@@ -47,6 +47,10 @@ import {
 import { setOrgCertifierCredentialsFn } from "@/fn/certifier-credentials";
 import { requireOrgContext } from "@/lib/auth/server";
 import { getIsometricClientForOrg, listProjects } from "@/lib/isometric";
+import {
+  CERTIFIER_CREDENTIAL_MASK,
+  certifierCredentialsRotationSchema,
+} from "@/schemas/organizations";
 
 const ORGANIZATION_ID = "org_test";
 const ACCESS_TOKEN = "access-token-sensitive-1234";
@@ -157,13 +161,18 @@ describe("setOrgCertifierCredentialsFn", () => {
     expect(result.success).toBe(true);
   });
 
-  it("refuses to store the masked placeholder as a key", async () => {
+  it.each([
+    CERTIFIER_CREDENTIAL_MASK,
+    `${CERTIFIER_CREDENTIAL_MASK}real-token`,
+    `real${CERTIFIER_CREDENTIAL_MASK}token`,
+    `real-token${CERTIFIER_CREDENTIAL_MASK}`,
+  ])("refuses to store a mask-contaminated key: %s", async (accessToken) => {
     // The form drops an untouched masked field, but the action is a public
     // server boundary — a hand-rolled request must not be able to store the
-    // placeholder as a real credential.
+    // placeholder or any contaminated derivative as a real credential.
     const result = await setOrgCertifierCredentialsFn({
       organizationId: ORGANIZATION_ID,
-      accessToken: "\u2022".repeat(16),
+      accessToken,
       clientSecret: CLIENT_SECRET,
     });
 
@@ -200,5 +209,28 @@ describe("setOrgCertifierCredentialsFn", () => {
       error: "Credential encryption key is not configured",
     });
     expect(upsertCertifierCredentials).not.toHaveBeenCalled();
+  });
+});
+
+describe("certifier credential rotation schema", () => {
+  it("accepts the exact untouched mask", () => {
+    expect(
+      certifierCredentialsRotationSchema.safeParse({
+        accessToken: CERTIFIER_CREDENTIAL_MASK,
+        clientSecret: CERTIFIER_CREDENTIAL_MASK,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a key containing mask characters", () => {
+    const result = certifierCredentialsRotationSchema.safeParse({
+      accessToken: `${CERTIFIER_CREDENTIAL_MASK}real-token`,
+      clientSecret: CERTIFIER_CREDENTIAL_MASK,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe(
+      "Remove the masked placeholder before entering a key.",
+    );
   });
 });

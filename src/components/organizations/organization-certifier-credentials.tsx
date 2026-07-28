@@ -38,18 +38,12 @@ import {
   useSetOrgCertifierCredentials,
 } from "@/hooks/use-certifier-credentials";
 import {
+  CERTIFIER_CREDENTIAL_MASK,
   certifierCredentialsFormSchema,
   certifierCredentialsRotationSchema,
   type CertifierCredentialsFormInput,
 } from "@/schemas/organizations";
 import { formatDateTime } from "@/lib/format-utils";
-
-/**
- * The stand-in seeded into a stored field. Any bullet run identifies itself as
- * a mask rather than a secret, and its length is fixed so it never leaks how
- * long the real key is.
- */
-const MASK = "•".repeat(16);
 
 interface OrganizationCertifierCredentialsProps {
   organizationId: string;
@@ -120,7 +114,10 @@ function CredentialsForm({
         : certifierCredentialsFormSchema,
     ),
     defaultValues: configured
-      ? { accessToken: MASK, clientSecret: MASK }
+      ? {
+          accessToken: CERTIFIER_CREDENTIAL_MASK,
+          clientSecret: CERTIFIER_CREDENTIAL_MASK,
+        }
       : { accessToken: "", clientSecret: "" },
   });
 
@@ -145,7 +142,10 @@ function CredentialsForm({
         accessToken,
         clientSecret,
       });
-      reset({ accessToken: MASK, clientSecret: MASK });
+      reset({
+        accessToken: CERTIFIER_CREDENTIAL_MASK,
+        clientSecret: CERTIFIER_CREDENTIAL_MASK,
+      });
       setVerification(result.verification);
       // The toast confirms the write; the panel below carries the connection
       // outcome, which is the part worth reading twice.
@@ -265,6 +265,6 @@ function VerificationNotice({
 /** `undefined` when the field still holds the mask or was left blank. */
 function changedValue(value: string): string | undefined {
   const trimmed = value.trim();
-  if (!trimmed || trimmed === MASK) return undefined;
+  if (!trimmed || trimmed === CERTIFIER_CREDENTIAL_MASK) return undefined;
   return trimmed;
 }

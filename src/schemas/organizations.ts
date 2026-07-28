@@ -45,9 +45,24 @@ export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
  * First-time credential entry: both halves have to be typed, because there is
  * nothing stored to fall back on.
  */
+const MASK_CHARACTER = "\u2022";
+export const CERTIFIER_CREDENTIAL_MASK = MASK_CHARACTER.repeat(16);
+const MASK_CONTAMINATION_MESSAGE =
+  "Remove the masked placeholder before entering a key.";
+
+function credentialFormValueSchema(requiredMessage: string) {
+  return z
+    .string()
+    .trim()
+    .min(1, requiredMessage)
+    .refine((value) => !value.includes(MASK_CHARACTER), {
+      message: MASK_CONTAMINATION_MESSAGE,
+    });
+}
+
 export const certifierCredentialsFormSchema = z.object({
-  accessToken: z.string().trim().min(1, "Access token is required."),
-  clientSecret: z.string().trim().min(1, "Client secret is required."),
+  accessToken: credentialFormValueSchema("Access token is required."),
+  clientSecret: credentialFormValueSchema("Client secret is required."),
 });
 export type CertifierCredentialsFormInput = z.infer<
   typeof certifierCredentialsFormSchema
@@ -60,8 +75,24 @@ export type CertifierCredentialsFormInput = z.infer<
  * Infers the same shape as the create schema, so one form type serves both.
  */
 export const certifierCredentialsRotationSchema = z.object({
-  accessToken: z.string().trim(),
-  clientSecret: z.string().trim(),
+  accessToken: z
+    .string()
+    .trim()
+    .refine(
+      (value) =>
+        value === CERTIFIER_CREDENTIAL_MASK ||
+        !value.includes(MASK_CHARACTER),
+      { message: MASK_CONTAMINATION_MESSAGE },
+    ),
+  clientSecret: z
+    .string()
+    .trim()
+    .refine(
+      (value) =>
+        value === CERTIFIER_CREDENTIAL_MASK ||
+        !value.includes(MASK_CHARACTER),
+      { message: MASK_CONTAMINATION_MESSAGE },
+    ),
 });
 
 const organizationIdSchema = z
@@ -75,12 +106,11 @@ const organizationIdSchema = z
  * request, or a future caller that forgets to strip it, cannot store the mask
  * as a real key — a credential made only of `\u2022` is never a real one.
  */
-const MASK_ONLY = /^\u2022+$/;
 const secretSchema = z
   .string()
   .trim()
   .min(1)
-  .refine((value) => !MASK_ONLY.test(value), {
+  .refine((value) => !value.includes(MASK_CHARACTER), {
     message: "That is the placeholder for a stored key, not a key.",
   });
 
