@@ -67,11 +67,11 @@ export function OrganizationDefaultsForm() {
   const { activeOrganizationId } = useFacilityContext();
   const query = useOrganizationDefaults(activeOrganizationId);
 
-  if (query.isLoading) {
+  if (query.isLoading && !query.data) {
     return <Skeleton className="h-320 w-full" />;
   }
 
-  if (query.error || !query.data) {
+  if (!query.data) {
     return (
       <p className="body-medium text-[var(--st-bad)]" role="alert">
         Couldn&apos;t load the operating defaults. Refresh the page to retry.
