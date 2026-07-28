@@ -50,7 +50,6 @@ interface Fixture {
   missingGpsSupplierId: string;
   activeBiocharProductId: string;
   validBatchSampleId: string;
-  activeFeedstockId: string;
   ids: {
     facilities: string[];
     suppliers: string[];
@@ -487,7 +486,6 @@ beforeAll(async () => {
       missingGpsSupplierId: missingGpsSupplier.id,
       activeBiocharProductId: activeBiocharProduct.id,
       validBatchSampleId: validBatchSample.id,
-      activeFeedstockId: activeFeedstock.id,
       ids: {
         facilities: facilityRows.map(({ id }) => id),
         suppliers: supplierRows.map(({ id }) => id),
@@ -551,15 +549,10 @@ describe("dashboard structural certification gaps", () => {
       missingFacilityGps: 1,
       missingFeedstockGps: 1,
       transportEndpointGpsGaps: 2,
-      transportDistanceEvidenceGaps: 4,
       missingFeedstockGpsSupplierId: fixture.missingGpsSupplierId,
       transportEndpointGpsTarget: {
         entityType: "biochar",
         entityId: fixture.activeBiocharProductId,
-      },
-      transportDistanceEvidenceTarget: {
-        entityType: "feedstock",
-        entityId: fixture.activeFeedstockId,
       },
     });
     expect(
@@ -585,87 +578,20 @@ describe("dashboard structural certification gaps", () => {
         count: 2,
         href: `/biochar-products?facility=${fixture.gapFacilityId}&biocharProduct=${fixture.activeBiocharProductId}&mode=edit&focus=transport-route`,
       },
-      {
-        key: "transportDistanceEvidence",
-        metadata: "Feedstock form · Transport evidence · 4 affected",
-        count: 4,
-        href: `/feedstocks?facility=${fixture.gapFacilityId}&feedstock=${fixture.activeFeedstockId}&mode=edit&focus=transport-evidence`,
-      },
     ]);
-
-    const [acceptedEvidence] = await db
-      .insert(documents)
-      .values({
-        organizationId: TEST_ORG_ID,
-        entityType: "feedstock",
-        entityId: fixture.activeFeedstockId,
-        documentType: "bill_of_lading",
-        fileName: "accepted-evidence.pdf",
-        fileUrl: "https://example.invalid/accepted-evidence.pdf",
-        uploadStatus: "uploaded",
-      })
-      .returning({ id: documents.id });
-    try {
-      const withEvidence = await loadDashboardStructuralGapCounts(
-        makeTestOrgContext(TEST_USER_ID),
-        fixture.gapFacilityId,
-      );
-      expect(withEvidence.transportDistanceEvidenceGaps).toBe(3);
-      expect(
-        ["biochar", "delivery"].includes(
-          withEvidence.transportDistanceEvidenceTarget?.entityType ?? "",
-        ),
-      ).toBe(true);
-      if (
-        withEvidence.transportDistanceEvidenceTarget?.entityType === "biochar"
-      ) {
-        expect(withEvidence.transportDistanceEvidenceTarget.entityId).toBe(
-          fixture.activeBiocharProductId,
-        );
-      }
-
-      const [sampleEvidence] = await db
-        .insert(documents)
-        .values({
-          organizationId: TEST_ORG_ID,
-          entityType: "transport_leg",
-          entityId: fixture.validBatchSampleTransportLegId,
-          documentType: "other_transport_evidence",
-          fileName: "sample-transport-evidence.pdf",
-          fileUrl: "https://example.invalid/sample-transport-evidence.pdf",
-          uploadStatus: "uploaded",
-        })
-        .returning({ id: documents.id });
-      try {
-        const withSampleEvidence = await loadDashboardStructuralGapCounts(
-          makeTestOrgContext(TEST_USER_ID),
-          fixture.gapFacilityId,
-        );
-        expect(withSampleEvidence.transportDistanceEvidenceGaps).toBe(2);
-      } finally {
-        await db.delete(documents).where(eq(documents.id, sampleEvidence.id));
-      }
-    } finally {
-      await db.delete(documents).where(eq(documents.id, acceptedEvidence.id));
-    }
   });
 
-  it("builds supported parent deep links for feedstock and sample legs", () => {
+  it("builds a supported parent deep link for a sample leg", () => {
     const facilityId = "00000000-0000-4000-8000-000000000001";
     const gaps = buildDashboardStructuralGaps(
       {
         missingFacilityGps: 0,
         missingFeedstockGps: 0,
         transportEndpointGpsGaps: 1,
-        transportDistanceEvidenceGaps: 1,
         missingFeedstockGpsSupplierId: null,
         transportEndpointGpsTarget: {
           entityType: "sample",
           entityId: fixture?.validBatchSampleId ?? "sample-id",
-        },
-        transportDistanceEvidenceTarget: {
-          entityType: "feedstock",
-          entityId: fixture?.activeFeedstockId ?? "feedstock-id",
         },
       },
       facilityId,
@@ -673,11 +599,9 @@ describe("dashboard structural certification gaps", () => {
 
     expect(gaps.map(({ href }) => href)).toEqual([
       `/samples?facility=${facilityId}&sample=${fixture?.validBatchSampleId ?? "sample-id"}&mode=edit&focus=transport-route`,
-      `/feedstocks?facility=${facilityId}&feedstock=${fixture?.activeFeedstockId ?? "feedstock-id"}&mode=edit&focus=transport-evidence`,
     ]);
     expect(gaps.map(({ metadata }) => metadata)).toEqual([
       "Sample form · Transport route · 1 affected",
-      "Feedstock form · Transport evidence · 1 affected",
     ]);
   });
 
@@ -685,7 +609,6 @@ describe("dashboard structural certification gaps", () => {
     ["feedstock", "Feedstock form"],
     ["biochar", "Biochar product form"],
     ["sample", "Sample form"],
-    ["delivery", "Delivery form"],
   ] as const)(
     "names the %s destination form for transport gaps",
     (entityType, formName) => {
@@ -694,15 +617,10 @@ describe("dashboard structural certification gaps", () => {
           missingFacilityGps: 0,
           missingFeedstockGps: 0,
           transportEndpointGpsGaps: 2,
-          transportDistanceEvidenceGaps: 3,
           missingFeedstockGpsSupplierId: null,
           transportEndpointGpsTarget: {
             entityType,
             entityId: `${entityType}-route`,
-          },
-          transportDistanceEvidenceTarget: {
-            entityType,
-            entityId: `${entityType}-evidence`,
           },
         },
         "00000000-0000-4000-8000-000000000001",
@@ -710,7 +628,6 @@ describe("dashboard structural certification gaps", () => {
 
       expect(gaps.map(({ metadata }) => metadata)).toEqual([
         `${formName} · Transport route · 2 affected`,
-        `${formName} · Transport evidence · 3 affected`,
       ]);
     },
   );
@@ -730,10 +647,8 @@ describe("dashboard structural certification gaps", () => {
       missingFacilityGps: 0,
       missingFeedstockGps: 0,
       transportEndpointGpsGaps: 0,
-      transportDistanceEvidenceGaps: 0,
       missingFeedstockGpsSupplierId: null,
       transportEndpointGpsTarget: null,
-      transportDistanceEvidenceTarget: null,
     });
     expect(buildDashboardStructuralGaps(counts, fixture.clearFacilityId)).toEqual([]);
   });

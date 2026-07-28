@@ -1,5 +1,15 @@
 # Isometric Docs Change Log
 
+## 2026-07-28 (transport evidence is optional)
+
+Transportation Module v1.1 §6 lists transport documents as records to retain
+for Distance-Based Method legs and examine through verification sampling. They
+are not a submission requirement.
+
+Transport evidence uploads remain available and continue to mirror to
+Isometric Sources. The CERT tag, entity-readiness gap, and dashboard
+structural-gap row have been removed.
+
 Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).
@@ -54,19 +64,21 @@ Earlier implementation notes are archived by date:
 
 ## 2026-07-21 (actionable transport-evidence readiness)
 
+Superseded on 2026-07-28: transport evidence is an optional retained record,
+not a submission-readiness requirement. The upload and classification workflow
+below remains available.
+
 Transport evidence now has one reusable operator workflow across feedstocks,
 deliveries, and manually managed transport legs. The UI uses one multi-file
 uploader with an explicit classification choice: bill of lading, weigh-scale
 ticket, or other transport evidence. These are alternatives; one successfully
 uploaded classified file is sufficient.
 
-Readiness is composite and reflects saved state: the effective distance source
-must be `document` and at least one accepted transport-evidence document must
-exist. Either fact alone remains incomplete. Persisted complete fields stay
-green in view and edit modes; incomplete evidence is orange and dashboard
-attention links focus the actionable transport section. Migration 0087 adds
-`other_transport_evidence` to `documentation_type` (renumbered from 0084
-during the staging sync).
+The readiness rule described in the original change required a `document`
+distance source and an accepted transport-evidence document. That rule, its
+CERT status, and its dashboard attention row were superseded on 2026-07-28.
+Migration 0087 adds `other_transport_evidence` to `documentation_type`
+(renumbered from 0084 during the staging sync).
 
 This is an operator-readiness and evidence-classification change. It does not
 change Isometric payload mappings or make a new protocol claim.
