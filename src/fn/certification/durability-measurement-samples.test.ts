@@ -10,6 +10,10 @@ import {
 import { normalizeMeasurementSamplesForHash } from "./durability-measurement-sample-snapshot";
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
 import { PRODUCT_MASS_MEASUREMENT_PROPERTY } from "@/lib/isometric/transformers/measurement-sample";
+import {
+  buildRemovalSourceBindingPlan,
+  classifyRemovalSourceCandidate,
+} from "@/lib/certification/removal-source-bindings";
 
 function sample(overrides: Partial<Sample>): Sample {
   return {
@@ -98,6 +102,72 @@ describe("DURABILITY_MEASUREMENT_SAMPLES_ENABLED", () => {
 });
 
 describe("patchMeasurementSampleSourceBindings", () => {
+  it("binds a boundary-method weighbridge Source to the staging batch product_mass Datapoint", async () => {
+    const creditBatchId = "01519716-f8e6-4042-886d-608792130dcc";
+    const applicationId = "application-staging-1";
+    const sourceId = "source-weighbridge";
+    const binding = classifyRemovalSourceCandidate({
+      documentType: "pdf",
+      metadata: { logbookEvidenceType: "weighbridge" },
+      lineage: {
+        entityType: "application",
+        entityId: applicationId,
+        entityLabel: "Application AP-26-001",
+      },
+    });
+    const sourceBindingPlan = buildRemovalSourceBindingPlan({
+      candidates: binding
+        ? [{ documentId: "document-weighbridge", sourceId, binding }]
+        : [],
+      template: {
+        groups: [
+          {
+            key: "co2-stored",
+            components: [
+              {
+                id: "component-sequestration",
+                blueprint_key: "biochar_sequestration_1000_year",
+                inputs: [{ input_key: "product_mass" }],
+              },
+            ],
+          },
+        ],
+      } as never,
+      applicationIdsByCreditBatchId: new Map([
+        [creditBatchId, [applicationId]],
+      ]),
+    });
+    const patch = vi.fn().mockResolvedValue({
+      id: "datapoint-product-mass",
+      source_ids: [sourceId],
+    });
+
+    await expect(
+      patchMeasurementSampleSourceBindings({
+        client: { patch } as never,
+        captures: [
+          {
+            measurementSampleId: "measurement-sample-existing",
+            supplierReferenceId: "measurement-sample-ref",
+            creditBatchId,
+            datapointIdsByMeasurementProperty: new Map([
+              [
+                encodeMeasurementProperty(PRODUCT_MASS_MEASUREMENT_PROPERTY),
+                ["datapoint-product-mass"],
+              ],
+            ]),
+          },
+        ],
+        sourceBindingPlan,
+      }),
+    ).resolves.toBe(1);
+
+    expect(patch).toHaveBeenCalledWith(
+      "/datapoints/datapoint-product-mass",
+      expect.objectContaining({ source_ids: [sourceId] }),
+    );
+  });
+
   it("patches only product_mass response Datapoints with Inventory Sources", async () => {
     const patch = vi.fn().mockResolvedValue({
       id: "datapoint-product-mass",

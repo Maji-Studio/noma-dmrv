@@ -45,6 +45,16 @@ describe("Removal source candidate discovery", () => {
               metadata: { logbookEvidenceType: "inventory" },
             },
             {
+              id: "weighbridge-document",
+              documentType: "pdf",
+              metadata: { logbookEvidenceType: "weighbridge" },
+            },
+            {
+              id: "affidavit-document",
+              documentType: "affidavit",
+              metadata: {},
+            },
+            {
               id: "application-photo",
               documentType: "photo",
               metadata: { evidenceRole: "spreading" },
@@ -90,13 +100,17 @@ describe("Removal source candidate discovery", () => {
     );
 
     expect(candidates.map((candidate) => candidate.documentId)).toEqual([
+      "affidavit-document",
       "delivery-bol",
       "feedstock-bol",
       "inventory-document",
+      "weighbridge-document",
     ]);
     expect(candidates.map((candidate) => candidate.binding.nomaRole).sort()).toEqual([
       "delivery_bill_of_lading",
       "feedstock_bill_of_lading",
+      "inventory",
+      "inventory",
       "inventory",
     ]);
     expect(documentsDA.listDocumentsForEntity).not.toHaveBeenCalledWith(
