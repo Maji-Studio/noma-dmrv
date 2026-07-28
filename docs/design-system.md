@@ -498,8 +498,11 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
 
 ## Entity Card pattern
 
-All biochar entity cards (Facility, Credit Batch, Storage Location,
-Application) are hand-rolled to this shape:
+All biochar entity cards (Facility, Credit Batch, Application) are hand-rolled
+to this shape. **Storage bins are the one exception**: the storage board draws
+each bin as a silo tile (`storage-bin-tile.tsx`) with a fill gauge on its left
+edge, so a wall of tiles reads as a bar chart of the facility. It keeps the
+`<article>` + `RowActionsMenu` + no-radius contract and drops the rest.
 
 ```tsx
 <article
