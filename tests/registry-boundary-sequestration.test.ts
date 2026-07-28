@@ -289,8 +289,8 @@ describe("1000-year sequestration registry boundary", () => {
         "GET",
         `/measurement_samples/${submitted.samples[0].measurementSampleId}`,
       ),
-    ).toBe(1);
-    expect(registry.requestCount("GET", "/measurement_samples")).toBe(0);
+    ).toBe(0);
+    expect(registry.requestCount("GET", "/measurement_samples")).toBe(1);
     expect(resumed.samples).toHaveLength(1);
     expect(resumed.samples[0].measurementSampleId).toBe(
       submitted.samples[0].measurementSampleId,
