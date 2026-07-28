@@ -37,7 +37,7 @@ export async function getOrganizationDefaults(
     .where(eq(organizationSettings.organizationId, ctx.organizationId))
     .limit(1);
 
-  if (!row) return DEFAULT_ORGANIZATION_SETTINGS;
+  if (!row) return { ...DEFAULT_ORGANIZATION_SETTINGS };
 
   return {
     // The column is free text (ISO 4217) to match `orders.currency`, so it is
