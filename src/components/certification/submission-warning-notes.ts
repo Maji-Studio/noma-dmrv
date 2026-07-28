@@ -79,7 +79,7 @@ function knownWarningNote(
   warning: string,
   index: number,
 ): SubmissionWarningNote {
-  if (warning.startsWith("Diesel fuel (genset and/or startup/preprocessing)")) {
+  if (warning.startsWith("Genset or startup diesel is recorded")) {
     return {
       key: `unmapped-diesel-${index}`,
       summary: "Some recorded fuel emissions cannot be submitted.",

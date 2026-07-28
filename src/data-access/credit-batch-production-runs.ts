@@ -5,7 +5,7 @@ import { applications } from "@/db/schema/application";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { biocharProducts } from "@/db/schema/products";
 import { SafeError } from "@/lib/errors";
-import { pluralize } from "@/lib/copy-utils";
+import { formatCount } from "@/lib/copy-utils";
 
 import { requireOrgScope } from "./utils";
 
@@ -61,7 +61,7 @@ async function getApplicationsForRunsWithExecutor(
     .map(([applicationId]) => applicationId);
   if (multiRunApplicationIds.length > 0) {
     throw new SafeError(
-      `${pluralize(multiRunApplicationIds.length, "Application")} ${multiRunApplicationIds.join(", ")} ${multiRunApplicationIds.length === 1 ? "resolves" : "resolve"} to multiple production runs. Check the linked biochar products.`,
+      `${formatCount(multiRunApplicationIds.length, "Application")} ${multiRunApplicationIds.length === 1 ? "is" : "are"} linked to multiple production runs. Check the linked biochar products.`,
     );
   }
 

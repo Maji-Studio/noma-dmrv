@@ -28,6 +28,7 @@ export class RegistryMappingError extends SafeError {
     message: string,
     readonly blueprintKey: string,
     readonly inputKey: string,
+    readonly groupKey?: string,
   ) {
     super(message);
     this.name = "RegistryMappingError";

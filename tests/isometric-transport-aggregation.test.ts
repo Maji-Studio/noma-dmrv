@@ -77,7 +77,7 @@ describe("aggregateTransportMassDistance", () => {
     );
     expect(result.massDistanceTonneKm).toBeNull();
     expect(result.warning).toBe(
-      "Sample transport leg tl_100_null has no load mass. Record each load mass before submitting.",
+      "Sample transport has 1 leg without a load mass. Record a load mass for each leg before submitting.",
     );
   });
 

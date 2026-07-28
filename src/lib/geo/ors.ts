@@ -30,7 +30,7 @@ function requireKey(): string {
   const key = env.OPENROUTESERVICE_API_KEY;
   if (!key) {
     throw new SafeError(
-      "Map search and routes are not configured. Ask an Admin to configure the mapping service."
+      "Map search and routes are not configured. Ask a Platform Admin to configure the mapping service."
     );
   }
   return key;

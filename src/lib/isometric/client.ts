@@ -123,7 +123,7 @@ async function isometricRequest<T = unknown>(
 ): Promise<T> {
   if (!credentials) {
     throw new IsometricApiError(
-      "The registry connection is not configured for this organization. Ask an Owner to add the connection credentials.",
+      "The registry connection is not configured for this organization. Ask an Owner or Admin to add the connection credentials.",
       undefined,
       undefined,
       "not_configured"

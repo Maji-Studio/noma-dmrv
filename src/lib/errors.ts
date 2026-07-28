@@ -43,7 +43,7 @@ function formatSafeErrorMessage(message: string): string {
 
   const missing = /^(.+?) not found\.?$/i.exec(trimmed);
   if (missing) {
-    return `${sentenceCase(missing[1])} was not found. Refresh the page and try again.`;
+    return missingRecordMessage(missing[1]);
   }
 
   return message;
@@ -69,6 +69,10 @@ const FALLBACK_RECOVERY = {
 
 function sentenceCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+export function missingRecordMessage(entity: string): string {
+  return `${sentenceCase(entity)} was not found. Refresh the page and try again.`;
 }
 
 function pluralAgreement(subject: string): "was" | "were" {

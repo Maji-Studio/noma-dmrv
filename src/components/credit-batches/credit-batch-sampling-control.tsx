@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { InfoHint } from "@/components/ui/tooltip";
 import type { MethodBEligibility } from "@/lib/certification/method-b-eligibility";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
-import { pluralize } from "@/lib/copy-utils";
+import { formatCount } from "@/lib/copy-utils";
 
 interface CreditBatchSamplingControlProps {
   visible: boolean;
@@ -56,12 +56,12 @@ export function CreditBatchSamplingControl({
     : !eligibility
       ? "Select a feedstock type to check Method B eligibility."
       : eligibility.unsampledAllowed
-        ? "The agreed baseline and Method-B prerequisites are complete."
+        ? "The Method-B baseline and prerequisites are complete."
         : !countMet
-          ? `${eligibility.eligibleSampleCount} / ${eligibility.agreedBaselineSize} eligible ${pluralize(eligibility.eligibleSampleCount, "Sample")} recorded. Unsampled batches become available when the agreed baseline is met.`
+          ? `${formatCount(eligibility.eligibleSampleCount, "qualifying Method-A Sample")} recorded. Record at least ${eligibility.agreedBaselineSize} to meet the Method-B baseline.`
           : canManage
-            ? "The Sample baseline is met. Record the Method-B prerequisites to enable unsampled batches."
-            : "The Sample baseline is met. An Admin must record the Method-B prerequisites."
+            ? "The Method-B baseline is met. Record the Method-B prerequisites to enable unsampled credit batches."
+            : "The Method-B baseline is met. An Admin must record the Method-B prerequisites."
 
   return (
     <fieldset className="flex flex-col gap-10" data-testid="sampling-control">

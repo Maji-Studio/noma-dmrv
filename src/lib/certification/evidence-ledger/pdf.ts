@@ -133,7 +133,7 @@ function claimCell(cat: LedgerCategory): ReactElement {
     ),
     t(styles.claimVal, nf2(cat.subtotalTkm)),
     t(styles.claimUnit, `tonne·km · ${formatCount(cat.legs.length, "leg")}`),
-    t(styles.claimCheck, "•  matches the submitted value"),
+    t(styles.claimCheck, "•  matches the prepared value"),
   );
 }
 
@@ -146,12 +146,12 @@ function claimBand(model: LedgerModel): ReactElement {
       [styles.claimCheck, { color: C.greenLite }],
       `•  ${formatCount(model.totalLegs, "leg")} ${
         model.totalLegs === 1 ? "matches" : "match"
-      } the submitted values`,
+      } the prepared values`,
     ),
   );
   return v(styles.claim, {},
     v(styles.claimHead, {},
-      t(styles.claimHeadLabel, "Submitted to registry: mass · distance"),
+      t(styles.claimHeadLabel, "Prepared for submission: mass · distance"),
       t(styles.claimHeadEq, "value = sum of distance × mass for each category"),
     ),
     v(styles.claimRow, {}, ...model.categories.map(claimCell), totalCell),
@@ -270,14 +270,14 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
           ? []
           : [
               footRow(
-                "Scaling adjustment: displayed values to submitted value",
+                "Scaling adjustment: displayed values to submission value",
                 nf2(cat.scaling.displayAdjustmentTkm),
                 "t·km",
                 { ...operandRow, ...stackedRow },
               ),
             ]),
         footRow(
-          `Subtotal: ${cat.key} · submitted value`,
+          `Subtotal: ${cat.key} · submission value`,
           nf2(cat.subtotalTkm),
           "t·km",
           stackedRow,
@@ -287,7 +287,7 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
       ? v({}, {},
           ...roundingRows,
           footRow(
-            `Subtotal: ${cat.key} · submitted value`,
+            `Subtotal: ${cat.key} · submission value`,
             nf2(cat.subtotalTkm),
             "t·km",
             stackedRow,
@@ -307,15 +307,15 @@ function apparatus(model: LedgerModel): ReactElement {
     t(styles.noteH, "Method note"),
     t(styles.noteBody,
       "Each leg's contribution is distance × mass, summed per category into the single " +
-      "mass and distance value submitted to Isometric Certify. The emission factor (per the " +
+      "mass and distance value prepared for Isometric Certify. The emission factor (per the " +
       "Transportation module's component for the declared mode and vehicle class) is applied " +
-      "by the registry, not in this ledger. noma submits distance and mass; Certify computes " +
-      "the sum of (distance × mass) over legs, times that factor. This sheet exists because the " +
-      "submitted total alone hides the per-leg breakdown. This ledger makes every row behind each " +
-      "submitted value auditable. The per-leg bills of lading remain attached as Sources on the Removal." +
+      "by the registry, not in this ledger. noma prepares distance and mass; Certify computes " +
+      "the sum of (distance × mass) over legs, times that factor. This sheet shows the " +
+      "per-leg breakdown behind each prepared value. The per-leg bills of lading remain attached " +
+      "as Sources on the Removal." +
       (hasScaling
         ? " Biochar distribution is delivery-bucket scoped under Biochar Protocol 8.6.2. " +
-          "The submitted value is the leg sum × the applied-biochar share, shown explicitly " +
+          "The prepared value is the leg sum × the applied-biochar share, shown explicitly " +
           "in that category's subtotal."
         : ""),
     ),
@@ -353,7 +353,7 @@ function buildDocument(model: LedgerModel): ReactElement {
   return h(Document, {
     title: `Transport Emissions Evidence Ledger${model.memberBatchCodes ? `: ${model.memberBatchCodes}` : ""}`,
     author: "noma dMRV",
-    subject: "Transport mass and distance by leg for the submitted registry values",
+    subject: "Transport mass and distance by leg for the prepared registry values",
   },
     h(Page, { size: "A4", style: styles.page },
       masthead(model),

@@ -31,7 +31,7 @@ import {
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
-import { pluralize } from "@/lib/copy-utils";
+import { formatCount, pluralize } from "@/lib/copy-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { lockProductionProcessScope } from "./production-processes";
 import { isCreditBatchMembershipLockedBySubmission } from "./credit-batch-certification-lock";
@@ -392,7 +392,7 @@ export async function resolveSingleFeedstockType(
   );
   if (missingFeedstockRunIds.length > 0) {
     throw new SafeError(
-      `${pluralize(missingFeedstockRunIds.length, "Production run")} ${missingFeedstockRunIds.join(", ")} ${missingFeedstockRunIds.length === 1 ? "has" : "have"} no linked feedstock. Link the feedstock before adding the production run to a credit batch.`,
+      `${formatCount(missingFeedstockRunIds.length, "Production run")} ${missingFeedstockRunIds.length === 1 ? "has" : "have"} no linked feedstock. Link feedstock to each production run before adding it to a credit batch.`,
     );
   }
 

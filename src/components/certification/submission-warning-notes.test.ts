@@ -45,12 +45,17 @@ describe("buildSubmissionWarningNotes", () => {
 
   it("gives repeated recognized warnings unique render keys", () => {
     const warning =
-      "Diesel fuel (genset and/or startup/preprocessing) cannot be mapped.";
+      "Genset or startup diesel is recorded, but the active Removal template has no monitored pyrolysis fuel input. Add the input in Isometric before submitting these fuel emissions.";
     const notes = buildSubmissionWarningNotes([warning, warning]);
 
     expect(notes.map((note) => note.key)).toEqual([
       "unmapped-diesel-0",
       "unmapped-diesel-1",
     ]);
+    expect(notes[0]).toMatchObject({
+      summary: "Some recorded fuel emissions cannot be submitted.",
+      detail:
+        "The active Removal template has no compatible field for this fuel use. Update the template or confirm how these emissions should be reported.",
+    });
   });
 });

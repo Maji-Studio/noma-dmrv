@@ -20,6 +20,7 @@ describe("CompiledSubmissionReview", () => {
               {
                 componentId: "rtc-1",
                 componentBlueprintKey: "transport",
+                componentDisplayName: "Feedstock transport",
                 inputKey: "mass_distance",
                 binding: "monitored",
                 wireMagnitude: 42,
@@ -79,7 +80,7 @@ describe("CompiledSubmissionReview", () => {
 
     for (const expected of [
       "Biochar removal",
-      "Mass and distance",
+      "Feedstock transport: Mass and distance",
       "42 t.km",
       "Set in template",
       "2026-01-31T23:59:59.000Z",

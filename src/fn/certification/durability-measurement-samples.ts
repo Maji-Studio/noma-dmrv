@@ -109,12 +109,12 @@ export function assertSupportedDurabilityConfiguration(
 ): void {
   if (batches.some((batch) => batch.sampling !== "sampled")) {
     throw new SafeError(
-      "Unsampled Method B Removals cannot be submitted yet. Submit a sampled Removal.",
+      "Unsampled Method B Removals cannot be submitted yet. Wait for support to confirm registry availability.",
     );
   }
   if (batches.some((batch) => batch.durabilityOption !== "1000_year")) {
     throw new SafeError(
-      "200-year Removals cannot be submitted yet. Submit a 1000-year Removal.",
+      "200-year Removals cannot be submitted yet. Wait for support to confirm registry availability.",
     );
   }
 }

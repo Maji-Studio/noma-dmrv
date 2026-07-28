@@ -53,7 +53,7 @@ export type IngredientInput = {
 
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { pluralize } from "@/lib/copy-utils";
+import { formatCount } from "@/lib/copy-utils";
 import {
   assertFormulationRatioWithinStock,
   lockFormulationRatioRows,
@@ -81,7 +81,7 @@ async function assertBlendFeedstockTypes(ctx: OrgContext, ingredients?: Ingredie
     const returnedIds = new Set(rows.map((row) => row.id));
     const missingIds = feedstockTypeIds.filter((id) => !returnedIds.has(id));
     throw new SafeError(
-      `${pluralize(missingIds.length, "Feedstock type")} ${missingIds.join(", ")} ${missingIds.length === 1 ? "was" : "were"} not found. Refresh the formulation and choose the feedstock types again.`,
+      `${formatCount(missingIds.length, "Feedstock type")} ${missingIds.length === 1 ? "was" : "were"} not found. Refresh the formulation and choose the feedstock types again.`,
     );
   }
 

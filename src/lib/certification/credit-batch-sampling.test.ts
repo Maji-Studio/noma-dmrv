@@ -9,7 +9,9 @@ describe("assertUnsampledBatchEligibility", () => {
         agreedBaselineSize: 30,
         unsampledAllowed: false,
       }),
-    ).toThrow(/at least 30 eligible Samples.*29 eligible Samples/);
+    ).toThrow(
+      "This process has 29 qualifying Method-A Samples. Record at least 30 and complete the Method-B prerequisites before creating an unsampled credit batch.",
+    );
   });
 
   it("accepts unsampled creation when computed eligibility is true", () => {

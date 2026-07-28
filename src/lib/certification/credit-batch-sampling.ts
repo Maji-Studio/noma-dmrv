@@ -11,6 +11,6 @@ export function assertUnsampledBatchEligibility(
 ): void {
   if (eligibility.unsampledAllowed) return;
   throw new SafeError(
-    `Unsampled credit batches are not available. Record the Method-B prerequisites and at least ${eligibility.agreedBaselineSize} eligible Samples. This process has ${formatCount(eligibility.eligibleSampleCount, "eligible Sample")}.`,
+    `This process has ${formatCount(eligibility.eligibleSampleCount, "qualifying Method-A Sample")}. Record at least ${eligibility.agreedBaselineSize} and complete the Method-B prerequisites before creating an unsampled credit batch.`,
   );
 }

@@ -17,7 +17,7 @@ import {
   feedstockTypes,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
-import { pluralize } from "@/lib/copy-utils";
+import { formatCount } from "@/lib/copy-utils";
 
 interface CompositionIngredientRef {
   formulationIngredientId: string;
@@ -93,7 +93,7 @@ export async function validateCompositionIngredientBins(
     );
     if (missingIngredientIds.length > 0) {
       throw new SafeError(
-        `${pluralize(missingIngredientIds.length, "Formulation line")} ${missingIngredientIds.join(", ")} ${missingIngredientIds.length === 1 ? "was" : "were"} not found. Refresh the product and choose its feedstock bins again.`,
+        `${formatCount(missingIngredientIds.length, "Formulation line")} ${missingIngredientIds.length === 1 ? "was" : "were"} not found. Refresh the product and choose its feedstock bins again.`,
       );
     }
     const wrongFormulationIds = ingredientRefs
@@ -105,7 +105,7 @@ export async function validateCompositionIngredientBins(
       .map((ref) => ref.formulationIngredientId);
     if (wrongFormulationIds.length > 0) {
       throw new SafeError(
-        `${pluralize(wrongFormulationIds.length, "Formulation line")} ${wrongFormulationIds.join(", ")} ${wrongFormulationIds.length === 1 ? "does" : "do"} not belong to the selected formulation. Refresh the product and choose its feedstock bins again.`,
+        `${formatCount(wrongFormulationIds.length, "Formulation line")} ${wrongFormulationIds.length === 1 ? "does" : "do"} not belong to the selected formulation. Refresh the product and choose its feedstock bins again.`,
       );
     }
     const mismatchedIngredientIds = ingredientRefs
@@ -117,7 +117,7 @@ export async function validateCompositionIngredientBins(
       .map((ref) => ref.formulationIngredientId);
     if (mismatchedIngredientIds.length > 0) {
       throw new SafeError(
-        `${pluralize(mismatchedIngredientIds.length, "Formulation line")} ${mismatchedIngredientIds.join(", ")} ${mismatchedIngredientIds.length === 1 ? "does" : "do"} not match the selected feedstock type. Refresh the product and choose its feedstock bins again.`,
+        `${formatCount(mismatchedIngredientIds.length, "Formulation line")} ${mismatchedIngredientIds.length === 1 ? "does" : "do"} not match the selected feedstock type. Refresh the product and choose its feedstock bins again.`,
       );
     }
   }

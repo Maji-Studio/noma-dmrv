@@ -53,6 +53,7 @@ import {
 export interface ResolvedMonitoredInput {
   removalTemplateComponentId: string;
   componentBlueprintKey: string;
+  componentDisplayName?: string;
   inputKey: string;
   quantity: { magnitude: number; unit: string };
   datapointType: string;
@@ -88,6 +89,7 @@ export interface RemovalSubmissionReview {
   bindings: Array<{
     componentId: string;
     componentBlueprintKey: string;
+    componentDisplayName?: string;
     inputKey: string;
     binding: "monitored" | "fixed" | "measurement-sample";
     wireMagnitude?: number;
@@ -250,10 +252,11 @@ export async function compileRemovalSubmission(
     if (error instanceof RegistryMappingError) {
       args.log?.error(
         {
+          groupKey: error.groupKey,
           blueprintKey: error.blueprintKey,
           inputKey: error.inputKey,
         },
-        "removal durability mapping is unsupported",
+        "removal registry mapping is unsupported",
       );
     }
     return {
@@ -319,10 +322,16 @@ export async function compileRemovalSubmission(
     };
   });
 
+  const templateComponentById = new Map(
+    args.defaultTemplate.groups
+      .flatMap((group) => group.components)
+      .map((component) => [component.id, component] as const),
+  );
   const bindings: RemovalSubmissionReview["bindings"] = [
     ...build.monitored.map((input) => ({
       componentId: input.removalTemplateComponentId,
       componentBlueprintKey: input.componentBlueprintKey,
+      componentDisplayName: input.componentDisplayName,
       inputKey: input.inputKey,
       binding: "monitored" as const,
       wireMagnitude: input.quantity.magnitude,
@@ -332,10 +341,11 @@ export async function compileRemovalSubmission(
     ...build.fixed.map((input) => ({
       componentId: input.removalTemplateComponentId,
       componentBlueprintKey:
-        args.defaultTemplate.groups
-          .flatMap((group) => group.components)
-          .find((component) => component.id === input.removalTemplateComponentId)
+        templateComponentById.get(input.removalTemplateComponentId)
           ?.blueprint_key ?? MISSING_VALUE.notAvailable,
+      componentDisplayName: templateComponentById.get(
+        input.removalTemplateComponentId,
+      )?.display_name,
       inputKey: input.inputKey,
       binding: "fixed" as const,
       fixedDatapointId: input.preboundDatapointId,
@@ -349,6 +359,7 @@ export async function compileRemovalSubmission(
           component.inputs.map((input) => ({
             componentId: component.id,
             componentBlueprintKey: component.blueprint_key,
+            componentDisplayName: component.display_name,
             inputKey: input.input_key,
             binding: "measurement-sample" as const,
           })),
@@ -916,6 +927,7 @@ function resolveTemplateInputs(args: {
         monitored.push({
           removalTemplateComponentId: component.id,
           componentBlueprintKey: component.blueprint_key,
+          componentDisplayName: component.display_name,
           inputKey: rtcInput.input_key,
           quantity: {
             magnitude: draft.quantity.magnitude,

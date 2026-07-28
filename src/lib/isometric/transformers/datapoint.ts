@@ -5,7 +5,10 @@ import type {
   EmissionInputBucket,
 } from "../utils/aggregation";
 import { payloadHash } from "../utils/payload-hash";
-import { SEQUESTRATION_COMPONENT_INPUT_BINDINGS } from "./sequestration-binding";
+import {
+  RegistryMappingError,
+  SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
+} from "./sequestration-binding";
 
 type DatapointType = components["schemas"]["DatapointType"];
 type QuantityKindType = components["schemas"]["QuantityKindType"];
@@ -419,8 +422,11 @@ export function buildCreateDatapointRequest(
 
   const mapping = lookupInputMapping(groupKey, componentBlueprintKey, inputKey);
   if (!mapping) {
-    throw new SafeError(
+    throw new RegistryMappingError(
       `Registry component ${componentLabel} is not supported. Ask support to update the registry mapping before submitting.`,
+      componentBlueprintKey,
+      inputKey,
+      groupKey,
     );
   }
   if (mapping.expectedQuantityKind !== blueprintInput.quantity_kind) {

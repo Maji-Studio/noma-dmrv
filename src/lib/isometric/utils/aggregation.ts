@@ -1,5 +1,5 @@
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { pluralize } from "@/lib/copy-utils";
+import { formatCount } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
 import { roundTripDistanceFactor } from "@/schemas/trip-type";
 import type { ProductionRun, Sample, TransportLeg } from "@/db/schema";
@@ -155,7 +155,7 @@ export function aggregateTransportMassDistance(
   if (missingMassLegIds.length > 0) {
     return {
       massDistanceTonneKm: null,
-      warning: `${categoryLabel} transport ${pluralize(missingMassLegIds.length, "leg")} ${missingMassLegIds.join(", ")} ${missingMassLegIds.length === 1 ? "has" : "have"} no load mass. Record each load mass before submitting.`,
+      warning: `${categoryLabel} transport has ${formatCount(missingMassLegIds.length, "leg")} without a load mass. Record a load mass for each leg before submitting.`,
     };
   }
 

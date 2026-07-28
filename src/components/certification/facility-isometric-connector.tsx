@@ -122,8 +122,8 @@ export function FacilityIsometricConnector({
           />
         </FormField>
         <p className="body-small text-[var(--color-text-tertiary)]">
-          The registry connection is not configured. Ask an Owner to add the
-          connection credentials.
+          The registry connection is not configured. Ask an Owner or Admin to
+          add the connection credentials.
         </p>
       </ConnectorShell>
     );

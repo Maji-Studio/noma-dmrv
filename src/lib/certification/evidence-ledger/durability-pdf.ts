@@ -206,7 +206,7 @@ function verdictRow(batch: LedgerBatch, isLast: boolean): ReactElement {
 
 function eligibilityBand(model: DurabilityLedgerModel): ReactElement {
   const head = v(styles.claimHead, {},
-    t(styles.claimHeadLabel, "Submitted to registry: durability eligibility"),
+    t(styles.claimHeadLabel, "Prepared for submission: durability eligibility"),
     t(styles.claimHeadEq, "judged on the pooled replicate mean · §3 Table 2"),
   );
   const colHead = v(styles.verdictColHead, {},
@@ -288,14 +288,14 @@ function batchSection(batch: LedgerBatch): ReactElement {
   const foot = v(styles.tfoot, {},
     v({ width: COL.ref + 4 }, {}),
     v({ flex: 1 }, {},
-      t(styles.subLabel, "Submitted"),
+      t(styles.subLabel, "Prepared"),
       t(styles.subN, `mean ± s.d. · n=${batch.replicateCount}`),
     ),
     h(Text, { style: [styles.subVal, { width: COL.day, paddingLeft: GAP, color: C.ink40 }] }, ""),
     h(Text, { style: [styles.subVal, { width: COL.hc, paddingLeft: GAP }] }, stat(batch.hToCorg, nf3)),
     h(Text, { style: [styles.subVal, { width: COL.oc, paddingLeft: GAP, color: C.ink55 }] }, stat(batch.oToCorg, nf3)),
     h(Text, { style: [styles.subVal, { width: COL.totc, paddingLeft: GAP }] }, stat(batch.totalCarbonPercent, nf1)),
-    h(Text, { style: [styles.subVal, { width: COL.orgc, paddingLeft: GAP, color: C.ink40 }] }, "Not submitted"),
+    h(Text, { style: [styles.subVal, { width: COL.orgc, paddingLeft: GAP, color: C.ink40 }] }, "Not included"),
     h(Text, { style: [styles.subVal, { width: COL.inorg, paddingLeft: GAP }] }, stat(batch.inorganicCarbonPercent, nf1)),
   );
   return v(styles.section, {}, header, v(styles.table, {}, th, ...rows, foot));
@@ -305,9 +305,9 @@ function soilBlock(model: DurabilityLedgerModel): ReactElement {
   const s = model.soil;
   const floorLine = s.temperatureFloored
     ? `Declared ${nf1(s.declaredSoilTemperatureC)} °C raised to the 7 °C floor (§5.1.1.3.1).`
-    : "The declared value is at or above the 7 °C floor. It is submitted as declared.";
+    : "The declared value is at or above the 7 °C floor. It is prepared as declared.";
   const left = v(styles.soilCell, {},
-    t(styles.soilLabel, "Effective value submitted"),
+    t(styles.soilLabel, "Effective value prepared"),
     h(Text, { style: styles.soilBig }, nf1(s.effectiveSoilTemperatureC), h(Text, { style: styles.soilUnit }, " °C")),
     t(styles.soilLine, `Declared ${nf1(s.declaredSoilTemperatureC)} °C`),
   );
@@ -331,10 +331,10 @@ function apparatus(): ReactElement {
       "Protocol §8.3.1 calls for at least 3 lab replicates per measured production batch, " +
       "representative of the full range of physical characteristics present in that batch. " +
       "This sheet reports the recorded replicate count, and reconciles the raw values " +
-      "into the per-batch mean ± standard deviation submitted as the batch's measurement-sample submission, " +
+      "into the per-batch mean ± standard deviation prepared for the batch's measurement-sample submission, " +
       "and records the §3 Table 2 permanence verdict (molar H/C_org < 0.5 AND O/C_org < 0.2) judged " +
       "on the pooled mean. The lab's own certificate of analysis remains attached as a Source on the " +
-      "Removal; this is noma's working showing how the submitted figures derive from it. The registry " +
+      "Removal; this is noma's working showing how the prepared figures derive from it. The registry " +
       "computes the durable fraction from these inputs and the soil-temperature reference.",
     ),
   );
@@ -346,7 +346,7 @@ function apparatus(): ReactElement {
     legendRow("O/C_org < 0.2", "Molar oxygen-to-organic-carbon permanence ceiling."),
     legendRow("mean ± s.d.", "Pooled replicate mean and sample standard deviation."),
     legendRow("Inorg C (plum)", "Derived as Total − Organic carbon (Eq.2) when not measured."),
-    legendRow("Submitted", "H/C_org, total and inorganic carbon, and product mass in the measurement-sample submission."),
+    legendRow("Prepared", "H/C_org, total and inorganic carbon, and product mass included in the measurement-sample submission."),
   );
   return v(styles.apparatus, {}, note, legend);
 }
@@ -370,7 +370,7 @@ function buildDocument(model: DurabilityLedgerModel): ReactElement {
   return h(Document, {
     title: `200-Year Durability Evidence Ledger${model.memberBatchCodes ? `: ${model.memberBatchCodes}` : ""}`,
     author: "noma dMRV",
-    subject: "Sample values and submitted durability results by credit batch",
+    subject: "Sample values and prepared durability results by credit batch",
   },
     h(Page, { size: "A4", style: styles.page },
       masthead(model),

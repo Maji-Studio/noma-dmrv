@@ -68,8 +68,20 @@ const REGISTRY_FIELD_LABELS: Record<string, string> = {
   s_fraction: "Durability fraction",
 };
 
-function registryFieldLabel(inputKey: string): string {
-  return REGISTRY_FIELD_LABELS[inputKey] ?? "Registry value";
+function registryFieldLabel(
+  inputKey: string,
+  componentDisplayName?: string,
+): string {
+  const fieldLabel = REGISTRY_FIELD_LABELS[inputKey] ?? "Registry value";
+  const componentLabel = componentDisplayName?.trim();
+  if (
+    !componentLabel ||
+    componentLabel.includes("_") ||
+    componentLabel.includes("/")
+  ) {
+    return fieldLabel;
+  }
+  return `${componentLabel}: ${fieldLabel}`;
 }
 
 export function CompiledSubmissionReview({
@@ -206,7 +218,10 @@ export function CompiledSubmissionReview({
                     className="border-t border-[var(--color-border-tertiary)]"
                   >
                     <td className="py-6 pr-12">
-                      {registryFieldLabel(binding.inputKey)}
+                      {registryFieldLabel(
+                        binding.inputKey,
+                        binding.componentDisplayName,
+                      )}
                     </td>
                     <td className="py-6 pr-12">
                       {bindingSourceLabel(binding.binding)}
