@@ -35,6 +35,7 @@ import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
 import { productionRuns } from "@/db/schema/production";
 import { biocharProducts } from "@/db/schema/products";
+import { binMovements } from "@/db/schema/bin-movements";
 
 const TEST_USER_ID = "test-user-storage-activity-sort";
 const PAGE_SIZE = 50;
@@ -45,6 +46,7 @@ const T2_RUN_DRAW = new Date("2026-02-10T08:00:00Z");
 const T3_RUN_FILL = new Date("2026-03-11T08:00:00Z");
 const T4_PRODUCT_FROM_RUN = new Date("2026-05-05T08:00:00Z");
 const T5_PRODUCT_STORED = new Date("2026-06-20T08:00:00Z");
+const T6_STOCK_TAKE = new Date("2026-07-25T08:00:00Z");
 
 /**
  * Bin D's own production run. Older than every other event on purpose: if the
@@ -246,6 +248,14 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
 async function cleanupFixture(fixture: ActivitySortFixture): Promise<void> {
   await db.transaction(async (tx) => {
     await tx
+      .delete(binMovements)
+      .where(
+        inArray(binMovements.storageLocationId, [
+          ...fixture.binIdsByAge,
+          fixture.quietBinId,
+        ]),
+      );
+    await tx
       .delete(biocharProducts)
       .where(inArray(biocharProducts.id, fixture.biocharProductIds));
     await tx
@@ -335,6 +345,45 @@ describe("storage-location lastActivityAt sort", () => {
       expect(printed).toHaveLength(fixture.binIdsByAge.length);
       expect([...printed].sort((a, b) => b - a)).toEqual(printed);
       expect(activityDates.at(-1)).toBeNull();
+    } finally {
+      await cleanupFixture(fixture);
+    }
+  });
+
+  it("treats a stock reconciliation as the bin's latest activity", async () => {
+    const runId = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const fixture = await createFixture(runId);
+
+    try {
+      await db.insert(binMovements).values({
+        organizationId: TEST_ORG_ID,
+        storageLocationId: fixture.quietBinId,
+        lane: "feedstock",
+        movementType: "adjustment",
+        massDeltaKg: -5,
+        reason: "Activity-sort regression fixture",
+        createdAt: T6_STOCK_TAKE,
+      });
+
+      const { items } = await getStorageLocations(
+        makeTestOrgContext(TEST_USER_ID),
+        {
+          facilityId: fixture.facilityId,
+          sortBy: "lastActivityAt",
+          sortOrder: "desc",
+          pageSize: PAGE_SIZE,
+        },
+      );
+
+      expect(items[0]).toMatchObject({
+        id: fixture.quietBinId,
+        lastActivity: {
+          type: "out",
+          massKg: 5,
+          label: "Stock-take adjustment",
+        },
+      });
+      expect(items[0].lastActivity?.date).toEqual(T6_STOCK_TAKE);
     } finally {
       await cleanupFixture(fixture);
     }

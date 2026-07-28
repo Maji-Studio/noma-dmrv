@@ -16,6 +16,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import {
   biocharProducts,
+  binMovements,
   feedstocks,
   productionRuns,
   storageLocations,
@@ -68,6 +69,13 @@ export function storageLocationLastActivityAt(organizationId: string): SQL<Date 
       FROM ${biocharProducts}
       WHERE ${biocharProducts.organizationId} = ${organizationId}
         AND ${biocharProducts.storageLocationId} = ${storageLocations.id}
+
+      UNION ALL
+
+      SELECT ${binMovements.createdAt}
+      FROM ${binMovements}
+      WHERE ${binMovements.organizationId} = ${organizationId}
+        AND ${binMovements.storageLocationId} = ${storageLocations.id}
     ) AS activity
   )`;
 }
