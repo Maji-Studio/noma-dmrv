@@ -37,6 +37,17 @@ test.describe("Organization operating defaults", () => {
       page.getByRole("heading", { name: "Defaults", exact: true, level: 1 }),
     ).toBeVisible({ timeout: 30_000 });
 
+    // Wait for hydration before touching a control. The form is server-rendered
+    // (the `(app)` layout seeds its values, so there is no loading skeleton to
+    // sit behind), and react-hook-form only records a change once its onChange
+    // listener is attached — a `selectOption` that lands first is visible in the
+    // DOM but never reaches form state, so Save would store the old value.
+    // The sidebar facility name is the repo's usual hydration signal: it is
+    // resolved client-side by FacilityProvider.
+    await expect(
+      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+    ).toBeVisible({ timeout: 30_000 });
+
     // The system fallback, before this organization has chosen anything.
     const currency = page.getByLabel("Currency");
     await expect(currency).toHaveValue("TZS");

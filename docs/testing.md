@@ -106,6 +106,22 @@ retry**. Specs must not assume ordering across files, workers, or shards.
 - A side sheet is `[role="dialog"]`; assert on the sheet **closing** as the success signal.
 - A DataTable `<tr>` becomes `role="button"` when `onRowClick` is set — select with
   `getByRole("button")`, not `getByRole("row")`.
+- **Wait for hydration before touching a control on a server-rendered form.** Forms are
+  server-rendered, so the inputs exist in the HTML before React attaches to them, and
+  react-hook-form only records a value once its `onChange` listener is live. A `fill()` or
+  `selectOption()` that lands in that window is visible in the DOM but absent from form
+  state, so submitting stores the *old* value — and the success toast still fires, so the
+  spec fails somewhere later with no hint of the cause. Element visibility is not a
+  hydration signal. Gate on something only the hydrated client can render; the usual choice
+  is the sidebar facility name, which `FacilityProvider` resolves client-side:
+  ```ts
+  await expect(
+    page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+  ).toBeVisible();
+  ```
+  A form that sits behind a loading skeleton until a query resolves hides this by accident.
+  Do not rely on that — a later change that seeds the query (server-side `initialData`, say)
+  removes the skeleton and the spec starts failing for reasons that look unrelated.
 
 ## `@live` split (Isometric sandbox)
 
