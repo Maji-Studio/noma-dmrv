@@ -11,6 +11,8 @@ import { currencyCodes } from "./credit-batches";
 import { timezones } from "./facilities";
 import { tripTypes } from "./trip-type";
 
+const MAX_ORGANIZATION_COUNTRY_LENGTH = 100;
+
 export const applicationEvidenceMethods = ["visual", "boundary"] as const;
 export const packagingTypes = ["loose", "bagged"] as const;
 
@@ -24,7 +26,10 @@ export const organizationSettingsFormSchema = z.object({
   defaultCountry: z
     .string()
     .trim()
-    .max(100, "Country must be 100 characters or fewer.")
+    .max(
+      MAX_ORGANIZATION_COUNTRY_LENGTH,
+      `Country must be ${MAX_ORGANIZATION_COUNTRY_LENGTH} characters or fewer.`,
+    )
     .transform((value) => value || null)
     .nullable(),
   defaultTimezone: z.enum(timezones),
