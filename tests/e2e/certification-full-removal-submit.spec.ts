@@ -140,11 +140,11 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
         "Confirm & submit",
         { timeout: COLD_COMPILE_TIMEOUT_MS },
       );
-      // ...and the requirements checklist renders (not the loading/error fallback) —
+      // ...and the submission summary renders (not the loading/error fallback) —
       // proof the removal context resolved against the real project.
-      await expect(
-        dialog.getByRole("heading", { name: "Confirm & submit" }),
-      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      await expect(dialog.getByText("You are sending")).toBeVisible({
+        timeout: COLD_COMPILE_TIMEOUT_MS,
+      });
 
       // Every facility-level check met ⇒ the submit button is enabled.
       // This is the canonical "removal is ready to submit" signal (it gates on

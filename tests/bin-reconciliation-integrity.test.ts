@@ -645,6 +645,10 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         moistureContentPercent: 0,
         waterAddedKg: 0,
       });
+      // Same handler-attach window as the delivery update below: a rejection
+      // landing before the expectation attaches would fail the run as an
+      // unhandled rejection instead of the real assertion.
+      createPromise.catch(() => {});
 
       await expect.poll(async () => {
         const result = await db.execute<{ waiting: boolean }>(sql`
@@ -902,6 +906,11 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
       deliveryUpdatePromise = updateDelivery(ctx, delivery.id, {
         status: "delivered",
       });
+      // The update can reject in the window between the barrier committing and
+      // the `.rejects` expectation below attaching — pre-attach a no-op
+      // handler so the runner never sees an unhandled rejection (flaked in
+      // CI). `expect(...).rejects` still observes the rejection.
+      deliveryUpdatePromise.catch(() => {});
 
       await expect.poll(async () => {
         const result = await db.execute<{ waiting: boolean }>(sql`

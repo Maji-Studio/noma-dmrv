@@ -28,7 +28,7 @@
  */
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { getStorageLocations } from "@/data-access/storage-locations";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
@@ -355,15 +355,27 @@ describe("storage-location lastActivityAt sort", () => {
     const fixture = await createFixture(runId);
 
     try {
-      await db.insert(binMovements).values({
-        organizationId: TEST_ORG_ID,
-        storageLocationId: fixture.quietBinId,
-        lane: "feedstock",
-        movementType: "adjustment",
-        massDeltaKg: -5,
-        reason: "Activity-sort regression fixture",
-        createdAt: T6_STOCK_TAKE,
-      });
+      const [movement] = await db
+        .insert(binMovements)
+        .values({
+          organizationId: TEST_ORG_ID,
+          storageLocationId: fixture.quietBinId,
+          lane: "feedstock",
+          movementType: "adjustment",
+          massDeltaKg: -5,
+          reason: "Activity-sort regression fixture",
+          createdAt: T6_STOCK_TAKE,
+        })
+        .returning({ id: binMovements.id });
+
+      // `created_at` is a naive `timestamp`, so the instant the enrichment
+      // query hands back carries the runner's UTC offset (see the ordering
+      // test above). Read the row back through the same raw-SQL path the
+      // query uses so the expectation shares that round-trip.
+      const roundTrip = await db.execute<{ created_at: Date }>(
+        sql`select created_at from bin_movements where id = ${movement.id}`,
+      );
+      const expectedActivityDate = new Date(roundTrip.rows[0].created_at);
 
       const { items } = await getStorageLocations(
         makeTestOrgContext(TEST_USER_ID),
@@ -383,7 +395,7 @@ describe("storage-location lastActivityAt sort", () => {
           label: "Stock-take adjustment",
         },
       });
-      expect(items[0].lastActivity?.date).toEqual(T6_STOCK_TAKE);
+      expect(items[0].lastActivity?.date).toEqual(expectedActivityDate);
     } finally {
       await cleanupFixture(fixture);
     }

@@ -46,6 +46,9 @@ vi.mock("./registry-create", () => ({
           source: "reconciliation" as const,
         };
       }
+      if (reconciled.found === "refused") {
+        throw new Error(reconciled.message);
+      }
     }
     const externalId = await args.create();
     await args.onConfirmed?.(externalId);
@@ -184,7 +187,11 @@ describe("measurement-sample journal recovery", () => {
     );
   });
 
-  it("uses a journaled remote ID directly and verifies its supplier reference", async () => {
+  it("reconciles a journaled sample through the supported collection endpoint", async () => {
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield registrySample();
+    });
+
     await submission(
       {
         journaled: {
@@ -199,18 +206,18 @@ describe("measurement-sample journal recovery", () => {
       true,
     );
 
-    expect(mocks.client.get).toHaveBeenCalledWith(
-      `/measurement_samples/${SAMPLE_ID}`,
+    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.paginate).toHaveBeenCalledWith(
+      "/measurement_samples",
     );
-    expect(mocks.client.paginate).not.toHaveBeenCalled();
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(mocks.appendSubmissionJournal).not.toHaveBeenCalled();
   });
 
-  it("fails closed on a journaled ID whose supplier reference does not match", async () => {
-    mocks.client.get.mockResolvedValue(
-      registrySample(SAMPLE_ID, "unexpected-reference"),
-    );
+  it("fails closed when a journaled supplier reference resolves to a different ID", async () => {
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield registrySample("mts-unexpected");
+    });
 
     await expect(
       submission(
@@ -226,15 +233,14 @@ describe("measurement-sample journal recovery", () => {
         },
         true,
       ),
-    ).rejects.toThrow(/supplier reference mismatch/i);
+    ).rejects.toThrow(/journal mismatch/i);
 
-    expect(mocks.client.paginate).not.toHaveBeenCalled();
+    expect(mocks.client.get).not.toHaveBeenCalled();
     expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.appendSubmissionJournal).not.toHaveBeenCalled();
   });
 
-  it("does not scan or POST when a journaled ID cannot be read", async () => {
-    mocks.client.get.mockRejectedValue(new Error("registry unavailable"));
-
+  it("fails closed when a journaled sample is missing from the collection", async () => {
     await expect(
       submission(
         {
@@ -249,9 +255,12 @@ describe("measurement-sample journal recovery", () => {
         },
         true,
       ),
-    ).rejects.toThrow(/registry unavailable/i);
+    ).rejects.toThrow(/not found by supplier reference/i);
 
-    expect(mocks.client.paginate).not.toHaveBeenCalled();
+    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.paginate).toHaveBeenCalledWith(
+      "/measurement_samples",
+    );
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(mocks.appendSubmissionJournal).not.toHaveBeenCalled();
   });

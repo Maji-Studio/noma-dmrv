@@ -34,7 +34,6 @@ import {
   captureMeasurementSampleDatapointIds,
   createMeasurementSample,
   findMeasurementSampleBySupplierRef,
-  getMeasurementSampleById,
   mergeMeasurementSampleDatapointIds,
   type CreateMeasurementSampleRequest,
   type IsometricMeasurementSample,
@@ -349,15 +348,26 @@ export async function submitDurabilityMeasurementSamples(
         return sample.id;
       },
       reconcile: async () => {
-        const sample = journaled
-          ? await getMeasurementSampleById(
-              client,
-              journaled.measurementSampleId,
-            )
-          : await findMeasurementSampleBySupplierRef(
-              client,
-              submission.supplierRefId,
-            );
+        const sample = await findMeasurementSampleBySupplierRef(
+          client,
+          submission.supplierRefId,
+        );
+        if (journaled && !sample) {
+          return {
+            found: "refused" as const,
+            message:
+              `Journaled measurement sample ${journaled.measurementSampleId} ` +
+              `was not found by supplier reference "${submission.supplierRefId}"; retry is blocked.`,
+          };
+        }
+        if (journaled && sample?.id !== journaled.measurementSampleId) {
+          return {
+            found: "refused" as const,
+            message:
+              `Measurement sample journal mismatch: expected "${journaled.measurementSampleId}" ` +
+              `but supplier reference "${submission.supplierRefId}" resolved to "${sample?.id}".`,
+          };
+        }
         if (sample) {
           assertMeasurementSampleSupplierReference(
             sample,

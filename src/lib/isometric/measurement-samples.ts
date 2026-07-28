@@ -166,15 +166,6 @@ export async function createMeasurementSample(
   );
 }
 
-export async function getMeasurementSampleById(
-  client: IsometricClient,
-  id: string,
-): Promise<IsometricMeasurementSample> {
-  return client.get<IsometricMeasurementSample>(
-    `/measurement_samples/${encodeURIComponent(id)}`,
-  );
-}
-
 /**
  * Looks up a measurement sample by its noma-controlled supplier reference for
  * the reconcile path. The `GET /measurement_samples` endpoint exposes no
