@@ -83,10 +83,12 @@ into that workspace**.
 4. **Settings consolidates config.** The facility↔project link's primary home is
    Certification → Settings (Registry connection), split admin/read-only **by
    data**. Emission/LCA config moves here (ADR 0005 unchanged, import-only);
-   `/admin/emission-estimates` redirects. The facility side-sheet shows only a
-   **read-only registry summary** + "Manage in Certification → Settings". A new
-   read-only **Environment & health** panel surfaces non-secret integration
-   status.
+   the retired `/admin/emission-estimates` route no longer exists. The facility
+   side-sheet shows only a **read-only registry summary** + "Manage in
+   Certification → Settings". A new read-only **Environment & health** panel
+   surfaces non-secret integration status. The route-consolidation history is
+   archived in
+   [`2026-07-28-admin-settings-consolidation.md`](../archive/2026-07-28-admin-settings-consolidation.md).
 
 5. **Three-item sidebar group.** Certification is a titled sidebar group with
    Removals, GHG Statements, and Settings entries under the same section; there
