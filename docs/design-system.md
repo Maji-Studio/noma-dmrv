@@ -432,7 +432,10 @@ redirect into the list's side sheet (`production-runs/[id]/page.tsx`,
 - Tables/panels never sit flush on the warm field — use the `--panel-*` recipe.
 - Side sheets: header title = entity code (or `Create X` in create mode — **no
   filler subtitle in create mode**); view/edit subtitle = the identifying
-  secondary. Edit sections use `FormSection`; read sections use `DetailSection`
+  secondary. **Storage bins invert this**: the name is the title and the code
+  the subtitle, because a bin's code is a lookup key for evidence and exports
+  while its name ("North hopper") is what operators say and search for. Follow
+  the code-first default everywhere else. Edit sections use `FormSection`; read sections use `DetailSection`
   through the shared `DetailSpine`, with matching titles, order, and grouping.
   The read rail is numbered only when the paired edit form uses `FormSpine` —
   see [forms.md](./forms.md). The panel is `w-full` below `sm`, then
@@ -498,8 +501,11 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
 
 ## Entity Card pattern
 
-All biochar entity cards (Facility, Credit Batch, Storage Location,
-Application) are hand-rolled to this shape:
+All biochar entity cards (Facility, Credit Batch, Application) are hand-rolled
+to this shape. **Storage bins are the one exception**: the storage board draws
+each bin as a silo tile (`storage-bin-tile.tsx`) with a fill gauge on its left
+edge, so a wall of tiles reads as a bar chart of the facility. It keeps the
+`<article>` + `RowActionsMenu` + no-radius contract and drops the rest.
 
 ```tsx
 <article

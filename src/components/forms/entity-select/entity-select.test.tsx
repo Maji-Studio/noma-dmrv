@@ -38,6 +38,9 @@ vi.mock("./vehicle-quick-add-dialog", () => ({
 vi.mock("./feedstock-type-quick-add-dialog", () => ({
   FeedstockTypeQuickAddDialog: () => null,
 }));
+vi.mock("./formulation-quick-add-dialog", () => ({
+  FormulationQuickAddDialog: () => null,
+}));
 
 import { EntitySelect } from "./entity-select";
 

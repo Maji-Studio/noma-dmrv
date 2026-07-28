@@ -34,6 +34,28 @@ export function isFeedstockBinType(
 }
 
 /**
+ * Sort keys the storage-bin list accepts. Every key is resolved in SQL before
+ * LIMIT/OFFSET, so the order a page shows is the order across the whole result
+ * set — the list must never re-sort a page in the client, which would order
+ * only the twenty rows it happens to hold.
+ *
+ * On-hand mass is deliberately absent: it is derived after pagination from five
+ * aggregate sources (see `deriveLaneStock`), so it cannot be an ORDER BY
+ * without duplicating that derivation in the paginated query.
+ */
+export const storageLocationSortKeys = [
+  "code",
+  "name",
+  "type",
+  "capacityKg",
+  "createdAt",
+  "updatedAt",
+  "lastActivityAt",
+] as const;
+
+export type StorageLocationSortKey = (typeof storageLocationSortKeys)[number];
+
+/**
  * Short descriptions shown beneath the bin-type picker.
  */
 export const STORAGE_LOCATION_TYPE_DESCRIPTIONS: Record<StorageLocationType, string> = {
@@ -73,7 +95,9 @@ export const storageLocationFormSchema = z.object({
     .optional()
     .nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid("Invalid feedstock type")).nullable().optional(),
-  // Product bins only — restricts the bin to one formulation (empty = pure biochar)
+  // Product bins only. Optional on purpose: a product bin with no formulation is
+  // an unassigned bin, which accepts pure biochar and is claimed by the first
+  // formulation put into it (`data-access/biochar-products.ts`).
   formulationId: emptyToNull.or(z.string().uuid("Invalid formulation")).nullable().optional(),
   storageMethod: z
     .string()
@@ -195,10 +219,9 @@ export const storageLocationFilterSchema = z.object({
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(100).default(20),
 
-  // Sorting
-  sortBy: z
-    .enum(["code", "name", "type", "capacityKg", "createdAt", "updatedAt"])
-    .default("code"),
+  // Sorting. `lastActivityAt` is derived (see `storageLocationLastActivityAt`
+  // in data-access) rather than a column, so it sorts NULLS LAST.
+  sortBy: z.enum(storageLocationSortKeys).default("code"),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
 

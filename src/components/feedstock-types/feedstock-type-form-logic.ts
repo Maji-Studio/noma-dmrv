@@ -1,5 +1,22 @@
-import { FEEDSTOCK_TYPE_USAGE_OPTIONS } from "@/schemas/feedstock-types";
+import {
+  FEEDSTOCK_TYPE_USAGE_OPTIONS,
+  feedstockTypeUsages,
+} from "@/schemas/feedstock-types";
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
+
+export function initialFeedstockTypeUsage(
+  persistedUsage: string | undefined,
+  defaultUsage: FeedstockTypeUsage | undefined,
+): FeedstockTypeUsage | undefined {
+  if (
+    persistedUsage &&
+    (feedstockTypeUsages as readonly string[]).includes(persistedUsage)
+  ) {
+    return persistedUsage as FeedstockTypeUsage;
+  }
+
+  return defaultUsage;
+}
 
 export function shouldShowIsometricFeedstockSection(
   lockUsage: boolean,

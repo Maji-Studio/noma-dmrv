@@ -20,6 +20,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { DriverQuickAddDialog } from "./driver-quick-add-dialog";
 import { VehicleQuickAddDialog } from "./vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
+import { FormulationQuickAddDialog } from "./formulation-quick-add-dialog";
 import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 import { getEntityOptionCodeLabel } from "./option-display";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
@@ -171,6 +172,7 @@ export function EntitySelect({
   const [isOperatorDialogOpen, setIsOperatorDialogOpen] = useState(false);
   const [isVehicleDialogOpen, setIsVehicleDialogOpen] = useState(false);
   const [isFeedstockTypeDialogOpen, setIsFeedstockTypeDialogOpen] = useState(false);
+  const [isFormulationDialogOpen, setIsFormulationDialogOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -238,6 +240,8 @@ export function EntitySelect({
         return () => setIsVehicleDialogOpen(true);
       case "feedstockType":
         return () => setIsFeedstockTypeDialogOpen(true);
+      case "formulation":
+        return () => setIsFormulationDialogOpen(true);
       default:
         return undefined;
     }
@@ -603,6 +607,11 @@ export function EntitySelect({
         onClose={() => setIsFeedstockTypeDialogOpen(false)}
         onSuccess={handleCreatedEntity}
         defaultUsage={getFeedstockTypeDefaultUsage(filterBy)}
+      />
+      <FormulationQuickAddDialog
+        isOpen={isFormulationDialogOpen}
+        onClose={() => setIsFormulationDialogOpen(false)}
+        onSuccess={handleCreatedEntity}
       />
     </div>
   );
