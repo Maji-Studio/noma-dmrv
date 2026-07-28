@@ -60,14 +60,6 @@ the shared application-evidence taxonomy and preserves exact application →
 credit-batch lineage resolution, Datapoint confirmation, submission journaling,
 and duplicate prevention.
 
-When that newly recognized Source is mirrored during an already-prepared
-submission, the payload-freshness gate intentionally retires the stale draft as
-`superseded` and asks the operator to reload. A latest superseded Removal attempt
-is now treated as actionable, matching the submission claim layer's
-`after-superseded` path, which mints a fresh version from the stable Source set.
-Previously, the review UI incorrectly treated that retired attempt as an
-already-submitted Removal and made the prescribed retry unreachable.
-
 ## 2026-07-10 (1000-year sandbox submission verified end to end)
 
 The 1000-year removal path has now passed a live Isometric sandbox submission
