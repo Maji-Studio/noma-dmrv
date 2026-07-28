@@ -19,15 +19,15 @@ the client router cache's five-minute `static` lifetime. It would also ask the
 server to render many sidebar destinations that the user may never open. That
 is a larger freshness/load trade-off than requested.
 
-## What the repository is doing now
+## Baseline before the quick patch
 
 - The app pins Next.js `16.2.11` and React `19.2.3`
   ([package.json](../../package.json)).
 - Cache Components/PPR are not enabled, and there are no `"use cache"`
   directives ([next.config.ts](../../next.config.ts),
   [modern-patterns.md](../modern-patterns.md)).
-- The authenticated tree contains 34 `page.tsx` files and **zero**
-  `loading.tsx` files.
+- The authenticated tree contained 34 `page.tsx` files and **zero**
+  `loading.tsx` files before the recommended boundary was added.
 - Its shared layout calls `requireAuth()` and `getOrgContext()`
   ([layout.tsx](../../src/app/(app)/layout.tsx)). Those reach
   `headers()` through Better Auth
