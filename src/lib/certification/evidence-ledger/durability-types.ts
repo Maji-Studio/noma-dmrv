@@ -30,6 +30,8 @@ export const DURABILITY_EVIDENCE_LEDGER_KIND = "durability_evidence_ledger";
 export interface DurabilityEvidenceLedgerDocMetadata {
   kind: typeof DURABILITY_EVIDENCE_LEDGER_KIND;
   removalId: string;
+  /** Facility-scoped tier determines the registry inputs this Source evidences. */
+  durabilityOption: "200_year" | "1000_year";
   /** Semantic fingerprint of the ledger (batches/figures, excluding render time). */
   contentHash: string;
 }
@@ -115,5 +117,34 @@ export interface DurabilityLedgerModel {
   soil: LedgerSoilReference;
   /** Count of batches passing the eligibility gate (of `batches.length`). */
   eligibleBatchCount: number;
+  totalReplicates: number;
+}
+
+export interface ThousandYearLedgerReplicate {
+  ref: string;
+  sampleCode: string;
+  samplingDay: string | null;
+  labName: string | null;
+  /** Registry wire value: total carbon dry-basis fraction in the 0 to 1 range. */
+  carbonContentFraction: number;
+  /** Registry wire value: fraction of R0 readings at or above 2%. */
+  sFraction: number;
+}
+
+export interface ThousandYearLedgerBatch {
+  creditBatchId: string;
+  creditBatchCode: string;
+  replicates: ThousandYearLedgerReplicate[];
+  replicateCount: number;
+  /** Attribution-scaled dry biochar mass submitted for this credit batch. */
+  productMassKg: number;
+}
+
+export interface ThousandYearDurabilityLedgerModel {
+  memberBatchCodes: string | null;
+  facilityName: string | null;
+  externalProjectId: string | null;
+  generatedAtIso: string;
+  batches: ThousandYearLedgerBatch[];
   totalReplicates: number;
 }

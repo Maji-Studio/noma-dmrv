@@ -87,6 +87,43 @@ describe("reviewPayloadHash", () => {
     );
   });
 
+  it("stays stable when deterministic generated ledgers materialize during submit", () => {
+    const withGeneratedLedgers = {
+      ...pendingPayload(),
+      candidateSources: [
+        ...(pendingPayload().candidateSources as unknown[]),
+        {
+          documentId: "doc-transport-ledger",
+          binding: { nomaRole: "transport_evidence_ledger" },
+        },
+        {
+          documentId: "doc-durability-ledger",
+          binding: { nomaRole: "durability_evidence_ledger" },
+        },
+      ],
+      sourceBindingPlan: [
+        ...(pendingPayload().sourceBindingPlan as unknown[]),
+        {
+          documentId: "doc-transport-ledger",
+          sourceId: "src-transport-ledger",
+          nomaRole: "transport_evidence_ledger",
+        },
+        {
+          documentId: "doc-durability-ledger",
+          sourceId: "src-durability-ledger",
+          nomaRole: "durability_evidence_ledger",
+        },
+      ],
+    };
+
+    expect(reviewPayloadHash(withGeneratedLedgers)).toBe(
+      reviewPayloadHash(pendingPayload()),
+    );
+    expect(payloadHash(withGeneratedLedgers)).not.toBe(
+      payloadHash(pendingPayload()),
+    );
+  });
+
   it("tolerates a payload with no Source fields at all", () => {
     const bare = { removalId: "rem-1" };
     expect(() => reviewPayloadHash(bare)).not.toThrow();

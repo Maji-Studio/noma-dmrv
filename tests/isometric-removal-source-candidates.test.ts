@@ -161,4 +161,60 @@ describe("Removal source candidate discovery", () => {
       },
     ]);
   });
+
+  it("includes generated transport and durability ledgers attached to member credit batches", async () => {
+    vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
+      async (_ctx, entityType) => {
+        if (entityType !== "credit_batch") return [] as never;
+        return [
+          {
+            id: "transport-ledger",
+            documentType: "pdf",
+            metadata: {
+              kind: "transport_evidence_ledger",
+              removalId: "removal-1",
+              contentHash: "transport-hash",
+            },
+          },
+          {
+            id: "durability-ledger",
+            documentType: "pdf",
+            metadata: {
+              kind: "durability_evidence_ledger",
+              removalId: "removal-1",
+              contentHash: "durability-hash",
+              durabilityOption: "1000_year",
+            },
+          },
+          {
+            id: "other-removal-ledger",
+            documentType: "pdf",
+            metadata: {
+              kind: "transport_evidence_ledger",
+              removalId: "removal-2",
+              contentHash: "other-hash",
+            },
+          },
+        ] as never;
+      },
+    );
+
+    const candidates = await collectCandidateSourceDocumentsForRemoval(
+      orgCtx,
+      {
+        removalId: "removal-1",
+        lineages,
+        memberBatches: [{ id: "credit-batch-1", code: "CB-001" }],
+      },
+    );
+
+    expect(candidates.map((candidate) => candidate.documentId)).toEqual([
+      "durability-ledger",
+      "transport-ledger",
+    ]);
+    expect(candidates.map((candidate) => candidate.binding.nomaRole)).toEqual([
+      "durability_evidence_ledger",
+      "transport_evidence_ledger",
+    ]);
+  });
 });

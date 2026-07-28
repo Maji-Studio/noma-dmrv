@@ -133,6 +133,80 @@ describe("submitRemoval — entity readiness gate", () => {
 });
 
 describe("submitRemoval — Source binding gate", () => {
+  it("materializes generated evidence ledgers before compiling the candidate Source set", async () => {
+    const ctx = makeContext();
+    const inventory = makeInventorySourceDocument("doc-inventory");
+    const transportLedger = makeInventorySourceDocument(
+      "doc-transport-ledger",
+    );
+    const durabilityLedger = makeInventorySourceDocument(
+      "doc-durability-ledger",
+    );
+    let generatedLedgersReady = false;
+
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      ctx,
+    );
+    vi.mocked(
+      evidenceLedgers.ensureEvidenceLedgersFromContext,
+    ).mockImplementation(async () => {
+      generatedLedgersReady = true;
+    });
+    vi.mocked(
+      sources.collectCandidateSourceDocumentsForRemoval,
+    ).mockImplementation(async () =>
+      generatedLedgersReady
+        ? [inventory, transportLedger, durabilityLedger]
+        : [inventory],
+    );
+    vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(
+      async (_ctx, { candidates }) =>
+        candidates.map((candidate) =>
+          makeResolvedInventorySource(
+            candidate.documentId,
+            `src-${candidate.documentId}`,
+          ),
+        ),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dtp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rem") as never,
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).resolves.toMatchObject({ externalId: "rem_1" });
+
+    expect(
+      evidenceLedgers.ensureEvidenceLedgersFromContext,
+    ).toHaveBeenCalledOnce();
+    expect(
+      vi.mocked(evidenceLedgers.ensureEvidenceLedgersFromContext).mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(sources.collectCandidateSourceDocumentsForRemoval).mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      (
+        storedRows[0].payloadSnapshot as {
+          semantic: {
+            candidateSources: Array<{ documentId: string }>;
+          };
+        }
+      ).semantic.candidateSources.map((candidate) => candidate.documentId),
+    ).toEqual([
+      "doc-durability-ledger",
+      "doc-inventory",
+      "doc-transport-ledger",
+    ]);
+  });
+
   it("preserves the reviewed hash while pending Source IDs materialize", async () => {
     const ctx = makeContext();
     const candidates = ["doc-1", "doc-2"].map(makeInventorySourceDocument);
@@ -254,7 +328,7 @@ describe("submitRemoval — Source binding gate", () => {
     expect(storedRows).toHaveLength(0);
     expect(
       evidenceLedgers.ensureEvidenceLedgersFromContext,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledOnce();
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
     expect(isometric.createGhgEntry).not.toHaveBeenCalled();
     expect(attemptSummaryEvents()).toHaveLength(1);

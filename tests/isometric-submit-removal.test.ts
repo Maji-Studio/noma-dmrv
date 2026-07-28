@@ -201,7 +201,7 @@ describe("submitRemoval — happy path", () => {
     );
     expect(
       evidenceLedgers.ensureEvidenceLedgersFromContext,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledOnce();
     expect(protocolCheckOrder).toBeLessThan(
       createDatapointFake.mock.invocationCallOrder[0],
     );

@@ -54,6 +54,8 @@ const removalSourceBindingPlanSchema = z.array(
       "inventory",
       "feedstock_bill_of_lading",
       "delivery_bill_of_lading",
+      "transport_evidence_ledger",
+      "durability_evidence_ledger",
     ]),
     lineage: z.object({
       entityType: z.string().min(1),
