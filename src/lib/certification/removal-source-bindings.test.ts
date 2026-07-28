@@ -6,6 +6,10 @@ import {
   sourceIdsForDatapointTarget,
   SOURCE_BINDING_MAPPING_REVISION,
 } from "./removal-source-bindings";
+import {
+  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
+  APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
+} from "./application-evidence";
 
 const application = {
   entityType: "application",
@@ -14,24 +18,57 @@ const application = {
 } as const;
 
 describe("classifyRemovalSourceCandidate", () => {
-  it("maps an application Inventory role to sequestration product_mass", () => {
+  it.each(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES)(
+    "maps an application %s logbook subtype to sequestration product_mass",
+    (logbookEvidenceType) => {
+      expect(
+        classifyRemovalSourceCandidate({
+          documentType: "pdf",
+          metadata: { logbookEvidenceType },
+          lineage: application,
+        }),
+      ).toEqual({
+        nomaRole: "inventory",
+        nomaRoleLabel: "Inventory",
+        lineage: application,
+        intendedTarget: {
+          kind: "sequestration",
+          groupKey: "co2-stored",
+          inputKey: "product_mass",
+        },
+        mappingRevision: SOURCE_BINDING_MAPPING_REVISION,
+      });
+    },
+  );
+
+  it.each(APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES)(
+    "maps an application %s document to sequestration product_mass",
+    (documentType) => {
+      expect(
+        classifyRemovalSourceCandidate({
+          documentType,
+          metadata: {},
+          lineage: application,
+        }),
+      ).toMatchObject({
+        nomaRole: "inventory",
+        intendedTarget: {
+          kind: "sequestration",
+          groupKey: "co2-stored",
+          inputKey: "product_mass",
+        },
+      });
+    },
+  );
+
+  it("does not map a generic application PDF without a logbook subtype", () => {
     expect(
       classifyRemovalSourceCandidate({
         documentType: "pdf",
-        metadata: { logbookEvidenceType: "inventory" },
+        metadata: {},
         lineage: application,
       }),
-    ).toEqual({
-      nomaRole: "inventory",
-      nomaRoleLabel: "Inventory",
-      lineage: application,
-      intendedTarget: {
-        kind: "sequestration",
-        groupKey: "co2-stored",
-        inputKey: "product_mass",
-      },
-      mappingRevision: SOURCE_BINDING_MAPPING_REVISION,
-    });
+    ).toBeNull();
   });
 
   it.each([
