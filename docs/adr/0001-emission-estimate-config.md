@@ -4,6 +4,13 @@
 > 3.7 (2026-05-21). ADR 0015 supersedes the per-stage split portion after the
 > active removal template moved to a single combined energy measurement point.
 > The genset-yield decision remains active.
+>
+> **"An admin page" is now Certification → Settings → Emissions**
+> (`/certification/settings?section=emission-estimates`), per ADR 0007. This
+> ADR's phrase is the origin of the `/admin` tile that pointed there; that tile,
+> and the `/admin` hub it sat on, were removed on 2026-07-28. Note also that
+> ADR 0015's 2026-07-03 amendment made the genset-yield half vestigial — the
+> column and its hidden round-trip field survive pending a removal migration.
 
 ## Context
 

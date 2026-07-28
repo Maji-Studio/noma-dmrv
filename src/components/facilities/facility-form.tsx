@@ -28,12 +28,25 @@ import {
   DurabilityTierSelect,
   FacilityIsometricConnector,
 } from "@/components/certification";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 
 // 1000-year is the go-forward tier (ADR 0021); new facilities default to it.
 const DEFAULT_DURABILITY_OPTION: DurabilityOption = "1000_year";
 
 const timezoneOptions: readonly { value: string; label: string }[] =
   timezones.map((tz) => ({ value: tz, label: formatTimezoneLabel(tz) }));
+
+/**
+ * A zone the picker actually offers, or `undefined`. Both the facility column
+ * and the organization default are free text, so either can hold a zone this
+ * list does not carry; seeding the select with one would leave it showing the
+ * first option and silently save that instead.
+ */
+function resolveTimezone(zone: string | null | undefined): Timezone | undefined {
+  return zone && timezones.includes(zone as Timezone)
+    ? (zone as Timezone)
+    : undefined;
+}
 
 function getDefaultDurabilityOption(
   option: Facility["durabilityOption"] | null | undefined
@@ -61,6 +74,10 @@ export function FacilityForm({
   submitLabel,
 }: FacilityFormProps) {
   const isEditMode = !!facility;
+  // Organization operating defaults seed create mode only; an existing record
+  // always wins. Warmed once per session in FacilityProvider, so this is a
+  // cache read rather than a round trip on open.
+  const { defaults: orgDefaults } = useOrganizationDefaultValues();
 
   const {
     register,
@@ -74,16 +91,15 @@ export function FacilityForm({
     resolver: zodResolver(facilityFormSchema),
     defaultValues: {
       name: facility?.name ?? "",
-      country: facility?.country ?? "",
+      country: facility?.country ?? orgDefaults.defaultCountry ?? "",
       location: facility?.location ?? "",
       address: facility?.address ?? "",
       gpsLatitude: facility?.gpsLatitude ?? undefined,
       gpsLongitude: facility?.gpsLongitude ?? undefined,
       contactEmail: facility?.contactEmail ?? "",
       contactPhone: facility?.contactPhone ?? "",
-      timezone: (facility?.timezone && timezones.includes(facility.timezone as Timezone)
-        ? facility.timezone as Timezone
-        : undefined),
+      timezone: resolveTimezone(facility?.timezone)
+        ?? resolveTimezone(orgDefaults.defaultTimezone),
       durabilityOption: getDefaultDurabilityOption(
         facility?.durabilityOption,
       ),

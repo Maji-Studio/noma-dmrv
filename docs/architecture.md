@@ -106,6 +106,16 @@ a Turbopack/Vercel runtime bug.
 - `src/app/(auth)/*` public · `src/app/(app)/*` authenticated workspace ·
   `src/app/(app)/admin/*` admin-only · `src/app/api/*` API routes.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
+- **Three configuration surfaces, deliberately not one.** `/settings`
+  (`Members` · `Defaults`) is org configuration, gated on org Owner/Admin, and
+  is the only one an operator can reach. `/certification/settings` is registry
+  configuration and stays there by ADR
+  [0007](./adr/0007-certification-workspace-consolidation.md). `/admin` is
+  cross-tenant platform administration (`users.role === "admin"`) and is now
+  only the organization directory — `/admin` itself redirects to
+  `/admin/organizations`. Both settings surfaces render the shared
+  `SettingsRail`; `/settings` selects by route, `/certification/settings` by
+  `?section=`.
 - `src/proxy.ts` → `updateSession()` in `src/lib/auth/middleware.ts`. Node
   runtime (not Edge) so Better Auth can use `crypto`. The matcher covers
   everything except static assets — **including `/api`**; `/api/auth/*` is

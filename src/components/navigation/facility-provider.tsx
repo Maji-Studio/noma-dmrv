@@ -8,6 +8,7 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { useQueryState, parseAsString } from "nuqs";
 import { useFacilities, useFacility } from "@/hooks/use-facilities";
+import { useOrganizationDefaults } from "@/hooks/use-organization-settings";
 import { authClient } from "@/lib/auth/client";
 import {
   FACILITY_STORAGE_KEY,
@@ -61,6 +62,14 @@ export function FacilityProvider({
    */
   initialOrganizationId?: string | null;
 }) {
+  // Warm the organization's operating defaults for the whole session. Every
+  // create form seeds fields from them, and react-hook-form reads
+  // `defaultValues` exactly once at mount — a form opened before this query
+  // landed would seed the system fallback and never correct itself, so the
+  // first order of a session would say TZS however the organization is
+  // configured. Nothing here consumes the result; the cache entry is the point.
+  useOrganizationDefaults();
+
   const { data: sessionData, isPending: isSessionPending } =
     authClient.useSession();
   const clientActiveOrganizationId =
