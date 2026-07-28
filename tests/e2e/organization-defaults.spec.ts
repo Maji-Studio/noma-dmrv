@@ -88,7 +88,8 @@ test.describe("Organization operating defaults", () => {
       page.getByRole("link", { name: "Defaults", exact: true }),
     ).toHaveCount(0);
 
-    await page.goto("/settings/defaults");
+    const response = await page.goto("/settings/defaults");
+    expect(response?.status()).toBe(404);
     await expect(page.getByLabel("Currency")).toHaveCount(0);
   });
 });
