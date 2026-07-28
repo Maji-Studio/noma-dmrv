@@ -38,6 +38,7 @@ import {
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import {
@@ -166,6 +167,11 @@ export function ApplicationForm({
   // removals derive durability from petrographic reflectance + TGA.
   const hideSoilTemperature = durabilityOption === "1000_year";
 
+  // Organization operating defaults seed create mode only; an existing record
+  // always wins. Warmed once per session in FacilityProvider, so this is a
+  // cache read rather than a round trip on open.
+  const { defaults: orgDefaults } = useOrganizationDefaultValues();
+
   const defaultValues = {
     applicationDate: application?.applicationDate
       ? formatLocalDate(new Date(application.applicationDate))
@@ -179,7 +185,9 @@ export function ApplicationForm({
     gpsLatitude: application?.gpsLatitude ?? undefined,
     gpsLongitude: application?.gpsLongitude ?? undefined,
     applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
-    evidenceMethod: (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ?? "visual",
+    evidenceMethod:
+      (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ??
+      orgDefaults.defaultEvidenceMethod,
     gisBoundaryReference: application?.gisBoundaryReference ?? "",
     soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
     soilTemperatureC: application?.soilTemperatureC ?? undefined,

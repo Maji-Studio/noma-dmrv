@@ -6,7 +6,7 @@
 
 import * as React from "react";
 import { Accordion as BaseAccordion } from "@base-ui/react/accordion";
-import { CaretDownIcon } from "@phosphor-icons/react";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 
 // ============================================

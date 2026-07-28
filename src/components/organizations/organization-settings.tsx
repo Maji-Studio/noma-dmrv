@@ -18,7 +18,7 @@ import {
   CopyIcon,
   EnvelopeSimpleIcon,
   UsersIcon,
-} from "@phosphor-icons/react";
+} from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
@@ -221,9 +221,12 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
         </section>
       )}
 
-      {/* Members */}
+      {/* The roster. Named "Current members" rather than "Members" because the
+          pane it sits in is already titled Members — and because it reads as
+          one of three states beside "Pending invitations" and "Invite a
+          member". */}
       <section className="flex flex-col gap-16">
-        <h2 className="title-heading-3">Members</h2>
+        <h2 className="title-heading-3">Current members</h2>
         {membersLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : !members || members.length === 0 ? (

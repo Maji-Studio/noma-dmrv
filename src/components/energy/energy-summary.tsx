@@ -17,7 +17,7 @@
  */
 "use client";
 
-import { FireIcon, GasPumpIcon, LightningIcon } from "@phosphor-icons/react";
+import { FireIcon, GasPumpIcon, LightningIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { PageHeader } from "@/components/ui";
 import { SelectFacilityEmptyState } from "@/components/navigation";

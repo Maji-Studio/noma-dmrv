@@ -13,7 +13,7 @@
 
 import * as React from "react";
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
-import { InfoIcon } from "@phosphor-icons/react";
+import { InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 
 // Open/close delays (ms) — snappy enough to feel responsive, slow enough to

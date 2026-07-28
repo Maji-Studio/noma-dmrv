@@ -10,7 +10,7 @@
 "use client";
 
 import Link from "next/link";
-import { SealCheckIcon } from "@phosphor-icons/react";
+import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {

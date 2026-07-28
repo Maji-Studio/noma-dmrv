@@ -11,7 +11,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { DotsThreeVerticalIcon } from "@phosphor-icons/react";
+import { DotsThreeVerticalIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 

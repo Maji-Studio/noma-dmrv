@@ -41,8 +41,10 @@ async function openOrganizationSettings(page: Page): Promise<void> {
   await enterDefaultOrganization(page);
   await page.goto("/settings/organization");
   // First render may hit a dev-server compile of this route; allow extra time.
+  // The route is now a pane inside the settings console: `Members` is both the
+  // page title and the pane heading, and the rail carries the rest.
   await expect(
-    page.getByRole("heading", { name: "Organization", exact: true }),
+    page.getByRole("heading", { name: "Members", exact: true, level: 1 }),
   ).toBeVisible({ timeout: 30_000 });
   await page.waitForLoadState("networkidle");
 }
@@ -75,7 +77,7 @@ test.describe("Organization foundation UI", () => {
     const page = adminPage;
     await openOrganizationSettings(page);
 
-    const membersSection = sectionWithHeading(page, "Members");
+    const membersSection = sectionWithHeading(page, "Current members");
     const memberRows = membersSection.getByRole("listitem");
     const ownerRoleSelect = membersSection
       .locator('select[aria-label^="Role for "]')

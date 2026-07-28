@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { CalendarIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react";
+import { CalendarIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";

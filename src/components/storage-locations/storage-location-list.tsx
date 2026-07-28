@@ -9,7 +9,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowsClockwiseIcon, PlusIcon } from "@phosphor-icons/react";
+import { ArrowsClockwiseIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import type { StorageLocation } from "@/db/schema";
 import {
   useArchiveStorageLocation,

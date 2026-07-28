@@ -6,7 +6,7 @@
 "use client";
 
 import { useState } from "react";
-import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react";
+import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   useProductionSamples,
   useCreateProductionSample,

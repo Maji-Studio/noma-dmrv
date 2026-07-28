@@ -392,6 +392,10 @@
   --spacing-32: 32px;
   --spacing-36: 36px;
   --spacing-40: 40px;
+  /* Minimum touch target. Load-bearing for a11y, not a rhythm step: six
+     controls already wrote size-44 / min-h-44 / h-44 and got no rule at all,
+     because this scale is an allow-list. Keep it. */
+  --spacing-44: 44px;
   --spacing-48: 48px;
   --spacing-56: 56px;
   --spacing-64: 64px;

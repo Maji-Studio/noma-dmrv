@@ -56,7 +56,7 @@ Data-access functions take an `OrgContext` and call `requireOrgScope(ctx)` — t
 - **`assertSameOrg()` must be passed the current `tx` as its `executor`** when called inside a transaction — reading through the global pool from inside a transaction starves the pool under parallel load. See `src/data-access/utils.ts`.
 - `organizationId` is never accepted from form data; cross-org IDs resolve as absent rather than disclosing another org's data.
 
-Registry credentials are owned per organization and managed only by Platform Admins; members use them through scoped certification flows but cannot read or replace the stored secrets.
+Registry credentials are owned per organization and managed by its Owners and Admins (and by Platform Admins), gated on the server-computed `viewerCanManage` rather than on `users.role`. Ordinary members use them through scoped certification flows but cannot read or replace the stored secrets.
 
 ## Rate limiting
 

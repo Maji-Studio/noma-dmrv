@@ -46,17 +46,20 @@ const ROUTES = [
   "/certification/removals",
   "/certification/ghg-statements",
   "/traceability",
-  "/admin",
-  "/admin/users",
+  // Settings is a rail plus one pane; both panes are checked because the rail
+  // and the pane stack differently below `md`.
+  "/settings/organization",
+  "/settings/defaults",
+  "/admin/organizations",
 ] as const;
 
 test.use({ viewport: MOBILE_VIEWPORT });
 
 /**
  * Fail if the document scrolls horizontally. A child element with its own
- * `overflow-x-auto` (e.g. the cert settings tab bar) does NOT widen the
- * document, so this only catches layout that escapes the viewport — exactly
- * the un-wrapped-table / non-stacked-grid regression we guard against.
+ * `overflow-x-auto` (e.g. a wrapped data table) does NOT widen the document, so
+ * this only catches layout that escapes the viewport — exactly the
+ * un-wrapped-table / non-stacked-grid regression we guard against.
  */
 async function expectNoHorizontalOverflow(page: Page, route: string) {
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({

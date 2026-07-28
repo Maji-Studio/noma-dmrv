@@ -1,7 +1,14 @@
 /**
- * RegistryPicker — the wizard's registry choice. Isometric is the one live
- * integration (selected); Puro Earth and CSI are typographic "coming soon"
- * placeholders. Pure UI — no provider enum changes, no external logo assets.
+ * RegistryPicker — which registry this organization certifies with.
+ *
+ * Isometric is the one live integration and is always the selection; Puro.earth
+ * and CSI are typographic "coming soon" placeholders. Pure UI — no provider
+ * enum changes, no external logo assets, nothing to submit. It exists so the
+ * choice is visible rather than implied: an operator pasting keys should be able
+ * to see *whose* keys they are.
+ *
+ * Lives here rather than in onboarding because certification owns the registry
+ * concept; the onboarding wizard and the certifier settings pane both render it.
  */
 "use client";
 

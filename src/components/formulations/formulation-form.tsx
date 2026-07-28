@@ -23,7 +23,7 @@ import {
   ResolvedErrorRevalidator,
 } from "@/components/forms";
 import { Button } from "@/components/ui";
-import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import { PlusIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   formulationPercentFormSchema,
   percentFormToRatioPayload,

@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { ShieldWarningIcon, TestTubeIcon } from "@phosphor-icons/react";
+import { ShieldWarningIcon, TestTubeIcon } from "@phosphor-icons/react/dist/ssr";
 
 interface EnvBannerProps {
   isProduction: boolean;

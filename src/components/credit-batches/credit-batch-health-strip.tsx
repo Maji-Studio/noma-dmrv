@@ -62,7 +62,7 @@ function AffectedRecordChips({
       {visibleRecords.map((record) => {
         const run = productionRuns.find((candidate) => candidate.id === record.id);
         const tooltip = (
-          <span className="flex flex-col gap-3">
+          <span className="flex flex-col gap-4">
             {run && <span>{formatDate(run.date)}</span>}
             {run && feedstockName && <span>{feedstockName}</span>}
             {run?.biocharDryMassKg != null && (

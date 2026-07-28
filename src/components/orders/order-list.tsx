@@ -6,7 +6,7 @@
 
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { PackageIcon, PlusIcon, XIcon, TruckIcon } from "@phosphor-icons/react";
+import { PackageIcon, PlusIcon, XIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Order } from "@/db/schema";
 import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
 import { useCustomers } from "@/hooks/use-customers";

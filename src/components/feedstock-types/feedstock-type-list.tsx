@@ -9,7 +9,7 @@ import {
   PlusIcon,
   SealCheckIcon,
   XIcon,
-} from "@phosphor-icons/react";
+} from "@phosphor-icons/react/dist/ssr";
 import type { FeedstockType } from "@/db/schema";
 import { ServerError } from "@/components/forms";
 import { DataTable } from "@/components/ui/data-table";

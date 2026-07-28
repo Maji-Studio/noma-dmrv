@@ -8,7 +8,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { WarehouseIcon, CaretDownIcon, PlusIcon, CheckIcon, GearSixIcon } from "@phosphor-icons/react";
+import { WarehouseIcon, CaretDownIcon, PlusIcon, CheckIcon, GearSixIcon } from "@phosphor-icons/react/dist/ssr";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
 export function FacilitySelector() {

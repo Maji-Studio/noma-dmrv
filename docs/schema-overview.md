@@ -21,6 +21,7 @@ Map of the Drizzle schema: where each area lives, and the invariants that are *n
 | Biochar storage inventory | `src/db/schema/storage-inventory.ts` |
 | Bin movements (ledger) | `src/db/schema/bin-movements.ts` |
 | Documents (polymorphic evidence store) | `src/db/schema/documentation.ts` |
+| Organization operating defaults | `src/db/schema/settings.ts` |
 | Route cache | `src/db/schema/geo.ts` |
 | Shared enums / shared numeric column types | `src/db/schema/common.ts` · `src/db/schema/numeric-families.ts` |
 
@@ -37,6 +38,7 @@ Map of the Drizzle schema: where each area lives, and the invariants that are *n
 - **`certifier_credentials` holds provider auth** (encrypted access token + client secret, unique per `(organization_id, provider)`) — separate from `certifier_projects`, which only maps facilities to provider project IDs plus emission-estimate config ([ADR 0015](./adr/0015-energy-single-combined-measurement-point.md)). Submission-unit shape: [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR 0004](./adr/0004-ghg-statement-as-independent-artifact.md), [ADR 0008](./adr/0008-submission-ledger-internal-seam.md).
 - **A registry GHG statement's local identity is per `(provider, organization, facility, remote id)`**, because one Isometric project may be shared by several facilities (`certifier_projects` has no `external_project_id` unique). So the same registry statement can hold one `certifier_ghg_statements` row per facility, and `cert_submissions_external_unique` is partial — it excludes `submission_type = 'ghg_statement'`, which uses `cert_submissions_ghg_statement_external_unique` instead. ADR 0004's one-statement-per-`(provider, facility, period)` constraint is unaffected. See [ADR 0023](./adr/0023-registry-ghg-statement-identity-is-org-and-facility-scoped.md).
 - **`certifier_organization_settings` holds provider policy above the facility scope.** Its Source visibility value is unique per `(organization_id, provider)`, defaults to private when the row is absent, and applies only to newly mirrored registry Sources.
+- **`organization_settings` holds operating defaults that seed forms, never protocol constants.** One row per organization (unique on `organization_id`); every column is NOT NULL with a default mirroring the literal it replaced, and the read falls back to `DEFAULT_ORGANIZATION_SETTINGS` (`src/config/organization-settings.ts`) when no row exists, so consumers never see null. Changing a default never rewrites a saved record. Protocol-derived thresholds stay constants — a settings row that could move the H:C eligibility ceiling or the Method-B sample floor would let an operator weaken a certification gate from a form.
 - **Soft delete** via nullable `archived_at` on `facilities` and its operational descendants — see [`database.md`](./database.md) → "Soft Delete — Facility Archive".
 - **All domain enums** are in `src/db/schema/common.ts` — read the file, not a sample.
 

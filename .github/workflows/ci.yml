@@ -76,6 +76,12 @@ jobs:
       - name: Org-scoping check
         run: pnpm check:org-scoping
 
+      # Tailwind's spacing scale is an allow-list here (`--spacing-*: initial`),
+      # so an off-scale utility compiles to nothing and fails silently at
+      # runtime rather than at build time. Nothing else catches it.
+      - name: Spacing-scale check
+        run: pnpm check:spacing-scale
+
       - name: Apply schema
         run: pnpm drizzle-kit push --force
 

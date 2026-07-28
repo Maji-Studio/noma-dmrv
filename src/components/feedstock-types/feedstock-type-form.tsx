@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type KeyboardEvent } from "react";
-import { DatabaseIcon, SealCheckIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { DatabaseIcon, SealCheckIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils";

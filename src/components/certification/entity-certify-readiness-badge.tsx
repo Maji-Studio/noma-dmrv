@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircleIcon, WarningIcon } from "@phosphor-icons/react";
+import { CheckCircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { EntityCertifyReadiness } from "@/lib/certification/entity-readiness";

@@ -10,6 +10,8 @@ import type { Facility } from "@/db/schema";
 export const FACILITY_STORAGE_KEY = "noma:selected-facility-id";
 
 export interface FacilityContextValue {
+  /** Active organization ID that scopes facility and organization-default queries. */
+  activeOrganizationId: string | null;
   /** Currently selected facility ID (resolved from URL/local storage/fallback) */
   facilityId: string | null;
   /** Update the selected facility (writes to URL and local storage) */

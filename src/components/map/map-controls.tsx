@@ -2,8 +2,8 @@
 
 /**
  * Map control stack (concept: vertical stack of 36px square buttons, hairline
- * border, hover inverts to ink-on-paper). Shared by the PositionPicker preview
- * (+ − SAT) and the Carbon Viewer (+ − FIT SAT).
+ * border, hover inverts to ink-on-paper). Shared by every map surface, which
+ * all show the same stack: + − FIT SAT.
  */
 
 import { cn } from "@/lib/utils";
@@ -21,8 +21,14 @@ const CONTROL_BUTTON_CLASS =
 export interface MapControlsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
-  /** Optional fit-to-bounds button (Carbon Viewer). */
+  /**
+   * Recenter the view on whatever the map is about: the markers, the pin, the
+   * boundary. Every map that has a natural center should pass it — panning away
+   * with no way back is the one thing these controls exist to prevent.
+   */
   onFit?: () => void;
+  /** What FIT recenters on, for screen readers. */
+  fitAriaLabel?: string;
   satOn: boolean;
   onToggleSat: () => void;
   className?: string;
@@ -32,6 +38,7 @@ export function MapControls({
   onZoomIn,
   onZoomOut,
   onFit,
+  fitAriaLabel = "Fit map to markers",
   satOn,
   onToggleSat,
   className,
@@ -65,7 +72,7 @@ export function MapControls({
         <Button
           variant="noOutline"
           size="icon"
-          aria-label="Fit map to markers"
+          aria-label={fitAriaLabel}
           className={CONTROL_BUTTON_CLASS}
           onClick={onFit}
         >

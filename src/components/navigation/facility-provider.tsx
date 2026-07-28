@@ -8,6 +8,8 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { useQueryState, parseAsString } from "nuqs";
 import { useFacilities, useFacility } from "@/hooks/use-facilities";
+import { useOrganizationDefaults } from "@/hooks/use-organization-settings";
+import type { OrganizationDefaultsPayload } from "@/fn/organization-settings";
 import { authClient } from "@/lib/auth/client";
 import {
   FACILITY_STORAGE_KEY,
@@ -49,8 +51,15 @@ function writeStoredFacilityId(facilityId: string | null) {
 export function FacilityProvider({
   children,
   initialOrganizationId = null,
+  initialOrganizationDefaults,
 }: {
   children: ReactNode;
+  /**
+   * The organization's operating defaults, resolved server-side in the `(app)`
+   * layout. Seeds the React Query cache so create forms can read them
+   * synchronously on first render. `undefined` when there is no active org.
+   */
+  initialOrganizationDefaults?: OrganizationDefaultsPayload;
   /**
    * Active organization resolved on the server in the `(app)` layout. It is
    * authoritative until the client session hydrates, so the facilities query
@@ -69,6 +78,17 @@ export function FacilityProvider({
       | undefined)?.activeOrganizationId ?? null;
   const activeOrganizationId =
     clientActiveOrganizationId ?? initialOrganizationId;
+  // Seed the organization's operating defaults, resolved on the server in the
+  // `(app)` layout, into the organization-scoped React Query cache. Every
+  // create form reads them for its `defaultValues`, which react-hook-form
+  // captures exactly once at mount. Do not seed the server payload under a
+  // different organization if the hydrated client session has already moved.
+  useOrganizationDefaults(
+    activeOrganizationId,
+    activeOrganizationId === initialOrganizationId
+      ? initialOrganizationDefaults
+      : undefined,
+  );
   const previousOrganizationIdRef = useRef<string | null>(null);
   const [facilityId, setFacilityId] = useQueryState(
     "facility",
@@ -208,6 +228,7 @@ export function FacilityProvider({
   );
 
   const value: FacilityContextValue = {
+    activeOrganizationId,
     facilityId: resolvedFacilityId,
     isResolving,
     setFacilityId: (id: string | null) => {

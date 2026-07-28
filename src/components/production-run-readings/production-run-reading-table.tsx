@@ -8,7 +8,7 @@
 "use client";
 
 import { useState } from "react";
-import { TrashIcon } from "@phosphor-icons/react";
+import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   useProductionRunReadings,
   useDeleteAllProductionRunReadings,

@@ -11,7 +11,7 @@ import {
   PlusIcon,
   ScalesIcon,
   XIcon,
-} from "@phosphor-icons/react";
+} from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
 import {
   useBiocharProduct,

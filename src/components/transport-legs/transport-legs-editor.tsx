@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react";
+import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { useToast } from "@/components/ui/toast";

@@ -25,8 +25,14 @@ Read these first. Each one fails quietly rather than loudly.
 - **`@theme inline` sets `--spacing-*: initial` and `--radius-*: initial`**
   (`src/app/globals.css`). Default Tailwind spacing and radius classes are
   **deleted, not remapped** — `rounded-md` resolves to nothing at all and is
-  dropped without any visible error. Only scale values that exist in the theme
-  block work.
+  dropped without any visible error. The spacing scale is an **allow-list**:
+  only the `--spacing-<n>` values declared in that block generate utilities, so
+  `gap-3` or `w-120` produces no rule and the element simply has no size.
+  `pnpm check:spacing-scale` (CI, `scripts/check-spacing-scale.ts`) is what
+  catches this — nothing else does, not Tailwind, not `tsc`, not ESLint. Write
+  an arbitrary value (`w-[120px]`) when a real off-scale number is intended.
+  **44px is on the scale** because it is the minimum touch target; six controls
+  had written `size-44` / `min-h-44` / `h-44` and were rendering at icon size.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
@@ -43,6 +49,17 @@ Read these first. Each one fails quietly rather than loudly.
   reintroduce `--color-gray-*` in component code.
 - **Never re-apply a page background.** The body sits on the warm `--bg`;
   panels and cards are pure `--paper`.
+- **On desktop, `main` is the scrollport — not the window.** The `(app)` shell
+  wrapper is `md:h-screen md:overflow-hidden` and `main` carries `overflow-auto`
+  (`src/app/(app)/layout.tsx`), so at `md`+ the scrollbar lives inside `main`.
+  Two things follow. **Sticky works**: `position: sticky` resolves against the
+  nearest scrolling ancestor, so a `lg:sticky lg:top-24` in-page rail now pins —
+  before the wrapper had a bounded height, `main` grew with its content, never
+  scrolled, and every sticky descendant failed with no error. And **`window`
+  scroll APIs do not**: `window.scrollY` / `window.scrollTo` read and move a
+  document that no longer scrolls. Use `scrollIntoView` (it walks every scroll
+  ancestor) or address `main` directly. Below `md` the window scrolls as before,
+  so anything you write has to hold in both frames.
 
 ---
 
@@ -221,10 +238,43 @@ Do not use shadcn or its theming system.
 
 **Phosphor icons** — always the `*Icon`-suffixed export names (`TrashIcon`,
 `PlusIcon`); the bare names are deprecated and appear nowhere in this codebase.
-Both `@phosphor-icons/react` and `@phosphor-icons/react/dist/ssr` are in live
-use, so match whichever the file you're editing already imports. Sizes: 16
-(small) · 20 (in buttons) · 24 (standalone / StatCard) · 32 (large). Prefer
-`weight="bold"`. Icon-only controls always need an `aria-label`.
+Sizes: 16 (small) · 20 (in buttons) · 24 (standalone / StatCard) · 32 (large).
+Prefer `weight="bold"`. Icon-only controls always need an `aria-label`.
+
+**The two Phosphor entry points are not interchangeable.** One rule, and ESLint
+enforces it (`no-restricted-imports` in `eslint.config.mjs`):
+
+```ts
+// Components: always /dist/ssr.
+import { CubeIcon, LeafIcon } from "@phosphor-icons/react/dist/ssr";
+// Types: only the root exports them, and only as a type-only import.
+import type { Icon } from "@phosphor-icons/react";
+```
+
+Why each half is load-bearing:
+
+- The root entry's icons are built on `IconBase`, which calls
+  `useContext(IconContext)`, and the module it pulls in calls `createContext` at
+  module scope. That makes the whole entry client-only, and it fails at **import**
+  time, not at render — under the `react-server` condition it throws
+  `SyntaxError: The requested module 'react' does not provide an export named
+  'createContext'`, which names React rather than the icon you imported. The
+  `/dist/ssr` icons use `SSRBase`, which takes no hooks and imports cleanly in
+  both environments (verified 2026-07-28 with `node --conditions=react-server`).
+  Their prop defaults are identical (`currentColor`, `1em`, `regular`), so the
+  only thing given up is an `IconContext` provider — which this codebase has
+  never used. The root entry also re-exports the *entire* `/dist/ssr` barrel on
+  top of its own, so it is strictly the more expensive import.
+- The `Icon` type (and `IconProps` / `IconWeight`) is **not** exported from
+  `/dist/ssr`. Asking for it there fails with `TS2724: has no exported member
+  named 'Icon'. Did you mean 'XIcon'?`. Take it from the root under
+  `import type`, which erases at compile time and so pulls in no runtime module.
+
+Use `Icon` — never a loose `ElementType` — for a prop or lookup table that
+holds an icon component (`Record<Kind, Icon>`, `{ icon: Icon }`). `ElementType`
+accepts `"div"` and any unrelated component, so it silently permits values that
+will not take `size` / `weight`. `src/components/storage-locations/bin-display.ts`
+is the reference.
 
 ---
 

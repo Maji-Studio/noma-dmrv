@@ -66,7 +66,7 @@ const tableVariants = cva(
       size: {
         default: "",
         compact: "[&_th]:py-6 [&_th]:px-8 [&_td]:py-4 [&_td]:px-8",
-        comfortable: "[&_th]:py-14 [&_th]:px-16 [&_td]:py-12 [&_td]:px-16",
+        comfortable: "[&_th]:py-16 [&_th]:px-16 [&_td]:py-12 [&_td]:px-16",
       },
     },
     defaultVariants: {

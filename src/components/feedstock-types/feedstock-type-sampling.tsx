@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { ConfirmActionDialog } from "@/components/certification/confirm-action-dialog";
 import { Button } from "@/components/ui";

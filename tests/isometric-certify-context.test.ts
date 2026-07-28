@@ -298,10 +298,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.productionReadinessGap?.kind).toBe("noApplications");
     expect(result.durabilityGateBlockers).toEqual([
       "Credit batch CB-1 is marked sampled but has no samples (§8.3).",
-      "Set this facility's reference soil temperature (admin → Emission estimates) before submitting a 200-year removal.",
+      "Set this facility's reference soil temperature (Certification → Settings → Emissions) before submitting a 200-year removal.",
     ]);
     expect(result.memberBatches[0]?.facilityEmissionsGateBlockers).toEqual([
-      "Set this facility's reference soil temperature (admin → Emission estimates) before submitting a 200-year removal.",
+      "Set this facility's reference soil temperature (Certification → Settings → Emissions) before submitting a 200-year removal.",
     ]);
     expect(result.submissionWarnings).toEqual([]);
     expect(mockedGetBatchesWithSamples).toHaveBeenCalledWith(

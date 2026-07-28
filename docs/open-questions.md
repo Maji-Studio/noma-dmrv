@@ -236,17 +236,66 @@ Pure starter residue; org scoping came later via ADR 0010.
 - **To resolve:** UX decision with DEC; adjacent to #253 (cross-facility
   context reconciliation), which any switch-while-open flow must satisfy.
 
-### Onboarding registry picker needs approved Puro Earth / CSI logo assets (`onboarding/registry-picker-logos`, opened 2026-07-22)
+### Registry picker needs approved Puro Earth / CSI logo assets (`onboarding/registry-picker-logos`, opened 2026-07-22)
 
 - The onboarding plan (`docs/plans/2026-07-21-onboarding.md`) asks the wizard's
   registry step to show Puro Earth and CSI greyed **with their logos**.
-  `src/components/onboarding/registry-picker.tsx` deliberately renders styled
+  `src/components/certification/registry-picker.tsx` deliberately renders styled
   text wordmarks instead: we hold no approved logo files, and bundling
   unofficial reproductions of third-party registry branding is worse than no
-  logo.
+  logo. (The component moved out of `onboarding/` on 2026-07-28 when the
+  certifier settings pane became its second consumer.)
 - **To resolve:** DEC obtains approved logo assets (and usage permission) for
   both registries, or amends the plan to accept text wordmarks. Swap the
   wordmark spans in `registry-picker.tsx` for the assets when they arrive.
+
+### An Organization cannot be renamed (`tenancy/organization-rename`, opened 2026-07-28)
+
+- `organizations.name` and `slug` (`src/db/schema/auth.ts`) are settable only at
+  creation, through `createOrganizationWithOwner`
+  (`src/data-access/organizations.ts`). There is no `updateOrganization`, so a
+  typo at onboarding is permanent and shows in the sidebar brand, the settings
+  subtitle, and every invitation email.
+- **To resolve:** add `updateOrganization` plus a name/slug field on
+  `/settings/organization` for Owners. A slug change needs a decision on
+  existing invitation-accept URLs, which embed the invitation id rather than the
+  slug — so probably none, but confirm before assuming.
+
+### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
+
+- The certifier settings pane replaces keys by typing over a masked field, and
+  the "Remove" control that used to sit above the form is gone
+  (`src/components/organizations/organization-certifier-credentials.tsx`). The
+  data-access primitive `deleteCertifierCredentials`
+  (`src/data-access/certifier-credentials.ts`) remains and is exercised by test
+  teardown, but no surface calls it, so an organization cannot disconnect from
+  the registry from the UI.
+- **To resolve:** decide whether disconnecting is a real operator need. If it
+  is, it belongs as a destructive action on the Certifier pane with a confirm
+  dialog, not as the row treatment it replaced.
+
+### New organizations still inherit Dark Earth Carbon's feedstock catalog (`tenancy/starter-feedstock-catalog`, opened 2026-07-28)
+
+- `seedOrgDefaults` (`src/db/org-defaults.ts`) injects `STARTER_FEEDSTOCK_TYPES`
+  — nine rows coded `FT-26-001…009`, one operator's actual catalog — into every
+  organization at creation. Harmless while DEC is the only tenant; wrong as soon
+  as it is not.
+- **To resolve:** a Platform-Admin choice at org creation, or an onboarding step
+  that picks a catalog. Not an operating default: it creates records rather than
+  seeding a form, so it does not belong on `/settings/defaults`.
+
+### ADR 0026's org-level plausibility overrides are unbuilt (`data-quality/plausibility-overrides`, opened 2026-07-28)
+
+- [ADR 0026](./adr/0026-plausibility-warnings-are-advisory.md) specifies that
+  each rule has "a versioned system default and may have an Admin-managed
+  Organization override". No plausibility module exists under `src/`, so neither
+  half is implemented.
+- **To resolve:** build the rule engine first. When it exists, the override
+  surface is `/settings/defaults`
+  (`src/components/settings/organization-defaults-form.tsx`) — the table
+  `organization_settings` and its Owner/Admin gate are already in place. Keep
+  the distinction that page is built on: advisory thresholds may be
+  org-editable, certification gates may not.
 
 ### White-label dashboards per Organization (`tenancy/white-label`, opened 2026-06-11)
 
