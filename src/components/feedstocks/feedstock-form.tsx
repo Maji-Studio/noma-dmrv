@@ -491,6 +491,21 @@ export function FeedstockForm({
               />
             </FormField>
 
+            <FormField
+              id="transportTripType"
+              label="Trip type"
+              error={errors.transportTripType?.message}
+              hint="Return counts the entered distance twice; One-way counts it once."
+            >
+              <FormSelect
+                id="transportTripType"
+                options={TRIP_TYPE_OPTIONS}
+                disabled={isSubmitting}
+                error={!!errors.transportTripType}
+                {...register("transportTripType")}
+              />
+            </FormField>
+
             <ActionableFocusTarget
               target="transport-route"
               activeTarget={focusTarget}
@@ -567,21 +582,6 @@ export function FeedstockForm({
                 </div>
               </FormField>
             </ActionableFocusTarget>
-
-            <FormField
-              id="transportTripType"
-              label="Trip type"
-              error={errors.transportTripType?.message}
-              hint="Return counts the entered distance twice; One-way counts it once."
-            >
-              <FormSelect
-                id="transportTripType"
-                options={TRIP_TYPE_OPTIONS}
-                disabled={isSubmitting}
-                error={!!errors.transportTripType}
-                {...register("transportTripType")}
-              />
-            </FormField>
           </div>
         </FormSection>
 
