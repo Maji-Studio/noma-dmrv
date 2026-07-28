@@ -5,7 +5,7 @@
  * Form sections:
  * 1. Application details — applicationDate, delivery, biocharAppliedTons + auto-calculated dry mass card
  * 2. Field details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
- * 3. Evidence — evidenceMethod, gisBoundaryReference, evidence panel
+ * 3. Evidence: evidenceMethod and evidence panel
  * 4. Soil temperature — soilTemperatureSource (enum toggle), soilTemperatureC
  */
 "use client";
@@ -179,8 +179,8 @@ export function ApplicationForm({
     gpsLatitude: application?.gpsLatitude ?? undefined,
     gpsLongitude: application?.gpsLongitude ?? undefined,
     applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
-    evidenceMethod: (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ?? "visual",
-    gisBoundaryReference: application?.gisBoundaryReference ?? "",
+    evidenceMethod: (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ?? "boundary",
+    gisBoundary: application?.gisBoundary ?? null,
     soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
     soilTemperatureC: application?.soilTemperatureC ?? undefined,
   };
@@ -352,8 +352,7 @@ export function ApplicationForm({
       ...data,
       biocharAppliedTons,
       biocharAppliedDryTons,
-      gisBoundaryReference:
-        data.evidenceMethod === "boundary" ? data.gisBoundaryReference : "",
+      gisBoundary: data.evidenceMethod === "boundary" ? data.gisBoundary : null,
     });
   });
 
@@ -557,7 +556,7 @@ export function ApplicationForm({
         title="Evidence"
         icon={<CameraIcon size={14} weight="bold" />}
         hint="Isometric requires one of two evidence paths per application: geotagged stage photos, or a GIS boundary map with logbook quantities (Biochar Storage in Soil module §8.5)."
-        fields={["evidenceMethod", "gisBoundaryReference"]}
+        fields={["evidenceMethod"]}
       >
         <div
           className="grid grid-cols-1 gap-8 md:grid-cols-2"
@@ -592,26 +591,6 @@ export function ApplicationForm({
             </label>
           ))}
         </div>
-
-        {evidenceMethod === "boundary" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <FormField
-              id="gisBoundaryReference"
-              label="GIS boundary reference"
-              error={errors.gisBoundaryReference?.message}
-              helperText="Link to GIS layer data"
-            >
-              <FormInput
-                id="gisBoundaryReference"
-                type="text"
-                placeholder="e.g., https://maps.example.com/dec/plot-a"
-                disabled={isSubmitting}
-                error={!!errors.gisBoundaryReference}
-                {...register("gisBoundaryReference")}
-              />
-            </FormField>
-          </div>
-        )}
 
         <ApplicationEvidencePanel
           applicationId={application?.id}

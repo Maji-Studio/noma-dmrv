@@ -689,9 +689,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                   (sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod,
                 ),
               },
-              ...((sideSheetEntity.evidenceMethod ?? "visual") === "boundary"
-                ? [{ label: "GIS boundary reference", value: sideSheetEntity.gisBoundaryReference }]
-                : []),
             ],
             content: (
               <ApplicationEvidencePanel

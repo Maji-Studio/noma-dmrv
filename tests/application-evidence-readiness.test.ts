@@ -8,6 +8,7 @@ import {
   APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
   APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
 } from "@/lib/certification/application-evidence";
+import { TEST_GIS_BOUNDARY } from "./helpers/application-evidence-fixtures";
 
 vi.mock("@/data-access/documents", () => ({
   listDocumentsForEntityIds: vi.fn(),
@@ -30,7 +31,7 @@ function lineage(
       id: APPLICATION_ID,
       code: APPLICATION_CODE,
       evidenceMethod: "visual",
-      gisBoundaryReference: null,
+      gisBoundary: null,
       ...application,
     } as ChainOfCustodyData["application"],
     delivery: { id: "del-1" } as ChainOfCustodyData["delivery"],
@@ -124,15 +125,15 @@ describe("buildApplicationEvidenceGaps", () => {
     expect(gaps).toEqual([]);
   });
 
-  it("flags boundary applications missing boundary reference and logbook", async () => {
+  it("flags boundary applications missing a GIS reference and logbook", async () => {
     mockedListDocuments.mockResolvedValue([]);
 
     const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
-      lineage({ evidenceMethod: "boundary", gisBoundaryReference: null }),
+      lineage({ evidenceMethod: "boundary", gisBoundary: null }),
     ]);
 
     expect(gaps).toEqual([
-      "Application APP-1: GIS boundary reference",
+      "Application APP-1: GIS reference",
       BOUNDARY_LOGBOOK_GAP,
     ]);
   });
@@ -151,14 +152,14 @@ describe("buildApplicationEvidenceGaps", () => {
     const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({
         evidenceMethod: "boundary",
-        gisBoundaryReference: "field-boundary-1",
+        gisBoundary: TEST_GIS_BOUNDARY,
       }),
     ]);
 
     expect(gaps).toEqual([BOUNDARY_LOGBOOK_GAP]);
   });
 
-  it("accepts typed boundary logbook evidence but still flags a blank boundary reference", async () => {
+  it("accepts typed boundary logbook evidence but still flags a missing GIS reference", async () => {
     mockedListDocuments.mockResolvedValue([
       {
         entityId: APPLICATION_ID,
@@ -170,10 +171,10 @@ describe("buildApplicationEvidenceGaps", () => {
     ]);
 
     const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
-      lineage({ evidenceMethod: "boundary", gisBoundaryReference: "   " }),
+      lineage({ evidenceMethod: "boundary", gisBoundary: null }),
     ]);
 
-    expect(gaps).toEqual(["Application APP-1: GIS boundary reference"]);
+    expect(gaps).toEqual(["Application APP-1: GIS reference"]);
   });
 
   it("does not count a non-uploaded logbook document toward boundary evidence", async () => {
@@ -190,7 +191,7 @@ describe("buildApplicationEvidenceGaps", () => {
     const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({
         evidenceMethod: "boundary",
-        gisBoundaryReference: "field-boundary-1",
+        gisBoundary: TEST_GIS_BOUNDARY,
       }),
     ]);
 
@@ -211,7 +212,7 @@ describe("buildApplicationEvidenceGaps", () => {
     const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({
         evidenceMethod: "boundary",
-        gisBoundaryReference: "field-boundary-1",
+        gisBoundary: TEST_GIS_BOUNDARY,
       }),
     ]);
 
@@ -272,7 +273,7 @@ describe("evidence-gap document-type taxonomy parity", () => {
       const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
         lineage({
           evidenceMethod: "boundary",
-          gisBoundaryReference: "field-boundary-1",
+          gisBoundary: TEST_GIS_BOUNDARY,
         }),
       ]);
 
