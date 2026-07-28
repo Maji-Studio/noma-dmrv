@@ -19,7 +19,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
-import { PlusIcon, SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  PlusIcon,
+  SealCheckIcon,
+  WarningIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -158,9 +162,17 @@ function StatusCell({ summary }: { summary: RemovalListRow }) {
     <span className="flex flex-col items-start gap-4">
       <StatusBadge status={status.value} label={status.label} />
       {firstReason && (
-        <span className="body-caption text-[var(--color-text-secondary)] line-clamp-2">
-          {firstReason}
-          {remainingReasonCount > 0 ? ` +${remainingReasonCount} more` : ""}
+        <span className="inline-flex items-start gap-6 body-caption text-[var(--color-text-secondary)]">
+          <WarningIcon
+            size={14}
+            weight="fill"
+            aria-hidden
+            className="mt-px shrink-0 text-[var(--color-signal-orange)]"
+          />
+          <span className="line-clamp-2">
+            {firstReason}
+            {remainingReasonCount > 0 ? ` +${remainingReasonCount} more` : ""}
+          </span>
         </span>
       )}
       {status.canRetry && (
