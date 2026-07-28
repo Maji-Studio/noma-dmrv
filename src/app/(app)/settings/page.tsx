@@ -6,7 +6,7 @@
  * `/admin` was. Members is the entry every member can reach.
  */
 import { redirect } from "next/navigation";
-import { SETTINGS_MEMBERS_HREF } from "@/components/settings/settings-console";
+import { SETTINGS_MEMBERS_HREF } from "@/lib/settings/links";
 
 export default function SettingsIndexPage() {
   redirect(SETTINGS_MEMBERS_HREF);

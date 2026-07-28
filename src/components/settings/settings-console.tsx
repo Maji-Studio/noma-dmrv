@@ -22,12 +22,14 @@ import {
   UsersIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { PageHeader, SettingsRail, type SettingsSectionMeta } from "@/components/ui";
+import {
+  SETTINGS_DEFAULTS_HREF,
+  SETTINGS_MEMBERS_HREF,
+} from "@/lib/settings/links";
 
 /** A rail plus a form pane stops being readable past roughly this width. */
 const CONSOLE_MAX_WIDTH = "max-w-[1160px]";
 
-export const SETTINGS_MEMBERS_HREF = "/settings/organization";
-export const SETTINGS_DEFAULTS_HREF = "/settings/defaults";
 const ADMIN_ORGANIZATIONS_HREF = "/admin/organizations";
 
 interface SettingsConsoleProps {
