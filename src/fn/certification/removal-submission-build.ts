@@ -488,7 +488,19 @@ export function materializeRemovalSubmissionSnapshot(args: {
         removalId,
         version: nextVersion,
         sourceIds: [],
-      })
+      }).map((datapoint) => ({
+        ...datapoint,
+        body: {
+          ...datapoint.body,
+          source_ids: sourceIdsForDatapointTarget(
+            compiled.sourceBindingPlan,
+            {
+              componentId: datapoint.rtcId,
+              inputKey: datapoint.inputKey,
+            },
+          ),
+        },
+      }))
     : [];
 
   return {

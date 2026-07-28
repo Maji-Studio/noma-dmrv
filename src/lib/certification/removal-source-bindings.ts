@@ -141,9 +141,16 @@ const DURABILITY_LEDGER_TARGETS = {
   ],
 } as const;
 
+// Bump whenever the immutable plan is materialized differently on registry
+// Datapoints. This makes the semantic submission hash supersede an already
+// submitted Removal whose target list is unchanged but whose wire attachment
+// behavior was corrected.
+const SOURCE_BINDING_MATERIALIZATION_REVISION = 2;
+
 export const SOURCE_BINDING_MAPPING_REVISION = payloadHash({
   rules: SOURCE_BINDING_RULES,
   durabilityLedgerTargets: DURABILITY_LEDGER_TARGETS,
+  materializationRevision: SOURCE_BINDING_MATERIALIZATION_REVISION,
 });
 
 function durabilityLedgerBinding(
