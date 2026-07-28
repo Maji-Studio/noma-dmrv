@@ -23,7 +23,9 @@ import {
   type SupplierLocationFormData,
 } from "@/schemas/suppliers";
 import type { SupplierLocation } from "@/db/schema/parties";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { resolveLocationCountry } from "@/lib/location-defaults";
 
 // ============================================
 // Component
@@ -53,9 +55,13 @@ export function SupplierLocationForm({
   submitLabel,
 }: SupplierLocationFormProps) {
   const isEditMode = !!location;
+  const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   const defaultValues = {
     name: location?.name ?? "",
-    country: location?.country ?? "",
+    country: resolveLocationCountry(
+      location,
+      organizationDefaults.defaultCountry,
+    ),
     stateRegion: location?.stateRegion ?? "",
     city: location?.city ?? "",
     gpsLatitude: location?.gpsLatitude ?? undefined,

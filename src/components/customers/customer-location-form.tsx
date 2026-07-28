@@ -14,6 +14,8 @@ import {
   type CustomerLocationFormInput,
 } from "@/schemas/customers";
 import type { CustomerLocation } from "@/db/schema/parties";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
+import { resolveLocationCountry } from "@/lib/location-defaults";
 import { CustomerLocationFields } from "./customer-location-fields";
 
 // ============================================
@@ -44,9 +46,13 @@ export function CustomerLocationForm({
   submitLabel,
 }: CustomerLocationFormProps) {
   const isEditMode = !!location;
+  const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   const defaultValues = {
     name: location?.name ?? "",
-    country: location?.country ?? "",
+    country: resolveLocationCountry(
+      location,
+      organizationDefaults.defaultCountry,
+    ),
     stateRegion: location?.stateRegion ?? "",
     city: location?.city ?? "",
     gpsLatitude: location?.gpsLatitude ?? undefined,
