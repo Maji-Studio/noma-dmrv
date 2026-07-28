@@ -75,8 +75,6 @@ export function OrganizationCertifierCredentials({
 
   return (
     <CredentialsForm
-      // Remount when the stored state flips so the masked defaults reseed.
-      key={configured ? "configured" : "empty"}
       organizationId={organizationId}
       configured={configured}
       accessTokenLast4={status?.accessTokenLast4 ?? null}
