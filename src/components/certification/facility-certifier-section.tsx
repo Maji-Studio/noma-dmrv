@@ -41,8 +41,9 @@ interface FacilityCertifierSectionProps {
   canManage: boolean;
   /**
    * Drop the section's own border-top wrapper and "Certification" title when
-   * the host already provides a titled card (e.g. the Settings "Registry
-   * connection — Isometric" card). Management actions still render.
+   * the host already provides a titled block (the Certifier settings pane, the
+   * onboarding wizard's registry step). Management actions still render, below
+   * the content rather than in the header the host owns.
    */
   embedded?: boolean;
 }
@@ -60,7 +61,9 @@ export function FacilityCertifierSection({
 }
 
 // `<Section>` (border-top divider) standalone; a plain block when embedded in a
-// host card that already supplies its own header + padding.
+// host card that already supplies its own header + padding. The shell owns the
+// rhythm between header, fields, and actions so no child carries its own top
+// margin — an embedded mount has no header for such a margin to sit under.
 function Shell({
   embedded,
   children,
@@ -68,8 +71,8 @@ function Shell({
   embedded: boolean;
   children: ReactNode;
 }) {
-  if (embedded) return <div className="flex flex-col">{children}</div>;
-  return <Section>{children}</Section>;
+  const stack = <div className="flex flex-col gap-16">{children}</div>;
+  return embedded ? stack : <Section>{stack}</Section>;
 }
 
 function CertifierHeader({
@@ -81,11 +84,11 @@ function CertifierHeader({
   actions?: ReactNode;
   embedded: boolean;
 }) {
-  if (embedded) {
-    return actions ? (
-      <div className="flex justify-end gap-12">{actions}</div>
-    ) : null;
-  }
+  // Embedded, the host card already carries the title, so there is no header
+  // row for actions to sit in. They render below the content instead (see
+  // `CertifierActions`) — a right-aligned button floating above the sentence
+  // that explains what it does read as chrome belonging to something else.
+  if (embedded) return null;
   return (
     <header className="flex items-center justify-between gap-12">
       <div className="flex flex-col gap-4">
@@ -97,6 +100,14 @@ function CertifierHeader({
       {actions}
     </header>
   );
+}
+
+/**
+ * The manage controls when the section is embedded in a host card: a left-
+ * aligned row below the content, in the same reading order as a form's actions.
+ */
+function CertifierActions({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap gap-12">{children}</div>;
 }
 
 /**
@@ -118,7 +129,7 @@ function CertifierMappingFields({
   const resolvesNames = projectName !== undefined;
 
   return (
-    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-12 mt-16">
+    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-12">
       <Field label="Project">
         {resolvesNames && (
           <span className="body-small">{projectName ?? "—"}</span>
@@ -228,7 +239,7 @@ function FacilityCertifierReadOnly({
       {mapping ? (
         <CertifierMappingFields mapping={mapping} isProduction={isProduction} />
       ) : (
-        <p className="body-small text-[var(--color-text-secondary)] mt-16">
+        <p className="body-small text-[var(--color-text-secondary)]">
           This facility has no Isometric project link yet. Ask an admin to link
           one — submissions from this facility are blocked until it is.
         </p>
@@ -299,6 +310,25 @@ function FacilityCertifierManage({
 
   const { mapping, isProduction } = data;
 
+  const actions = mapping ? (
+    <>
+      <Button variant="default" size="small" onClick={() => setEditOpen(true)}>
+        Edit
+      </Button>
+      <Button
+        variant="default"
+        size="small"
+        onClick={() => setUnlinkOpen(true)}
+      >
+        Unlink
+      </Button>
+    </>
+  ) : (
+    <Button variant="primary" size="small" onClick={() => setEditOpen(true)}>
+      Link Isometric project
+    </Button>
+  );
+
   return (
     <>
       <Shell embedded={embedded}>
@@ -306,31 +336,8 @@ function FacilityCertifierManage({
           isProduction={isProduction}
           embedded={embedded}
           actions={
-            mapping ? (
-              <div className="flex gap-12">
-                <Button
-                  variant="default"
-                  size="small"
-                  onClick={() => setEditOpen(true)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="default"
-                  size="small"
-                  onClick={() => setUnlinkOpen(true)}
-                >
-                  Unlink
-                </Button>
-              </div>
-            ) : (
-              <Button
-                variant="primary"
-                size="small"
-                onClick={() => setEditOpen(true)}
-              >
-                Link Isometric project
-              </Button>
+            embedded ? undefined : (
+              <div className="flex gap-12">{actions}</div>
             )
           }
         />
@@ -343,11 +350,13 @@ function FacilityCertifierManage({
             templateName={templateName}
           />
         ) : (
-          <p className="body-small text-[var(--color-text-secondary)] mt-16">
+          <p className="body-small text-[var(--color-text-secondary)]">
             This facility has no Isometric project link yet. Submissions from
             this facility will be blocked until you link one.
           </p>
         )}
+
+        {embedded && <CertifierActions>{actions}</CertifierActions>}
       </Shell>
 
       {editOpen && (

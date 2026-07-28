@@ -9,11 +9,17 @@ import { requireOrgScope } from "./utils";
 type CertifierCredentialRow = typeof certifierCredentials.$inferSelect;
 type CertifierProvider = CertifierCredentialRow["provider"];
 
+/**
+ * Either secret may be omitted to rotate the other one on its own. The stored
+ * value is kept for an omitted field, so the settings form can leave a masked
+ * input untouched and still save. A first save must carry both — there is
+ * nothing to keep.
+ */
 export type UpsertCertifierCredentialsInput = {
   organizationId: string;
   provider: CertifierProvider;
-  accessToken: string;
-  clientSecret: string;
+  accessToken?: string;
+  clientSecret?: string;
 };
 
 export type CertifierCredentialsStatus = {
@@ -41,8 +47,33 @@ export async function upsertCertifierCredentials(
   input: UpsertCertifierCredentialsInput,
 ): Promise<void> {
   assertCanManageOrgCredentials(ctx, input.organizationId);
-  const accessTokenEncrypted = encryptSecret(input.accessToken);
-  const clientSecretEncrypted = encryptSecret(input.clientSecret);
+
+  const [existing] = await db
+    .select({
+      accessTokenEncrypted: certifierCredentials.accessTokenEncrypted,
+      clientSecretEncrypted: certifierCredentials.clientSecretEncrypted,
+    })
+    .from(certifierCredentials)
+    .where(
+      and(
+        eq(certifierCredentials.organizationId, input.organizationId),
+        eq(certifierCredentials.provider, input.provider),
+      ),
+    )
+    .limit(1);
+
+  if (!existing && (!input.accessToken || !input.clientSecret)) {
+    throw new SafeError(
+      "Enter both the access token and the client secret the first time you connect.",
+    );
+  }
+
+  const accessTokenEncrypted = input.accessToken
+    ? encryptSecret(input.accessToken)
+    : existing!.accessTokenEncrypted;
+  const clientSecretEncrypted = input.clientSecret
+    ? encryptSecret(input.clientSecret)
+    : existing!.clientSecretEncrypted;
 
   await db
     .insert(certifierCredentials)

@@ -41,6 +41,10 @@ export const createOrganizationSchema = z.object({
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 
+/**
+ * First-time credential entry: both halves have to be typed, because there is
+ * nothing stored to fall back on.
+ */
 export const certifierCredentialsFormSchema = z.object({
   accessToken: z.string().trim().min(1, "Access token is required."),
   clientSecret: z.string().trim().min(1, "Client secret is required."),
@@ -49,14 +53,35 @@ export type CertifierCredentialsFormInput = z.infer<
   typeof certifierCredentialsFormSchema
 >;
 
+/**
+ * Rotation: the settings form keeps both inputs on screen once credentials
+ * exist, seeded with a masked stand-in. A field left at its mask (or cleared
+ * and not retyped) means "leave this one alone", so neither is required here.
+ * Infers the same shape as the create schema, so one form type serves both.
+ */
+export const certifierCredentialsRotationSchema = z.object({
+  accessToken: z.string().trim(),
+  clientSecret: z.string().trim(),
+});
+
 const organizationIdSchema = z
   .string()
   .trim()
   .min(1, "Organization id is required.");
 
-export const setOrgCertifierCredentialsSchema =
-  certifierCredentialsFormSchema.extend({
+/**
+ * The action payload. Both secrets are optional so a rotation can carry only
+ * the half that changed; the data-access layer keeps the stored value for an
+ * omitted field and rejects a first save that omits either.
+ */
+export const setOrgCertifierCredentialsSchema = z
+  .object({
     organizationId: organizationIdSchema,
+    accessToken: z.string().trim().min(1).optional(),
+    clientSecret: z.string().trim().min(1).optional(),
+  })
+  .refine((values) => values.accessToken || values.clientSecret, {
+    message: "Enter an access token or a client secret to save.",
   });
 
 export const orgCertifierCredentialsTargetSchema = z.object({

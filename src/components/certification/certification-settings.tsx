@@ -1,77 +1,128 @@
 /**
  * CertificationSettings
- * The consolidated home for everything that configures how a facility's
- * submissions reach the registry — previously scattered across the facility
- * side-sheet (project link) and /admin/emission-estimates (LCA config), plus
- * the formerly-invisible env/credential posture.
  *
- * All three areas now live on a single stacked page (no tabs) so nothing hides
- * behind a near-empty sub-tab:
+ * Everything that configures how a facility's submissions reach the registry:
+ * organization credentials and Source visibility policy, the facility's project
+ * link, its soil reference values, and the read-only integration diagnostics.
  *
- *   Registry credentials — Isometric (org Owners/Admins manage)
- *   Registry connection — Isometric  (everyone reads; org Owners/Admins manage)
- *   Emission estimates               (org Owners/Admins — ADR 0001/0015)
- *   Environment & health             (platform admin only — read-only)
+ * Registry configuration stays on this route by ADR 0007 — only the shape
+ * changes here. The page was a single stacked column of five sections, which
+ * made two things hard to see: which tier a setting applied to (organization or
+ * facility), and that the "Emission estimates" section rendered for nobody on a
+ * default deployment because it was gated on the 200-year durability tier that
+ * ADR 0021 leaves unavailable.
  *
- * Provider-neutral shell (Decision #1): a future registry slots in beside the
- * connection section. Facility comes from context (never a per-form picker).
- * Management capability comes from the server-returned facility summary. The
- * health panel remains a platform-admin surface.
+ * It is now a console — a category rail plus a detail pane:
+ *
+ *   ORGANIZATION   Certifier · Sources
+ *   FACILITY       Emissions
+ *   PLATFORM       Diagnostics          (platform admin only)
+ *
+ * Three consequences of that shape worth knowing before editing:
+ *
+ * 1. Only the selected section is mounted, so a URL fragment cannot reach a
+ *    section. Deep links use `?section=` (see `@/lib/certification/links`), and
+ *    the section keys there are load-bearing.
+ * 2. Credentials and the facility's project link were two categories and are
+ *    now one Certifier pane: keys are useless without a linked project, and a
+ *    project cannot be listed before the keys work, so splitting them made one
+ *    job take two clicks in a fixed order the rail did not express. The old
+ *    `?section=connection` still resolves here.
+ * 3. The Emissions category is always listed for anyone who can manage it, and
+ *    explains itself as "Not used" off the 200-year tier rather than vanishing.
+ *    A fix link that lands on an empty page is worse than one that lands on a
+ *    sentence saying why there is nothing to set.
+ *
+ * Diagnostics used to be a collapsed `<details>` so it could not crowd out the
+ * thing an operator came to fix (QA 2026-07-21 F5). A rail entry satisfies that
+ * finding more directly: it is not on the first layer at all.
+ *
+ * Provider-neutral: a second registry becomes more sections under the same
+ * tiers. Facility comes from context, never a per-form picker; management
+ * capability comes from the server-computed `viewerCanManage`.
  */
 "use client";
 
+import type { ReactNode } from "react";
+import { parseAsString, useQueryState } from "nuqs";
 import {
-  FactoryIcon,
   GaugeIcon,
   GlobeIcon,
-  KeyIcon,
   PlugsIcon,
   PulseIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import type { ElementType, ReactNode } from "react";
 import { EmissionEstimatesForm } from "@/components/admin/emission-estimates-form";
-import { OrganizationCertifierCredentials } from "@/components/organizations/organization-certifier-credentials";
+import { SelectFacilityEmptyState } from "@/components/navigation";
+import { PageHeader } from "@/components/ui";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useActiveOrganizationProfile } from "@/hooks/use-organizations";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
-import { CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR } from "@/lib/certification/links";
+import { useOrgCertifierCredentialsStatus } from "@/hooks/use-certifier-credentials";
+import {
+  CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
+  CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
+  CERTIFICATION_SETTINGS_LEGACY_CONNECTION_SECTION,
+  CERTIFICATION_SETTINGS_SECTION_PARAM,
+} from "@/lib/certification/links";
 import { CertificationHealthPanel } from "./certification-health-panel";
+import { CertifierSettingsPanel } from "./certifier-settings-panel";
 import { EnvBanner } from "./env-banner";
-import { FacilityCertifierSection } from "./facility-certifier-section";
 import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-settings";
+import { SettingsRail, type SettingsSectionMeta } from "@/components/ui";
 
-function SettingsSection({
-  id,
-  icon: Icon,
+/** A rail plus a form pane stops being readable past roughly this width. */
+const CONSOLE_MAX_WIDTH = "max-w-[1160px]";
+
+const SECTION_CERTIFIER = CERTIFICATION_SETTINGS_CERTIFIER_SECTION;
+const SECTION_SOURCES = "sources";
+const SECTION_EMISSIONS = CERTIFICATION_SETTINGS_EMISSIONS_SECTION;
+const SECTION_DIAGNOSTICS = "diagnostics";
+
+/** Section keys that were retired, mapped to the pane that absorbed them. */
+const LEGACY_SECTION_KEYS: Record<string, string> = {
+  [CERTIFICATION_SETTINGS_LEGACY_CONNECTION_SECTION]: SECTION_CERTIFIER,
+  credentials: SECTION_CERTIFIER,
+};
+
+/** The durability tier the soil reference values are configuration for. */
+const SOIL_MODELLED_TIER = "200_year";
+
+interface ConsoleSection extends SettingsSectionMeta {
+  /** Pane header. The rail label is one word; this line explains it. */
+  caption: string;
+  /** Who may change what is in this pane, for the pane footnote. */
+  access: string;
+  content: ReactNode;
+}
+
+/**
+ * Explains a category that is present but has nothing to set, in place of the
+ * form. The "Not used" marker is one of only two markers the settings work kept
+ * (the other is "Required"): it changes what you do next by telling you not to
+ * go looking for a control.
+ */
+function NotUsedNotice({
   title,
-  caption,
   children,
 }: {
-  id?: string;
-  icon: ElementType;
   title: string;
-  caption: string;
   children: ReactNode;
 }) {
   return (
-    <section
-      id={id}
-      className="flex flex-col gap-24 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24"
-    >
-      <div className="flex items-center gap-12 border-b border-[var(--color-border-tertiary)] pb-16">
-        <span className="flex size-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-primary)]">
-          <Icon size={18} weight="bold" />
-        </span>
-        <div className="flex flex-col gap-2">
-          <h2 className="title-heading-3">{title}</h2>
-          <p className="body-caption text-[var(--color-text-tertiary)]">
-            {caption}
-          </p>
-        </div>
+    <div className="flex flex-col gap-10">
+      <div className="flex items-center gap-8">
+        <span
+          aria-hidden
+          className="size-6 rounded-full bg-[var(--st-off)]"
+        />
+        <span className="body-caption text-[var(--st-off)]">Not used</span>
       </div>
-      {children}
-    </section>
+      <h3 className="body-medium text-[var(--color-text-primary)]">{title}</h3>
+      <p className="body-small max-w-[560px] text-[var(--color-text-secondary)]">
+        {children}
+      </p>
+    </div>
   );
 }
 
@@ -80,155 +131,203 @@ export function CertificationSettings() {
   const isAdmin = useIsAdmin();
   const { data: organization } = useActiveOrganizationProfile();
 
-  // DB-only summary — no Isometric API. Provides the page EnvBanner's
-  // environment and the emissions section's prefill mapping without pulling the
-  // management payload (the connection section fetches that itself, only when
-  // the viewer can manage).
+  // DB-only summary — no Isometric API. Supplies the environment banner, the
+  // emissions prefill mapping, and whether this viewer may manage anything,
+  // without pulling the heavier management payload (the connection section
+  // fetches that itself, and only when the viewer can manage).
   const { data: summary, isLoading: summaryLoading } =
     useFacilityCertifierSummary(facilityId ?? "", !!facilityId);
   const viewerCanManage = summary?.viewerCanManage ?? false;
 
+  // Posture only, for the rail marker. Gated to exactly the condition that
+  // mounts the Credentials pane, so no viewer triggers a call they could not
+  // already make.
+  const canManageCredentials = viewerCanManage && !!organization;
+  const { data: credentials } = useOrgCertifierCredentialsStatus(
+    organization?.id ?? "",
+    canManageCredentials,
+  );
+
+  // `?section=` is the single source of truth for the selection, so a deep link
+  // and a rail click are the same operation. `shallow` because no section needs
+  // a server round-trip, and `replace` because switching category is not a
+  // navigation an operator would expect Back to undo.
+  const [requestedSection, setRequestedSection] = useQueryState(
+    CERTIFICATION_SETTINGS_SECTION_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+
+  const soilTierActive =
+    selectedFacility?.durabilityOption === SOIL_MODELLED_TIER;
+
+  const sections: ConsoleSection[] = [];
+
+  // Always listed, for every viewer. A member cannot change the keys or the
+  // link, but the pane is where the current state is readable, and it is what
+  // the registry-guard's "not connected yet" copy points at.
+  sections.push({
+    key: SECTION_CERTIFIER,
+    tier: "organization",
+    label: "Certifier",
+    icon: PlugsIcon,
+    caption:
+      "Your registry, its organization-wide keys, and the project this facility submits to.",
+    access: "Owners and Admins",
+    // Either half missing blocks every submission from this facility, and both
+    // are fixed here, so one marker covers them. `summary` is undefined while
+    // loading — wait rather than flash a marker that then disappears.
+    needsAttention: summary
+      ? !summary.mapping || (canManageCredentials && credentials
+          ? !credentials.configured
+          : false)
+      : false,
+    content: facilityId ? (
+      <CertifierSettingsPanel
+        facilityId={facilityId}
+        facilityLabel={selectedFacility?.code}
+        canManage={viewerCanManage}
+      />
+    ) : null,
+  });
+
+  sections.push({
+    key: SECTION_SOURCES,
+    tier: "organization",
+    label: "Sources",
+    icon: GlobeIcon,
+    caption:
+      "Whether new Isometric Sources start private to verifiers or public on the registry.",
+    access: "Owners and Admins",
+    content: <RegistrySourceVisibilitySettings />,
+  });
+
+  if (viewerCanManage) {
+    sections.push({
+      key: SECTION_EMISSIONS,
+      tier: "facility",
+      label: "Emissions",
+      icon: GaugeIcon,
+      caption: soilTierActive
+        ? "Reference soil temperature for this facility's 200-year durability model."
+        : "Soil reference values, used only by the 200-year durability model.",
+      access: "Owners and Admins",
+      content: !soilTierActive ? (
+        // ADR 0021: the tier is declared once per facility and 1000-year is the
+        // available one, so on a default deployment this is the state everyone
+        // sees. It used to render nothing at all, which made the credit-batch
+        // "Open emission estimates" fix link lead to a blank page.
+        <NotUsedNotice title="This facility is on the 1000-year durability tier">
+          The reference soil temperature only feeds the 200-year model, which
+          derives durability from the H:C ratio and soil temperature. The
+          1000-year tier measures R₀ reflectance on the sample instead, so there
+          is nothing to configure here. Change the facility&apos;s durability
+          tier to make these values apply.
+        </NotUsedNotice>
+      ) : summaryLoading ? (
+        <p className="body-medium text-[var(--color-text-tertiary)]">
+          Loading facility configuration…
+        </p>
+      ) : !summary ? (
+        <p className="body-medium text-[var(--clr-red)]" role="alert">
+          Couldn&apos;t load facility configuration. Refresh the page to retry.
+        </p>
+      ) : facilityId ? (
+        // EmissionEstimatesForm seeds its RHF defaultValues from `mapping` at
+        // mount, so it must not mount before the summary lands — otherwise
+        // saved values render blank.
+        <EmissionEstimatesForm
+          key={`emission-estimates-${facilityId}`}
+          facilityId={facilityId}
+          mapping={summary.mapping ?? null}
+          durabilityOption={SOIL_MODELLED_TIER}
+        />
+      ) : null,
+    });
+  }
+
+  if (isAdmin) {
+    sections.push({
+      key: SECTION_DIAGNOSTICS,
+      tier: "platform",
+      label: "Diagnostics",
+      icon: PulseIcon,
+      caption:
+        "Read-only environment, credential and allowlist status. Never exposes tokens.",
+      access: "Platform Admins",
+      content: <CertificationHealthPanel />,
+    });
+  }
+
+  // Resolve the selection against what this viewer can actually see: a deep
+  // link built for an Owner must not leave a member staring at an empty pane,
+  // and an unknown `?section=` must not blank the console either. Retired keys
+  // resolve to the pane that absorbed them before anything else is tried.
+  const resolvedKey = requestedSection
+    ? (LEGACY_SECTION_KEYS[requestedSection] ?? requestedSection)
+    : null;
+  const selected =
+    sections.find((s) => s.key === resolvedKey) ??
+    sections.find((s) => s.key === SECTION_CERTIFIER) ??
+    sections[0];
+
+  const subtitle = selectedFacility
+    ? `Configure how ${selectedFacility.code} reaches the registry.`
+    : "Configure how this facility's removals and GHG statements reach the registry.";
+
+  if (!facilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader area="certification" title="Settings" subtitle={subtitle} />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to configure its certification settings." />
+      </div>
+    );
+  }
+
   return (
     <div className="container-max page-shell">
-      <header className="flex flex-col gap-8">
-        <span className="title-chapter-title text-[var(--color-text-tertiary)]">
-          Certification
-        </span>
-        <h1 className="title-heading-2">Settings</h1>
-        <p className="body-medium text-[var(--color-text-secondary)] max-w-[680px]">
-          Configure how this facility&apos;s removals and GHG statements reach
-          the registry — the project link, emission estimates, and the
-          integration environment.
-        </p>
-        {selectedFacility && (
-          <div className="flex items-center gap-8 pt-4">
-            <span className="title-chapter-title text-[var(--color-text-tertiary)]">
-              Settings for
-            </span>
-            <span className="body-small text-[var(--color-text-primary)]">
-              {selectedFacility.code} — {selectedFacility.name}
-            </span>
-          </div>
+      <div className={`${CONSOLE_MAX_WIDTH} flex flex-col gap-16`}>
+        <PageHeader area="certification" title="Settings" subtitle={subtitle} />
+        {/* Which Isometric environment a write lands in is a property of the
+            whole integration, not of one category, so it stays above the rail
+            where no selection can hide it. */}
+        <EnvBanner
+          isProduction={summary?.isProduction ?? false}
+          isLoading={summaryLoading || !summary}
+        />
+      </div>
+
+      <div
+        className={`${CONSOLE_MAX_WIDTH} grid gap-24 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start`}
+      >
+        <SettingsRail
+          sections={sections}
+          selectedKey={selected?.key ?? ""}
+          onSelect={(key) => void setRequestedSection(key)}
+          ariaLabel="Certification settings categories"
+          idPrefix="certification-settings"
+        />
+
+        {selected && (
+          <section className="border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]">
+            {/* Title and caption only. A scope tag here would repeat the rail
+                header the selection came from. */}
+            <div className="flex flex-col gap-4 border-b-[1px] border-[var(--clr-dark-purple-10)] bg-[var(--sea)] px-24 py-16">
+              <h2 className="title-heading-3">{selected.label}</h2>
+              <p className="body-caption text-[var(--color-text-tertiary)]">
+                {selected.caption}
+              </p>
+            </div>
+
+            <div className="p-24">{selected.content}</div>
+
+            <div className="border-t-[1px] border-[var(--clr-dark-purple-10)] px-24 py-16">
+              <span className="body-caption text-[var(--color-text-tertiary)]">
+                {selected.access} can change these.
+              </span>
+            </div>
+          </section>
         )}
-      </header>
-
-      {!facilityId ? (
-        <div className="flex flex-col items-center justify-center gap-16 border border-dashed border-[var(--color-border-secondary)] bg-[var(--color-background-white)] py-56">
-          <FactoryIcon size={48} className="text-[var(--color-text-tertiary)]" />
-          <div className="text-center">
-            <h3 className="title-heading-3 mb-8">Select a facility</h3>
-            <p className="body-small text-[var(--color-text-secondary)]">
-              Choose a facility from the sidebar to configure its certification
-              settings.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-24">
-          <EnvBanner
-            isProduction={summary?.isProduction ?? false}
-            isLoading={summaryLoading || !summary}
-          />
-
-          {viewerCanManage && organization && (
-            <SettingsSection
-              icon={KeyIcon}
-              title="Registry credentials — Isometric"
-              caption="Write-only organization credentials used to connect to Isometric."
-            >
-              <OrganizationCertifierCredentials
-                organizationId={organization.id}
-                organizationName={organization.name ?? "your organization"}
-              />
-            </SettingsSection>
-          )}
-
-          <SettingsSection
-            icon={GlobeIcon}
-            title="Registry Source visibility"
-            caption="Default visibility for new Isometric Sources across all facilities."
-          >
-            <RegistrySourceVisibilitySettings />
-          </SettingsSection>
-
-          {/* Registry connection — everyone reads; org Owners/Admins manage. */}
-          <SettingsSection
-            icon={PlugsIcon}
-            title="Registry connection — Isometric"
-            caption="The Isometric project that every removal and GHG statement from this facility targets."
-          >
-            <FacilityCertifierSection
-              key={`facility-certifier-${facilityId}`}
-              facilityId={facilityId}
-              canManage={viewerCanManage}
-              embedded
-            />
-          </SettingsSection>
-
-          {/* Emission estimates — org Owner/Admin only (ADR 0001/0015).
-              EmissionEstimatesForm seeds its RHF defaultValues from `mapping`
-              at mount, so it must not mount until the summary has loaded —
-              otherwise saved values render blank. */}
-          {viewerCanManage &&
-            selectedFacility?.durabilityOption === "200_year" && (
-              <SettingsSection
-                id={CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR}
-                icon={GaugeIcon}
-                title="Emission estimates"
-                caption="Reference soil temperature for 200-year durability removals."
-              >
-                {summaryLoading ? (
-                  <p className="body-medium text-[var(--color-text-tertiary)]">
-                    Loading facility configuration…
-                  </p>
-                ) : !summary ? (
-                  <p className="body-medium text-[var(--clr-red)]" role="alert">
-                    Couldn&apos;t load facility configuration. Refresh the page
-                    to retry.
-                  </p>
-                ) : (
-                  <EmissionEstimatesForm
-                    key={`emission-estimates-${facilityId}`}
-                    facilityId={facilityId}
-                    mapping={summary.mapping ?? null}
-                    durabilityOption="200_year"
-                  />
-                )}
-              </SettingsSection>
-            )}
-
-          {/* Integration diagnostics — admin only, read-only, no secrets.
-              Collapsed by default: credentials health and allowlists are
-              diagnostics, not operator configuration — on the first layer they
-              crowd out the one thing an operator came here to fix
-              (QA 2026-07-21 F5). */}
-          {isAdmin && (
-            <details className="group border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
-              <summary className="flex cursor-pointer list-none items-center gap-12 p-24 [&::-webkit-details-marker]:hidden">
-                <span className="flex size-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-primary)]">
-                  <PulseIcon size={18} weight="bold" />
-                </span>
-                <div className="flex flex-col gap-2">
-                  <h2 className="title-heading-3">Integration diagnostics</h2>
-                  <p className="body-caption text-[var(--color-text-tertiary)]">
-                    Read-only environment, credentials, and allowlist status.
-                    Never exposes tokens or secrets.
-                  </p>
-                </div>
-                <span className="ml-auto body-caption text-[var(--color-text-tertiary)] group-open:hidden">
-                  Show
-                </span>
-                <span className="ml-auto hidden body-caption text-[var(--color-text-tertiary)] group-open:inline">
-                  Hide
-                </span>
-              </summary>
-              <div className="border-t border-[var(--color-border-tertiary)] p-24">
-                <CertificationHealthPanel />
-              </div>
-            </details>
-          )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
