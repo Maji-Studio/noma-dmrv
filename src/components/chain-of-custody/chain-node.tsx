@@ -1,6 +1,6 @@
 "use client";
 
-import { type ElementType } from "react";
+import type { Icon } from "@phosphor-icons/react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { ArrowUpRightIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
 import { getStatusState, getStatusStateColor } from "@/lib/status-state";
@@ -9,7 +9,7 @@ import type { LineageDetailRow } from "./use-chain-graph";
 export interface ChainNodeData {
   label: string;
   code: string;
-  icon: ElementType;
+  icon: Icon;
   /** Fill accent — left edge + highlight ring. */
   accent: string;
   /** Ink variant — header type label text (always passes contrast). */

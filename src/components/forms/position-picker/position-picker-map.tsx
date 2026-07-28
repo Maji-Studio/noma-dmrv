@@ -239,6 +239,19 @@ export default function PositionPickerMap({
     }
   }, [latitude, longitude, accent, disabled]);
 
+  // Panning away from the pin is easy and there is no other way back to it.
+  // With no pin set, this returns to the map's opening view.
+  const recenter = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    const lngLat = mapPoint(latitude, longitude);
+    map.easeTo({
+      center: lngLat ?? DEFAULT_MAP_CENTER,
+      zoom: lngLat ? Math.max(map.getZoom(), FOCUSED_MAP_ZOOM) : DEFAULT_MAP_ZOOM,
+      duration: EASE_DURATION_MS,
+    });
+  };
+
   const toggleSat = () => {
     const map = mapRef.current;
     if (!map?.getLayer(SAT_LAYER_ID)) return;
@@ -274,6 +287,8 @@ export default function PositionPickerMap({
       <MapControls
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}
+        onFit={recenter}
+        fitAriaLabel="Recenter the map"
         satOn={satOn}
         onToggleSat={toggleSat}
       />

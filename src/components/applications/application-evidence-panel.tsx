@@ -225,7 +225,7 @@ function EvidenceDocumentList({
               )}
             </div>
             {onSetVisualRole && doc.documentType === VISUAL_DOC_TYPE && (
-              <div className="w-full sm:w-200">
+              <div className="w-full sm:w-192">
                 <FormSelect
                   aria-label={`Evidence role for ${doc.fileName}`}
                   value={evidenceRole ?? ""}
@@ -242,7 +242,7 @@ function EvidenceDocumentList({
               </div>
             )}
             {onSetLogbookEvidenceType && doc.documentType === BOUNDARY_DOC_TYPE && (
-              <div className="w-full sm:w-200">
+              <div className="w-full sm:w-192">
                 <FormSelect
                   aria-label={`Logbook evidence type for ${doc.fileName}`}
                   value={logbookEvidenceType ?? ""}

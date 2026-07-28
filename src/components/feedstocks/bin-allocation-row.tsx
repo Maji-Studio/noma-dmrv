@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { TrashIcon } from "@phosphor-icons/react";
+import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Control, UseFormRegisterReturn, FieldError } from "react-hook-form";
 import { FormField, FormInput, FormEntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui/button";

@@ -24,7 +24,7 @@ vi.mock("@/hooks/use-reactors", () => ({
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
 }));
-vi.mock("@phosphor-icons/react", () => ({
+vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   LightningIcon: () => <span />,
   FlaskIcon: () => <span />,
   PlusIcon: () => <span />,

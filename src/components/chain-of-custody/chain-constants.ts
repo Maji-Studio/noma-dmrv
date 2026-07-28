@@ -1,4 +1,4 @@
-import type { ElementType } from "react";
+import type { Icon } from "@phosphor-icons/react";
 import {
   CubeIcon,
   FactoryIcon,
@@ -62,7 +62,7 @@ export type LineageNodeKind =
 
 export interface LineageNodeStyle {
   label: string;
-  icon: ElementType;
+  icon: Icon;
   /** Fill accent — left edge, minimap, marker shapes. */
   accent: string;
   /** Ink variant of the accent — text-on-light always passes contrast. */

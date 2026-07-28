@@ -48,7 +48,7 @@ describe("SelectBatchesStep", () => {
     expect(html).toContain("1,000-year biochar sequestration");
     expect(html).not.toContain("biochar_sequestration_1000_year");
     expect(html).toContain(
-      'href="/certification/settings?tab=connection&amp;facility=facility-1"',
+      'href="/certification/settings?section=certifier&amp;facility=facility-1"',
     );
     expect(html).toContain("Review certification settings");
     expect(html).not.toContain("CO₂e preview");

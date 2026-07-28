@@ -402,7 +402,7 @@ export function buildSoilTemperatureReconciliationWarnings(args: {
     `An application site soil temperature (${maxSiteC.toFixed(1)} °C) exceeds the declared ` +
       `facility reference (${args.facilityReference.effectiveSoilTemperatureC.toFixed(1)} °C) — ` +
       `the reference may over-credit durability for that site. Reconcile the facility ` +
-      `reference value (admin → Emission estimates) or its PDD justification.`,
+      `reference value (Certification → Settings → Emissions) or its PDD justification.`,
   ];
 }
 
@@ -484,8 +484,8 @@ export function buildSoilTemperatureGate(args: {
   if (args.facilityReference == null) {
     return {
       blockers: [
-        "Set this facility's reference soil temperature (admin → Emission " +
-          "estimates) before submitting a 200-year removal.",
+        "Set this facility's reference soil temperature (Certification → " +
+          "Settings → Emissions) before submitting a 200-year removal.",
       ],
       warnings: [],
     };

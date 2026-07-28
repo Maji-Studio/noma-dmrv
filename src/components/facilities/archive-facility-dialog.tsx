@@ -15,7 +15,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { WarningIcon } from "@phosphor-icons/react";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, Modal } from "@/components/ui";
 import { useFacilityArchiveImpact } from "@/hooks/use-facilities";
 

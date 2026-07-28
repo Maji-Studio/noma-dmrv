@@ -56,7 +56,7 @@ describe("SubmissionChecks", () => {
     expect(html).toContain("Removal template resolved");
     expect(html).toContain("No default removal template is selected.");
     expect(html).toContain(
-      'href="/certification/settings?tab=connection&amp;facility=facility-1"',
+      'href="/certification/settings?section=certifier&amp;facility=facility-1"',
     );
   });
 

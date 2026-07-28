@@ -22,10 +22,11 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
+import { TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import type { Delivery } from "@/db/schema";
 import { useOrdersForSelect } from "@/hooks/use-orders";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { DeliveryEvidenceSection } from "./delivery-trailing-sections";
@@ -97,6 +98,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const isEditMode = !!delivery;
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
+  // Organization operating defaults seed create mode only; an existing record
+  // always wins. Warmed once per session in FacilityProvider, so this is a
+  // cache read rather than a round trip on open.
+  const { defaults: orgDefaults } = useOrganizationDefaultValues();
+
 
   // The order picker fetches its own options (FormEntitySelect); this query
   // only backs the stored-distance prefill for the selected order below.
@@ -119,7 +125,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     distanceKmOverride: delivery?.distanceKmOverride ?? undefined,
     distanceSource: delivery?.distanceSource ?? null,
     distanceNote: delivery?.distanceNote ?? "",
-    tripType: delivery?.tripType ?? DEFAULT_TRIP_TYPE,
+    tripType: delivery?.tripType ?? orgDefaults.defaultTripType,
   };
 
   const {

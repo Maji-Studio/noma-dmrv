@@ -12,7 +12,8 @@
  */
 "use client";
 
-import { type ElementType, useState } from "react";
+import { useState } from "react";
+import type { Icon } from "@phosphor-icons/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -36,6 +37,7 @@ import {
   ListChecksIcon,
   LightningIcon,
   GearSixIcon,
+  BuildingsIcon,
   SignOutIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
@@ -54,7 +56,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 interface NavItem {
   href: string;
   label: string;
-  icon: ElementType;
+  icon: Icon;
   /** Skip appending the `?facility=` query param (e.g. admin pages with their own selectors). */
   skipFacilityParam?: boolean;
   /** Match the active state on the exact path only, not the `href/` prefix. */
@@ -155,17 +157,21 @@ const navSections: NavSection[] = [
 
 /**
  * Admin section — appended to the nav only for users with the admin role.
- * Admin pages carry their own facility selectors, so the `?facility=` param
- * is skipped on this link.
+ *
+ * One item, because the organization directory is the only surface that lives
+ * under `/admin`. It used to point at an `/admin` hub whose other two tiles
+ * were cross-links to pages already in this sidebar; the label now names the
+ * destination instead of the gate. Cross-tenant by definition, so the
+ * `?facility=` param is skipped.
  */
 const adminSection: NavSection = {
   title: "Admin",
   accent: SECTION_ACCENTS.admin,
   items: [
     {
-      href: "/admin",
-      label: "Admin Panel",
-      icon: GearSixIcon,
+      href: "/admin/organizations",
+      label: "Organizations",
+      icon: BuildingsIcon,
       skipFacilityParam: true,
     },
   ],
@@ -386,6 +392,13 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               {session?.user?.email ?? " "}
             </span>
           </div>
+          {/* Straight to Members rather than `/settings`, which only
+              redirects here — the settings rail is the index.
+
+              The name stays "Organization settings": the Certification section
+              already carries a link named exactly "Settings", and two links in
+              the same nav with one accessible name is ambiguous for screen
+              reader users and for any by-name lookup. */}
           <Link
             href="/settings/organization"
             onClick={onNavigate}

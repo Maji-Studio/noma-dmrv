@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ListChecksIcon, PlusIcon } from "@phosphor-icons/react";
+import { ListChecksIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   useCreateFormulation,
   useDeleteFormulation,
