@@ -80,8 +80,8 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
       // Make the new facility active so the reactor + registry steps scope to
       // it (ReactorForm reads facilityId from context; the registry surfaces
       // take activeFacilityId). Goes through the context setter, not a
-      // hand-rolled localStorage write. The onboarding-status refetch is
-      // deferred to wizard dismiss (see useOnboardingGate).
+      // hand-rolled localStorage write. The wizard is latched open before the
+      // mutation refreshes onboarding status, so this cannot close it mid-flow.
       setFacilityId(facility.id);
       setCurrent(STEP.reactor);
     } catch (error) {

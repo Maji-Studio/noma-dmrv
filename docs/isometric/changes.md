@@ -1,5 +1,9 @@
 # Isometric Docs Change Log
 
+Certification-readiness, transport-evidence, supporting-source, and sampling
+correction notes are archived in
+[`docs/archive/2026-07-28-certification-readiness-and-sampling-corrections.md`](../archive/2026-07-28-certification-readiness-and-sampling-corrections.md).
+
 Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).
@@ -39,25 +43,6 @@ Earlier implementation notes are archived by date:
 - [`2026-06-10 to 2026-06-20`](../archive/isometric-changes-archive-2026-06-10-to-06-20.md)
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
-
-## 2026-07-21 (actionable transport-evidence readiness)
-
-Transport evidence now has one reusable operator workflow across feedstocks,
-deliveries, and manually managed transport legs. The UI uses one multi-file
-uploader with an explicit classification choice: bill of lading, weigh-scale
-ticket, or other transport evidence. These are alternatives; one successfully
-uploaded classified file is sufficient.
-
-Readiness is composite and reflects saved state: the effective distance source
-must be `document` and at least one accepted transport-evidence document must
-exist. Either fact alone remains incomplete. Persisted complete fields stay
-green in view and edit modes; incomplete evidence is orange and dashboard
-attention links focus the actionable transport section. Migration 0087 adds
-`other_transport_evidence` to `documentation_type` (renumbered from 0084
-during the staging sync).
-
-This is an operator-readiness and evidence-classification change. It does not
-change Isometric payload mappings or make a new protocol claim.
 
 ## 2026-07-10 (1000-year sandbox submission verified end to end)
 

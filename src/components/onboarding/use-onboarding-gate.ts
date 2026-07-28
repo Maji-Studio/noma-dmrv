@@ -15,7 +15,10 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth/client";
-import { onboardingKeys, useOnboardingStatus } from "@/hooks/use-onboarding";
+import {
+  invalidateOnboardingProgress,
+  useOnboardingStatus,
+} from "@/hooks/use-onboarding";
 import type { OnboardingStatus } from "@/data-access/onboarding";
 import {
   onboardingGuideCollapsedKey,
@@ -27,12 +30,14 @@ import { deriveSetupProgress, type SetupProgress } from "./use-setup-steps";
  * - `takeover-guide` — Owner/Admin, setup incomplete: the guide IS the body.
  * - `takeover-member` — Member, setup incomplete: the calm "in progress" note.
  * - `strip` — Owner/Admin collapsed the guide: slim strip above the real body.
+ * - `loading` — status is unresolved: hold the onboarding-shaped placeholder.
  * - `none` — nothing to show; the real dashboard renders as usual.
  */
 export type OnboardingMode =
   | "takeover-guide"
   | "takeover-member"
   | "strip"
+  | "loading"
   | "none";
 
 export interface OnboardingWizardControls {
@@ -119,9 +124,9 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
   // Persisted preferences read lazily, re-read whenever their scoped key
   // changes (session resolves, org switches) — the render-adjustment pattern,
   // so no effect is needed. Hydration-safe: both only influence the rendered
-  // output once the status query has resolved (post-hydration) — until then
-  // the gate mode is "none" and the guide/strip aren't rendered — so the
-  // server's `false` first paint never mismatches the client.
+  // output once the status query has resolved (post-hydration). The loading
+  // mode does not read either flag, so the server's `false` first paint never
+  // mismatches the client.
   const [readCollapsedKey, setReadCollapsedKey] = useState<string | null>(null);
   const [collapsed, setCollapsedState] = useState(false);
   if (readCollapsedKey !== collapsedKey) {
@@ -166,10 +171,9 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
       if (dismissKey) writeBooleanFlag("session", dismissKey, true);
       setDismissed(true);
       setExplicitOpen(false);
-      // Setup progress advanced inside the wizard (we defer the refetch to now
-      // so a mid-flow refetch can't flip auto-open and close the modal) — re-read
-      // it so the guide behind the modal reflects what was just created.
-      void queryClient.invalidateQueries({ queryKey: onboardingKeys.all });
+      // Re-read once more at the wizard boundary so steps completed by nested
+      // registry surfaces also appear behind the modal immediately.
+      void invalidateOnboardingProgress(queryClient);
     },
   };
 
@@ -207,7 +211,8 @@ export function resolveMode({
   progress: SetupProgress;
   collapsed: boolean;
 }): OnboardingMode {
-  if (isLoading || !status) return "none";
+  if (isLoading) return "loading";
+  if (!status) return "none";
 
   // Fresh org, no facility yet: the wizard's landing pad. A Member waits.
   if (status.facilityCount === 0) {

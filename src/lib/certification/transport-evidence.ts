@@ -26,7 +26,7 @@ export function isTransportEvidenceDocumentType(
   );
 }
 
-/** The one place that defines an "accepted" transport-evidence document row. */
+/** A transport record that has finished uploading and has a supported classification. */
 export function isAcceptedTransportEvidenceDocument(document: {
   uploadStatus: string;
   documentType: string;
@@ -45,27 +45,4 @@ export function hasAcceptedTransportEvidence(
     Number.isFinite(acceptedDocumentCount) &&
     acceptedDocumentCount > 0
   );
-}
-
-/** Certification's transport-evidence rule: one accepted classified upload. */
-export function hasCompleteTransportEvidence(
-  acceptedDocumentCount: number | null | undefined,
-): boolean {
-  return hasAcceptedTransportEvidence(acceptedDocumentCount);
-}
-
-export type TransportEvidenceCertStatus =
-  | "neutral"
-  | "satisfied"
-  | "missing";
-
-export function deriveTransportEvidenceCertStatus(input: {
-  persisted: boolean | undefined;
-  documentsLoaded: boolean;
-  acceptedDocumentCount: number | null | undefined;
-}): TransportEvidenceCertStatus {
-  if (!input.persisted || !input.documentsLoaded) return "neutral";
-  return hasCompleteTransportEvidence(input.acceptedDocumentCount)
-    ? "satisfied"
-    : "missing";
 }

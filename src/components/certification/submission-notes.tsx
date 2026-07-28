@@ -39,7 +39,7 @@ export function SubmissionNotes({ notes }: SubmissionNotesProps) {
           </div>
         </div>
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          Doesn&apos;t block submission
+          Does not block submission
         </span>
       </div>
 
@@ -54,7 +54,7 @@ export function SubmissionNotes({ notes }: SubmissionNotesProps) {
               className="mt-3 h-16 w-2 bg-[var(--color-signal-orange)]"
             />
             <span className="body-small text-[var(--color-text-secondary)]">
-              Advisory — {note.summary}
+              Advisory: {note.summary}
             </span>
             {note.detail && (
               <InfoHint

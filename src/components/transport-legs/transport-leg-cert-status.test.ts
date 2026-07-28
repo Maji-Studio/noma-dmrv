@@ -11,12 +11,11 @@ describe("transport leg header CERT status", () => {
     ).toEqual({
       distance: "neutral",
       provenance: "neutral",
-      evidence: "neutral",
       load: "neutral",
     });
   });
 
-  it("accepts manual distance provenance while missing evidence stays separate", () => {
+  it("accepts manual distance provenance", () => {
     expect(
       deriveTransportLegCertStatuses(
         [{ distanceKm: 25, distanceSource: "manual", loadMassKg: 100 }],
@@ -25,12 +24,11 @@ describe("transport leg header CERT status", () => {
     ).toEqual({
       distance: "satisfied",
       provenance: "satisfied",
-      evidence: "missing",
       load: "satisfied",
     });
   });
 
-  it("marks all persisted requirements green with recorded provenance and an upload", () => {
+  it("marks all persisted requirements green with recorded provenance", () => {
     expect(
       deriveTransportLegCertStatuses(
         [
@@ -38,7 +36,6 @@ describe("transport leg header CERT status", () => {
             distanceKm: 25,
             distanceSource: "document",
             loadMassKg: 100,
-            transportEvidenceDocumentCount: 1,
           },
         ],
         true,
@@ -46,38 +43,7 @@ describe("transport leg header CERT status", () => {
     ).toEqual({
       distance: "satisfied",
       provenance: "satisfied",
-      evidence: "satisfied",
       load: "satisfied",
     });
-  });
-
-  it("keeps evidence orange when no file is uploaded", () => {
-    expect(
-      deriveTransportLegCertStatuses(
-        [
-          {
-            distanceKm: 25,
-            distanceSource: "document",
-            loadMassKg: 100,
-            transportEvidenceDocumentCount: 0,
-          },
-        ],
-        true,
-      ),
-    ).toEqual({
-      distance: "satisfied",
-      provenance: "satisfied",
-      evidence: "missing",
-      load: "satisfied",
-    });
-  });
-
-  it("fails closed when a saved row omits its evidence count", () => {
-    expect(
-      deriveTransportLegCertStatuses(
-        [{ distanceKm: 25, distanceSource: "document", loadMassKg: 100 }],
-        true,
-      ).evidence,
-    ).toBe("missing");
   });
 });

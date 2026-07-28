@@ -8,6 +8,7 @@ in the components' own TSDoc. Neither is duplicated here.
 
 Related: [forms.md](./forms.md) (form/schema work) ·
 [code-style.md](./code-style.md) (naming, React Compiler rules, a11y) ·
+[ux-writing.md](./ux-writing.md) (all user-facing copy) ·
 [architecture.md](./architecture.md) (layers, ActionResult, facility context) ·
 [traceability.md](./traceability.md) (DAG / Map / Sankey surfaces) ·
 [troubleshooting.md](./troubleshooting.md) ·
@@ -431,7 +432,10 @@ redirect into the list's side sheet (`production-runs/[id]/page.tsx`,
 - Tables/panels never sit flush on the warm field — use the `--panel-*` recipe.
 - Side sheets: header title = entity code (or `Create X` in create mode — **no
   filler subtitle in create mode**); view/edit subtitle = the identifying
-  secondary. Edit sections use `FormSection`; read sections use `DetailSection`
+  secondary. **Storage bins invert this**: the name is the title and the code
+  the subtitle, because a bin's code is a lookup key for evidence and exports
+  while its name ("North hopper") is what operators say and search for. Follow
+  the code-first default everywhere else. Edit sections use `FormSection`; read sections use `DetailSection`
   through the shared `DetailSpine`, with matching titles, order, and grouping.
   The read rail is numbered only when the paired edit form uses `FormSpine` —
   see [forms.md](./forms.md). The panel is `w-full` below `sm`, then
@@ -473,9 +477,13 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   `isCreateOpen`/`editingX`/`viewingX` flags, which don't compose with
   `onModeChange`. Plus `searchQuery`, per-column filters, `currentPage`/
   `pageSize`, `hasActiveFilters`, `clearFilters`.
-- **Loading is prop-driven.** There are **zero** route `loading.tsx` files —
-  pass `isLoading` to `DataTable` and each `StatCard`; nested tables use
-  `LoadingSkeleton`. A page-level spinner flashes the whole shell.
+- **Entity-data loading is prop-driven.** Continue to pass `isLoading` to
+  `DataTable` and each `StatCard`; nested tables use `LoadingSkeleton`. Do not
+  add a shared `(app)/loading.tsx`: a parent Suspense fallback can replace a
+  detail route's canonical `not-found.tsx` response. If server-render latency
+  needs a route fallback, add the narrowest leaf `loading.tsx` and verify that
+  malformed, absent, and foreign-organization detail IDs still return the
+  designed 404.
 - **Mutations:** `toast.success(...)` on success; **failures go to local error
   state rendered as `<ServerError>` inside the sheet**, which stays open.
   `toast.error` is for non-form actions only — a form error in a toast lands
@@ -495,8 +503,11 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
 
 ## Entity Card pattern
 
-All biochar entity cards (Facility, Credit Batch, Storage Location,
-Application) are hand-rolled to this shape:
+All biochar entity cards (Facility, Credit Batch, Application) are hand-rolled
+to this shape. **Storage bins are the one exception**: the storage board draws
+each bin as a silo tile (`storage-bin-tile.tsx`) with a fill gauge on its left
+edge, so a wall of tiles reads as a bar chart of the facility. It keeps the
+`<article>` + `RowActionsMenu` + no-radius contract and drops the rest.
 
 ```tsx
 <article

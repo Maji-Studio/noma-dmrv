@@ -13,11 +13,14 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { CheckCircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, buttonVariants } from "@/components/ui";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { deriveRemovalStatus } from "@/lib/certification/status";
+import {
+  deriveRemovalWorkflowStatus,
+  type RemovalWorkflowStatus,
+} from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
 import { RegistryRecordLink } from "./registry-record-link";
@@ -47,114 +50,57 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function ReadinessBlock({ summary }: { summary: RemovalListRow }) {
-  if (summary.enrichmentStatus === "unavailable" || !summary.readiness) {
-    return (
-      <div className="flex flex-col items-start gap-8 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-        <p className="body-small text-[var(--color-text-primary)]">
-          Readiness unavailable for this Removal.
-        </p>
+function SubmissionStatusPanel({
+  summary,
+  status,
+}: {
+  summary: RemovalListRow;
+  status: RemovalWorkflowStatus;
+}) {
+  return (
+    <section
+      aria-labelledby="removal-submission-status"
+      className="border-y border-[var(--color-border-secondary)] py-12"
+    >
+      <div className="flex items-center justify-between gap-12">
+        <h3
+          id="removal-submission-status"
+          className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]"
+        >
+          Submission status
+        </h3>
+        <StatusBadge status={status.value} label={status.label} />
+      </div>
+
+      {status.reasons.length > 0 && (
+        <ul className="mt-10 flex flex-col gap-6 border-l-2 border-[var(--color-signal-orange)] pl-12">
+          {status.reasons.map((reason) => (
+            <li key={reason} className="flex items-start gap-6">
+              <WarningIcon
+                size={14}
+                weight="fill"
+                aria-hidden
+                className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
+              />
+              <span className="body-small text-[var(--color-text-secondary)]">
+                {reason}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {status.canRetry && (
         <Button
           variant="default"
           size="small"
+          className="mt-10"
           onClick={() => void summary.retry?.()}
         >
-          Retry readiness
+          Retry
         </Button>
-      </div>
-    );
-  }
-  const { state, reasons, advisories } = summary.readiness;
-  if (state === "ready") {
-    return (
-      <div className="flex flex-col gap-8">
-        <div className="flex items-center gap-8 border-l-2 border-[var(--st-ok)] pl-12 py-4">
-          <CheckCircleIcon
-            size={16}
-            weight="fill"
-            aria-hidden
-            className="shrink-0 text-[var(--st-ok)]"
-          />
-          <span className="body-small text-[var(--color-text-primary)]">
-            Ready to submit —{" "}
-            {advisories.length > 0
-              ? "blocking preconditions met."
-              : "all preconditions met."}
-          </span>
-        </div>
-        <AdvisoryRows advisories={advisories} />
-      </div>
-    );
-  }
-  if (state === "blocked") {
-    return (
-      <div className="flex flex-col gap-8">
-        <div className="flex flex-col gap-6 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-          <span className="body-small font-medium text-[var(--color-text-primary)]">
-            Blocked — resolve before submitting:
-          </span>
-          <ul className="flex flex-col gap-4">
-            {reasons.map((reason) => (
-              <li key={reason} className="flex items-start gap-6">
-                <WarningIcon
-                  size={14}
-                  weight="fill"
-                  aria-hidden
-                  className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
-                />
-                <span className="body-caption text-[var(--color-text-secondary)]">
-                  {reason}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <AdvisoryRows advisories={advisories} />
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-8">
-      <p className="body-small text-[var(--color-text-secondary)]">
-        {state === "inProgress"
-          ? "A submission is in progress."
-          : "This removal has been submitted to the registry."}
-      </p>
-      <AdvisoryRows advisories={advisories} showSubmissionNote={false} />
-    </div>
-  );
-}
-
-function AdvisoryRows({
-  advisories,
-  showSubmissionNote = true,
-}: {
-  advisories: string[];
-  showSubmissionNote?: boolean;
-}) {
-  if (advisories.length === 0) return null;
-  return (
-    <ul className="flex flex-col gap-4 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-      {advisories.map((advisory) => (
-        <li key={advisory} className="flex items-start gap-6">
-          <WarningIcon
-            size={14}
-            weight="fill"
-            aria-hidden
-            className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
-          />
-          {showSubmissionNote ? (
-            <span className="body-caption text-[var(--color-text-secondary)]">
-              Advisory — {advisory}. Submission remains available.
-            </span>
-          ) : (
-            <span className="body-caption text-[var(--color-text-secondary)]">
-              Advisory — {advisory}.
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
+      )}
+    </section>
   );
 }
 
@@ -186,11 +132,12 @@ export function RemovalDetailSheet({
   open,
   onClose,
 }: RemovalDetailSheetProps) {
-  const derived = deriveRemovalStatus({
+  const workflowStatus = deriveRemovalWorkflowStatus({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
+    enrichmentStatus: summary.enrichmentStatus,
+    readiness: summary.readiness,
   });
-  const state = summary.readiness?.state ?? null;
   const submissionWarningNotes = buildSubmissionWarningNotes(
     summary.submissionWarnings,
   );
@@ -199,9 +146,7 @@ export function RemovalDetailSheet({
   // removal is done, and an `inProgress` one is mid-flight — neither offers an
   // action, so the sheet stays read-only (the server would refuse a resubmit
   // anyway; this just stops offering a dead-end control).
-  const isActionable =
-    summary.enrichmentStatus === "available" &&
-    (state === "ready" || state === "blocked");
+  const isActionable = workflowStatus.isActionable;
 
   // "Review & submit" resumes the New-Removal wizard directly on this removal.
   // The legacy `/removals/[id]/review` route only redirects here (dropping any
@@ -210,10 +155,11 @@ export function RemovalDetailSheet({
     summary.removalId,
   )}&facility=${encodeURIComponent(facilityId)}`;
 
+  const hasReportingWindow = summary.startedOn && summary.completedOn;
   const window =
-    summary.startedOn && summary.completedOn
+    hasReportingWindow
       ? formatDateRange(summary.startedOn, summary.completedOn)
-      : "Set on submit";
+      : "Set when submitted";
 
   return (
     <SlideOverPanel.Root open={open} onOpenChange={(o) => !o && onClose()}>
@@ -222,53 +168,54 @@ export function RemovalDetailSheet({
           <SlideOverPanel.Title>
             Removal {summary.removalId.slice(0, 8)}…
           </SlideOverPanel.Title>
-          <SlideOverPanel.Description>{window}</SlideOverPanel.Description>
+          {hasReportingWindow && (
+            <SlideOverPanel.Description>{window}</SlideOverPanel.Description>
+          )}
         </SlideOverPanel.Header>
 
         <SlideOverPanel.Body className="flex flex-col gap-24">
           <EnvBanner isProduction={isProduction} variant="inline" />
 
-          <div className="flex items-center justify-between gap-12">
-            <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-              Status
-            </span>
-            <StatusBadge status={derived.value} label={derived.label} />
-          </div>
-
-          <RemovalCarbonBreakdown removalId={summary.removalId} enabled={open} />
-
-          <Field label="Reporting window">{window}</Field>
-
-          <Field label={`Credit batches (${summary.memberBatchCodes.length})`}>
-            <span className="font-mono">
-              {summary.memberBatchCodes.join(", ") || "—"}
-            </span>
-          </Field>
+          <SubmissionStatusPanel summary={summary} status={workflowStatus} />
 
           {summary.externalId && (
-            <Field label="Registry record">
-              <RegistryRecordLink
-                facilityId={facilityId}
-                externalId={summary.externalId}
-                version={summary.version}
-                isProduction={isProduction}
-                kind="removal"
-              />
-            </Field>
+            <RemovalCarbonBreakdown
+              removalId={summary.removalId}
+              enabled={open}
+            />
           )}
 
-          {summary.evidenceHealth && (
-            <Field label="Evidence attachments">
-              <span>
-                {summary.evidenceHealth.label}
-                {summary.evidenceHealth.totalCount > 0
-                  ? ` — ${summary.evidenceHealth.verifiedCount} of ${summary.evidenceHealth.totalCount} intended targets verified`
-                  : ""}
+          <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
+            <Field label="Reporting window">{window}</Field>
+            <Field label={`Credit batches (${summary.memberBatchCodes.length})`}>
+              <span className="font-mono">
+                {summary.memberBatchCodes.join(", ") || "—"}
               </span>
             </Field>
-          )}
 
-          <ReadinessBlock summary={summary} />
+            {summary.externalId && (
+              <Field label="Registry record">
+                <RegistryRecordLink
+                  facilityId={facilityId}
+                  externalId={summary.externalId}
+                  version={summary.version}
+                  isProduction={isProduction}
+                  kind="removal"
+                />
+              </Field>
+            )}
+
+            {summary.evidenceHealth && (
+              <Field label="Evidence attachments">
+                <span>
+                  {summary.evidenceHealth.label}
+                  {summary.evidenceHealth.totalCount > 0
+                    ? ` — ${summary.evidenceHealth.verifiedCount} of ${summary.evidenceHealth.totalCount} intended targets verified`
+                    : ""}
+                </span>
+              </Field>
+            )}
+          </div>
 
           {/*
             Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
@@ -290,11 +237,13 @@ export function RemovalDetailSheet({
             isEditable={isActionable}
           />
 
-          <SyncEventLog
-            events={summary.recentSyncEvents}
-            compact
-            label={`View removal sync history (${summary.recentSyncEvents.length})`}
-          />
+          {summary.recentSyncEvents.length > 0 && (
+            <SyncEventLog
+              events={summary.recentSyncEvents}
+              compact
+              label={`Submission history (${summary.recentSyncEvents.length})`}
+            />
+          )}
         </SlideOverPanel.Body>
 
         <SlideOverPanel.Footer className="justify-stretch">

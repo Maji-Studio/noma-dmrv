@@ -21,7 +21,6 @@ import { onboardingGuideCollapsedKey } from "@/components/onboarding/onboarding-
 import {
   facilities,
   feedstocks,
-  documents,
   storageLocations,
   supplierLocations,
   suppliers,
@@ -97,7 +96,6 @@ test.describe("Dashboard (Flow Hero)", () => {
     const storageLocationId = crypto.randomUUID();
     const feedstockId = crypto.randomUUID();
     const transportLegId = crypto.randomUUID();
-    const evidenceDocumentId = crypto.randomUUID();
     const tag = crypto.randomUUID().slice(0, 8);
 
     try {
@@ -190,89 +188,15 @@ test.describe("Dashboard (Flow Hero)", () => {
         structuralGaps.getByText("Transport endpoint GPS missing"),
       ).toBeVisible();
       await expect(
-        structuralGaps.getByText("Transport evidence missing"),
-      ).toBeVisible();
-      await expect(
         structuralGaps.getByText("Supplier form · Location · 1 affected"),
       ).toBeVisible();
       await expect(
         structuralGaps.getByText("Feedstock form · Transport route · 1 affected"),
       ).toBeVisible();
       await expect(
-        structuralGaps.getByText(
-          "Feedstock form · Transport evidence · 1 affected",
-        ),
+        page.getByText("2 open", { exact: true }).first(),
       ).toBeVisible();
-      await expect(page.getByText("3 open", { exact: true }).first()).toBeVisible();
       await expect(page.getByText("All clear")).toHaveCount(0);
-
-      const evidenceLink = structuralGaps.getByRole("link", {
-        name: /Transport evidence missing/,
-      });
-      await expect(evidenceLink).toHaveAttribute(
-        "href",
-        `/feedstocks?facility=${facilityId}&feedstock=${feedstockId}&mode=edit&focus=transport-evidence`,
-      );
-      await evidenceLink.click();
-      const feedstockSheet = page.getByRole("dialog");
-      await expect(feedstockSheet.getByText("Save Changes")).toBeVisible();
-      await expect(
-        feedstockSheet.getByText(
-          "Attach at least one classified transport-evidence file",
-        ),
-      ).toBeVisible();
-      const distanceSource = feedstockSheet.getByLabel("Distance source", {
-        exact: true,
-      });
-      await expect(distanceSource).toHaveValue("supplier_default");
-      await expect(
-        distanceSource.locator('option[value="document"]'),
-      ).toHaveCount(0);
-      await expect(
-        feedstockSheet.getByRole("radio", { name: "Bill of lading" }),
-      ).toBeChecked();
-      await expect(
-        feedstockSheet.getByRole("radio", { name: "Weigh-scale ticket" }),
-      ).toBeVisible();
-      await expect(
-        feedstockSheet.getByRole("radio", { name: "Other transport evidence" }),
-      ).toBeVisible();
-      await expect(
-        feedstockSheet.getByText("Drop files here or click to upload"),
-      ).toHaveCount(1);
-      await feedstockSheet
-        .getByRole("button", { name: "About transport evidence" })
-        .hover();
-      await expect(
-        page.getByText(
-          "Upload at least one bill of lading, weigh-scale ticket, or other transport evidence file. One accepted file is enough.",
-        ),
-      ).toBeVisible();
-      await expect(
-        feedstockSheet.getByRole("spinbutton", { name: "Distance (km)" }),
-      ).toHaveValue("25");
-      await expect(distanceSource).toHaveValue("supplier_default");
-
-      await feedstockSheet
-        .getByRole("button", { name: "Save Changes" })
-        .click();
-      await expect(feedstockSheet).toHaveCount(0);
-      await expect(page).not.toHaveURL(/(?:\?|&)feedstock=/);
-      const [savedTransportLeg] = await db
-        .select({
-          distanceKm: transportLegs.distanceKm,
-          distanceSource: transportLegs.distanceSource,
-          isDerived: transportLegs.isDerived,
-        })
-        .from(transportLegs)
-        .where(eq(transportLegs.id, transportLegId));
-      expect(savedTransportLeg).toEqual({
-        distanceKm: 25,
-        distanceSource: "manual",
-        isDerived: true,
-      });
-
-      await page.goto(`/dashboard?facility=${facilityId}`);
 
       await db.transaction(async (tx) => {
         await tx
@@ -286,16 +210,6 @@ test.describe("Dashboard (Flow Hero)", () => {
             originGpsLongitude: 39.28,
           })
           .where(eq(transportLegs.id, transportLegId));
-        await tx.insert(documents).values({
-          id: evidenceDocumentId,
-          organizationId: DEC_ORG_ID,
-          entityType: "feedstock",
-          entityId: feedstockId,
-          documentType: "bill_of_lading",
-          fileName: "transport-evidence.pdf",
-          fileUrl: "https://example.invalid/transport-evidence.pdf",
-          uploadStatus: "uploaded",
-        });
       });
 
       await page.reload();
@@ -303,7 +217,6 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(page.getByText("All clear")).toBeVisible();
       await expect(page.getByText("Every blocking check passes.")).toBeVisible();
     } finally {
-      await db.delete(documents).where(eq(documents.id, evidenceDocumentId));
       await db.delete(transportLegs).where(eq(transportLegs.id, transportLegId));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
       await db

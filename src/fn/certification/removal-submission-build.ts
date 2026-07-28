@@ -107,6 +107,8 @@ export interface RemovalSubmissionReview {
     type: string;
   }>;
   sourceIds: string[];
+  /** Candidate files whose Source IDs are materialized during submission. */
+  pendingSourceCount?: number;
   intendedPostTargets: string[];
   memberCreditBatches: Array<{ id: string; code: string }>;
   productionRuns: Array<{ id: string; code: string | null }>;
@@ -178,6 +180,7 @@ function emptyReview(
     measurementSamples: [],
     directSequestrationDatapoints: [],
     sourceIds: [],
+    pendingSourceCount: 0,
     intendedPostTargets: [],
     memberCreditBatches: [],
     productionRuns: [],
@@ -217,7 +220,13 @@ export function removalTemplateTierCompatibilityBlocker(
  * version.
  */
 export async function compileRemovalSubmission(
-  args: Parameters<typeof buildRemovalSubmissionBuild>[0],
+  args: Parameters<typeof buildRemovalSubmissionBuild>[0] & {
+    /**
+     * Review-time compilation may include candidate files that submission will
+     * mirror. The submit path recompiles strictly after those mirrors persist.
+     */
+    allowPendingSources?: boolean;
+  },
 ): Promise<CompiledRemovalSubmission> {
   if (
     args.ctx.entityReadinessGaps?.length === 0 &&
@@ -256,22 +265,26 @@ export async function compileRemovalSubmission(
     build.sourceBindingPlan.length > 0
       ? build.sourceBindingPlan.length
       : build.sourceIds.length;
+  const pendingSourceCount = Math.max(
+    build.candidateDocumentIds.length - readySourceDocumentCount,
+    0,
+  );
   const tierBlocker = removalTemplateTierCompatibilityBlocker(
     args.ctx,
     args.defaultTemplate,
   );
   if (tierBlocker) blockers.push(tierBlocker);
-  if (readySourceDocumentCount === 0) {
+  if (build.candidateDocumentIds.length === 0) {
     blockers.push(
-      "Removal submission requires at least one evidence file with a persisted Isometric Source mapping. Prepare the file in the Removal Sources panel, then recompile.",
+      "Removal submission requires at least one supporting evidence file.",
     );
   }
   if (
-    build.candidateDocumentIds.length > 0 &&
-    readySourceDocumentCount < build.candidateDocumentIds.length
+    !args.allowPendingSources &&
+    pendingSourceCount > 0
   ) {
     blockers.push(
-      `${readySourceDocumentCount} of ${build.candidateDocumentIds.length} evidence files are ready with validated Isometric Source IDs. Prepare the remaining files in the Removal Sources panel, then recompile.`,
+      `Only ${readySourceDocumentCount} of ${build.candidateDocumentIds.length} supporting files reached the registry. Submit again to retry the rest.`,
     );
   }
 
@@ -370,6 +383,7 @@ export async function compileRemovalSubmission(
     measurementSamples,
     directSequestrationDatapoints,
     sourceIds: [...build.sourceIds],
+    pendingSourceCount,
     intendedPostTargets: [
       ...(build.monitored.length > 0 ||
       directSequestrationDatapoints.length > 0
@@ -665,8 +679,34 @@ export async function buildRemovalSubmissionBuild(args: {
     Array.from(
       new Set(sourceBindingCandidates.map((candidate) => candidate.sourceId)),
     ).sort();
+  const sourceIdByDocumentId = new Map(
+    sourceBindingCandidates.map((candidate) => [
+      candidate.documentId,
+      candidate.sourceId,
+    ]),
+  );
   const sourceBindingPlan = buildRemovalSourceBindingPlan({
     candidates: sourceBindingCandidates,
+    template: defaultTemplate,
+    applicationIdsByCreditBatchId: new Map(
+      ctx.memberBatchClaims.map((batch) => [
+        batch.creditBatchId,
+        batch.applicationIds,
+      ]),
+    ),
+  });
+  // The operator reviews every candidate file before pending Sources receive
+  // registry IDs. Build the semantic plan from that complete candidate set,
+  // using an empty placeholder only for IDs that submission will materialize.
+  // `reviewPayloadHash` strips those IDs, so the reviewed and post-mirror plans
+  // compare identically while every role, lineage and intended target remains
+  // covered. The operational plan above stays strict and contains ready Sources
+  // only, so no empty ID can reach a wire payload.
+  const semanticSourceBindingPlan = buildRemovalSourceBindingPlan({
+    candidates: candidateSourceDocuments.map((candidate) => ({
+      ...candidate,
+      sourceId: sourceIdByDocumentId.get(candidate.documentId) ?? "",
+    })),
     template: defaultTemplate,
     applicationIdsByCreditBatchId: new Map(
       ctx.memberBatchClaims.map((batch) => [
@@ -726,7 +766,15 @@ export async function buildRemovalSubmissionBuild(args: {
     startedOn: agg.earliestStartTime.toISOString(),
     completedOn: latestApplicationTime.toISOString(),
     sourceIds,
-    sourceBindingPlan,
+    sourceBindingPlan: semanticSourceBindingPlan,
+    candidateSources: candidateSourceDocuments
+      .map((candidate) => ({
+        documentId: candidate.documentId,
+        binding: candidate.binding,
+      }))
+      .sort((left, right) =>
+        left.documentId.localeCompare(right.documentId),
+      ),
     ...(semanticMeasurementSamples.length > 0
       ? { durabilityMeasurementSamples: semanticMeasurementSamples }
       : {}),

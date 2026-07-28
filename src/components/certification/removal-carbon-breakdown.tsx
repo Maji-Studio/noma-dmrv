@@ -27,7 +27,7 @@ export function RemovalCarbonBreakdown({
   if (query.isError || !query.data) {
     return (
       <RegistryObservationMessage
-        message="Registry result unavailable."
+        message="Couldn’t load the registry carbon result."
         onRetry={() => void query.refetch()}
       />
     );
@@ -60,7 +60,7 @@ export function RegistryObservationMessage({
     <div className="flex flex-col items-start gap-8 border border-[var(--color-border-secondary)] p-12">
       <p className="body-small text-[var(--color-text-secondary)]">{message}</p>
       <Button variant="default" size="small" onClick={onRetry}>
-        Retry registry result
+        Try again
       </Button>
     </div>
   );

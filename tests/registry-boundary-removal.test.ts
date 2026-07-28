@@ -63,6 +63,10 @@ vi.mock("@/fn/certification/sources", () => ({
   resolveSourceBindingCandidates: vi.fn(async () => [
     { ...makeBoundarySourceDocument(), sourceId: "src-boundary-1" },
   ]),
+  // submitRemoval mirrors pending candidates before compiling the strict
+  // artifact; the boundary fixtures already resolve every candidate, so the
+  // mirror is a no-op here.
+  mirrorCandidateSourcesForSubmission: vi.fn(async () => undefined),
 }));
 
 import { db } from "@/db";

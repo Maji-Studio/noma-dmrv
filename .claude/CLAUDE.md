@@ -88,6 +88,7 @@ Rankings below are **higher = better**. Cost reflects what I actually pay (gpt-5
 - Before ANY **form/schema** work → `docs/forms.md` — `@/schemas/helpers` numeric helpers, Zod 4 string formats, never `valueAsNumber`.
 - Before **Isometric/certification/requirements** work → `docs/isometric/README.md` + `versions.json`, and call the isometric MCP `how_to` first. Local summaries are **non-authoritative** — verify against the registry.
 - Before **UI** work → `docs/design-system.md` — Canonical Page Shell, `EmptyState` (never bare text), a11y, and the token trap: default Tailwind spacing/radius classes are **deleted**, not remapped (`p-4` = 4px, `rounded-md` = nothing).
+- Before **writing or changing user-facing copy or generated operator content** → `docs/ux-writing.md` — shared terminology, message structure, surface-specific guidance, and the ban on en/em dashes.
 - Before **writing code** → `docs/code-style.md` — naming/file conventions, the org-scoping seam + waiver syntax, React Compiler rules (no manual memo, avoid `useEffect`), local gates.
 - Before **any test** work → `docs/testing.md` — two layers (Vitest in root `tests/` and colocated `src/**/*.test.{ts,tsx}` + Playwright E2E), fixtures, `.env.test`, E2E naming prefixes, `db:reset` on dup keys.
 - Before **writing a server action or data-access query** → `docs/architecture.md` — `withAction()`, `OrgContext`, `ActionResult` (+ `conflict`), React Query key factories, facility context, CI/CD.

@@ -15,6 +15,7 @@ export type {
 } from "./use-onboarding-gate";
 export { OnboardingWizard } from "./onboarding-wizard";
 export { SetupGuide } from "./setup-guide";
+export { SetupGuideSkeleton } from "./setup-guide-skeleton";
 export { SetupStrip } from "./setup-strip";
 export { SetupInProgressState } from "./setup-in-progress-state";
 export { deriveSetupProgress } from "./use-setup-steps";

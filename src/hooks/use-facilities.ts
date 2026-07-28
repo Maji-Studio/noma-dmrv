@@ -24,6 +24,7 @@ import {
 } from "@/fn/facilities";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { invalidateOnboardingProgress } from "./use-onboarding";
 
 // ============================================
 // Query Keys
@@ -241,6 +242,7 @@ export function useCreateFacility(
       await queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
       // Invalidate countries in case a new country was added
       await queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() });
+      await invalidateOnboardingProgress(queryClient);
 
       // Pre-populate the detail cache with the new facility
       queryClient.setQueryData(facilityKeys.detail(data.id), data);

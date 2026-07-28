@@ -16,7 +16,7 @@ const CHECKS = [
   ["transport", "Transport legs recorded"],
   ["transportUniformity", "Transport legs aggregate cleanly"],
   ["production", "Production lineage complete"],
-  ["measurementDates", "Measurement dates not in the future"],
+  ["measurementDates", "Production run and application dates have passed"],
   ["entityReadiness", "Certifier fields on linked records"],
   ["durability", "Sampling & durability eligibility"],
 ].map(([key, requirementLabel]) => ({
@@ -125,10 +125,10 @@ describe("SubmissionChecks", () => {
       ...CHECKS,
       {
         key: "evidence",
-        label: "Evidence files ready",
-        requirementLabel: "Evidence files ready",
+        label: "Supporting evidence linked",
+        requirementLabel: "Supporting evidence linked",
         status: "warning",
-        detail: "0 of 2 files ready",
+        detail: "2 files will be mirrored automatically on submit",
       },
     ];
     const html = renderToStaticMarkup(
@@ -136,6 +136,6 @@ describe("SubmissionChecks", () => {
     );
 
     expect(html).toContain("9 of 10 checks passed · 1 need attention");
-    expect(html).toContain("0 of 2 files ready");
+    expect(html).toContain("2 files will be mirrored automatically on submit");
   });
 });

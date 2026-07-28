@@ -40,7 +40,7 @@ import {
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
   assertSupportedDurabilityConfiguration,
-  DURABILITY_MEASUREMENT_SAMPLES_LIVE,
+  DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
   submitDurabilityMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
@@ -69,8 +69,12 @@ import {
 } from "./removal-submission-build";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
-import { resolveSourceBindingCandidates } from "./sources";
+import {
+  mirrorCandidateSourcesForSubmission,
+  resolveSourceBindingCandidates,
+} from "./sources";
 import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
+import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import {
   appendSyncEventBestEffort,
   assertProductionConfirmed,
@@ -277,12 +281,11 @@ async function submitRemovalCore(
   const hasDurabilityComponents = defaultTemplate.groups.some((group) =>
     group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
   );
-  if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
+  if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
     throw new SafeError(
-      "Durability submission is staged but not yet live — measurement-sample " +
-        "POSTs are disabled, so the required sequestration datapoint IDs cannot " +
-        "be bound. Enable DURABILITY_MEASUREMENT_SAMPLES_LIVE only for the " +
-        "sandbox after operator validation.",
+      "Durability measurement-sample POSTs run against the Isometric sandbox " +
+        "only. This environment targets the live registry, so the required " +
+        "sequestration datapoint IDs cannot be bound.",
     );
   }
   if (hasDurabilityComponents) {
@@ -353,6 +356,34 @@ async function submitRemovalCore(
   });
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
+  const reviewedCompilation = await compileRemovalSubmission({
+    orgCtx,
+    removalId,
+    ctx,
+    defaultTemplate,
+    blueprintsByKey,
+    externalProjectId,
+    allowPeriodInputStub,
+    hasDurabilityComponents,
+    log,
+    allowPendingSources: true,
+  });
+  if (!reviewedCompilation.transportPlan) {
+    throw new SafeError(
+      `Removal submission blocked:\n${reviewedCompilation.blockers.join("\n")}`,
+    );
+  }
+  const reviewedBuild = reviewedCompilation.transportPlan;
+  assertReviewedCompilationHash(expectedCompilationHash, reviewedBuild);
+
+  await mirrorCandidateSourcesForSubmission(orgCtx, {
+    removalId,
+    candidateDocumentIds: reviewedBuild.candidateDocumentIds,
+  });
+
+  // Compile again from persisted mappings. Only this strict artifact can be
+  // claimed and sent; a failed/partial automatic mirror therefore leaves no
+  // submission snapshot or registry GHG Entry behind.
   const initialCompilation = await compileRemovalSubmission({
     orgCtx,
     removalId,
@@ -370,6 +401,11 @@ async function submitRemovalCore(
     );
   }
   const initialBuild = initialCompilation.transportPlan;
+  // Re-assert AFTER copying evidence. The reviewed fingerprint is Source-ID
+  // independent, so this compares like with like: it passes when the only change
+  // was IDs materializing, and fails when the evidence set itself moved — e.g.
+  // another operator removed or reclassified a supporting file mid-submission.
+  // Without this, that changed artifact could be claimed and sent unreviewed.
   assertReviewedCompilationHash(expectedCompilationHash, initialBuild);
   const {
     agg,
@@ -569,14 +605,21 @@ async function submitRemovalCore(
   }
 }
 
+/**
+ * Re-assert the fingerprint the operator reviewed. Uses `reviewPayloadHash`, not
+ * the full payload hash, so that registry Source IDs materializing during this
+ * submission do not invalidate the operator's own artifact — see
+ * `removal-review-hash.ts`. A genuine evidence change (a file added, removed, or
+ * rebound) still moves this hash through `candidateSources`.
+ */
 function assertReviewedCompilationHash(
   expectedHash: string | undefined,
   compiled: { semanticPayload: Record<string, unknown> },
 ): void {
   if (!expectedHash) return;
-  if (payloadHash(compiled.semanticPayload) === expectedHash) return;
+  if (reviewPayloadHash(compiled.semanticPayload) === expectedHash) return;
   throw new SafeError(
-    "Removal source data changed after the compiled review. Recompile and inspect the updated artifact before submitting.",
+    "This Removal's data changed after you reviewed it. Reload the Removal and check the updated summary before submitting.",
   );
 }
 
@@ -607,7 +650,7 @@ async function assertClaimedRemovalPayloadFresh(args: {
   const freshHasDurabilityComponents = freshCtx.defaultTemplate.groups.some((group) =>
     group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
   );
-  if (freshHasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
+  if (freshHasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
     await retireStaleSubmissionDraft(orgCtx, row.id, {
       reason: "durability measurement-sample gate changed after draft claim",
     });
@@ -742,9 +785,9 @@ async function runRemovalSubmission({
   // Measurement-property inputs bind response datapoints; direct-datapoint
   // inputs (currently 1000-year s_fraction) were already posted through the
   // same idempotent loop above and remain duplicated in the sample as
-  // data-quality evidence. The flag is already on whenever submissions are
+  // data-quality evidence. The gate is already open whenever submissions are
   // present; the explicit guard is defence-in-depth for future callers.
-  if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
+  if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
     throw new SafeError(
       "Durability measurement-sample submission is disabled. The GHG entry cannot be created without explicit sequestration datapoint bindings.",
     );

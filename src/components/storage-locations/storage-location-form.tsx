@@ -214,7 +214,9 @@ export function StorageLocationForm({
             entityType="formulation"
             placeholder="Pure biochar (no formulation)"
             disabled={isSubmitting}
-            helperText="Keeps this bin clean — restricts it to one formulation. Leave empty for pure biochar."
+            helperText="Restricts this bin to one formulation. Leave it empty for a pure biochar bin, which the first formulated product stored here will claim."
+            allowCreate
+            createLabel="Add new formulation"
           />
         </div>
       )}

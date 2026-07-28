@@ -111,9 +111,15 @@ export function CompiledSubmissionReview({
         </p>
       </ReviewSection>
 
-      <ReviewSection title="Mirrored Isometric Sources">
-        {review.sourceIds.length === 0 ? (
-          <EmptyValue>No validated Source IDs.</EmptyValue>
+      <ReviewSection title="Supporting sources">
+        {(review.pendingSourceCount ?? 0) > 0 ? (
+          <EmptyValue>
+            {review.pendingSourceCount}{" "}
+            {review.pendingSourceCount === 1 ? "file" : "files"} will be
+            mirrored automatically when you submit.
+          </EmptyValue>
+        ) : review.sourceIds.length === 0 ? (
+          <EmptyValue>No supporting Source IDs.</EmptyValue>
         ) : (
           <ul className="space-y-2 font-mono body-small text-[var(--color-text-primary)]">
             {review.sourceIds.map((sourceId) => (

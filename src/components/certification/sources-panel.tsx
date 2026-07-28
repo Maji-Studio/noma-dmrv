@@ -2,9 +2,9 @@
  * SourcesPanel — Phase 3.5
  *
  * Lists candidate noma documents discovered along the Removal's chain-of-
- * custody. The operator mirrors selected docs to Isometric Sources via a
- * server-side proxy; once ready, each Source is bound only to its code-owned
- * intended Datapoint target at submit time.
+ * custody. Submission mirrors managed documents to Isometric Sources
+ * automatically; each Source is then bound only to its code-owned intended
+ * Datapoint target.
  *
  * Mounted in `RemovalDetailSheet` (the Removals-tab quick view, opened via
  * `?removal=<id>`), the single place the candidate set is consumed. The
@@ -21,16 +21,10 @@ import {
   FileIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { useRef } from "react";
-import { Button, EmptyState } from "@/components/ui";
-import { useToast } from "@/components/ui/toast";
-import {
-  useCandidateDocumentsForRemoval,
-  useMirrorDocumentToSource,
-} from "@/hooks/use-certification-sources";
+import { EmptyState } from "@/components/ui";
+import { useCandidateDocumentsForRemoval } from "@/hooks/use-certification-sources";
 import { Section } from "./panel-layout";
 
-const ICON_SIZE = 14;
 const STATE_ICON_SIZE = 16;
 const PDF_MIME_TYPE = "application/pdf";
 
@@ -47,11 +41,11 @@ export function SourcesPanel({ removalId, isEditable }: SourcesPanelProps) {
       <div className="flex flex-col gap-12">
         <header className="flex items-center justify-between gap-12">
           <h3 className="title-chapter-title">Supporting sources</h3>
-          <PanelCounter removalId={removalId} />
+          <PanelCounter removalId={removalId} isEditable={isEditable} />
         </header>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Prepare each Noma evidence role for its intended Removal datapoint.
-          Attachment is verified separately after submission.
+          Files linked to this Removal are mirrored automatically when you
+          submit. Isometric verifies them afterward.
         </p>
         <PanelBody removalId={removalId} isEditable={isEditable} />
       </div>
@@ -59,14 +53,22 @@ export function SourcesPanel({ removalId, isEditable }: SourcesPanelProps) {
   );
 }
 
-function PanelCounter({ removalId }: { removalId: string | null }) {
+function PanelCounter({
+  removalId,
+  isEditable,
+}: {
+  removalId: string | null;
+  isEditable: boolean;
+}) {
   const query = useCandidateDocumentsForRemoval(removalId);
   if (!removalId || !query.data) return null;
   const total = query.data.candidates.length;
   const ready = query.data.candidates.filter((c) => c.mirror).length;
   return (
     <span className="body-caption text-[var(--color-text-tertiary)]">
-      {ready} of {total} files ready
+      {isEditable
+        ? `${total} ${total === 1 ? "file" : "files"} linked`
+        : `${ready} of ${total} files attached`}
     </span>
   );
 }
@@ -81,8 +83,8 @@ function PanelBody({
   if (!removalId) {
     return (
       <p className="body-small text-[var(--color-text-tertiary)]">
-        A removal will be created on first submit. You can mirror sources
-        from the Removals hub once it exists.
+        A Removal will be created on first submit. Its supporting files will
+        be mirrored automatically.
       </p>
     );
   }
@@ -121,7 +123,7 @@ function PanelBodyForRemoval({
     return (
       <p className="body-small text-[var(--color-text-secondary)]">
         Link this facility to an Isometric project in facility settings
-        before mirroring sources.
+        before submitting sources.
       </p>
     );
   }
@@ -148,7 +150,6 @@ function PanelBodyForRemoval({
           }
         >
           <CandidateRow
-            removalId={removalId}
             candidate={candidate}
             isEditable={isEditable}
           />
@@ -159,32 +160,13 @@ function PanelBodyForRemoval({
 }
 
 interface CandidateRowProps {
-  removalId: string;
   isEditable: boolean;
   candidate: NonNullable<
     ReturnType<typeof useCandidateDocumentsForRemoval>["data"]
   >["candidates"][number];
 }
 
-export type SourceRowState = "idle" | "pending" | "success" | "failure";
-
-export function deriveSourceRowState(args: {
-  hasConfirmedMapping: boolean;
-  isPending: boolean;
-  isError: boolean;
-}): SourceRowState {
-  if (args.hasConfirmedMapping) return "success";
-  if (args.isPending) return "pending";
-  if (args.isError) return "failure";
-  return "idle";
-}
-
-export function canStartSourceMirror(state: SourceRowState): boolean {
-  return state === "idle" || state === "failure";
-}
-
 function CandidateRow({
-  removalId,
   candidate,
   isEditable,
 }: CandidateRowProps) {
@@ -192,50 +174,10 @@ function CandidateRow({
   const isMirrored = !!mirror;
   const isMirrorable = !!document.storageKey;
   const isPdf = isPdfCandidate(document.mimeType, document.fileName);
-  const mirrorMutation = useMirrorDocumentToSource();
-  const toast = useToast();
-  const mirrorActionInFlight = useRef(false);
-
-  const rowState = deriveSourceRowState({
-    hasConfirmedMapping: isMirrored,
-    isPending: mirrorMutation.isPending,
-    isError: mirrorMutation.isError,
-  });
   const description = [
-    `Noma role: ${binding.nomaRoleLabel}`,
+    binding.nomaRoleLabel,
     lineageEntity.entityLabel,
   ].join(" · ");
-
-  const handleMirror = () => {
-    if (
-      mirrorActionInFlight.current ||
-      !canStartSourceMirror(rowState)
-    ) {
-      return;
-    }
-    mirrorActionInFlight.current = true;
-    mirrorMutation.mutate(
-      { removalId, documentId: document.id },
-      {
-        onSuccess: (result) => {
-          if (result.recovered) {
-            toast.success(
-              `Reconciled existing Isometric Source for ${document.fileName}.`,
-            );
-          } else {
-            toast.success(`Mirrored ${document.fileName} to Isometric.`);
-          }
-        },
-        onError: (err) =>
-          toast.error(
-            err instanceof Error ? err.message : "Mirror failed.",
-          ),
-        onSettled: () => {
-          mirrorActionInFlight.current = false;
-        },
-      },
-    );
-  };
 
   return (
     <div className="flex items-center justify-between gap-12 px-12 py-12">
@@ -264,44 +206,32 @@ function CandidateRow({
           <span className="body-caption truncate text-[var(--color-text-tertiary)]">
             {description}
           </span>
-          {isMirrored && mirror && (
-            <span className="body-caption font-mono text-[var(--color-text-tertiary)] truncate">
-              {mirror.externalDocumentId}
-            </span>
-          )}
         </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-8">
-        {rowState === "success" ? (
+        {isMirrored ? (
           <span
-            className="flex items-center gap-4 text-[var(--st-ok)]"
-            title="Mirrored to Isometric"
+            className="flex items-center gap-4 body-caption text-[var(--st-ok)]"
+            title="Ready in Isometric"
           >
             <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
+            Ready
           </span>
         ) : isMirrorable && isEditable ? (
-          <Button
-            variant="primary"
-            size="small"
-            onClick={handleMirror}
-            disabled={rowState === "pending"}
-            busy={rowState === "pending"}
+          <span
+            className="flex items-center gap-4 body-caption text-[var(--color-text-tertiary)]"
+            role="status"
+            title="This file is sent to Isometric automatically when you submit the Removal."
           >
-            {rowState !== "pending" && (
-              <CloudIcon size={ICON_SIZE} weight="bold" />
-            )}
-            {rowState === "pending"
-              ? "Pending"
-              : rowState === "failure"
-                ? "Retry"
-                : "Mirror"}
-          </Button>
+            <CloudIcon size={STATE_ICON_SIZE} weight="bold" />
+            On submit
+          </span>
         ) : !isMirrorable ? (
           <span
             className="flex max-w-[180px] items-center gap-6 body-caption text-[var(--color-text-tertiary)]"
             role="status"
-            title="Legacy URL-only document: noma has no managed file bytes to copy to Isometric. Upload a new managed document to mirror it."
+            title="Legacy URL-only document: noma has no managed file bytes to copy to Isometric. Upload a managed replacement before submitting."
           >
             <WarningCircleIcon
               size={STATE_ICON_SIZE}
@@ -309,17 +239,6 @@ function CandidateRow({
               className="shrink-0"
             />
             No managed file bytes
-          </span>
-        ) : rowState === "pending" ? (
-          <span
-            className="body-caption text-[var(--color-text-tertiary)]"
-            role="status"
-          >
-            Pending
-          </span>
-        ) : rowState === "failure" ? (
-          <span className="body-caption text-[var(--clr-red)]" role="status">
-            Mirror failed
           </span>
         ) : (
           <span
