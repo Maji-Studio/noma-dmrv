@@ -26,6 +26,11 @@
  * the hash. Only the registry-assigned IDs, which the operator never sees, are
  * excluded.
  *
+ * Generated evidence ledgers are also excluded. They materialize during submit
+ * from transport and durability inputs already covered by the review, so their
+ * document IDs do not exist when the operator opens it. The full payload hash
+ * still covers their candidate records, binding targets, and Source IDs.
+ *
  * The full `payloadHash` remains the supersede / drift fingerprint: the persisted
  * snapshot must still change when the IDs do.
  */
@@ -34,6 +39,11 @@ import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 /** Keys whose values are registry-assigned Source IDs, not reviewed content. */
 const SOURCE_ID_KEY = "sourceIds";
 const SOURCE_BINDING_PLAN_KEY = "sourceBindingPlan";
+const CANDIDATE_SOURCES_KEY = "candidateSources";
+const GENERATED_LEDGER_ROLES = new Set([
+  "transport_evidence_ledger",
+  "durability_evidence_ledger",
+]);
 
 /**
  * Hash a compiled semantic payload with every registry-assigned Source ID
@@ -53,12 +63,37 @@ function stripSourceIds(
   for (const [key, value] of Object.entries(semanticPayload)) {
     if (key === SOURCE_ID_KEY) continue;
     if (key === SOURCE_BINDING_PLAN_KEY && Array.isArray(value)) {
-      out[key] = value.map(stripBindingSourceId);
+      out[key] = value
+        .filter((entry) => !isGeneratedLedgerBinding(entry))
+        .map(stripBindingSourceId);
+      continue;
+    }
+    if (key === CANDIDATE_SOURCES_KEY && Array.isArray(value)) {
+      out[key] = value.filter(
+        (candidate) => !isGeneratedLedgerCandidate(candidate),
+      );
       continue;
     }
     out[key] = value;
   }
   return out;
+}
+
+function isGeneratedLedgerBinding(value: unknown): boolean {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  return GENERATED_LEDGER_ROLES.has(
+    String((value as Record<string, unknown>).nomaRole),
+  );
+}
+
+function isGeneratedLedgerCandidate(value: unknown): boolean {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const binding = (value as Record<string, unknown>).binding;
+  return isGeneratedLedgerBinding(binding);
 }
 
 /**
@@ -70,6 +105,7 @@ function stripBindingSourceId(entry: unknown): unknown {
   if (entry == null || typeof entry !== "object" || Array.isArray(entry)) {
     return entry;
   }
-  const { sourceId: _sourceId, ...rest } = entry as Record<string, unknown>;
-  return rest;
+  const copy = { ...(entry as Record<string, unknown>) };
+  delete copy.sourceId;
+  return copy;
 }

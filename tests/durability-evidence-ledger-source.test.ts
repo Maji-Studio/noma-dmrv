@@ -29,6 +29,11 @@ vi.mock("@/fn/certification/certify-context-core", () => ({
 vi.mock("@/lib/certification/evidence-ledger/durability-pdf", () => ({
   renderDurabilityLedgerPdf: vi.fn(async () => Buffer.from("%PDF-fake")),
 }));
+vi.mock("@/lib/certification/evidence-ledger/durability-1000-pdf", () => ({
+  renderThousandYearDurabilityLedgerPdf: vi.fn(async () =>
+    Buffer.from("%PDF-fake-1000"),
+  ),
+}));
 vi.mock("@/lib/certification/evidence-ledger/durability-build-model", () => ({
   buildDurabilityLedgerModel: vi.fn(() => ({
     memberBatchCodes: "CB-26-001",
@@ -41,6 +46,19 @@ vi.mock("@/lib/certification/evidence-ledger/durability-build-model", () => ({
     totalReplicates: 3,
   })),
 }));
+vi.mock(
+  "@/lib/certification/evidence-ledger/durability-1000-build-model",
+  () => ({
+    buildThousandYearDurabilityLedgerModel: vi.fn(() => ({
+      memberBatchCodes: "CB-26-001",
+      facilityName: "Dark Earth Hub",
+      externalProjectId: "prj_TEST",
+      generatedAtIso: "2026-07-13T00:00:00.000Z",
+      batches: [{ creditBatchId: BATCH }],
+      totalReplicates: 3,
+    })),
+  }),
+);
 vi.mock("@/data-access/facilities", () => ({
   getFacilityById: vi.fn(async () => ({ id: FACILITY, name: "Dark Earth Hub" })),
 }));
@@ -80,6 +98,7 @@ import {
   listDocumentsByKindForRemoval,
 } from "@/data-access/documents";
 import { renderDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-pdf";
+import { renderThousandYearDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-1000-pdf";
 import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources";
 import { ensureDurabilityEvidenceLedgerSourceFromContext } from "@/fn/certification/durability-evidence-ledger";
 
@@ -149,19 +168,22 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
     );
   });
 
-  it("retires 200-year evidence instead of generating it for a 1000-year facility", async () => {
+  it("generates a 1000-year durability ledger without a soil reference", async () => {
     const result = await ensureDurabilityEvidenceLedgerSourceFromContext(
       makeTestOrgContext(USER),
       REMOVAL,
-      context({ durabilityOption: "1000_year", hasSoilReference: true }),
+      context({ durabilityOption: "1000_year", hasSoilReference: false }),
     );
 
-    expect(result).toEqual({ status: "skipped", reason: "not-200-year" });
+    expect(result).toMatchObject({ status: "created", documentId: "doc-new" });
     expect(renderDurabilityLedgerPdf).not.toHaveBeenCalled();
-    expect(mirrorDocumentToSourceForUser).not.toHaveBeenCalled();
-    expect(deleteDocumentRow).toHaveBeenCalledWith(
+    expect(renderThousandYearDurabilityLedgerPdf).toHaveBeenCalledOnce();
+    expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(
       makeTestOrgContext(USER),
-      "doc-old",
+      {
+        removalId: REMOVAL,
+        documentId: "doc-new",
+      },
     );
   });
 

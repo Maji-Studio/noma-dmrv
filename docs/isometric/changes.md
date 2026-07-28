@@ -315,3 +315,22 @@ which supersedes the journal half of ADR 0005.
   samples since the current epoch.
 - Blueprint routing now follows the stored batch choice. Eligibility remains a
   live decision for new batches and does not rewrite existing ones.
+
+## 2026-07-28 (restore automatic evidence-ledger Sources)
+
+- Removal submission once again materializes the generated transport and
+  durability evidence-ledger PDFs after side-effect-free preflight and before
+  Source mirroring. Generation failures now block submission with an
+  actionable error instead of allowing incomplete registry attribution.
+- Candidate Source discovery includes documents attached to each member credit
+  batch. Generated ledgers remain Removal-scoped through their metadata, so a
+  ledger for another Removal cannot be mirrored or bound accidentally.
+- Transport ledgers bind to each present `mass_distance` input. Durability
+  ledgers bind to the tier-specific measurement-sample inputs, while
+  `product_mass` still requires and retains the Inventory Source as well.
+- Durability ledger generation now covers both the 200-year H/C pathway and
+  the 1000-year carbon-content/reflectance pathway. Content hashes include the
+  durability option, preserving idempotent reuse and safe supersession.
+- Generated ledgers are excluded from the operator review hash because they do
+  not exist until submission, but remain covered by the full immutable
+  submission payload hash.
