@@ -477,11 +477,13 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   `isCreateOpen`/`editingX`/`viewingX` flags, which don't compose with
   `onModeChange`. Plus `searchQuery`, per-column filters, `currentPage`/
   `pageSize`, `hasActiveFilters`, `clearFilters`.
-- **Entity-data loading is prop-driven.** The shared `(app)/loading.tsx` is a
-  data-free navigation fallback only; it keeps the app shell responsive while
-  a dynamic route resolves. Continue to pass `isLoading` to `DataTable` and
-  each `StatCard`; nested tables use `LoadingSkeleton`. Do not move React Query
-  loading or business-data reads into the route fallback.
+- **Entity-data loading is prop-driven.** Continue to pass `isLoading` to
+  `DataTable` and each `StatCard`; nested tables use `LoadingSkeleton`. Do not
+  add a shared `(app)/loading.tsx`: a parent Suspense fallback can replace a
+  detail route's canonical `not-found.tsx` response. If server-render latency
+  needs a route fallback, add the narrowest leaf `loading.tsx` and verify that
+  malformed, absent, and foreign-organization detail IDs still return the
+  designed 404.
 - **Mutations:** `toast.success(...)` on success; **failures go to local error
   state rendered as `<ServerError>` inside the sheet**, which stays open.
   `toast.error` is for non-form actions only — a form error in a toast lands
