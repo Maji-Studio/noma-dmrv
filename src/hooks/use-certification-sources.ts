@@ -86,43 +86,6 @@ export function useCandidateDocumentsForRemoval(
   });
 }
 
-export function useMirrorDocumentToSource() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: MirrorDocumentToSourceInput) => {
-      const result = await mirrorDocumentToSource(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    onSuccess: (data, vars) => {
-      const queryKey =
-        certificationSourcesKeys.candidatesForRemoval(vars.removalId);
-      // The server has confirmed that the Source mapping is persisted. Reflect
-      // that confirmed result synchronously; this is not an optimistic write.
-      queryClient.setQueryData<CandidateDocumentsForRemoval | null>(
-        queryKey,
-        (current) =>
-          applyConfirmedSourceMapping(current, vars.documentId, data),
-      );
-      void queryClient.invalidateQueries({ queryKey });
-      // The Sources change also shifts the removal's submit-readiness display.
-      void queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
-    // A failed/ambiguous action can still have persisted remotely and locally.
-    // Keep the mutation pending until the authoritative candidate read settles;
-    // only then may the row expose Retry.
-    onError: async (_error, vars) => {
-      await reconcileCandidateSourcesAfterFailure(
-        queryClient,
-        vars.removalId,
-      );
-    },
-  });
-}
-
-// `removalId` is part of the action input now — the hook stamps it onto
-// every variant so callers can't accidentally omit it and slip through
-// the schema check.
 export function useUnlinkDocumentSource(removalId: string) {
   const queryClient = useQueryClient();
   return useMutation({

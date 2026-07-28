@@ -44,8 +44,8 @@ export function collectFutureDatedMeasurements(args: {
   for (const run of runs) {
     if (run.endTime && run.endTime.getTime() > nowMs) {
       blockers.push(
-        `Production run ${run.code} ends ${formatUtcDate(run.endTime)} UTC, in the ` +
-          "future — wait until production is complete or correct the run end time.",
+        `Production run ${run.code} ends on ${formatUtcDate(run.endTime)}. ` +
+          "Change the end time or wait until the run ends.",
       );
     }
   }
@@ -54,8 +54,8 @@ export function collectFutureDatedMeasurements(args: {
     if (application.applicationDate.getTime() > nowMs) {
       blockers.push(
         `Application ${application.code} is dated ` +
-          `${formatUtcDate(application.applicationDate)}, in the future — wait ` +
-          "until the application has occurred or correct the application date.",
+          `${formatUtcDate(application.applicationDate)}. ` +
+          "Change the application date or wait until then.",
       );
     }
   }

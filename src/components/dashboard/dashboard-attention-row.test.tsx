@@ -23,8 +23,8 @@ describe("DashboardAttentionRow", () => {
         />
         <DashboardAttentionRow
           href="/feedstocks?feedstock=feedstock-1"
-          metadata="Feedstock form · Transport evidence · 1 affected"
-          title="Transport distance lacks document evidence"
+          metadata="Feedstock form · Transport route · 1 affected"
+          title="Transport endpoint GPS missing"
           divided
         />
       </ul>,
@@ -33,9 +33,9 @@ describe("DashboardAttentionRow", () => {
     expect(html).toContain("PR-26-0042 · Jul 4, 2026");
     expect(html).toContain("Complete run missing mass data");
     expect(html).toContain(
-      "Feedstock form · Transport evidence · 1 affected",
+      "Feedstock form · Transport route · 1 affected",
     );
-    expect(html).toContain("Transport distance lacks document evidence");
+    expect(html).toContain("Transport endpoint GPS missing");
     expect(html.match(/grid-cols-\[minmax\(0,1fr\)_auto\]/g)).toHaveLength(2);
   });
 
@@ -60,11 +60,11 @@ describe("DashboardAttentionRow", () => {
         ]}
         structuralGaps={[
           {
-            key: "transportDistanceEvidence",
-            label: "Transport distance lacks document evidence",
-            metadata: "Feedstock form · Transport evidence · 1 affected",
+            key: "transportEndpointGps",
+            label: "Transport endpoint GPS missing",
+            metadata: "Feedstock form · Transport route · 1 affected",
             count: 1,
-            href: "/feedstocks?feedstock=feedstock-1",
+            href: "/feedstocks?feedstock=feedstock-1&focus=transport-route",
           },
         ]}
         total={3}

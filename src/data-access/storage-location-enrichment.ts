@@ -29,6 +29,7 @@ import {
   deliveries,
   orders,
   applications,
+  binMovements,
   type StorageLocation,
 } from "@/db/schema";
 import { deriveLaneStock } from "./lane-stock-derivation";
@@ -366,6 +367,19 @@ export async function enrichStorageLocationRows(
             UNION ALL
             SELECT storage_location_id, 'in', created_at, mass_kg, code
             FROM biochar_products WHERE organization_id = ${ctx.organizationId} AND storage_location_id IN (${storageLocationIdsSql})
+            UNION ALL
+            SELECT
+              ${binMovements.storageLocationId},
+              CASE WHEN ${binMovements.massDeltaKg} >= 0 THEN 'in' ELSE 'out' END,
+              ${binMovements.createdAt},
+              ABS(${binMovements.massDeltaKg}),
+              CASE
+                WHEN ${binMovements.movementType} = 'loss' THEN 'Recorded loss'
+                ELSE 'Stock-take adjustment'
+              END
+            FROM ${binMovements}
+            WHERE ${binMovements.organizationId} = ${ctx.organizationId}
+              AND ${binMovements.storageLocationId} IN (${storageLocationIdsSql})
           )
           SELECT DISTINCT ON (storage_location_id)
             storage_location_id, activity_type, created_at as activity_date, mass_kg, label

@@ -72,9 +72,9 @@ export const CERT_REQUIREMENT_META: Record<
       "This batch's applications must trace back to at least one production run so the removal can attribute the pyrolysed biochar mass and its production emissions. With no linked run there is nothing to submit.",
   },
   measurementDates: {
-    requirementLabel: "Measurement dates not in the future",
+    requirementLabel: "Production run and application dates have passed",
     whyDetail:
-      "Durability is measured at the end of the production run, and the reporting period ends when the biochar is applied. Both dates have to have already happened — a removal cannot report a measurement that has not been taken yet, so a run ending or an application dated in the future is rejected. Correct the date, or wait until the run or application has actually occurred.",
+      "Isometric uses the production run end time for the durability measurement date and the application date for the reporting period end. A future date blocks submission. Change the run end time or application date, or wait until that date.",
   },
   transport: {
     requirementLabel: "Transport legs recorded",
@@ -107,9 +107,9 @@ export const CERT_REQUIREMENT_META: Record<
       "The facility's default removal template defines which inputs and transport categories the registry expects. It has to resolve cleanly — every referenced component present — before a removal can be assembled from it.",
   },
   evidence: {
-    requirementLabel: "Evidence files ready",
+    requirementLabel: "Supporting evidence linked",
     whyDetail:
-      "Ready means the three code-owned Noma evidence roles have persisted Source mappings. Their intended registry Datapoint attachments are verified separately after submission.",
+      "Files attached to the three supported evidence roles are sent to the registry automatically when you submit. Noma then verifies that each one reached its intended Datapoint.",
   },
   durability: {
     requirementLabel: "Sampling & durability eligibility",

@@ -4,9 +4,8 @@
  * unit (ADR 0016), so this rolls up every lab Sample that characterises the batch
  * (across its member runs/days), shows the batch-level mean ± std-dev that the
  * measurement-sample submission actually sends, and states the readiness inline:
- * the §3 Table 2 eligibility verdict, the §8.3.1 ≥3 count, and the distribution
- * across distinct runs/days. User-facing copy stays plain — protocol § references
- * live in the header InfoHint, not the body.
+ * the §3 Table 2 eligibility verdict and the §8.3.1 ≥3 count. User-facing copy
+ * stays plain — protocol § references live in the header InfoHint, not the body.
  *
  * Figures come from `buildDurabilityBatchSummaries` — the SAME aggregation the
  * submit pipeline feeds — so this panel reconciles exactly to what's submitted.
@@ -51,8 +50,9 @@ function Section({ children }: { children: React.ReactNode }) {
             Samples from this batch&apos;s production runs are pooled into one
             batch-level figure (mean ± standard deviation) — that is what the
             registry receives for the 200-year durability claim. Protocol
-            rules (module §8.3.1, §3 Table 2): at least 3 independent samples
-            across distinct runs/days, eligible when the pooled mean H/C_org
+            rules (module §8.3.1, §3 Table 2): at least 3 samples representative
+            of the batch&apos;s full range of physical characteristics, eligible
+            when the pooled mean H/C_org
             &lt; {DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org &lt;{" "}
             {DURABILITY_ELIGIBILITY_CEILINGS.oToC}.
           </>

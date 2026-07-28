@@ -1,11 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
   feedstockTypeUsageOptionsFor,
+  initialFeedstockTypeUsage,
   shouldClearCategoryForIsometricSelection,
   shouldSetUsageToPyrolysisForIsometricSelection,
   shouldShowCertifiedFeedstockWarning,
   shouldShowIsometricFeedstockSection,
 } from "./feedstock-type-form-logic";
+
+describe("initialFeedstockTypeUsage", () => {
+  it("leaves usage unselected for a standalone create form", () => {
+    expect(initialFeedstockTypeUsage(undefined, undefined)).toBeUndefined();
+  });
+
+  it("uses a parent workflow default when provided", () => {
+    expect(initialFeedstockTypeUsage(undefined, "blend")).toBe("blend");
+  });
+
+  it("preserves the persisted usage when editing", () => {
+    expect(initialFeedstockTypeUsage("pyrolysis", "blend")).toBe("pyrolysis");
+  });
+});
 
 describe("shouldShowIsometricFeedstockSection", () => {
   it("shows the Isometric section when usage is not locked", () => {

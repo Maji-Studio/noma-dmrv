@@ -39,11 +39,12 @@ test.describe("200-year durability readiness", () => {
     const panel = adminPage.getByTestId("credit-batch-durability-panel");
     await expect(panel).toBeVisible();
 
-    // The three readiness signals: ≥3 met, distributed across runs/days, eligible.
+    // The readiness signals: the §8.3.1 ≥3 count and the §3 Table 2 verdict.
+    // §8.3.1 requires no within-batch run/day distribution, so no such signal.
     const signals = panel.getByTestId("durability-readiness-signals");
     await expect(signals).toContainText("3 of 3 usable samples");
-    await expect(signals).toContainText("distinct runs/days");
     await expect(signals).toContainText("Chemistry eligible");
+    await expect(signals).not.toContainText("distinct runs/days");
 
     await panel.getByText("View chemistry details", { exact: true }).click();
 

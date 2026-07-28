@@ -289,8 +289,8 @@ describe("deriveBatchHealth", () => {
     const result = deriveBatchHealth(
       facts({
         carbonMissingInputs: [
-          "At least 3 usable 1000-year lab samples across distinct runs/days",
-          "At least 3 usable 1000-year lab samples across distinct runs/days",
+          "At least 3 usable 1000-year lab samples",
+          "At least 3 usable 1000-year lab samples",
         ],
         hasSubmittableRuns: false,
         productionReadinessGap: {
@@ -305,7 +305,7 @@ describe("deriveBatchHealth", () => {
     expect(result.issueCount).toBe(2);
     expect(open.map((check) => check.key)).toEqual(["carbon", "production"]);
     expect(checkFor(result, "carbon").detail).toBe(
-      "Missing: At least 3 usable 1000-year lab samples across distinct runs/days",
+      "Missing: At least 3 usable 1000-year lab samples",
     );
   });
 });

@@ -21,11 +21,14 @@ import {
   orders,
   type StorageLocation,
 } from "@/db/schema";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   isFeedstockBinType,
   type StorageLocationFilterData,
+  type StorageLocationSortKey,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
+import { storageLocationLastActivityAt } from "./storage-location-activity";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardStorageLocationName } from "./unique-name-guards";
@@ -49,6 +52,20 @@ export type {
   StorageLocationWithFacility,
   PaginatedStorageLocations,
   StorageLocationLastActivity,
+};
+
+/**
+ * Non-null columns the list can sort by, ordered with Drizzle's `asc`/`desc`.
+ * The two nullable keys are absent on purpose: `lastActivityAt` is derived, and
+ * `capacityKg` needs an explicit NULLS LAST. Both are handled in
+ * `getStorageLocations`.
+ */
+const SORT_COLUMNS: Partial<Record<StorageLocationSortKey, AnyPgColumn>> = {
+  code: storageLocations.code,
+  name: storageLocations.name,
+  type: storageLocations.type,
+  createdAt: storageLocations.createdAt,
+  updatedAt: storageLocations.updatedAt,
 };
 
 async function getStorageLocationLaneSummary(
@@ -217,17 +234,25 @@ export async function getStorageLocations(
 
   const whereClause = and(...conditions);
 
-  // Build sort clause
-  const sortColumn = {
-    code: storageLocations.code,
-    name: storageLocations.name,
-    type: storageLocations.type,
-    capacityKg: storageLocations.capacityKg,
-    createdAt: storageLocations.createdAt,
-    updatedAt: storageLocations.updatedAt,
-  }[sortBy] ?? storageLocations.code;
-
-  const orderFn = sortOrder === "desc" ? desc : asc;
+  // Build sort clause. Two of the sort keys are nullable, and for both of them a
+  // missing value means "not applicable", never "smallest" — so both pin their
+  // nulls to the end in *either* direction rather than taking Postgres's
+  // default (NULLS LAST on ASC, NULLS FIRST on DESC, which would lead the
+  // "Largest capacity" board with every uncapped bin).
+  const direction = sortOrder === "desc" ? sql`DESC` : sql`ASC`;
+  const primaryOrder =
+    sortBy === "lastActivityAt"
+      ? sql`${storageLocationLastActivityAt(ctx.organizationId)} ${direction} NULLS LAST`
+      : sortBy === "capacityKg"
+        ? sql`${storageLocations.capacityKg} ${direction} NULLS LAST`
+        : (sortOrder === "desc" ? desc : asc)(
+            SORT_COLUMNS[sortBy] ?? storageLocations.code,
+          );
+  // Code breaks every tie. Without it, rows sharing a sort value (every bin of
+  // one type, every bin with no activity) come back in whatever order the plan
+  // produced, and a row can repeat on page 2 after appearing on page 1.
+  const orderBy =
+    sortBy === "code" ? [primaryOrder] : [primaryOrder, asc(storageLocations.code)];
 
   // Count total for pagination
   // org-scope-ok: whereClause includes the active organization predicate.
@@ -286,7 +311,7 @@ export async function getStorageLocations(
       ),
     )
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(...orderBy)
     .limit(pageSize)
     .offset(offset);
 

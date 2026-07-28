@@ -34,22 +34,20 @@ import {
   makeBatchesWithSamples,
   makeContext,
   makeLineage,
-  makeInventorySourceDocument,
-  makeResolvedInventorySource,
   makeRun,
   make1000YearSequestrationTemplate,
   makeSequestrationTemplate,
-  setDurabilityMeasurementSamplesLive,
+  setDurabilityMeasurementSamplesEnabled,
   storedRows,
 } from "./fixtures/submit-removal-orchestrator";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import * as ledger from "@/data-access/certification";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import * as protocolPreflight from "@/fn/certification/protocol-version-preflight";
-import * as sources from "@/fn/certification/sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { compileRemovalSubmission } from "@/fn/certification/removal-submission-build";
 import * as isometric from "@/lib/isometric";
@@ -92,175 +90,6 @@ function attemptSummaryEvents() {
     );
 }
 
-describe("submitRemoval — entity readiness gate", () => {
-  it("blocks before submit-phase side effects", async () => {
-    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
-      makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
-        entityReadinessGaps: [
-          "Application APP-TEST-001: Upload the application logbook",
-        ],
-      }),
-    );
-
-    await expect(
-      submitRemoval({
-        orgCtx: makeTestOrgContext(USER_ID),
-        removalId: REMOVAL_ID,
-      }),
-    ).rejects.toThrow(/entity certification readiness/i);
-
-    expect(
-      evidenceLedgers.ensureEvidenceLedgersFromContext,
-    ).not.toHaveBeenCalled();
-    // Context loading is mocked above. The gate prevents the separate client
-    // construction used by the mutation phase.
-    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
-    expect(storedRows).toHaveLength(0);
-    expect(attemptSummaryEvents()).toHaveLength(1);
-    expect(attemptSummaryEvents()[0]?.[1]).toMatchObject({
-      status: "failed",
-      attemptedAt: expect.any(Date),
-      responsePayload: {
-        attempt_id: expect.stringMatching(
-          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-        ),
-        outcome: "refused",
-        error_class: "SafeError",
-        error_message: expect.stringMatching(
-          /entity certification readiness/i,
-        ),
-        ghg_entry_external_mutation: "none",
-      },
-    });
-  });
-
-  it("blocks durability gaps before generating evidence ledgers", async () => {
-    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
-      makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
-        durabilityGateBlockers: [
-          "Credit batch CB-TEST-001 has 2 replicate(s); at least 3 are required.",
-        ],
-      }),
-    );
-
-    await expect(
-      submitRemoval({
-        orgCtx: makeTestOrgContext(USER_ID),
-        removalId: REMOVAL_ID,
-      }),
-    ).rejects.toThrow(/sampling & eligibility/i);
-
-    expect(
-      evidenceLedgers.ensureEvidenceLedgersFromContext,
-    ).not.toHaveBeenCalled();
-    expect(storedRows).toHaveLength(0);
-  });
-
-  it("fails the invocation when the required attempt-summary audit cannot be persisted", async () => {
-    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
-      makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
-        entityReadinessGaps: ["Application evidence is missing."],
-      }),
-    );
-    vi.mocked(ledger.appendSyncEvent).mockRejectedValueOnce(
-      new Error("audit store unavailable"),
-    );
-
-    await expect(
-      submitRemoval({
-        orgCtx: makeTestOrgContext(USER_ID),
-        removalId: REMOVAL_ID,
-      }),
-    ).rejects.toThrow(/audit store unavailable/i);
-
-    expect(ledger.appendSyncEvent).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("submitRemoval — Source binding gate", () => {
-  it.each([
-    {
-      label: "no mirrored Source",
-      candidates: ["doc-1"],
-      sourceIds: [] as string[],
-      expected: /at least one evidence file/i,
-    },
-    {
-      label: "partially mirrored Sources",
-      candidates: ["doc-1", "doc-2"],
-      sourceIds: ["src-1"],
-      expected: /1 of 2 evidence files/i,
-    },
-  ])("fails closed for $label before claim or POST", async ({
-    candidates,
-    sourceIds,
-    expected,
-  }) => {
-    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
-      makeContext(),
-    );
-    vi.mocked(
-      sources.collectCandidateSourceDocumentsForRemoval,
-    ).mockResolvedValue(candidates.map(makeInventorySourceDocument));
-    vi.mocked(sources.resolveSourceBindingCandidates).mockResolvedValue(
-      sourceIds.map((sourceId, index) =>
-        makeResolvedInventorySource(candidates[index]!, sourceId),
-      ),
-    );
-
-    await expect(
-      submitRemoval({
-        orgCtx: makeTestOrgContext(USER_ID),
-        removalId: REMOVAL_ID,
-      }),
-    ).rejects.toThrow(expected);
-
-    expect(storedRows).toHaveLength(0);
-    expect(
-      evidenceLedgers.ensureEvidenceLedgersFromContext,
-    ).not.toHaveBeenCalled();
-    expect(isometric.createDatapoint).not.toHaveBeenCalled();
-    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
-    expect(attemptSummaryEvents()).toHaveLength(1);
-    expect(attemptSummaryEvents()[0]?.[1]).toMatchObject({
-      responsePayload: {
-        outcome: "refused",
-        ghg_entry_external_mutation: "none",
-      },
-    });
-  });
-
-  it("recompiles and refuses a Source set that becomes partial under mirror locks", async () => {
-    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
-      makeContext(),
-    );
-    vi.mocked(
-      sources.collectCandidateSourceDocumentsForRemoval,
-    ).mockResolvedValue(
-      ["doc-1", "doc-2"].map(makeInventorySourceDocument),
-    );
-    vi.mocked(sources.resolveSourceBindingCandidates)
-      .mockResolvedValueOnce([
-        makeResolvedInventorySource("doc-1", "src-1"),
-        makeResolvedInventorySource("doc-2", "src-2"),
-      ])
-      .mockResolvedValueOnce([
-        makeResolvedInventorySource("doc-1", "src-1"),
-      ]);
-
-    await expect(
-      submitRemoval({
-        orgCtx: makeTestOrgContext(USER_ID),
-        removalId: REMOVAL_ID,
-      }),
-    ).rejects.toThrow(/1 of 2 evidence files/i);
-
-    expect(storedRows).toHaveLength(0);
-    expect(isometric.createDatapoint).not.toHaveBeenCalled();
-    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
-  });
-});
-
 describe("submitRemoval — happy path", () => {
   it("carries the reviewed compiler artifact through claim snapshot and POST, and refuses review drift", async () => {
     const ctx = makeContext();
@@ -283,7 +112,12 @@ describe("submitRemoval — happy path", () => {
       hasDurabilityComponents: false,
     });
     expect(reviewed.snapshot).not.toBeNull();
-    const reviewedHash = isometric.payloadHash(
+    // What the operator reviews and re-asserts at submit: Source-ID independent.
+    const reviewedHash = reviewPayloadHash(
+      reviewed.snapshot!.semanticPayload,
+    );
+    // What is persisted as the supersede / drift fingerprint: the full payload.
+    const storedHash = isometric.payloadHash(
       reviewed.snapshot!.semanticPayload,
     );
     const repointed = await compileRemovalSubmission({
@@ -302,7 +136,7 @@ describe("submitRemoval — happy path", () => {
       hasDurabilityComponents: false,
     });
     expect(
-      isometric.payloadHash(repointed.snapshot!.semanticPayload),
+      reviewPayloadHash(repointed.snapshot!.semanticPayload),
     ).not.toBe(reviewedHash);
     vi.mocked(isometric.createDatapoint).mockImplementation(
       fakeExternalIds("dp") as never,
@@ -317,7 +151,7 @@ describe("submitRemoval — happy path", () => {
       expectedCompilationHash: reviewedHash,
     });
 
-    expect(storedRows[0].payloadHash).toBe(reviewedHash);
+    expect(storedRows[0].payloadHash).toBe(storedHash);
     expect(storedRows[0].payloadSnapshot).toMatchObject({
       semantic: reviewed.snapshot!.semanticPayload,
     });
@@ -338,7 +172,7 @@ describe("submitRemoval — happy path", () => {
         removalId: REMOVAL_ID,
         expectedCompilationHash: reviewedHash,
       }),
-    ).rejects.toThrow(/changed after the compiled review/i);
+    ).rejects.toThrow(/changed after you reviewed it/i);
     expect(storedRows).toHaveLength(1);
     expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
   });
@@ -742,7 +576,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
   }
 
   it("uses MAX(applicationDate) across lineages for completed_on while durability measured_at keeps the production end", async () => {
-    setDurabilityMeasurementSamplesLive(true);
+    setDurabilityMeasurementSamplesEnabled(true);
     vi.mocked(
       durabilitySamples.submitDurabilityMeasurementSamples,
     ).mockResolvedValue({
@@ -943,7 +777,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/production run end.*is in the future/i);
+    ).rejects.toThrow(/latest production run ends at.*change the end time/i);
 
     expect(
       evidenceLedgers.ensureEvidenceLedgersFromContext,
@@ -995,8 +829,8 @@ describe("submitRemoval — reporting window anchored to application date (issue
   });
 });
 
-describe("submitRemoval — durability measurement-samples gate (Phase 3, staged)", () => {
-  it("blocks a template that declares a biochar_sequestration_200_year_* component while the flag is off", async () => {
+describe("submitRemoval — durability measurement-samples gate (sandbox-only)", () => {
+  it("blocks a template that declares a biochar_sequestration_200_year_* component when the environment targets the live registry", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...makeContext(),
       defaultTemplate: makeSequestrationTemplate(),
@@ -1008,13 +842,13 @@ describe("submitRemoval — durability measurement-samples gate (Phase 3, staged
 
     await expect(
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
-    ).rejects.toThrow(/staged but not yet live/i);
+    ).rejects.toThrow(/run against the Isometric sandbox only/i);
     // Gated before any aggregation/claim — nothing posted, no ledger row.
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
 
-  it("blocks the 1000-year component rather than silently omitting it when the flag is off", async () => {
+  it("blocks the 1000-year component rather than silently omitting it when the environment targets the live registry", async () => {
     const ctx = makeContext();
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...ctx,
@@ -1039,8 +873,8 @@ describe("submitRemoval — durability measurement-samples gate (Phase 3, staged
     expect(storedRows).toHaveLength(0);
   });
 
-  it("rejects 200-year Removal submissions before any registry mutation or ledger claim when the flag is on", async () => {
-    setDurabilityMeasurementSamplesLive(true);
+  it("rejects 200-year Removal submissions before any registry mutation or ledger claim against the sandbox", async () => {
+    setDurabilityMeasurementSamplesEnabled(true);
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...makeContext(),
       defaultTemplate: makeSequestrationTemplate(),
@@ -1061,8 +895,8 @@ describe("submitRemoval — durability measurement-samples gate (Phase 3, staged
     expect(storedRows).toHaveLength(0);
   });
 
-  it("rejects unsampled Method B before any registry mutation or ledger claim when the flag is on", async () => {
-    setDurabilityMeasurementSamplesLive(true);
+  it("rejects unsampled Method B before any registry mutation or ledger claim against the sandbox", async () => {
+    setDurabilityMeasurementSamplesEnabled(true);
     const ctx = makeContext();
     const unsampledBatches = ctx.batchesWithSamples.map((batch) => ({
       ...batch,

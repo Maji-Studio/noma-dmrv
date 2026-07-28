@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { collectFutureDatedMeasurements } from "./future-dated-measurements";
 
 const NOW = new Date("2026-07-25T12:00:00.000Z");
+const EN_OR_EM_DASH = /[\u2013\u2014]/;
 
 function run(code: string, endTime: Date | null) {
   return { code, endTime };
@@ -40,10 +41,11 @@ describe("collectFutureDatedMeasurements", () => {
     });
 
     expect(rest).toEqual([]);
-    expect(blocker).toContain("PR-0007");
-    expect(blocker).toContain("2026-08-01");
-    expect(blocker).toContain("correct the run end time");
-    expect(blocker).toContain("UTC");
+    expect(blocker).toBe(
+      "Production run PR-0007 ends on 2026-08-01. " +
+        "Change the end time or wait until the run ends.",
+    );
+    expect(blocker).not.toMatch(EN_OR_EM_DASH);
   });
 
   it("names the application dated in the future", () => {
@@ -53,9 +55,11 @@ describe("collectFutureDatedMeasurements", () => {
       now: NOW,
     });
 
-    expect(blocker).toContain("APP-0003");
-    expect(blocker).toContain("2026-08-14");
-    expect(blocker).toContain("correct the application date");
+    expect(blocker).toBe(
+      "Application APP-0003 is dated 2026-08-14. " +
+        "Change the application date or wait until then.",
+    );
+    expect(blocker).not.toMatch(EN_OR_EM_DASH);
   });
 
   it("reports every offending record, runs before applications", () => {

@@ -18,7 +18,6 @@ import {
   BLEND_FEEDSTOCK_CATEGORY_OPTIONS,
   PYROLYSIS_FEEDSTOCK_CATEGORY_OPTIONS,
   feedstockCategories,
-  feedstockTypeUsages,
   type FeedstockTypeUsage,
   type FeedstockTypeFormData,
 } from "@/schemas/feedstock-types";
@@ -27,6 +26,7 @@ import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
 import type { IsometricFeedstockType } from "@/lib/isometric";
 import {
   feedstockTypeUsageOptionsFor,
+  initialFeedstockTypeUsage,
   shouldClearCategoryForIsometricSelection,
   shouldSetUsageToPyrolysisForIsometricSelection,
   shouldShowCertifiedFeedstockWarning,
@@ -130,9 +130,7 @@ export function FeedstockTypeForm({
       category: feedstockType?.category && (feedstockCategories as readonly string[]).includes(feedstockType.category)
         ? (feedstockType.category as FeedstockTypeFormData["category"])
         : undefined,
-      usage: feedstockType?.usage && (feedstockTypeUsages as readonly string[]).includes(feedstockType.usage)
-        ? (feedstockType.usage as FeedstockTypeFormData["usage"])
-        : defaultUsage ?? "pyrolysis",
+      usage: initialFeedstockTypeUsage(feedstockType?.usage, defaultUsage),
       description: feedstockType?.description ?? "",
       // No form field anymore (UI-only removal) — kept in form state so
       // edit-mode submits pass the persisted value through unchanged.

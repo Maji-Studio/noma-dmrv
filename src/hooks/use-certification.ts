@@ -46,6 +46,7 @@ import {
   submitRemovalAction,
   type CreditBatchHealthSummary,
 } from "@/fn/certification";
+import { invalidateOnboardingProgress } from "./use-onboarding";
 import type {
   CreateGhgStatementInput,
   CreateRemovalWithBatchesInput,
@@ -368,11 +369,12 @@ export function useSaveFacilityCertifierMapping() {
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      await invalidateOnboardingProgress(queryClient);
     },
   });
 }

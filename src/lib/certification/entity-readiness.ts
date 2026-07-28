@@ -3,7 +3,6 @@ import {
   type CertifyEntityKind,
   type CertifyFieldDescriptor,
 } from "./certify-field-registry";
-import { hasCompleteTransportEvidence } from "./transport-evidence";
 
 export type EntityCertifyReadinessState = "ready" | "incomplete";
 
@@ -47,15 +46,6 @@ const APPLICATION_EVIDENCE_GAP: EntityCertifyGap = {
   label: "Application evidence",
   fields: ["evidenceGapCount"],
   detail: "Geotagged photos or boundary evidence required to certify",
-};
-
-const TRANSPORT_EVIDENCE_GAP: EntityCertifyGap = {
-  kind: "field",
-  key: "transportEvidence",
-  label: "Transport evidence",
-  fields: ["transportEvidenceDocumentCount"],
-  detail:
-    "At least one accepted, classified transport-evidence file is required to certify",
 };
 
 function fieldValue(
@@ -200,26 +190,6 @@ export function deriveEntityCertifyReadiness(
       evidenceGapCount !== 0
     ) {
       gaps.push(APPLICATION_EVIDENCE_GAP);
-    }
-  }
-
-  if (
-    entityKind === "feedstock" ||
-    entityKind === "delivery" ||
-    entityKind === "transportLeg"
-  ) {
-    const documentCount = fieldValue(
-      entity,
-      "transportEvidenceDocumentCount",
-    );
-    // A missing count must fail closed because evidence coverage and
-    // Source-binding readiness are independent of distance provenance.
-    if (
-      !hasCompleteTransportEvidence(
-        typeof documentCount === "number" ? documentCount : undefined,
-      )
-    ) {
-      gaps.push(TRANSPORT_EVIDENCE_GAP);
     }
   }
 

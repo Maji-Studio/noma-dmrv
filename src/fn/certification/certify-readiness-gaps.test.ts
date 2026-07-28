@@ -4,8 +4,6 @@ import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples"
 import type { TransportLeg } from "@/db/schema";
 import { buildEntityReadinessResult } from "./certify-readiness-gaps";
 
-const TRANSPORT_LEG_ID = "00000000-0000-4000-a000-000000000001";
-
 /** A lab sample whose chemistry is complete for the 200-year tier. */
 function labSample(
   id: string,
@@ -85,9 +83,9 @@ describe("buildEntityReadinessResult", () => {
     expect(result.gaps.join(" ")).not.toContain("run-affected");
   });
 
-  it("uses a friendly transport label in blocking gaps", () => {
+  it("does not block a required transport category without evidence", () => {
     const transportLeg = {
-      id: TRANSPORT_LEG_ID,
+      id: "00000000-0000-4000-a000-000000000001",
       entityId: "00000000-0000-4000-a000-000000000002",
       distanceKm: 25,
       loadMassKg: 900,
@@ -102,9 +100,8 @@ describe("buildEntityReadinessResult", () => {
       ["feedstock"],
     );
 
-    expect(result.gaps.join(" ")).toContain("feedstock transport 1");
-    expect(result.gaps.join(" ")).not.toContain(TRANSPORT_LEG_ID);
-    expect(result.issues).toHaveLength(1);
+    expect(result.gaps).toEqual([]);
+    expect(result.issues).toEqual([]);
     expect(result.warnings).toEqual([]);
   });
 
@@ -145,7 +142,7 @@ describe("buildEntityReadinessResult", () => {
     });
   });
 
-  it("keeps feedstock and biochar evidence blockers separately identified", () => {
+  it("does not create evidence blockers for feedstock or biochar legs", () => {
     const feedstockLeg = {
       id: "00000000-0000-4000-a000-000000000003",
       entityId: "00000000-0000-4000-a000-000000000004",
@@ -170,10 +167,8 @@ describe("buildEntityReadinessResult", () => {
       ["feedstock", "biochar"],
     );
 
-    expect(result.gaps).toHaveLength(2);
-    expect(result.gaps[0]).toContain("feedstock transport 1");
-    expect(result.gaps[1]).toContain("biochar transport 1");
-    expect(result.issues).toHaveLength(2);
+    expect(result.gaps).toEqual([]);
+    expect(result.issues).toEqual([]);
     expect(result.warnings).toEqual([]);
   });
 });

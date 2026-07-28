@@ -17,11 +17,9 @@ import {
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
 import type { DocumentEntityType } from "@/schemas/documents";
-import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { InfoHint } from "@/components/ui/tooltip";
 import {
   isAcceptedTransportEvidenceDocument,
-  deriveTransportEvidenceCertStatus,
   isTransportEvidenceDocumentType,
   TRANSPORT_EVIDENCE_DOCUMENT_LABELS,
 } from "@/lib/certification/transport-evidence";
@@ -177,8 +175,6 @@ interface TransportEvidencePanelProps {
   entityType: TransportEvidenceEntityType;
   entityId: string;
   readOnly?: boolean;
-  /** Undefined while the saved entity is still loading. */
-  persisted?: boolean;
   /** Omits repeated visible chrome when a parent section already supplies the heading. */
   embedded?: boolean;
 }
@@ -191,18 +187,8 @@ export function TransportEvidencePanel({
   entityType,
   entityId,
   readOnly = false,
-  persisted = true,
   embedded = false,
 }: TransportEvidencePanelProps) {
-  const { data: documents } = useDocumentsForEntity(entityType, entityId);
-  const acceptedDocumentCount = documents?.filter(
-    isAcceptedTransportEvidenceDocument,
-  ).length;
-  const evidenceStatus = deriveTransportEvidenceCertStatus({
-    persisted,
-    documentsLoaded: documents !== undefined,
-    acceptedDocumentCount,
-  });
   return (
     <section
       className={
@@ -218,13 +204,9 @@ export function TransportEvidencePanel({
             Transport evidence
           </h3>
         )}
-        <CertificationFieldTag
-          status={evidenceStatus}
-          description="Satisfied when at least one classified transport-evidence file is uploaded"
-        />
         <InfoHint label="About transport evidence">
-          Upload at least one bill of lading, weigh-scale ticket, or other
-          transport evidence file. One accepted file is enough.
+          Optional. Attach a bill of lading, weigh-scale ticket, or other
+          transport record if you have one.
         </InfoHint>
       </div>
       <TransportEvidenceDocuments

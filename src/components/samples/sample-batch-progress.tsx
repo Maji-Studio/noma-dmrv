@@ -4,10 +4,10 @@
  * A Sample characterises ONE credit batch (the protocol production batch —
  * ADR 0016, anchored directly since issue #309: the batch's biochar is
  * commingled across runs, so the form selects the batch, never a run). From the
- * chosen batch this panel shows live progress toward the protocol's ≥3
- * distributed-sample minimum (§8.3.1): the existing replicate count, the
- * runs/days they span (the distribution evidence), and the eligibility verdict
- * — the same `DurabilityReadinessSignals` the credit-batch detail uses.
+ * chosen batch this panel shows live progress toward the protocol's ≥3-sample
+ * minimum (§8.3.1): the existing replicate count and the eligibility verdict —
+ * the same `DurabilityReadinessSignals` the credit-batch detail uses. §8.3.1
+ * requires no within-batch run/day distribution, so none is shown.
  */
 "use client";
 
@@ -28,8 +28,6 @@ import { DurabilityReadinessSignals } from "@/components/certification/durabilit
 const H_TO_CORG_INPUT_LABEL = "Hydrogen (%)";
 const O_TO_CORG_INPUT_LABEL = "Oxygen (%)";
 
-const UNKNOWN_DAY_LABEL = "date unknown";
-
 interface SampleBatchProgressProps {
   /** The form's currently-selected credit batch. */
   creditBatchId: string | undefined;
@@ -40,30 +38,6 @@ function isUsableReplicate(
   replicate: DurabilityBatchSummary["replicates"][number],
 ): boolean {
   return replicate.hToCorg != null && replicate.oToCorg != null;
-}
-
-/**
- * Distinct (run code, day) labels among the batch's USABLE pooled samples. Run
- * provenance only exists on legacy pre-re-grain rows — batch-anchored samples
- * label by sampling day alone.
- *
- * Only complete-chemistry replicates may evidence the §8.3.1 distribution, the
- * same rule `buildDurabilityBatchSummaries` and `usableProvenance`
- * (durability-submission-gates.ts) apply. An incomplete sample on another
- * run/day would otherwise add a phantom chip claiming a distribution the
- * submission gate does not see (QA 2026-07-25 F-6).
- */
-function distinctProvenanceLabels(summary: DurabilityBatchSummary): string[] {
-  const seen = new Map<string, string>();
-  for (const r of summary.replicates) {
-    if (!isUsableReplicate(r)) continue;
-    const day = r.samplingDay ?? UNKNOWN_DAY_LABEL;
-    const key = `${r.productionRunId ?? "?"}::${r.samplingDay ?? "?"}`;
-    if (!seen.has(key)) {
-      seen.set(key, r.productionRunCode ? `${r.productionRunCode} · ${day}` : day);
-    }
-  }
-  return Array.from(seen.values());
 }
 
 /**
@@ -105,22 +79,19 @@ function progressHint(summary: DurabilityBatchSummary): string {
   const remaining = Math.max(0, minimum - usable);
 
   if (remaining === 0) {
-    return summary.distributionWarning
-      ? `This batch meets ≥${minimum}, but all replicates cluster on one run/day — §8.3.1 expects them distributed across distinct runs/days.`
-      : `This batch already meets the ≥${minimum}-sample minimum across distinct runs/days.`;
+    return `This batch already meets the ≥${minimum}-sample minimum.`;
   }
 
   const usableClause = `This batch has ${usable} usable replicate${usable === 1 ? "" : "s"}`;
   const incomplete = summarizeIncompleteChemistry(summary);
 
   if (incomplete.count === 0) {
-    return `${usableClause} — add ${remaining} more (across distinct runs/days) to reach the ≥${minimum} minimum.`;
+    return `${usableClause}. Add ${remaining} more to reach the ≥${minimum} minimum.`;
   }
 
   const stillShort = Math.max(0, remaining - incomplete.count);
-  const thenAdd =
-    stillShort > 0 ? `, then add ${stillShort} more (across distinct runs/days)` : "";
-  return `${usableClause}. ${incomplete.count} recorded sample${incomplete.count === 1 ? " doesn't" : "s don't"} count yet — enter ${incomplete.label} on ${incomplete.count === 1 ? "it" : "them"}${thenAdd} to reach the ≥${minimum} minimum.`;
+  const thenAdd = stillShort > 0 ? `, then add ${stillShort} more` : "";
+  return `${usableClause}. ${incomplete.count} recorded sample${incomplete.count === 1 ? " doesn't" : "s don't"} count yet. Enter ${incomplete.label} on ${incomplete.count === 1 ? "it" : "them"}${thenAdd} to reach the ≥${minimum} minimum.`;
 }
 
 function Panel({ children }: { children: React.ReactNode }) {
@@ -168,8 +139,6 @@ export function SampleBatchProgress({
     );
   }
 
-  const provenance = distinctProvenanceLabels(summary);
-
   return (
     <Panel>
       <div className="flex flex-wrap items-center justify-between gap-8">
@@ -196,19 +165,6 @@ export function SampleBatchProgress({
       <p className="body-caption text-[var(--color-text-secondary)]">
         {progressHint(summary)}
       </p>
-
-      {provenance.length > 0 && (
-        <div className="flex flex-wrap items-center gap-6">
-          {provenance.map((label) => (
-            <span
-              key={label}
-              className="inline-flex items-center border border-[var(--color-border-tertiary)] bg-[var(--color-background-white)] px-6 py-2 body-caption text-[var(--color-text-tertiary)]"
-            >
-              {label}
-            </span>
-          ))}
-        </div>
-      )}
     </Panel>
   );
 }

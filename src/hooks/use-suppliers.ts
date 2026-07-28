@@ -37,6 +37,7 @@ import {
 } from "@/fn/suppliers";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { invalidateOnboardingProgress } from "./use-onboarding";
 
 // ============================================
 // Query Keys
@@ -182,6 +183,7 @@ export function useCreateSupplier(
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
+      await invalidateOnboardingProgress(queryClient);
 
       // Pre-populate the detail cache with the new supplier
       queryClient.setQueryData(supplierKeys.detail(data.id), data);
@@ -215,6 +217,7 @@ export function useCreateSupplierWithLocations(
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(data.id) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
+      await invalidateOnboardingProgress(queryClient);
       queryClient.setQueryData(supplierKeys.detail(data.id), data);
 
       await callbacks?.onSuccess?.(data, variables);

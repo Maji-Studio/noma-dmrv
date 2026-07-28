@@ -3,8 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const rowMutationState = vi.hoisted(() => ({
-  isPending: false,
-  isError: false,
   confirmed: false,
 }));
 const queryState = vi.hoisted(() => ({
@@ -91,14 +89,6 @@ vi.mock("@/hooks/use-certification-sources", () => ({
     isError: queryState.isError,
     error: queryState.isError ? new Error("background refetch failed") : null,
   }),
-  useMirrorDocumentToSource: () => ({
-    isPending: rowMutationState.isPending,
-    isError: rowMutationState.isError,
-    mutate: vi.fn(),
-  }),
-}));
-vi.mock("@/components/ui/toast", () => ({
-  useToast: () => ({ success: vi.fn(), error: vi.fn() }),
 }));
 vi.mock("@/components/ui", () => ({
   Button: ({
@@ -131,15 +121,11 @@ vi.mock("./panel-layout", () => ({
 }));
 
 import {
-  canStartSourceMirror,
-  deriveSourceRowState,
   SourcesPanel,
 } from "./sources-panel";
 
 describe("SourcesPanel supporting document affordances", () => {
   beforeEach(() => {
-    rowMutationState.isPending = false;
-    rowMutationState.isError = false;
     rowMutationState.confirmed = false;
     queryState.isError = false;
   });
@@ -177,51 +163,26 @@ describe("SourcesPanel supporting document affordances", () => {
     expect(html).not.toContain("aria-pressed");
   });
 
-  it.each([
-    [{ hasConfirmedMapping: false, isPending: false, isError: false }, "idle"],
-    [{ hasConfirmedMapping: false, isPending: true, isError: false }, "pending"],
-    [{ hasConfirmedMapping: true, isPending: false, isError: false }, "success"],
-    [{ hasConfirmedMapping: false, isPending: false, isError: true }, "failure"],
-    // An ambiguous failed response reconciled to a persisted mapping is success.
-    [{ hasConfirmedMapping: true, isPending: false, isError: true }, "success"],
-  ] as const)("derives deterministic row state %#", (input, expected) => {
-    expect(deriveSourceRowState(input)).toBe(expected);
-  });
-
-  it("prevents duplicate mirror actions while a row is pending", () => {
-    expect(canStartSourceMirror("pending")).toBe(false);
-    expect(canStartSourceMirror("idle")).toBe(true);
-    expect(canStartSourceMirror("failure")).toBe(true);
-  });
-
-  it("shows only the slow row as pending and disables its action", () => {
-    rowMutationState.isPending = true;
+  it("shows managed files as automatic submit work with no per-file action", () => {
     const html = renderToStaticMarkup(
       <SourcesPanel removalId="removal-id" isEditable />,
     );
 
-    expect(html).toContain("Pending");
-    expect(html).toContain("disabled");
+    expect(html.match(/On submit/g)).toHaveLength(2);
+    expect(html).toContain("3 files linked");
+    expect(html).not.toContain(">Mirror<");
+    expect(html).not.toContain(">Retry<");
+    expect(html).not.toContain("<button");
   });
 
-  it("shows Retry only after a reconciled failure remains unconfirmed", () => {
-    rowMutationState.isError = true;
-    const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" isEditable />,
-    );
-
-    expect(html).toContain("Retry");
-  });
-
-  it("treats an ambiguous response reconciled to a mapping as success", () => {
-    rowMutationState.isError = true;
+  it("shows persisted mappings as ready", () => {
     rowMutationState.confirmed = true;
     const html = renderToStaticMarkup(
       <SourcesPanel removalId="removal-id" isEditable />,
     );
 
-    expect(html).toContain("source-confirmed");
-    expect(html).not.toContain("Retry");
+    expect(html.match(/>Ready<\/span>/g)).toHaveLength(3);
+    expect(html).not.toContain("On submit");
   });
 
   it("surfaces a background refetch failure instead of stale cached data", () => {
@@ -245,25 +206,4 @@ describe("SourcesPanel supporting document affordances", () => {
     expect(html).not.toContain("Unlink locally");
   });
 
-  it("preserves pending mirror status for submitted removals", () => {
-    rowMutationState.isPending = true;
-
-    const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" isEditable={false} />,
-    );
-
-    expect(html).toContain("Pending");
-    expect(html).not.toContain(">Mirror<");
-  });
-
-  it("preserves failed mirror status for submitted removals", () => {
-    rowMutationState.isError = true;
-
-    const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" isEditable={false} />,
-    );
-
-    expect(html).toContain("Mirror failed");
-    expect(html).not.toContain(">Retry<");
-  });
 });

@@ -110,9 +110,11 @@ credit batch**, recorded against it directly — the batch's biochar is
 attributable (a run link survives only on legacy rows as provenance).
 The Sample inherits the **durability tier** (200- vs 1000-year) its
 **facility** declares, carried through its credit batch, and the ≥3 must
-be **independent samples distributed across
-the batch** (distinct sampling points/days — protocol §8.3.1), never
-aliquots of a single grab. The lab's certificate of analysis is attached
+be **representative of the full range of physical characteristics**
+(particle size, colour) present in the batch — protocol §8.3.1. They need
+**not** come from distinct production runs or distinct days; §8.3.1's
+distinct-days language governs Method B's random-sampling cadence *across*
+batches, not within one. The lab's certificate of analysis is attached
 as a `lab_report` **document**, not a separate record. Distinct from the
 in-process spot-checks logged against a **production run** (the
 ~2-hourly field measurements) — those are internal-only and never
@@ -125,11 +127,13 @@ with reactor **readings** (telemetry).
 The role a **Sample** plays within its **credit batch**'s set — each
 lab-analysed Sample is one replicate, and a sampled credit batch carries
 ≥3 so a mean, standard deviation and outliers can be derived. Per
-protocol §8.3.1 the ≥3 are **independent samples taken from distinct
-points (production runs / days) across the batch** and analysed
-individually — *not* three aliquots of one grab — and the count is
-judged **per credit batch**, never per production run. _Avoid_: replicate
-as a lab aliquot; counting the ≥3 at the production-run grain.
+protocol §8.3.1 the ≥3 must be **representative of the full range of
+physical characteristics available in the batch** and analysed
+individually; they are **not** required to span distinct production runs
+or days. The count is judged **per credit batch**, never per production
+run. _Avoid_: replicate as a lab aliquot; counting the ≥3 at the
+production-run grain; reading a within-batch distinct-runs/days
+requirement into §8.3.1.
 
 **Production process**:
 A campaign of biochar production sharing **one feedstock under

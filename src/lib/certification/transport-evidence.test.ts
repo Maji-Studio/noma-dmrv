@@ -1,45 +1,60 @@
 import { describe, expect, it } from "vitest";
 import {
-  deriveTransportEvidenceCertStatus,
-  hasCompleteTransportEvidence,
+  hasAcceptedTransportEvidence,
+  isAcceptedTransportEvidenceDocument,
 } from "./transport-evidence";
 
-describe("transport evidence readiness", () => {
+describe("transport evidence display predicates", () => {
   it.each([
     { count: 0, expected: false },
     { count: undefined, expected: false },
+    { count: null, expected: false },
+    { count: Number.NaN, expected: false },
     { count: 1, expected: true },
-  ])("depends only on accepted evidence count", ({ count, expected }) => {
-    expect(hasCompleteTransportEvidence(count)).toBe(expected);
-  });
-
-  it("keeps create and loading states neutral", () => {
-    expect(
-      deriveTransportEvidenceCertStatus({
-        persisted: false,
-        documentsLoaded: true,
-        acceptedDocumentCount: 1,
-      }),
-    ).toBe("neutral");
-    expect(
-      deriveTransportEvidenceCertStatus({
-        persisted: true,
-        documentsLoaded: false,
-        acceptedDocumentCount: undefined,
-      }),
-    ).toBe("neutral");
+  ])("reports whether an accepted document count is present", ({ count, expected }) => {
+    expect(hasAcceptedTransportEvidence(count)).toBe(expected);
   });
 
   it.each([
-    { count: 0, expected: "missing" },
-    { count: 1, expected: "satisfied" },
-  ])("resolves persisted status from accepted documents", ({ count, expected }) => {
-    expect(
-      deriveTransportEvidenceCertStatus({
-        persisted: true,
-        documentsLoaded: true,
-        acceptedDocumentCount: count,
-      }),
-    ).toBe(expected);
-  });
+    {
+      document: {
+        uploadStatus: "uploaded",
+        documentType: "bill_of_lading",
+      },
+      expected: true,
+    },
+    {
+      document: {
+        uploadStatus: "uploaded",
+        documentType: "weighbridge_ticket",
+      },
+      expected: true,
+    },
+    {
+      document: {
+        uploadStatus: "uploaded",
+        documentType: "other_transport_evidence",
+      },
+      expected: true,
+    },
+    {
+      document: {
+        uploadStatus: "pending",
+        documentType: "bill_of_lading",
+      },
+      expected: false,
+    },
+    {
+      document: {
+        uploadStatus: "uploaded",
+        documentType: "invoice",
+      },
+      expected: false,
+    },
+  ])(
+    "accepts only uploaded, classified transport records",
+    ({ document, expected }) => {
+      expect(isAcceptedTransportEvidenceDocument(document)).toBe(expected);
+    },
+  );
 });

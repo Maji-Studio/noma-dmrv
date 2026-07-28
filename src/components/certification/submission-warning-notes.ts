@@ -20,22 +20,10 @@ type WarningEntry =
 
 const POST_WINDOW_SAMPLE_PATTERN =
   /^Sample (.+?) was taken on (\d{4}-\d{2}-\d{2}), after credit batch (.+?)'s production window (\d{4}-\d{2}-\d{2})–(\d{4}-\d{2}-\d{2})\./;
-const UNKNOWN_PROVENANCE_PATTERN =
-  /^Credit batch (.+?): all (\d+) replicates have unknown run\/day provenance/;
-const SINGLE_RUN_DAY_PATTERN =
-  /^Credit batch (.+?): all (\d+) replicates cluster on a single run\/day/;
 const REPORTING_WINDOW_PATTERN =
   /^Reporting window spans multiple months \(production started (\d{4}-\d{2}), latest application (\d{4}-\d{2})\)/;
 const SOIL_TEMPERATURE_PATTERN =
   /^An application site soil temperature \(([\d.]+) °C\) exceeds the declared facility reference \(([\d.]+) °C\)/;
-const MIN_INDEPENDENT_SAMPLES = 3;
-
-function independentSamplingRequirement(batchCode: string): string {
-  return (
-    `${batchCode} needs at least ${MIN_INDEPENDENT_SAMPLES} independent samples from different production runs or days ` +
-    "(§8.3.1). Confirm this sampling approach with the registry."
-  );
-}
 
 function parsePostWindowSample(
   warning: string,
@@ -83,8 +71,7 @@ function postWindowNote(
     detail:
       `${sampleSubject} ${sampleVerb} sampled ${samplingRange}, ` +
       `after ${first.batchCode}'s production window (${productionWindow}). Under §8.3.1, ` +
-      "stored-material samples must cover different parts of the batch; confirm this with the registry. " +
-      "This sampling day does not count as within-batch temporal distribution.",
+      "stored-material samples must cover different parts of the batch; confirm this with the registry.",
   };
 }
 
@@ -92,26 +79,6 @@ function knownWarningNote(
   warning: string,
   index: number,
 ): SubmissionWarningNote {
-  const unknownProvenance = warning.match(UNKNOWN_PROVENANCE_PATTERN);
-  if (unknownProvenance) {
-    const [, batchCode, count] = unknownProvenance;
-    return {
-      key: `unknown-provenance-${batchCode}-${index}`,
-      summary: `Run/day details are missing for all ${count} samples.`,
-      detail: independentSamplingRequirement(batchCode),
-    };
-  }
-
-  const singleRunDay = warning.match(SINGLE_RUN_DAY_PATTERN);
-  if (singleRunDay) {
-    const [, batchCode, count] = singleRunDay;
-    return {
-      key: `single-run-day-${batchCode}-${index}`,
-      summary: `All ${count} samples are from the same production run or day.`,
-      detail: independentSamplingRequirement(batchCode),
-    };
-  }
-
   if (warning.startsWith("Diesel fuel (genset and/or startup/preprocessing)")) {
     return {
       key: `unmapped-diesel-${index}`,

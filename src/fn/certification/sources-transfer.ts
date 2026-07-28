@@ -56,7 +56,7 @@ export async function downloadDocumentBlob(
 ): Promise<{ blob: Blob; contentType: string }> {
   if (!document.storageKey) {
     throw new SafeError(
-      "This document has no managed storage (legacy URL-only). Re-upload through noma before mirroring to Isometric.",
+      "This document has no managed storage (legacy URL-only). Re-upload it through noma before sending it to Isometric.",
     );
   }
   const provider = getStorageProvider();

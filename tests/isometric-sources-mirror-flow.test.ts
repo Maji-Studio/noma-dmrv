@@ -122,7 +122,10 @@ import * as documentsDA from "@/data-access/documents";
 import * as uploadsDA from "@/data-access/certifier-document-uploads";
 import * as organizationSettingsDA from "@/data-access/certifier-organization-settings";
 import * as isometric from "@/lib/isometric";
-import { mirrorDocumentToSource } from "@/fn/certification/sources";
+import {
+  mirrorCandidateSourcesForSubmission,
+  mirrorDocumentToSource,
+} from "@/fn/certification/sources";
 import { buildSourceSupplierRef } from "@/lib/isometric/utils/source-ref";
 
 const SUPPLIER_REF = buildSourceSupplierRef(DOCUMENT_ID);
@@ -217,6 +220,33 @@ beforeEach(() => {
 });
 
 describe("mirrorDocumentToSource — orphan recovery", () => {
+  it("mirrors a pending candidate when submission prepares its sources", async () => {
+    vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue({
+      id: EXISTING_SOURCE_ID,
+      is_public: false,
+    } as never);
+    vi.mocked(isometric.requestSignedUploadUrl).mockResolvedValue({
+      kind: "already_uploaded",
+    });
+
+    await mirrorCandidateSourcesForSubmission(
+      makeTestOrgContext(USER_ID),
+      {
+        removalId: REMOVAL_ID,
+        candidateDocumentIds: [DOCUMENT_ID],
+      },
+    );
+
+    expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      expect.objectContaining({
+        documentId: DOCUMENT_ID,
+        externalDocumentId: EXISTING_SOURCE_ID,
+      }),
+      expect.anything(),
+    );
+  });
+
   it.each(["submitted", "accepted", "superseded"] as const)(
     "rejects public mirroring when the latest Removal submission is %s",
     async (status) => {

@@ -20,7 +20,6 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
 import {
-  CheckCircleIcon,
   PlusIcon,
   SealCheckIcon,
   WarningIcon,
@@ -33,7 +32,7 @@ import {
   useRemovalPreflightSummaries,
   useRemovalsForFacility,
 } from "@/hooks/use-certification";
-import { deriveRemovalStatus } from "@/lib/certification/status";
+import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
@@ -109,21 +108,24 @@ function shortId(id: string): string {
   return id.slice(0, SHORT_ID);
 }
 
-function reportingWindow(summary: RemovalListRow): string {
+function reportingWindow(summary: RemovalListRow): string | null {
   return summary.startedOn && summary.completedOn
     ? formatDateRange(summary.startedOn, summary.completedOn)
-    : "Set on submit";
+    : null;
 }
 
 function RemovalCell({ summary }: { summary: RemovalListRow }) {
+  const window = reportingWindow(summary);
   return (
     <div className="flex flex-col gap-2 min-w-0">
       <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
         {shortId(summary.removalId)}…
       </span>
-      <span className="body-caption text-[var(--color-text-tertiary)]">
-        {reportingWindow(summary)}
-      </span>
+      {window && (
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          {window}
+        </span>
+      )}
     </div>
   );
 }
@@ -147,27 +149,33 @@ function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
 }
 
 function StatusCell({ summary }: { summary: RemovalListRow }) {
-  const derived = deriveRemovalStatus({
+  const status = deriveRemovalWorkflowStatus({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
+    enrichmentStatus: summary.enrichmentStatus,
+    readiness: summary.readiness,
   });
-  return <StatusBadge status={derived.value} label={derived.label} />;
-}
+  const firstReason = status.reasons[0];
+  const remainingReasonCount = status.reasons.length - 1;
 
-function ReadinessCell({ summary }: { summary: RemovalListRow }) {
-  if (summary.enrichmentStatus === "loading") {
-    return (
-      <span className="body-caption text-[var(--color-text-tertiary)]">
-        Checking readiness…
-      </span>
-    );
-  }
-  if (summary.enrichmentStatus === "unavailable" || !summary.readiness) {
-    return (
-      <span className="flex flex-col items-start gap-4">
-        <span className="body-caption text-[var(--color-signal-orange-strong)]">
-          Readiness unavailable
+  return (
+    <span className="flex flex-col items-start gap-4">
+      <StatusBadge status={status.value} label={status.label} />
+      {firstReason && (
+        <span className="inline-flex items-start gap-6 body-caption text-[var(--color-text-secondary)]">
+          <WarningIcon
+            size={14}
+            weight="fill"
+            aria-hidden
+            className="mt-px shrink-0 text-[var(--color-signal-orange)]"
+          />
+          <span className="line-clamp-2">
+            {firstReason}
+            {remainingReasonCount > 0 ? ` +${remainingReasonCount} more` : ""}
+          </span>
         </span>
+      )}
+      {status.canRetry && (
         <Button
           variant="default"
           size="small"
@@ -176,74 +184,11 @@ function ReadinessCell({ summary }: { summary: RemovalListRow }) {
             void summary.retry?.();
           }}
         >
-          Retry readiness
+          Retry
         </Button>
-      </span>
-    );
-  }
-  const { state, reasons, advisories } = summary.readiness;
-  if (state === "ready") {
-    return (
-      <span className="flex flex-col gap-4">
-        <span className="inline-flex items-center gap-6 body-caption text-[var(--st-ok)]">
-          <CheckCircleIcon size={16} weight="fill" aria-hidden />
-          Ready to submit
-        </span>
-        {advisories.map((advisory) => (
-          <span
-            key={advisory}
-            className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]"
-          >
-            <WarningIcon
-              size={16}
-              weight="fill"
-              aria-hidden
-              className="mt-px shrink-0"
-            />
-            <span className="line-clamp-2">{advisory}</span>
-          </span>
-        ))}
-      </span>
-    );
-  }
-  if (state === "blocked") {
-    return (
-      <span className="flex flex-col gap-4">
-        {reasons.map((reason) => (
-          <span
-            key={reason}
-            className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]"
-          >
-            <WarningIcon
-              size={16}
-              weight="fill"
-              aria-hidden
-              className="mt-px shrink-0"
-            />
-            <span className="line-clamp-2">{reason}</span>
-          </span>
-        ))}
-        {advisories.map((advisory) => (
-          <span
-            key={advisory}
-            className="inline-flex items-start gap-6 body-caption"
-          >
-            <WarningIcon
-              size={16}
-              weight="fill"
-              aria-hidden
-              className="mt-px shrink-0 text-[var(--color-signal-orange)]"
-            />
-            <span className="line-clamp-2 text-[var(--color-text-secondary)]">
-              Advisory — {advisory}
-            </span>
-          </span>
-        ))}
-      </span>
-    );
-  }
-  // submitted / inProgress — the status column already carries the verdict.
-  return <span className="body-caption text-[var(--color-text-tertiary)]">—</span>;
+      )}
+    </span>
+  );
 }
 
 const columns: ColumnDef<RemovalListRow>[] = [
@@ -251,7 +196,7 @@ const columns: ColumnDef<RemovalListRow>[] = [
     id: "removal",
     header: "Removal",
     accessorFn: (summary) =>
-      `${summary.removalId} ${reportingWindow(summary)}`,
+      `${summary.removalId} ${reportingWindow(summary) ?? ""}`,
     cell: ({ row }) => <RemovalCell summary={row.original} />,
   },
   {
@@ -263,21 +208,16 @@ const columns: ColumnDef<RemovalListRow>[] = [
   {
     id: "status",
     header: "Status",
-    accessorFn: (summary) =>
-      deriveRemovalStatus({
+    accessorFn: (summary) => {
+      const status = deriveRemovalWorkflowStatus({
         local: summary.local,
         lockInFlight: summary.lockInFlight,
-      }).label,
+        enrichmentStatus: summary.enrichmentStatus,
+        readiness: summary.readiness,
+      });
+      return `${status.label} ${status.reasons.join(" ")}`;
+    },
     cell: ({ row }) => <StatusCell summary={row.original} />,
-  },
-  {
-    id: "readiness",
-    header: "Readiness",
-    accessorFn: (summary) =>
-      summary.readiness
-        ? `${summary.readiness.state} ${summary.readiness.reasons.join(" ")} ${summary.readiness.advisories.join(" ")}`
-        : "Readiness unavailable",
-    cell: ({ row }) => <ReadinessCell summary={row.original} />,
   },
 ];
 

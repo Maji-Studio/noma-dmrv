@@ -20,7 +20,6 @@
  */
 import { createElement as h, type ReactElement } from "react";
 import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
-import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { C, MONO, SANS, Text_, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
 import type {
   DurabilityLedgerModel,
@@ -263,15 +262,11 @@ function replicateRow(
 }
 
 function batchSection(batch: LedgerBatch): ReactElement {
-  const distrib =
-    batch.distinctRunDayCount >= MINIMUM_REPLICATES_PER_BATCH
-      ? `${batch.distinctRunDayCount} distinct run/day sources`
-      : `${batch.distinctRunDayCount} distinct run/day source(s) — review distribution`;
   const header = v(styles.sectionHead, { minPresenceAhead: 80 },
     v(styles.rule, {}),
     t(styles.sectionName, `Credit batch ${batch.creditBatchCode}`),
     t(styles.sectionTag, `${batch.replicateCount} replicates`),
-    t(styles.sectionEqn, `${distrib} · ${nfi(batch.productMassKg)} kg product`),
+    t(styles.sectionEqn, `${nfi(batch.productMassKg)} kg product`),
   );
   const th = v(styles.th, {},
     t([styles.thText, { width: COL.ref }], "#"),
@@ -329,8 +324,9 @@ function apparatus(): ReactElement {
   const note = v(styles.noteCol, {},
     t(styles.noteH, "Method note"),
     t(styles.noteBody,
-      "Protocol §8.3.1 calls for at least 3 independent lab replicates distributed across distinct " +
-      "production runs/days. This sheet reports the recorded replicate count and distribution, and reconciles the raw values " +
+      "Protocol §8.3.1 calls for at least 3 lab replicates per measured production batch, " +
+      "representative of the full range of physical characteristics present in that batch. " +
+      "This sheet reports the recorded replicate count, and reconciles the raw values " +
       "into the per-batch mean ± standard deviation submitted as the batch's measurement sample, " +
       "and records the §3 Table 2 permanence verdict (molar H/C_org < 0.5 AND O/C_org < 0.2) judged " +
       "on the pooled mean. The lab's own certificate of analysis remains attached as a Source on the " +

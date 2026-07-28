@@ -178,58 +178,6 @@ describe("buildDurabilityLedgerModel", () => {
     expect(r.inorganicDerived).toBe(true);
   });
 
-  it("counts distinct (run, day) provenance for the §8.3.1 distribution check", () => {
-    const model = buildDurabilityLedgerModel({ ...COMMON, batches: [eligibleBatch()] });
-    expect(model.batches[0].distinctRunDayCount).toBe(3);
-
-    const clustered = batch({
-      creditBatchId: "c",
-      creditBatchCode: "CB-C",
-      samples: [
-        sample({ sampleCode: "S-C-01", samplingTime: new Date("2026-02-01T00:00:00.000Z"), hToCOrgRatio: 0.3, oToCOrgRatio: 0.04, totalCarbonPercent: 80, organicCarbonPercent: 79 }),
-        sample({ sampleCode: "S-C-02", samplingTime: new Date("2026-02-01T00:00:00.000Z"), hToCOrgRatio: 0.31, oToCOrgRatio: 0.05, totalCarbonPercent: 81, organicCarbonPercent: 80 }),
-        sample({ sampleCode: "S-C-03", samplingTime: new Date("2026-02-01T00:00:00.000Z"), hToCOrgRatio: 0.32, oToCOrgRatio: 0.06, totalCarbonPercent: 82, organicCarbonPercent: 81 }),
-      ],
-    });
-    expect(
-      buildDurabilityLedgerModel({ ...COMMON, batches: [clustered] }).batches[0]
-        .distinctRunDayCount,
-    ).toBe(1);
-  });
-
-  it("normalizes post-window sampling days for distribution evidence", () => {
-    const storedMaterial = batch({
-      creditBatchId: "stored",
-      creditBatchCode: "CB-STORED",
-      endDate: "2026-01-31",
-      samples: [
-        sample({
-          sampleCode: "S-STORED-01",
-          samplingTime: new Date("2026-01-15T00:00:00.000Z"),
-          hToCOrgRatio: 0.3,
-          oToCOrgRatio: 0.04,
-        }),
-        sample({
-          sampleCode: "S-STORED-02",
-          samplingTime: new Date("2026-01-15T00:00:00.000Z"),
-          hToCOrgRatio: 0.31,
-          oToCOrgRatio: 0.05,
-        }),
-        sample({
-          sampleCode: "S-STORED-03",
-          samplingTime: new Date("2026-02-15T00:00:00.000Z"),
-          hToCOrgRatio: 0.32,
-          oToCOrgRatio: 0.06,
-        }),
-      ],
-    });
-
-    expect(
-      buildDurabilityLedgerModel({ ...COMMON, batches: [storedMaterial] })
-        .batches[0].distinctRunDayCount,
-    ).toBe(1);
-  });
-
   it("skips an unsampled batch (no H/C replicate) but keeps the soil block", () => {
     const unsampled = batch({ creditBatchId: "u", creditBatchCode: "CB-U" });
     const model = buildDurabilityLedgerModel({ ...COMMON, batches: [unsampled] });

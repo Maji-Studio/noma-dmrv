@@ -94,6 +94,7 @@ jobs:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_build
       NEXT_PUBLIC_APP_URL: http://localhost:3100
       BETTER_AUTH_SECRET: ci-build-placeholder-secret-not-a-real-key
+      ISOMETRIC_ENVIRONMENT: sandbox
       STORAGE_PROVIDER: s3-compatible
       STORAGE_BUCKET: ci-build
       STORAGE_REGION: us-east-1

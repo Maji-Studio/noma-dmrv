@@ -111,13 +111,6 @@ const envSchema = z.object({
     .enum(["sandbox", "production"])
     .optional()
     .default("sandbox"),
-  // Explicit sandbox-only kill-switch override for the staged durability
-  // measurement-sample POST. Production is rejected below even if set.
-  DURABILITY_MEASUREMENT_SAMPLES_LIVE: z
-    .string()
-    .optional()
-    .default("false")
-    .transform((value) => value === "true"),
   // Comma-separated allowlist of host suffixes the signed-upload flows
   // (Sources mirror + telemetry) will PUT bytes to. Resolved in
   // `uploadHostAllowlist()` in signed-upload.ts: an EMPTY value preserves the
@@ -211,18 +204,6 @@ const envSchema = z.object({
     });
   }
 
-  if (
-    data.DURABILITY_MEASUREMENT_SAMPLES_LIVE &&
-    data.ISOMETRIC_ENVIRONMENT !== "sandbox"
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["DURABILITY_MEASUREMENT_SAMPLES_LIVE"],
-      message:
-        "DURABILITY_MEASUREMENT_SAMPLES_LIVE may only be enabled against the Isometric sandbox",
-    });
-  }
-
   // Storage provider gates
   if (data.STORAGE_PROVIDER === "s3-compatible") {
     const missing: string[] = [];
@@ -269,6 +250,28 @@ const envSchema = z.object({
       path: ["GEO_PROVIDER"],
       message:
         "GEO_PROVIDER must not be 'stub' in production — stub adapters return fixture distances.",
+    });
+  }
+
+  // Production fail-closed: ISOMETRIC_ENVIRONMENT defaults to "sandbox" so
+  // local and CI runs need no configuration, but inheriting that default in a
+  // real deployment is fail-OPEN. It both selects the registry base URL
+  // (`BASE_URLS` in isometric/client.ts) and enables the sandbox-only
+  // durability measurement-sample POSTs, so an unset value would silently route
+  // every registry call to the sandbox. CI is carved out for the same
+  // hermetic-production-bundle reason as GEO_PROVIDER above.
+  // `data` already carries the default, so only the raw value distinguishes
+  // "explicitly sandbox" from "never set".
+  if (
+    data.NODE_ENV === "production" &&
+    !isCI &&
+    !process.env.ISOMETRIC_ENVIRONMENT
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["ISOMETRIC_ENVIRONMENT"],
+      message:
+        "ISOMETRIC_ENVIRONMENT must be set explicitly in production (sandbox or production) - the sandbox default is not safe to inherit.",
     });
   }
 

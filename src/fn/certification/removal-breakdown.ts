@@ -55,8 +55,7 @@ export async function loadRemovalBreakdown(
       return {
         status: "pending",
         value: null,
-        message:
-          "Registry result pending. Isometric carbon figures appear after this Removal is submitted and the registry result is ready.",
+        message: "Submit this Removal to see its registry carbon result.",
       };
     }
 
@@ -68,8 +67,7 @@ export async function loadRemovalBreakdown(
       return {
         status: "unavailable",
         value: null,
-        message:
-          "Registry result unavailable. Retry the read-only registry fetch; this does not submit the Removal again.",
+        message: "Couldn’t load the registry carbon result.",
       };
     }
 
@@ -80,8 +78,7 @@ export async function loadRemovalBreakdown(
       return {
         status: "pending",
         value: null,
-        message:
-          "Registry result pending. The submitted Removal is preserved while Isometric finishes its carbon calculation.",
+        message: "Isometric is calculating the carbon result.",
       };
     }
 

@@ -5,12 +5,12 @@ import {
   type ReplicateProvenance,
 } from "./durability-submission-gates";
 
-// Default provenance distributes replicates across distinct runs/days so the
-// cluster warning stays silent unless a test deliberately clusters them.
+// Default provenance puts each replicate on its own in-window day. §8.3.1
+// requires no such spread, so it is incidental — these gates never judge run/day
+// distribution; the fixtures below assert that clustering changes nothing.
 function distributedProvenance(n: number): ReplicateProvenance[] {
   return Array.from({ length: n }, (_, i) => ({
     sampleCode: `SAM-${i + 1}`,
-    productionRunId: `run-${i}`,
     samplingDay: `2026-06-0${(i % 9) + 1}`,
   }));
 }
@@ -37,7 +37,7 @@ const eligibleTriplet = [
 ];
 
 describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch grain)", () => {
-  it("passes a sampled batch with ≥3 eligible replicates distributed across runs/days", () => {
+  it("passes a sampled batch with ≥3 eligible replicates", () => {
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ replicates: eligibleTriplet }),
     ]);
@@ -109,59 +109,37 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
     expect(r.blockers.some((b) => /indeterminate|cannot confirm|missing/i.test(b))).toBe(true);
   });
 
-  it("warns (does not block) when ≥3 eligible replicates cluster on a single run/day (§8.3.1)", () => {
+  // §8.3.1 requires 3 samples "representative of the full range of physical
+  // characteristics ... available in the batch" — it does NOT require them to
+  // come from distinct production runs or distinct days. (The distinct-days
+  // language governs Method B's random-sampling cadence ACROSS batches.) So a
+  // batch whose 3 replicates all share one run/day is fully clean.
+  it("does not warn when ≥3 eligible replicates share a single run/day (§8.3.1)", () => {
     const clustered: ReplicateProvenance[] = [
-      { sampleCode: "SAM-1", productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { sampleCode: "SAM-2", productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { sampleCode: "SAM-3", productionRunId: "run-1", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-1", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-2", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-3", samplingDay: "2026-06-01" },
     ];
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ replicates: eligibleTriplet, replicateProvenance: clustered }),
     ]);
     expect(r.ok).toBe(true);
     expect(r.blockers).toEqual([]);
-    expect(r.warnings.some((w) => /cluster/i.test(w) && /8\.3\.1/.test(w))).toBe(true);
+    expect(r.warnings).toEqual([]);
   });
 
-  it("still warns when the 3 complete replicates cluster but an incomplete off-day sample spreads the raw provenance (§8.3.1)", () => {
-    // Regression (PR #296 review): the cluster check must judge only the USABLE
-    // (complete-chemistry) replicates, not every raw sample. Three complete
-    // replicates all on run-1/2026-06-01 + one incomplete sample (missing O/C_org)
-    // on run-2/2026-06-02 → usableReplicateCount stays 3 (gate c passes), and the
-    // incomplete off-day sample must NOT mask that the usable set clusters.
-    const replicates = [
-      ...eligibleTriplet,
-      { hToCOrgRatio: 0.31, oToCOrgRatio: null },
-    ];
-    const replicateProvenance: ReplicateProvenance[] = [
-      { sampleCode: "SAM-1", productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { sampleCode: "SAM-2", productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { sampleCode: "SAM-3", productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { sampleCode: "SAM-4", productionRunId: "run-2", samplingDay: "2026-06-02" },
-    ];
-    const r = evaluateDurabilitySubmissionGates([
-      gateBatch({ replicates, replicateProvenance }),
-    ]);
-    expect(r.ok).toBe(true);
-    expect(r.blockers).toEqual([]);
-    expect(r.warnings.some((w) => /cluster/i.test(w) && /8\.3\.1/.test(w))).toBe(true);
-  });
-
-  it("warns distinctly when ≥3 eligible replicates have unknown run/day provenance", () => {
+  it("does not warn when ≥3 eligible replicates have unknown run/day provenance", () => {
     const unknown: ReplicateProvenance[] = [
-      { sampleCode: "SAM-1", productionRunId: null, samplingDay: null },
-      { sampleCode: "SAM-2", productionRunId: null, samplingDay: null },
-      { sampleCode: "SAM-3", productionRunId: null, samplingDay: null },
+      { sampleCode: "SAM-1", samplingDay: null },
+      { sampleCode: "SAM-2", samplingDay: null },
+      { sampleCode: "SAM-3", samplingDay: null },
     ];
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ replicates: eligibleTriplet, replicateProvenance: unknown }),
     ]);
     expect(r.ok).toBe(true);
     expect(r.blockers).toEqual([]);
-    expect(r.warnings.some((w) => /unknown run\/day provenance/i.test(w))).toBe(
-      true,
-    );
-    expect(r.warnings.every((w) => !/single run\/day/i.test(w))).toBe(true);
+    expect(r.warnings).toEqual([]);
   });
 
   it("aggregates blockers across multiple batches", () => {
@@ -189,9 +167,9 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
       gateBatch({
         replicates: eligibleTriplet,
         replicateProvenance: [
-          { sampleCode: "SAM-26-003", productionRunId: "run-1", samplingDay: "2026-05-31" },
-          { sampleCode: "SAM-26-004", productionRunId: "run-1", samplingDay: "2026-06-02" },
-          { sampleCode: "SAM-26-005", productionRunId: "run-1", samplingDay: "2026-06-03" },
+          { sampleCode: "SAM-26-003", samplingDay: "2026-05-31" },
+          { sampleCode: "SAM-26-004", samplingDay: "2026-06-02" },
+          { sampleCode: "SAM-26-005", samplingDay: "2026-06-03" },
         ],
       }),
     ]);
@@ -200,14 +178,14 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
     expect(r.blockers.some((b) => /SAM-26-003/.test(b) && /2026-06-01–2026-06-30/.test(b) && /8\.3\.1/.test(b))).toBe(true);
   });
 
-  it("counts a post-window sample as usable but excludes its day from temporal distribution", () => {
+  it("counts a post-window sample as usable and warns to confirm stored-material sampling", () => {
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({
         replicates: eligibleTriplet,
         replicateProvenance: [
-          { sampleCode: "SAM-26-001", productionRunId: "run-1", samplingDay: "2026-06-15" },
-          { sampleCode: "SAM-26-002", productionRunId: "run-1", samplingDay: "2026-06-15" },
-          { sampleCode: "SAM-26-003", productionRunId: "run-1", samplingDay: "2026-07-20" },
+          { sampleCode: "SAM-26-001", samplingDay: "2026-06-15" },
+          { sampleCode: "SAM-26-002", samplingDay: "2026-06-15" },
+          { sampleCode: "SAM-26-003", samplingDay: "2026-07-20" },
         ],
       }),
     ]);
@@ -215,7 +193,8 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
     expect(r.ok).toBe(true);
     expect(r.blockers.every((b) => !/replicate/.test(b))).toBe(true);
     expect(r.warnings.some((w) => /SAM-26-003/.test(w) && /stored material/.test(w) && /registry/.test(w))).toBe(true);
-    expect(r.warnings.some((w) => /single run\/day/.test(w))).toBe(true);
+    // The stored-material advisory is the ONLY warning — no distribution note.
+    expect(r.warnings).toHaveLength(1);
   });
 
   it("leaves distinct in-window sampling days unchanged", () => {

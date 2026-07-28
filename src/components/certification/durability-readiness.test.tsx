@@ -19,8 +19,6 @@ function summary(): DurabilityBatchSummary {
     usableReplicateCount: 1,
     minimumReplicates: 3,
     meetsMinimum: false,
-    distinctRunDayCount: 1,
-    distributionWarning: false,
     eligibility: {
       eligible: true,
       hToCorgMean: 0.4,

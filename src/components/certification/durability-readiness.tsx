@@ -1,7 +1,7 @@
 /**
  * Shared presentation for the 200-year durability sampling readiness of a credit
- * batch — the three signals the protocol gate turns on (§8.3.1 ≥3 replicates,
- * §8.3.1 distribution across distinct runs/days, §3 Table 2 eligibility), plus a
+ * batch — the signals the protocol gate turns on (§8.3.1 ≥3 replicates,
+ * §3 Table 2 eligibility), plus a
  * mean ± std-dev formatter. Used by BOTH Phase-5 surfaces (the lab-sample form's
  * derived-batch preview and the credit-batch detail's durability section) so they
  * read identically. Pure presentation over a `DurabilityBatchSummary`.
@@ -171,24 +171,6 @@ export function DurabilityReadinessSignals({
         usableReplicateCount === 1 ? "is" : "are"
       } complete so far.`,
     },
-    ...(meetsMinimum
-      ? [{
-          key: "distribution",
-          tone: summary.distributionWarning ? "wait" as const : "ok" as const,
-          icon: summary.distributionWarning ? undefined : (
-            <CheckCircleIcon size={14} weight="fill" />
-          ),
-          // "Clustered" was jargon: it means every sample was drawn from the
-          // same production run on the same day, so nothing shows the batch
-          // stayed consistent across its production window.
-          content: summary.distributionWarning
-            ? "All samples from one run/day"
-            : `${summary.distinctRunDayCount} distinct runs/days`,
-          hint: summary.distributionWarning
-            ? "Every sample was taken from the same production run on the same day, so they can't show the batch stayed consistent across its production window. Spread samples across different runs or days. This doesn't block submission, but your verifier is likely to query it."
-            : `Samples come from ${summary.distinctRunDayCount} different runs or days, which is what shows the batch stayed consistent across its production window.`,
-        }]
-      : []),
   ].sort(
     (left, right) =>
       Number(right.tone === "ok") - Number(left.tone === "ok"),

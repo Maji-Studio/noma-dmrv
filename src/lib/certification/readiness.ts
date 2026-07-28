@@ -101,8 +101,9 @@ const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
 const ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT = 5;
 const DURABILITY_LABEL = "Sampling & durability eligibility met";
-const EVIDENCE_LABEL = "Evidence files ready";
-const MEASUREMENT_DATES_LABEL = "Measurement dates are not in the future";
+const EVIDENCE_LABEL = "Supporting evidence linked";
+const MEASUREMENT_DATES_LABEL =
+  "Production run and application dates have passed";
 const FUTURE_DATE_REASON_PREVIEW_LIMIT = 3;
 const FUTURE_DATE_CHECK_DISPLAY_LIMIT = 3;
 // Keep the blocker list readable: show the first few full blocker lines as
@@ -129,8 +130,9 @@ function futureDatedMeasurementReasons(measurements: string[]): string[] {
   if (measurements.length === 0) return [];
   const shown = measurements.slice(0, FUTURE_DATE_REASON_PREVIEW_LIMIT);
   const overflow = measurements.length - shown.length;
+  const dateLabel = overflow === 1 ? "date" : "dates";
   return overflow > 0
-    ? [...shown, `+${overflow} more future-dated measurement(s)`]
+    ? [...shown, `+${overflow} more future ${dateLabel}`]
     : shown;
 }
 
@@ -192,11 +194,13 @@ function evidenceMirrorDetail(
   const total = facts.supportingDocumentCount ?? 0;
   if (total === 0) return null;
   const mirrored = Math.min(facts.mirroredDocumentCount ?? 0, total);
-  return `${mirrored} of ${total} files ready`;
+  const pending = total - mirrored;
+  return pending > 0
+    ? `${pending}${pending === total ? "" : ` of ${total}`} ${pending === 1 ? "file is" : "files are"} sent automatically when you submit`
+    : `${total} of ${total} files ready`;
 }
 
 function evidenceAdvisories(facts: RemovalReadinessFacts): string[] {
-  if (facts.sourceBindingRequired) return [];
   const detail = evidenceMirrorDetail(facts);
   if (!detail) return [];
   return (facts.mirroredDocumentCount ?? 0) < (facts.supportingDocumentCount ?? 0)
@@ -207,11 +211,7 @@ function evidenceAdvisories(facts: RemovalReadinessFacts): string[] {
 function sourceBindingGap(facts: RemovalReadinessFacts): string | null {
   if (!facts.sourceBindingRequired) return null;
   const total = facts.supportingDocumentCount ?? 0;
-  if (total === 0) return "No validated Isometric Source is available";
-  const mirrored = Math.min(facts.mirroredDocumentCount ?? 0, total);
-  return mirrored < total
-    ? `${mirrored} of ${total} files ready`
-    : null;
+  return total === 0 ? "No supporting evidence file is available" : null;
 }
 
 /**

@@ -858,18 +858,6 @@ bound); these are the decisions it deliberately did not make.
   — then apply it to the remaining sites and add a lint or test guard so a
   zoneless `new Date(string)` cannot reappear (M).
 
-### Sampling-day chips are not post-window-normalized (`certification/sampling-day-normalization`)
-
-- F-6 filtered the credit-batch day chips to usable replicates, but
-  `certification/durability-batch-summary` exposes `replicates[].samplingDay`
-  raw, while the gate's `distinctRunDayCount` passes days through
-  `normalizePostWindowSamplingDay` (which nulls days after the batch end date).
-  A stored-material sample dated after the production window can therefore still
-  show a chip that the submission gate does not credit.
-- **Resolve via:** normalize `samplingDay` at the summary boundary so every
-  surface reads the same day set, or expose the normalized day alongside the raw
-  one and have the chips use it (S).
-
 ### Operator-initiated GHG statements are still refused on a shared project (`certification/shared-project-statement-create`)
 
 - ADR 0023 scoped registry statement identity per organization + facility, so a
@@ -928,3 +916,26 @@ bound); these are the decisions it deliberately did not make.
   project; defer version-keyed registry entries until a concrete v1.2+ adoption
   date exists, then key new-in-version requirements (custody handoffs) on the
   pinned version (M).
+
+### Storage board cannot sort bins by on-hand mass (`storage/sort-by-on-hand-mass`)
+
+- The board's sort control (`BIN_SORT_OPTIONS` in
+  `src/components/storage-locations/bin-display.ts`) offers only keys that
+  resolve in SQL before LIMIT/OFFSET, so the order it shows holds across pages.
+  "Most/least on hand" is missing from that list, and it is the sort an operator
+  asks for first when deciding where to put a delivery.
+- It is missing because on-hand mass is not a column. `binCurrentMassKg` reads
+  the enriched row, and that enrichment runs **after** pagination: feedstock and
+  biochar stock come from `deriveLaneStock` (five aggregates over feedstocks,
+  production runs, production-run feedstocks, biochar products and bin
+  movements), and product stock additionally subtracts delivered mass. Sorting
+  on it means replicating all of that inside the paginated query.
+- Sorting the page in the client is not a substitute: it would order the twenty
+  rows already fetched, so a nearly-full bin on page 3 would never rise to
+  page 1. The board deliberately does no client-side re-sort for this reason.
+- `lastActivityAt` shows the tractable shape of the fix — a correlated scalar
+  subquery in `src/data-access/storage-location-activity.ts`, pinned by
+  `tests/storage-location-activity-sort.test.ts`.
+- **Resolve via:** express per-bin on-hand mass as one correlated subquery (or a
+  materialised per-bin stock view) that `getStorageLocations` can ORDER BY, then
+  add the option and extend the activity-sort test to cover it (M).
