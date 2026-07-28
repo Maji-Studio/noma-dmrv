@@ -27,6 +27,7 @@ import {
   useOrganizationDefaults,
   useSaveOrganizationDefaults,
 } from "@/hooks/use-organization-settings";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import { currencyCodes } from "@/schemas/credit-batches";
 import { timezones, type Timezone } from "@/schemas/facilities";
@@ -63,7 +64,8 @@ function isOfferedTimezone(zone: string): zone is Timezone {
 }
 
 export function OrganizationDefaultsForm() {
-  const query = useOrganizationDefaults();
+  const { activeOrganizationId } = useFacilityContext();
+  const query = useOrganizationDefaults(activeOrganizationId);
 
   if (query.isLoading) {
     return <Skeleton className="h-320 w-full" />;

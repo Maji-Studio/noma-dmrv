@@ -70,15 +70,6 @@ export function FacilityProvider({
    */
   initialOrganizationId?: string | null;
 }) {
-  // Seed the organization's operating defaults, resolved on the server in the
-  // `(app)` layout, into the React Query cache. Every create form reads them
-  // for its `defaultValues`, which react-hook-form captures exactly once at
-  // mount — so a form that opens before a *fetched* value arrives would create
-  // a record with the system fallback and never correct itself. `initialData`
-  // closes that window entirely: the first client render already has them.
-  // Nothing here consumes the result; the cache entry is the point.
-  useOrganizationDefaults(initialOrganizationDefaults);
-
   const { data: sessionData, isPending: isSessionPending } =
     authClient.useSession();
   const clientActiveOrganizationId =
@@ -87,6 +78,17 @@ export function FacilityProvider({
       | undefined)?.activeOrganizationId ?? null;
   const activeOrganizationId =
     clientActiveOrganizationId ?? initialOrganizationId;
+  // Seed the organization's operating defaults, resolved on the server in the
+  // `(app)` layout, into the organization-scoped React Query cache. Every
+  // create form reads them for its `defaultValues`, which react-hook-form
+  // captures exactly once at mount. Do not seed the server payload under a
+  // different organization if the hydrated client session has already moved.
+  useOrganizationDefaults(
+    activeOrganizationId,
+    activeOrganizationId === initialOrganizationId
+      ? initialOrganizationDefaults
+      : undefined,
+  );
   const previousOrganizationIdRef = useRef<string | null>(null);
   const [facilityId, setFacilityId] = useQueryState(
     "facility",
@@ -226,6 +228,7 @@ export function FacilityProvider({
   );
 
   const value: FacilityContextValue = {
+    activeOrganizationId,
     facilityId: resolvedFacilityId,
     isResolving,
     setFacilityId: (id: string | null) => {

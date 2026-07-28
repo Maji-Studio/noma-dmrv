@@ -23,13 +23,15 @@ import {
   type OrganizationDefaultsPayload,
 } from "@/fn/organization-settings";
 import type { OrganizationSettingsValues } from "@/schemas/organization-settings";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { unwrap } from "@/hooks/types";
 
 const ORGANIZATION_DEFAULTS_STALE_MS = 300_000;
 
 export const organizationSettingsKeys = {
   all: ["organization-settings"] as const,
-  defaults: () => [...organizationSettingsKeys.all, "defaults"] as const,
+  defaults: (organizationId: string | null) =>
+    [...organizationSettingsKeys.all, "defaults", organizationId] as const,
 };
 
 /**
@@ -37,11 +39,13 @@ export const organizationSettingsKeys = {
  * payload. Every other caller reads the cache entry that seeded.
  */
 export function useOrganizationDefaults(
+  organizationId: string | null,
   initialData?: OrganizationDefaultsPayload,
 ) {
   return useQuery({
-    queryKey: organizationSettingsKeys.defaults(),
+    queryKey: organizationSettingsKeys.defaults(organizationId),
     queryFn: async () => unwrap(await loadOrganizationDefaults()),
+    enabled: !!organizationId,
     staleTime: ORGANIZATION_DEFAULTS_STALE_MS,
     initialData,
   });
@@ -53,7 +57,8 @@ export function useOrganizationDefaults(
  * place, means the user has no active organization at all.
  */
 export function useOrganizationDefaultValues() {
-  const { data, isLoading } = useOrganizationDefaults();
+  const { activeOrganizationId } = useFacilityContext();
+  const { data, isLoading } = useOrganizationDefaults(activeOrganizationId);
   return {
     defaults: data?.defaults ?? DEFAULT_ORGANIZATION_SETTINGS,
     isLoading,
@@ -61,15 +66,19 @@ export function useOrganizationDefaultValues() {
 }
 
 export function useSaveOrganizationDefaults() {
+  const { activeOrganizationId } = useFacilityContext();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: OrganizationSettingsValues) =>
       unwrap(await saveOrganizationDefaults(input)),
     onSuccess: (defaults) => {
-      queryClient.setQueryData(organizationSettingsKeys.defaults(), {
-        defaults,
-        viewerCanManage: true,
-      });
+      queryClient.setQueryData(
+        organizationSettingsKeys.defaults(activeOrganizationId),
+        {
+          defaults,
+          viewerCanManage: true,
+        },
+      );
     },
   });
 }
