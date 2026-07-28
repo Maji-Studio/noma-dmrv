@@ -7,14 +7,13 @@
  * stamped server-side from the session's active organization.
  */
 import { z } from "zod";
+import { applicationEvidenceMethods } from "./applications";
 import { currencyCodes } from "./credit-batches";
 import { timezones } from "./facilities";
+import { packagingTypes } from "./orders";
 import { tripTypes } from "./trip-type";
 
 const MAX_ORGANIZATION_COUNTRY_LENGTH = 100;
-
-export const applicationEvidenceMethods = ["visual", "boundary"] as const;
-export const packagingTypes = ["loose", "bagged"] as const;
 
 export const organizationSettingsFormSchema = z.object({
   defaultCurrency: z.enum(currencyCodes),

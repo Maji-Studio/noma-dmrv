@@ -29,8 +29,13 @@ import {
 } from "@/hooks/use-organization-settings";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { formatTimezoneLabel } from "@/lib/date-utils";
+import {
+  applicationEvidenceMethods,
+  type ApplicationEvidenceMethod,
+} from "@/schemas/applications";
 import { currencyCodes } from "@/schemas/credit-batches";
 import { timezones, type Timezone } from "@/schemas/facilities";
+import { packagingTypes, type PackagingType } from "@/schemas/orders";
 import {
   organizationSettingsFormSchema,
   type OrganizationSettingsInput,
@@ -49,15 +54,25 @@ const TIMEZONE_OPTIONS = timezones.map((zone) => ({
   label: formatTimezoneLabel(zone),
 }));
 
-const EVIDENCE_METHOD_OPTIONS = [
-  { value: "visual", label: "Visual" },
-  { value: "boundary", label: "GIS boundary" },
-] as const;
+const EVIDENCE_METHOD_LABELS: Record<ApplicationEvidenceMethod, string> = {
+  visual: "Visual",
+  boundary: "GIS boundary",
+};
 
-const PACKAGING_OPTIONS = [
-  { value: "loose", label: "Loose" },
-  { value: "bagged", label: "Bagged" },
-] as const;
+const EVIDENCE_METHOD_OPTIONS = applicationEvidenceMethods.map((method) => ({
+  value: method,
+  label: EVIDENCE_METHOD_LABELS[method],
+}));
+
+const PACKAGING_LABELS: Record<PackagingType, string> = {
+  loose: "Loose",
+  bagged: "Bagged",
+};
+
+const PACKAGING_OPTIONS = packagingTypes.map((type) => ({
+  value: type,
+  label: PACKAGING_LABELS[type],
+}));
 
 function isOfferedTimezone(zone: string): zone is Timezone {
   return (timezones as readonly string[]).includes(zone);
