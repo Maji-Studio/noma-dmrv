@@ -92,9 +92,7 @@ Non-obvious semantics only:
 - **`ISOMETRIC_ENVIRONMENT`** — `sandbox` (default) or `production`. Selects the
   registry base URL AND gates the durability measurement-sample POSTs, so it must
   be set explicitly in production; `envSchema` rejects an unset value there rather
-  than inheriting the sandbox default. (The former
-  `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flag was removed 2026-07-28 — targeting the
-  sandbox is itself the opt-in.)
+  than inheriting the sandbox default. Targeting the sandbox is the opt-in.
 - **`GEO_PROVIDER`** — `ors` default, `stub` = hermetic test fixtures. See
   [ADR 0009](./adr/0009-provider-agnostic-server-proxied-geo.md).
 

@@ -89,12 +89,11 @@ they don't churn a freshly-introduced surface mid-review:
 
 ### Durability measurement-samples — sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
 
-**Gate semantics (updated 2026-07-28):** the surface is gated on
-`ISOMETRIC_ENVIRONMENT === "sandbox"` alone. The former
-`DURABILITY_MEASUREMENT_SAMPLES_LIVE` flag and its cross-field refinement were
-removed: targeting the sandbox is itself the opt-in, and `envSchema` now requires
-`ISOMETRIC_ENVIRONMENT` explicitly in production so the sandbox default cannot be
-inherited. This entry closes when the sandbox wire-format confirms land.
+**Gate semantics:** the surface is gated on
+`ISOMETRIC_ENVIRONMENT === "sandbox"` alone. Targeting the sandbox is the
+opt-in, and `envSchema` requires `ISOMETRIC_ENVIRONMENT` explicitly in
+production so the sandbox default cannot be inherited. This entry closes when
+the sandbox wire-format confirms land.
 
 Phases 1–5 and the 1000-year extension are **built and committed** (ADR 0021;
 issues #358 and #348); the phased plan and its decision record live in

@@ -437,9 +437,8 @@ export async function seedDurabilityBatch(
       ),
     );
 
-    // 3 eligible replicates: 2 on run 1 / day 1, 1 on run 2 / day 2 — ≥3 usable
-    // and 2 distinct (run, day) keys, so distribution is clean (no cluster
-    // warning). Pooled means (H/C ~0.38 < 0.5, O/C ~0.12 < 0.2) → Eligible.
+    // Three usable replicates satisfy the chemistry thresholds. Pooled means
+    // (H/C ~0.38 < 0.5, O/C ~0.12 < 0.2) are eligible.
     const sampleRows = [
       { suffix: "1", runId: run1Id, samplingTime: day1, hToC: 0.38, oToC: 0.12, totalC: 80, orgC: 78 },
       { suffix: "2", runId: run1Id, samplingTime: day1, hToC: 0.41, oToC: 0.13, totalC: 82, orgC: 80 },

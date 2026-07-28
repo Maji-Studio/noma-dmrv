@@ -1,32 +1,8 @@
 # Isometric Docs Change Log
 
-## 2026-07-28 (no within-batch distinct runs/days sampling rule)
-
-Biochar Protocol v1.1 §8.3.1 requires a minimum of 3 samples per measured
-Production Batch, "representative of the full range of physical characteristics
-(eg. particle size, color) available in the batch". It does **not** require
-those samples to come from distinct production runs or distinct calendar days.
-The distinct-days language in §8.3.1 belongs to Method B's random-sampling
-cadence *across* Production Batches, not to replication within one.
-
-Our within-batch distribution check was a misreading and has been removed: the
-cluster and unknown-provenance warnings, `countDistinctProvenance`,
-`distinctRunDayCount`, `distributionWarning`, the readiness signal, and the
-evidence-ledger line. The ≥3 usable-replicate gate is unchanged, as are the
-pre-window blocker and the stored-material advisory.
-
-The sandbox-only durability POST gate is now `ISOMETRIC_ENVIRONMENT = sandbox`
-alone; the separate `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flag was removed.
-
-## 2026-07-28 (transport evidence is optional)
-
-Transportation Module v1.1 §6 lists transport documents as records to retain
-for Distance-Based Method legs and examine through verification sampling. They
-are not a submission requirement.
-
-Transport evidence uploads remain available and continue to mirror to
-Isometric Sources. The CERT tag, entity-readiness gap, and dashboard
-structural-gap row have been removed.
+Certification-readiness, transport-evidence, supporting-source, and sampling
+correction notes are archived in
+[`docs/archive/2026-07-28-certification-readiness-and-sampling-corrections.md`](../archive/2026-07-28-certification-readiness-and-sampling-corrections.md).
 
 Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
@@ -44,18 +20,6 @@ implementation and sandbox-verification notes from 2026-06-19 are archived in
 Removal review, Source lifecycle, and transport-provenance implementation notes
 from 2026-07-27 are archived in
 [`docs/archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md`](../archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md).
-
-## 2026-07-28 (automatic supporting-source mirroring)
-
-Removal submission now mirrors every pending managed supporting file
-automatically before compiling the strict registry artifact. The reviewed
-candidate-file fingerprint is checked before mirroring, then submission
-recompiles from the persisted Isometric Source mappings and fails closed before
-claiming a snapshot or creating a GHG Entry if any transfer remains incomplete.
-
-The Removal Sources panel is status-only: pending managed files read “On
-submit,” and the per-file Mirror and Retry actions are no longer part of the
-operator workflow.
 
 ## Registry Source visibility contract
 
@@ -79,27 +43,6 @@ Earlier implementation notes are archived by date:
 - [`2026-06-10 to 2026-06-20`](../archive/isometric-changes-archive-2026-06-10-to-06-20.md)
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
-
-## 2026-07-21 (actionable transport-evidence readiness)
-
-Superseded on 2026-07-28: transport evidence is an optional retained record,
-not a submission-readiness requirement. The upload and classification workflow
-below remains available.
-
-Transport evidence now has one reusable operator workflow across feedstocks,
-deliveries, and manually managed transport legs. The UI uses one multi-file
-uploader with an explicit classification choice: bill of lading, weigh-scale
-ticket, or other transport evidence. These are alternatives; one successfully
-uploaded classified file is sufficient.
-
-The readiness rule described in the original change required a `document`
-distance source and an accepted transport-evidence document. That rule, its
-CERT status, and its dashboard attention row were superseded on 2026-07-28.
-Migration 0087 adds `other_transport_evidence` to `documentation_type`
-(renumbered from 0084 during the staging sync).
-
-This is an operator-readiness and evidence-classification change. It does not
-change Isometric payload mappings or make a new protocol claim.
 
 ## 2026-07-10 (1000-year sandbox submission verified end to end)
 
