@@ -1,5 +1,23 @@
 # Isometric Docs Change Log
 
+## 2026-07-28 (no within-batch distinct runs/days sampling rule)
+
+Biochar Protocol v1.1 §8.3.1 requires a minimum of 3 samples per measured
+Production Batch, "representative of the full range of physical characteristics
+(eg. particle size, color) available in the batch". It does **not** require
+those samples to come from distinct production runs or distinct calendar days.
+The distinct-days language in §8.3.1 belongs to Method B's random-sampling
+cadence *across* Production Batches, not to replication within one.
+
+Our within-batch distribution check was a misreading and has been removed: the
+cluster and unknown-provenance warnings, `countDistinctProvenance`,
+`distinctRunDayCount`, `distributionWarning`, the readiness signal, and the
+evidence-ledger line. The ≥3 usable-replicate gate is unchanged, as are the
+pre-window blocker and the stored-material advisory.
+
+The sandbox-only durability POST gate is now `ISOMETRIC_ENVIRONMENT = sandbox`
+alone; the separate `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flag was removed.
+
 ## 2026-07-28 (transport evidence is optional)
 
 Transportation Module v1.1 §6 lists transport documents as records to retain
