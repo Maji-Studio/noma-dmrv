@@ -56,11 +56,11 @@ export function OrganizationCertifierCredentials({
 }: OrganizationCertifierCredentialsProps) {
   const statusQuery = useOrgCertifierCredentialsStatus(organizationId);
 
-  if (statusQuery.isLoading) {
+  if (statusQuery.isLoading && !statusQuery.data) {
     return <Skeleton className="h-160 w-full" />;
   }
 
-  if (statusQuery.error) {
+  if (statusQuery.error && !statusQuery.data) {
     return (
       <p className="body-small text-[var(--st-bad)]" role="alert">
         Couldn&apos;t read the credential status for {organizationName}.

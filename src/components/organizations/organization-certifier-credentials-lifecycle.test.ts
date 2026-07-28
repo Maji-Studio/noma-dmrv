@@ -18,4 +18,14 @@ describe("OrganizationCertifierCredentials lifecycle", () => {
     expect(source).toContain("setVerification(result.verification)");
     expect(source).not.toMatch(/key=\{configured\s*\?/);
   });
+
+  it("preserves typed input when a background status refetch fails", () => {
+    // React Query retains the last successful data during a failed background
+    // refetch. Continuing to render that data keeps the same unkeyed form (and
+    // its uncontrolled input values) mounted; only a cold-load error replaces it.
+    expect(source).toContain(
+      "if (statusQuery.error && !statusQuery.data)",
+    );
+    expect(source).not.toMatch(/key=\{configured\s*\?/);
+  });
 });
