@@ -61,15 +61,18 @@ const PASSING_CHECKS: RemovalRequirementCheck[] = [
 function render(overrides: {
   ctx?: RemovalCertifyContext;
   checks?: RemovalRequirementCheck[];
+  compilation?: RemovalCompilationView;
+  rejectionMessage?: string | null;
 } = {}) {
   return renderToStaticMarkup(
     <SubmissionSummary
       ctx={overrides.ctx ?? CONTEXT}
       facilityId="facility-1"
-      compilation={COMPILATION}
+      compilation={overrides.compilation ?? COMPILATION}
       isCompilationLoading={false}
       compilationError={null}
       checks={overrides.checks ?? PASSING_CHECKS}
+      rejectionMessage={overrides.rejectionMessage ?? null}
     />,
   );
 }
@@ -123,6 +126,30 @@ describe("SubmissionSummary", () => {
     const html = render();
 
     expect(html).not.toContain("Sandbox · Isometric registry");
+  });
+
+  it("does not invent a destination when the removal is not linked", () => {
+    const html = render({
+      ctx: {
+        ...CONTEXT,
+        project: null,
+        mapping: null,
+      } as unknown as RemovalCertifyContext,
+    });
+
+    expect(html).toContain("Not linked");
+    expect(html).not.toContain("Isometric project");
+  });
+
+  it("uses grammatical singular copy for one pending file", () => {
+    const html = render({
+      compilation: {
+        ...COMPILATION,
+        review: { pendingSourceCount: 1 },
+      } as unknown as RemovalCompilationView,
+    });
+
+    expect(html).toContain("1 file uploads on submit");
   });
 
   it("renders the production banner only in production", () => {

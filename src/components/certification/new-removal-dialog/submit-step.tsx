@@ -187,6 +187,9 @@ export function SubmitStep({
         isCompilationLoading={compilationQuery.isLoading}
         compilationError={compilationQuery.error}
         checks={checklist}
+        rejectionMessage={
+          rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null
+        }
       />
 
       <DebugDrawer

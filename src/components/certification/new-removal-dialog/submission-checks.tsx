@@ -34,11 +34,11 @@ function fixLinksFor(
   facilityId: string,
 ): { label: string; href: string }[] {
   const productionRuns = {
-    label: "Review production runs",
+    label: "Open production runs",
     href: `/production-runs?facility=${facilityId}`,
   };
   const applications = {
-    label: "Review applications",
+    label: "Open applications",
     href: `/applications?facility=${facilityId}`,
   };
 
@@ -51,9 +51,6 @@ function fixLinksFor(
     case "measurementDates":
       if (check.fixTarget === "productionRuns") return [productionRuns];
       if (check.fixTarget === "applications") return [applications];
-      if (check.fixTarget === "productionRunsAndApplications") {
-        return [productionRuns, applications];
-      }
       return [];
     case "transportUniformity":
     case "transport":
@@ -65,22 +62,6 @@ function fixLinksFor(
     default:
       return [];
   }
-}
-
-function checkHeading(check: RemovalRequirementCheck): string {
-  return check.key === "measurementDates"
-    ? "Future dates"
-    : check.requirementLabel;
-}
-
-function dateGuidance(dateCount: number): string {
-  if (dateCount === 1) {
-    return "Correct this date, or wait until it has passed.";
-  }
-  if (dateCount === 2) {
-    return "Correct these dates, or wait until both dates have passed.";
-  }
-  return `Correct these dates, or wait until all ${dateCount} dates have passed.`;
 }
 
 /** One unmet check per row: what is wrong, on which record, and where to fix it. */
@@ -106,7 +87,7 @@ function CheckRow({
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <span className="inline-flex items-center gap-4 body-caption text-[var(--color-text-secondary)]">
-          {checkHeading(check)}
+          {check.requirementLabel}
           {check.whyDetail && (
             <InfoHint label="Why is this required?">{check.whyDetail}</InfoHint>
           )}
@@ -122,11 +103,6 @@ function CheckRow({
               <li key={line}>{line}</li>
             ))}
           </ul>
-        )}
-        {check.key === "measurementDates" && detailLines.length > 0 && (
-          <span className="body-caption font-medium text-[var(--color-text-primary)]">
-            {dateGuidance(detailLines.length)}
-          </span>
         )}
         {fixes.length > 0 && (
           <span className="flex flex-wrap gap-x-12 gap-y-4">

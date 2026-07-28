@@ -72,9 +72,9 @@ export const CERT_REQUIREMENT_META: Record<
       "This batch's applications must trace back to at least one production run so the removal can attribute the pyrolysed biochar mass and its production emissions. With no linked run there is nothing to submit.",
   },
   measurementDates: {
-    requirementLabel: "Production and application dates",
+    requirementLabel: "Production run and application dates have passed",
     whyDetail:
-      "These dates tell Isometric when production finished and when the reporting period ended. Future dates cannot be submitted.",
+      "Isometric uses the production run end time for the durability measurement date and the application date for the reporting period end. A future date blocks submission. Change the run end time or application date, or wait until that date.",
   },
   transport: {
     requirementLabel: "Transport legs recorded",

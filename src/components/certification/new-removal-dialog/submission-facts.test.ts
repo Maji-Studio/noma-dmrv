@@ -76,6 +76,7 @@ function facts(overrides: Partial<SubmissionFactsInput> = {}) {
     isCompilationLoading: false,
     compilationError: null,
     checks: [check("mapping", "met")],
+    rejectionMessage: null,
     ...overrides,
   });
 }
@@ -136,6 +137,19 @@ describe("buildSubmissionFacts verdict precedence", () => {
       detail: "Review the issue below.",
       // Suppressed: the check names the same fault in operator language.
       blockers: [],
+    });
+  });
+
+  it("reports a registry rejection ahead of unmet checks", () => {
+    expect(
+      facts({
+        rejectionMessage: "Resolve the rejected registry record.",
+        checks: [check("mapping", "unmet")],
+      }),
+    ).toMatchObject({
+      state: "blocked",
+      headline: "Cannot submit yet",
+      detail: "Resolve the rejected registry record.",
     });
   });
 
@@ -221,7 +235,7 @@ describe("buildSubmissionFacts panel data", () => {
       runCount: 3,
       applicationCount: 4,
       windowLabel: "Jun 5 – Aug 20, 2026",
-      durabilityLabel: "1000-year (R₀ reflectance), 200-year (R₀ reflectance)",
+      durabilityLabel: "1000-year (R₀ reflectance), 200-year (H:Corg)",
       samplingLabel: "Sampled, Not sampled",
     });
   });
@@ -248,14 +262,27 @@ describe("buildSubmissionFacts panel data", () => {
       environmentLabel: "Production",
       isProduction: true,
     });
+
+    expect(
+      facts({
+        ctx: {
+          ...CONTEXT,
+          project: null,
+          mapping: null,
+        } as unknown as RemovalCertifyContext,
+      }).projectLabel,
+    ).toBeNull();
   });
 
-  it("merges compiler warnings with the context's submission warnings", () => {
+  it("merges and de-duplicates compiler and context warnings", () => {
     expect(
       facts({
         compilation: {
           ...READY_COMPILATION,
-          warnings: ["Ash content captured but not represented."],
+          warnings: [
+            "Ash content captured but not represented.",
+            "Moisture reading omitted.",
+          ],
         } as unknown as RemovalCompilationView,
         ctx: {
           ...CONTEXT,

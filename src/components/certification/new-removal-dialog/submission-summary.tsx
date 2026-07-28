@@ -32,7 +32,7 @@ import {
 import { SubmissionChecks } from "./submission-checks";
 
 const STATE_ICON_SIZE = 20;
-const BATCH_LINK_ICON_SIZE = 12;
+const BATCH_LINK_ICON_SIZE = 16;
 
 const VERDICT_RULE: Record<SubmitState, string> = {
   ready: "border-[var(--st-ok)]",
@@ -159,7 +159,9 @@ export function SubmissionSummary({
 
         <dl className="flex flex-col">
           <Fact label="Destination">
-            {facts.projectLabel} ({facts.environmentLabel})
+            {facts.projectLabel
+              ? `${facts.projectLabel} (${facts.environmentLabel})`
+              : "Not linked"}
           </Fact>
           <Fact label="Crediting window">{facts.windowLabel ?? "Not set"}</Fact>
           <Fact
@@ -186,7 +188,9 @@ export function SubmissionSummary({
           <Fact label="Sampling">{facts.samplingLabel}</Fact>
           {facts.pendingDocuments > 0 && (
             <Fact label="Supporting files">
-              {countLabel(facts.pendingDocuments, "file")} upload on submit
+              {facts.pendingDocuments === 1
+                ? "1 file uploads on submit"
+                : `${facts.pendingDocuments} files upload on submit`}
             </Fact>
           )}
         </dl>
