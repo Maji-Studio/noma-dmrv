@@ -61,9 +61,11 @@ import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useOrgCertifierCredentialsStatus } from "@/hooks/use-certifier-credentials";
 import {
   CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
+  CERTIFICATION_SETTINGS_DIAGNOSTICS_SECTION,
   CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
   CERTIFICATION_SETTINGS_LEGACY_CONNECTION_SECTION,
   CERTIFICATION_SETTINGS_SECTION_PARAM,
+  CERTIFICATION_SETTINGS_SOURCES_SECTION,
 } from "@/lib/certification/links";
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { CertifierSettingsPanel } from "./certifier-settings-panel";
@@ -75,9 +77,9 @@ import { SettingsRail, type SettingsSectionMeta } from "@/components/ui";
 const CONSOLE_MAX_WIDTH = "max-w-[1160px]";
 
 const SECTION_CERTIFIER = CERTIFICATION_SETTINGS_CERTIFIER_SECTION;
-const SECTION_SOURCES = "sources";
+const SECTION_SOURCES = CERTIFICATION_SETTINGS_SOURCES_SECTION;
 const SECTION_EMISSIONS = CERTIFICATION_SETTINGS_EMISSIONS_SECTION;
-const SECTION_DIAGNOSTICS = "diagnostics";
+const SECTION_DIAGNOSTICS = CERTIFICATION_SETTINGS_DIAGNOSTICS_SECTION;
 
 /** Section keys that were retired, mapped to the pane that absorbed them. */
 const LEGACY_SECTION_KEYS: Record<string, string> = {

@@ -12,6 +12,8 @@
  */
 export const CERTIFICATION_SETTINGS_SECTION_PARAM = "section";
 export const CERTIFICATION_SETTINGS_EMISSIONS_SECTION = "emission-estimates";
+export const CERTIFICATION_SETTINGS_SOURCES_SECTION = "sources";
+export const CERTIFICATION_SETTINGS_DIAGNOSTICS_SECTION = "diagnostics";
 /**
  * Keys and the facility's project link are one pane — one is useless without
  * the other. `connection` was the key while they were separate categories;

@@ -3,6 +3,7 @@ import {
   CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
   CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
   CERTIFICATION_SETTINGS_SECTION_PARAM,
+  CERTIFICATION_SETTINGS_SOURCES_SECTION,
   certificationEmissionEstimatesHref,
   certificationRemovalsHref,
   certificationSettingsHref,
@@ -37,9 +38,12 @@ describe("certificationSettingsHref", () => {
   });
 
   it("accepts a section override", () => {
-    const href = certificationSettingsHref("fac-abc123", "sources");
+    const href = certificationSettingsHref(
+      "fac-abc123",
+      CERTIFICATION_SETTINGS_SOURCES_SECTION,
+    );
     expect(href).toBe(
-      "/certification/settings?section=sources&facility=fac-abc123",
+      `/certification/settings?section=${CERTIFICATION_SETTINGS_SOURCES_SECTION}&facility=fac-abc123`,
     );
   });
 
