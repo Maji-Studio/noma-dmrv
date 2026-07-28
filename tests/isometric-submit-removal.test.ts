@@ -43,6 +43,7 @@ import {
   storedRows,
 } from "./fixtures/submit-removal-orchestrator";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import * as ledger from "@/data-access/certification";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
@@ -230,13 +231,13 @@ describe("submitRemoval — Source binding gate", () => {
       label: "no mirrored Source",
       candidates: ["doc-1"],
       sourceIds: [] as string[],
-      expected: /0 of 1 evidence files/i,
+      expected: /Only 0 of 1 supporting files/i,
     },
     {
       label: "partially mirrored Sources",
       candidates: ["doc-1", "doc-2"],
       sourceIds: ["src-1"],
-      expected: /1 of 2 evidence files/i,
+      expected: /Only 1 of 2 supporting files/i,
     },
   ])("fails closed for $label before claim or POST", async ({
     candidates,
@@ -300,7 +301,7 @@ describe("submitRemoval — Source binding gate", () => {
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/1 of 2 evidence files/i);
+    ).rejects.toThrow(/Only 1 of 2 supporting files/i);
 
     expect(storedRows).toHaveLength(0);
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
@@ -330,7 +331,12 @@ describe("submitRemoval — happy path", () => {
       hasDurabilityComponents: false,
     });
     expect(reviewed.snapshot).not.toBeNull();
-    const reviewedHash = isometric.payloadHash(
+    // What the operator reviews and re-asserts at submit: Source-ID independent.
+    const reviewedHash = reviewPayloadHash(
+      reviewed.snapshot!.semanticPayload,
+    );
+    // What is persisted as the supersede / drift fingerprint: the full payload.
+    const storedHash = isometric.payloadHash(
       reviewed.snapshot!.semanticPayload,
     );
     const repointed = await compileRemovalSubmission({
@@ -349,7 +355,7 @@ describe("submitRemoval — happy path", () => {
       hasDurabilityComponents: false,
     });
     expect(
-      isometric.payloadHash(repointed.snapshot!.semanticPayload),
+      reviewPayloadHash(repointed.snapshot!.semanticPayload),
     ).not.toBe(reviewedHash);
     vi.mocked(isometric.createDatapoint).mockImplementation(
       fakeExternalIds("dp") as never,
@@ -364,7 +370,7 @@ describe("submitRemoval — happy path", () => {
       expectedCompilationHash: reviewedHash,
     });
 
-    expect(storedRows[0].payloadHash).toBe(reviewedHash);
+    expect(storedRows[0].payloadHash).toBe(storedHash);
     expect(storedRows[0].payloadSnapshot).toMatchObject({
       semantic: reviewed.snapshot!.semanticPayload,
     });
@@ -385,7 +391,7 @@ describe("submitRemoval — happy path", () => {
         removalId: REMOVAL_ID,
         expectedCompilationHash: reviewedHash,
       }),
-    ).rejects.toThrow(/changed after the compiled review/i);
+    ).rejects.toThrow(/changed after you reviewed it/i);
     expect(storedRows).toHaveLength(1);
     expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
   });

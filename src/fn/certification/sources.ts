@@ -421,7 +421,7 @@ export async function mirrorDocumentToSourceForUser(
   );
   if (!candidates.hasMapping) {
     throw new SafeError(
-      "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
+      "This facility isn't linked to an Isometric project. Link it in facility settings before submitting.",
     );
   }
   const removal = await getCertifierRemovalById(orgCtx, removalId);
@@ -434,7 +434,7 @@ export async function mirrorDocumentToSourceForUser(
   if (!mapping) {
     // Defensive: hasMapping was true above, so this is a TOCTOU edge.
     throw new SafeError(
-      "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
+      "This facility isn't linked to an Isometric project. Link it in facility settings before submitting.",
     );
   }
   if (options.enforceRemovalLifecycle) {
@@ -452,12 +452,12 @@ export async function mirrorDocumentToSourceForUser(
     if (!document) throw new SafeError("Document not found.");
     if (!document.storageKey) {
       throw new SafeError(
-        "This document has no managed storage (legacy URL-only). Re-upload through noma before mirroring.",
+        "This document has no managed storage (legacy URL-only). Re-upload it through noma, then submit again.",
       );
     }
     if (!document.fileSizeBytes) {
       throw new SafeError(
-        "This document has no recorded size. Re-upload through noma before mirroring.",
+        "This document has no recorded size. Re-upload it through noma, then submit again.",
       );
     }
     if (document.fileSizeBytes > SOURCES_MAX_BYTES) {
@@ -467,19 +467,19 @@ export async function mirrorDocumentToSourceForUser(
     }
     if (!document.mimeType) {
       throw new SafeError(
-        "This document has no recorded MIME type. Re-upload through noma before mirroring.",
+        "This document has no recorded file type. Re-upload it through noma, then submit again.",
       );
     }
     const provider = getStorageProvider();
     const head = await provider.headObject(document.storageKey);
     if (!head) {
       throw new SafeError(
-        "Document bytes not found in storage. The upload may have failed; re-upload before mirroring.",
+        "This document's file is missing from storage. The upload may have failed; re-upload it, then submit again.",
       );
     }
     if (head.size !== document.fileSizeBytes) {
       throw new SafeError(
-        "Stored object size does not match the document record. Re-upload before mirroring.",
+        "The stored file does not match this document's record. Re-upload it, then submit again.",
       );
     }
 
@@ -740,7 +740,7 @@ export async function unlinkDocumentSource(
       );
       if (referenced) {
         throw new SafeError(
-          "This source is referenced by a submitted Removal payload. Unlinking would break the audit trail. The Source remains on Isometric; future submissions can re-attach by re-mirroring.",
+          "This file is referenced by a submitted Removal. Unlinking it would break the audit trail. The file stays on Isometric and a later submission can attach it again.",
         );
       }
 

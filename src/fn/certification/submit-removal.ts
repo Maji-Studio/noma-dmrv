@@ -74,6 +74,7 @@ import {
   resolveSourceBindingCandidates,
 } from "./sources";
 import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
+import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import {
   appendSyncEventBestEffort,
   assertProductionConfirmed,
@@ -400,6 +401,12 @@ async function submitRemovalCore(
     );
   }
   const initialBuild = initialCompilation.transportPlan;
+  // Re-assert AFTER copying evidence. The reviewed fingerprint is Source-ID
+  // independent, so this compares like with like: it passes when the only change
+  // was IDs materializing, and fails when the evidence set itself moved — e.g.
+  // another operator removed or reclassified a supporting file mid-submission.
+  // Without this, that changed artifact could be claimed and sent unreviewed.
+  assertReviewedCompilationHash(expectedCompilationHash, initialBuild);
   const {
     agg,
     latestApplicationTime,
@@ -598,14 +605,21 @@ async function submitRemovalCore(
   }
 }
 
+/**
+ * Re-assert the fingerprint the operator reviewed. Uses `reviewPayloadHash`, not
+ * the full payload hash, so that registry Source IDs materializing during this
+ * submission do not invalidate the operator's own artifact — see
+ * `removal-review-hash.ts`. A genuine evidence change (a file added, removed, or
+ * rebound) still moves this hash through `candidateSources`.
+ */
 function assertReviewedCompilationHash(
   expectedHash: string | undefined,
   compiled: { semanticPayload: Record<string, unknown> },
 ): void {
   if (!expectedHash) return;
-  if (payloadHash(compiled.semanticPayload) === expectedHash) return;
+  if (reviewPayloadHash(compiled.semanticPayload) === expectedHash) return;
   throw new SafeError(
-    "Removal source data changed after the compiled review. Recompile and inspect the updated artifact before submitting.",
+    "This Removal's data changed after you reviewed it. Reload the Removal and check the updated summary before submitting.",
   );
 }
 

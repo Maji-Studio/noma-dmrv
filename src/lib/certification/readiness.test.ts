@@ -306,11 +306,11 @@ describe("evidence mirroring advisory", () => {
     expect(readiness.state).toBe("ready");
     expect(readiness.reasons).toEqual([]);
     expect(readiness.advisories).toEqual([
-      "4 files will be mirrored automatically on submit",
+      "4 files are sent automatically when you submit",
     ]);
     expect(checkFor(buildRemovalPreflightChecklist(facts), "evidence")).toMatchObject({
       status: "warning",
-      detail: "4 files will be mirrored automatically on submit",
+      detail: "4 files are sent automatically when you submit",
     });
   });
 
@@ -322,14 +322,14 @@ describe("evidence mirroring advisory", () => {
 
     expect(deriveRemovalReadiness(facts)).toMatchObject({
       state: "ready",
-      advisories: ["6 of 9 files will be mirrored automatically on submit"],
+      advisories: ["6 of 9 files are sent automatically when you submit"],
     });
     const wizardEvidence = buildRemovalRequirementsChecklist(facts).find(
       (check) => check.key === "evidence",
     );
     expect(wizardEvidence).toMatchObject({
       status: "warning",
-      detail: "6 of 9 files will be mirrored automatically on submit",
+      detail: "6 of 9 files are sent automatically when you submit",
     });
   });
 
@@ -379,10 +379,10 @@ describe("evidence mirroring advisory", () => {
 
     expect(readiness.state).toBe("blocked");
     expect(readiness.reasons).not.toContain(
-      "2 files will be mirrored automatically on submit",
+      "2 files are sent automatically when you submit",
     );
     expect(readiness.advisories).toContain(
-      "2 files will be mirrored automatically on submit",
+      "2 files are sent automatically when you submit",
     );
   });
 });

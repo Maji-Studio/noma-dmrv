@@ -20,10 +20,26 @@ export interface PrototypeVariant {
 
 const VARIANT_PARAM = "variant";
 
-/** Reads the active variant key, falling back to the first one. */
+/**
+ * Prototype variants are throwaway UI and must be unreachable in production.
+ * The early return alone was not enough: it ran AFTER `useEffect`, so the global
+ * arrow-key listener still registered in production and could rewrite the URL to
+ * `?variant=…`. Gate every effect and navigation on this, not just the render.
+ */
+const PROTOTYPES_ENABLED = process.env.NODE_ENV !== "production";
+
+/**
+ * Reads the active variant key, falling back to the first one.
+ *
+ * In production the `?variant=` param is ignored outright and the first variant
+ * (the real, shipped surface) always wins. Hiding only the switcher was not
+ * enough: a hand-typed `?variant=B` still rendered a throwaway prototype board
+ * to a real user. Gating here covers every consumer, including future ones.
+ */
 export function usePrototypeVariant(variants: readonly PrototypeVariant[]) {
   const searchParams = useSearchParams();
   const requested = searchParams.get(VARIANT_PARAM);
+  if (!PROTOTYPES_ENABLED) return variants[0].key;
   const match = variants.find((variant) => variant.key === requested);
   return match?.key ?? variants[0].key;
 }
@@ -44,6 +60,7 @@ export function PrototypeSwitcher({ variants, current }: PrototypeSwitcherProps)
   );
 
   const goTo = (offset: number) => {
+    if (!PROTOTYPES_ENABLED) return;
     const next = variants[(index + offset + variants.length) % variants.length];
     const params = new URLSearchParams(searchParams.toString());
     params.set(VARIANT_PARAM, next.key);
@@ -51,6 +68,7 @@ export function PrototypeSwitcher({ variants, current }: PrototypeSwitcherProps)
   };
 
   useEffect(() => {
+    if (!PROTOTYPES_ENABLED) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
       const target = event.target as HTMLElement | null;
@@ -69,7 +87,7 @@ export function PrototypeSwitcher({ variants, current }: PrototypeSwitcherProps)
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
-  if (process.env.NODE_ENV === "production") return null;
+  if (!PROTOTYPES_ENABLED) return null;
 
   const active = variants[index];
 
@@ -87,7 +105,7 @@ export function PrototypeSwitcher({ variants, current }: PrototypeSwitcherProps)
         <span className="flex h-40 items-center gap-8 px-16">
           <span className="label-micro opacity-60">Variant</span>
           <span className="label-micro">
-            {active.key} — {active.name}
+            {active.key}: {active.name}
           </span>
           <span className="label-micro opacity-40">
             {index + 1}/{variants.length}

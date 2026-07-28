@@ -284,7 +284,7 @@ export async function compileRemovalSubmission(
     pendingSourceCount > 0
   ) {
     blockers.push(
-      `${readySourceDocumentCount} of ${build.candidateDocumentIds.length} evidence files have validated Isometric Source IDs after automatic mirroring.`,
+      `Only ${readySourceDocumentCount} of ${build.candidateDocumentIds.length} supporting files reached the registry. Submit again to retry the rest.`,
     );
   }
 

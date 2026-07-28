@@ -109,7 +109,7 @@ export const CERT_REQUIREMENT_META: Record<
   evidence: {
     requirementLabel: "Supporting evidence linked",
     whyDetail:
-      "Noma mirrors managed files for the three supported evidence roles automatically on submit. Their intended registry Datapoint attachments are verified afterward.",
+      "Files attached to the three supported evidence roles are sent to the registry automatically when you submit. Noma then verifies that each one reached its intended Datapoint.",
   },
   durability: {
     requirementLabel: "Sampling & durability eligibility",

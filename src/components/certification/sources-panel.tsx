@@ -222,7 +222,7 @@ function CandidateRow({
           <span
             className="flex items-center gap-4 body-caption text-[var(--color-text-tertiary)]"
             role="status"
-            title="This file will be mirrored to Isometric automatically when the Removal is submitted."
+            title="This file is sent to Isometric automatically when you submit the Removal."
           >
             <CloudIcon size={STATE_ICON_SIZE} weight="bold" />
             On submit

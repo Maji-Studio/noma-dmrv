@@ -19,6 +19,7 @@ import {
   type CompiledRemovalSubmission,
   type RemovalSubmissionReview,
 } from "./removal-submission-build";
+import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 
 export interface RemovalCompilationView {
   review: RemovalSubmissionReview;
@@ -89,7 +90,7 @@ export async function loadRemovalCompilation(
       snapshot: blockers.length === 0 ? compiled.snapshot : null,
       compilationHash:
         blockers.length === 0 && compiled.snapshot
-          ? payloadHash(compiled.snapshot.semanticPayload)
+          ? reviewPayloadHash(compiled.snapshot.semanticPayload)
           : null,
     };
   });

@@ -196,7 +196,7 @@ function evidenceMirrorDetail(
   const mirrored = Math.min(facts.mirroredDocumentCount ?? 0, total);
   const pending = total - mirrored;
   return pending > 0
-    ? `${pending}${pending === total ? "" : ` of ${total}`} ${pending === 1 ? "file" : "files"} will be mirrored automatically on submit`
+    ? `${pending}${pending === total ? "" : ` of ${total}`} ${pending === 1 ? "file is" : "files are"} sent automatically when you submit`
     : `${total} of ${total} files ready`;
 }
 
