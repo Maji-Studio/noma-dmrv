@@ -53,8 +53,8 @@ everywhere today, so none of this blocks current work — but do not enable
 Method B until all three close.
 
 - **`_unsampled` registry wire contract — needs-registry-check.** The live
-  `_unsampled` POST stays behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE`
-  (`src/config/env.ts`) because the submitted representation is unconfirmed. The
+  `_unsampled` POST stays sandbox-only (`ISOMETRIC_ENVIRONMENT === "sandbox"`)
+  because the submitted representation is unconfirmed. The
   working product expectation is to reuse the trailing eligible historical sample
   pool/average rather than require three new 1000-year replicates per unsampled
   batch — but noma must not invent it. Also unconfirmed: whether
@@ -89,11 +89,12 @@ they don't churn a freshly-introduced surface mid-review:
 
 ### Durability measurement-samples — sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
 
-**Flag semantics:** `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (`src/config/env.ts`)
-is an optional flag *plus* a cross-field refinement rejecting it whenever
-`ISOMETRIC_ENVIRONMENT !== "sandbox"` — a sandbox-only kill-switch that cannot be
-enabled against production. The whole surface sits behind it. This entry closes
-when the flag is retired.
+**Gate semantics (updated 2026-07-28):** the surface is gated on
+`ISOMETRIC_ENVIRONMENT === "sandbox"` alone. The former
+`DURABILITY_MEASUREMENT_SAMPLES_LIVE` flag and its cross-field refinement were
+removed: targeting the sandbox is itself the opt-in, and `envSchema` now requires
+`ISOMETRIC_ENVIRONMENT` explicitly in production so the sandbox default cannot be
+inherited. This entry closes when the sandbox wire-format confirms land.
 
 Phases 1–5 and the 1000-year extension are **built and committed** (ADR 0021;
 issues #358 and #348); the phased plan and its decision record live in

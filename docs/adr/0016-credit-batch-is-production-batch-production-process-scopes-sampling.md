@@ -154,8 +154,13 @@ Because DEC runs **Method A everywhere** with stable conditions, this branch shi
   — the run link is **kept** as provenance + the data-entry anchor: a Sample is entered against
   **one** production run and its credit batch is **derived** from that run's membership (the
   accounting grain). Both links stay populated; the run is never the characterisation / ≥3-count
-  grain, and the ≥3 are independent samples distributed across the batch's runs/days (protocol
-  §8.3.1, re-verified 2026-06-19). `production_samples` is untouched.
+  grain, and the ≥3 must be representative of the full range of physical characteristics present
+  in the batch (protocol §8.3.1). `production_samples` is untouched.
+  _(Correction 2026-07-28: this consequence previously read "the ≥3 are independent samples
+  distributed across the batch's runs/days (protocol §8.3.1, re-verified 2026-06-19)". That was a
+  misreading — §8.3.1 imposes no within-batch run/day distribution; its distinct-days language
+  governs Method B's random-sampling cadence ACROSS production batches. The gate built on the
+  misreading was removed.)_
 - `getMethodBEligibilityByReactor` → per-process (dormant under Method A; closes the
   cross-feedstock over-credit bug when Method B unlocks). Cadence / replicate / eligibility
   gates move from run-grain to credit-batch-grain, grouped by process.

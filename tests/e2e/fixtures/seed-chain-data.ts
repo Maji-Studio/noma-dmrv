@@ -398,8 +398,9 @@ const SEEDED_DURABILITY_BATCH_CODE_PREFIX = "E2E-DUR";
  * Seed an eligible, distribution-clean 200-year durability batch for the Phase-5
  * readiness surfaces: a single-feedstock credit batch spanning TWO production
  * runs on distinct days, with THREE lab samples carrying complete H/C_org +
- * O/C_org chemistry well under the eligibility ceilings (§3 Table 2) and
- * distributed across both runs/days (§8.3.1). The samples set `creditBatchId`
+ * O/C_org chemistry well under the eligibility ceilings (§3 Table 2). The two
+ * runs are incidental: §8.3.1 requires no within-batch run/day distribution.
+ * The samples set `creditBatchId`
  * directly (the production form's derive-on-create write-path is exercised by
  * the unit tests; the E2E only needs the rolled-up state). Drives the
  * credit-batch durability panel and the lab-sample form's batch-progress

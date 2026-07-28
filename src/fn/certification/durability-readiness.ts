@@ -100,7 +100,6 @@ export function buildDurabilityGates(
     })),
     replicateProvenance: batch.samples.map((s) => ({
       sampleCode: s.sampleCode,
-      productionRunId: s.productionRunId,
       samplingDay: isoSamplingDay(s.samplingTime, batch.facilityTimezone),
     })),
   }));

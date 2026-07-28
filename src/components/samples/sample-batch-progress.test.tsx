@@ -85,14 +85,16 @@ function render(replicates: DurabilitySummaryReplicate[]): string {
 }
 
 describe("SampleBatchProgress", () => {
-  it("omits days that only unusable replicates span", () => {
+  // §8.3.1 requires no within-batch run/day distribution, so the panel shows
+  // no sampling-day provenance at all — not even for usable replicates.
+  it("shows no run/day provenance", () => {
     const html = render([
       replicate({ id: "1", samplingDay: "2026-07-01" }),
-      replicate({ id: "2", samplingDay: "2026-07-02", oToCorg: null }),
-      replicate({ id: "3", samplingDay: "2026-07-03", oToCorg: null }),
+      replicate({ id: "2", samplingDay: "2026-07-02" }),
+      replicate({ id: "3", samplingDay: "2026-07-03" }),
     ]);
 
-    expect(html).toContain("2026-07-01");
+    expect(html).not.toContain("2026-07-01");
     expect(html).not.toContain("2026-07-02");
     expect(html).not.toContain("2026-07-03");
   });
@@ -105,7 +107,7 @@ describe("SampleBatchProgress", () => {
     ]);
 
     expect(html).toContain(
-      "This batch has 1 usable replicate. 2 recorded samples don&#x27;t count yet — enter Oxygen (%) on them to reach the ≥3 minimum.",
+      "This batch has 1 usable replicate. 2 recorded samples don&#x27;t count yet. Enter Oxygen (%) on them to reach the ≥3 minimum.",
     );
   });
 
@@ -113,7 +115,7 @@ describe("SampleBatchProgress", () => {
     const html = render([replicate({ id: "1", hToCorg: null })]);
 
     expect(html).toContain(
-      "This batch has 0 usable replicates. 1 recorded sample doesn&#x27;t count yet — enter Hydrogen (%) on it, then add 2 more to reach the ≥3 minimum.",
+      "This batch has 0 usable replicates. 1 recorded sample doesn&#x27;t count yet. Enter Hydrogen (%) on it, then add 2 more to reach the ≥3 minimum.",
     );
   });
 
@@ -121,7 +123,7 @@ describe("SampleBatchProgress", () => {
     const html = render([replicate({ id: "1" })]);
 
     expect(html).toContain(
-      "This batch has 1 usable replicate — add 2 more to reach the ≥3 minimum.",
+      "This batch has 1 usable replicate. Add 2 more to reach the ≥3 minimum.",
     );
   });
 

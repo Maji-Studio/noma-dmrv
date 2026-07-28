@@ -41,12 +41,14 @@ import {
 } from "@/lib/calculations/biochar-eligibility";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 
-/** Provenance of one pooled replicate, for the production-window checks. */
+/**
+ * Provenance of one pooled replicate, for the production-window checks. The
+ * originating production run is deliberately absent: §8.3.1 imposes no
+ * within-batch run/day distribution, so no gate reads it.
+ */
 export interface ReplicateProvenance {
   /** Human-facing sample identifier used in window diagnostics. */
   sampleCode: string;
-  /** The production run the sample was physically drawn from (nullable post-0015). */
-  productionRunId: string | null;
   /** ISO calendar day (YYYY-MM-DD) the sample was taken; null when unknown. */
   samplingDay: string | null;
 }

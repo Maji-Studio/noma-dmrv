@@ -5,13 +5,12 @@ import {
   type ReplicateProvenance,
 } from "./durability-submission-gates";
 
-// Default provenance spreads replicates over runs/days. §8.3.1 does not require
-// that spread, so it is incidental — these gates never judge run/day
+// Default provenance puts each replicate on its own in-window day. §8.3.1
+// requires no such spread, so it is incidental — these gates never judge run/day
 // distribution; the fixtures below assert that clustering changes nothing.
 function distributedProvenance(n: number): ReplicateProvenance[] {
   return Array.from({ length: n }, (_, i) => ({
     sampleCode: `SAM-${i + 1}`,
-    productionRunId: `run-${i}`,
     samplingDay: `2026-06-0${(i % 9) + 1}`,
   }));
 }
@@ -38,7 +37,7 @@ const eligibleTriplet = [
 ];
 
 describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch grain)", () => {
-  it("passes a sampled batch with ≥3 eligible replicates distributed across runs/days", () => {
+  it("passes a sampled batch with ≥3 eligible replicates", () => {
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ replicates: eligibleTriplet }),
     ]);
@@ -117,9 +116,9 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
   // batch whose 3 replicates all share one run/day is fully clean.
   it("does not warn when ≥3 eligible replicates share a single run/day (§8.3.1)", () => {
     const clustered: ReplicateProvenance[] = [
-      { sampleCode: "SAM-1", productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { sampleCode: "SAM-2", productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { sampleCode: "SAM-3", productionRunId: "run-1", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-1", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-2", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-3", samplingDay: "2026-06-01" },
     ];
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ replicates: eligibleTriplet, replicateProvenance: clustered }),
@@ -131,9 +130,9 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
 
   it("does not warn when ≥3 eligible replicates have unknown run/day provenance", () => {
     const unknown: ReplicateProvenance[] = [
-      { sampleCode: "SAM-1", productionRunId: null, samplingDay: null },
-      { sampleCode: "SAM-2", productionRunId: null, samplingDay: null },
-      { sampleCode: "SAM-3", productionRunId: null, samplingDay: null },
+      { sampleCode: "SAM-1", samplingDay: null },
+      { sampleCode: "SAM-2", samplingDay: null },
+      { sampleCode: "SAM-3", samplingDay: null },
     ];
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ replicates: eligibleTriplet, replicateProvenance: unknown }),
@@ -168,9 +167,9 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
       gateBatch({
         replicates: eligibleTriplet,
         replicateProvenance: [
-          { sampleCode: "SAM-26-003", productionRunId: "run-1", samplingDay: "2026-05-31" },
-          { sampleCode: "SAM-26-004", productionRunId: "run-1", samplingDay: "2026-06-02" },
-          { sampleCode: "SAM-26-005", productionRunId: "run-1", samplingDay: "2026-06-03" },
+          { sampleCode: "SAM-26-003", samplingDay: "2026-05-31" },
+          { sampleCode: "SAM-26-004", samplingDay: "2026-06-02" },
+          { sampleCode: "SAM-26-005", samplingDay: "2026-06-03" },
         ],
       }),
     ]);
@@ -184,9 +183,9 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
       gateBatch({
         replicates: eligibleTriplet,
         replicateProvenance: [
-          { sampleCode: "SAM-26-001", productionRunId: "run-1", samplingDay: "2026-06-15" },
-          { sampleCode: "SAM-26-002", productionRunId: "run-1", samplingDay: "2026-06-15" },
-          { sampleCode: "SAM-26-003", productionRunId: "run-1", samplingDay: "2026-07-20" },
+          { sampleCode: "SAM-26-001", samplingDay: "2026-06-15" },
+          { sampleCode: "SAM-26-002", samplingDay: "2026-06-15" },
+          { sampleCode: "SAM-26-003", samplingDay: "2026-07-20" },
         ],
       }),
     ]);

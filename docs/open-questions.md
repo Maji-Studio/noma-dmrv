@@ -858,18 +858,6 @@ bound); these are the decisions it deliberately did not make.
   — then apply it to the remaining sites and add a lint or test guard so a
   zoneless `new Date(string)` cannot reappear (M).
 
-### Sampling-day chips are not post-window-normalized (`certification/sampling-day-normalization`)
-
-- F-6 filtered the credit-batch day chips to usable replicates, but
-  `certification/durability-batch-summary` exposes `replicates[].samplingDay`
-  raw, while the gate's `distinctRunDayCount` passes days through
-  `normalizePostWindowSamplingDay` (which nulls days after the batch end date).
-  A stored-material sample dated after the production window can therefore still
-  show a chip that the submission gate does not credit.
-- **Resolve via:** normalize `samplingDay` at the summary boundary so every
-  surface reads the same day set, or expose the normalized day alongside the raw
-  one and have the chips use it (S).
-
 ### Operator-initiated GHG statements are still refused on a shared project (`certification/shared-project-statement-create`)
 
 - ADR 0023 scoped registry statement identity per organization + facility, so a

@@ -192,6 +192,26 @@ const envSchema = z.object({
     });
   }
 
+  // ISOMETRIC_ENVIRONMENT defaults to "sandbox" so local/CI runs need no
+  // configuration, but that default is fail-OPEN for a production deploy: it
+  // both selects the sandbox API base URL (`BASE_URLS` in isometric/client.ts)
+  // and enables the sandbox-only durability measurement-sample POSTs. An
+  // unset value in production would therefore route every registry call to
+  // the sandbox silently. Require it explicitly there.
+  // `data` already carries the default, so the raw value is the only way to
+  // tell "explicitly sandbox" from "never set".
+  if (
+    process.env.NODE_ENV === "production" &&
+    !process.env.ISOMETRIC_ENVIRONMENT
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["ISOMETRIC_ENVIRONMENT"],
+      message:
+        "ISOMETRIC_ENVIRONMENT must be set explicitly in production (sandbox or production); the sandbox default is not safe to inherit",
+    });
+  }
+
   const hasIsometricSecret = !!data.ISOMETRIC_CLIENT_SECRET;
   const hasIsometricToken = !!data.ISOMETRIC_ACCESS_TOKEN;
 
