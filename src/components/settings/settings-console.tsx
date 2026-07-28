@@ -105,7 +105,10 @@ export function SettingsConsole({
           idPrefix="organization-settings"
         />
 
-        <section className="border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]">
+        {/* A presentational card, so a plain div: as a `section` it became an
+            ancestor of every pane's own sections, and a `section`-scoped query
+            for one of them silently widened to the whole pane. */}
+        <div className="border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]">
           <div className="flex flex-col gap-4 border-b-[1px] border-[var(--clr-dark-purple-10)] bg-[var(--sea)] px-24 py-16">
             <h2 className="title-heading-3">{title}</h2>
             <p className="body-caption text-[var(--color-text-tertiary)]">
@@ -120,7 +123,7 @@ export function SettingsConsole({
               {access} can change these.
             </span>
           </div>
-        </section>
+        </div>
       </div>
     </div>
   );

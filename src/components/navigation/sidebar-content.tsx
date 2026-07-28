@@ -393,12 +393,17 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </span>
           </div>
           {/* Straight to Members rather than `/settings`, which only
-              redirects here — the settings rail is the index. */}
+              redirects here — the settings rail is the index.
+
+              The name stays "Organization settings": the Certification section
+              already carries a link named exactly "Settings", and two links in
+              the same nav with one accessible name is ambiguous for screen
+              reader users and for any by-name lookup. */}
           <Link
             href="/settings/organization"
             onClick={onNavigate}
             className="flex items-center justify-center size-44 md:size-28 text-[var(--color-white-25)] hover:text-white transition-colors duration-150"
-            aria-label="Settings"
+            aria-label="Organization settings"
           >
             <GearSixIcon size={16} />
           </Link>
