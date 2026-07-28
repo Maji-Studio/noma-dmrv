@@ -17,7 +17,7 @@ export function SetupGuideSkeleton() {
       <header className="flex flex-col gap-8">
         <Skeleton className="h-12 w-48" />
         <Skeleton className="h-24 w-256 max-w-full" />
-        <Skeleton className="h-14 w-320 max-w-full" />
+        <Skeleton className="h-16 w-320 max-w-full" />
       </header>
 
       <div className="flex flex-col gap-16">
