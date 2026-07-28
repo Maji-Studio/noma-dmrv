@@ -10,8 +10,9 @@
  *
  *   - **Removal** → submitted to the **registry**. Single-phase `submitRemoval`.
  *     There is NO remote Removal status in this integration, so the lifecycle
- *     ends at "Submitted" (+ "Superseded" on a re-version). Verified in code:
- *     `submit-removal.ts` only ever marks the ledger row `submitted`.
+ *     ends at "Submitted". A latest `superseded` row is a retired attempt with
+ *     no current version and must remain actionable; successful re-versioning
+ *     exposes the newer `submitted` row instead.
  *
  *   - **GHG Statement** → submitted to a **verifier**. One linear ladder
  *     (#250): Draft → In registry → In verification → Verified → Issued (with
@@ -135,7 +136,7 @@ export interface RemovalWorkflowStatusInput extends RemovalStatusInput {
 
 /**
  * Operator-facing status for a Removal. Local-only — removals carry no remote
- * status, so the high end is "Submitted" / "Superseded".
+ * status, so the high end is "Submitted".
  */
 export function deriveRemovalStatus({
   local,
@@ -181,12 +182,17 @@ export function deriveRemovalStatus({
         isTerminal: false,
       };
     case "superseded":
+      // Callers pass the latest row. When superseding succeeds, a newer draft
+      // or submitted row is therefore latest; a latest superseded row means a
+      // stale attempt was retired before replacement (for example after the
+      // fail-closed payload-freshness gate). The claim layer's
+      // `after-superseded` path explicitly mints a fresh version on retry.
       return {
-        kind: "superseded",
-        value: "superseded",
-        label: "Superseded",
-        isActionable: false,
-        isTerminal: true,
+        kind: "not-submitted",
+        value: "draft",
+        label: "Not submitted",
+        isActionable: true,
+        isTerminal: false,
       };
   }
 }

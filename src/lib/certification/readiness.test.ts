@@ -59,9 +59,10 @@ describe("deriveRemovalReadiness — precedence", () => {
     expect(r.reasons).toEqual([]);
   });
 
-  it("reports submitted for a superseded removal", () => {
+  it("re-evaluates a retired superseded draft for a fresh version", () => {
     const r = deriveRemovalReadiness(ready({ local: "superseded" }));
-    expect(r.state).toBe("submitted");
+    expect(r.state).toBe("ready");
+    expect(r.reasons).toEqual([]);
   });
 
   it("treats accepted defensively as submitted (unreachable for removals)", () => {

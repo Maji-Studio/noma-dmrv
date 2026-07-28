@@ -222,7 +222,7 @@ function sourceBindingGap(facts: RemovalReadinessFacts): string | null {
 
 /**
  * Folds removal status + submission preconditions into one verdict.
- * Precedence: live lock → terminal (submitted/superseded) → blocked → ready.
+ * Precedence: live lock → terminal submitted row → blocked → ready.
  */
 export function deriveRemovalReadiness(
   facts: RemovalReadinessFacts,
@@ -230,8 +230,10 @@ export function deriveRemovalReadiness(
   const advisories = evidenceAdvisories(facts);
   if (facts.lockInFlight) return { state: "inProgress", reasons: [], advisories };
 
-  // Status drives the high end. `isTerminal` covers submitted/superseded — a
-  // removal is "done" at submitted (no remote lifecycle exists; see status.ts).
+  // Status drives the high end. A latest superseded row is non-terminal: it is
+  // a retired attempt for which `claimSubmissionDraft` will mint a fresh
+  // version. A removal is done only at submitted (no remote lifecycle exists;
+  // see status.ts).
   const status = deriveRemovalStatus({ local: facts.local, lockInFlight: false });
   if (status.isTerminal) return { state: "submitted", reasons: [], advisories };
 
