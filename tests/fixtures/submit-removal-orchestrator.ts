@@ -61,6 +61,7 @@ vi.mock("@/fn/certification/sources", async () => {
         sourceId: `src-${candidate.documentId}`,
       })),
     ),
+    mirrorCandidateSourcesForSubmission: vi.fn(),
   };
 });
 vi.mock("@/lib/isometric", async (importOriginal) => {
@@ -84,14 +85,14 @@ vi.mock("@/fn/certification/durability-measurement-samples", async (importOrigin
   >();
   return {
     ...actual,
-    get DURABILITY_MEASUREMENT_SAMPLES_LIVE() {
+    get DURABILITY_MEASUREMENT_SAMPLES_ENABLED() {
       return durabilityFlag.live;
     },
     submitDurabilityMeasurementSamples: vi.fn(),
   };
 });
 
-export function setDurabilityMeasurementSamplesLive(live: boolean): void {
+export function setDurabilityMeasurementSamplesEnabled(live: boolean): void {
   durabilityFlag.live = live;
 }
 
@@ -708,6 +709,9 @@ beforeEach(() => {
   vi.mocked(sources.resolveSourceBindingCandidates).mockResolvedValue([
     makeResolvedInventorySource("doc-test-1", "src-test-1"),
   ]);
+  vi.mocked(
+    sources.mirrorCandidateSourcesForSubmission,
+  ).mockResolvedValue(undefined);
   // §8.6.2 fresh-read re-assert (production-claim-gate): after the draft
   // claim, submitRemoval re-reads the removal scope (claims + lineage
   // fingerprint) through resolveScopeForRemoval. Default: unclaimed,

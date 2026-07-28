@@ -60,6 +60,17 @@ import {
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { CardSkeleton, Skeleton } from "@/components/ui/loading-skeleton";
+// PROTOTYPE (throwaway) — `?variant=` board explorations. Remove with the
+// `prototype/` folders once a variant is picked and folded in properly.
+import {
+  PrototypeSwitcher,
+  usePrototypeVariant,
+} from "@/components/prototype/prototype-switcher";
+import {
+  StoragePrototypeBoard,
+  STORAGE_VARIANTS,
+  type StorageTypeFilter,
+} from "./prototype";
 
 /** Placeholder bin cards per lane while the first page of bins loads. */
 const LOADING_CARDS_PER_LANE = 2;
@@ -205,7 +216,11 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
 export function StorageLocationList() {
   const { facilityId } = useFacilityContext();
 
+  const variant = usePrototypeVariant(STORAGE_VARIANTS);
+  const isPrototype = variant !== "current";
+
   const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<StorageTypeFilter>("all");
   const [showArchived, setShowArchived] = useState(false);
   const { currentPage, pageSize, setCurrentPage, setPageSize } =
     useListPagination(facilityId);
@@ -225,13 +240,23 @@ export function StorageLocationList() {
     () => ({
       search: debouncedSearch || undefined,
       facilityId: facilityId || undefined,
+      // PROTOTYPE: the type filter only exists on the variant boards.
+      type: isPrototype && typeFilter !== "all" ? typeFilter : undefined,
       archived: showArchived,
       page: currentPage,
       pageSize,
       sortBy: "code",
       sortOrder: "asc",
     }),
-    [debouncedSearch, facilityId, showArchived, currentPage, pageSize]
+    [
+      debouncedSearch,
+      facilityId,
+      isPrototype,
+      typeFilter,
+      showArchived,
+      currentPage,
+      pageSize,
+    ]
   );
 
   const { data: storageLocationsData, isLoading, error: fetchError } = useStorageLocations(filters, {
@@ -375,6 +400,7 @@ export function StorageLocationList() {
 
   const clearFilters = () => {
     setSearchQuery("");
+    setTypeFilter("all");
     setCurrentPage(1);
   };
 
@@ -384,7 +410,7 @@ export function StorageLocationList() {
     setSideSheet(null);
   };
 
-  const hasActiveFilters = Boolean(searchQuery);
+  const hasActiveFilters = Boolean(searchQuery) || typeFilter !== "all";
   const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
   const isSubmitting = createStorageLocation.isPending || updateStorageLocation.isPending;
 
@@ -423,6 +449,42 @@ export function StorageLocationList() {
         }
       />
 
+      {isPrototype ? (
+        <StoragePrototypeBoard
+          variant={variant}
+          bins={storageLocations}
+          isLoading={isLoading}
+          laneSummary={laneSummary}
+          total={totalStorageLocations}
+          searchQuery={searchQuery}
+          onSearchChange={(value) => {
+            setSearchQuery(value);
+            setCurrentPage(1);
+          }}
+          typeFilter={typeFilter}
+          onTypeFilterChange={(value) => {
+            setTypeFilter(value);
+            setCurrentPage(1);
+          }}
+          showArchived={showArchived}
+          onToggleArchived={toggleShowArchived}
+          hasActiveFilters={hasActiveFilters}
+          onClearFilters={clearFilters}
+          page={currentPage}
+          pageCount={totalPages}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          onCreate={openCreate}
+          onView={openView}
+          onEdit={openEdit}
+          onArchive={handleArchive}
+          onRestore={handleRestore}
+          onDelete={handleDelete}
+          onReconcile={openReconcile}
+        />
+      ) : (
+        <>
       <div className="grid grid-cols-1 gap-24 md:grid-cols-3">
         <StatCard
           title="Feedstock On Hand"
@@ -600,6 +662,10 @@ export function StorageLocationList() {
           />
         </>
       )}
+        </>
+      )}
+
+      <PrototypeSwitcher variants={STORAGE_VARIANTS} current={variant} />
 
       {deleteError && !deletingStorageLocationId && (
         <ServerError message={deleteError} />

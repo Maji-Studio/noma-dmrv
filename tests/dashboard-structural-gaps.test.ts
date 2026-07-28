@@ -9,7 +9,6 @@ import { db } from "@/db";
 import {
   biocharProducts,
   creditBatches,
-  documents,
   facilities,
   feedstocks,
   feedstockTypes,
@@ -52,7 +51,6 @@ interface Fixture {
   activeBiocharProductId: string;
   validBatchSampleId: string;
   activeFeedstockId: string;
-  validBatchSampleTransportLegId: string;
   ids: {
     facilities: string[];
     suppliers: string[];
@@ -66,7 +64,6 @@ interface Fixture {
     samples: string[];
     biocharProducts: string[];
     transportLegs: string[];
-    documents: string[];
   };
   foreignOrgId: string;
 }
@@ -483,27 +480,6 @@ beforeAll(async () => {
         entityType: transportLegs.entityType,
         entityId: transportLegs.entityId,
       });
-    const validBatchSampleTransportLegId = transportRows.find(
-      (row) =>
-        row.entityType === "sample" && row.entityId === validBatchSample.id,
-    )?.id;
-    if (!validBatchSampleTransportLegId) {
-      throw new Error("Expected the active batch sample transport leg fixture");
-    }
-
-    const [foreignEvidence] = await tx
-      .insert(documents)
-      .values({
-        organizationId: foreignOrgId,
-        entityType: "feedstock",
-        entityId: activeFeedstock.id,
-        documentType: "bill_of_lading",
-        fileName: "foreign-evidence.pdf",
-        fileUrl: "https://example.invalid/foreign-evidence.pdf",
-        uploadStatus: "uploaded",
-      })
-      .returning({ id: documents.id });
-
     return {
       gapFacilityId: gapFacility.id,
       clearFacilityId: clearFacility.id,
@@ -512,7 +488,6 @@ beforeAll(async () => {
       activeBiocharProductId: activeBiocharProduct.id,
       validBatchSampleId: validBatchSample.id,
       activeFeedstockId: activeFeedstock.id,
-      validBatchSampleTransportLegId,
       ids: {
         facilities: facilityRows.map(({ id }) => id),
         suppliers: supplierRows.map(({ id }) => id),
@@ -526,7 +501,6 @@ beforeAll(async () => {
         samples: sampleRows.map(({ id }) => id),
         biocharProducts: [activeBiocharProduct.id],
         transportLegs: transportRows.map(({ id }) => id),
-        documents: [foreignEvidence.id],
       },
       foreignOrgId,
     };
@@ -536,7 +510,6 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!fixture) return;
   const { ids } = fixture;
-  await db.delete(documents).where(inArray(documents.id, ids.documents));
   await db.delete(transportLegs).where(inArray(transportLegs.id, ids.transportLegs));
   await db.delete(samples).where(inArray(samples.id, ids.samples));
   await db

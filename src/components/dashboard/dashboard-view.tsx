@@ -15,6 +15,7 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import {
   OnboardingWizard,
   SetupGuide,
+  SetupGuideSkeleton,
   SetupInProgressState,
   SetupStrip,
   useOnboardingGate,
@@ -75,7 +76,9 @@ export function DashboardView() {
         )}
       </header>
 
-      {isTakeover ? (
+      {onboarding.mode === "loading" ? (
+        <SetupGuideSkeleton />
+      ) : isTakeover ? (
         onboarding.mode === "takeover-member" ? (
           <SetupInProgressState />
         ) : (

@@ -2,24 +2,17 @@ import {
   resolveCertFieldStatus,
   type CertFieldStatus,
 } from "@/components/forms/cert-field-status";
-import { hasCompleteTransportEvidence } from "@/lib/certification/transport-evidence";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 
 interface TransportLegCertValues {
   distanceKm: number | null | undefined;
   distanceSource?: DistanceSourceValue | null;
   loadMassKg: number | null | undefined;
-  /**
-   * Accepted transport-evidence uploads backing this leg (absent on deferred
-   * rows that were never saved). Absence keeps the evidence status missing.
-   */
-  transportEvidenceDocumentCount?: number | null;
 }
 
 export interface TransportLegCertStatuses {
   distance: CertFieldStatus;
   provenance: CertFieldStatus;
-  evidence: CertFieldStatus;
   load: CertFieldStatus;
 }
 
@@ -41,13 +34,6 @@ export function deriveTransportLegCertStatuses(
       savedRowsKnown,
       hasLegs &&
         rows.every((leg) => leg.distanceSource != null),
-    ),
-    evidence: resolveCertFieldStatus(
-      savedRowsKnown,
-      hasLegs &&
-        rows.every((leg) =>
-          hasCompleteTransportEvidence(leg.transportEvidenceDocumentCount),
-        ),
     ),
     load: resolveCertFieldStatus(
       savedRowsKnown,

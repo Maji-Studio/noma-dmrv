@@ -66,15 +66,15 @@ export function assertRemovalDatesNotFuture(args: {
 
   if (productionEndTime.getTime() > now.getTime()) {
     throw new SafeError(
-      `Production run end ${productionEndTime.toISOString()} is in the future. ` +
-        "Wait until production is complete or correct the run end time before submitting.",
+      `Latest production run ends at ${productionEndTime.toISOString()}. ` +
+        "Change the end time or wait until the run ends.",
     );
   }
 
   if (latestApplicationTime.getTime() > now.getTime()) {
     throw new SafeError(
-      `Latest application date ${latestApplicationTime.toISOString()} is in the future. ` +
-        "Wait until the application has occurred or correct the application date before submitting.",
+      `Latest application is dated ${latestApplicationTime.toISOString()}. ` +
+        "Change the application date or wait until then.",
     );
   }
 }

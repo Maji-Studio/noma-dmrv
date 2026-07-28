@@ -105,21 +105,18 @@ function progressHint(summary: DurabilityBatchSummary): string {
   const remaining = Math.max(0, minimum - usable);
 
   if (remaining === 0) {
-    return summary.distributionWarning
-      ? `This batch meets ≥${minimum}, but all replicates cluster on one run/day — §8.3.1 expects them distributed across distinct runs/days.`
-      : `This batch already meets the ≥${minimum}-sample minimum across distinct runs/days.`;
+    return `This batch already meets the ≥${minimum}-sample minimum.`;
   }
 
   const usableClause = `This batch has ${usable} usable replicate${usable === 1 ? "" : "s"}`;
   const incomplete = summarizeIncompleteChemistry(summary);
 
   if (incomplete.count === 0) {
-    return `${usableClause} — add ${remaining} more (across distinct runs/days) to reach the ≥${minimum} minimum.`;
+    return `${usableClause} — add ${remaining} more to reach the ≥${minimum} minimum.`;
   }
 
   const stillShort = Math.max(0, remaining - incomplete.count);
-  const thenAdd =
-    stillShort > 0 ? `, then add ${stillShort} more (across distinct runs/days)` : "";
+  const thenAdd = stillShort > 0 ? `, then add ${stillShort} more` : "";
   return `${usableClause}. ${incomplete.count} recorded sample${incomplete.count === 1 ? " doesn't" : "s don't"} count yet — enter ${incomplete.label} on ${incomplete.count === 1 ? "it" : "them"}${thenAdd} to reach the ≥${minimum} minimum.`;
 }
 

@@ -46,13 +46,12 @@ export function FeedstockEvidenceSection({
     <FormSection
       title="Transport evidence"
       icon={<PaperclipIcon size={14} weight="bold" />}
-      certifyRequired={!isEditMode}
       __spine={__spine}
     >
       <ActionableFocusTarget
         target="transport-evidence"
         activeTarget={focusTarget}
-        actionLabel="Attach at least one classified transport-evidence file"
+        actionLabel="Attach a transport document (optional)"
       >
         {isEditMode && feedstock ? (
           <div className="flex flex-col gap-12">

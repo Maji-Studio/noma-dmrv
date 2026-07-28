@@ -51,11 +51,6 @@ function summaryWith(
   const usableReplicateCount = replicates.filter(
     (r) => r.hToCorg != null && r.oToCorg != null,
   ).length;
-  const usableDays = new Set(
-    replicates
-      .filter((r) => r.hToCorg != null && r.oToCorg != null)
-      .map((r) => `${r.productionRunId ?? "?"}::${r.samplingDay ?? "?"}`),
-  );
 
   return {
     creditBatchId: "batch-1",
@@ -66,9 +61,6 @@ function summaryWith(
     usableReplicateCount,
     minimumReplicates: MINIMUM_REPLICATES,
     meetsMinimum: usableReplicateCount >= MINIMUM_REPLICATES,
-    distinctRunDayCount: usableDays.size,
-    distributionWarning:
-      usableReplicateCount >= MINIMUM_REPLICATES && usableDays.size <= 1,
     eligibility: {
       eligible: usableReplicateCount > 0 ? true : null,
       hToCorgMean: usableReplicateCount > 0 ? 0.4 : null,
@@ -121,7 +113,7 @@ describe("SampleBatchProgress", () => {
     const html = render([replicate({ id: "1", hToCorg: null })]);
 
     expect(html).toContain(
-      "This batch has 0 usable replicates. 1 recorded sample doesn&#x27;t count yet — enter Hydrogen (%) on it, then add 2 more (across distinct runs/days) to reach the ≥3 minimum.",
+      "This batch has 0 usable replicates. 1 recorded sample doesn&#x27;t count yet — enter Hydrogen (%) on it, then add 2 more to reach the ≥3 minimum.",
     );
   });
 
@@ -129,7 +121,7 @@ describe("SampleBatchProgress", () => {
     const html = render([replicate({ id: "1" })]);
 
     expect(html).toContain(
-      "This batch has 1 usable replicate — add 2 more (across distinct runs/days) to reach the ≥3 minimum.",
+      "This batch has 1 usable replicate — add 2 more to reach the ≥3 minimum.",
     );
   });
 
@@ -141,7 +133,7 @@ describe("SampleBatchProgress", () => {
     ]);
 
     expect(html).toContain(
-      "This batch already meets the ≥3-sample minimum across distinct runs/days.",
+      "This batch already meets the ≥3-sample minimum.",
     );
   });
 });

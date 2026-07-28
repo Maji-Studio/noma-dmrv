@@ -311,6 +311,40 @@ export interface MirrorResult {
   recovered: boolean;
 }
 
+/**
+ * Ensures every candidate evidence document has a persisted Isometric Source
+ * mapping before the Removal snapshot is compiled. Submission is the owning
+ * workflow for this transition; operators should not have to mirror files one
+ * at a time in the UI.
+ */
+export async function mirrorCandidateSourcesForSubmission(
+  orgCtx: OrgContext,
+  args: { removalId: string; candidateDocumentIds: string[] },
+): Promise<void> {
+  const candidateDocumentIds = Array.from(
+    new Set(args.candidateDocumentIds),
+  ).sort();
+  if (candidateDocumentIds.length === 0) return;
+
+  const existing = await listDocumentUploadsForDocuments(
+    orgCtx,
+    ISOMETRIC_PROVIDER,
+    candidateDocumentIds,
+  );
+  const mirroredDocumentIds = new Set(
+    existing.map((row) => row.documentId),
+  );
+
+  for (const documentId of candidateDocumentIds) {
+    if (mirroredDocumentIds.has(documentId)) continue;
+    await mirrorDocumentToSourceForUser(
+      orgCtx,
+      { removalId: args.removalId, documentId },
+      { enforceRemovalLifecycle: true },
+    );
+  }
+}
+
 const SOURCE_READ_ONLY_SUBMISSION_STATUSES = new Set<
   CertificationSubmissionRow["status"]
 >([

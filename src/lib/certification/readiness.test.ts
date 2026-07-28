@@ -281,39 +281,23 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
 });
 
 describe("evidence mirroring advisory", () => {
-  it.each([
-    {
-      total: 0,
-      mirrored: 0,
-      detail: "No validated Isometric Source is available",
-    },
-    {
-      total: 4,
-      mirrored: 2,
-      detail: "2 of 4 files ready",
-    },
-  ])(
-    "blocks an existing Removal when Source binding is incomplete",
-    ({ total, mirrored, detail }) => {
-      const facts = ready({
-        sourceBindingRequired: true,
-        supportingDocumentCount: total,
-        mirroredDocumentCount: mirrored,
-      });
-
-      expect(deriveRemovalReadiness(facts)).toMatchObject({
-        state: "blocked",
-        reasons: [detail],
-        advisories: [],
-      });
-      expect(
-        checkFor(buildRemovalPreflightChecklist(facts), "evidence"),
-      ).toMatchObject({ status: "unmet", detail });
-    },
-  );
-
-  it("shows 0 of M as a warning without blocking readiness", () => {
+  it("blocks when no supporting evidence file exists", () => {
     const facts = ready({
+      sourceBindingRequired: true,
+      supportingDocumentCount: 0,
+      mirroredDocumentCount: 0,
+    });
+
+    expect(deriveRemovalReadiness(facts)).toMatchObject({
+      state: "blocked",
+      reasons: ["No supporting evidence file is available"],
+      advisories: [],
+    });
+  });
+
+  it("shows pending automatic mirroring without blocking readiness", () => {
+    const facts = ready({
+      sourceBindingRequired: true,
       supportingDocumentCount: 4,
       mirroredDocumentCount: 0,
     });
@@ -322,11 +306,11 @@ describe("evidence mirroring advisory", () => {
     expect(readiness.state).toBe("ready");
     expect(readiness.reasons).toEqual([]);
     expect(readiness.advisories).toEqual([
-      "0 of 4 files ready",
+      "4 files will be mirrored automatically on submit",
     ]);
     expect(checkFor(buildRemovalPreflightChecklist(facts), "evidence")).toMatchObject({
       status: "warning",
-      detail: "0 of 4 files ready",
+      detail: "4 files will be mirrored automatically on submit",
     });
   });
 
@@ -338,14 +322,14 @@ describe("evidence mirroring advisory", () => {
 
     expect(deriveRemovalReadiness(facts)).toMatchObject({
       state: "ready",
-      advisories: ["3 of 9 files ready"],
+      advisories: ["6 of 9 files will be mirrored automatically on submit"],
     });
     const wizardEvidence = buildRemovalRequirementsChecklist(facts).find(
       (check) => check.key === "evidence",
     );
     expect(wizardEvidence).toMatchObject({
       status: "warning",
-      detail: "3 of 9 files ready",
+      detail: "6 of 9 files will be mirrored automatically on submit",
     });
   });
 
@@ -395,10 +379,10 @@ describe("evidence mirroring advisory", () => {
 
     expect(readiness.state).toBe("blocked");
     expect(readiness.reasons).not.toContain(
-      "0 of 2 files ready",
+      "2 files will be mirrored automatically on submit",
     );
     expect(readiness.advisories).toContain(
-      "0 of 2 files ready",
+      "2 files will be mirrored automatically on submit",
     );
   });
 });
@@ -659,11 +643,11 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
 
 describe("future-dated measurement dates", () => {
   const FUTURE_RUN =
-    "Production run PR-0007 ends 2099-01-31, in the future — wait until " +
-    "production is complete or correct the run end time.";
+    "Production run PR-0007 ends on 2099-01-31. " +
+    "Change the end time or wait until the run ends.";
   const FUTURE_APPLICATION =
-    "Application APP-0003 is dated 2099-02-14, in the future — wait until the " +
-    "application has occurred or correct the application date.";
+    "Application APP-0003 is dated 2099-02-14. " +
+    "Change the application date or wait until then.";
 
   it("blocks submission instead of failing only at submit time", () => {
     const readiness = deriveRemovalReadiness(
@@ -678,8 +662,10 @@ describe("future-dated measurement dates", () => {
     const measurements = [
       FUTURE_RUN,
       FUTURE_APPLICATION,
-      "Application APP-0004 is dated 2099-02-15, in the future.",
-      "Application APP-0005 is dated 2099-02-16, in the future.",
+      "Application APP-0004 is dated 2099-02-15. " +
+        "Change the application date or wait until then.",
+      "Application APP-0005 is dated 2099-02-16. " +
+        "Change the application date or wait until then.",
     ];
 
     const readiness = deriveRemovalReadiness(
@@ -687,7 +673,18 @@ describe("future-dated measurement dates", () => {
     );
 
     expect(readiness.state).toBe("blocked");
-    expect(readiness.reasons).toContain("+1 more future-dated measurement(s)");
+    expect(readiness.reasons).toContain("+1 more future date");
+
+    const pluralReadiness = deriveRemovalReadiness(
+      ready({
+        futureDatedMeasurements: [
+          ...measurements,
+          "Application APP-0006 is dated 2099-02-17. " +
+            "Change the application date or wait until then.",
+        ],
+      }),
+    );
+    expect(pluralReadiness.reasons).toContain("+2 more future dates");
   });
 
   it("renders red in the requirements checklist naming the offending record", () => {

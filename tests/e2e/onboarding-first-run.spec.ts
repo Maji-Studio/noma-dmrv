@@ -139,7 +139,7 @@ test.describe("First-run onboarding", () => {
       await expect(guide).toBeVisible();
 
       // 7. Supplier round-trip via its upcoming-step link: create sheet
-      // deep-link, then the step self-clears on return (refetchOnMount).
+      // deep-link, then the step self-clears on client-side dashboard return.
       await guide.getByRole("link", { name: "Add supplier" }).click();
       await expect(page).toHaveURL(/\/suppliers/);
       const sheet = page.getByRole("dialog");
@@ -172,7 +172,10 @@ test.describe("First-run onboarding", () => {
       // The sheet closes only after the create mutation succeeds — wait for it
       // so the dashboard return can't race the in-flight write.
       await expect(sheet).not.toBeVisible();
-      await page.goto("/dashboard");
+      await page
+        .getByRole("link", { name: "Dashboard", exact: true })
+        .click();
+      await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
       await expect(guide.getByText("3 of 7 done")).toBeVisible();
 
       // 8. With a facility present the wizard never auto-opens again.

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 
 const POST_WINDOW_SUFFIX =
-  "§8.3.1 permits sampling from stored material only when samples are spatially distributed across the stored batch; confirm this with the registry. This sampling day does not count as within-batch temporal distribution.";
+  "§8.3.1 permits sampling from stored material only when samples are spatially distributed across the stored batch; confirm this with the registry.";
 
 describe("buildSubmissionWarningNotes", () => {
   it("groups repeated post-production sample warnings into one plain-language note", () => {
@@ -21,20 +21,8 @@ describe("buildSubmissionWarningNotes", () => {
       }),
     ]);
     expect(buildSubmissionWarningNotes(warnings)[0].detail).toContain(
-      "does not count as within-batch temporal distribution",
+      "stored-material samples must cover different parts of the batch",
     );
-  });
-
-  it("simplifies missing run/day provenance without losing the protocol context", () => {
-    const [note] = buildSubmissionWarningNotes([
-      "Credit batch CB-26-006: all 3 replicates have unknown run/day provenance — §8.3.1 expects ≥3 independent samples distributed across distinct runs/days. Confirm this is a registry-agreed sampling alternative.",
-    ]);
-
-    expect(note.summary).toBe(
-      "Run/day details are missing for all 3 samples.",
-    );
-    expect(note.detail).toContain("CB-26-006");
-    expect(note.detail).toContain("§8.3.1");
   });
 
   it("uses singular copy for one post-production sample", () => {

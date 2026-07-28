@@ -9,14 +9,13 @@
  * `measurement-property` source. Values retained only as evidence (currently
  * 1000-year `s_fraction`) are bound through direct orchestrator datapoints.
  *
- * ─── ⚠️ STAGED, NOT LIVE — gated on `DURABILITY_MEASUREMENT_SAMPLES_LIVE` ──────
+ * ─── ⚠️ SANDBOX ONLY — gated on `ISOMETRIC_ENVIRONMENT === "sandbox"` ─────────
  * Explicit binding is implemented for the verified 1000-year component. The
  * 200-year H/C unit scaling and property/input table remain unverified (see
  * `docs/open-questions.md`) and unsampled Method B remains post-MVP, so both
- * combinations fail closed even when this gate is enabled. While it is `false`,
- * `submitRemoval` hard-blocks any template that declares a sequestration
- * component, so this step never runs against the registry. The operator enables
- * the flag only for the sandbox after validating the active durability path.
+ * combinations fail closed even against the sandbox. Against PRODUCTION the
+ * gate is `false` and `submitRemoval` hard-blocks any template that declares a
+ * sequestration component, so this step never runs against the live registry.
  *
  * The POST choreography reuses `performRegistryCreate` (create → on failure
  * reconcile by supplier-ref lookup → audit event / ledger-reject), idempotent on
@@ -62,13 +61,14 @@ import {
 } from "@/lib/certification/measurement-sample-journal";
 
 /**
- * Sandbox-only gate for sampled 1000-year measurement-sample POSTs.
- * `submitRemoval` blocks every sequestration-template submission while this is
- * off, so checked-in code cannot create an emissions-only entry.
+ * Sandbox-only gate for sampled 1000-year measurement-sample POSTs. Pointing an
+ * environment at the Isometric SANDBOX is itself the opt-in — there is nothing
+ * to protect there — so no separate flag is required. Against production this
+ * stays false, and `submitRemoval` blocks every sequestration-template
+ * submission, so checked-in code cannot create an emissions-only entry.
  */
-export const DURABILITY_MEASUREMENT_SAMPLES_LIVE =
-  env.ISOMETRIC_ENVIRONMENT === "sandbox" &&
-  env.DURABILITY_MEASUREMENT_SAMPLES_LIVE;
+export const DURABILITY_MEASUREMENT_SAMPLES_ENABLED =
+  env.ISOMETRIC_ENVIRONMENT === "sandbox";
 
 /** One measurement-sample POST: its versioned supplier ref + the request body. */
 export interface DurabilityMeasurementSampleSubmission {

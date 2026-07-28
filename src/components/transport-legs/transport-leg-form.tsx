@@ -331,10 +331,9 @@ export function TransportLegForm({
         </div>
       </FormSection>
 
-      <FormSection title="Documentation" certifyRequired={isPersisted}>
+      <FormSection title="Documentation">
         <p className="body-small text-[var(--color-text-secondary)]">
-          Classify each supporting file before upload. One accepted transport
-          evidence file is sufficient.
+          Optional. Classify each transport document before upload.
         </p>
         {isEditMode && leg && isSavedTransportLeg(leg) ? (
           <TransportEvidencePanel

@@ -46,6 +46,9 @@ describe("TransportEvidencePanel chrome", () => {
     expect(html).not.toContain("<h3");
     expect(html).not.toContain("border-t");
     expect(html).toContain('aria-label="Transport evidence"');
-    expect(html).toContain("CERT");
+    expect(html).not.toContain("CERT");
+    expect(html).toContain(
+      "Optional. Attach a bill of lading, weigh-scale ticket, or other transport record if you have one.",
+    );
   });
 });

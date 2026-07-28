@@ -20,7 +20,7 @@ import type {
   TransportLegFormData,
 } from "@/schemas/transport-legs";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
-import { hasCompleteTransportEvidence } from "@/lib/certification/transport-evidence";
+import { hasAcceptedTransportEvidence } from "@/lib/certification/transport-evidence";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
 import { deriveTransportLegCertStatuses } from "./transport-leg-cert-status";
@@ -251,15 +251,7 @@ export function TransportLegsEditor({
                     />
                   </span>
                 </th>
-                <th className="py-8 pr-12 font-medium">
-                  <span className="flex items-center gap-6">
-                    Evidence
-                    <CertificationFieldTag
-                      status={certStatuses.evidence}
-                      description="Satisfied when every saved leg has at least one uploaded transport-evidence file"
-                    />
-                  </span>
-                </th>
+                <th className="py-8 pr-12 font-medium">Evidence</th>
                 <th className="py-8 pr-12 font-medium">Method</th>
                 <th className="py-8 pr-12 font-medium">
                   <span className="flex items-center gap-6">
@@ -290,27 +282,14 @@ export function TransportLegsEditor({
                       : "—"}
                   </td>
                   <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
-                    <span className="flex items-center gap-6">
-                      {isSavedTransportLeg(leg) && !deferred
-                        ? hasCompleteTransportEvidence(
-                            (leg as { transportEvidenceDocumentCount?: number })
-                              .transportEvidenceDocumentCount,
-                          )
-                          ? "Attached"
-                          : "Missing"
-                        : "—"}
-                      {isSavedTransportLeg(leg) &&
-                        !deferred &&
-                        !hasCompleteTransportEvidence(
-                          (leg as { transportEvidenceDocumentCount?: number })
-                            .transportEvidenceDocumentCount,
-                        ) && (
-                          <CertificationFieldTag
-                            status="missing"
-                            description="This leg needs at least one uploaded transport-evidence file"
-                          />
-                        )}
-                    </span>
+                    {isSavedTransportLeg(leg) &&
+                    !deferred &&
+                    hasAcceptedTransportEvidence(
+                      (leg as { transportEvidenceDocumentCount?: number })
+                        .transportEvidenceDocumentCount,
+                    )
+                      ? "Attached"
+                      : "—"}
                   </td>
                   <td className="py-8 pr-12">{formatMethod(leg.transportMethodType)}</td>
                   <td className="py-8 pr-12">

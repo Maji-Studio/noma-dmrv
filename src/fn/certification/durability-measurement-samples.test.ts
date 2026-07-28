@@ -4,7 +4,7 @@ import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples"
 import type { FacilityReferenceSoilTemperature } from "@/lib/isometric/utils/durability-aggregation";
 import {
   buildDurabilityMeasurementSampleSubmissions,
-  DURABILITY_MEASUREMENT_SAMPLES_LIVE,
+  DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
   patchMeasurementSampleSourceBindings,
 } from "./durability-measurement-samples";
 import { normalizeMeasurementSamplesForHash } from "./durability-measurement-sample-snapshot";
@@ -71,9 +71,11 @@ const thousandYearBatch = (id: string, code: string) =>
     ],
   });
 
-describe("DURABILITY_MEASUREMENT_SAMPLES_LIVE", () => {
-  it("stays off without the sandbox-only operator opt-in", () => {
-    expect(DURABILITY_MEASUREMENT_SAMPLES_LIVE).toBe(false);
+describe("DURABILITY_MEASUREMENT_SAMPLES_ENABLED", () => {
+  // Targeting the Isometric sandbox IS the opt-in — there is no separate flag.
+  // The test env has no ISOMETRIC_ENVIRONMENT, which defaults to "sandbox".
+  it("is on whenever the environment targets the sandbox", () => {
+    expect(DURABILITY_MEASUREMENT_SAMPLES_ENABLED).toBe(true);
   });
 });
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { SubmissionNotes } from "./submission-notes";
 
 describe("SubmissionNotes", () => {
-  it("renders a calm non-blocking notes summary", () => {
+  it("renders a concise notes summary", () => {
     const html = renderToStaticMarkup(
       <SubmissionNotes
         notes={[
@@ -21,9 +21,9 @@ describe("SubmissionNotes", () => {
     );
 
     expect(html).toContain("Notes");
-    expect(html).toContain("Doesn&#x27;t block submission");
+    expect(html).not.toContain("Doesn&#x27;t block submission");
     expect(html).toContain(
-      'class="body-small text-[var(--color-text-secondary)]">Advisory — 3 samples were taken after production ended.',
+      'class="body-small text-[var(--color-text-secondary)]">3 samples were taken after production ended.',
     );
     expect(html).toContain(
       'aria-label="Details for: 3 samples were taken after production ended."',

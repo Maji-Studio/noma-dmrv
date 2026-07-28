@@ -17,6 +17,18 @@ Removal review, Source lifecycle, and transport-provenance implementation notes
 from 2026-07-27 are archived in
 [`docs/archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md`](../archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md).
 
+## 2026-07-28 (automatic supporting-source mirroring)
+
+Removal submission now mirrors every pending managed supporting file
+automatically before compiling the strict registry artifact. The reviewed
+candidate-file fingerprint is checked before mirroring, then submission
+recompiles from the persisted Isometric Source mappings and fails closed before
+claiming a snapshot or creating a GHG Entry if any transfer remains incomplete.
+
+The Removal Sources panel is status-only: pending managed files read “On
+submit,” and the per-file Mirror and Retry actions are no longer part of the
+operator workflow.
+
 ## Registry Source visibility contract
 
 Certification Settings exposes one organization-wide Isometric Source

@@ -8,6 +8,7 @@ in the components' own TSDoc. Neither is duplicated here.
 
 Related: [forms.md](./forms.md) (form/schema work) ·
 [code-style.md](./code-style.md) (naming, React Compiler rules, a11y) ·
+[ux-writing.md](./ux-writing.md) (all user-facing copy) ·
 [architecture.md](./architecture.md) (layers, ActionResult, facility context) ·
 [traceability.md](./traceability.md) (DAG / Map / Sankey surfaces) ·
 [troubleshooting.md](./troubleshooting.md) ·

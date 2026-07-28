@@ -9,9 +9,8 @@ interface SubmissionNotesProps {
 }
 
 /**
- * A quiet review surface for non-blocking submission notes. The thin orange
- * marks borrow from an auditor's margin annotations without presenting the
- * notes as errors.
+ * A quiet review surface for submission notes. Readiness is communicated by
+ * the shared workflow status, so this module only presents the note itself.
  */
 export function SubmissionNotes({ notes }: SubmissionNotesProps) {
   if (notes.length === 0) return null;
@@ -21,26 +20,21 @@ export function SubmissionNotes({ notes }: SubmissionNotesProps) {
       aria-labelledby="submission-notes-heading"
       className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]"
     >
-      <div className="flex flex-wrap items-center justify-between gap-8 border-b border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] px-12 py-10">
-        <div className="flex items-center gap-8">
-          <span className="flex size-28 items-center justify-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] text-[var(--color-signal-orange-strong)]">
-            <NoteIcon size={15} weight="bold" aria-hidden />
-          </span>
-          <div className="flex items-baseline gap-6">
-            <h3
-              id="submission-notes-heading"
-              className="body-small font-medium text-[var(--color-text-primary)]"
-            >
-              Notes
-            </h3>
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              {notes.length}
-            </span>
-          </div>
-        </div>
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          Doesn&apos;t block submission
+      <div className="flex items-center gap-8 border-b border-[var(--color-border-tertiary)] px-12 py-10">
+        <span className="flex size-28 items-center justify-center text-[var(--color-signal-orange-strong)]">
+          <NoteIcon size={16} weight="bold" aria-hidden />
         </span>
+        <div className="flex items-center gap-8">
+          <h3
+            id="submission-notes-heading"
+            className="body-small font-medium text-[var(--color-text-primary)]"
+          >
+            Notes
+          </h3>
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            {notes.length}
+          </span>
+        </div>
       </div>
 
       <ul className="divide-y divide-[var(--color-border-tertiary)]">
@@ -54,7 +48,7 @@ export function SubmissionNotes({ notes }: SubmissionNotesProps) {
               className="mt-3 h-16 w-2 bg-[var(--color-signal-orange)]"
             />
             <span className="body-small text-[var(--color-text-secondary)]">
-              Advisory — {note.summary}
+              {note.summary}
             </span>
             {note.detail && (
               <InfoHint
