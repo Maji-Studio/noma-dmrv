@@ -454,9 +454,13 @@ export function StorageLocationList() {
         }}
         mode={sideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
-        title={sideSheet?.mode === "create" ? "Create Storage Bin" : sideSheet?.entity?.code ?? ""}
+        // Bins lead with their name, not their code — the one entity where the
+        // house convention (code as the sheet title) puts an opaque lookup key
+        // where the operator's own word for the thing belongs. The code stays,
+        // small, on the line beneath.
+        title={sideSheet?.mode === "create" ? "Create Storage Bin" : sideSheet?.entity?.name ?? ""}
         subtitle={
-          sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.name
+          sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.code
         }
         editLabel="Edit Storage Bin"
         canEdit={sideSheet?.entity?.archivedAt == null}

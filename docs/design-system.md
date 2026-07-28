@@ -432,7 +432,10 @@ redirect into the list's side sheet (`production-runs/[id]/page.tsx`,
 - Tables/panels never sit flush on the warm field — use the `--panel-*` recipe.
 - Side sheets: header title = entity code (or `Create X` in create mode — **no
   filler subtitle in create mode**); view/edit subtitle = the identifying
-  secondary. Edit sections use `FormSection`; read sections use `DetailSection`
+  secondary. **Storage bins invert this**: the name is the title and the code
+  the subtitle, because a bin's code is a lookup key for evidence and exports
+  while its name ("North hopper") is what operators say and search for. Follow
+  the code-first default everywhere else. Edit sections use `FormSection`; read sections use `DetailSection`
   through the shared `DetailSpine`, with matching titles, order, and grouping.
   The read rail is numbered only when the paired edit form uses `FormSpine` —
   see [forms.md](./forms.md). The panel is `w-full` below `sm`, then

@@ -3,10 +3,13 @@
  *
  * A vertical gauge on the left edge carries the fill level, so a wall of tiles
  * reads as a bar chart of the facility. The tile leads with the *material* it
- * holds rather than the bin code: an operator looking for somewhere to put pine
- * chips scans for "Pine chips", not for "FB-004". The code is still on the tile
- * — evidence, exports and radio traffic all reference it — but demoted to the
- * identity line beneath the headline.
+ * holds, then names the bin holding it: an operator looking for somewhere to put
+ * pine chips scans for "Pine chips" and then for "North hopper".
+ *
+ * The bin code appears nowhere on the tile's face. It is a lookup key for
+ * evidence and exports, not something to read a wall of tiles by, and a column
+ * of codes crowds out the two words that actually identify the bin. It stays
+ * reachable where it is useful: the detail sheet and this tile's actions menu.
  *
  * Colour is spent once, on the gauge. The type icon repeats it small; the
  * headline stays in ordinary ink so the material reads as content rather than
@@ -79,7 +82,9 @@ export function StorageBinTile({
       }}
       // Named for the bin, not for the material: several tiles can hold the same
       // material, and a screen reader moving between them needs them distinct.
-      aria-label={`${bin.code} ${bin.name}`}
+      // Bin names are unique per org (`guardStorageLocationName`), so the name
+      // alone identifies it — no need to read the code aloud either.
+      aria-label={bin.name}
       className={`group flex cursor-pointer items-stretch bg-[var(--panel-bg)] [border:var(--panel-border)] transition-colors hover:[border-color:var(--bin-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] ${
         isEmpty ? "opacity-70" : ""
       } ${needsReconciliation ? "[border-color:var(--st-bad-border)]" : ""}`}
@@ -123,12 +128,11 @@ export function StorageBinTile({
           </span>
         </div>
 
-        {/* Identity: the bin the material sits in. The archived marker is its
-            own element so it stays findable as an exact string. */}
+        {/* Identity: the bin the material sits in, by the name operators
+            actually say out loud. The code is a lookup key for evidence and
+            exports, not something to scan a wall of tiles by, so it lives on
+            the detail sheet and on this tile's actions menu instead. */}
         <p className="flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]">
-          {/* Both truncate. A long code must not squeeze the name to nothing,
-              and a long name must not push the code off the tile. */}
-          <span className="label-micro min-w-0 truncate">{bin.code}</span>
           <span className="min-w-0 truncate">{bin.name}</span>
           {isArchived && (
             <span className="label-micro shrink-0 border border-[var(--color-border-primary)] px-6">
