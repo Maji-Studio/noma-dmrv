@@ -77,6 +77,24 @@ describe("DURABILITY_MEASUREMENT_SAMPLES_ENABLED", () => {
   it("is on whenever the environment targets the sandbox", () => {
     expect(DURABILITY_MEASUREMENT_SAMPLES_ENABLED).toBe(true);
   });
+
+  it("is off whenever the environment targets production", async () => {
+    const { env: currentEnv } = await import("@/config/env");
+    vi.resetModules();
+    vi.doMock("@/config/env", () => ({
+      env: { ...currentEnv, ISOMETRIC_ENVIRONMENT: "production" },
+    }));
+
+    try {
+      const productionModule = await import("./durability-measurement-samples");
+      expect(
+        productionModule.DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
+      ).toBe(false);
+    } finally {
+      vi.doUnmock("@/config/env");
+      vi.resetModules();
+    }
+  });
 });
 
 describe("patchMeasurementSampleSourceBindings", () => {
