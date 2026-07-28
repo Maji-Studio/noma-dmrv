@@ -26,8 +26,17 @@ export default async function AppLayout({
       <SessionSignOutListener />
       {/* Desktop: sidebar + main side by side. Mobile: a sticky top bar
           stacks above a full-width main (the sidebar is hidden, its nav lives
-          in the drawer that MobileNav opens). */}
-      <div className="min-h-screen flex flex-col md:flex-row">
+          in the drawer that MobileNav opens).
+
+          `main` carries `overflow-auto`, which makes it the scrollport for any
+          `position: sticky` descendant. Without a bounded height it grows with
+          its content and never scrolls internally — the window scrolls — so a
+          sticky child has a scrollport that never moves and silently fails to
+          stick. `md:h-screen` gives the desktop shell the fixed-frame height
+          the sidebar already assumes (`h-screen sticky top-0`), so `main` is a
+          real scroll container and in-page sticky rails work. Below `md` the
+          window keeps scrolling as before. */}
+      <div className="min-h-screen flex flex-col md:h-screen md:flex-row md:overflow-hidden">
         <AppSidebar />
         <MobileNav />
         <main className="flex-1 min-w-0 overflow-auto">{children}</main>
