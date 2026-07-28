@@ -110,10 +110,10 @@ test.describe("First-run onboarding", () => {
       await expect(wizard.getByText(/coming soon/i).first()).toBeVisible();
       await wizard.getByLabel("Access token").fill("cu-test-access-9999");
       await wizard.getByLabel("Client secret").fill("cu-test-secret");
-      await wizard
-        .getByRole("button", { name: /Set credentials|Replace credentials/ })
-        .click();
-      await expect(wizard.getByText("Access token …9999")).toBeVisible();
+      await wizard.getByRole("button", { name: "Save keys" }).click();
+      // Fake keys still store — Isometric rejects them, but the write lands, so
+      // the form reseeds as configured and the field caption names the last 4.
+      await expect(wizard.getByText(/Ends 9999/)).toBeVisible();
 
       // 5. Finish → the guide takes over the dashboard body.
       await wizard.getByRole("button", { name: "Finish" }).click();
