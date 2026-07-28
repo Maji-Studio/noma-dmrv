@@ -11,8 +11,10 @@
  * chosen for itself — which is the point, and also the reason to change one
  * only deliberately.
  */
+import type { ApplicationEvidenceMethod } from "@/schemas/applications";
 import type { CurrencyCode } from "@/schemas/credit-batches";
 import type { Timezone } from "@/schemas/facilities";
+import type { PackagingType } from "@/schemas/orders";
 import type { TripTypeValue } from "@/schemas/trip-type";
 
 export interface OrganizationDefaults {
@@ -27,8 +29,8 @@ export interface OrganizationDefaults {
    */
   defaultTimezone: string;
   defaultTripType: TripTypeValue;
-  defaultEvidenceMethod: "visual" | "boundary";
-  defaultPackaging: "loose" | "bagged";
+  defaultEvidenceMethod: ApplicationEvidenceMethod;
+  defaultPackaging: PackagingType;
 }
 
 /** Exported narrow so a picker can use it as a fallback without re-guarding. */
