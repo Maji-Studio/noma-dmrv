@@ -41,6 +41,12 @@ import {
 } from "@/lib/isometric/measurement-samples";
 import {
   build1000YearSequestrationSample,
+  CARBON_CONTENTS_MEASUREMENT_PROPERTY,
+  H_TO_C_ORG_MEASUREMENT_PROPERTY,
+  INORGANIC_CARBON_MEASUREMENT_PROPERTY,
+  PRODUCT_MASS_MEASUREMENT_PROPERTY,
+  S_FRACTION_MEASUREMENT_PROPERTY,
+  TOTAL_CARBON_MEASUREMENT_PROPERTY,
 } from "@/lib/isometric/transformers/measurement-sample";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { SafeError } from "@/lib/errors";
@@ -52,7 +58,6 @@ import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import { REMOVAL_ENTITY_TYPE } from "./shared";
 import type { RemovalSourceBindingPlanEntry } from "@/lib/certification/removal-source-bindings";
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
-import { PRODUCT_MASS_MEASUREMENT_PROPERTY } from "@/lib/isometric/transformers/measurement-sample";
 import {
   addJournaledMeasurementSample,
   readJournaledMeasurementSamples,
@@ -242,52 +247,98 @@ export async function patchMeasurementSampleSourceBindings(args: {
   captures: MeasurementSampleSourceBindingCapture[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
 }): Promise<number> {
-  const propertyKey = encodeMeasurementProperty(
-    PRODUCT_MASS_MEASUREMENT_PROPERTY,
-  );
+  const propertyKeyByInput = new Map([
+    [
+      "product_mass",
+      encodeMeasurementProperty(PRODUCT_MASS_MEASUREMENT_PROPERTY),
+    ],
+    [
+      "carbon_contents",
+      encodeMeasurementProperty(CARBON_CONTENTS_MEASUREMENT_PROPERTY),
+    ],
+    [
+      "s_fraction",
+      encodeMeasurementProperty(S_FRACTION_MEASUREMENT_PROPERTY),
+    ],
+    [
+      "h_c_molar_ratios",
+      encodeMeasurementProperty(H_TO_C_ORG_MEASUREMENT_PROPERTY),
+    ],
+    [
+      "total_carbon_contents",
+      encodeMeasurementProperty(TOTAL_CARBON_MEASUREMENT_PROPERTY),
+    ],
+    [
+      "inorganic_carbon_contents",
+      encodeMeasurementProperty(INORGANIC_CARBON_MEASUREMENT_PROPERTY),
+    ],
+  ]);
   let patchedCount = 0;
   for (const capture of args.captures) {
-    const datapointIds =
-      capture.datapointIdsByMeasurementProperty.get(propertyKey) ?? [];
-    if (datapointIds.length === 0) continue;
+    const productMassDatapointIds =
+      capture.datapointIdsByMeasurementProperty.get(
+        propertyKeyByInput.get("product_mass")!,
+      ) ?? [];
+    if (productMassDatapointIds.length === 0) continue;
     if (!capture.creditBatchId) {
       throw new SafeError(
         `Measurement sample ${capture.measurementSampleId} returned product_mass without a credit-batch identity; Source attribution is blocked.`,
       );
     }
     const creditBatchId = capture.creditBatchId;
-    const sourceIds = Array.from(
+    const batchBindings = args.sourceBindingPlan.filter(
+      (entry) =>
+        entry.intendedTarget.kind === "sequestration" &&
+        entry.intendedTarget.creditBatchIds.includes(creditBatchId),
+    );
+    const inventorySourceIds = Array.from(
       new Set(
-        args.sourceBindingPlan
+        batchBindings
           .filter(
             (entry) =>
-              entry.intendedTarget.kind === "sequestration" &&
-              entry.intendedTarget.inputKey === "product_mass" &&
-              entry.intendedTarget.creditBatchIds.includes(creditBatchId),
+              entry.nomaRole === "inventory" &&
+              entry.intendedTarget.inputKey === "product_mass",
           )
           .map((entry) => entry.sourceId),
       ),
     ).sort();
-    if (sourceIds.length === 0) {
+    if (inventorySourceIds.length === 0) {
       throw new SafeError(
         `Credit batch ${creditBatchId} has no intended Inventory Source for its product_mass Datapoint; Source attribution is blocked.`,
       );
     }
-    for (const datapointId of datapointIds) {
-      const patched = await patchDatapoint(args.client, datapointId, {
-        description: PATCH_UNDEFINED,
-        display_name: PATCH_UNDEFINED,
-        quantity: PATCH_UNDEFINED,
-        source_ids: sourceIds,
-        type: PATCH_UNDEFINED,
-        uncertainty_justification: PATCH_UNDEFINED,
-      });
-      if (sourceIds.some((sourceId) => !patched.source_ids.includes(sourceId))) {
-        throw new SafeError(
-          `Measurement-sample Datapoint ${datapointId} did not confirm its intended Sources; the GHG entry was not created.`,
-        );
+
+    for (const [inputKey, propertyKey] of propertyKeyByInput) {
+      const datapointIds =
+        capture.datapointIdsByMeasurementProperty.get(propertyKey) ?? [];
+      if (datapointIds.length === 0) continue;
+      const sourceIds = Array.from(
+        new Set(
+          batchBindings
+            .filter((entry) => entry.intendedTarget.inputKey === inputKey)
+            .map((entry) => entry.sourceId),
+        ),
+      ).sort();
+      if (sourceIds.length === 0) continue;
+
+      for (const datapointId of datapointIds) {
+        const patched = await patchDatapoint(args.client, datapointId, {
+          description: PATCH_UNDEFINED,
+          display_name: PATCH_UNDEFINED,
+          quantity: PATCH_UNDEFINED,
+          source_ids: sourceIds,
+          type: PATCH_UNDEFINED,
+          uncertainty_justification: PATCH_UNDEFINED,
+        });
+        if (
+          sourceIds.some((sourceId) => !patched.source_ids.includes(sourceId))
+        ) {
+          throw new SafeError(
+            `Measurement-sample Datapoint ${datapointId} did not confirm its intended Sources; the GHG entry was not created.`,
+          );
+        }
+        patchedCount += 1;
       }
-      patchedCount += 1;
     }
   }
   return patchedCount;
