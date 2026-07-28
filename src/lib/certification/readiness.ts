@@ -102,8 +102,7 @@ const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
 const ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT = 5;
 const DURABILITY_LABEL = "Sampling & durability eligibility met";
 const EVIDENCE_LABEL = "Supporting evidence linked";
-const MEASUREMENT_DATES_LABEL =
-  "Production run and application dates have passed";
+const MEASUREMENT_DATES_LABEL = "Production and application dates";
 const FUTURE_DATE_REASON_PREVIEW_LIMIT = 3;
 const FUTURE_DATE_CHECK_DISPLAY_LIMIT = 3;
 // Keep the blocker list readable: show the first few full blocker lines as
@@ -134,6 +133,13 @@ function futureDatedMeasurementReasons(measurements: string[]): string[] {
   return overflow > 0
     ? [...shown, `+${overflow} more future ${dateLabel}`]
     : shown;
+}
+
+function futureDatedMeasurementSummary(measurement: string): string {
+  const instructionStart = measurement.indexOf(". Change the ");
+  return instructionStart === -1
+    ? measurement
+    : measurement.slice(0, instructionStart + 1);
 }
 
 function describeCategories(categories: TransportCategory[]): string {
@@ -303,7 +309,8 @@ export type PreflightCheckStatus =
 
 export type RemovalMeasurementDateFixTarget =
   | "productionRuns"
-  | "applications";
+  | "applications"
+  | "productionRunsAndApplications";
 
 export interface PreflightCheck {
   key:
@@ -385,18 +392,19 @@ function evidencePreflightCheck(facts: RemovalReadinessFacts) {
 function measurementDateFixTarget(
   measurements: readonly string[],
 ): RemovalMeasurementDateFixTarget | undefined {
-  if (
-    measurements.every((measurement) =>
-      measurement.startsWith("Production run "),
-    )
-  ) {
+  const hasProductionRuns = measurements.some((measurement) =>
+    measurement.startsWith("Production run "),
+  );
+  const hasApplications = measurements.some((measurement) =>
+    measurement.startsWith("Application "),
+  );
+  if (hasProductionRuns && hasApplications) {
+    return "productionRunsAndApplications";
+  }
+  if (hasProductionRuns) {
     return "productionRuns";
   }
-  if (
-    measurements.every((measurement) =>
-      measurement.startsWith("Application "),
-    )
-  ) {
+  if (hasApplications) {
     return "applications";
   }
   return undefined;
@@ -424,6 +432,7 @@ function measurementDatesCheck(facts: RemovalReadinessFacts): {
     status: "unmet",
     detail: measurements
       .slice(0, FUTURE_DATE_CHECK_DISPLAY_LIMIT)
+      .map(futureDatedMeasurementSummary)
       .join(" · "),
   };
 }

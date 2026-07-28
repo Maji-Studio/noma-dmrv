@@ -695,7 +695,9 @@ describe("future-dated measurement dates", () => {
     expect(check).toMatchObject({ status: "unmet" });
     expect(check?.detail).toContain("PR-0007");
     expect(check?.detail).toContain("APP-0003");
-    expect(check?.fixTarget).toBeUndefined();
+    expect(check?.detail).not.toContain("Change the end time");
+    expect(check?.detail).not.toContain("Change the application date");
+    expect(check?.fixTarget).toBe("productionRunsAndApplications");
   });
 
   it("targets the matching record list for a single-kind future-date blocker", () => {
