@@ -19,11 +19,7 @@
  */
 "use client";
 
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  WarningIcon,
-} from "@phosphor-icons/react/dist/ssr";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { RowActionsMenu } from "@/components/ui";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
@@ -153,12 +149,12 @@ export function StorageBinTile({
           >
             {isEmpty ? "Empty" : formatMassKg(massKg)}
           </span>
-          {needsReconciliation ? (
+          {needsReconciliation && (
             <ReconcileLink bin={bin} onReconcile={onReconcile} />
-          ) : (
-            <LastActivity bin={bin} />
           )}
         </div>
+
+        <LastActivity bin={bin} />
       </div>
     </article>
   );
@@ -191,28 +187,34 @@ function ReconcileLink({
 }
 
 /**
- * Last inventory event on the bin. The arrow carries direction; neither
- * direction is a status, so neither takes a status colour — material arriving
- * and material leaving are both an ordinary day.
+ * When the bin last moved. Named in words rather than marked with a direction
+ * arrow: a bare glyph beside a date asks the reader to learn a legend, and the
+ * direction is the least useful part of it on a board scanned for what is
+ * moving. The record itself, including direction and mass, is on the tooltip
+ * and in full in the detail sheet.
  */
 function LastActivity({ bin }: { bin: StorageLocationWithFacility }) {
   const { lastActivity } = bin;
-  if (!lastActivity) return null;
+
+  if (!lastActivity) {
+    // Worth saying: under the board's default order this bin sorts last, and
+    // silence here would leave that unexplained.
+    return (
+      <p className="truncate body-caption text-[var(--color-text-tertiary)]">
+        No activity yet
+      </p>
+    );
+  }
 
   const sign = lastActivity.type === "in" ? "+" : "−";
   return (
-    <span
-      className="flex shrink-0 items-center gap-4 body-caption text-[var(--color-text-tertiary)]"
+    <p
+      className="truncate body-caption text-[var(--color-text-tertiary)]"
       title={`${lastActivity.label} · ${sign}${formatMassKg(
         lastActivity.massKg,
       )} · ${formatDateTime(lastActivity.date)}`}
     >
-      {lastActivity.type === "in" ? (
-        <ArrowUpIcon size={12} weight="bold" />
-      ) : (
-        <ArrowDownIcon size={12} weight="bold" />
-      )}
-      {formatDate(lastActivity.date)}
-    </span>
+      Last activity: {formatDate(lastActivity.date)}
+    </p>
   );
 }
