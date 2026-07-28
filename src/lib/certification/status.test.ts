@@ -36,11 +36,12 @@ describe("deriveRemovalStatus", () => {
     expect(s.isActionable).toBe(false);
   });
 
-  it("renders a superseded removal with the distinct superseded value", () => {
+  it("treats a retired superseded draft as not submitted and actionable", () => {
     const s = deriveRemovalStatus({ local: "superseded", lockInFlight: false });
-    expect(s.label).toBe("Superseded");
-    expect(s.value).toBe("superseded");
-    expect(s.isTerminal).toBe(true);
+    expect(s.label).toBe("Not submitted");
+    expect(s.value).toBe("draft");
+    expect(s.isTerminal).toBe(false);
+    expect(s.isActionable).toBe(true);
   });
 
   it("maps a rejected removal back to actionable", () => {
@@ -132,6 +133,22 @@ describe("deriveRemovalWorkflowStatus", () => {
     });
 
     expect(status.label).toBe("Ready to resubmit");
+  });
+
+  it("offers a fresh submit after the production gate retires a stale draft", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "superseded",
+      lockInFlight: false,
+      enrichmentStatus: "available",
+      readiness: { state: "ready", reasons: [], advisories: [] },
+    });
+
+    expect(status).toMatchObject({
+      kind: "ready",
+      value: "ready",
+      label: "Ready to submit",
+      isActionable: true,
+    });
   });
 });
 
