@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildGhgStatementReportModel,
+  canonicalJson,
   GhgStatementReportReconciliationError,
 } from "@/lib/certification/ghg-statement-report/model";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
@@ -110,6 +111,21 @@ function build() {
     narratives,
   });
 }
+
+describe("canonicalJson", () => {
+  it("orders keys by code unit rather than locale collation", () => {
+    // `"a".localeCompare("B")` is negative in most locales, but "B" (U+0042)
+    // sorts before "a" (U+0061) by code unit. Pinning this keeps
+    // `sourceFingerprint` stable across runtimes with different ICU defaults.
+    expect(canonicalJson({ a: 1, B: 2 })).toBe('{"B":2,"a":1}');
+  });
+
+  it("orders nested keys by code unit too", () => {
+    expect(canonicalJson({ outer: { a: 1, B: 2 } })).toBe(
+      '{"outer":{"B":2,"a":1}}',
+    );
+  });
+});
 
 describe("GHG Statement report model", () => {
   it("deterministically reconciles live membership and totals to frozen Removal snapshots", () => {
