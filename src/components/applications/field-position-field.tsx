@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { FormField, FormSelect, PositionPicker } from "@/components/forms";
 import type { PositionValue } from "@/components/forms";
 
@@ -48,6 +47,12 @@ export function applyFieldPositionMode(
   if (next === "derive") resetToDerived();
 }
 
+/**
+ * The mode is controlled by the owning form rather than held here: a latched
+ * copy would keep showing "derive" against the new delivery's coordinates
+ * while the form still held the previous ones, and would miss a mode that only
+ * becomes resolvable once the deliveries query settles.
+ */
 export function FieldPositionField({
   derived,
   hasDelivery,
@@ -56,7 +61,8 @@ export function FieldPositionField({
   latitudeError,
   longitudeError,
   disabled = false,
-  defaultMode = "derive",
+  mode,
+  onModeChange,
   onPositionChange,
   onDerive,
 }: {
@@ -67,12 +73,11 @@ export function FieldPositionField({
   latitudeError?: string;
   longitudeError?: string;
   disabled?: boolean;
-  defaultMode?: FieldPositionMode;
+  mode: FieldPositionMode;
+  onModeChange: (mode: FieldPositionMode) => void;
   onPositionChange: (position: PositionValue) => void;
   onDerive: () => void;
 }) {
-  const [mode, setMode] = useState<FieldPositionMode>(defaultMode);
-
   return (
     <div className="flex flex-col gap-16">
       <div className="grid grid-cols-1 gap-x-16 gap-y-20 md:grid-cols-2">
@@ -89,7 +94,7 @@ export function FieldPositionField({
             onChange={(event) =>
               applyFieldPositionMode(
                 event.target.value as FieldPositionMode,
-                setMode,
+                onModeChange,
                 onDerive,
               )
             }

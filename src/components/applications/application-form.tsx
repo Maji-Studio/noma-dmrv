@@ -15,7 +15,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 import { formatDate } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
@@ -43,6 +43,7 @@ import {
   FieldPositionField,
   resetFieldPosition,
 } from "./field-position-field";
+import type { FieldPositionMode } from "./field-position-field";
 import {
   applicationKgToTons,
   applicationTonsToKg,
@@ -232,12 +233,29 @@ export function ApplicationForm({
   const derivedPosition = selectedDelivery
     ? resolveApplicationPositionDefault({ delivery: selectedDelivery })
     : null;
-  const fieldPositionDefaultMode =
+
+  // The saved record's own delivery, not the currently selected one: the mode
+  // a stored application opens in must not flip just because the operator
+  // picked a different delivery, and it stays unresolved (so it defaults to
+  // derive) until the deliveries query settles rather than latching to manual.
+  const savedDelivery = application
+    ? deliveries.find((delivery) => delivery.id === application.deliveryId)
+    : undefined;
+  const savedDerivedPosition = savedDelivery
+    ? resolveApplicationPositionDefault({ delivery: savedDelivery })
+    : null;
+  const fieldPositionDefaultMode: FieldPositionMode =
     application &&
-    (application.gpsLatitude !== derivedPosition?.gpsLatitude ||
-      application.gpsLongitude !== derivedPosition?.gpsLongitude)
+    savedDelivery &&
+    (application.gpsLatitude !== savedDerivedPosition?.gpsLatitude ||
+      application.gpsLongitude !== savedDerivedPosition?.gpsLongitude)
       ? "manual"
       : "derive";
+  // Null until the operator picks a mode, so the resolved mode keeps tracking
+  // the record while they have expressed no preference.
+  const [pickedFieldPositionMode, setPickedFieldPositionMode] =
+    useState<FieldPositionMode | null>(null);
+  const fieldPositionMode = pickedFieldPositionMode ?? fieldPositionDefaultMode;
 
   // Prefill soil temperature from the delivery's customer-location /
   // facility default, but only while the operator hasn't touched the
@@ -268,32 +286,31 @@ export function ApplicationForm({
     });
   }, [getFieldState, isEditMode, selectedDelivery, setValue, hideSoilTemperature]);
 
-  // Prefill the field position from the delivery's destination customer
-  // location, but only while the operator hasn't touched it (pin drag and
-  // address search set the fields dirty; prefills don't). While untouched,
-  // the position always mirrors the selected delivery — including clearing
-  // a stale prefill when the new destination has no GPS.
+  // In derive mode the position always mirrors the selected delivery's
+  // destination — on an edit too, so changing the delivery cannot leave the
+  // previous coordinates in form state behind a summary showing the new ones.
+  // It also clears a stale position when the new destination has no GPS.
+  // Manual mode owns the fields outright and is never overwritten here.
+  const derivedLatitude = derivedPosition?.gpsLatitude;
+  const derivedLongitude = derivedPosition?.gpsLongitude;
   useEffect(() => {
-    if (isEditMode || !selectedDelivery) return;
-    if (
-      getFieldState("gpsLatitude").isDirty ||
-      getFieldState("gpsLongitude").isDirty
-    ) {
-      return;
-    }
+    if (fieldPositionMode !== "derive" || !selectedDelivery) return;
 
-    const positionDefault = resolveApplicationPositionDefault({
-      delivery: selectedDelivery,
-    });
-    setValue("gpsLatitude", positionDefault?.gpsLatitude, {
+    setValue("gpsLatitude", derivedLatitude, {
       shouldDirty: false,
       shouldValidate: true,
     });
-    setValue("gpsLongitude", positionDefault?.gpsLongitude, {
+    setValue("gpsLongitude", derivedLongitude, {
       shouldDirty: false,
       shouldValidate: true,
     });
-  }, [getFieldState, isEditMode, selectedDelivery, setValue]);
+  }, [
+    derivedLatitude,
+    derivedLongitude,
+    fieldPositionMode,
+    selectedDelivery,
+    setValue,
+  ]);
 
   const moisturePercent = selectedDelivery?.moistureContentPercent ?? null;
   const appliedKgNum = typeof watchedAppliedKg === "string" ? parseFloat(watchedAppliedKg) : watchedAppliedKg;
@@ -553,7 +570,8 @@ export function ApplicationForm({
           hasDelivery={!!selectedDelivery}
           latitude={gpsLatitude ?? null}
           longitude={gpsLongitude ?? null}
-          defaultMode={fieldPositionDefaultMode}
+          mode={fieldPositionMode}
+          onModeChange={setPickedFieldPositionMode}
           onPositionChange={({ lat, lng }) => {
             setValue("gpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
             setValue("gpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
