@@ -40,12 +40,12 @@ const TELEMETRY_GAP: EntityCertifyGap = {
   detail: "Production readings CSV is required to certify",
 };
 
-const APPLICATION_EVIDENCE_GAP: EntityCertifyGap = {
-  kind: "field",
+const APPLICATION_EVIDENCE_WARNING: EntityCertifyWarning = {
   key: "applicationEvidence",
   label: "Application evidence",
   fields: ["evidenceGapCount"],
-  detail: "Geotagged photos or boundary evidence required to certify",
+  detail:
+    "Application evidence is incomplete. This does not block certification.",
 };
 
 function fieldValue(
@@ -189,7 +189,7 @@ export function deriveEntityCertifyReadiness(
       !Number.isFinite(evidenceGapCount) ||
       evidenceGapCount !== 0
     ) {
-      gaps.push(APPLICATION_EVIDENCE_GAP);
+      warnings.push(APPLICATION_EVIDENCE_WARNING);
     }
   }
 

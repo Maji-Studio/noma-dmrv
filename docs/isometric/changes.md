@@ -390,3 +390,13 @@ resubmission creates a superseding version carrying the real mass. Sandbox
 removals already submitted against the 29 Jul template carry a 0 kg safety
 margin and need a deliberate resubmission. Locked drafts replay their stored
 snapshot by design.
+
+## 2026-07-29 (application evidence is advisory)
+
+- Missing geotagged photos, boundary references, and boundary logbook records
+  no longer block Removal submission.
+- Application evidence remains visible as an advisory warning for operator
+  follow-up and verification.
+- This aligns the submission gate with the pinned agricultural-soils module:
+  application evidence may be retained or supplied voluntarily, but it is not
+  required in the Certify submission payload.

@@ -833,9 +833,7 @@ describe("requiredTransportCategories", () => {
       }
       return [];
     });
-    mockedListDocuments.mockResolvedValue(
-      satisfiedVisualEvidenceDocuments("app-1"),
-    );
+    mockedListDocuments.mockResolvedValue([]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
       makeTestOrgContext(USER_ID),
@@ -844,6 +842,11 @@ describe("requiredTransportCategories", () => {
 
     expect(result.requiredTransportCategories).toEqual(["feedstock", "biochar"]);
     expect(result.entityReadinessGaps).toEqual([]);
+    expect(result.submissionWarnings).toEqual(
+      expect.arrayContaining([
+        "Application APP-1: geotagged stockpile photo. This does not block submission.",
+      ]),
+    );
     expect(result.transportCoverage.sample.aggregationWarning).toContain("tl-s1");
   });
 
