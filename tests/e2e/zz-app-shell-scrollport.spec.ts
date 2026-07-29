@@ -13,6 +13,27 @@
  * worker. Keep the sign-in count at one.
  *
  * Delete this file once the change has shipped and settled.
+ *
+ * SKIPPED 2026-07-29, and a candidate for exactly that deletion. `FACILITY`
+ * below is a hardcoded UUID that exists nowhere in this repo outside this file
+ * and its `zz-redirect-route-errors` companion — no seed, fixture or migration
+ * creates it. Every real e2e spec resolves a facility through
+ * `seededData.facility.id` instead. In CI that facility does not exist, so each
+ * route renders the select-facility empty state, and the route assertions below
+ * only measure `main` scroll geometry, which an empty page trivially satisfies.
+ * They passed for a day while rendering none of the content they claim to
+ * guard.
+ *
+ * The one assertion that touches real content is the feedstocks side sheet, and
+ * that is where this hangs: an unresolved facility renders no "New Feedstock"
+ * button, so the click waits out the 600s test timeout, twice with retry, for
+ * ~23m of red CI per run on every branch that carries the file.
+ *
+ * So this does not guard the scrollport and could not have caught the
+ * regression it was written for. The change it covered
+ * (`md:h-screen md:overflow-hidden`) has shipped on staging. If the scrollport
+ * deserves a permanent guard it needs a purpose-built spec on `seededData`, not
+ * this one.
  */
 import { test, expect } from "./fixtures/auth-fixtures";
 
@@ -76,7 +97,7 @@ async function probe(page: import("@playwright/test").Page): Promise<ScrollProbe
   });
 }
 
-test("app shell scrollport holds across routes", async ({ adminPage: page }) => {
+test.skip("app shell scrollport holds across routes", async ({ adminPage: page }) => {
   test.setTimeout(600_000);
 
   // Attribute each console error to the route that was loaded when it fired,
@@ -162,6 +183,10 @@ test("app shell scrollport holds across routes", async ({ adminPage: page }) => 
   }
 
   // ---- The mobile drawer still opens and scrolls its own nav. ----
+  // Retag first: `current` still holds the last ROUTES label, which is one of
+  // the REDIRECT_ROUTES filtered out below, so errors from here would be
+  // silently swallowed as known pre-existing ones.
+  current = "dashboard (mobile drawer)";
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/dashboard?facility=${FACILITY}`);
   await page.waitForLoadState("networkidle");
@@ -177,6 +202,7 @@ test("app shell scrollport holds across routes", async ({ adminPage: page }) => 
   await page.keyboard.press("Escape");
 
   // ---- A side sheet's own scroll container still works on desktop. ----
+  current = "feedstocks (side sheet)";
   await page.setViewportSize({ width: 1440, height: 700 });
   await page.goto(`/feedstocks?facility=${FACILITY}`);
   await page.waitForLoadState("networkidle");
