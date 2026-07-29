@@ -6,12 +6,18 @@ Symptom-to-fix lookup for issues that have actually bitten someone in this repo.
 
 ### `pnpm dev` Is Not `next dev`
 
-`pnpm dev` → `pnpm dev:docker` → `docker compose up -d && pnpm db:wait && next dev -p 3100` (see `package.json`). Consequences:
+`pnpm dev` → `pnpm dev:docker` → Docker startup, database wait, migration,
+schema verification, then `next dev -p 3100` (see `package.json`).
+Consequences:
 
 - Extra args do **not** reach Next. `pnpm dev -- -p 3101` is a no-op; the port is hard-coded in the script.
 - `pnpm dev:manual` is the bare `next dev -p 3100` escape hatch.
 - `pnpm dev:docker:init` is the reset-and-start variant (runs `db:reset` in between).
 - A local "database not running" symptom is usually a stopped container → `pnpm docker:up`, then `pnpm db:wait` (`src/lib/cli/wait-for-db.ts`).
+- A migration or schema-verification failure stops startup before the app can
+  serve pages against an incompatible database. Use the reported database
+  command to repair the schema. If local migration history is inconsistent,
+  use `pnpm db:reset` and then `pnpm db:seed`.
 
 ### Port 3100 Already in Use
 

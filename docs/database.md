@@ -43,7 +43,11 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
 | `pnpm db:push` | Push schema directly. Schema experimentation only — never after a migration has been generated. | Local only |
 | `pnpm db:reset` | `reset-db.ts` → `db:migrate` → `db:ensure-admin`. Applies the **full migration chain** (not `push`), so it is the local rehearsal of the CI/production path — a broken migration surfaces here. | Destructive |
 
-- **Fresh clone: run `pnpm dev:docker:init`.** Plain `pnpm dev` (= `docker:up && db:wait && next dev -p 3100`) does **not** prepare the schema; you get a server against an empty database. `dev:docker:init` inserts `db:reset`.
+- **Fresh clone: run `pnpm dev:docker:init`.** Plain `pnpm dev` starts Docker,
+  waits for Postgres, applies pending migrations, verifies the live schema, and
+  only then starts Next.js. It does not seed data or create the initial admin.
+  `dev:docker:init` resets the database first so the full migration chain and
+  admin bootstrap run before schema verification.
 - `pnpm dev:manual` starts Next.js alone; `pnpm docker:up` / `docker:down` / `docker:clean` manage the container; `pnpm db:seed` loads canonical seed data.
 - Connection via `DATABASE_URL`. The app pool (`src/db/index.ts`) also reads `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool.
 
