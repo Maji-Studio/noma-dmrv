@@ -31,8 +31,13 @@ export async function buildCertifyEntityReadiness(args: {
   );
 
   return {
-    gaps: [...entityReadiness.gaps, ...applicationReadiness.gaps],
-    warnings: entityReadiness.warnings,
-    issues: [...entityReadiness.issues, ...applicationReadiness.issues],
+    gaps: entityReadiness.gaps,
+    warnings: [
+      ...entityReadiness.warnings,
+      ...applicationReadiness.gaps.map(
+        (gap) => `${gap}. This does not block submission.`,
+      ),
+    ],
+    issues: entityReadiness.issues,
   };
 }
