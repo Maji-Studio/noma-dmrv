@@ -666,6 +666,13 @@
       "when": 1785233426627,
       "tag": "0094_fast_nemesis",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1785272154166,
+      "tag": "0095_thick_the_enforcers",
+      "breakpoints": true
     }
   ]
 }

@@ -12,6 +12,8 @@ import {
 // the registry; keep this in sync with any column length on the persisted
 // side if/when one is added.
 const SUMMARY_OF_CHANGES_MAX_LENGTH = 2000;
+const REPORT_NARRATIVE_MIN_LENGTH = 20;
+const REPORT_NARRATIVE_MAX_LENGTH = 4000;
 
 // Rejects shapes that pass the YYYY-MM-DD regex but aren't real calendar
 // dates (e.g. 2026-02-31, 2023-02-29) via a Date.UTC round-trip.
@@ -140,7 +142,10 @@ export type CreateRemovalWithBatchesInput = z.infer<
 >;
 
 export const submitGhgStatementDialogSchema = z.object({
-  reportUrl: httpsUrlSchema,
+  reportId: z.string().uuid().optional(),
+  externalReportUrl: httpsUrlSchema.optional(),
+  // Compatibility alias for existing callers. New UI uses externalReportUrl.
+  reportUrl: httpsUrlSchema.optional(),
   summaryOfChanges: z
     .string()
     .max(
@@ -149,6 +154,25 @@ export const submitGhgStatementDialogSchema = z.object({
     )
     .optional(),
   confirmProduction: z.boolean().optional(),
+}).check((ctx) => {
+  const value = ctx.value;
+  const externalUrl = value.externalReportUrl ?? value.reportUrl;
+  if (!value.reportId && !externalUrl) {
+    ctx.issues.push({
+      code: "custom",
+      input: value,
+      path: ["reportId"],
+      message: "Approve a generated report or enter an external report URL",
+    });
+  }
+  if (value.reportId && externalUrl) {
+    ctx.issues.push({
+      code: "custom",
+      input: value,
+      path: ["reportId"],
+      message: "Choose either the generated report or the external fallback",
+    });
+  }
 });
 
 export type SubmitGhgStatementDialogInput = z.infer<
@@ -179,6 +203,69 @@ export function buildSubmitGhgStatementDialogSchema(args: {
     }
   });
 }
+
+const reportNarrativeSchema = z
+  .string()
+  .trim()
+  .min(
+    REPORT_NARRATIVE_MIN_LENGTH,
+    `Enter at least ${REPORT_NARRATIVE_MIN_LENGTH} characters`,
+  )
+  .max(
+    REPORT_NARRATIVE_MAX_LENGTH,
+    `Keep this statement under ${REPORT_NARRATIVE_MAX_LENGTH} characters`,
+  );
+
+export const ghgStatementReportNarrativesSchema = z.object({
+  systemBoundaryAndMethodology: reportNarrativeSchema
+    .refine((value) => /\benergy\b/i.test(value), {
+      error: "Describe the reviewed energy boundary",
+    })
+    .refine((value) => /\btransport\b/i.test(value), {
+      error: "Describe the reviewed transport boundary",
+    }),
+  evidenceIndex: reportNarrativeSchema,
+  uncertaintyAndSensitivity: reportNarrativeSchema,
+  dataQualityAndExceptions: reportNarrativeSchema,
+  monitoringAndDurability: reportNarrativeSchema,
+  approvalStatement: reportNarrativeSchema,
+});
+
+/**
+ * UI fields only. `humanReviewAcknowledged` is a `boolean` with a truthiness
+ * refinement rather than `z.literal(true)` so an unchecked box is a valid form
+ * default that fails validation with a message, instead of a type error.
+ */
+export const ghgStatementReportFormSchema = z.object({
+  narratives: ghgStatementReportNarrativesSchema,
+  humanReviewAcknowledged: z.boolean().refine((value) => value, {
+    error: "Confirm that you reviewed the generated facts and narrative",
+  }),
+});
+
+export type GhgStatementReportFormData = z.infer<
+  typeof ghgStatementReportFormSchema
+>;
+
+export const prepareGhgStatementReportSchema =
+  ghgStatementReportFormSchema.extend({
+    ghgStatementId: z.uuid(),
+    preparationKey: z.uuid(),
+  });
+
+export type PrepareGhgStatementReportInput = z.infer<
+  typeof prepareGhgStatementReportSchema
+>;
+
+export const approveGhgStatementReportSchema = z.object({
+  ghgStatementId: z.string().uuid(),
+  reportId: z.string().uuid(),
+  version: z.number().int().positive(),
+});
+
+export type ApproveGhgStatementReportInput = z.infer<
+  typeof approveGhgStatementReportSchema
+>;
 
 // Period-first GHG-statement creation. Isometric creates a statement from
 // only { project_id, end_on }; the user picks the period end and the server

@@ -18,6 +18,7 @@ const PUBLIC_ROUTES = [
   "/unauthorized",
   "/api/auth",
   "/api/storage-local",
+  "/api/ghg-statement-reports",
 ];
 
 const AUTH_ROUTES = ["/login", "/forgot-password"];

@@ -40,7 +40,9 @@ import type {
   ReconcileResult,
 } from "@/data-access/certifier-ghg-statements";
 import type { CertifierRemovalRow } from "@/data-access/certifier-removals";
+import type { GhgStatementReportRow } from "@/data-access/ghg-statement-reports";
 import type { GhgStatement } from "@/lib/isometric";
+import { SafeError } from "@/lib/errors";
 
 // ---------------------------------------------------------------------------
 // Module mocks — declared before the system under test imports.
@@ -49,6 +51,15 @@ import type { GhgStatement } from "@/lib/isometric";
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-ghg-statements");
+vi.mock("@/data-access/ghg-statement-reports");
+vi.mock("@/fn/certification/ghg-statement-reports", () => ({
+  assertGhgStatementReportFresh: vi.fn(),
+  // Mints a fresh capability token and returns the link carrying it.
+  issueVerifierReportUrl: vi.fn(
+    async () =>
+      "https://app.example.com/api/ghg-statement-reports/55555555-5555-4555-8555-555555555555?token=opaque",
+  ),
+}));
 vi.mock("@/data-access/facilities", () => ({
   getFacilityById: vi.fn(),
 }));
@@ -97,6 +108,8 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
 import * as ledger from "@/data-access/certification";
 import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as ghgDA from "@/data-access/certifier-ghg-statements";
+import * as reportDA from "@/data-access/ghg-statement-reports";
+import * as reportActions from "@/fn/certification/ghg-statement-reports";
 import { makeClaimSubmissionDraftFake } from "./fixtures/fake-claim";
 import * as facilitiesDA from "@/data-access/facilities";
 import * as authServer from "@/lib/auth/server";
@@ -126,6 +139,10 @@ const REPORTING_PERIOD_END = "2026-01-31";
 const IN_WINDOW_COMPLETED_ON = "2026-01-15";
 const OUT_OF_WINDOW_COMPLETED_ON = "2026-02-15";
 const REPORT_URL = "https://example.com/report.pdf";
+const REPORT_ID = "55555555-5555-4555-8555-555555555555";
+const REPORT_DOCUMENT_ID = "66666666-6666-4666-8666-666666666666";
+const GENERATED_REPORT_URL =
+  `https://app.example.com/api/ghg-statement-reports/${REPORT_ID}?token=opaque`;
 
 // ---------------------------------------------------------------------------
 // In-memory stores. We model just the slice each orchestrator path reads
@@ -268,6 +285,13 @@ beforeEach(() => {
     makeMapping(),
   );
   vi.mocked(ledger.getSubmissionByExternalId).mockResolvedValue(null);
+  vi.mocked(reportDA.getApprovedGhgStatementReport).mockResolvedValue(null);
+  vi.mocked(reportDA.markGhgStatementReportSubmitted).mockResolvedValue(
+    undefined,
+  );
+  vi.mocked(
+    reportActions.assertGhgStatementReportFresh,
+  ).mockResolvedValue(undefined);
 
   // Statement upsert: returns the seed row; orchestrator treats it as
   // already-present.
@@ -799,5 +823,208 @@ describe("submitGhgStatementToVerifier — happy path", () => {
       submittedToVerifierAt: expect.any(String),
       reportUrl: REPORT_URL,
     });
+  });
+
+  it("submits the approved immutable report through its stable verifier URL", async () => {
+    const remoteBefore = makeRemoteStatement({ status: "DRAFT" });
+    const remoteAfter = makeRemoteStatement({
+      status: "AWAITING_VERIFICATION",
+      ghg_statement_report_url: GENERATED_REPORT_URL,
+      submitted_at: "2026-02-01T10:00:00Z",
+    });
+    vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteBefore);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
+    await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    vi.mocked(reportDA.getApprovedGhgStatementReport).mockResolvedValue({
+      id: REPORT_ID,
+      ghgStatementId: STATEMENT_ID,
+      documentId: REPORT_DOCUMENT_ID,
+      version: 1,
+      lifecycle: "approved",
+      sourceFingerprint: "a".repeat(64),
+    } as GhgStatementReportRow);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
+    vi.mocked(isometric.submitGhgStatement).mockResolvedValue(remoteAfter);
+
+    const result = await submitGhgStatementToVerifier(STATEMENT_ID, {
+      reportId: REPORT_ID,
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { remoteStatus: "AWAITING_VERIFICATION" },
+    });
+    expect(
+      reportActions.assertGhgStatementReportFresh,
+    ).toHaveBeenCalledOnce();
+    expect(isometric.submitGhgStatement).toHaveBeenCalledWith(
+      expect.any(Object),
+      EXTERNAL_STATEMENT_ID,
+      { ghg_statement_report_url: GENERATED_REPORT_URL },
+    );
+    expect(authServer.requireOrgRole).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      "admin",
+    );
+    expect(ledger.attachReportDocument).not.toHaveBeenCalled();
+    // The submitted link carries a freshly minted capability token rather than
+    // a value derivable from the report id and a global secret.
+    expect(reportActions.issueVerifierReportUrl).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      REPORT_ID,
+    );
+    expect(reportDA.markGhgStatementReportSubmitted).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      REPORT_ID,
+    );
+  });
+
+  it("does not duplicate or mark the generated report when provider submit fails", async () => {
+    const remoteBefore = makeRemoteStatement({ status: "DRAFT" });
+    vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteBefore);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
+    await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    vi.mocked(reportDA.getApprovedGhgStatementReport).mockResolvedValue({
+      id: REPORT_ID,
+      ghgStatementId: STATEMENT_ID,
+      documentId: REPORT_DOCUMENT_ID,
+      version: 1,
+      lifecycle: "approved",
+      sourceFingerprint: "a".repeat(64),
+    } as GhgStatementReportRow);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
+    vi.mocked(isometric.submitGhgStatement).mockRejectedValue(
+      new Error("network unavailable"),
+    );
+
+    const result = await submitGhgStatementToVerifier(STATEMENT_ID, {
+      reportId: REPORT_ID,
+    });
+
+    expect(result).toMatchObject({ success: false });
+    expect(ledger.attachReportDocument).not.toHaveBeenCalled();
+    expect(reportDA.markGhgStatementReportSubmitted).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale approved report before provider submission", async () => {
+    const remoteBefore = makeRemoteStatement({ status: "DRAFT" });
+    vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteBefore);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
+    await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    vi.mocked(reportDA.getApprovedGhgStatementReport).mockResolvedValue({
+      id: REPORT_ID,
+      ghgStatementId: STATEMENT_ID,
+      documentId: REPORT_DOCUMENT_ID,
+      version: 1,
+      lifecycle: "approved",
+      sourceFingerprint: "a".repeat(64),
+    } as GhgStatementReportRow);
+    vi.mocked(
+      reportActions.assertGhgStatementReportFresh,
+    ).mockRejectedValue(
+      new SafeError(
+        "The approved report is stale. Prepare and approve a new report.",
+      ),
+    );
+
+    const result = await submitGhgStatementToVerifier(STATEMENT_ID, {
+      reportId: REPORT_ID,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        "The approved report is stale. Prepare and approve a new report.",
+    });
+    expect(isometric.submitGhgStatement).not.toHaveBeenCalled();
+    expect(ledger.attachReportDocument).not.toHaveBeenCalled();
+  });
+
+  it("marks the selected report submitted when reconciliation proves provider success", async () => {
+    const remoteBefore = makeRemoteStatement({ status: "DRAFT" });
+    const remoteAfter = makeRemoteStatement({
+      status: "AWAITING_VERIFICATION",
+      ghg_statement_report_url: GENERATED_REPORT_URL,
+      submitted_at: "2026-02-01T10:00:00Z",
+    });
+    vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteBefore);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
+    await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    vi.mocked(reportDA.getApprovedGhgStatementReport).mockResolvedValue({
+      id: REPORT_ID,
+      ghgStatementId: STATEMENT_ID,
+      documentId: REPORT_DOCUMENT_ID,
+      version: 1,
+      lifecycle: "approved",
+      sourceFingerprint: "a".repeat(64),
+    } as GhgStatementReportRow);
+    vi.mocked(isometric.getGhgStatement)
+      .mockResolvedValueOnce(remoteBefore)
+      .mockResolvedValueOnce(remoteAfter);
+    vi.mocked(isometric.submitGhgStatement).mockRejectedValue(
+      new Error("response lost"),
+    );
+
+    const result = await submitGhgStatementToVerifier(STATEMENT_ID, {
+      reportId: REPORT_ID,
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { remoteStatus: "AWAITING_VERIFICATION" },
+    });
+    expect(reportDA.markGhgStatementReportSubmitted).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      REPORT_ID,
+    );
+  });
+
+  it("does not reconcile an unrelated registry change as report submission", async () => {
+    const remoteBefore = makeRemoteStatement({ status: "DRAFT" });
+    const unrelatedAfter = makeRemoteStatement({
+      status: "AWAITING_VERIFICATION",
+      ghg_statement_report_url:
+        "https://app.example.com/api/ghg-statement-reports/another?token=other",
+      submitted_at: "2026-02-01T10:00:00Z",
+    });
+    vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteBefore);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
+    await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    vi.mocked(reportDA.getApprovedGhgStatementReport).mockResolvedValue({
+      id: REPORT_ID,
+      ghgStatementId: STATEMENT_ID,
+      documentId: REPORT_DOCUMENT_ID,
+      version: 1,
+      lifecycle: "approved",
+      sourceFingerprint: "a".repeat(64),
+    } as GhgStatementReportRow);
+    vi.mocked(isometric.getGhgStatement)
+      .mockResolvedValueOnce(remoteBefore)
+      .mockResolvedValueOnce(unrelatedAfter);
+    vi.mocked(isometric.submitGhgStatement).mockRejectedValue(
+      new Error("response lost"),
+    );
+
+    const result = await submitGhgStatementToVerifier(STATEMENT_ID, {
+      reportId: REPORT_ID,
+    });
+
+    expect(result).toMatchObject({ success: false });
+    expect(reportDA.markGhgStatementReportSubmitted).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,7 @@ import {
   updateGhgStatementReportingWindow,
 } from "./certifier-ghg-statements";
 import { requireOrgScope } from "./utils";
+import { redactReportUrlSecrets } from "@/lib/certification/report-url";
 
 export async function applyGhgRemoteState(
   ctx: OrgContext,
@@ -99,7 +100,7 @@ function remoteMetadata(remote: GhgStatement): Record<string, unknown> {
     [SUBMISSION_METADATA_KEYS.remoteStatus]: remote.status,
     [SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg]:
       remote.pending_total_co2e_removed_kg,
-    reportUrl: remote.ghg_statement_report_url,
+    reportUrl: redactReportUrlSecrets(remote.ghg_statement_report_url),
     reportingPeriodStartAt: period.startOn,
     reportingPeriodEndAt: period.endOn,
     submittedToVerifierAt: remote.submitted_at,

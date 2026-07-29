@@ -23,6 +23,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import {
   useGhgStatementState,
+  useGhgStatementReports,
   useRefreshGhgStatementStatus,
 } from "@/hooks/use-certification";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
@@ -34,6 +35,7 @@ import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
+import { GhgStatementReportWorkflow } from "./ghg-statement-report-workflow";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -176,6 +178,7 @@ function DetailState({
   isProduction: boolean;
 }) {
   const query = useGhgStatementState(ghgStatementId);
+  const reportsQuery = useGhgStatementReports(ghgStatementId);
   const refreshMutation = useRefreshGhgStatementStatus();
   const toast = useToast();
   const [submitOpen, setSubmitOpen] = useState(false);
@@ -264,6 +267,11 @@ function DetailState({
 
       <SyncEventLog events={recentSyncEvents} compact />
 
+      <GhgStatementReportWorkflow
+        ghgStatementId={ghgStatementId}
+        reportsQuery={reportsQuery}
+      />
+
       <div className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
         {/* No undo/withdraw exists for a submitted statement. The supported
             path is amend-and-resubmit: edit a linked removal (open it above),
@@ -309,6 +317,13 @@ function DetailState({
         onClose={() => setSubmitOpen(false)}
         isProduction={isProduction}
         isResubmit={isResubmit}
+        approvedReportId={
+          reportsQuery.data?.find(
+            (report) =>
+              report.lifecycle === "approved" ||
+              report.lifecycle === "submitted",
+          )?.id ?? null
+        }
       />
     </div>
   );

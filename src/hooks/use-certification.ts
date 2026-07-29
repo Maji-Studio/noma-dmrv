@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-query";
 import {
   createGhgStatementDraft,
+  approveGhgStatementReport,
   createRemovalWithBatchesAction,
   deleteFacilityCertifierMapping,
   loadBatchHealth,
@@ -24,6 +25,7 @@ import {
   loadFacilityCertifierMapping,
   loadFacilityCertifierSummary,
   loadGhgStatementBreakdown,
+  loadGhgStatementReports,
   loadGhgStatementsForFacility,
   loadGhgStatementState,
   loadIsometricFeedstockTypes,
@@ -38,6 +40,7 @@ import {
   loadRemovalsForFacility,
   loadSelectableBatchesForFacility,
   refreshGhgStatementStatus,
+  prepareGhgStatementReport,
   reconcileGhgStatementsFromRegistry,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
@@ -55,6 +58,8 @@ import type {
   SaveMappingInput,
   SubmitGhgStatementDialogInput,
   SubmitRemovalInput,
+  PrepareGhgStatementReportInput,
+  ApproveGhgStatementReportInput,
 } from "@/schemas/certification";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 
@@ -149,6 +154,12 @@ export const certificationKeys = {
     [
       ...certificationKeys.all,
       "ghg-statement-breakdown",
+      ghgStatementId,
+    ] as const,
+  ghgStatementReports: (ghgStatementId: string) =>
+    [
+      ...certificationKeys.all,
+      "ghg-statement-reports",
       ghgStatementId,
     ] as const,
   openRemovalsForFacility: (facilityId: string) =>
@@ -724,6 +735,50 @@ export function useGhgStatementBreakdown(
     },
     enabled: enabled && !!ghgStatementId,
     staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+export function useGhgStatementReports(
+  ghgStatementId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.ghgStatementReports(ghgStatementId),
+    queryFn: async () => {
+      const result = await loadGhgStatementReports(ghgStatementId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!ghgStatementId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+export function usePrepareGhgStatementReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: PrepareGhgStatementReportInput) => {
+      const result = await prepareGhgStatementReport(input);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+  });
+}
+
+export function useApproveGhgStatementReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ApproveGhgStatementReportInput) => {
+      const result = await approveGhgStatementReport(input);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
   });
 }
 

@@ -78,6 +78,12 @@ export {
   submitGhgStatementToVerifier,
 } from "./ghg-statements";
 export {
+  approveGhgStatementReport,
+  loadGhgStatementReports,
+  prepareGhgStatementReport,
+  type GhgStatementReportView,
+} from "./ghg-statement-reports";
+export {
   type ReconcileRegistryGhgStatementsResult,
   type RegistryGhgStatementView,
 } from "./ghg-statement-reconciliation";

@@ -884,6 +884,20 @@ export async function attachReportDocument(
 ): Promise<DocumentRow> {
   requireOrgScope(ctx);
   await assertSameOrg(ctx, certificationSubmissions, args.submissionId);
+  const [existing] = await db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.entityType, "ghgStatement"),
+        eq(documents.entityId, args.submissionId),
+        eq(documents.fileUrl, args.reportUrl),
+        eq(documents.organizationId, ctx.organizationId),
+      ),
+    )
+    .orderBy(desc(documents.createdAt))
+    .limit(1);
+  if (existing) return existing;
   const [row] = await db
     .insert(documents)
     .values({
@@ -894,7 +908,10 @@ export async function attachReportDocument(
       fileUrl: args.reportUrl,
       fileName: deriveFileName(args.reportUrl),
       description: args.description,
-      metadata: (args.metadata ?? {}) as Record<string, unknown>,
+      metadata: {
+        kind: "external_ghg_statement_report",
+        ...(args.metadata ?? {}),
+      } as Record<string, unknown>,
       createdBy: ctx.userId,
     })
     .returning();
