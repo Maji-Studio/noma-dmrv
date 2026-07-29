@@ -7,6 +7,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useState } from "react";
 import {
   FormField,
   FormInput,
@@ -28,6 +29,7 @@ interface GhgStatementSubmitDialogProps {
   onClose: () => void;
   isProduction: boolean;
   isResubmit: boolean;
+  approvedReportId: string | null;
 }
 
 export function GhgStatementSubmitDialog({
@@ -36,6 +38,7 @@ export function GhgStatementSubmitDialog({
   onClose,
   isProduction,
   isResubmit,
+  approvedReportId,
 }: GhgStatementSubmitDialogProps) {
   const mutation = useSubmitGhgStatementToVerifier();
   const toast = useToast();
@@ -43,13 +46,17 @@ export function GhgStatementSubmitDialog({
     isResubmit,
     isProduction,
   });
+  const [reportSource, setReportSource] = useState<"generated" | "external">(
+    approvedReportId ? "generated" : "external",
+  );
   // The dialog stays mounted across open/close (it's rendered unconditionally
   // by the hub), so react-hook-form and react-query mutation state would
   // persist between sessions without an explicit reset. Match the
   // create-dialog pattern: reset both via the Modal's onOpen callback so the
   // form starts blank and any prior server error is cleared every open.
   const initialValues: SubmitGhgStatementDialogInput = {
-    reportUrl: "",
+    reportId: approvedReportId ?? undefined,
+    externalReportUrl: undefined,
     summaryOfChanges: isResubmit ? "" : undefined,
     confirmProduction: false,
   };
@@ -59,6 +66,7 @@ export function GhgStatementSubmitDialog({
     reset,
     formState: { errors },
     setError,
+    setValue,
   } = useForm<SubmitGhgStatementDialogInput>({
     resolver: zodResolver(schema),
     defaultValues: initialValues,
@@ -67,6 +75,7 @@ export function GhgStatementSubmitDialog({
   const onModalOpen = () => {
     reset(initialValues);
     mutation.reset();
+    setReportSource(approvedReportId ? "generated" : "external");
   };
 
   const onSubmit = handleSubmit(async (data) => {
@@ -74,7 +83,14 @@ export function GhgStatementSubmitDialog({
       const result = await mutation.mutateAsync({
         ghgStatementId,
         input: {
-          reportUrl: data.reportUrl,
+          reportId:
+            reportSource === "generated"
+              ? approvedReportId ?? undefined
+              : undefined,
+          externalReportUrl:
+            reportSource === "external"
+              ? data.externalReportUrl
+              : undefined,
           summaryOfChanges: data.summaryOfChanges,
           confirmProduction: data.confirmProduction,
         },
@@ -106,21 +122,66 @@ export function GhgStatementSubmitDialog({
             </h2>
           </header>
 
-          <FormField
-            id="reportUrl"
-            label="Report URL"
-            helperText="Link to the published PDF report the verifier will open."
-            required
-            error={errors.reportUrl?.message}
-          >
-            <FormInput
-              id="reportUrl"
-              type="url"
-              placeholder="https://example.com/report.pdf"
-              error={!!errors.reportUrl}
-              {...register("reportUrl")}
-            />
-          </FormField>
+          <div className="flex flex-col gap-12">
+            <label className="flex items-start gap-8 border border-[var(--color-border-secondary)] p-12 body-small">
+              <input
+                type="radio"
+                name="reportSource"
+                checked={reportSource === "generated"}
+                onChange={() => {
+                  setReportSource("generated");
+                  setValue("reportId", approvedReportId ?? undefined);
+                  setValue("externalReportUrl", undefined);
+                }}
+                disabled={!approvedReportId}
+              />
+              <span>
+                <strong>Approved generated report</strong>
+                <span className="mt-2 block text-[var(--color-text-tertiary)]">
+                  {approvedReportId
+                    ? "Submit the current approved immutable report."
+                    : "Prepare and approve a report to use this option."}
+                </span>
+              </span>
+            </label>
+
+            <details className="border border-[var(--color-border-secondary)] p-12">
+              <summary className="body-small cursor-pointer">
+                Advanced: VVB or project-supplied controlled document
+              </summary>
+              <div className="mt-12 flex flex-col gap-12">
+                <label className="flex items-start gap-8 body-small">
+                  <input
+                    type="radio"
+                    name="reportSource"
+                    checked={reportSource === "external"}
+                    onChange={() => {
+                      setReportSource("external");
+                      setValue("reportId", undefined);
+                    }}
+                  />
+                  Use an external HTTPS report URL
+                </label>
+                {reportSource === "external" && (
+                  <FormField
+                    id="externalReportUrl"
+                    label="External report URL"
+                    helperText="The verifier must be able to open this controlled document."
+                    required
+                    error={errors.externalReportUrl?.message}
+                  >
+                    <FormInput
+                      id="externalReportUrl"
+                      type="url"
+                      placeholder="https://example.com/report.pdf"
+                      error={!!errors.externalReportUrl}
+                      {...register("externalReportUrl")}
+                    />
+                  </FormField>
+                )}
+              </div>
+            </details>
+          </div>
 
           {isResubmit && (
             <FormField
@@ -166,13 +227,9 @@ export function GhgStatementSubmitDialog({
             <Button
               type="submit"
               variant="primary"
-              disabled={mutation.isPending}
+              busy={mutation.isPending}
             >
-              {mutation.isPending
-                ? "Submitting…"
-                : isResubmit
-                  ? "Resubmit"
-                  : "Submit"}
+              {isResubmit ? "Resubmit" : "Submit"}
             </Button>
           </div>
         </div>

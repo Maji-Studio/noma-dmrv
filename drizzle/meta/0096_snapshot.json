@@ -1,6 +1,6 @@
 {
-  "id": "6a8a3160-1a14-4236-9228-dc98fe81fc61",
-  "prevId": "d0bdb3c4-f940-472f-8c5d-fff979d96e96",
+  "id": "b5e11e5a-2490-446b-9563-4ecc8149db35",
+  "prevId": "6a8a3160-1a14-4236-9228-dc98fe81fc61",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -105,9 +105,9 @@
           "notNull": true,
           "default": "'visual'"
         },
-        "gis_boundary_reference": {
-          "name": "gis_boundary_reference",
-          "type": "text",
+        "gis_boundary": {
+          "name": "gis_boundary",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -9454,7 +9454,8 @@
         "photo",
         "video",
         "pdf",
-        "sensor_data"
+        "sensor_data",
+        "gis_boundary"
       ]
     },
     "public.durability_option": {
