@@ -5,6 +5,8 @@ export const DEFAULT_MODELS = ["codex", "opus"];
 export const DEFAULT_PRACTICES = ["standards", "spec", "deep-correctness"];
 export const DEFAULT_TIMEOUT_MINUTES = 20;
 export const DEFAULT_CONCURRENCY = 2;
+export const DEFAULT_COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
+const SIGKILL_GRACE_MS = 5000;
 
 export function usage() {
   return `
@@ -110,13 +112,23 @@ function validateSelection(label, selected, allowed) {
   if (unknown.length > 0) {
     throw new Error(`Unknown ${label}(s): ${unknown.join(", ")}`);
   }
+  const repeated = [
+    ...new Set(
+      selected.filter((value, index) => selected.indexOf(value) !== index),
+    ),
+  ];
+  if (repeated.length > 0) {
+    throw new Error(
+      `Duplicate ${label}(s): ${repeated.join(", ")}. Each ${label} may be selected once.`,
+    );
+  }
 }
 
 export function run(command, args, options = {}) {
   const {
     cwd = process.cwd(),
     input,
-    timeoutMs,
+    timeoutMs = DEFAULT_COMMAND_TIMEOUT_MS,
     allowFailure = false,
     env = process.env,
   } = options;
@@ -130,6 +142,8 @@ export function run(command, args, options = {}) {
     const stdout = [];
     const stderr = [];
     let settled = false;
+    let timedOut = false;
+    let stdinError;
     let terminationTimer;
     let killTimer;
 
@@ -147,6 +161,18 @@ export function run(command, args, options = {}) {
     child.on("error", (error) => {
       finish(new Error(`Unable to start ${command}: ${error.message}`));
     });
+    // A child that exits before draining stdin raises EPIPE on this stream. Without a
+    // listener Node rethrows it as an uncaught exception, which skips every caller's
+    // try/catch and any worktree cleanup. EPIPE itself is not settled here: the close
+    // event carries the child's real exit status, which is the more useful error.
+    child.stdin.on("error", (error) => {
+      stdinError = error;
+      if (error.code !== "EPIPE") {
+        finish(
+          new Error(`Unable to send input to ${command}: ${error.message}`),
+        );
+      }
+    });
     child.on("close", (code, signal) => {
       const result = {
         code,
@@ -155,11 +181,15 @@ export function run(command, args, options = {}) {
         stderr: Buffer.concat(stderr).toString("utf8"),
       };
       if (code === 0 || allowFailure) {
-        finish(undefined, result);
+        finish(undefined, { ...result, timedOut });
       } else {
-        const detail =
-          result.stderr.trim() || result.stdout.trim() || `exit ${code}`;
-        finish(new Error(`${command} failed: ${detail}`));
+        const detail = timedOut
+          ? `timed out after ${Math.round(timeoutMs / 1000)}s and was terminated`
+          : result.stderr.trim() || result.stdout.trim() || `exit ${code}`;
+        const inputNote = stdinError
+          ? ` (input stream error: ${stdinError.code || stdinError.message})`
+          : "";
+        finish(new Error(`${command} failed: ${detail}${inputNote}`));
       }
     });
 
@@ -168,11 +198,49 @@ export function run(command, args, options = {}) {
 
     if (timeoutMs) {
       terminationTimer = setTimeout(() => {
+        timedOut = true;
         child.kill("SIGTERM");
-        killTimer = setTimeout(() => child.kill("SIGKILL"), 5000);
+        killTimer = setTimeout(() => child.kill("SIGKILL"), SIGKILL_GRACE_MS);
       }, timeoutMs);
     }
   });
+}
+
+export function globToRegExp(glob) {
+  let expression = "^";
+  for (let index = 0; index < glob.length; index += 1) {
+    const character = glob[index];
+    const next = glob[index + 1];
+    if (character === "*" && next === "*") {
+      // "**/" spans zero or more directories, so it must be able to consume the
+      // trailing slash. Emitting ".*" and leaving the slash literal forced at least
+      // one directory and made "src/**/*x*" unable to match "src/x.ts".
+      if (glob[index + 2] === "/") {
+        expression += "(?:.*/)?";
+        index += 2;
+      } else {
+        expression += ".*";
+        index += 1;
+      }
+    } else if (character === "*") {
+      expression += "[^/]*";
+    } else if (character === "?") {
+      expression += "[^/]";
+    } else {
+      expression += character.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+    }
+  }
+  return new RegExp(`${expression}$`);
+}
+
+export function matchesScope(path, scope) {
+  return globToRegExp(scope).test(path);
+}
+
+export function truncateForComment(body, limit, artifactDir) {
+  if (body.length <= limit) return body;
+  const notice = `\n\n_Report truncated to fit the GitHub comment limit. Full report: ${artifactDir}_\n`;
+  return `${body.slice(0, limit - notice.length)}${notice}`;
 }
 
 export async function requireCommand(command, versionArgs = ["--version"]) {
