@@ -5,6 +5,7 @@ import {
   GEOJSON_MAX_NOTE_LENGTH,
   GEOJSON_MAX_NOTES,
   GEOJSON_MAX_VERTICES,
+  GEOJSON_MIN_AREA_HECTARES,
 } from "@/config/geo";
 import { computeBoundaryStats } from "@/lib/geojson/stats";
 import type { GisBoundary } from "@/lib/geojson/types";
@@ -132,6 +133,17 @@ export function parseGisBoundary(value: unknown): GisBoundary {
         code: "custom",
         path: ["collection", "features"],
         message: `This boundary has ${stats.vertices} vertices. The maximum is ${GEOJSON_MAX_VERTICES}.`,
+      },
+    ]);
+  }
+
+  if (stats.areaHectares < GEOJSON_MIN_AREA_HECTARES) {
+    throw new z.ZodError([
+      {
+        code: "custom",
+        path: ["collection", "features"],
+        message:
+          "This boundary encloses no area. Check for a self-intersecting or collinear ring and export it again.",
       },
     ]);
   }

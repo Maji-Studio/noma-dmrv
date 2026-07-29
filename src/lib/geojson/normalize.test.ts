@@ -85,6 +85,41 @@ describe("normalizeGeoJson", () => {
     expect(boundary.stats.areaHectares).toBeGreaterThan(0);
   });
 
+  it("rejects a self-intersecting ring that encloses no area", () => {
+    const bowTie = [
+      [37.42, -3.25],
+      [37.43, -3.24],
+      [37.43, -3.25],
+      [37.42, -3.24],
+      [37.42, -3.25],
+    ];
+    const result = normalize({
+      type: "FeatureCollection",
+      features: [polygonFeature(bowTie)],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a rejection");
+    expect(result.error).toMatch(/encloses no area/);
+  });
+
+  it("rejects a collinear ring that encloses no area", () => {
+    const collinear = [
+      [37.42, -3.25],
+      [37.43, -3.25],
+      [37.44, -3.25],
+      [37.42, -3.25],
+    ];
+    const result = normalize({
+      type: "FeatureCollection",
+      features: [polygonFeature(collinear)],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a rejection");
+    expect(result.error).toMatch(/encloses no area/);
+  });
+
   it("drops source properties that are not on the allow list", () => {
     const boundary = expectBoundary(
       normalize({

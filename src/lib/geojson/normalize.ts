@@ -16,6 +16,7 @@ import {
   GEOJSON_MAX_INPUT_BYTES,
   GEOJSON_MAX_NORMALIZED_BYTES,
   GEOJSON_MAX_VERTICES,
+  GEOJSON_MIN_AREA_HECTARES,
   GEOJSON_PROPERTY_BYTE_CAP,
   GEOJSON_PROPERTY_KEY_CAP,
 } from "@/config/geo";
@@ -474,6 +475,13 @@ export function normalizeGeoJson({
   const stats = computeBoundaryStats(collection.features);
   const overCap = capError(stats.features, stats.vertices);
   if (overCap) return overCap;
+  if (stats.areaHectares < GEOJSON_MIN_AREA_HECTARES) {
+    return {
+      ok: false,
+      error:
+        "This boundary encloses no area. Check for a self-intersecting or collinear ring and export it again.",
+    };
+  }
 
   const boundary: GisBoundary = {
     version: 1,

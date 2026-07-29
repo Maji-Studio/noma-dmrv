@@ -102,6 +102,14 @@ export const GEOJSON_PROPERTY_KEY_CAP = 32;
 /** Maximum serialized property bytes retained on one feature. */
 export const GEOJSON_PROPERTY_BYTE_CAP = 8 * 1024;
 
+/**
+ * Smallest boundary area accepted, in hectares (1 m²). A collinear ring or a
+ * self-intersecting bow-tie normalizes cleanly but encloses nothing, and the
+ * evidence gate only checks that a boundary exists — so without a positive
+ * area floor a boundary with no extent would satisfy the GIS requirement.
+ */
+export const GEOJSON_MIN_AREA_HECTARES = 0.0001;
+
 /** Maximum normalization notes carried on one boundary envelope. */
 export const GEOJSON_MAX_NOTES = 32;
 
