@@ -162,6 +162,10 @@ test("app shell scrollport holds across routes", async ({ adminPage: page }) => 
   }
 
   // ---- The mobile drawer still opens and scrolls its own nav. ----
+  // Retag first: `current` still holds the last ROUTES label, which is one of
+  // the REDIRECT_ROUTES filtered out below, so errors from here would be
+  // silently swallowed as known pre-existing ones.
+  current = "dashboard (mobile drawer)";
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/dashboard?facility=${FACILITY}`);
   await page.waitForLoadState("networkidle");
@@ -177,6 +181,7 @@ test("app shell scrollport holds across routes", async ({ adminPage: page }) => 
   await page.keyboard.press("Escape");
 
   // ---- A side sheet's own scroll container still works on desktop. ----
+  current = "feedstocks (side sheet)";
   await page.setViewportSize({ width: 1440, height: 700 });
   await page.goto(`/feedstocks?facility=${FACILITY}`);
   await page.waitForLoadState("networkidle");
