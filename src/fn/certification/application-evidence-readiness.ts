@@ -42,6 +42,7 @@ export async function buildApplicationEvidenceGaps(
 
 export interface ApplicationEvidenceReadinessResult {
   gaps: string[];
+  submissionWarningGaps: string[];
   issues: BatchEntityReadinessIssue[];
 }
 
@@ -63,6 +64,7 @@ export async function buildApplicationEvidenceReadiness(
   }
 
   const gaps: string[] = [];
+  const submissionWarningGaps: string[] = [];
   const affectedRecords: BatchEntityReadinessIssue["affectedRecords"] = [];
   for (const lineage of lineages) {
     const application = lineage.application;
@@ -73,9 +75,15 @@ export async function buildApplicationEvidenceReadiness(
       applicationDocuments,
     );
     for (const requirement of missingRequirements) {
-      gaps.push(
-        applicationEvidenceGapMessage(application.code, requirement.gap),
+      const gapMessage = applicationEvidenceGapMessage(
+        application.code,
+        requirement.gap,
       );
+      gaps.push(gapMessage);
+      // Keep this application-level advisory out of Removal submission notes.
+      if (requirement.gap.kind !== "boundary-logbook") {
+        submissionWarningGaps.push(gapMessage);
+      }
     }
     if (missingRequirements.length > 0) {
       affectedRecords.push({
@@ -90,6 +98,7 @@ export async function buildApplicationEvidenceReadiness(
 
   return {
     gaps,
+    submissionWarningGaps,
     issues:
       affectedRecords.length > 0
         ? [
