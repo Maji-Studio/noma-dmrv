@@ -226,10 +226,11 @@ export function RemovalDetailSheet({
           <SubmissionNotes notes={submissionWarningNotes} />
 
           {/*
-            Supporting sources — prepare the three code-owned Noma evidence
-            roles for their intended registry Datapoint targets. This is the
-            only place the candidate set is consumed: submit is resolve-only
-            and never auto-mirrors.
+            Registry value sources prepare mapped evidence for its intended
+            registry Datapoint targets. Application evidence stays on its
+            owning Application until the Biochar Application integration can
+            submit source_ids. This is the only place the candidate set is
+            consumed: submit is resolve-only and never auto-mirrors.
             (Restores the mount lost when evidence-step.tsx was deleted in the
             2026-06-04 certify redesign.)
           */}

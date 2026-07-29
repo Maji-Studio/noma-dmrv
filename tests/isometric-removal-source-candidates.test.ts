@@ -59,6 +59,11 @@ describe("Removal source candidate discovery", () => {
               documentType: "photo",
               metadata: { evidenceRole: "spreading" },
             },
+            {
+              id: "application-gis-boundary",
+              documentType: "gis_boundary",
+              metadata: {},
+            },
           ] as never;
         }
         if (entityType === "feedstock") {
@@ -113,6 +118,11 @@ describe("Removal source candidate discovery", () => {
       "inventory",
       "inventory",
     ]);
+    expect(
+      candidates.find(
+        (candidate) => candidate.documentId === "application-gis-boundary",
+      ),
+    ).toBeUndefined();
     expect(documentsDA.listDocumentsForEntity).not.toHaveBeenCalledWith(
       orgCtx,
       "production_run",
