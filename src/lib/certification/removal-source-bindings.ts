@@ -2,6 +2,7 @@ import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import { isSequestrationBlueprintFamily } from "@/lib/isometric/transformers/measurement-sample";
+import { normalizeComponentDisplayName } from "@/lib/isometric/transformers/datapoint";
 import {
   APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
   isApplicationBoundaryLogbookEvidenceType,
@@ -46,6 +47,8 @@ export type RemovalSourceIntendedTarget =
       componentBlueprintKey:
         | "mass_distance_based_ci_emissions"
         | "mass_based_ci_emissions";
+      /** Exact component name discriminator after trimming and lowercasing. */
+      componentDisplayName?: string;
       inputKey: "mass_distance" | "mass";
       /** The facility template can omit a transport category with no component. */
       optionalInTemplate?: boolean;
@@ -93,6 +96,7 @@ const SOURCE_BINDING_RULES = {
         kind: "ordinary",
         groupKey: "miscellaneous",
         componentBlueprintKey: "mass_based_ci_emissions",
+        componentDisplayName: "Safety margin",
         inputKey: "mass",
         optionalInTemplate: true,
       },
@@ -295,12 +299,16 @@ const LEGACY_SEQUESTRATION_BLUEPRINT_KEY =
 
 function matchesIntendedComponent(
   blueprintKey: string,
+  componentDisplayName: string | undefined,
   target: RemovalSourceIntendedTarget,
 ): boolean {
   return target.kind === "sequestration"
     ? blueprintKey === LEGACY_SEQUESTRATION_BLUEPRINT_KEY ||
         isSequestrationBlueprintFamily(blueprintKey)
-    : blueprintKey === target.componentBlueprintKey;
+    : blueprintKey === target.componentBlueprintKey &&
+        (target.componentDisplayName === undefined ||
+          normalizeComponentDisplayName(componentDisplayName) ===
+            normalizeComponentDisplayName(target.componentDisplayName));
 }
 
 /**
@@ -324,7 +332,11 @@ export function buildRemovalSourceBindingPlan(args: {
           .flatMap((group) => group.components)
           .filter(
             (component) =>
-              matchesIntendedComponent(component.blueprint_key, target) &&
+              matchesIntendedComponent(
+                component.blueprint_key,
+                component.display_name,
+                target,
+              ) &&
               component.inputs.some(
                 (input) => input.input_key === target.inputKey,
               ),
