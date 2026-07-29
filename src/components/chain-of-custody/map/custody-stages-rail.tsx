@@ -432,7 +432,6 @@ function LegSubRow({
         <Link
           href={leg.outerHref}
           aria-label={`Open ${leg.outerCode ?? "record"}`}
-          onClick={(event) => event.stopPropagation()}
           className="flex shrink-0 items-center px-12 text-[var(--clr-dark-purple-30)] transition-colors hover:bg-[var(--clr-dark-purple-1)] hover:text-[var(--clr-dark-purple)]"
         >
           <ArrowUpRightIcon size={LINK_ICON_PX} weight="bold" aria-hidden="true" />

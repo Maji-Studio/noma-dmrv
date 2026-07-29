@@ -152,7 +152,9 @@ export function legAnchorNodeId(
     return leg.outerNodeId;
   }
   if (leg.kind === "inbound") {
-    const feedstock = geo.nodes.find((node) => node.entityId === leg.entityId);
+    const feedstock = geo.nodes.find(
+      (node) => node.kind === "feedstock" && node.entityId === leg.entityId
+    );
     if (feedstock) return feedstock.id;
   } else {
     const product = geo.nodes.find(

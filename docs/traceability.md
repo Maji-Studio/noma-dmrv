@@ -129,8 +129,9 @@ The map view (both anchors) renders the Carbon Transit panel. The DAG is the
   application out — on a dashed thread, transport legs as sub-rows, a "Not on
   the map" cluster for anything unplottable) with the map, and docks a clicked
   record's details over the map's left edge (`record-detail-panel.tsx`, closed
-  only by its own X). `view="split"` is the compact half beside the DAG and
-  keeps the legend plus the collapsed not-geolocated chip box.
+  by its own X or a basemap click, never by re-clicking the rail row — the row
+  is a selection, not a toggle). `view="split"` is the compact half beside the
+  DAG and keeps the legend plus the collapsed not-geolocated chip box.
 - **Geo payload** — `chain-of-custody-geo.ts` reuses the same lineage resolution;
   node position source falls back `own` GPS → inbound-leg origin (feedstocks) →
   facility-inherited → none.
