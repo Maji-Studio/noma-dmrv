@@ -2,9 +2,14 @@
 
 /**
  * Carbon Transit panel — "Geography: carbon in transit". Owns the geo data
- * fetch, route-geometry fetch, and the React overlays (legend, rails, warning
- * banner, empty state); the MapLibre half is dynamically imported so
- * maplibre-gl stays out of the route bundle.
+ * fetch, route-geometry fetch, and the React overlays (stage rail, legend,
+ * rails, warning banner, empty state, docked record panel); the MapLibre half
+ * is dynamically imported so maplibre-gl stays out of the route bundle.
+ *
+ * Two layouts off one fetch: `view="map"` is the full surface — the custody
+ * stages rail beside the map, with a record's details docking over the map's
+ * left edge; `view="split"` is the compact half beside the DAG, which keeps the
+ * legend and the collapsed not-geolocated chip box.
  *
  * Graceful degradation (plan decision 5): no NEXT_PUBLIC_MAPTILER_KEY → the
  * map still runs on a blank style over a tinted field (markers/legs/chips
@@ -15,10 +20,6 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
-import type {
-  ChainGeoLeg,
-  ChainOfCustodyGeoData,
-} from "@/data-access/chain-of-custody-geo";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { ROUTE_GEOMETRY_MAX_LEGS } from "@/config/geo";
 import {
@@ -27,16 +28,18 @@ import {
 } from "@/hooks/use-chain-of-custody";
 import { useRouteGeometries } from "@/hooks/use-geo";
 import { LINEAGE_NODE_STYLES } from "../chain-constants";
+import type { ChainNodeSheetNode } from "../chain-node-sheet";
 import { buildLineageNodes } from "../use-chain-graph";
 import type { PopupContentByNodeId } from "./carbon-transit-map";
+import { CustodyStagesRail } from "./custody-stages-rail";
+import { RecordDetailPanel } from "./record-detail-panel";
 import {
   MapWarningBanner,
   NotGeolocatedChips,
-  TransportLegsRail,
   ViewerEmptyState,
   ViewerLegend,
 } from "./viewer-rails";
-import { resolveLegEndpoints } from "./viewer-utils";
+import { legAnchorNodeId, resolveLegEndpoints } from "./viewer-utils";
 
 // maplibre-gl is ~250 kB gzipped — fetch it only when the map view renders.
 const CarbonTransitMap = dynamic(() => import("./carbon-transit-map"), {
@@ -52,6 +55,17 @@ const CarbonTransitMap = dynamic(() => import("./carbon-transit-map"), {
     </div>
   ),
 });
+
+/**
+ * Map controls (zoom / fit / satellite), pushed out of the top-left corner the
+ * docked record panel owns in map view. `bottom-32` clears the maplibre
+ * attribution strip.
+ */
+const MAP_VIEW_CONTROLS_CLASS = "left-auto top-auto right-16 bottom-32";
+
+/** The panel's outer frame — the same box in both layouts. */
+const PANEL_FRAME_CLASS =
+  "h-full overflow-hidden border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]";
 
 /** Which anchor the panel plots: a single application or a batch roll-up. */
 export type ChainGeoSource =
@@ -78,6 +92,17 @@ export interface CarbonTransitPanelProps {
   onNodeSelect: (nodeId: string) => void;
   /** Clear the shared focus (hub click / basemap click). */
   onClearSelection: () => void;
+  /**
+   * Map view only: a stage-rail row click focuses the sub-chain AND opens the
+   * record in the docked detail panel. Absent = rows fall back to onNodeSelect.
+   */
+  onNodeDetails?: (nodeId: string) => void;
+  /** Map view only: the docked panel's payload; null = closed (page-owned). */
+  detailNode?: ChainNodeSheetNode | null;
+  /** Map view only: closes the docked panel and releases the shared focus. */
+  onDetailClose?: () => void;
+  /** Map view only: "Trace rollback" — drills into the member application. */
+  onDetailTrace?: (nodeId: string) => void;
 }
 
 function buildPopupContent(
@@ -109,24 +134,6 @@ function buildPopupContent(
   return content;
 }
 
-/** Marker the rail row should highlight: the leg's chain-side anchor node. */
-function legAnchorNodeId(geo: ChainOfCustodyGeoData, leg: ChainGeoLeg): string {
-  if (leg.kind === "inbound") {
-    const feedstock = geo.nodes.find((node) => node.entityId === leg.entityId);
-    if (feedstock) return feedstock.id;
-  } else {
-    // Single-application chain: anchor outbound on the application. A batch
-    // roll-up has N applications, so anchor on the leg's own product instead.
-    const applications = geo.nodes.filter((node) => node.kind === "application");
-    if (applications.length === 1) return applications[0].id;
-    const product = geo.nodes.find(
-      (node) => node.kind === "biocharProduct" && node.entityId === leg.entityId
-    );
-    if (product) return product.id;
-  }
-  return `facility:${geo.facility.id}`;
-}
-
 export function CarbonTransitPanel({
   source,
   lineages,
@@ -135,6 +142,10 @@ export function CarbonTransitPanel({
   focusNodeIds,
   onNodeSelect,
   onClearSelection,
+  onNodeDetails,
+  detailNode,
+  onDetailClose,
+  onDetailTrace,
 }: CarbonTransitPanelProps) {
   // Transient hover isolation, shared between the map (line hover) and the rail
   // (dropdown-row hover): whichever sets it, both surfaces ghost back the rest.
@@ -219,49 +230,93 @@ export function CarbonTransitPanel({
       ? { nodeIds: focusNodeIds, legIds: focusLegIds }
       : null;
 
+  if (!anythingPlotted) {
+    return (
+      <div
+        className={`relative ${PANEL_FRAME_CLASS}`}
+        data-testid="carbon-viewer-panel"
+      >
+        <ViewerEmptyState message="No record in this chain carries GPS coordinates yet. Set a position on the facility, suppliers, or application to plot it here." />
+      </div>
+    );
+  }
+
+  // Keyless mode degrades inside the map: tinted field, markers still plotted,
+  // a visible "basemap unavailable" note.
+  const mapElement = (
+    <CarbonTransitMap
+      geo={geo}
+      routeGeometries={routeGeometries}
+      popupContent={popupContent}
+      // Neither layout overlays the bottom of the map any more, so the fit
+      // never has to reserve room for a strip.
+      railVisible={false}
+      highlight={highlight}
+      focus={mapFocus}
+      hoverLegId={hoverLegId}
+      onMarkerClick={onNodeSelect}
+      onLegHover={setHoverLegId}
+      onClear={onClearSelection}
+      controlsClassName={view === "map" ? MAP_VIEW_CONTROLS_CLASS : undefined}
+    />
+  );
+
+  if (view === "map") {
+    // A rail row goes one step further than a marker click: it opens the record.
+    const openNode = onNodeDetails ?? onNodeSelect;
+    // Extra context for the docked record panel: the leg this record anchors
+    // (so the panel can draw the From→To thread and the transport numbers) and
+    // its position-resolved geo node. Both are absent for records off the
+    // transport path, and the panel simply drops those sections.
+    const detailLeg =
+      geo.legs.find((leg) => legAnchorNodeId(geo, leg) === detailNode?.id) ?? null;
+    const detailGeoNode =
+      geo.nodes.find((node) => node.id === detailNode?.id) ?? null;
+
+    return (
+      <div
+        className={`flex ${PANEL_FRAME_CLASS}`}
+        data-testid="carbon-viewer-panel"
+      >
+        {/* Keyed on the plotted source: a batch/application change remounts the
+            rail, collapsing both sides and returning the scroll to the top,
+            which matches the map refitting to the new chain. */}
+        <CustodyStagesRail
+          key={sourceKey}
+          geo={geo}
+          focusNodeIds={focusNodeIds}
+          focusLegIds={focusLegIds}
+          hoverLegId={hoverLegId}
+          onHoverLeg={setHoverLegId}
+          onSelectNode={openNode}
+        />
+        <div className="relative min-w-0 flex-1">
+          {mapElement}
+          <MapWarningBanner warnings={geo.warnings} />
+          {detailNode && onDetailClose ? (
+            <RecordDetailPanel
+              node={detailNode}
+              onClose={onDetailClose}
+              onTrace={onDetailTrace}
+              leg={detailLeg}
+              geoNode={detailGeoNode}
+              facilityName={geo.facility.code}
+            />
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="relative h-full overflow-hidden border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]"
+      className={`relative ${PANEL_FRAME_CLASS}`}
       data-testid="carbon-viewer-panel"
     >
-      {!anythingPlotted ? (
-        <ViewerEmptyState message="No record in this chain carries GPS coordinates yet. Set a position on the facility, suppliers, or application to plot it here." />
-      ) : (
-        <>
-          {/* Keyless mode degrades inside the map: tinted field, markers
-              still plotted, a visible "basemap unavailable" note. */}
-          <CarbonTransitMap
-            geo={geo}
-            routeGeometries={routeGeometries}
-            popupContent={popupContent}
-            railVisible={view === "map"}
-            highlight={highlight}
-            focus={mapFocus}
-            hoverLegId={hoverLegId}
-            onMarkerClick={onNodeSelect}
-            onLegHover={setHoverLegId}
-            onClear={onClearSelection}
-          />
-
-          <MapWarningBanner warnings={geo.warnings} />
-          <ViewerLegend />
-
-          {view === "map" ? (
-            <div className="absolute bottom-16 left-16 right-16 z-10">
-              <TransportLegsRail
-                legs={geo.legs}
-                facility={{ code: geo.facility.code, name: geo.facility.name }}
-                focusLegIds={focusLegIds}
-                onFocusLeg={(leg) => onNodeSelect(legAnchorNodeId(geo, leg))}
-                onClearFocus={onClearSelection}
-                onHoverLeg={setHoverLegId}
-              />
-            </div>
-          ) : (
-            <NotGeolocatedChips nodes={ungeolocated} onSelectNode={onNodeSelect} />
-          )}
-        </>
-      )}
+      {mapElement}
+      <MapWarningBanner warnings={geo.warnings} />
+      <ViewerLegend />
+      <NotGeolocatedChips nodes={ungeolocated} onSelectNode={onNodeSelect} />
     </div>
   );
 }

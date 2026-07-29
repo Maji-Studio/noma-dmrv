@@ -121,6 +121,13 @@ token and contrast rules are owned by [docs/design-system.md](design-system.md).
 The map view (both anchors) renders the Carbon Transit panel. The DAG is the
 *logical lineage* tool; the MapLibre map is the *geography* tool.
 
+- **Two layouts, one fetch** — `view="map"` pairs the custody stages rail
+  (`custody-stages-rail.tsx`: three milestones — feedstock in / pyrolysis /
+  application out — on a dashed thread, transport legs as sub-rows, a "Not on
+  the map" cluster for anything unplottable) with the map, and docks a clicked
+  record's details over the map's left edge (`record-detail-panel.tsx`, closed
+  only by its own X). `view="split"` is the compact half beside the DAG and
+  keeps the legend plus the collapsed not-geolocated chip box.
 - **Geo payload** — `chain-of-custody-geo.ts` reuses the same lineage resolution;
   node position source falls back `own` GPS → inbound-leg origin (feedstocks) →
   facility-inherited → none.

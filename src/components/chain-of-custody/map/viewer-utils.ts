@@ -134,6 +134,31 @@ export function chipAnchor(
   return coordinates[index];
 }
 
+/**
+ * Marker a leg resolves to: its chain-side anchor node. Rail rows, the stage
+ * tracker's sub-rows and the docked record panel all key off this, so it lives
+ * here rather than in any one of them.
+ */
+export function legAnchorNodeId(
+  geo: ChainOfCustodyGeoData,
+  leg: ChainGeoLeg
+): string {
+  if (leg.kind === "inbound") {
+    const feedstock = geo.nodes.find((node) => node.entityId === leg.entityId);
+    if (feedstock) return feedstock.id;
+  } else {
+    // Single-application chain: anchor outbound on the application. A batch
+    // roll-up has N applications, so anchor on the leg's own product instead.
+    const applications = geo.nodes.filter((node) => node.kind === "application");
+    if (applications.length === 1) return applications[0].id;
+    const product = geo.nodes.find(
+      (node) => node.kind === "biocharProduct" && node.entityId === leg.entityId
+    );
+    if (product) return product.id;
+  }
+  return `facility:${geo.facility.id}`;
+}
+
 /** Total stored distance across legs (the rail header figure), km. */
 export function totalLegDistanceKm(legs: ChainGeoLeg[]): number {
   return Math.round(legs.reduce((sum, leg) => sum + leg.distanceKm, 0) * 10) / 10;

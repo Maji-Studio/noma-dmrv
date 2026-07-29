@@ -50,10 +50,6 @@ import { ChainEdge } from "./chain-edge";
 import { ChainNode, type ChainNodeData } from "./chain-node";
 import { ChainNodeSheet, type ChainNodeSheetNode } from "./chain-node-sheet";
 import { CarbonTransitPanel } from "./map";
-// PROTOTYPE — map-view + header rework studies (?variant= and ?header=
-// switchers, dev only). The full map view and the header render through these
-// wrappers; split view keeps the real panel.
-import { PrototypeMapView } from "./map/map-prototype/prototype-map-view";
 import { type RunPickerOption } from "./run-picker";
 import { BatchSankey } from "./sankey";
 import { ApplicationTrail } from "./trail";
@@ -332,9 +328,9 @@ export function TraceabilityPage() {
     setSheetNode(toSheetNode(node));
   };
 
-  // PROTOTYPE (map variant D): the same detail payload rendered as a popover
-  // INSIDE the map pane instead of the global slide-over. Closing it releases
-  // the shared focus. Delete with map-prototype/.
+  // Map view: the same detail payload, docked INSIDE the map pane instead of
+  // the global slide-over. Closing it releases the shared focus, and any
+  // context change (batch, run, drill-down, back) clears it.
   const [mapDetailNode, setMapDetailNode] = useState<ChainNodeSheetNode | null>(
     null
   );
@@ -537,9 +533,12 @@ export function TraceabilityPage() {
     }
   };
 
-  // PROTOTYPE (map variant D): a rail row click focuses the sub-chain on the
-  // map (no toggle-off — the popover's close is the way back) and shows the
-  // record's details in the map-pane popover. Delete with map-prototype/.
+  /**
+   * Stage-rail row click: focus the sub-chain on the map AND open the record in
+   * the docked detail panel. Deliberately NOT a toggle — re-clicking the active
+   * row keeps it selected, because the panel's close button is the one way back
+   * (the rail carries no "Clear focus" affordance).
+   */
   const openMapNodeDetails = (nodeId: string) => {
     setSelection((current) => ({
       nodeId,
@@ -550,10 +549,12 @@ export function TraceabilityPage() {
     );
     setMapDetailNode(graphNode ? toSheetNode(graphNode) : null);
   };
+  /** The panel's close is the dismissal: it also releases the shared focus. */
   const closeMapDetail = () => {
     setMapDetailNode(null);
     clearSelection();
   };
+  /** Panel "Trace rollback" — drill the batch into the member's lineage. */
   const traceFromMapDetail = (nodeId: string) => {
     setMapDetailNode(null);
     traceFromSheet(nodeId);
@@ -600,7 +601,7 @@ export function TraceabilityPage() {
     }
     if (applicationView === "map") {
       return (
-        <PrototypeMapView
+        <CarbonTransitPanel
           source={{ kind: "application", id: selectedApplicationId }}
           lineages={chainData ? [chainData] : undefined}
           view="map"
@@ -692,7 +693,7 @@ export function TraceabilityPage() {
     }
     if (batchView === "map") {
       return (
-        <PrototypeMapView
+        <CarbonTransitPanel
           source={{ kind: "creditBatch", id: selectedBatchId }}
           lineages={batchLineages}
           view="map"

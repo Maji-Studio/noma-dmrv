@@ -119,6 +119,11 @@ export interface CarbonTransitMapProps {
   onLegHover?: (legId: string | null) => void;
   /** Clear the shared focus (basemap click). */
   onClear?: () => void;
+  /**
+   * Reposition the zoom/fit/satellite cluster (default top-left) so a docked
+   * overlay can own that corner — the map view's record panel does.
+   */
+  controlsClassName?: string;
 }
 
 interface PlottedNode {
@@ -230,6 +235,7 @@ export default function CarbonTransitMap({
   onMarkerClick,
   onLegHover,
   onClear,
+  controlsClassName,
 }: CarbonTransitMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -701,6 +707,7 @@ export default function CarbonTransitMap({
         onFit={() => fitToMarkers(true)}
         satOn={satOn}
         onToggleSat={toggleSat}
+        className={controlsClassName}
       />
     </div>
   );

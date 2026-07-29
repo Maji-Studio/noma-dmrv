@@ -2,7 +2,7 @@
  * Carbon Viewer E2E (hermetic) — map-integration Phase 2.
  *
  * Covers the traceability view segment (Lineage / Map / Split), the
- * geography panel's rails (transport legs, not-geolocated), the split-view
+ * geography panel's rails (custody stages, not-geolocated), the split-view
  * cross-linking into the DAG, and the nothing-to-plot empty state.
  *
  * Hermetic by construction: every assertion targets React overlays and URL
@@ -267,7 +267,7 @@ test.describe("Carbon Viewer (traceability geography)", () => {
     await expect(page.getByTestId("carbon-viewer-panel")).toHaveCount(0);
   });
 
-  test("map view lists transport legs with provenance-backed distances and ungeolocated records", async ({
+  test("map view tracks the custody stages with provenance-backed leg distances", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -282,18 +282,16 @@ test.describe("Carbon Viewer (traceability geography)", () => {
       })
     );
 
-    const legsRail = page.getByTestId("carbon-viewer-legs-rail");
-    await expect(legsRail).toBeVisible({ timeout: 15000 });
-    // Redesigned rail (2026-03): consolidated Feedstock → hub → Application
-    // areas, each transport-leg pill carrying its distance (no aggregate total).
-    await expect(legsRail).toContainText("Feedstock");
-    await expect(legsRail).toContainText("Application");
-    await expect(legsRail).toContainText(`${INBOUND_DISTANCE_KM} km`);
-    await expect(legsRail).toContainText(`${OUTBOUND_RAIL_DISTANCE_KM} km`);
-
-    await expect(page.getByTestId("carbon-viewer-legend")).toContainText(
-      "Facility · pyrolysis hub"
-    );
+    const stageRail = page.getByTestId("carbon-viewer-stage-rail");
+    await expect(stageRail).toBeVisible({ timeout: 15000 });
+    // Stage tracker (2026-07): three milestones on one thread, each side's legs
+    // as sub-rows carrying their own distance (no aggregate total).
+    await expect(stageRail).toContainText("Custody stages");
+    await expect(stageRail).toContainText("Feedstock in");
+    await expect(stageRail).toContainText("Pyrolysis");
+    await expect(stageRail).toContainText("Application out");
+    await expect(stageRail).toContainText(`${INBOUND_DISTANCE_KM} km`);
+    await expect(stageRail).toContainText(`${OUTBOUND_RAIL_DISTANCE_KM} km`);
 
     // Basemap or its graceful no-key fallback — hermetic either way.
     await expect(
@@ -319,6 +317,12 @@ test.describe("Carbon Viewer (traceability geography)", () => {
       })
     );
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
+
+    // The legend rides the split half only — the map view's stage rail names
+    // each milestone in words instead.
+    await expect(page.getByTestId("carbon-viewer-legend")).toContainText(
+      "Facility · pyrolysis hub"
+    );
 
     const chips = page.getByTestId("carbon-viewer-ungeo-chips");
     await expect(chips).toBeVisible({ timeout: 15000 });
@@ -377,6 +381,6 @@ test.describe("Carbon Viewer (traceability geography)", () => {
     const empty = page.getByTestId("carbon-viewer-empty");
     await expect(empty).toBeVisible({ timeout: 15000 });
     await expect(empty).toContainText("Nothing to plot.");
-    await expect(page.getByTestId("carbon-viewer-legs-rail")).toHaveCount(0);
+    await expect(page.getByTestId("carbon-viewer-stage-rail")).toHaveCount(0);
   });
 });
