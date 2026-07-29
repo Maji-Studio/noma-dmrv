@@ -50,7 +50,10 @@ export const TEST_GIS_BOUNDARY: GisBoundary = {
   stats: {
     features: 1,
     vertices: 5,
-    areaHectares: 123.4,
+    // Persisting a boundary recomputes stats from the geometry rather than
+    // trusting the supplied values, so this must be turf's area for the
+    // polygon above or the create/update round-trip assertions fail.
+    areaHectares: 123.44521035075039,
     bbox: [37.42, -3.25, 37.43, -3.24],
     center: [37.425, -3.245],
   },

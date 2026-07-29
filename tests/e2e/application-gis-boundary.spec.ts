@@ -158,8 +158,11 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   const applicationRow = page.locator("table tbody tr[role='button']").first();
   await applicationRow.click();
   await waitForSideSheet(page);
+  // The saved panel prints the file name twice: once as the reference summary's
+  // Source, once as the retained gis_boundary document in the evidence list.
+  // Take the summary (first in DOM order) so the assertion stays unambiguous.
   await expect(
-    page.getByText(FIRST_BOUNDARY_FILE, { exact: true }),
+    page.getByText(FIRST_BOUNDARY_FILE, { exact: true }).first(),
   ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
   await expect(page.getByText(SUMMARY_AREAS)).toBeVisible();
 
