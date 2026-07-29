@@ -125,39 +125,6 @@ function uniqueLabels(values: string[]): string {
 }
 
 /**
- * Compiler blockers that an unmet checklist row already states in operator
- * language, keyed by the check that restates them. Matched on a stable fragment
- * because the two sides are worded independently: `readiness.ts` says "No
- * supporting evidence file is available" where `removal-submission-build.ts`
- * says "Removal submission requires at least one supporting evidence file."
- *
- * Nothing else belongs here. The compiler also emits independent blockers — a
- * template/durability tier mismatch, an environment that cannot post durability
- * measurement samples — that no check covers. Hiding those behind an unrelated
- * unmet check would make the operator fix one item, recompile, and only then
- * discover the next.
- */
-const CHECK_RESTATED_BLOCKERS: Partial<
-  Record<RemovalRequirementCheck["key"], RegExp>
-> = {
-  evidence: /at least one supporting evidence file/i,
-};
-
-function blockersNotRestatedByChecks(
-  blockers: string[],
-  checks: RemovalRequirementCheck[],
-): string[] {
-  const restated = checks
-    .filter((check) => check.status === "unmet")
-    .map((check) => CHECK_RESTATED_BLOCKERS[check.key])
-    .filter((pattern) => pattern !== undefined);
-  if (restated.length === 0) return blockers;
-  return blockers.filter(
-    (blocker) => !restated.some((pattern) => pattern.test(blocker)),
-  );
-}
-
-/**
  * The outbound reporting window: earliest production-run start through latest
  * application date, exactly as `removal-submission-build.ts` sends it. The
  * credit batches' own configured bounds are a different range, so showing them
@@ -219,8 +186,7 @@ export function buildSubmissionFacts({
 
   // Checks outrank compiler blockers in the verdict line: they name the record
   // and link to the fix, where a blocker string is the same fault in compiler
-  // words. Blockers no check restates still render below (see
-  // `blockersNotRestatedByChecks`).
+  // words. Independent compiler blockers still render below.
   if (isCompilationLoading) {
     state = "loading";
     headline = "Preparing the submission";
@@ -296,7 +262,7 @@ export function buildSubmissionFacts({
     state,
     headline,
     detail,
-    blockers: blockersNotRestatedByChecks(panelBlockers, checks),
+    blockers: panelBlockers,
     // The compiler and the context can reach the same advisory independently.
     warnings: [
       ...new Set([...(compilation?.warnings ?? []), ...ctx.submissionWarnings]),

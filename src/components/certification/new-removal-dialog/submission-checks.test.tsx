@@ -134,8 +134,8 @@ describe("SubmissionChecks", () => {
           }),
           {
             key: "evidence",
-            label: "Supporting evidence linked",
-            requirementLabel: "Supporting evidence linked",
+            label: "Registry value sources linked",
+            requirementLabel: "Registry value sources linked",
             status: "warning",
             detail: "2 files will upload on submit",
           },
@@ -145,7 +145,7 @@ describe("SubmissionChecks", () => {
     );
 
     expect(html).toContain("8 checks passed");
-    expect(html).not.toContain("Supporting evidence linked");
+    expect(html).not.toContain("Registry value sources linked");
     expect(html).not.toContain("2 files will upload on submit");
   });
 });

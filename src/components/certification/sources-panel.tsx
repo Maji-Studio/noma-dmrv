@@ -40,12 +40,12 @@ export function SourcesPanel({ removalId, isEditable }: SourcesPanelProps) {
     <Section>
       <div className="flex flex-col gap-12">
         <header className="flex items-center justify-between gap-12">
-          <h3 className="title-chapter-title">Supporting sources</h3>
+          <h3 className="title-chapter-title">Registry value sources</h3>
           <PanelCounter removalId={removalId} isEditable={isEditable} />
         </header>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Files linked to this Removal are mirrored automatically when you
-          submit. Isometric verifies them afterward.
+          Files that support registry values are mirrored automatically when
+          you submit. GIS boundaries and photos remain on the Application.
         </p>
         <PanelBody removalId={removalId} isEditable={isEditable} />
       </div>
@@ -83,8 +83,8 @@ function PanelBody({
   if (!removalId) {
     return (
       <p className="body-small text-[var(--color-text-tertiary)]">
-        A Removal will be created on first submit. Its supporting files will
-        be mirrored automatically.
+        A Removal will be created on first submit. Its registry value sources
+        will be mirrored automatically.
       </p>
     );
   }
@@ -115,7 +115,8 @@ function PanelBodyForRemoval({
   if (query.isError || !query.data) {
     return (
       <p className="body-small text-[var(--clr-red)]">
-        Supporting sources could not be loaded. Refresh the page and try again.
+        Registry value sources could not be loaded. Refresh the page and try
+        again.
       </p>
     );
   }
@@ -131,8 +132,8 @@ function PanelBodyForRemoval({
     return (
       <EmptyState
         icon={<FileIcon size={32} />}
-        title="No mapped evidence files found"
-        description="Add an Inventory application document, feedstock bill of lading, or delivery bill of lading to this Removal's lineage."
+        title="No registry value sources found"
+        description="Add a logbook or bill of lading when it supports a registry mass or transport value. GIS boundaries remain on the Application and are not attached to those values."
         padding="sm"
       />
     );

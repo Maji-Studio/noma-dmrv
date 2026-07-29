@@ -107,9 +107,9 @@ export const CERT_REQUIREMENT_META: Record<
       "The facility's default Removal template defines the inputs and transport categories the registry expects. Every referenced component must be available before a Removal can be assembled.",
   },
   evidence: {
-    requirementLabel: "Supporting evidence linked",
+    requirementLabel: "Registry value sources linked",
     whyDetail:
-      "Files attached to the three supported evidence roles are sent to the registry automatically when you submit. Noma then verifies that each file reached the correct registry field.",
+      "Registry value sources are sent automatically when you submit. Noma then verifies that each source reached the correct registry field.",
   },
   durability: {
     requirementLabel: "Sampling & durability eligibility",

@@ -35,7 +35,6 @@ export function toRemovalReadinessFacts(
     futureDatedMeasurements: ctx.futureDatedMeasurements ?? [],
     supportingDocumentCount: ctx.supportingDocuments.total,
     mirroredDocumentCount: ctx.supportingDocuments.mirrored,
-    sourceBindingRequired: ctx.removalId !== null,
     requiredTransport: ctx.requiredTransportCategories.map((category) => {
       const bucket = ctx.transportCoverage[category];
       return {

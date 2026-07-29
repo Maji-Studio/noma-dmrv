@@ -81,6 +81,16 @@ describe("classifyRemovalSourceCandidate", () => {
     ).toBeNull();
   });
 
+  it("keeps GIS boundary evidence separate from product-mass Sources", () => {
+    expect(
+      classifyRemovalSourceCandidate({
+        documentType: "gis_boundary",
+        metadata: { logbookEvidenceType: "inventory" },
+        lineage: application,
+      }),
+    ).toBeNull();
+  });
+
   it.each([
     {
       lineage: {

@@ -288,11 +288,6 @@ export async function compileRemovalSubmission(
     args.defaultTemplate,
   );
   if (tierBlocker) blockers.push(tierBlocker);
-  if (build.candidateDocumentIds.length === 0) {
-    blockers.push(
-      "Removal submission requires at least one supporting evidence file.",
-    );
-  }
   if (
     !args.allowPendingSources &&
     pendingSourceCount > 0

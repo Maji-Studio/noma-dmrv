@@ -264,7 +264,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
 
       expect(result.success).toBe(false);
       if (result.success) return;
-      expect(result.error).toMatch(/supporting sources are read-only/i);
+      expect(result.error).toMatch(/registry value sources are read-only/i);
       expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
       expect(isometric.findSourceBySupplierRef).not.toHaveBeenCalled();
       expect(isometric.createSource).not.toHaveBeenCalled();
