@@ -95,6 +95,13 @@ export interface ChainGeoLeg {
   outerHref: string | null;
   /** Record code of the outer party (feedstock code / application code). */
   outerCode: string | null;
+  /**
+   * DAG/geo node id of that outer party (`feedstock:…` inbound,
+   * `application:…` outbound). A batch roll-up carries one outbound leg per
+   * member application, so this is what keeps each leg on its own record
+   * instead of collapsing them onto the shared biochar product.
+   */
+  outerNodeId: string | null;
 }
 
 export interface ChainOfCustodyGeoData {
@@ -210,6 +217,9 @@ function enrichLegs(
         materialLabel: feedstock?.feedstockTypeName ?? null,
         outerHref: feedstock?.href ?? null,
         outerCode: feedstock?.code ?? null,
+        outerNodeId: feedstock
+          ? `${idPrefix("feedstock")}:${feedstock.id}`
+          : null,
       };
     }
     return {
@@ -217,6 +227,7 @@ function enrichLegs(
       materialLabel: chain.biocharProduct?.formulationName ?? "Biochar",
       outerHref: chain.application.href,
       outerCode: chain.application.code,
+      outerNodeId: `${idPrefix("application")}:${chain.application.id}`,
     };
   });
 }
@@ -409,11 +420,12 @@ async function getFeedstockLegs(
   return rows.map((row) => ({
     ...row,
     kind: row.entityType === "feedstock" ? ("inbound" as const) : ("outbound" as const),
-    // Material / link / code are enriched from the lineage by the caller.
+    // Material / link / code / anchor are enriched from the lineage by the caller.
     appliedWetMassKg: null,
     materialLabel: null,
     outerHref: null,
     outerCode: null,
+    outerNodeId: null,
   }));
 }
 
@@ -492,6 +504,7 @@ async function getApplicationBiocharLeg({
       materialLabel: null,
       outerHref: null,
       outerCode: null,
+      outerNodeId: null,
     },
   ];
 }

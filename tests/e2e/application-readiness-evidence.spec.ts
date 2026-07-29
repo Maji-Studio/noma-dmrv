@@ -1,16 +1,17 @@
 /**
  * Application certification readiness — shared evidence source (issue #246)
  *
- * Regression guard for the QA contradiction where an application listed
- * "Ready" for certification with every form field filled but ZERO application
- * evidence, while the removal wizard blocked it on that same missing evidence.
+ * Regression guard for the QA contradiction where the list badge and the
+ * removal wizard disagreed about the same missing application evidence.
  *
- * The fix folds the application-evidence gap into the shared readiness decision
- * (`deriveEntityCertifyReadiness`, fed by `applicationEvidenceGapCountSql`), so
- * the list badge is now evidence-aware for this entity-local fact. This spec
- * guards the list-badge side of that: a form-complete-but-evidence-missing
- * application must badge Incomplete (naming the evidence gap), and once
- * qualifying geotagged evidence exists the same badge must flip to Ready.
+ * The fix folds the application-evidence fact into the shared readiness
+ * decision (`deriveEntityCertifyReadiness`, fed by
+ * `applicationEvidenceGapCountSql`), so the list badge is evidence-aware for
+ * this entity-local fact. Since #585 that fact is ADVISORY: missing evidence
+ * never blocks certification or Removal submission, it only raises a warning.
+ * This spec guards the list-badge side of that: a form-complete-but-evidence-
+ * missing application badges Ready with one advisory warning that names the
+ * gap, and once qualifying geotagged evidence exists the warning clears.
  *
  * Scope note: this spec asserts only the list badge. The wizard's server-side
  * gap computation (`buildApplicationEvidenceGaps`) is a separate implementation
@@ -121,7 +122,7 @@ async function seedFormCompleteApplication(
 }
 
 test.describe("Application certification readiness reads the shared evidence source", () => {
-  test("form-complete application badges Incomplete until evidence exists", async ({
+  test("form-complete application badges an advisory warning until evidence exists", async ({
     adminPage: page,
     seededData,
   }) => {
@@ -168,22 +169,30 @@ test.describe("Application certification readiness reads the shared evidence sou
     const row = page.locator("table tbody tr", { hasText: applicationCode });
     await expect(row).toBeVisible({ timeout: 10000 });
 
-    // Every form field is filled, yet the certification badge must NOT read
-    // "Ready": the missing visual evidence is a gap the shared decision counts.
-    const incompleteBadge = row.getByRole("button", {
-      name: /Incomplete for certification/,
+    // Every form field is filled and the missing visual evidence no longer
+    // blocks certification (#585), so the badge reads Ready — but it must still
+    // carry the evidence fact as an advisory warning rather than swallow it.
+    const advisoryBadge = row.getByRole("button", {
+      name: /Ready for certification with 1 warning/,
     });
-    await expect(incompleteBadge).toBeVisible();
-    await expect(incompleteBadge).toContainText("Incomplete (1)");
+    await expect(advisoryBadge).toBeVisible();
+    await expect(advisoryBadge).toContainText("Ready (1 warning)");
+    await expect(
+      row.getByRole("button", { name: /Incomplete for certification/ }),
+    ).toHaveCount(0);
+    // The unqualified ready badge is a plain span with an exact aria-label; the
+    // advisory one is a tooltip trigger, so this proves which variant rendered.
     await expect(
       page.locator('[aria-label="Ready for certification"]'),
     ).toHaveCount(0);
 
-    // The gap the badge reports is the evidence gap — the same missing fact the
-    // wizard also blocks on (via its own gap computation; see the scope note).
-    await incompleteBadge.hover();
+    // The warning the badge reports is the evidence warning — the same fact the
+    // wizard now surfaces without blocking (see the scope note).
+    await advisoryBadge.hover();
     await expect(
-      page.getByText("Geotagged photos or boundary evidence required to certify"),
+      page.getByText(
+        "Advisory: Application evidence is incomplete. This does not block certification.",
+      ),
     ).toBeVisible({ timeout: 5000 });
 
     // Add qualifying geotagged evidence for all three visual stages, mirroring a
@@ -206,8 +215,8 @@ test.describe("Application certification readiness reads the shared evidence sou
       await pool.end();
     }
 
-    // Reload for a fresh server-computed evidenceGapCount — the badge now agrees
-    // the entity is certification-ready.
+    // Reload for a fresh server-computed evidenceGapCount — the advisory
+    // warning clears and the badge reads plain Ready.
     await page.goto(applicationsUrl);
     await page.waitForLoadState("networkidle");
     const reloadedRow = page.locator("table tbody tr", {
@@ -216,6 +225,9 @@ test.describe("Application certification readiness reads the shared evidence sou
     await expect(
       reloadedRow.locator('[aria-label="Ready for certification"]'),
     ).toBeVisible({ timeout: 10000 });
+    await expect(
+      reloadedRow.getByRole("button", { name: /Ready for certification with/ }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /Incomplete for certification/ }),
     ).toHaveCount(0);
