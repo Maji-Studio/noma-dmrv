@@ -14,7 +14,7 @@
  *
  *   1. Seeds applications across every interesting branch (visual roles,
  *      geotag/upload predicates, boundary logbook document types, GIS-reference
- *      blankness).
+ *      presence).
  *   2. Asserts the SQL-derived `evidenceGapCount` from `getApplications` against
  *      hand-specified expectations.
  *   3. Cross-checks each count against the JS twin `buildApplicationEvidenceGaps`
@@ -227,7 +227,7 @@ async function seedApplicationsAndDocuments(
         biocharAppliedTons: 5,
         biocharAppliedDryTons: 4.5,
         evidenceMethod: spec.evidenceMethod,
-        gisBoundaryReference: spec.gisBoundaryReference,
+        gisBoundary: spec.gisBoundary,
       })
       .returning({ id: applications.id, code: applications.code });
 
@@ -290,7 +290,7 @@ function lineageFor(app: SeededApplication): ChainOfCustodyData {
       applicationDate: new Date("2025-06-15"),
       fieldIdentifier: null,
       evidenceMethod: app.spec.evidenceMethod,
-      gisBoundaryReference: app.spec.gisBoundaryReference,
+      gisBoundary: app.spec.gisBoundary,
       biocharAppliedDryTons: 4.5,
       soilTemperatureC: null,
       href: `/applications/${app.id}`,

@@ -16,10 +16,46 @@ import {
 } from "./fixtures/certification-helpers";
 import { createDbConnection } from "./fixtures/db";
 import { waitForSideSheet } from "./fixtures/page-helpers";
+import type { GisBoundary } from "../../src/schemas/gis-boundary";
 
 const COLD_COMPILE_TIMEOUT_MS = 30_000;
 const EVIDENCE_FILE_NAME = "application-boundary-logbook.pdf";
-const BOUNDARY_REFERENCE = "https://maps.example.test/readiness-boundary";
+const GIS_BOUNDARY: GisBoundary = {
+  version: 1,
+  source: "paste",
+  fileName: null,
+  capturedAt: "2026-07-28T08:00:00.000Z",
+  collection: {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: { name: "E2E readiness area" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [39.27, -6.81],
+              [39.29, -6.81],
+              [39.29, -6.79],
+              [39.27, -6.79],
+              [39.27, -6.81],
+            ],
+          ],
+        },
+      },
+    ],
+    bbox: [39.27, -6.81, 39.29, -6.79],
+  },
+  stats: {
+    features: 1,
+    vertices: 5,
+    areaHectares: 488.96,
+    bbox: [39.27, -6.81, 39.29, -6.79],
+    center: [39.28, -6.8],
+  },
+  notes: [],
+};
 const PDF_BYTES = Buffer.from(
   "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF",
 );
@@ -56,7 +92,7 @@ async function makeBoundaryEvidenceIncomplete(
         .update(schema.applications)
         .set({
           evidenceMethod: "boundary",
-          gisBoundaryReference: BOUNDARY_REFERENCE,
+          gisBoundary: GIS_BOUNDARY,
         })
         .where(eq(schema.applications.id, batch.applicationId));
     });

@@ -673,6 +673,13 @@
       "when": 1785272154166,
       "tag": "0095_thick_the_enforcers",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1785272154167,
+      "tag": "0096_confused_mandroid",
+      "breakpoints": true
     }
   ]
 }

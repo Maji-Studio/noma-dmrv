@@ -20,7 +20,7 @@ function applicationEvidenceMissingLabel(
     case "visual-role":
       return `geotagged ${APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[gap.role].toLowerCase()} photo`;
     case "boundary-reference":
-      return "GIS boundary reference";
+      return "GIS reference";
     case "boundary-logbook":
       return `boundary logbook evidence (${Object.values(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS).join(", ")})`;
   }

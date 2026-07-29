@@ -34,7 +34,8 @@ import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "../../src/lib/certification/a
 
 /**
  * Create Order → delivered Delivery → Application (all certify-relevant form
- * fields filled, visual evidence method, NO photos uploaded) and return the
+ * fields filled, then switched to the legacy visual evidence method in the
+ * fixture setup with NO photos uploaded) and return the
  * unique field identifier used to locate the row / DB record.
  */
 async function seedFormCompleteApplication(
@@ -106,9 +107,11 @@ async function seedFormCompleteApplication(
   // Soil temperature is a certify requirement for 200-year facilities.
   await page.fill('input[name="soilTemperatureC"]', "24");
 
-  // Evidence method stays on the "visual" default; no photos are uploaded.
+  // New applications use the selectable GIS path. The test switches the saved
+  // record to the still-supported visual path below, because that path is
+  // locked only in the UI.
   await expect(
-    page.locator('input[name="evidenceMethod"][value="visual"]'),
+    page.getByRole("radio", { name: /GIS reference/ }),
   ).toBeChecked();
 
   await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
@@ -149,6 +152,10 @@ test.describe("Application certification readiness reads the shared evidence sou
         expect(application?.id).toBeTruthy();
         applicationId = application!.id;
         applicationCode = application!.code;
+        await db
+          .update(schema.applications)
+          .set({ evidenceMethod: "visual" })
+          .where(eq(schema.applications.id, applicationId));
       } finally {
         await pool.end();
       }

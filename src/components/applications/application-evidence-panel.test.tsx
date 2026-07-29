@@ -76,7 +76,11 @@ function renderPanel(docs: DocumentRow[]): string {
   });
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
-      <ApplicationEvidencePanel applicationId={APPLICATION_ID} mode="boundary" />
+      <ApplicationEvidencePanel
+        applicationId={APPLICATION_ID}
+        mode="boundary"
+        boundary={null}
+      />
     </QueryClientProvider>,
   );
 }
@@ -126,6 +130,16 @@ describe("savedLogbookEvidenceType", () => {
 });
 
 describe("ApplicationEvidencePanel boundary evidence type", () => {
+  it("keeps visual evidence visible but locked", () => {
+    const html = renderPanel([]);
+
+    expect(html).toContain("Visual evidence");
+    expect(html).toContain("Available later");
+    expect(html).toMatch(
+      /role="radio"[^>]*aria-checked="false"[^>]*aria-disabled="true"/,
+    );
+  });
+
   it("initialises the upload-type radio from the saved evidence", () => {
     const html = renderPanel([boundaryDoc("affidavit")]);
 

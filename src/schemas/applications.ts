@@ -6,6 +6,7 @@ import {
   MASS_INPUT_MAX_TONNES,
   MASS_MAX_TONNES_MESSAGE,
 } from "./helpers";
+import { gisBoundarySchema } from "./gis-boundary";
 
 // ============================================
 // Constants and Enums
@@ -89,12 +90,8 @@ const applicationFormBaseSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z.enum(applicationMethods).optional().nullable()
   ),
-  evidenceMethod: z.enum(applicationEvidenceMethods).default("visual"),
-  gisBoundaryReference: z
-    .string()
-    .max(255, "GIS boundary reference must be less than 255 characters")
-    .optional()
-    .or(z.literal("")),
+  evidenceMethod: z.enum(applicationEvidenceMethods).default("boundary"),
+  gisBoundary: gisBoundarySchema.nullable().default(null),
 
   // === Section 3: Soil Temperature ===
   soilTemperatureSource: z.preprocess(
@@ -144,7 +141,7 @@ export const updateApplicationSchema = z.object({
   gpsLongitude: longitudeSchema,
   applicationMethodType: z.enum(applicationMethods).optional().nullable(),
   evidenceMethod: z.enum(applicationEvidenceMethods).optional(),
-  gisBoundaryReference: z.string().max(255).optional().nullable(),
+  gisBoundary: gisBoundarySchema.optional().nullable(),
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
 }).superRefine(gpsPairSuperRefine);
@@ -196,8 +193,8 @@ export function formatApplicationMethod(method: ApplicationMethod): string {
 
 export function formatApplicationEvidenceMethod(method: ApplicationEvidenceMethod): string {
   const labels: Record<ApplicationEvidenceMethod, string> = {
-    visual: "Visual proof",
-    boundary: "Boundary records",
+    visual: "Visual evidence",
+    boundary: "GIS reference",
   };
   return labels[method];
 }

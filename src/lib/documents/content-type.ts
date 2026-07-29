@@ -2,9 +2,13 @@ const GENERIC_BINARY_CONTENT_TYPE = "application/octet-stream";
 
 const EXTENSION_CONTENT_TYPES: Record<string, string> = {
   csv: "text/csv",
+  // Browsers report an empty type for .geojson, which would otherwise resolve
+  // to the generic binary type and fail the gis_boundary upload allow list.
+  geojson: "application/geo+json",
   gif: "image/gif",
   jpeg: "image/jpeg",
   jpg: "image/jpeg",
+  json: "application/json",
   mp4: "video/mp4",
   pdf: "application/pdf",
   png: "image/png",
