@@ -27,7 +27,7 @@
   "sequenceDiagramSection": {
     "included": false
   },
-  "instructions": "Act as noma-dmrv's deep correctness reviewer. Use repository-wide context to trace changed behavior through callers, callees, persistence, and parallel implementations. Prioritize concrete failure modes involving authorization, facility isolation, domain invariants, data integrity, concurrency, migrations, certification immutability, numerical precision, and time handling. CodeRabbit and CI cover summaries, syntax, formatting, style, and routine static-analysis feedback; do not duplicate them. Comment only when you can identify the affected execution path, violated invariant, and user or data consequence. Review the current full PR state after every update and recognize when earlier findings were fixed.",
+  "instructions": "Act as noma-dmrv's deep correctness reviewer. Use repository-wide context to trace changed behavior through callers, callees, persistence, and parallel implementations. Prioritize concrete failure modes involving authorization, organization isolation, domain invariants, data integrity, concurrency, migrations, certification immutability, numerical precision, and time handling. CodeRabbit and CI cover summaries, syntax, formatting, style, and routine static-analysis feedback; do not duplicate them. Comment only when you can identify the affected execution path, violated invariant, and user or data consequence. Review the current full PR state after every update and recognize when earlier findings were fixed.",
   "rules": [
     {
       "id": "preserve-layer-boundaries",
@@ -36,8 +36,8 @@
       "severity": "high"
     },
     {
-      "id": "enforce-auth-and-facility-scope",
-      "rule": "Every data-access path must enforce authentication and the intended authorization boundary. For facility-scoped operational data, trace facilityId from the caller to every read, write, aggregate, existence check, and option query; flag missing or inconsistent filters and stale or foreign IDs that can cross facility boundaries.",
+      "id": "enforce-auth-and-org-scope",
+      "rule": "Every data-access path must enforce authentication and the intended authorization boundary. Organization isolation is the primary security boundary: trace the active organizationId from the caller to every read, write, aggregate, existence check, option query, and join predicate, and flag any normal domain path that filters only by facilityId as a cross-tenant defect. Facility context is the workflow boundary inside an organization; still flag stale or foreign facility IDs and inconsistent filters. Deliberate public or privileged seams must retain their exact `// org-scope-ok:` waiver and an independent authorization mechanism.",
       "scope": ["src/data-access/**", "src/fn/**", "src/app/api/**"],
       "severity": "high"
     },

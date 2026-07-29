@@ -36,10 +36,9 @@ warning card explaining where the rollback stops.
   chemistry and CO₂e preview assembly for full accounting consumers.
   `chain-of-custody-batch.ts` projects the traceability payload from the shallow
   loader instead of resolving lineage itself. Do not recreate the deleted
-  `credit-batch-lineage-facts.ts`, `credit-batch-previews.ts`, or
-  `credit-batch-production-runs.ts` seams, and do not thread preloaded facts
-  through public signatures; either move a projection into the consolidated
-  module or call the appropriate loader.
+  `credit-batch-lineage-facts.ts` or `credit-batch-previews.ts` seams, and do not
+  thread preloaded facts through public signatures; either move a projection into
+  the consolidated module or call the appropriate loader.
 - These data-access modules guard with `requireOrgScope(ctx)` (org-scoped tenancy,
   [ADR 0010](adr/0010-shared-schema-org-column-tenancy.md)) — **not** the route-level
   `requireAuth()` — and **every** join predicate, leftJoins

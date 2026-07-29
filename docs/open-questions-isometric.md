@@ -117,10 +117,11 @@ after the confirmed alias sunset:
   `GhgStatement.removal_ids` / `Component.removal_template_component_id` keys
   disappear, so the test mocks still carrying both old+new fields
   (`isometric-reconciliation.test.ts`, `isometric-ghg-statement-flow.test.ts`,
-  `isometric-ghg-statement-submit.test.ts`) drop the deprecated keys; (b) delete
-  the 🚫-marked deprecated rows from
-  [`docs/isometric/openapi-index.md`](./isometric/openapi-index.md). No app-code
-  route migration is expected.
+  `isometric-ghg-statement-submit.test.ts`) drop the deprecated keys; (b) drop
+  the deprecated-`/removals*`-alias note from
+  [`docs/isometric/openapi-index.md`](./isometric/openapi-index.md), which now
+  carries the aliases as prose rather than marked rows. No app-code route
+  migration is expected.
 ### GHG entry / statement free-field follow-ups (`isometric/ghg-entry-free-fields`, opened 2026-06-10)
 
 The migrated surface returns fields noma does not yet capture — new capability,
@@ -450,7 +451,7 @@ are clean deferrals.
   fixed.
   **Resolve via:** accumulate event payloads in a closure and flush after the
   transaction settles (success or rollback). Touch points:
-  `src/fn/certification/sources.ts` (`withSyncEventOnFailure`, the
+  `src/fn/certification/sources.ts` (`withSourceSyncEventOnFailure`, the
   `appendSyncEventBestEffort` calls inside the mirror transaction),
   `src/data-access/certification.ts` (`appendSyncEvent`).
 
@@ -497,7 +498,7 @@ authority-vs-docs-vs-code gap list before re-pinning.
 - **Why it matters:** the New-Removal wizard's first step and the submit path;
   cost scales with batches × applications-per-batch. The per-batch Isometric
   *remote* calls were already hoisted and the create-removal confirm loop fixed
-  (`buildCreditBatchContextWithFacts` loads facility facts once) — what's left is
+  (`buildCreditBatchContexts` loads facility facts once) — what's left is
   the per-batch DB lineage fan-out.
 - **Resolve via:** rework `buildRemovalContext` to batch the lineage walks across
   a batch set (one chain-of-custody resolve keyed by all `applicationIds`, one

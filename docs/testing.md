@@ -90,8 +90,7 @@ Fixture set: `tests/e2e/fixtures/auth-fixtures.ts` (typed `AuthFixtures` — rol
 pages and contexts for admin/operator/labTechnician/viewer, plus `seededData`,
 `seedTestData`, `cleanupTestData`). Import barrel: `tests/e2e/fixtures/index.ts`.
 
-- **Always import `test`/`expect` from `tests/e2e/fixtures`**, never from
-  `@playwright/test` —
+- **Always import `test`/`expect` from `./fixtures`**, never from `@playwright/test` —
   otherwise none of the auth fixtures exist and you get `adminPage is not defined`.
 - Auth goes over the **HTTP API**, not UI login (worker-scoped storage states via
   `createSignedAuthStorageState`); the sign-in request must send an `Origin` header or
@@ -145,5 +144,5 @@ comment-only `// @live` marker will **not** be excluded by `--grep-invert`.
   `facility-certifier-mapping.spec.ts`) to pick up `ISOMETRIC_DEMO_PROJECT_ID` without
   duplicating it into `.env.test`. This is the usual cause of a failing local `@live` run.
 - **Convention:** whenever a live half exists, keep a hermetic UI+DB counterpart in PR CI
-  (`durability-readiness.spec.ts`, `production-processes.spec.ts` document themselves as
-  deliberately not `@live`). Don't push all new certification coverage behind the nightly.
+  (`durability-readiness.spec.ts` documents itself as deliberately not `@live`).
+  Don't push all new certification coverage behind the nightly.

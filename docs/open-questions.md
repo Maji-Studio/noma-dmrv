@@ -444,7 +444,7 @@ two oversized data-access files. Still open:
 
 - **Sequential datapoint POSTs in `submitRemoval`** (`perf/datapoint-fanout`).
   `src/fn/certification/submit-removal.ts` iterates `transport.datapointBodies`
-  and awaits each `createOrReconcile` sequentially — N × Isometric RTT per
+  and awaits each `performRegistryCreate` sequentially — N × Isometric RTT per
   submission. Each monitored input adds another Isometric round trip.
   `Promise.all` with bounded concurrency would reduce wall time without
   overwhelming Isometric's per-second budget; sync-event ordering becomes
@@ -472,7 +472,7 @@ two oversized data-access files. Still open:
   (`obs/preserve-error-context`). **Half fixed.** `createGhgStatementRemote`
   (`src/fn/certification/ghg-statements.ts`) now records `status` +
   `sanitizeIsometricErrorBody(err.body)` — copy that pattern. Still lossy:
-  `createOrReconcile` in `src/fn/certification/submit-removal.ts`, which logs
+  `performRegistryCreate` in `src/fn/certification/submit-removal.ts`, which logs
   only `err.message` and drops `err.body` / `err.status` / `err.code`, so neither
   the audit ledger nor any logger receives them. **Resolve via:** include all
   three in `responsePayload` alongside `mapping_revision`; pair with the logger

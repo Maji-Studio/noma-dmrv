@@ -241,7 +241,7 @@ Facts worth pinning because they are frequently misremembered:
 
 - Worker count is **not** fixed: `workers: process.env.CI ? ciWorkers : undefined` — Playwright's default locally. Reason about "parallel workers", never "4 workers".
 - Per-test timeout is `process.env.CI ? 60000 : 90000` (`playwright.config.ts`) — 60s in CI, 90s locally.
-- The worker auth fixture builds storage states via `createSignedAuthStorageState` (`tests/e2e/fixtures/auth-fixtures.ts`). `createDirectAuthContext` is a thin wrapper over it used by a single spec — do not treat it as the entry point.
+- The worker auth fixture builds storage states via `createSignedAuthStorageState` (`tests/e2e/fixtures/auth-fixtures.ts`). `createDirectAuthContext` is a thin wrapper over it used by three specs (`onboarding-first-run`, `org-isolation`, `facility-gate`) — do not treat it as the entry point.
 - `playwright.config` loads **`.env.test`, which is untracked**. Running E2E from a fresh git worktree without copying in both `.env.test` and `.env.local` makes every spec fail on a dead `DATABASE_URL`. This is the highest-frequency agent-facing E2E failure.
 
 ### E2E Schema Drift After Local Schema Changes

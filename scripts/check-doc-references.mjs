@@ -112,13 +112,13 @@ function stripFencedCodeAndComments(markdown) {
   return markdown
     .split("\n")
     .map((line) => {
+      // Order matters. An open comment still swallows fence delimiters, but a
+      // fenced block must win over a comment *opening*: otherwise an
+      // unterminated `<!--` inside a code sample latches `inComment` and blanks
+      // the rest of the file, silently skipping every remaining check.
       if (inComment) {
         if (line.includes("-->")) inComment = false;
         return "";
-      }
-      if (line.includes("<!--")) {
-        if (!line.includes("-->", line.indexOf("<!--") + 4)) inComment = true;
-        return line.slice(0, line.indexOf("<!--"));
       }
 
       const fence = line.match(/^\s{0,3}(`{3,}|~{3,})/);
@@ -133,7 +133,13 @@ function stripFencedCodeAndComments(markdown) {
         }
         return "";
       }
-      return inFence ? "" : line;
+      if (inFence) return "";
+
+      if (line.includes("<!--")) {
+        if (!line.includes("-->", line.indexOf("<!--") + 4)) inComment = true;
+        return line.slice(0, line.indexOf("<!--"));
+      }
+      return line;
     })
     .join("\n");
 }
@@ -353,10 +359,24 @@ function isDeliberatePattern(reference) {
   );
 }
 
+// A `./`-prefixed code span is far more often a module specifier (`./fixtures`,
+// `./aggregation`) than a doc-relative file. Only treat one as a repository path
+// when it carries a path separator and a checkable extension, so the gate cannot
+// push a doc into rewriting a correct import as a wrong one.
+const relativeReferencePattern =
+  /^\.{1,2}\/(?:[^/\s]+\/)+[^/\s]+\.(?:md|tsx?|jsx?|mjs|cjs|json|ya?ml|sql|css|sh|toml)$/i;
+
+function isRelativeRepositoryReference(reference) {
+  const cleaned = stripConcreteSuffix(reference.trim());
+  if (!cleaned.startsWith("./") && !cleaned.startsWith("../")) return false;
+  return relativeReferencePattern.test(cleaned);
+}
+
 function repositoryReferenceBase(reference, sourceFile) {
   let cleaned = stripConcreteSuffix(reference.trim());
   if (cleaned.startsWith("@/")) cleaned = `src/${cleaned.slice(2)}`;
   if (cleaned.startsWith("./") || cleaned.startsWith("../")) {
+    if (!isRelativeRepositoryReference(reference)) return null;
     return path.resolve(path.dirname(sourceFile), cleaned);
   }
   if (
@@ -381,8 +401,7 @@ function extractRepositoryReferences(markdown) {
       const candidate = part.trim();
       if (
         candidate.startsWith("@/") ||
-        candidate.startsWith("./") ||
-        candidate.startsWith("../") ||
+        isRelativeRepositoryReference(candidate) ||
         repositoryPrefixes.some((prefix) => candidate.startsWith(prefix)) ||
         rootFileNames.has(stripConcreteSuffix(candidate))
       ) {

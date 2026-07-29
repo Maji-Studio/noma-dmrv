@@ -199,8 +199,11 @@ Notes:
 Runtime registry credentials are stored per organization in
 `certifier_credentials`, encrypted at rest with AES-256-GCM using
 `CREDENTIALS_ENCRYPTION_KEY`. Only masked status (configured, access-token last
-four, update time) may cross a server-action boundary. Platform Admins manage
-these write-only values from the organization admin area. Certification readiness
+four, update time) may cross a server-action boundary. Each organization's Owners
+and Admins manage these write-only values themselves from the organization admin
+area, with Platform Admins as an override
+(`assertCanManageOrgCredentials`, `src/data-access/certifier-credentials.ts`; see
+[auth.md](./auth.md)). Certification readiness
 and live submission **fail closed** when the active organization has no
 credential row. Keep the same key while stored rows exist — rotating it requires
 re-encrypting or replacing every organization's credentials.

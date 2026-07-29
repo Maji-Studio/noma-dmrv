@@ -10,7 +10,7 @@ promotion rule, and documentation hygiene. Read it before creating a file or a
 ## Component Folders Are Flat
 
 A feature folder is a flat list of files plus a barrel `index.ts`. This holds
-**at every size** — `src/components/credit-batches/` has 13 files (form, detail,
+**at every size** — `src/components/credit-batches/` has 24 files (form, detail,
 list, card, panel, colocated tests) and is still flat.
 
 ```text
