@@ -19,7 +19,7 @@ export interface ProductionReadinessGap {
 }
 
 export const DEFAULT_NO_PRODUCTION_DETAIL =
-  "No production data linked yet — nothing to submit";
+  "No production data is linked. Link a production run before submitting.";
 
 export function defaultProductionReadinessGap(): ProductionReadinessGap {
   return {

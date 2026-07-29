@@ -91,7 +91,7 @@ const EXIT_NOTES: Record<SankeyExitKey, string> = {
   ineligible_feedstock:
     "Feedstock mass excluded from the eligible balance for this batch.",
   conversion_loss:
-    "Pyrolysis gas and heat — the expected mass loss of conversion.",
+    "Pyrolysis gas and heat, which are the expected conversion loss.",
   unallocated_output:
     "Run output not allocated to any biochar lot in this batch.",
   in_storage: "Biochar produced for this batch but not yet applied.",

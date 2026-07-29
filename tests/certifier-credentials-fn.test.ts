@@ -93,7 +93,7 @@ describe("setOrgCertifierCredentialsFn", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Failed to save Isometric credentials.",
+      error: "Isometric credentials were not saved. Try again.",
     });
     expect(upsertCertifierCredentials).not.toHaveBeenCalled();
   });
@@ -206,7 +206,8 @@ describe("setOrgCertifierCredentialsFn", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Credential encryption key is not configured",
+      error:
+        "Credential encryption is not configured. Ask a Platform Admin to configure it.",
     });
     expect(upsertCertifierCredentials).not.toHaveBeenCalled();
   });

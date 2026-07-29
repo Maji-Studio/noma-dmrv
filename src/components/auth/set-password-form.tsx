@@ -44,7 +44,7 @@ function SetPasswordFormContent() {
 
     // Validate token exists
     if (!token) {
-      setServerError("Invalid invitation link. Please contact your administrator.");
+      setServerError("This invitation link is invalid. Ask your Admin for a new one.");
       return;
     }
 
@@ -64,7 +64,9 @@ function SetPasswordFormContent() {
         router.push("/verify-email");
       }, 2000);
     } else {
-      setServerError(result.error || "Failed to set password");
+      setServerError(
+        result.error || "The password was not set. Check the form and try again.",
+      );
     }
   }
 
@@ -76,10 +78,10 @@ function SetPasswordFormContent() {
           className="p-24 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
           role="alert"
         >
-          <h3 className="body-bold mb-16">Invalid Invitation Link</h3>
+          <h3 className="body-bold mb-16">Invalid invitation link</h3>
           <p className="body-small">
-            This invitation link is invalid or has expired. Please contact your
-            administrator for a new invitation.
+            This invitation link is invalid or has expired. Ask your Admin for
+            a new invitation.
           </p>
         </div>
 
@@ -106,11 +108,11 @@ function SetPasswordFormContent() {
             aria-live="polite"
           >
             <h3 className="body-bold mb-16">
-              Password set successfully
+              Password set
             </h3>
             <p className="body-small">
-              Your password has been set. Please verify your email address to
-              complete your account setup. Redirecting...
+              Your password is set. Verify your email address to complete your
+              account setup. You are being redirected.
             </p>
           </div>
         </div>

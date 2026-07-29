@@ -20,7 +20,7 @@ import {
 // Constants
 // ============================================
 
-const PERCENT_RANGE_MESSAGE = "Must be 0–100";
+const PERCENT_RANGE_MESSAGE = "Enter a value from 0 to 100";
 const NON_NEGATIVE_NUMBER_MESSAGE = "Must be a non-negative number";
 const PH_MIN = 0;
 const PH_MAX = 14;
@@ -133,13 +133,13 @@ export const sampleFormSchema = z
     // characterises — required: every sample belongs to exactly one batch
     // (issue #309). The batch pools biochar across its member runs, so the
     // sample never anchors on a production run.
-    creditBatchId: z.string().min(1, "Please select a credit batch").uuid("Invalid credit batch"),
+    creditBatchId: z.string().min(1, "Select a credit batch.").uuid("Choose a valid credit batch."),
     samplingTime: z.union([
       z.date(),
       z.string().transform((val, ctx) => {
         const date = new Date(val);
         if (isNaN(date.getTime())) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
           return z.NEVER;
         }
         return date;
@@ -302,20 +302,20 @@ export const createSampleSchema = sampleFormSchema;
  * All fields optional except sampleId
  */
 export const updateSampleSchema = z.object({
-  sampleId: z.string().uuid("Invalid sample ID"),
+  sampleId: z.string().uuid("Choose a valid Sample."),
   sampleCode: z
     .string()
     .min(1)
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  creditBatchId: z.string().uuid("Invalid credit batch").optional(),
+  creditBatchId: z.string().uuid("Choose a valid credit batch.").optional(),
   samplingTime: z.union([
     z.date(),
     z.string().transform((val, ctx) => {
       const date = new Date(val);
       if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
         return z.NEVER;
       }
       return date;
@@ -366,7 +366,7 @@ export const updateSampleSchema = z.object({
  * Schema for deleting a sample
  */
 export const deleteSampleSchema = z.object({
-  sampleId: z.string().uuid("Invalid sample ID"),
+  sampleId: z.string().uuid("Choose a valid Sample."),
 });
 
 // ============================================

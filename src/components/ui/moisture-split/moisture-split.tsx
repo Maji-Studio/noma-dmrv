@@ -151,7 +151,7 @@ export function MoistureSplit({
       <div className={`flex flex-col gap-6 ${className}`}>
         <UnresolvedBar height={variant === "compact" ? "h-8" : "h-12"} />
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          {missing} not recorded — {dryLabel.toLowerCase()} cannot be derived.
+          {missing} not recorded. {dryLabel} cannot be calculated.
         </p>
       </div>
     );

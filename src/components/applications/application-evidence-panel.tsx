@@ -362,7 +362,7 @@ export function ApplicationEvidencePanel({
       setErrorMessage(
         deleteError instanceof Error
           ? deleteError.message
-          : "Failed to delete evidence",
+          : "The evidence was not deleted. Try again.",
       );
     }
   };
@@ -384,7 +384,7 @@ export function ApplicationEvidencePanel({
       setErrorMessage(
         classifyError instanceof Error
           ? classifyError.message
-          : "Failed to classify evidence",
+          : "The evidence type was not saved. Try again.",
       );
     } finally {
       setClassifyingDocumentId(null);
@@ -534,7 +534,7 @@ export function ApplicationEvidencePanel({
               errorMessage ??
               (error instanceof Error
                 ? error.message
-                : "Failed to load evidence")
+                : "The evidence could not be loaded. Refresh the page and try again.")
             }
           />
         )}

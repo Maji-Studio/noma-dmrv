@@ -23,6 +23,18 @@ type CreateMeasurementSampleRequest =
 export type DatapointIdsByRtcInput = Map<string, string[]>;
 export type DatapointIdsByMeasurementProperty = Map<string, string[]>;
 
+export class RegistryMappingError extends SafeError {
+  constructor(
+    message: string,
+    readonly blueprintKey: string,
+    readonly inputKey: string,
+    readonly groupKey?: string,
+  ) {
+    super(message);
+    this.name = "RegistryMappingError";
+  }
+}
+
 const S_FRACTION_MIN = 0;
 const S_FRACTION_MAX = 1;
 const LEGACY_SEQUESTRATION_BLUEPRINT_KEY =
@@ -145,7 +157,7 @@ export function assertSequestrationTemplateBindings(
     components.length + legacyComponents.length;
   if (storageComponentCount !== 1) {
     throw new SafeError(
-      `Removal template "${template.display_name}" must contain exactly one supported sequestration component; found ${storageComponentCount}.`,
+      `Removal template "${template.display_name}" must contain one supported storage component. It contains ${storageComponentCount}. Choose another template.`,
     );
   }
   if (legacyComponents.length === 1) return;
@@ -173,13 +185,13 @@ export function assertSequestrationTemplateBindings(
     );
     if (declared.length !== 1) {
       throw new SafeError(
-        `Sequestration component ${component.id} must declare input "${inputKey}" exactly once; found ${declared.length}.`,
+        `The selected Removal template must contain one value for each required durability field. One field contains ${declared.length}. Ask an Admin to update the template.`,
       );
     }
     const input = declared[0];
     if (input.type !== "monitored") {
       throw new SafeError(
-        `Sequestration component ${component.id} input "${inputKey}" must be monitored; found "${input.type}".`,
+        "A durability field in the selected Removal template must use recorded values. Ask an Admin to update the template.",
       );
     }
     const expectedQuantityKind =
@@ -188,7 +200,7 @@ export function assertSequestrationTemplateBindings(
         : binding.quantityKind;
     if (input.quantity_kind !== expectedQuantityKind) {
       throw new SafeError(
-        `Sequestration component ${component.id} input "${inputKey}" requires quantity kind "${expectedQuantityKind}"; found "${input.quantity_kind}".`,
+        "A durability field in the selected Removal template uses the wrong measurement type. Ask an Admin to update the template.",
       );
     }
   }
@@ -252,7 +264,7 @@ export function buildDirectSequestrationDatapoints(args: {
               magnitude > S_FRACTION_MAX
             ) {
               throw new SafeError(
-                `Measurement sample ${submission.supplierRefId} has invalid ${rtcInput.input_key} magnitude ${String(magnitude)}; expected a finite value from ${S_FRACTION_MIN} to ${S_FRACTION_MAX}.`,
+                `Registry measurement ${submission.supplierRefId} has value ${String(magnitude)}, outside ${S_FRACTION_MIN} to ${S_FRACTION_MAX}. Record a value in this range.`,
               );
             }
 
@@ -291,13 +303,12 @@ export function buildDirectSequestrationDatapoints(args: {
 
         if (directIndex === 0) {
           throw new SafeError(
-            `Measurement-sample submissions did not contain a value for direct sequestration component ${component.id} input "${rtcInput.input_key}" ` +
-              `(evidence property "${propertyKey}").`,
+            "The selected Removal template has no value from the durability evidence. Check the Samples before submitting.",
           );
         }
         if (binding.dataShape === "SCALAR" && directIndex !== 1) {
           throw new SafeError(
-            `Sequestration component ${component.id} input "${rtcInput.input_key}" is SCALAR but ${directIndex} direct datapoints were built.`,
+            `A durability field accepts one value but received ${directIndex}. Ask support to check the registry mapping.`,
           );
         }
       }
@@ -349,23 +360,21 @@ export function bindSequestrationDatapointsToTemplate(args: {
             args.datapointIdsByMeasurementProperty.get(propertyKey) ?? [];
           if (datapointIds.length === 0) {
             throw new SafeError(
-              `Measurement-sample responses did not return a datapoint for sequestration component ${component.id} input "${rtcInput.input_key}" ` +
-                `(measurement property "${propertyKey}").`,
+              "The selected Removal template has no value from the durability measurement. Refresh the registry data and try again.",
             );
           }
         } else {
           datapointIds = datapointIdsByRtcInput.get(rtcInputKey) ?? [];
           if (datapointIds.length === 0) {
             throw new SafeError(
-              `The orchestrator did not post a direct datapoint for sequestration component ${component.id} input "${rtcInput.input_key}" ` +
-                `(quantity kind "${binding.quantityKind}", unit "${binding.unit}").`,
+              "A durability field has no submitted value. Check the Removal data before submitting.",
             );
           }
         }
 
         if (binding.dataShape === "SCALAR" && datapointIds.length !== 1) {
           throw new SafeError(
-            `Sequestration component ${component.id} input "${rtcInput.input_key}" is SCALAR but ${datapointIds.length} datapoints were resolved.`,
+            `A durability field accepts one value but received ${datapointIds.length}. Ask support to check the registry mapping.`,
           );
         }
 
@@ -379,21 +388,18 @@ export function bindSequestrationDatapointsToTemplate(args: {
 
 function assertSupportedSequestrationBlueprint(blueprintKey: string): void {
   if (hasExplicitSequestrationBinding(blueprintKey)) return;
-  const supported = Object.keys(SEQUESTRATION_COMPONENT_INPUT_BINDINGS)
-    .map((key) => `"${key}"`)
-    .join(", ");
   throw new SafeError(
-    `Sequestration blueprint "${blueprintKey}" has no explicit GHG-entry datapoint binding. ` +
-      `Re-author the removal template to a supported blueprint (${supported}), or add and verify its source-to-input mapping before submitting.`,
+    "The selected Removal template has an unsupported durability component. Choose a template for this facility's durability tier.",
   );
 }
 
 function missingInputBindingError(
   blueprintKey: string,
   inputKey: string,
-): SafeError {
-  return new SafeError(
-    `Sequestration blueprint "${blueprintKey}" input "${inputKey}" has no explicit datapoint-source binding. ` +
-      "Update the verified sequestration binding table before submitting.",
+): RegistryMappingError {
+  return new RegistryMappingError(
+    "The selected Removal template contains an unsupported durability field. Ask support to update the registry mapping before submitting.",
+    blueprintKey,
+    inputKey,
   );
 }

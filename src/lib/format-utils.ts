@@ -3,13 +3,13 @@
  */
 
 import { format, isValid, parseISO } from "date-fns";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseLocalDateString } from "@/lib/date-utils";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_FORMAT = "MMM d, yyyy";
 const DATE_TIME_FORMAT = "MMM d, yyyy, HH:mm";
 const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
-const FALLBACK_DISPLAY = "—";
 const KG_PER_TONNE = 1000;
 const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
 const MASS_KG_MAX_FRACTION_DIGITS = 1;
@@ -40,8 +40,9 @@ function parseDateValue(value: DateValue): Date | null {
  * Returns "—" for null, undefined, or invalid values.
  */
 export function formatDate(value: DateValue): string {
+  if (!value) return MISSING_VALUE.notRecorded;
   const date = parseDateValue(value);
-  return date ? format(date, DATE_FORMAT) : FALLBACK_DISPLAY;
+  return date ? format(date, DATE_FORMAT) : MISSING_VALUE.notAvailable;
 }
 
 const SHORT_MONTH_NAMES = [
@@ -57,10 +58,11 @@ const SHORT_MONTH_NAMES = [
  * for `Date`/timestamp values. Returns "—" for null, undefined, or malformed input.
  */
 export function formatDayString(day: string | null | undefined): string {
-  if (!day || !DATE_ONLY_PATTERN.test(day)) return FALLBACK_DISPLAY;
+  if (!day) return MISSING_VALUE.notRecorded;
+  if (!DATE_ONLY_PATTERN.test(day)) return MISSING_VALUE.notAvailable;
   const [year, month, dayOfMonth] = day.split("-").map(Number);
   const monthName = SHORT_MONTH_NAMES[month - 1];
-  if (!monthName) return FALLBACK_DISPLAY;
+  if (!monthName) return MISSING_VALUE.notAvailable;
   return `${monthName} ${dayOfMonth}, ${year}`;
 }
 
@@ -69,8 +71,9 @@ export function formatDayString(day: string | null | undefined): string {
  * Returns "—" for null, undefined, or invalid values.
  */
 export function formatDateTime(value: DateValue): string {
+  if (!value) return MISSING_VALUE.notRecorded;
   const date = parseDateValue(value);
-  return date ? format(date, DATE_TIME_FORMAT) : FALLBACK_DISPLAY;
+  return date ? format(date, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
 }
 
 /**
@@ -79,15 +82,16 @@ export function formatDateTime(value: DateValue): string {
  * Returns "—" when either boundary is null, undefined, or invalid.
  */
 export function formatDateRange(start: DateValue, end: DateValue): string {
+  if (!start || !end) return MISSING_VALUE.notRecorded;
   const startDate = parseDateValue(start);
   const endDate = parseDateValue(end);
-  if (!startDate || !endDate) return FALLBACK_DISPLAY;
+  if (!startDate || !endDate) return MISSING_VALUE.notAvailable;
 
   if (startDate.getFullYear() === endDate.getFullYear()) {
-    return `${format(startDate, SAME_YEAR_RANGE_START_FORMAT)} – ${format(endDate, DATE_FORMAT)}`;
+    return `${format(startDate, SAME_YEAR_RANGE_START_FORMAT)} to ${format(endDate, DATE_FORMAT)}`;
   }
 
-  return `${format(startDate, DATE_FORMAT)} – ${format(endDate, DATE_FORMAT)}`;
+  return `${format(startDate, DATE_FORMAT)} to ${format(endDate, DATE_FORMAT)}`;
 }
 
 /**
@@ -108,7 +112,7 @@ export function formatDateRange(start: DateValue, end: DateValue): string {
  * `NaN`.
  */
 export function formatMass(kg: number | null | undefined): string {
-  if (kg == null || Number.isNaN(kg)) return FALLBACK_DISPLAY;
+  if (kg == null || Number.isNaN(kg)) return MISSING_VALUE.notRecorded;
   if (kg >= KG_PER_TONNE) return `${(kg / KG_PER_TONNE).toFixed(1)} t`;
   return `${Math.round(kg).toLocaleString()} kg`;
 }
@@ -123,7 +127,7 @@ export function formatMass(kg: number | null | undefined): string {
  * Note the precision difference as well as the unit one — see `formatMass`.
  */
 export function formatMassKg(kg: number | null | undefined): string {
-  if (kg == null || Number.isNaN(kg)) return FALLBACK_DISPLAY;
+  if (kg == null || Number.isNaN(kg)) return MISSING_VALUE.notRecorded;
   return `${kg.toLocaleString(undefined, { maximumFractionDigits: MASS_KG_MAX_FRACTION_DIGITS })} kg`;
 }
 
@@ -137,7 +141,7 @@ export function formatPercent(
   value: number | null | undefined,
   opts?: { digits?: number }
 ): string {
-  if (value == null || Number.isNaN(value)) return FALLBACK_DISPLAY;
+  if (value == null || Number.isNaN(value)) return MISSING_VALUE.notRecorded;
   const digits = opts?.digits ?? PERCENT_DEFAULT_FRACTION_DIGITS;
   return `${Number(value.toFixed(digits)).toLocaleString(undefined, { maximumFractionDigits: digits })}%`;
 }
@@ -154,7 +158,7 @@ export function formatCo2e(
   kg: number | null | undefined,
   opts?: { signed?: boolean; unit?: string }
 ): string {
-  if (kg == null || Number.isNaN(kg)) return FALLBACK_DISPLAY;
+  if (kg == null || Number.isNaN(kg)) return MISSING_VALUE.notAvailable;
   const { signed = false, unit } = opts ?? {};
   const abs = Math.abs(kg);
   const inTonnes = abs >= KG_PER_TONNE;
@@ -182,7 +186,7 @@ export function formatTonnes(
   value: number | null | undefined,
   opts?: { digits?: number; unit?: string }
 ): string {
-  if (value == null) return FALLBACK_DISPLAY;
+  if (value == null) return MISSING_VALUE.notAvailable;
   const { digits = 2, unit = "t" } = opts ?? {};
   return `${value.toFixed(digits)} ${unit}`;
 }
@@ -201,7 +205,7 @@ export function roundKmDisplay(km: number): string {
  * Returns "—" for null/undefined.
  */
 export function formatDistanceKm(km: number | null | undefined): string {
-  if (km == null) return FALLBACK_DISPLAY;
+  if (km == null) return MISSING_VALUE.notSet;
   return `${roundKmDisplay(km)} km`;
 }
 
@@ -209,7 +213,7 @@ export const BYTES_PER_KB = 1024;
 export const BYTES_PER_MB = 1024 * 1024;
 
 export function formatFileSize(bytes: number | null | undefined): string {
-  if (bytes == null) return FALLBACK_DISPLAY;
+  if (bytes == null) return MISSING_VALUE.notAvailable;
   if (bytes < BYTES_PER_KB) return `${bytes} B`;
   if (bytes < BYTES_PER_MB) return `${(bytes / BYTES_PER_KB).toFixed(1)} KB`;
   return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;

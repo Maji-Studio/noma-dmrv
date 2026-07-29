@@ -242,9 +242,9 @@ export function StorageLocationList() {
     try {
       await createStorageLocation.mutateAsync(data);
       setSideSheet(null);
-      toast.success("Storage bin created successfully");
+      toast.success("Storage bin created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to create storage bin");
+      setFormError(error instanceof Error ? error.message : "The storage bin was not created. Check the form and try again.");
     }
   };
 
@@ -257,9 +257,9 @@ export function StorageLocationList() {
         ...data,
       });
       setSideSheet(null);
-      toast.success("Storage bin updated successfully");
+      toast.success("Storage bin updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to update storage bin");
+      setFormError(error instanceof Error ? error.message : "The storage bin was not saved. Try again.");
     }
   };
 
@@ -270,13 +270,13 @@ export function StorageLocationList() {
     try {
       await archiveStorageLocation.mutateAsync(storageLocationId);
       toast.success(
-        "Storage bin archived — restore it any time from the archived view",
+        "Storage bin archived. Restore it from the archived view.",
       );
     } catch (error) {
       setDeleteError(
         error instanceof Error
           ? error.message
-          : "Failed to archive storage bin",
+          : "The storage bin was not archived. Try again.",
       );
     }
   };
@@ -290,7 +290,7 @@ export function StorageLocationList() {
       setDeleteError(
         error instanceof Error
           ? error.message
-          : "Failed to restore storage bin",
+          : "The storage bin was not restored. Try again.",
       );
     }
   };
@@ -301,9 +301,9 @@ export function StorageLocationList() {
     try {
       await deleteStorageLocation.mutateAsync(deletingStorageLocationId);
       setDeletingStorageLocationId(null);
-      toast.success("Storage bin deleted successfully");
+      toast.success("Storage bin deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete storage bin");
+      setDeleteError(error instanceof Error ? error.message : "The storage bin was not deleted. Try again.");
     }
   };
 
@@ -372,7 +372,7 @@ export function StorageLocationList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load storage"} />
+        <ServerError message={fetchError.message || "The storage could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }

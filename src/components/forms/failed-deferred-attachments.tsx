@@ -36,7 +36,10 @@ export function FailedDeferredAttachments({
     <div className="flex flex-col gap-10 border border-[var(--color-status-error)] p-12">
       <div className="flex flex-wrap items-center justify-between gap-8">
         <p className="body-small font-medium text-[var(--color-status-error)]">
-          {failed.length} {failed.length === 1 ? "attachment" : "attachments"} failed to upload
+          {failed.length}{" "}
+          {failed.length === 1
+            ? "attachment was not uploaded"
+            : "attachments were not uploaded"}
         </p>
         <Button
           type="button"
@@ -60,7 +63,7 @@ export function FailedDeferredAttachments({
                 {attachment.file.name}
               </p>
               <p className="body-caption text-[var(--color-status-error)]">
-                {attachment.error ?? "Upload failed"}
+                {attachment.error ?? "The attachment was not uploaded. Try again."}
               </p>
             </div>
             <Button

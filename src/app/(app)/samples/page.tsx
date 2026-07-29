@@ -13,7 +13,8 @@ import {
 
 export const metadata = {
   title: "Lab Samples | Maji dMRV",
-  description: "Lab sample tracking for biochar quality analysis linked to production runs",
+  description:
+    "Track lab Samples for biochar quality and credit batch certification.",
 };
 
 export default async function SamplesPage({

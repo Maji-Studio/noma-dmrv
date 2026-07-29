@@ -42,7 +42,7 @@ describe("DashboardAttentionRow", () => {
   it("omits the date separator when the record date is missing or invalid", () => {
     expect(formatDashboardRecordMetadata("FS-26-0042", null)).toBe("FS-26-0042");
     expect(formatDashboardRecordMetadata("FS-26-0042", "not-a-date")).toBe(
-      "FS-26-0042",
+      "FS-26-0042 · Not available",
     );
   });
 

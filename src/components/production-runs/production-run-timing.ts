@@ -180,5 +180,7 @@ export function productionRunTimezoneHelperText(
     "_",
     " ",
   );
-  return resolved ? `Facility time — ${label}` : `Facility time unknown — using ${label}`;
+  return resolved
+    ? `Facility time: ${label}`
+    : `Facility time is not set. Using ${label}.`;
 }

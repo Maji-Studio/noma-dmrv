@@ -231,7 +231,9 @@ function StockTakeForm({
         return;
       }
       setServerError(
-        error instanceof Error ? error.message : "Failed to record stock-take"
+        error instanceof Error
+          ? error.message
+          : "The stock-take was not recorded. Check the form and try again."
       );
     }
   });
@@ -311,7 +313,7 @@ function StockTakeForm({
         label="Reason"
         error={errors.reason?.message}
         required
-        helperText="Why the count differs — e.g. settling, scale recalibration, miscount."
+        helperText="Why the count differs, such as settling, scale recalibration, or a miscount."
       >
         <FormTextarea
           id="stock-take-reason"
@@ -401,7 +403,9 @@ function LossForm({
         return;
       }
       setServerError(
-        error instanceof Error ? error.message : "Failed to record loss"
+        error instanceof Error
+          ? error.message
+          : "The loss was not recorded. Check the form and try again."
       );
     }
   });
@@ -414,7 +418,7 @@ function LossForm({
         label="Amount lost (kg)"
         error={lossMassError}
         required
-        helperText="The mass removed from the bin — spoilage, spillage, or write-off."
+        helperText="The mass removed from the bin through spoilage, spillage, or write-off."
       >
         <FormInput
           id="loss-amount"
@@ -433,7 +437,7 @@ function LossForm({
         label="Reason"
         error={errors.reason?.message}
         required
-        helperText="What happened — e.g. spoiled batch, spilled during transfer, failed run."
+        helperText="What happened, such as a spoiled batch, transfer spill, or failed production run."
       >
         <FormTextarea
           id="loss-reason"

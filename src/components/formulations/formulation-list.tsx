@@ -36,14 +36,14 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 // ============================================
 
 function formatRatio(ratio: number | null): string {
-  if (ratio === null || ratio === undefined) return "\u2014";
+  if (ratio === null || ratio === undefined) return "Not recorded";
   return `${(ratio * 100).toFixed(0)}%`;
 }
 
 function formatIngredientsSummary(
   ingredients: FormulationWithIngredients["ingredients"]
 ): string {
-  if (!ingredients || ingredients.length === 0) return "\u2014";
+  if (!ingredients || ingredients.length === 0) return "None";
   return ingredients
     .map((ing) => {
       const ratio = ing.ratio != null ? ` (${(ing.ratio * 100).toFixed(0)}%)` : "";
@@ -95,7 +95,7 @@ function createColumns(
       header: "Description",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)] max-w-xs truncate block">
-          {row.original.description || "\u2014"}
+          {row.original.description || "Not recorded"}
         </span>
       ),
     },
@@ -171,9 +171,9 @@ export function FormulationList() {
     try {
       await createFormulation.mutateAsync(data);
       setSideSheet(null);
-      toast.success("Formulation created successfully");
+      toast.success("Formulation created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to create formulation");
+      setFormError(error instanceof Error ? error.message : "The formulation was not created. Check the form and try again.");
     }
   };
 
@@ -186,9 +186,9 @@ export function FormulationList() {
         ...data,
       });
       setSideSheet(null);
-      toast.success("Formulation updated successfully");
+      toast.success("Formulation updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to update formulation");
+      setFormError(error instanceof Error ? error.message : "The formulation was not saved. Try again.");
     }
   };
 
@@ -200,9 +200,9 @@ export function FormulationList() {
     try {
       await deleteFormulation.mutateAsync(deletingFormulationId);
       setDeletingFormulationId(null);
-      toast.success("Formulation deleted successfully");
+      toast.success("Formulation deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete formulation");
+      setDeleteError(error instanceof Error ? error.message : "The formulation was not deleted. Try again.");
     }
   };
 
@@ -230,7 +230,7 @@ export function FormulationList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load formulations"} />
+        <ServerError message={fetchError.message || "The formulations could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }
@@ -275,7 +275,7 @@ export function FormulationList() {
         ],
         content: ingredientCount === 0 ? (
           <p className="body-small text-[var(--color-text-tertiary)] py-8">
-            No ingredients added — this is a pure-biochar formulation.
+            No blend feedstock types are added. This is a pure-biochar formulation.
           </p>
         ) : undefined,
       },

@@ -131,7 +131,7 @@ function TransferFlowPreview({
           </span>
         ) : (
           <span className="body-caption text-[var(--color-text-tertiary)] mt-2">
-            — kg
+            Not recorded
           </span>
         )}
       </div>
@@ -466,7 +466,7 @@ export function BiocharProductForm({
                 filterBy={selectedFacilityId ? { facilityId: selectedFacilityId, status: "complete" } : { status: "complete" }}
                 emptyHint={{
                   message:
-                    "No completed production runs yet — only runs marked Complete can become a product. Finish the run first.",
+                    "Only complete production runs can become a biochar product. Complete the production run first.",
                   href: selectedFacilityId
                     ? `/production-runs?facility=${encodeURIComponent(selectedFacilityId)}`
                     : "/production-runs",
@@ -510,7 +510,7 @@ export function BiocharProductForm({
             required: true,
             disabled: isSubmitting,
             placeholder: "e.g. 2",
-            helperText: "Typically 1–2% for biochar",
+            helperText: "Typically 1 to 2% for biochar",
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
           }}
           splitFooter={

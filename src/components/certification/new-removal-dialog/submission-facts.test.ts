@@ -323,7 +323,7 @@ describe("buildSubmissionFacts panel data", () => {
       batchCount: 2,
       runCount: 3,
       applicationCount: 4,
-      reportingWindowLabel: "Jun 5 – Aug 20, 2026",
+      reportingWindowLabel: "Jun 5 to Aug 20, 2026",
       durabilityLabel: "1000-year (R₀ reflectance), 200-year (H:Corg)",
       samplingLabel: "Sampled, Not sampled",
     });
@@ -370,16 +370,16 @@ describe("buildSubmissionFacts panel data", () => {
       facts({
         compilation: {
           ...READY_COMPILATION,
-          warnings: ["Ash content captured but not represented."],
+          warnings: ["Ash content was recorded but is not included."],
         } as unknown as RemovalCompilationView,
         ctx: {
           ...CONTEXT,
-          submissionWarnings: ["Moisture reading omitted."],
+          submissionWarnings: ["Moisture reading was not included."],
         } as unknown as RemovalCertifyContext,
       }).warnings,
     ).toEqual([
-      "Ash content captured but not represented.",
-      "Moisture reading omitted.",
+      "Ash content was recorded but is not included.",
+      "Moisture reading was not included.",
     ]);
   });
 });

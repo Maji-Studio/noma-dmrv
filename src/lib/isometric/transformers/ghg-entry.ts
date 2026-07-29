@@ -1,4 +1,5 @@
 import { SafeError } from "@/lib/errors";
+import { formatCount } from "@/lib/copy-utils";
 import type { components } from "../generated/certify";
 import { isSequestrationBlueprintFamily } from "./measurement-sample";
 import {
@@ -58,8 +59,7 @@ export function buildCreateGhgEntryRequest(
         !hasExplicitSequestrationBinding(component.blueprint_key)
       ) {
         throw new SafeError(
-          `Sequestration blueprint "${component.blueprint_key}" has no explicit GHG-entry datapoint binding. ` +
-            "Re-author the template to a supported sequestration blueprint or add and verify its input mapping before submitting.",
+          "The selected Removal template contains an unsupported component. Choose another template before submitting.",
         );
       }
 
@@ -68,7 +68,7 @@ export function buildCreateGhgEntryRequest(
         : blueprintsByKey.get(component.blueprint_key);
       if (!isSequestration && !blueprint) {
         throw new SafeError(
-          `Component blueprint "${component.blueprint_key}" missing from catalog — drift detected.`,
+          "A component in the selected Removal template is no longer available. Ask an Admin to check the template before submitting.",
         );
       }
 
@@ -86,13 +86,12 @@ export function buildCreateGhgEntryRequest(
         );
         if (isSequestration && !sequestrationBinding) {
           throw new SafeError(
-            `Sequestration blueprint "${component.blueprint_key}" input "${rtcInput.input_key}" has no explicit GHG-entry binding. ` +
-              "Update the verified sequestration binding table before submitting.",
+            "The selected Removal template contains an unsupported field. Ask support to update the registry mapping before submitting.",
           );
         }
         if (!isSequestration && !blueprintInput) {
           throw new SafeError(
-            `Blueprint "${component.blueprint_key}" missing input "${rtcInput.input_key}".`,
+            "The selected Removal template is missing a required field. Ask an Admin to update the template.",
           );
         }
         const datapointIds = datapointIdsByRtcInput.get(
@@ -100,7 +99,7 @@ export function buildCreateGhgEntryRequest(
         );
         if (!datapointIds || datapointIds.length === 0) {
           throw new SafeError(
-            `Orchestrator did not resolve any datapoints for component ${component.id} input "${rtcInput.input_key}".`,
+            "A registry component has no submitted value. Check the Removal data before submitting.",
           );
         }
 
@@ -115,7 +114,7 @@ export function buildCreateGhgEntryRequest(
         } else if (dataShape === "SCALAR") {
           if (datapointIds.length !== 1) {
             throw new SafeError(
-              `Component ${component.id} input "${rtcInput.input_key}" is SCALAR but ${datapointIds.length} datapoints were resolved.`,
+              `A registry field has ${formatCount(datapointIds.length, "value")} but accepts one. Ask support to check the Removal template.`,
             );
           }
           inputs.push({
@@ -125,7 +124,7 @@ export function buildCreateGhgEntryRequest(
           });
         } else {
           throw new SafeError(
-            `Blueprint "${component.blueprint_key}" input "${rtcInput.input_key}" has unsupported data_shape "${String(dataShape)}".`,
+            "The selected Removal template contains a field with an unsupported format. Ask support to check the template.",
           );
         }
       }

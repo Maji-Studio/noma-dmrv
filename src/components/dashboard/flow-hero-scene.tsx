@@ -168,7 +168,7 @@ export function formatTonnes(tonnes: number): string {
 }
 
 function stationAria(station: DashboardStation): string {
-  const parts = [`${station.name} — ${station.totalLabel}`];
+  const parts = [`${station.name}: ${station.totalLabel}`];
   if (station.reasons.length > 0) {
     parts.push(station.reasons.map((reason) => reason.text).join(", "));
   } else {

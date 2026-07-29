@@ -284,7 +284,9 @@ export async function createTransportLeg(
   });
 
   if (!row) {
-    throw new SafeError("Failed to create transport leg");
+    throw new SafeError(
+      "The transport leg was not created. Check its details and try again.",
+    );
   }
 
   return row;

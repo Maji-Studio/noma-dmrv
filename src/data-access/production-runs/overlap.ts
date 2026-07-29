@@ -67,8 +67,8 @@ function formatWindow(start: Date, end: Date): string {
   const startTime = formatLocalTime(start);
   const endTime = formatLocalTime(end);
   return startDate === endDate
-    ? `${startDate} ${startTime}–${endTime}`
-    : `${formatInstant(start)} – ${formatInstant(end)}`;
+    ? `${startDate} ${startTime} to ${endTime}`
+    : `${formatInstant(start)} to ${formatInstant(end)}`;
 }
 
 /** Build the friendly, non-technical overlap message for a conflicting run. */
@@ -80,7 +80,7 @@ function overlapMessage(conflict: {
   if (conflict.endTime) {
     return `Overlaps run ${conflict.code} (${formatWindow(conflict.startTime, conflict.endTime)}) on this reactor`;
   }
-  return `This reactor has an unfinished run ${conflict.code} (started ${formatInstant(conflict.startTime)}) — set its end time first`;
+  return `Production run ${conflict.code} on this reactor is unfinished. Set its end time before adding another run.`;
 }
 
 /**

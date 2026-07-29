@@ -48,7 +48,7 @@ describe("DurabilityReadinessSignals", () => {
     );
 
     expect(html.indexOf("Chemistry eligible")).toBeLessThan(
-      html.indexOf("1 of 3 usable samples"),
+      html.indexOf("1 of 3 usable Samples"),
     );
     expect(html.match(/data-icon="check"/g)).toHaveLength(1);
     expect(html).not.toContain('data-icon="error"');

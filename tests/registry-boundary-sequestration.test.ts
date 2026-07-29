@@ -49,6 +49,7 @@ import {
   assertSequestrationTemplateBindings,
   bindSequestrationDatapointsToTemplate,
   buildDirectSequestrationDatapoints,
+  RegistryMappingError,
 } from "@/lib/isometric/transformers/sequestration-binding";
 import {
   createDatapoint,
@@ -155,29 +156,38 @@ describe("1000-year sequestration registry boundary", () => {
       structuredClone(duplicate.groups[0].components[0]),
     );
     expect(() => assertSequestrationTemplateBindings(duplicate)).toThrow(
-      /exactly one supported sequestration component; found 2/,
+      /must contain one supported storage component.*contains 2/,
     );
 
     const emissionsOnly = structuredClone(valid);
     emissionsOnly.groups[0].components[0].blueprint_key =
       "pyrolyzer_direct";
     expect(() => assertSequestrationTemplateBindings(emissionsOnly)).toThrow(
-      /exactly one supported sequestration component; found 0/,
+      /must contain one supported storage component.*contains 0/,
     );
 
     const renamedInput = structuredClone(valid);
     renamedInput.groups[0].components[0].inputs[0].input_key =
       "renamed_carbon_contents";
     expect(() => assertSequestrationTemplateBindings(renamedInput)).toThrow(
-      /has no explicit datapoint-source binding/,
+      /unsupported durability field/,
     );
+    try {
+      assertSequestrationTemplateBindings(renamedInput);
+    } catch (error) {
+      expect(error).toBeInstanceOf(RegistryMappingError);
+      expect(error).toMatchObject({
+        blueprintKey: "biochar_sequestration_1000_year",
+        inputKey: "renamed_carbon_contents",
+      });
+    }
 
     const wrongQuantityKind = structuredClone(valid);
     wrongQuantityKind.groups[0].components[0].inputs[2].quantity_kind =
       "dimensionless_ratio";
     expect(() =>
       assertSequestrationTemplateBindings(wrongQuantityKind),
-    ).toThrow(/requires quantity kind "dimensionless"/);
+    ).toThrow(/uses the wrong measurement type/);
   });
 
   it("captures POSTed measurement value IDs and binds them into the GHG entry variants", async () => {

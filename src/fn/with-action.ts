@@ -11,7 +11,7 @@ import { logActionError } from "./action-errors";
 interface WithActionOptions {
   /** Prefix for ZodError messages. Default: "Validation error" */
   zodErrorPrefix?: string;
-  /** Fallback message when error is not an Error instance. Default: "An unexpected error occurred" */
+  /** Fallback message when error is not an Error instance. */
   fallbackMessage?: string;
   /**
    * Opt-in per-user abuse limit, scoped by `key`. Only expensive actions (e.g.
@@ -31,7 +31,7 @@ export async function withAction<T>(
 ): Promise<ActionResult<T>> {
   const {
     zodErrorPrefix = "Validation error",
-    fallbackMessage = "An unexpected error occurred",
+    fallbackMessage = "The action could not be completed. Try again.",
     rateLimit,
   } = options ?? {};
 

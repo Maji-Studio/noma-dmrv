@@ -94,7 +94,7 @@ describe("credit batch CO₂e stored", () => {
         creditBatch: makeBatch(),
         co2ePreviewFailed: true,
       }),
-    ).toContain("Couldn&#x27;t calculate");
+    ).toContain("Not available");
   });
 
   it("states that a resolved-but-empty preview is not calculable, with an explanation", () => {

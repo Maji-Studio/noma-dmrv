@@ -27,7 +27,7 @@ export function WizardRegistryStep({
       <p className="body-small text-[var(--color-text-secondary)]">
         {canManage
           ? "Isometric is your registry. Save the organization's keys, then link this facility to its Isometric project. You can skip this and connect later."
-          : "Isometric is your registry. The connection is set up together with the Maji platform team — once it's live, this facility's project link appears here. You can skip this step and keep going."}
+          : "Isometric is your registry. The Maji platform team helps set up the connection. Once it is live, this facility's project link appears here. You can skip this step and continue."}
       </p>
 
       <CertifierSettingsPanel facilityId={facilityId} canManage={canManage} />

@@ -197,15 +197,16 @@ export default function StyleguidePage() {
             <Swatch name="Orange Light" cssVar="--color-signal-orange-light" />
           </div>
           <p className="body-caption" style={{ color: "var(--color-text-tertiary)" }}>
-            The green signal tokens are retired — their definitions are gone; use the status ramp below.
+            The green signal tokens are retired. Use the status ramp below.
           </p>
         </Section>
 
         {/* ═══ STATUS RAMP ═══ */}
         <Section title="Status Ramp">
           <p className="body-caption" style={{ color: "var(--color-text-tertiary)" }}>
-            Canonical palette for status badges, dots and state text. Solid =
-            icon, text or rule; BG = 10% tint fill; Border = 40% tint.
+            Shared palette for status badges, dots, and state text. Use the
+            solid color for icons, text, and rules; use the lighter colors for
+            backgrounds and borders.
           </p>
           {STATUS_RAMP.map((state) => (
             <ColorRow

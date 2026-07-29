@@ -63,7 +63,7 @@ test.describe("Dashboard (Flow Hero)", () => {
     // Traceability hero with the smart-view segmented control
     const hero = page.getByTestId("flow-hero");
     await expect(hero).toBeVisible();
-    await expect(hero.getByText("Traceability — supplier to soil")).toBeVisible();
+    await expect(hero.getByText("Traceability: supplier to soil")).toBeVisible();
     const attentionView = hero.getByRole("button", { name: "Needs attention" });
     await attentionView.click();
     await expect(attentionView).toHaveAttribute("aria-pressed", "true");
@@ -72,7 +72,7 @@ test.describe("Dashboard (Flow Hero)", () => {
     // Supporting row
     await expect(page.getByText("Needs attention", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Recent activity")).toBeVisible();
-    await expect(page.getByText("Certification — credit batches")).toBeVisible();
+    await expect(page.getByText("Certification: credit batches")).toBeVisible();
 
     // Period toggle switches the active segment
     const week = page.getByRole("button", { name: "Week" });
@@ -266,7 +266,7 @@ test.describe("Credit batch view sheet (Phase 5)", () => {
     // Readiness and lab samples render below the sections.
     await expect(sheet.getByTestId("batch-health-strip")).toBeVisible();
     await expect(sheet.getByText("Certification requirements")).toBeVisible();
-    await expect(sheet.getByText("Lab samples", { exact: true })).toBeVisible();
+    await expect(sheet.getByText("Lab Samples", { exact: true })).toBeVisible();
 
     // Registry/accounting fields are deliberately absent; the form mounts only
     // after the footer edit action is used.
