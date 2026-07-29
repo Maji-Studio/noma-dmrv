@@ -9,7 +9,11 @@ import {
 } from "./durability-measurement-samples";
 import { normalizeMeasurementSamplesForHash } from "./durability-measurement-sample-snapshot";
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
-import { PRODUCT_MASS_MEASUREMENT_PROPERTY } from "@/lib/isometric/transformers/measurement-sample";
+import {
+  CARBON_CONTENTS_MEASUREMENT_PROPERTY,
+  PRODUCT_MASS_MEASUREMENT_PROPERTY,
+  S_FRACTION_MEASUREMENT_PROPERTY,
+} from "@/lib/isometric/transformers/measurement-sample";
 import {
   buildRemovalSourceBindingPlan,
   classifyRemovalSourceCandidate,
@@ -304,6 +308,123 @@ describe("patchMeasurementSampleSourceBindings", () => {
       2,
       "/datapoints/datapoint-product-mass-b",
       expect.objectContaining({ source_ids: ["source-inventory-b"] }),
+    );
+  });
+
+  it("adds the durability ledger to every 1000-year measurement-sample input without replacing Inventory", async () => {
+    const patch = vi.fn(
+      async (path: string, body: { source_ids: string[] }) => ({
+        id: path.split("/").at(-1),
+        source_ids: body.source_ids,
+      }),
+    );
+    const creditBatchId = "credit-batch-1";
+    const inventoryBinding = classifyRemovalSourceCandidate({
+      documentType: "pdf",
+      metadata: { logbookEvidenceType: "inventory" },
+      lineage: {
+        entityType: "application",
+        entityId: "application-1",
+        entityLabel: "Application APP-001",
+      },
+    })!;
+    const durabilityBinding = classifyRemovalSourceCandidate({
+      documentType: "pdf",
+      metadata: {
+        kind: "durability_evidence_ledger",
+        removalId: "removal-1",
+        durabilityOption: "1000_year",
+      },
+      lineage: {
+        entityType: "credit_batch",
+        entityId: creditBatchId,
+        entityLabel: "Credit batch CB-001",
+      },
+      removalId: "removal-1",
+    })!;
+    const sourceBindingPlan = buildRemovalSourceBindingPlan({
+      candidates: [
+        {
+          documentId: "document-inventory",
+          sourceId: "source-inventory",
+          binding: inventoryBinding,
+        },
+        {
+          documentId: "document-durability-ledger",
+          sourceId: "source-durability-ledger",
+          binding: durabilityBinding,
+        },
+      ],
+      template: {
+        groups: [
+          {
+            key: "co2-stored",
+            components: [
+              {
+                id: "component-sequestration",
+                blueprint_key: "biochar_sequestration_1000_year",
+                inputs: [
+                  { input_key: "carbon_contents" },
+                  { input_key: "product_mass" },
+                  { input_key: "s_fraction" },
+                ],
+              },
+            ],
+          },
+        ],
+      } as never,
+      applicationIdsByCreditBatchId: new Map([
+        [creditBatchId, ["application-1"]],
+      ]),
+    });
+
+    await expect(
+      patchMeasurementSampleSourceBindings({
+        client: { patch } as never,
+        captures: [
+          {
+            measurementSampleId: "measurement-sample-1",
+            supplierReferenceId: "sample-ref-1",
+            creditBatchId,
+            datapointIdsByMeasurementProperty: new Map([
+              [
+                encodeMeasurementProperty(PRODUCT_MASS_MEASUREMENT_PROPERTY),
+                ["datapoint-product-mass"],
+              ],
+              [
+                encodeMeasurementProperty(
+                  CARBON_CONTENTS_MEASUREMENT_PROPERTY,
+                ),
+                ["datapoint-carbon-a", "datapoint-carbon-b"],
+              ],
+              [
+                encodeMeasurementProperty(S_FRACTION_MEASUREMENT_PROPERTY),
+                ["datapoint-s-a", "datapoint-s-b"],
+              ],
+            ]),
+          },
+        ],
+        sourceBindingPlan,
+      }),
+    ).resolves.toBe(5);
+
+    expect(patch).toHaveBeenCalledWith(
+      "/datapoints/datapoint-product-mass",
+      expect.objectContaining({
+        source_ids: ["source-durability-ledger", "source-inventory"],
+      }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "/datapoints/datapoint-carbon-a",
+      expect.objectContaining({
+        source_ids: ["source-durability-ledger"],
+      }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "/datapoints/datapoint-s-a",
+      expect.objectContaining({
+        source_ids: ["source-durability-ledger"],
+      }),
     );
   });
 });

@@ -242,4 +242,110 @@ describe("buildRemovalSubmissionBuild", () => {
       sourceBindingPlan,
     );
   });
+
+  it("materializes the durability ledger Source on direct s_fraction Datapoints", () => {
+    const sourceBindingPlan = [
+      {
+        documentId: "document-durability-ledger",
+        sourceId: "source-durability-ledger",
+        nomaRole: "durability_evidence_ledger",
+        lineage: {
+          entityType: "credit_batch",
+          entityId: "batch-1",
+          entityLabel: "Credit batch CB-001",
+        },
+        intendedTarget: {
+          kind: "sequestration",
+          groupKey: "co2-stored",
+          componentId: "component-sequestration",
+          componentBlueprintKey: "biochar_sequestration_1000_year",
+          inputKey: "s_fraction",
+          creditBatchIds: ["batch-1"],
+        },
+        mappingRevision: "source-mapping-revision",
+      },
+    ] as const;
+
+    const snapshot = materializeRemovalSubmissionSnapshot({
+      compiled: {
+        monitored: [],
+        fixed: [],
+        datapointBodyByKey: new Map(),
+        sourceBindingPlan,
+        memberCreditBatchIds: ["batch-1"],
+        semanticPayload: {},
+        durabilityMeasurementSampleArgs: {
+          removalId: "removal-1",
+          externalProjectId: "project-1",
+          batches: [
+            {
+              creditBatchId: "batch-1",
+              creditBatchCode: "CB-001",
+              facilityTimezone: "UTC",
+              sampling: "sampled",
+              declaredHToCorgRatio: null,
+              durabilityOption: "1000_year",
+              runs: [
+                {
+                  id: "run-1",
+                  code: "RUN-001",
+                  biocharDryMassKg: 1_000,
+                },
+              ],
+              samples: [
+                {
+                  id: "sample-1",
+                  totalCarbonPercent: 80,
+                  sReflectanceFraction: 0.91,
+                },
+                {
+                  id: "sample-2",
+                  totalCarbonPercent: 82,
+                  sReflectanceFraction: 0.92,
+                },
+                {
+                  id: "sample-3",
+                  totalCarbonPercent: 84,
+                  sReflectanceFraction: 0.93,
+                },
+              ],
+            },
+          ],
+          attributionByRunId: new Map([["run-1", 1]]),
+          facilityReferenceSoilTemperature: null,
+          measuredAt: "2026-07-27T00:00:00.000Z",
+        },
+      } as never,
+      template: {
+        groups: [
+          {
+            key: "co2-stored",
+            components: [
+              {
+                id: "component-sequestration",
+                blueprint_key: "biochar_sequestration_1000_year",
+                inputs: [{ input_key: "s_fraction" }],
+              },
+            ],
+          },
+        ],
+      } as never,
+      externalProjectId: "project-1",
+      removalId: "removal-1",
+      nextVersion: 2,
+    });
+
+    const directDatapoints =
+      snapshot.payloadSnapshot.transport.datapointBodies.filter(
+        (datapoint) => datapoint.inputKey === "s_fraction",
+      );
+    expect(directDatapoints).toHaveLength(3);
+    expect(
+      directDatapoints.map((datapoint) => datapoint.body.source_ids),
+    ).toEqual([
+      ["source-durability-ledger"],
+      ["source-durability-ledger"],
+      ["source-durability-ledger"],
+    ]);
+  });
 });

@@ -35,6 +35,7 @@ import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { SelectBatchesStep } from "./select-batches-step";
 import { SubmitStep } from "./submit-step";
+import { blocksRemovalResume } from "./resume-state";
 
 const STEPS: StepFlowStep[] = [
   { key: "select", label: "Select batches" },
@@ -132,28 +133,23 @@ function WizardBody({
 
   const currentIndex = STEP_KEYS.indexOf(step);
 
-  // Guard a resumed draft: once its context loads, a removal that's already
-  // `submitted` or mid-flight (`inProgress`) has nothing left to action, so the
-  // wizard must not re-enter the confirm-&-submit step. Stops a stale
-  // `?resume=<id>` link (e.g. a bookmark) from re-opening a done removal — the
-  // detail sheet already hides the entry, this covers direct navigation.
+  // A live submission lock is the only resume blocker. Submitted Removals may
+  // re-enter this step: the backend returns the existing version when nothing
+  // changed and creates a superseding version when reviewed evidence or mapping
+  // revisions changed.
   const resumeReadiness =
     resumeRemovalId && ctxQuery.data
       ? deriveRemovalReadiness(toRemovalReadinessFacts(ctxQuery.data))
       : null;
-  if (
-    resumeReadiness?.state === "submitted" ||
-    resumeReadiness?.state === "inProgress"
-  ) {
+  if (resumeReadiness && blocksRemovalResume(resumeReadiness.state)) {
     return (
       <div className="flex flex-col gap-24">
         <h2 id="new-removal-title" className="title-heading-2">
           Removal
         </h2>
         <p className="body-small text-[var(--color-text-secondary)]">
-          {resumeReadiness.state === "submitted"
-            ? "This Removal has already been submitted to the registry. No further action is needed."
-            : "A submission for this Removal is in progress. Wait for it to finish before making changes."}
+          A submission for this Removal is in progress. Wait for it to finish
+          before making changes.
         </p>
         <div className="flex justify-end">
           <Button variant="primary" onClick={onClose}>

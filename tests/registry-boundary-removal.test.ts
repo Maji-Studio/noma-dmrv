@@ -18,9 +18,10 @@ import {
  * again* — is asserted against the registry's state, not hand-wired mocks.
  *
  * Mocked besides the client: the removal context loader (pure data — the
- * lineage/template plumbing has its own tests) and the sources resolver
- * (mirroring stays on its own create/reconcile shape by decision; see the
- * plan's out-of-scope list).
+ * lineage/template plumbing has its own tests), generated evidence-ledger
+ * materialization (render/storage/mirroring has dedicated tests), and the
+ * sources resolver (mirroring stays on its own create/reconcile shape by
+ * decision; see the plan's out-of-scope list).
  *
  * Coverage (plan Phase 3, boundary tests 1, 2, 4, 5 — test 3 lives in
  * registry-boundary-ghg-statement.test.ts):
@@ -52,6 +53,9 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
   return createFakeClientModule(actual);
 });
 vi.mock("@/fn/certification/certify-context-core");
+vi.mock("@/fn/certification/ensure-evidence-ledgers", () => ({
+  ensureEvidenceLedgersFromContext: vi.fn(async () => undefined),
+}));
 vi.mock("@/fn/certification/sources", () => ({
   collectCandidateDocumentIdsForRemoval: vi.fn(async () => [
     "doc-boundary-1",

@@ -73,13 +73,15 @@ import {
 // Candidate-document discovery
 // ───────────────────────────────────────────────────────────────────────────
 
-// PR2's code-owned Removal evidence roles exist only on these three lineage
-// entities. Production-run readings remain telemetry, and transport-leg
-// documents are not inferred as substitutes for the direct BoL roles.
+// Code-owned Removal evidence roles live on the three operational lineage
+// entities plus generated evidence ledgers attached to member credit batches.
+// Production-run readings remain telemetry, and transport-leg documents are
+// not inferred as substitutes for the direct BoL roles.
 type LineageEntityType =
   | "application"
   | "delivery"
-  | "feedstock";
+  | "feedstock"
+  | "credit_batch";
 
 export interface CandidateLineageEntity {
   entityType: LineageEntityType;
@@ -129,6 +131,11 @@ async function collectLineageEntities(
 
   for (const batch of batches) {
     if (!batch) continue;
+    add({
+      entityType: "credit_batch",
+      entityId: batch.id,
+      entityLabel: `Credit batch ${batch.code}`,
+    });
 
     const applicationsForRuns = await getApplicationsForRuns(
       orgCtx,
@@ -219,6 +226,7 @@ export async function loadCandidateDocumentsForRemovalForUser(
         documentType: doc.documentType,
         metadata: doc.metadata,
         lineage: entity,
+        removalId,
       });
       if (!binding) return [];
       const mirror = mirrorByDocumentId.get(doc.id);
@@ -797,6 +805,7 @@ export async function unlinkDocumentSource(
 export async function collectCandidateDocumentIdsForRemoval(
   orgCtx: OrgContext,
   args: {
+    removalId: string;
     lineages: Array<{
       application: { id: string; code?: string | null };
       delivery: { id: string; code?: string | null };
@@ -806,14 +815,17 @@ export async function collectCandidateDocumentIdsForRemoval(
       reactor: { id: string } | null;
       feedstocks: Array<{ id: string; code?: string | null }>;
     }>;
-    memberBatchIds: string[];
+    memberBatches: Array<{ id: string; code?: string | null }>;
   },
 ): Promise<string[]> {
-  void args.memberBatchIds;
   const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, {
+    removalId: args.removalId,
     lineages: args.lineages,
+    memberBatches: args.memberBatches,
   });
-  return candidates.map((candidate) => candidate.documentId);
+  return Array.from(
+    new Set(candidates.map((candidate) => candidate.documentId)),
+  ).sort();
 }
 
 export interface CandidateSourceDocument {
@@ -828,13 +840,17 @@ interface SourceCandidateLineage {
 }
 
 /**
- * Discovers only the three code-owned MVP source roles. Telemetry and every
- * other lineage document stay outside both Removal Source candidates and the
- * submission requirement denominator.
+ * Discovers the three operator evidence roles and current generated ledgers.
+ * Telemetry and every other lineage document stay outside both Removal Source
+ * candidates and the submission requirement denominator.
  */
 export async function collectCandidateSourceDocumentsForRemoval(
   orgCtx: OrgContext,
-  args: { lineages: SourceCandidateLineage[] },
+  args: {
+    removalId?: string;
+    lineages: SourceCandidateLineage[];
+    memberBatches?: Array<{ id: string; code?: string | null }>;
+  },
 ): Promise<CandidateSourceDocument[]> {
   const entities = new Map<string, CandidateLineageEntity>();
   const add = (entity: CandidateLineageEntity) => {
@@ -860,6 +876,13 @@ export async function collectCandidateSourceDocumentsForRemoval(
       });
     }
   }
+  for (const batch of args.memberBatches ?? []) {
+    add({
+      entityType: "credit_batch",
+      entityId: batch.id,
+      entityLabel: `Credit batch ${batch.code ?? batch.id}`,
+    });
+  }
 
   const documentsByEntity = await Promise.all(
     Array.from(entities.values(), async (lineage) => ({
@@ -878,6 +901,7 @@ export async function collectCandidateSourceDocumentsForRemoval(
         documentType: document.documentType,
         metadata: document.metadata,
         lineage,
+        removalId: args.removalId,
       });
       if (binding && !candidates.has(document.id)) {
         candidates.set(document.id, { documentId: document.id, binding });

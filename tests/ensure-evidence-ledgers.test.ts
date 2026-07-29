@@ -48,18 +48,23 @@ describe("ensureEvidenceLedgersFromContext", () => {
     expect(failure.message).toBe(
       "Old certification evidence could not be replaced. Retry the submission.",
     );
-    expect(log.warn).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledOnce();
   });
 
-  it("keeps ordinary ledger generation failures best-effort", async () => {
+  it("fails closed when ordinary ledger generation fails", async () => {
+    const failure = new Error("render failed");
     vi.mocked(
       ensureTransportEvidenceLedgerSourceFromContext,
-    ).mockRejectedValue(new Error("render failed"));
+    ).mockRejectedValue(failure);
 
     await expect(
       ensureEvidenceLedgersFromContext(orgCtx, "removal-1", ctx, log as never),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow(
+      "Unable to prepare the transport evidence ledger. Retry the Removal submission.",
+    );
     expect(log.warn).toHaveBeenCalledOnce();
-    expect(ensureDurabilityEvidenceLedgerSourceFromContext).toHaveBeenCalled();
+    expect(
+      ensureDurabilityEvidenceLedgerSourceFromContext,
+    ).not.toHaveBeenCalled();
   });
 });

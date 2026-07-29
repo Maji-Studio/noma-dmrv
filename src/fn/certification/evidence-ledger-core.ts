@@ -220,9 +220,8 @@ async function getLedgerUpload(
 /**
  * Generate (or reuse) one ledger artifact and mirror it to an Isometric Source.
  * Idempotent on `spec.contentHash`; supersedes any prior ledger of the same kind
- * for the removal. Throws on render/storage/mirror failure — the caller decides
- * whether a ledger hiccup should block submission (both current callers treat it
- * best-effort).
+ * for the removal. Throws on render/storage/mirror failure. The submit
+ * orchestrator treats that as a blocking evidence-preparation failure.
  */
 export async function ensureLedgerSource(
   orgCtx: OrgContext,
