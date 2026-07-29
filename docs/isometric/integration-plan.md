@@ -261,6 +261,9 @@ The server-side Slice A pipeline is implemented:
 - reads `/data-upload-submissions/{id}` for status;
 - journals step IDs and uses mapping locks.
 
+Production-run readings are now stored as unchanged `sensor_data` CSV
+documents, and the upload UI does not populate row-level readings.
+
 The UI is not live. `TelemetryPanel` and its hook exist, but the panel is not
 rendered on any current route. There is no usable “Submit Telemetry” button in
 the application. Treat the pipeline as implemented but dark until it is
