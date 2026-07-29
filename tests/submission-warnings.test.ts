@@ -61,7 +61,6 @@ function run(
     preprocessingFuelLiters: 0,
     dieselGensetLiters: 0,
     samples: [],
-    readingsCount: 0,
     ...overrides,
   } as unknown as ProductionRunWithSamples;
 }

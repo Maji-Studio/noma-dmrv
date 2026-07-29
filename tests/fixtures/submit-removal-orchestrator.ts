@@ -355,7 +355,7 @@ function makeMapping(): CertifierProjectRow {
 
 export function makeRun(
   biocharMassKg: number,
-): ProductionRun & { samples: Sample[]; readingsCount: number } {
+): ProductionRun & { samples: Sample[] } {
   return {
     id: PRODUCTION_RUN_ID,
     code: "PR-TEST-001",
@@ -369,7 +369,6 @@ export function makeRun(
     electricityKwh: 0,
     startTime: new Date("2026-01-01T00:00:00Z"),
     endTime: new Date("2026-01-31T23:59:59Z"),
-    readingsCount: 1,
     // Three eligible replicates (H/C_org < 0.5, O/C_org < 0.2) so the D3
     // durability gates pass. organicCarbonPercent stays 80 across replicates so
     // the weighted carbon datapoint magnitude is unchanged.
@@ -402,7 +401,7 @@ export function makeRun(
         moistureContentPercent: 10,
       } as unknown as Sample,
     ],
-  } as unknown as ProductionRun & { samples: Sample[]; readingsCount: number };
+  } as unknown as ProductionRun & { samples: Sample[] };
 }
 
 // One credit batch pooling the removal's runs' samples (ADR 0016: the credit
