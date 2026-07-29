@@ -74,7 +74,7 @@ function createColumns(
     },
     {
       accessorKey: "biocharRatio",
-      header: "Biochar share",
+      header: "Biochar volume share",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
           {formatRatio(row.original.biocharRatio)}
@@ -83,7 +83,7 @@ function createColumns(
     },
     {
       id: "ingredients",
-      header: "Ingredients",
+      header: "Ingredients by volume",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)] max-w-xs truncate block">
           {formatIngredientsSummary(row.original.ingredients)}
@@ -250,7 +250,7 @@ export function FormulationList() {
               value: ingredient.feedstockType.name,
             },
             {
-              label: `${prefix} · share (%)`,
+              label: `${prefix} · volume share (%)`,
               value: formatRatio(ingredient.ratio),
             },
           ];
@@ -265,9 +265,12 @@ export function FormulationList() {
         ],
       },
       {
-        title: "Blend composition",
+        title: "Blend composition by volume",
         fields: [
-          { label: "Biochar · share (%)", value: formatRatio(entity.biocharRatio) },
+          {
+            label: "Biochar · volume share (%)",
+            value: formatRatio(entity.biocharRatio),
+          },
           ...ingredientFields,
         ],
         content: ingredientCount === 0 ? (
