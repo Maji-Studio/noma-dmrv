@@ -27,6 +27,7 @@ import type {
   BatchLineageApplicationFact,
   BatchLineageRunFact,
 } from "./credit-batch-accounting";
+import type { GisBoundary } from "@/lib/geojson/types";
 
 const CHAIN_HREFS = {
   application: "/applications",
@@ -51,7 +52,7 @@ export interface ChainApplicationLineage {
   applicationDate: Date;
   fieldIdentifier: string | null;
   evidenceMethod: "visual" | "boundary";
-  gisBoundaryReference: string | null;
+  gisBoundary: GisBoundary | null;
   biocharAppliedDryTons: number | null;
   /**
    * The application site's own declared annual-average soil temperature (°C),
@@ -161,7 +162,7 @@ export function projectChainOfCustodyFromBatchFacts(
       applicationDate: application.applicationDate,
       fieldIdentifier: application.fieldIdentifier,
       evidenceMethod: application.evidenceMethod,
-      gisBoundaryReference: application.gisBoundaryReference,
+      gisBoundary: application.gisBoundary,
       biocharAppliedDryTons: application.biocharAppliedDryTons,
       soilTemperatureC: application.soilTemperatureC,
       href: CHAIN_HREFS.application,
@@ -205,7 +206,7 @@ export async function getChainOfCustodyData(
       applicationDate: applications.applicationDate,
       fieldIdentifier: applications.fieldIdentifier,
       evidenceMethod: applications.evidenceMethod,
-      gisBoundaryReference: applications.gisBoundaryReference,
+      gisBoundary: applications.gisBoundary,
       biocharAppliedDryTons: applications.biocharAppliedDryTons,
       applicationSoilTemperatureC: applications.soilTemperatureC,
       deliveryId: deliveries.id,
@@ -284,7 +285,7 @@ export async function getChainOfCustodyData(
       applicationDate: applicationRow.applicationDate,
       fieldIdentifier: applicationRow.fieldIdentifier,
       evidenceMethod: applicationRow.evidenceMethod,
-      gisBoundaryReference: applicationRow.gisBoundaryReference,
+      gisBoundary: applicationRow.gisBoundary,
       biocharAppliedDryTons: applicationRow.biocharAppliedDryTons,
       soilTemperatureC: applicationRow.applicationSoilTemperatureC,
       href: "/applications",

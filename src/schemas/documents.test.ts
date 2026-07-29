@@ -5,6 +5,7 @@ import {
   DOCUMENT_UPLOAD_MAX_MB,
 } from "@/lib/documents/upload-policy";
 import {
+  DOCUMENT_TYPE_LABELS,
   DOCUMENT_TYPES,
   isAllowedMime,
   maxBytesFor,
@@ -29,4 +30,17 @@ describe("document upload limits", () => {
       expect(isAllowedMime(documentType, "text/plain")).toBe(false);
     },
   );
+
+  it.each([
+    "application/geo+json",
+    "application/json",
+    "text/plain",
+    "",
+  ])("accepts %j for GIS boundary documents", (contentType) => {
+    expect(isAllowedMime("gis_boundary", contentType)).toBe(true);
+  });
+
+  it("labels GIS boundary documents", () => {
+    expect(DOCUMENT_TYPE_LABELS.gis_boundary).toBe("GIS boundary");
+  });
 });

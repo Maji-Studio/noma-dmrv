@@ -39,6 +39,7 @@ import type {
   CreateApplicationData,
   UpdateApplicationData,
 } from "@/schemas/applications";
+import type { GisBoundary } from "@/schemas/gis-boundary";
 import type { DeliveryStatus } from "@/schemas/deliveries";
 
 import { requireOrgScope } from "./utils";
@@ -47,6 +48,7 @@ import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
 import { retireDocumentsForEntities } from "./documents";
+import { parseGisBoundary } from "@/schemas/gis-boundary";
 
 // ============================================
 // Application Data Access Layer
@@ -73,8 +75,12 @@ export interface ApplicationDeliveryOptionData {
   alreadyAppliedWetKg: number;
 }
 
-type CreateApplicationInput = Omit<CreateApplicationData, "evidenceMethod"> & {
+type CreateApplicationInput = Omit<
+  CreateApplicationData,
+  "evidenceMethod" | "gisBoundary"
+> & {
   evidenceMethod?: ApplicationEvidenceMethod;
+  gisBoundary?: GisBoundary | null;
 };
 
 function optionalText(value: string | null | undefined): string | null {
@@ -394,7 +400,7 @@ export async function getApplications(
       gpsLongitude: applications.gpsLongitude,
       applicationMethodType: applications.applicationMethodType,
       evidenceMethod: applications.evidenceMethod,
-      gisBoundaryReference: applications.gisBoundaryReference,
+      gisBoundary: applications.gisBoundary,
       soilTemperatureSource: applications.soilTemperatureSource,
       soilTemperatureC: applications.soilTemperatureC,
       co2eStoredTonnes: applications.co2eStoredTonnes,
@@ -632,7 +638,10 @@ export async function createApplication(
         gpsLongitude: data.gpsLongitude ?? null,
         applicationMethodType: data.applicationMethodType ?? null,
         evidenceMethod: data.evidenceMethod ?? "visual",
-        gisBoundaryReference: optionalText(data.gisBoundaryReference),
+        gisBoundary:
+          data.gisBoundary === null || data.gisBoundary === undefined
+            ? null
+            : parseGisBoundary(data.gisBoundary),
         soilTemperatureSource: data.soilTemperatureSource ?? null,
         soilTemperatureC: data.soilTemperatureC ?? null,
       })
@@ -736,7 +745,10 @@ export async function updateApplication(
     if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
     if (data.applicationMethodType !== undefined) updateData.applicationMethodType = data.applicationMethodType;
     if (data.evidenceMethod !== undefined) updateData.evidenceMethod = data.evidenceMethod;
-    if (data.gisBoundaryReference !== undefined) updateData.gisBoundaryReference = optionalText(data.gisBoundaryReference);
+    if (data.gisBoundary !== undefined) {
+      updateData.gisBoundary =
+        data.gisBoundary === null ? null : parseGisBoundary(data.gisBoundary);
+    }
     if (data.soilTemperatureSource !== undefined) updateData.soilTemperatureSource = data.soilTemperatureSource;
     if (data.soilTemperatureC !== undefined) updateData.soilTemperatureC = data.soilTemperatureC;
 

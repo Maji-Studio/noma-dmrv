@@ -502,7 +502,45 @@
     "crop_type": "coffee",
     "application_method_type": "top_dressing",
     "field_identifier": "NF-PLOT-14",
-    "gis_boundary_reference": "KML-NF-14",
+    "gis_boundary": {
+      "version": 1,
+      "source": "paste",
+      "fileName": null,
+      "capturedAt": "2025-06-16T08:00:00Z",
+      "collection": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "name": "NF-PLOT-14",
+              "reference_id": "NF-PLOT-14"
+            },
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [36.835, -1.173],
+                  [36.837, -1.173],
+                  [36.837, -1.171],
+                  [36.835, -1.171],
+                  [36.835, -1.173]
+                ]
+              ]
+            }
+          }
+        ],
+        "bbox": [36.835, -1.173, 36.837, -1.171]
+      },
+      "stats": {
+        "features": 1,
+        "vertices": 5,
+        "areaHectares": 4.95,
+        "bbox": [36.835, -1.173, 36.837, -1.171],
+        "center": [36.836, -1.172]
+      },
+      "notes": []
+    },
     "soil_temperature_source": "baseline",
     "soil_temperature_c": 22.4,
     "co2e_stored_tonnes": 1.28,

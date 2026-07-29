@@ -163,33 +163,12 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="cropType"]', "maize");
 
     await expect(
-      page.locator('input[name="evidenceMethod"][value="visual"]')
+      page.getByRole("radio", { name: /GIS reference/ }),
     ).toBeChecked();
-    await expect(page.locator('input[name="gisBoundaryReference"]')).toHaveCount(0);
-
-    // Scope to the side-sheet form: #264's list evidence-method <select> renders the
-    // same labels, so an unscoped getByText matches two elements (strict-mode violation).
-    await page
-      .locator('[role="dialog"]')
-      .getByText("Boundary records", { exact: true })
-      .click();
     await expect(
-      page.locator('input[name="evidenceMethod"][value="boundary"]')
-    ).toBeChecked();
-    await expect(page.locator('input[name="gisBoundaryReference"]')).toBeVisible();
-    await page.fill(
-      'input[name="gisBoundaryReference"]',
-      "https://maps.example.test/e2e-field-01",
-    );
-
-    await page
-      .locator('[role="dialog"]')
-      .getByText("Visual proof", { exact: true })
-      .click();
-    await expect(
-      page.locator('input[name="evidenceMethod"][value="visual"]')
-    ).toBeChecked();
-    await expect(page.locator('input[name="gisBoundaryReference"]')).toHaveCount(0);
+      page.getByRole("radio", { name: /Visual evidence/ }),
+    ).toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByText("Available later")).toBeVisible();
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
     await waitForSideSheetClose(page);
@@ -200,35 +179,6 @@ test.describe("Application + Credit Batch UI CRUD", () => {
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
 
-    const applicationRow = page.locator("table tbody tr[role='button']").first();
-    await applicationRow.focus();
-    await page.keyboard.press("Enter");
-    await waitForSideSheet(page);
-    await page.getByRole("button", { name: "Edit Application" }).click();
-    // The visual-evidence panel renders one image upload slot per evidence role
-    // (APPLICATION_VISUAL_EVIDENCE_ROLES), so target the first; the no-geotag
-    // check is role-independent.
-    const evidenceUpload = page
-      .locator('[role="dialog"] input[type="file"][accept="image/*"]')
-      .first();
-    await evidenceUpload.setInputFiles({
-      name: "application-no-exif.jpg",
-      mimeType: "image/jpeg",
-      buffer: Buffer.from([
-        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00,
-        0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00, 0xff, 0xdb,
-        0x00, 0x43, 0x00, 0xff, 0xd9,
-      ]),
-    });
-    const uploadedEvidence = page.locator('[role="dialog"] li', {
-      hasText: "application-no-exif.jpg",
-    });
-    await expect(uploadedEvidence.first()).toBeVisible({
-      timeout: 10000,
-    });
-    await expect(uploadedEvidence.first()).toContainText("No geotag:", {
-      timeout: 10000,
-    });
   });
 
   test("blocks application against an undelivered delivery", async ({
