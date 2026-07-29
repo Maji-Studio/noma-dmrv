@@ -336,9 +336,11 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
       await expect(
         dialog.getByRole("heading", { name: "Select credit batches" }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-      await expect(dialog.getByText(batch.code)).toBeVisible({
-        timeout: COLD_COMPILE_TIMEOUT_MS,
-      });
+      // `exact` — readiness gap strings quote the batch code too, so a
+      // substring match resolves to both the code chip and the gap sentence.
+      await expect(
+        dialog.getByText(batch.code, { exact: true }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       // The identical requirement string appears in the wizard too.
       await expect(dialog.getByText(PRODUCTION_REQUIREMENT).first()).toBeVisible();
     } finally {
@@ -407,7 +409,10 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
       await expect(
         dialog.getByText(/Not ready yet \(\d+\)/),
       ).toBeVisible();
-      await expect(dialog.getByText(batch.code)).toBeVisible();
+      // `exact` — the batch's own gap strings quote the code (see above).
+      await expect(
+        dialog.getByText(batch.code, { exact: true }),
+      ).toBeVisible();
 
       // Production lineage and sample completeness are independent: fixing the
       // application path must not reveal a previously hidden lab blocker.

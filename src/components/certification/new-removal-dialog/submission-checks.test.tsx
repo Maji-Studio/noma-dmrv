@@ -16,7 +16,7 @@ const CHECKS = [
   ["transport", "Transport legs recorded"],
   ["transportUniformity", "Transport legs aggregate cleanly"],
   ["production", "Production lineage complete"],
-  ["measurementDates", "Production run and application dates have passed"],
+  ["measurementDates", "Production and application dates"],
   ["entityReadiness", "Certifier fields on linked records"],
   ["durability", "Sampling & durability eligibility"],
 ].map(([key, requirementLabel]) => ({
@@ -78,25 +78,26 @@ describe("SubmissionChecks", () => {
     );
   });
 
-  it("routes single-kind future-date blockers to their record list", () => {
+  it("routes future-date blockers to every record target they name", () => {
     const runHtml = renderToStaticMarkup(
       <SubmissionChecks
-        checks={withUnmet("measurementDates", {
-          fixTarget: "productionRuns",
-          detail:
-            "Production run PR-26-001 ends on 2028-01-02. " +
-            "Change the end time or wait until then.",
-        })}
+        checks={withUnmet("measurementDates", { fixTarget: "productionRuns" })}
         facilityId="facility-1"
       />,
     );
     const applicationHtml = renderToStaticMarkup(
       <SubmissionChecks
+        checks={withUnmet("measurementDates", { fixTarget: "applications" })}
+        facilityId="facility-1"
+      />,
+    );
+    const bothHtml = renderToStaticMarkup(
+      <SubmissionChecks
         checks={withUnmet("measurementDates", {
-          fixTarget: "applications",
+          fixTarget: "productionRunsAndApplications",
           detail:
-            "Application AP-26-001 is dated 2028-01-08. " +
-            "Change the application date or wait until then.",
+            "Production run PR-26-001 ends on 2028-01-02. · " +
+            "Application AP-26-001 is dated 2028-01-08.",
         })}
         facilityId="facility-1"
       />,
@@ -107,29 +108,21 @@ describe("SubmissionChecks", () => {
       'href="/applications?facility=facility-1"',
     );
     expect(applicationHtml).not.toContain('href="/production-runs');
-    expect(runHtml).toContain(">Open production runs</a>");
-    expect(applicationHtml).toContain(">Open applications</a>");
-    expect(runHtml).toContain(
-      "Production run and application dates have passed",
-    );
-  });
 
-  it("does not point mixed future-date blockers at only one record list", () => {
-    const html = renderToStaticMarkup(
-      <SubmissionChecks
-        checks={withUnmet("measurementDates", {
-          detail:
-            "Production run PR-26-001 ends on 2028-01-02. · " +
-            "Application AP-26-001 is dated 2028-01-08.",
-        })}
-        facilityId="facility-1"
-      />,
+    expect(bothHtml).toContain('href="/production-runs?facility=facility-1"');
+    expect(bothHtml).toContain('href="/applications?facility=facility-1"');
+    // Each named record gets its own bullet instead of one run-on sentence.
+    expect(bothHtml).toContain("PR-26-001");
+    expect(bothHtml).toContain("AP-26-001");
+    expect(bothHtml).toMatch(/<li[^>]*>[\s\S]*PR-26-001/);
+    expect(bothHtml).toContain("Future dates");
+    expect(bothHtml).toContain(
+      "Correct these dates, or wait until both dates have passed.",
     );
-
-    expect(html).toContain("PR-26-001");
-    expect(html).toContain("AP-26-001");
-    expect(html).not.toContain('href="/production-runs');
-    expect(html).not.toContain('href="/applications');
+    expect(bothHtml).toContain(">Review production runs</a>");
+    expect(bothHtml).toContain(">Review applications</a>");
+    expect(bothHtml).not.toContain("Change the end time or wait");
+    expect(bothHtml).not.toContain("Change the application date or wait");
   });
 
   it("leaves automatic submit-time advisories out of the count and the list", () => {

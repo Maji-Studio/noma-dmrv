@@ -40,6 +40,7 @@ import { SubmitConfirmDialog } from "../submit-confirm-dialog";
 import { DebugDrawer } from "./debug-drawer";
 import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
+import { allowsRemovalSubmission } from "./resume-state";
 
 const REJECTED_IN_ISOMETRIC_MSG =
   "This removal was rejected in Isometric. Resolve the registry record before retrying from noma.";
@@ -74,7 +75,7 @@ export function SubmitStep({
     compilationQuery.data ?? null,
   );
   const requirementsMet =
-    readiness.state === "ready" && compilationReady === true;
+    allowsRemovalSubmission(readiness.state) && compilationReady === true;
 
   const fireSubmit = (confirmProduction = false) => {
     if (rejectedWithExternal) {
@@ -187,9 +188,6 @@ export function SubmitStep({
         isCompilationLoading={compilationQuery.isLoading}
         compilationError={compilationQuery.error}
         checks={checklist}
-        rejectionMessage={
-          rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null
-        }
       />
 
       <DebugDrawer
