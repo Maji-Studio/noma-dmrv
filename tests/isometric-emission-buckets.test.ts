@@ -71,6 +71,7 @@ describe("emission-input buckets — SOURCE_BUCKETS ⇄ INPUT_MAPPING weld (§8.
         "production",
       "pyrolysis/grid_electricity_use/electricity_use": "production",
       "pyrolysis/fuel_usage_by_volume/volume_of_fuel": "production",
+      "miscellaneous/mass_based_ci_emissions/mass": "stored",
     };
 
     const actual = Object.fromEntries(

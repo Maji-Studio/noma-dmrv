@@ -145,7 +145,11 @@ async function main(): Promise<void> {
 
   const { getIsometricClientFromEnv, listGhgEntryTemplates } = await import("../src/lib/isometric");
   const client = getIsometricClientFromEnv();
-  const { lookupInputMapping, lookupPeriodInputTuple } = await import(
+  const {
+    lookupInputMapping,
+    lookupPeriodInputTuple,
+    resolveDatapointSource,
+  } = await import(
     "../src/lib/isometric/transformers/datapoint"
   );
 
@@ -179,7 +183,12 @@ async function main(): Promise<void> {
     }
 
     // Each group + component + input is one tuple to cover.
-    type Tuple = { group: string; blueprint: string; input: string };
+    type Tuple = {
+      group: string;
+      blueprint: string;
+      component: string;
+      input: string;
+    };
     const tuples: Tuple[] = [];
     for (const group of template.groups ?? []) {
       for (const component of group.components ?? []) {
@@ -188,6 +197,7 @@ async function main(): Promise<void> {
           tuples.push({
             group: group.key,
             blueprint: component.blueprint_key,
+            component: component.display_name,
             input: rtcInput.input_key,
           });
         }
@@ -196,10 +206,15 @@ async function main(): Promise<void> {
     console.log(`  template monitored tuples: ${tuples.length}`);
 
     for (const t of tuples) {
-      // Scope-conflict check runs BEFORE accepting a mapping — a tuple
-      // present in both PERIOD_INPUT_TUPLES and INPUT_MAPPING must fail
+      // Scope-conflict check runs BEFORE accepting a mapping. A period tuple
+      // must fail unless its exact component name is an explicit carve-out
       // (mirrors the guard ordering in transformers/datapoint.ts, ADR 0018).
-      const periodTuple = lookupPeriodInputTuple(t.group, t.blueprint, t.input);
+      const periodTuple = lookupPeriodInputTuple(
+        t.group,
+        t.blueprint,
+        t.input,
+        t.component,
+      );
       if (periodTuple) {
         console.error(
           `  ✗ scope-conflict: template declares ${t.group}/${t.blueprint}/${t.input} as REMOVAL-scope, but it belongs to PROJECT (category="${periodTuple.category}"). Remove from template (ADR 0018).`,
@@ -211,6 +226,15 @@ async function main(): Promise<void> {
       if (!mapping) {
         console.error(
           `  ✗ missing INPUT_MAPPING entry: ${t.group}/${t.blueprint}/${t.input}`,
+        );
+        failed += 1;
+        continue;
+      }
+      try {
+        resolveDatapointSource(mapping, t.component);
+      } catch (err) {
+        console.error(
+          `  ✗ invalid component mapping: ${t.group}/${t.blueprint}/${t.input} (${t.component}): ${err instanceof Error ? err.message : err}`,
         );
         failed += 1;
       }

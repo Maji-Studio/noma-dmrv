@@ -41,9 +41,12 @@ export type RemovalSourceIntendedTarget =
       groupKey:
         | "biomass-feedstock-transport"
         | "biochar-transport"
-        | "sampling-required-for-mrv";
-      componentBlueprintKey: "mass_distance_based_ci_emissions";
-      inputKey: "mass_distance";
+        | "sampling-required-for-mrv"
+        | "miscellaneous";
+      componentBlueprintKey:
+        | "mass_distance_based_ci_emissions"
+        | "mass_based_ci_emissions";
+      inputKey: "mass_distance" | "mass";
       /** The facility template can omit a transport category with no component. */
       optionalInTemplate?: boolean;
     };
@@ -81,6 +84,19 @@ const SOURCE_BINDING_RULES = {
       groupKey: "co2-stored",
       inputKey: "product_mass",
     },
+    additionalIntendedTargets: [
+      {
+        // The safety-margin deduction multiplies the SAME biochar mass the
+        // sequestration claim uses, so the same mass evidence justifies it.
+        // Optional: the two legacy templates declare an empty `miscellaneous`
+        // group.
+        kind: "ordinary",
+        groupKey: "miscellaneous",
+        componentBlueprintKey: "mass_based_ci_emissions",
+        inputKey: "mass",
+        optionalInTemplate: true,
+      },
+    ],
   },
   feedstockBillOfLading: {
     nomaRole: "feedstock_bill_of_lading",

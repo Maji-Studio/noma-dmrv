@@ -338,3 +338,41 @@ which supersedes the journal half of ADR 0005.
   compilation and review gates apply: an unchanged payload reuses the existing
   registry version, while changed reviewed evidence or mappings create a
   superseding version. Only a live submission lock blocks reopening.
+
+## 2026-07-29 (Safety margin mass is a Removal-scope datapoint — named carve-out)
+
+The 29 Jul Removal Template (`Dark Earth Carbon Template (29 Jul)`) added a
+`Safety margin` component under `miscellaneous / mass_based_ci_emissions`: a
+flat conservatism deduction of 20 kgCO2e per tonne of biochar. Its
+`carbon_intensity` input is a `fixed` input pre-bound on the template (noma
+submits nothing for it; attaching a justification document to that Datapoint's
+Sources is an operator action in the registry UI). Its `mass` input is
+`monitored` and previously hit the ADR 0005/0018 PROJECT-scope guard: sandbox
+submitted a 0 kg no-sources stub, production failed closed.
+
+Because the deduction scales with the exact biochar mass each Removal claims,
+it cannot be amortized as a PROJECT-scope Component. The guard now supports a
+named-component carve-out: `lookupPeriodInputTuple` takes the template
+component display name and releases a period tuple only when the matching
+`INPUT_MAPPING` entry names that component in `sourceByComponent`. The only
+carve-out is `"safety margin"` → `totalBiocharDryMassKg` (dry mass, bucket
+`stored` — the identical attribution-scaled reduce the sequestration
+`product_mass` claims). Every other `miscellaneous` component, and all six
+other period tuples, keep the fail-closed PROJECT-scope behavior; the guard's
+error text now lists the recognized carve-out names so a renamed registry
+component is self-explanatory.
+
+The Inventory Source rule (application-boundary logbook / weighbridge
+evidence) gained the safety-margin mass as an `additionalIntendedTargets`
+entry with `optionalInTemplate: true` (the two legacy templates declare an
+empty `miscellaneous` group), so the same mass evidence that backs
+`product_mass` now backs the deduction. `scripts/isometric-coverage-check.ts`
+threads component display names through the guard and validates
+`resolveDatapointSource` per tuple, so the nightly health run catches a
+renamed `Safety margin` (or diesel-split) component the same way submit does.
+
+Both `MAPPING_REVISION` and `SOURCE_BINDING_MAPPING_REVISION` changed: a
+resubmission creates a superseding version carrying the real mass. Sandbox
+removals already submitted against the 29 Jul template carry a 0 kg safety
+margin and need a deliberate resubmission. Locked drafts replay their stored
+snapshot by design.

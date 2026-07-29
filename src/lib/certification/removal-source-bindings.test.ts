@@ -36,6 +36,15 @@ describe("classifyRemovalSourceCandidate", () => {
           groupKey: "co2-stored",
           inputKey: "product_mass",
         },
+        additionalIntendedTargets: [
+          {
+            kind: "ordinary",
+            groupKey: "miscellaneous",
+            componentBlueprintKey: "mass_based_ci_emissions",
+            inputKey: "mass",
+            optionalInTemplate: true,
+          },
+        ],
         mappingRevision: SOURCE_BINDING_MAPPING_REVISION,
       });
     },
@@ -260,6 +269,96 @@ describe("buildRemovalSourceBindingPlan", () => {
       },
       mappingRevision: SOURCE_BINDING_MAPPING_REVISION,
     });
+  });
+
+  it("binds the Inventory Source to the optional Safety margin mass input", () => {
+    const templateWithSafetyMargin = {
+      ...template,
+      groups: [
+        ...template.groups,
+        {
+          key: "miscellaneous",
+          components: [
+            {
+              id: "component-safety-margin",
+              blueprint_key: "mass_based_ci_emissions",
+              inputs: [{ input_key: "mass" }],
+            },
+          ],
+        },
+      ],
+    };
+    const plan = buildRemovalSourceBindingPlan({
+      candidates: [classified[0]],
+      template: templateWithSafetyMargin as never,
+      applicationIdsByCreditBatchId,
+    });
+
+    expect(plan).toContainEqual({
+      documentId: "document-inventory",
+      sourceId: "source-inventory",
+      nomaRole: "inventory",
+      lineage: application,
+      intendedTarget: {
+        kind: "ordinary",
+        groupKey: "miscellaneous",
+        componentId: "component-safety-margin",
+        componentBlueprintKey: "mass_based_ci_emissions",
+        inputKey: "mass",
+        creditBatchIds: [],
+      },
+      mappingRevision: SOURCE_BINDING_MAPPING_REVISION,
+    });
+  });
+
+  it("skips the optional Safety margin target when miscellaneous is empty", () => {
+    const templateWithEmptyMiscellaneous = {
+      ...template,
+      groups: [
+        ...template.groups,
+        { key: "miscellaneous", components: [] },
+      ],
+    };
+
+    expect(
+      buildRemovalSourceBindingPlan({
+        candidates: [classified[0]],
+        template: templateWithEmptyMiscellaneous as never,
+        applicationIdsByCreditBatchId,
+      }),
+    ).toHaveLength(1);
+  });
+
+  it("fails closed when more than one miscellaneous mass component matches", () => {
+    const ambiguousTemplate = {
+      ...template,
+      groups: [
+        ...template.groups,
+        {
+          key: "miscellaneous",
+          components: [
+            {
+              id: "component-safety-margin-1",
+              blueprint_key: "mass_based_ci_emissions",
+              inputs: [{ input_key: "mass" }],
+            },
+            {
+              id: "component-safety-margin-2",
+              blueprint_key: "mass_based_ci_emissions",
+              inputs: [{ input_key: "mass" }],
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(() =>
+      buildRemovalSourceBindingPlan({
+        candidates: [classified[0]],
+        template: ambiguousTemplate as never,
+        applicationIdsByCreditBatchId,
+      }),
+    ).toThrow(/expected exactly one/i);
   });
 
   it("gives ordinary datapoints only their targeted Source IDs", () => {

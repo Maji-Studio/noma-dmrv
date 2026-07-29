@@ -42,7 +42,12 @@ canonical scope:
 - `staff-travel/distance_based_ci_emissions/distance` → category `staff_travel`
 - `direct-emissions/ghg_direct_emissions/{concentration,mass_flow}` → category `pyrolyzer_direct`
 - `biochar-storage/fuel_usage_by_volume/volume_of_fuel` → category `biochar_storage_fuel`
-- `miscellaneous/mass_based_ci_emissions/mass` → category `miscellaneous`
+- `miscellaneous/mass_based_ci_emissions/mass` → category `miscellaneous` —
+  **except** a component named exactly `Safety margin`
+  (case/whitespace-insensitive), which is REMOVAL-scope: its `mass` maps to
+  the removal's biochar dry mass via the named carve-out in
+  `INPUT_MAPPING.miscellaneous` (see `changes.md` 2026-07-29). Any other
+  miscellaneous component still trips the guard.
 - `sampling-required-for-mrv/mass_based_ci_emissions/mass` → category `sampling_consumables`
 - `sampling-required-for-mrv/grid_electricity_use/electricity_use` → category `lab_electricity`
 

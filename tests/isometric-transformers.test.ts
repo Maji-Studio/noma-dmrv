@@ -276,6 +276,48 @@ describe("buildCreateDatapointRequest", () => {
     expect(result.description).toContain("pr_1, pr_2");
   });
 
+  it("maps the Safety margin mass to the removal's biochar dry mass", () => {
+    const result = buildCreateDatapointRequest({
+      groupKey: "miscellaneous",
+      componentBlueprintKey: "mass_based_ci_emissions",
+      componentDisplayName: "Safety margin",
+      rtcInput: rtcInput({ input_key: "mass", quantity_kind: "mass" }),
+      blueprintInput: blueprintInput({
+        input_key: "mass",
+        compatible_unit: "kg",
+        quantity_kind: "mass",
+      }),
+      agg: baseAgg,
+      projectId: PROJECT_ID,
+      supplierRefId: SUPPLIER_REF,
+    });
+
+    expect(result.quantity).toEqual({
+      magnitude: baseAgg.totalBiocharDryMassKg,
+      unit: "kg",
+    });
+    expect(result.type).toBe("REPORTED");
+  });
+
+  it("keeps a renamed Safety margin component behind the PROJECT-scope guard", () => {
+    expect(() =>
+      buildCreateDatapointRequest({
+        groupKey: "miscellaneous",
+        componentBlueprintKey: "mass_based_ci_emissions",
+        componentDisplayName: "Renamed margin",
+        rtcInput: rtcInput({ input_key: "mass", quantity_kind: "mass" }),
+        blueprintInput: blueprintInput({
+          input_key: "mass",
+          compatible_unit: "kg",
+          quantity_kind: "mass",
+        }),
+        agg: baseAgg,
+        projectId: PROJECT_ID,
+        supplierRefId: SUPPLIER_REF,
+      }),
+    ).toThrow(/PROJECT.*safety margin/i);
+  });
+
   it("applies the /100 transform for carbon_content (percent → fraction)", () => {
     // samples.organicCarbonPercent stored as 0–100; blueprint expects 0–1.
     const result = buildCreateDatapointRequest({
