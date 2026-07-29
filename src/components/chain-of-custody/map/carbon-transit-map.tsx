@@ -69,9 +69,6 @@ const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 
 const SAT_TILE_SIZE = 256;
 const FALLBACK_LAYER_ID = `${LEGS_BASE_LAYER_ID}-fallback`;
-// Extra bottom padding so a fit doesn't tuck markers under the legs strip:
-// 72px strip body + 24px vertical padding + 36px breathing room.
-const STRIP_FIT_BOTTOM = 132;
 // CSS class toggled on out-of-focus markers / distance chips (opacity in CSS
 // mirrors FOCUS_DIM_OPACITY; leg lines dim via the paint expression below).
 const DIM_CLASS = "cvm-dim";
@@ -99,8 +96,6 @@ export interface CarbonTransitMapProps {
   /** Road polylines per leg id; absent/null entries draw the dashed arc. */
   routeGeometries: RouteGeometryByRequestId | undefined;
   popupContent: PopupContentByNodeId;
-  /** Side rail visible (map view) — widens the fit padding on the right. */
-  railVisible: boolean;
   /** Cross-link from the DAG; nonce re-triggers for repeat clicks. */
   highlight: { nodeId: string; nonce: number } | null;
   /**
@@ -119,6 +114,11 @@ export interface CarbonTransitMapProps {
   onLegHover?: (legId: string | null) => void;
   /** Clear the shared focus (basemap click). */
   onClear?: () => void;
+  /**
+   * Reposition the zoom/fit/satellite cluster (default top-left) so a docked
+   * overlay can own that corner — the map view's record panel does.
+   */
+  controlsClassName?: string;
 }
 
 interface PlottedNode {
@@ -223,13 +223,13 @@ export default function CarbonTransitMap({
   geo,
   routeGeometries,
   popupContent,
-  railVisible,
   highlight,
   focus,
   hoverLegId,
   onMarkerClick,
   onLegHover,
   onClear,
+  controlsClassName,
 }: CarbonTransitMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -246,7 +246,6 @@ export default function CarbonTransitMap({
   const onMarkerClickRef = useRef(onMarkerClick);
   const onClearRef = useRef(onClear);
   const onLegHoverRef = useRef(onLegHover);
-  const railVisibleRef = useRef(railVisible);
   // Latest hover so the geo-sync rebuild re-applies the right line opacity.
   const hoverLegIdRef = useRef(hoverLegId);
   const [styleReady, setStyleReady] = useState(false);
@@ -259,7 +258,6 @@ export default function CarbonTransitMap({
     onMarkerClickRef.current = onMarkerClick;
     onClearRef.current = onClear;
     onLegHoverRef.current = onLegHover;
-    railVisibleRef.current = railVisible;
     hoverLegIdRef.current = hoverLegId;
     // geo-sync (a separate effect) reads the latest focus to flag newly built
     // markers/chips/legs; the dedicated focus effect handles focus-only changes.
@@ -274,12 +272,7 @@ export default function CarbonTransitMap({
       bounds.extend(marker.getLngLat());
     }
     map.fitBounds(bounds, {
-      padding: {
-        ...FIT_PADDING,
-        // The transport-legs strip sits along the bottom in map view — keep
-        // markers clear of it.
-        bottom: railVisibleRef.current ? STRIP_FIT_BOTTOM : FIT_PADDING.bottom,
-      },
+      padding: FIT_PADDING,
       maxZoom: FIT_MAX_ZOOM,
       duration: animate ? FIT_DURATION_MS : 0,
     });
@@ -701,6 +694,7 @@ export default function CarbonTransitMap({
         onFit={() => fitToMarkers(true)}
         satOn={satOn}
         onToggleSat={toggleSat}
+        className={controlsClassName}
       />
     </div>
   );

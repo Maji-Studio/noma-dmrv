@@ -123,8 +123,8 @@ export const CHIP_STAGGER_STEPS = 3;
 // ---------------------------------------------------------------------------
 
 export const FIT_PADDING = { top: 96, bottom: 70, left: 110, right: 130 } as const;
-/** Extra right padding when the side rail is visible (map view). */
-export const FIT_PADDING_RIGHT_WITH_RAIL = 330;
+/** Gutter every overlay keeps from the map pane's edges (and from each other). */
+export const MAP_OVERLAY_GUTTER_PX = 16;
 export const FIT_MAX_ZOOM = 10.4;
 export const FIT_DURATION_MS = 700;
 export const HIGHLIGHT_EASE_DURATION_MS = 650;
@@ -135,15 +135,9 @@ export const POPUP_WIDTH_PX = 246;
 export const POPUP_OFFSET_PX = 20;
 
 // ---------------------------------------------------------------------------
-// Transport-legs rail (directional bar) + cross-surface focus dimming
+// Cross-surface focus dimming
 // ---------------------------------------------------------------------------
 
-/** Per-leg card width in the rail wings (px). */
-export const RAIL_CARD_WIDTH_PX = 168;
-/** Consolidated area-card width in the directional bar (px). */
-export const RAIL_AREA_CARD_WIDTH_PX = 208;
-/** Dropdown panel width when an area card is expanded (px). */
-export const RAIL_DROPDOWN_WIDTH_PX = 296;
 /**
  * Opacity for out-of-focus elements when a focus is active — rail cards, map
  * markers, distance chips, and leg lines all dim to this so the focused

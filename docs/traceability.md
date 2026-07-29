@@ -51,10 +51,13 @@ warning card explaining where the rollback stops.
 
 ## Anchors and readings
 
-Header: **credit batch selection cards** plus a **production-run filter** whose
-options derive from the loaded batch's lineages, never an unscoped fetch. The run
-filter narrows the whole roll-up (DAG, Map, and a client-side recomputed Sankey —
-every figure derives from the filtered lineages) and deep-links as `?run=`.
+Header: one **command bar** (`traceability-header.tsx`) — page eyebrow, a
+**credit batch dropdown** (`batch-picker.tsx`), a **production-run filter**
+(`run-picker.tsx`) whose options derive from the loaded batch's lineages, never
+an unscoped fetch, the back-to-roll-up button, the kg/% and view segments, and
+the facility code. The run filter narrows the whole roll-up (DAG, Map, and a
+client-side recomputed Sankey — every figure derives from the filtered lineages)
+and deep-links as `?run=`.
 
 Batch selection is remembered per facility in localStorage under
 `noma:traceability:selected-credit-batch:<facilityId>` (`creditBatchStorageKey`),
@@ -95,7 +98,7 @@ inside batch context, with a "Batch roll-up" button back.
 | Server Action | `src/fn/chain-of-custody.ts` | Validates ids; application, batch, batch-geo, trail actions |
 | React Query Hook | `src/hooks/use-chain-of-custody.ts` | Caches by application / batch id |
 | Batch List | `src/hooks/use-credit-batches.ts` | Facility-scoped, newest-first cards query |
-| Components | `src/components/chain-of-custody/` | Page, selector, run filter, DAG, `sankey/`, `trail/`, `map/` |
+| Components | `src/components/chain-of-custody/` | Page, command-bar header, batch/run pickers, DAG, `sankey/`, `trail/`, `map/` |
 | Route | `src/app/(app)/traceability/page.tsx` | Canonical entry; legacy `/chain-of-custody` redirects here with query string intact |
 
 ## Graph behavior
@@ -121,6 +124,14 @@ token and contrast rules are owned by [docs/design-system.md](design-system.md).
 The map view (both anchors) renders the Carbon Transit panel. The DAG is the
 *logical lineage* tool; the MapLibre map is the *geography* tool.
 
+- **Two layouts, one fetch** — `view="map"` pairs the custody stages rail
+  (`custody-stages-rail.tsx`: three milestones — feedstock in / pyrolysis /
+  application out — on a dashed thread, transport legs as sub-rows, a "Not on
+  the map" cluster for anything unplottable) with the map, and docks a clicked
+  record's details over the map's left edge (`record-detail-panel.tsx`, closed
+  by its own X or a basemap click, never by re-clicking the rail row — the row
+  is a selection, not a toggle). `view="split"` is the compact half beside the
+  DAG and keeps the legend plus the collapsed not-geolocated chip box.
 - **Geo payload** — `chain-of-custody-geo.ts` reuses the same lineage resolution;
   node position source falls back `own` GPS → inbound-leg origin (feedstocks) →
   facility-inherited → none.
