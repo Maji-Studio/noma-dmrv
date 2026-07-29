@@ -142,7 +142,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
     });
   });
 
-  it("puts unmet checks ahead of compiler blockers", () => {
+  it("puts unmet checks ahead of compiler blockers in the verdict", () => {
     expect(
       facts({
         compilation: BLOCKED_COMPILATION,
@@ -152,9 +152,33 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "1 issue blocks submission",
       detail: "Review the issue below.",
-      // Suppressed: the check names the same fault in operator language.
-      blockers: [],
     });
+  });
+
+  it("hides only the blocker an unmet check restates", () => {
+    const evidenceBlocker =
+      "Removal submission requires at least one supporting evidence file.";
+    const tierBlocker =
+      "This facility is on the 1000-year durability tier, but its removal template's sequestration component is wrong.";
+
+    expect(
+      facts({
+        compilation: {
+          ...BLOCKED_COMPILATION,
+          blockers: [evidenceBlocker, tierBlocker],
+        } as unknown as RemovalCompilationView,
+        checks: [check("evidence", "unmet")],
+      }).blockers,
+    ).toEqual([tierBlocker]);
+  });
+
+  it("keeps every blocker when no check restates one", () => {
+    expect(
+      facts({
+        compilation: BLOCKED_COMPILATION,
+        checks: [check("measurementDates", "unmet")],
+      }).blockers,
+    ).toEqual(BLOCKED_COMPILATION.blockers);
   });
 
   it("pluralises the blocking issue count", () => {
