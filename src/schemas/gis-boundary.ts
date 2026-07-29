@@ -2,8 +2,11 @@ import { z } from "zod";
 import {
   GEOJSON_MAX_FEATURES,
   GEOJSON_MAX_NORMALIZED_BYTES,
+  GEOJSON_MAX_NOTE_LENGTH,
+  GEOJSON_MAX_NOTES,
   GEOJSON_MAX_VERTICES,
 } from "@/config/geo";
+import { computeBoundaryStats } from "@/lib/geojson/stats";
 import type { GisBoundary } from "@/lib/geojson/types";
 
 const positionSchema = z.tuple([
@@ -72,7 +75,9 @@ const gisBoundaryEnvelopeSchema = z
         z.number().min(-90).max(90),
       ]),
     }),
-    notes: z.array(z.string()),
+    notes: z
+      .array(z.string().max(GEOJSON_MAX_NOTE_LENGTH))
+      .max(GEOJSON_MAX_NOTES),
   })
   .superRefine((value, ctx) => {
     if (value.source === "paste" && value.fileName !== null) {
@@ -89,90 +94,55 @@ const gisBoundaryEnvelopeSchema = z
         message: "Uploaded boundaries require a file name",
       });
     }
-    if (value.stats.features !== value.collection.features.length) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["stats", "features"],
-        message: "Boundary feature statistics do not match the collection",
-      });
-    }
-    if (
-      value.collection.bbox.some(
-        (coordinate, index) => coordinate !== value.stats.bbox[index],
-      )
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["stats", "bbox"],
-        message: "Boundary extent statistics do not match the collection",
-      });
-    }
   });
 
 export const gisBoundarySchema: z.ZodType<GisBoundary, GisBoundary> =
   gisBoundaryEnvelopeSchema;
-
-function countPositionArray(value: unknown): number {
-  if (!Array.isArray(value)) return 0;
-  if (
-    value.length === 2 &&
-    typeof value[0] === "number" &&
-    typeof value[1] === "number"
-  ) {
-    return 1;
-  }
-  return value.reduce(
-    (total, entry) => total + countPositionArray(entry),
-    0,
-  );
-}
 
 function serializedBytes(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
 
 /**
- * Revalidate a client-returned boundary before persistence. The Zod schema
- * checks the envelope and geometry shape; these checks enforce render and
- * server-action budgets from the actual collection rather than trusting stats.
+ * Revalidate a client-returned boundary before persistence.
+ *
+ * The Zod schema checks the envelope and geometry shape. Everything a reader
+ * later treats as a measurement — extent, centre, area, feature and vertex
+ * counts — is recomputed here from `collection.features` and written back over
+ * whatever the caller sent, so a hand-crafted payload cannot claim a different
+ * location or size than the coordinates it stores. The caps are then enforced
+ * against those recomputed numbers.
  */
 export function parseGisBoundary(value: unknown): GisBoundary {
   const parsed = gisBoundarySchema.parse(value);
-  const featureCount = parsed.collection.features.length;
-  const vertexCount = parsed.collection.features.reduce(
-    (total, feature) =>
-      total + countPositionArray(feature.geometry.coordinates),
-    0,
-  );
+  const stats = computeBoundaryStats(parsed.collection.features);
 
-  if (featureCount > GEOJSON_MAX_FEATURES) {
+  if (stats.features > GEOJSON_MAX_FEATURES) {
     throw new z.ZodError([
       {
         code: "custom",
         path: ["collection", "features"],
-        message: `This boundary has ${featureCount} areas. The maximum is ${GEOJSON_MAX_FEATURES}.`,
+        message: `This boundary has ${stats.features} areas. The maximum is ${GEOJSON_MAX_FEATURES}.`,
       },
     ]);
   }
-  if (vertexCount > GEOJSON_MAX_VERTICES) {
+  if (stats.vertices > GEOJSON_MAX_VERTICES) {
     throw new z.ZodError([
       {
         code: "custom",
         path: ["collection", "features"],
-        message: `This boundary has ${vertexCount} vertices. The maximum is ${GEOJSON_MAX_VERTICES}.`,
+        message: `This boundary has ${stats.vertices} vertices. The maximum is ${GEOJSON_MAX_VERTICES}.`,
       },
     ]);
   }
-  if (parsed.stats.vertices !== vertexCount) {
-    throw new z.ZodError([
-      {
-        code: "custom",
-        path: ["stats", "vertices"],
-        message: "Boundary vertex statistics do not match the collection",
-      },
-    ]);
-  }
-  if (serializedBytes(parsed) > GEOJSON_MAX_NORMALIZED_BYTES) {
+
+  const boundary: GisBoundary = {
+    ...parsed,
+    collection: { ...parsed.collection, bbox: stats.bbox },
+    stats,
+  };
+
+  if (serializedBytes(boundary) > GEOJSON_MAX_NORMALIZED_BYTES) {
     throw new z.ZodError([
       {
         code: "custom",
@@ -183,7 +153,7 @@ export function parseGisBoundary(value: unknown): GisBoundary {
     ]);
   }
 
-  return parsed as GisBoundary;
+  return boundary;
 }
 
 export type { GisBoundary } from "@/lib/geojson/types";

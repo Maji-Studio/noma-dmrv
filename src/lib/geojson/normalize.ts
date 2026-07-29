@@ -1,5 +1,4 @@
 import { getIssues, scavenge } from "@placemarkio/check-geojson";
-import { area } from "@turf/area";
 import { bbox } from "@turf/bbox";
 import { rewind } from "@turf/rewind";
 import { truncate } from "@turf/truncate";
@@ -22,6 +21,7 @@ import {
   GEOJSON_PROPERTY_KEY_CAP,
 } from "@/config/geo";
 import { parseGisBoundary } from "@/schemas/gis-boundary";
+import { computeBoundaryStats, forEachPosition } from "./stats";
 import type {
   GisBoundary,
   GisBoundaryBbox,
@@ -32,8 +32,6 @@ import type {
 } from "./types";
 
 const AREA_GEOMETRY_TYPES = new Set(["Polygon", "MultiPolygon"]);
-/** turf reports area in square metres; boundaries read in hectares. */
-const SQUARE_METRES_PER_HECTARE = 10_000;
 /** Longitude degrees a single field boundary can plausibly span. */
 const MAX_LONGITUDE_SPAN_DEGREES = 180;
 const PROPERTY_ALLOW_LIST = ["name", "description", "reference_id"] as const;
@@ -203,34 +201,6 @@ function coerceFeatureCollection(
     },
     flattenedGeometryCount: 0,
   };
-}
-
-function forEachPosition(
-  value: unknown,
-  visit: (position: Position) => void,
-): void {
-  if (
-    Array.isArray(value) &&
-    value.length >= 2 &&
-    value.every((entry) => typeof entry === "number")
-  ) {
-    visit(value);
-    return;
-  }
-  if (!Array.isArray(value)) return;
-  for (const entry of value) {
-    forEachPosition(entry, visit);
-  }
-}
-
-function countVertices(features: readonly AreaFeature[]): number {
-  let vertices = 0;
-  for (const feature of features) {
-    forEachPosition(feature.geometry.coordinates, () => {
-      vertices += 1;
-    });
-  }
-  return vertices;
 }
 
 function plural(count: number, singular: string, pluralValue?: string): string {
@@ -510,9 +480,8 @@ export function normalizeGeoJson({
   }
 
   const collection = normalizedCollection(areaFeatures);
-  const featureCount = collection.features.length;
-  const vertexCount = countVertices(collection.features);
-  const overCap = capError(featureCount, vertexCount);
+  const stats = computeBoundaryStats(collection.features);
+  const overCap = capError(stats.features, stats.vertices);
   if (overCap) return overCap;
 
   const boundary: GisBoundary = {
@@ -521,16 +490,7 @@ export function normalizeGeoJson({
     fileName: source === "upload" ? (fileName?.trim() || null) : null,
     capturedAt: new Date().toISOString(),
     collection,
-    stats: {
-      features: featureCount,
-      vertices: vertexCount,
-      areaHectares: area(collection) / SQUARE_METRES_PER_HECTARE,
-      bbox: collection.bbox,
-      center: [
-        (collection.bbox[0] + collection.bbox[2]) / 2,
-        (collection.bbox[1] + collection.bbox[3]) / 2,
-      ],
-    },
+    stats,
     notes,
   };
 

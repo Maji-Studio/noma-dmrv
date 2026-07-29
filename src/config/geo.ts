@@ -102,6 +102,12 @@ export const GEOJSON_PROPERTY_KEY_CAP = 32;
 /** Maximum serialized property bytes retained on one feature. */
 export const GEOJSON_PROPERTY_BYTE_CAP = 8 * 1024;
 
+/** Maximum normalization notes carried on one boundary envelope. */
+export const GEOJSON_MAX_NOTES = 32;
+
+/** Maximum characters in a single normalization note. */
+export const GEOJSON_MAX_NOTE_LENGTH = 200;
+
 /**
  * Per-user abuse limit for boundary normalization. Each call parses, rewinds,
  * and re-serializes up to a megabyte of text, so it is expensive in the way
