@@ -21,6 +21,33 @@ Removal review, Source lifecycle, and transport-provenance implementation notes
 from 2026-07-27 are archived in
 [`docs/archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md`](../archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md).
 
+## 2026-07-29 (application evidence removed from Removal readiness)
+
+Application evidence health no longer produces Removal submission blockers,
+advisory notes, or incomplete certification badges. The configured project uses
+Biochar Protocol v1.1, which binds Biochar Storage in Agricultural Soils v1.1.
+That module places project-boundary evidence in the PDD and does not contain the
+later Soil Environments module's per-application boundary-logbook taxonomy.
+
+Application document uploads remain available. Biochar Protocol v1.1 still
+requires weigh-scale tickets or equivalent application-mass records to be
+retained for verification for at least five years. Retained records are not
+treated as evidence that must be attached to each application before a Removal
+can be submitted.
+
+The submit pipeline now accepts the generated durability evidence ledger as the
+Source for the `product_mass` datapoint. It no longer requires that Source to
+carry the Application-logbook-specific `Inventory` role. Preflight also waits
+for submit-time ledger generation instead of blocking an existing Removal when
+no operator-uploaded Source exists.
+
+This also closes the open question "Application evidence-readiness: two
+implementations, one taxonomy" (opened 2026-07-20). The duplication went away by
+deleting the certification submission gate rather than by unifying the two
+evaluators. The shared SQL builder is now the only path that feeds a surface,
+and what it feeds is an informational evidence-health count rather than a gate.
+The JS twin in `src/fn/certification/application-evidence-readiness.ts` survives
+only as the test oracle that keeps the SQL builder honest.
 ## 2026-07-29 (interpretation docs refreshed against v1.1)
 
 [`requirements-shortlist.md`](./requirements-shortlist.md) and

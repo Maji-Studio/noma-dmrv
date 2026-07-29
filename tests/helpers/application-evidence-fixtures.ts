@@ -1,6 +1,6 @@
 /**
  * Shared fixture matrix for the application evidence-gap rule — one case per
- * branch of the Isometric Soil module §8.5.1/§8.5.2 taxonomy. Consumed by BOTH
+ * branch of the application evidence-health taxonomy. Consumed by BOTH
  * adapter suites so the matrices cannot drift while both stay green:
  *
  *  - `tests/application-evidence-gap-sql.test.ts` seeds these into Postgres and
@@ -15,10 +15,9 @@ import type { GisBoundary } from "@/lib/geojson/types";
 // Expected-gap constants, derived from the taxonomy so a bare integer can never
 // drift away from the rule it stands for.
 export const NO_GAPS = 0;
-export const SINGLE_GAP = 1;
 export const ALL_VISUAL_ROLE_GAPS = APPLICATION_VISUAL_EVIDENCE_ROLES.length; // 3
 export const ONE_VISUAL_ROLE_SATISFIED_GAPS = ALL_VISUAL_ROLE_GAPS - 1; // 2
-export const BOUNDARY_BOTH_INPUT_GAPS = 2; // missing GIS reference + missing logbook
+export const BOUNDARY_REFERENCE_GAPS = 1;
 
 export const TEST_GIS_BOUNDARY: GisBoundary = {
   version: 1,
@@ -134,7 +133,7 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     ],
     expectedGapCount: ALL_VISUAL_ROLE_GAPS,
   },
-  // --- Boundary method (§8.5.2): GIS reference + a logbook doc ---
+  // --- Boundary method: GIS reference only; records are retained separately ---
   {
     key: "boundary-complete-weighbridge",
     evidenceMethod: "boundary",
@@ -150,7 +149,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     expectedGapCount: NO_GAPS,
   },
   {
-    // Generic PDF counts only when its logbookEvidenceType metadata qualifies.
+    // Retained records never change boundary readiness, typed or not. These two
+    // cases pin that: the GIS reference alone decides the outcome.
     key: "boundary-complete-typed-pdf",
     evidenceMethod: "boundary",
     gisBoundary: TEST_GIS_BOUNDARY,
@@ -158,34 +158,33 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     expectedGapCount: NO_GAPS,
   },
   {
-    // Untyped PDF does not attest logbook quantities.
     key: "boundary-untyped-pdf",
     evidenceMethod: "boundary",
     gisBoundary: TEST_GIS_BOUNDARY,
     docs: [{ documentType: "pdf", metadata: {} }],
-    expectedGapCount: SINGLE_GAP,
+    expectedGapCount: NO_GAPS,
   },
   {
-    // A missing GIS reference is incomplete even with a logbook.
+    // A missing GIS reference is incomplete even with a retained record.
     key: "boundary-missing-reference",
     evidenceMethod: "boundary",
     gisBoundary: null,
     docs: [{ documentType: "affidavit", metadata: {} }],
-    expectedGapCount: SINGLE_GAP,
+    expectedGapCount: BOUNDARY_REFERENCE_GAPS,
   },
   {
     key: "boundary-ref-no-logbook",
     evidenceMethod: "boundary",
     gisBoundary: TEST_GIS_BOUNDARY,
     docs: [],
-    expectedGapCount: SINGLE_GAP,
+    expectedGapCount: NO_GAPS,
   },
   {
     key: "boundary-none",
     evidenceMethod: "boundary",
     gisBoundary: null,
     docs: [],
-    expectedGapCount: BOUNDARY_BOTH_INPUT_GAPS,
+    expectedGapCount: BOUNDARY_REFERENCE_GAPS,
   },
 ];
 

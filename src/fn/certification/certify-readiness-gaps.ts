@@ -88,6 +88,8 @@ export function buildEntityReadinessResult(
     );
     addIssueRecord(issues, issueConfig, { ...record, missing });
   };
+  // Inert until an entity kind produces warnings again. See the warning channel
+  // note in `deriveEntityCertifyReadiness`.
   const addEntityWarnings = (
     entityLabel: string,
     readinessWarnings: ReturnType<
