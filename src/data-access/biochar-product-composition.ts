@@ -17,6 +17,7 @@ import {
   feedstockTypes,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
+import { formatCount } from "@/lib/copy-utils";
 
 interface CompositionIngredientRef {
   formulationIngredientId: string;
@@ -92,7 +93,7 @@ export async function validateCompositionIngredientBins(
     );
     if (missingIngredientIds.length > 0) {
       throw new SafeError(
-        `Composition ingredient line(s) not found: ${missingIngredientIds.join(", ")}`,
+        `${formatCount(missingIngredientIds.length, "Formulation line")} ${missingIngredientIds.length === 1 ? "was" : "were"} not found. Refresh the product and choose its feedstock bins again.`,
       );
     }
     const wrongFormulationIds = ingredientRefs
@@ -104,7 +105,7 @@ export async function validateCompositionIngredientBins(
       .map((ref) => ref.formulationIngredientId);
     if (wrongFormulationIds.length > 0) {
       throw new SafeError(
-        `Composition ingredient line(s) must belong to the selected formulation: ${wrongFormulationIds.join(", ")}`,
+        `${formatCount(wrongFormulationIds.length, "Formulation line")} ${wrongFormulationIds.length === 1 ? "does" : "do"} not belong to the selected formulation. Refresh the product and choose its feedstock bins again.`,
       );
     }
     const mismatchedIngredientIds = ingredientRefs
@@ -116,7 +117,7 @@ export async function validateCompositionIngredientBins(
       .map((ref) => ref.formulationIngredientId);
     if (mismatchedIngredientIds.length > 0) {
       throw new SafeError(
-        `Composition ingredient line(s) must match the selected formulation material: ${mismatchedIngredientIds.join(", ")}`,
+        `${formatCount(mismatchedIngredientIds.length, "Formulation line")} ${mismatchedIngredientIds.length === 1 ? "does" : "do"} not match the selected feedstock type. Refresh the product and choose its feedstock bins again.`,
       );
     }
   }

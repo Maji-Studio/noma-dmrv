@@ -70,7 +70,7 @@ describe("deriveBatchHealth", () => {
         productionReadinessGap: {
           kind: "noApplications",
           detail:
-            "No applications fall in this batch's crediting period — record an application in the period, or adjust the period.",
+            "No applications fall in this batch's crediting period. Record an application in the period or adjust the period.",
           fixTarget: "applications",
         },
       }),
@@ -133,7 +133,7 @@ describe("deriveBatchHealth", () => {
           },
           {
             key: "lab-samples",
-            label: "Lab-sample evidence",
+            label: "Sample evidence",
             fixTarget: "labSamples",
             affectedRecords: [
               { id: "sample-1", code: "S-1", missing: ["Lab report"] },
@@ -165,7 +165,7 @@ describe("deriveBatchHealth", () => {
         entityReadinessIssues: [
           {
             key: "lab-samples",
-            label: "Lab-sample evidence",
+            label: "Sample evidence",
             fixTarget: "labSamples",
             affectedRecords: [
               { id: "sample-1", code: "S-1", missing: ["Organic carbon"] },
@@ -184,7 +184,7 @@ describe("deriveBatchHealth", () => {
       "Carbon & durability inputs complete · Entity certifier fields complete",
     );
     expect(open[0]?.requirementLabel).toBe(
-      "Lab chemistry results · Lab-sample evidence",
+      "Lab chemistry results · Sample evidence",
     );
     expect(open[0]?.whyDetail).toContain(
       CERT_REQUIREMENT_META.carbon.whyDetail,
@@ -289,8 +289,8 @@ describe("deriveBatchHealth", () => {
     const result = deriveBatchHealth(
       facts({
         carbonMissingInputs: [
-          "At least 3 usable 1000-year lab samples",
-          "At least 3 usable 1000-year lab samples",
+          "At least 3 usable 1000-year Samples",
+          "At least 3 usable 1000-year Samples",
         ],
         hasSubmittableRuns: false,
         productionReadinessGap: {
@@ -305,7 +305,7 @@ describe("deriveBatchHealth", () => {
     expect(result.issueCount).toBe(2);
     expect(open.map((check) => check.key)).toEqual(["carbon", "production"]);
     expect(checkFor(result, "carbon").detail).toBe(
-      "Missing: At least 3 usable 1000-year lab samples",
+      "Missing: At least 3 usable 1000-year Samples",
     );
   });
 });

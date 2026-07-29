@@ -31,6 +31,7 @@
  */
 
 import type { Sample } from "@/db/schema";
+import { pluralize } from "@/lib/copy-utils";
 import {
   SOIL_TEMPERATURE_FLOOR_C,
   SOIL_TEMPERATURE_SUBDIVIDE_SPREAD_C,
@@ -265,7 +266,7 @@ export function resolveConservativeSoilTemperature(
 ): ConservativeSoilTemperature {
   const usable = siteTemperaturesC.filter(isUsableNumber);
   const method =
-    `Conservative estimate: maximum soil temperature across ${usable.length} application site(s) ` +
+    `Conservative estimate: maximum soil temperature across ${usable.length} application ${pluralize(usable.length, "site")} ` +
     `(7 °C floor); not a measured project-area annual average.`;
 
   if (usable.length === 0) {
@@ -278,7 +279,7 @@ export function resolveConservativeSoilTemperature(
       conservativeEstimate: true,
       method,
       warnings: [
-        "No application site has a soil temperature — durability soil-temp input is indeterminate.",
+      "No application site has a soil temperature. Record a soil temperature before calculating durability.",
       ],
     };
   }
@@ -295,8 +296,8 @@ export function resolveConservativeSoilTemperature(
   const warnings: string[] = [];
   if (subdivideWarning) {
     warnings.push(
-      `Application sites span ${spreadC.toFixed(1)} °C (> ${SOIL_TEMPERATURE_SUBDIVIDE_SPREAD_C} °C, module §5) — ` +
-        `consider subdividing the project; the conservative max (${maxSoilTemperatureC.toFixed(1)} °C) is used.`,
+      `Application sites span ${spreadC.toFixed(1)} °C, above the ${SOIL_TEMPERATURE_SUBDIVIDE_SPREAD_C} °C limit in module §5. ` +
+        `Consider subdividing the project. The conservative maximum of ${maxSoilTemperatureC.toFixed(1)} °C is used.`,
     );
   }
   if (temperatureFloored) {
@@ -374,7 +375,7 @@ export function resolveFacilityReferenceSoilTemperature(input: {
     temperatureFloored,
     method:
       `Facility reference soil temperature (annual average; 7 °C floor)` +
-      (source ? ` — ${source}` : ""),
+      (source ? `: ${source}` : ""),
     warnings,
   };
 }
@@ -400,9 +401,9 @@ export function buildSoilTemperatureReconciliationWarnings(args: {
 
   return [
     `An application site soil temperature (${maxSiteC.toFixed(1)} °C) exceeds the declared ` +
-      `facility reference (${args.facilityReference.effectiveSoilTemperatureC.toFixed(1)} °C) — ` +
-      `the reference may over-credit durability for that site. Reconcile the facility ` +
-      `reference value (Certification → Settings → Emissions) or its PDD justification.`,
+      `facility reference (${args.facilityReference.effectiveSoilTemperatureC.toFixed(1)} °C). ` +
+      "This may over-credit durability for that site. Review the facility reference or its " +
+      "PDD justification under Certification settings, then Emissions.",
   ];
 }
 
@@ -484,8 +485,7 @@ export function buildSoilTemperatureGate(args: {
   if (args.facilityReference == null) {
     return {
       blockers: [
-        "Set this facility's reference soil temperature (Certification → " +
-          "Settings → Emissions) before submitting a 200-year removal.",
+        "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
       ],
       warnings: [],
     };
@@ -521,8 +521,8 @@ export function reconcileDeclaredHToCorg(
     return null;
   }
   return (
-    `Declared H/C_org ${declared} diverges from the sample-aggregated ` +
+    `Declared H/C_org ${declared} differs from the Sample-derived ` +
     `${aggregated.toFixed(3)} (> ${H_TO_CORG_RECONCILIATION_TOLERANCE}). ` +
-    `The sample-derived value is submitted; reconcile the declared field.`
+    "The Sample-derived value is submitted. Review the declared H/C_org value for this credit batch."
   );
 }

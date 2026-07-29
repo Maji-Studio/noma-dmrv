@@ -52,7 +52,9 @@ describe("decideRemovalMembership", () => {
     });
     expect(decision.toLink).toEqual([]);
     expect(decision.linkedRemovalIds).toEqual([]);
-    expect(decision.warnings[0]).toContain("no local record");
+    expect(decision.warnings[0]).toBe(
+      "Isometric linked Removal rmv_unknown, but it is not saved in noma. Sync the GHG Statement again.",
+    );
   });
 
   it("dedupes when two external ids map to the same local removal", () => {

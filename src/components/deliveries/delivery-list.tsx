@@ -118,14 +118,14 @@ function createColumns(
     {
       accessorKey: "orderCode",
       header: "Order",
-      cell: ({ row }) => <span>{row.original.orderCode || "—"}</span>,
+      cell: ({ row }) => <span>{row.original.orderCode || "Not recorded"}</span>,
     },
     {
       accessorKey: "customerName",
       header: "Customer",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.customerName || "—"}
+          {row.original.customerName || "Not recorded"}
         </span>
       ),
     },
@@ -277,7 +277,7 @@ export function DeliveryList() {
     entityNoun: "Delivery",
     executeCreate: async (data: DeliveryFormData) => {
       if (!contextFacilityId) {
-        throw new Error("No facility selected. Please select a facility first.");
+        throw new Error("No facility selected. Select a facility and try again.");
       }
       const createData = {
         ...data,
@@ -301,13 +301,13 @@ export function DeliveryList() {
     setError: setFormError,
     setUpdateError: setFormError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Failed to create delivery",
+      error instanceof Error ? error.message : "The delivery was not created. Check the form and try again.",
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this delivery.",
     openEditOnFailure: (delivery) =>
       setSideSheet({ entity: delivery, mode: "edit" }),
     closeOnSuccess: () => setSideSheet(null),
-    onSuccess: () => toast.success("Delivery created successfully"),
+    onSuccess: () => toast.success("Delivery created."),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
   const deepLinkedSideSheet =
@@ -390,9 +390,9 @@ export function DeliveryList() {
         ...data,
       });
       closeSideSheet();
-      toast.success("Delivery updated successfully");
+      toast.success("Delivery updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to update delivery");
+      setFormError(error instanceof Error ? error.message : "The delivery was not saved. Try again.");
     }
   };
 
@@ -406,9 +406,9 @@ export function DeliveryList() {
     try {
       await deleteDelivery.mutateAsync(deletingDeliveryId);
       setDeletingDeliveryId(null);
-      toast.success("Delivery deleted successfully");
+      toast.success("Delivery deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete delivery");
+      setDeleteError(error instanceof Error ? error.message : "The delivery was not deleted. Try again.");
     }
   };
 
@@ -445,7 +445,7 @@ export function DeliveryList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load deliveries"} />
+        <ServerError message={fetchError.message || "The deliveries could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }

@@ -53,6 +53,7 @@ export type IngredientInput = {
 
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { formatCount } from "@/lib/copy-utils";
 import {
   assertFormulationRatioWithinStock,
   lockFormulationRatioRows,
@@ -79,7 +80,9 @@ async function assertBlendFeedstockTypes(ctx: OrgContext, ingredients?: Ingredie
   if (rows.length !== feedstockTypeIds.length) {
     const returnedIds = new Set(rows.map((row) => row.id));
     const missingIds = feedstockTypeIds.filter((id) => !returnedIds.has(id));
-    throw new SafeError(`Blend material(s) not found: ${missingIds.join(", ")}`);
+    throw new SafeError(
+      `${formatCount(missingIds.length, "Feedstock type")} ${missingIds.length === 1 ? "was" : "were"} not found. Refresh the formulation and choose the feedstock types again.`,
+    );
   }
 
   if (rows.some((row) => row.usage !== "blend")) {

@@ -692,7 +692,7 @@ export default function CarbonTransitMap({
           className="absolute bottom-16 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 font-mono text-[9.5px] font-medium uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]"
           data-testid="carbon-viewer-no-basemap-note"
         >
-          Basemap unavailable — set NEXT_PUBLIC_MAPTILER_KEY
+          Basemap unavailable. Ask an Admin to configure the map service.
         </div>
       ) : null}
       <MapControls

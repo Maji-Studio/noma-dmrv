@@ -12,7 +12,7 @@ describe("toBatchHealthFacts", () => {
           id: "batch-1",
           code: "CB-1",
           durabilityGateBlockers: [
-            "Credit batch CB-1 has 0 replicate(s) with complete H/C_org + O/C_org chemistry; ≥ 3 required per sampled batch (§8.3.1).",
+            "Credit batch CB-1 has no replicates with complete H/C_org and O/C_org chemistry. Record at least 3 for each sampled batch (§8.3.1).",
           ],
           facilityEmissionsGateBlockers: [
             "Set the facility reference soil temperature.",
@@ -44,7 +44,7 @@ describe("toBatchHealthFacts", () => {
     expect(health.issueCount).toBe(3);
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
-    ).toContain("complete H/C_org + O/C_org chemistry");
+    ).toContain("complete H/C_org and O/C_org chemistry");
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
     ).not.toContain("reference soil temperature");

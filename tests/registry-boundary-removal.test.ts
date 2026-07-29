@@ -507,7 +507,7 @@ function makeContext(
       source: "Test dataset (annual mean)",
       temperatureFloored: false,
       method:
-        "Facility reference soil temperature (annual average; 7 °C floor) — Test dataset (annual mean)",
+        "Facility reference soil temperature (annual average; 7 °C floor): Test dataset (annual mean)",
       warnings: [],
     },
   };
@@ -769,7 +769,7 @@ describe("submitRemoval boundary — removal orphan (test 2)", () => {
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: fixture.removalId }),
     ).rejects.toThrowError(
       new SafeError(
-        "Stale submission cannot be resumed because its fixed-input snapshot does not match the current schema.",
+        "This saved submission uses an older input format and cannot resume. Select Refresh review, then submit again.",
       ),
     );
 

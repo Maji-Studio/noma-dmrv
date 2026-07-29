@@ -129,7 +129,7 @@ function removalLifecycle(
     case "in-progress":
       return {
         badgeStatus: "running",
-        label: "Submitting removal",
+        label: "Submitting Removal",
         currentStepIndex: 0,
         stepStates: buildStepStates(0),
       };

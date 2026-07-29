@@ -270,8 +270,7 @@ export default function PositionPickerMap({
           Map preview unavailable
         </span>
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          The map preview could not load. Enter coordinates manually below —
-          they still work.
+          The map preview could not load. Enter the coordinates below.
         </span>
       </div>
     );

@@ -92,7 +92,7 @@ describe("buildProductionRunWindowDetailFields", () => {
       { label: "End time", value: "16:00" },
       {
         label: "Time zone",
-        value: "Facility time — Africa/Dar es Salaam",
+        value: "Facility time: Africa/Dar es Salaam",
       },
     ]);
   });
@@ -128,7 +128,7 @@ describe("buildProductionRunWindowDetailFields", () => {
     expect(fields[1]).toEqual({ label: "Start time", value: "05:00" });
     expect(fields[4]).toEqual({
       label: "Time zone",
-      value: "Facility time unknown — using UTC",
+      value: "Facility time is not set. Using UTC.",
     });
   });
 
@@ -149,7 +149,7 @@ describe("buildProductionRunWindowDetailFields", () => {
     expect(fields[3]).toEqual({ label: "End time", value: "03:30" });
     expect(fields[4]).toEqual({
       label: "Time zone",
-      value: "Facility time — America/New York",
+      value: "Facility time: America/New York",
     });
   });
 });

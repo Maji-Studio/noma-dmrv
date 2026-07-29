@@ -39,7 +39,7 @@ const facilityIdSchema = z.uuid();
 const CONCURRENT_RECONCILIATION_WARNING =
   "This registry statement is already being reconciled by another request.";
 export const SHARED_PROJECT_GHG_CREATE_MESSAGE =
-  "GHG statements cannot be created while this Isometric project is shared across multiple noma facilities. Link each facility to a dedicated Isometric project first.";
+  "GHG Statements cannot be created while this Isometric project is shared across multiple noma facilities. Link each facility to a dedicated Isometric project first.";
 
 export function assertDedicatedGhgStatementProject(
   projectFacilityIds: string[],
@@ -55,7 +55,7 @@ function assertSingleFacilityRegistryStatement(
 ): void {
   if (new Set(facilityIds).size > 1) {
     throw new SafeError(
-      `Registry statement ${remoteId} contains removals from multiple noma facilities. Split it into one statement per facility in Isometric, then sync again.`,
+      `Registry GHG Statement ${remoteId} contains Removals from multiple noma facilities. Split it into one GHG Statement per facility in Isometric, then sync again.`,
     );
   }
 }
@@ -95,7 +95,7 @@ export async function reconcileGhgStatementsForFacility(
   const project = await getCertifierProjectByFacility(orgCtx, facilityId);
   if (!project) {
     throw new SafeError(
-      "Link this facility to an Isometric project before syncing GHG statements.",
+      "Link this facility to an Isometric project before syncing GHG Statements.",
     );
   }
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
@@ -204,7 +204,7 @@ export async function listRegistryGhgStatementsForFacility(
   const project = await getCertifierProjectByFacility(orgCtx, facilityId);
   if (!project) {
     throw new SafeError(
-      "Link this facility to an Isometric project before syncing GHG statements.",
+      "Link this facility to an Isometric project before syncing GHG Statements.",
     );
   }
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
@@ -239,7 +239,7 @@ export async function reconcileRegistryGhgStatement(
     : null;
   if (existingSubmission && !existingStatement) {
     throw new SafeError(
-      `Registry statement ${args.remote.id} could not be reconciled to its local record. Reload and retry.`,
+      `Registry GHG Statement ${args.remote.id} could not be synced. Refresh the page and try again.`,
     );
   }
   const statement =
@@ -299,14 +299,14 @@ export async function reconcileRegistryGhgStatement(
         submission?.externalId !== args.remote.id
       ) {
         throw new SafeError(
-          `Registry statement ${args.remote.id} could not be reconciled to its local record. Reload and retry.`,
+          `Registry GHG Statement ${args.remote.id} could not be synced. Refresh the page and try again.`,
         );
       }
     }
   }
   if (!submission) {
     throw new SafeError(
-      `Registry statement ${args.remote.id} could not be reconciled to its local record. Reload and retry.`,
+      `Registry GHG Statement ${args.remote.id} could not be synced. Refresh the page and try again.`,
     );
   }
 

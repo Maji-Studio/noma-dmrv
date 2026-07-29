@@ -81,7 +81,7 @@ export function EntityCertifyReadinessBadge({
           onClick={(e) => e.stopPropagation()}
           aria-label={`${readyLabel ?? `Ready for ${readinessNoun}`} with ${warningCount} warning${
             warningCount === 1 ? "" : "s"
-          } — submission remains available`}
+          }. Submission remains available.`}
           className="inline-flex cursor-help rounded-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-1"
         >
           {pill}
@@ -111,7 +111,7 @@ export function EntityCertifyReadinessBadge({
         onClick={(e) => e.stopPropagation()}
         aria-label={`${incompleteLabel} with ${gapCount} gap${
           gapCount === 1 ? "" : "s"
-        } — activate to see what's missing`}
+        }. Activate to see what is missing.`}
         className="inline-flex cursor-help rounded-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-1"
       >
         {pill}
@@ -163,7 +163,7 @@ function ReadinessGapList({
                 <span aria-hidden className="mt-2 leading-none">
                   •
                 </span>
-                <span>Advisory — {warning.detail}</span>
+                <span>Advisory: {warning.detail}</span>
               </li>
             ))}
           </ul>

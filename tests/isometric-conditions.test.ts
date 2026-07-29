@@ -17,7 +17,7 @@ describe("Isometric conditional required validation", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error.issues.map((issue) => issue.message)).toContain(
-      "load_mass_kg is required"
+      "Load mass is required"
     );
   });
 
@@ -42,7 +42,7 @@ describe("Isometric conditional required validation", () => {
     if (result.success) return;
 
     expect(result.error.issues.map((issue) => issue.message)).toContain(
-      "h_to_c_org_ratio is required when durability_option=200_year"
+      "H/C_org ratio is required for 200-year durability"
     );
   });
 
@@ -56,7 +56,7 @@ describe("Isometric conditional required validation", () => {
     if (result.success) return;
 
     expect(result.error.issues.map((issue) => issue.message)).toContain(
-      "soil_temperature_c is required for 200-year durability calculation"
+      "Soil temperature is required for 200-year durability"
     );
   });
 

@@ -105,13 +105,13 @@ export async function requestUpload(
     const docType = parsed.data.documentType as DocumentType;
     if (!isAllowedMime(docType, parsed.data.contentType)) {
       throw new SafeError(
-        `Content type ${parsed.data.contentType} not allowed for ${docType}`
+        "This file type is not allowed for this document. Choose another file."
       );
     }
     const cap = maxBytesFor(docType);
     if (parsed.data.sizeBytes > cap) {
       throw new SafeError(
-        `File exceeds ${Math.round(cap / BYTES_PER_MB)} MB limit for ${docType}`
+        `This file is larger than the ${Math.round(cap / BYTES_PER_MB)} MB limit. Choose a smaller file.`
       );
     }
     await assertCanManageDocumentEntity(
@@ -184,16 +184,24 @@ export async function confirmUpload(
     const row = await getDocumentById(ctx, documentId);
     if (!row) throw new SafeError("Document not found");
     await assertCanManageDocumentEntity(ctx, row.entityType, row.entityId);
-    if (!row.storageKey) throw new SafeError("Document has no storage key");
+    if (!row.storageKey) {
+      throw new SafeError(
+        "The document is not available in storage. Upload the file again.",
+      );
+    }
     if (row.uploadStatus !== "pending") {
-      throw new SafeError(`Document already in '${row.uploadStatus}' state`);
+      throw new SafeError(
+        "This file is no longer waiting for confirmation. Upload it again.",
+      );
     }
 
     const provider = getStorageProvider();
     const head = await provider.headObject(row.storageKey);
     if (!head) {
       await updateDocument(ctx, row.id, { uploadStatus: "failed" });
-      throw new SafeError("Uploaded object not found in storage");
+      throw new SafeError(
+        "The uploaded file could not be found. Upload it again.",
+      );
     }
 
     const docType = row.documentType as DocumentType;
@@ -204,7 +212,7 @@ export async function confirmUpload(
         updateDocument(ctx, row.id, { uploadStatus: "failed" }),
       ]);
       throw new SafeError(
-        `Object size ${head.size} exceeds ${cap}-byte cap for ${docType}`
+        `This file is larger than the ${Math.round(cap / BYTES_PER_MB)} MB limit. Choose a smaller file.`,
       );
     }
     if (!isAllowedMime(docType, head.contentType)) {
@@ -213,7 +221,7 @@ export async function confirmUpload(
         updateDocument(ctx, row.id, { uploadStatus: "failed" }),
       ]);
       throw new SafeError(
-        `Object content-type ${head.contentType} not allowed for ${docType}`
+        "The uploaded file type is not allowed for this document. Choose another file.",
       );
     }
 
@@ -222,7 +230,11 @@ export async function confirmUpload(
       fileSizeBytes: head.size,
       mimeType: head.contentType,
     });
-    if (!updated) throw new SafeError("Failed to mark document uploaded");
+    if (!updated) {
+      throw new SafeError(
+        "The document upload could not be completed. Upload the file again.",
+      );
+    }
     return updated;
   });
 }

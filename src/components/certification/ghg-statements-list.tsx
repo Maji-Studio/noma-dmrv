@@ -39,6 +39,7 @@ import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { formatCount } from "@/lib/copy-utils";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
 
@@ -111,10 +112,8 @@ function LinkedRemovalsCell({ item }: { item: GhgStatementListItem }) {
   const { linkedRemovalCount } = item;
   return (
     <span className="body-small text-[var(--color-text-primary)]">
-      {linkedRemovalCount}
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        {" "}
-        removal{linkedRemovalCount === 1 ? "" : "s"}
+        {formatCount(linkedRemovalCount, "Removal")}
       </span>
     </span>
   );
@@ -124,7 +123,7 @@ function RegistryRecordCell({ item }: { item: GhgStatementListItem }) {
   const { latestSubmission } = item;
   if (!latestSubmission?.externalId) {
     return (
-      <span className="body-small text-[var(--color-text-tertiary)]">—</span>
+      <span className="body-small text-[var(--color-text-tertiary)]">None</span>
     );
   }
   return (
@@ -150,7 +149,7 @@ const columns: ColumnDef<GhgStatementListItem>[] = [
   },
   {
     id: "linkedRemovals",
-    header: "Linked removals",
+    header: "Linked Removals",
     accessorFn: (item) => String(item.linkedRemovalCount),
     cell: ({ row }) => <LinkedRemovalsCell item={row.original} />,
   },
@@ -222,7 +221,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Unable to sync GHG statements.",
+          : "GHG Statements were not synced. Try again.",
       );
     }
   };
@@ -231,7 +230,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
     return (
       <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
         <p className="body-medium text-[var(--clr-red)]" role="alert">
-          Unable to load GHG statements. Try refreshing the page.
+          GHG Statements could not be loaded. Refresh the page and try again.
         </p>
       </div>
     );
@@ -298,7 +297,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
           isLoading={query.isLoading}
           hoverable
           onRowClick={(row) => setStatementId(row.statement.id)}
-          aria-label="GHG statements"
+          aria-label="GHG Statements"
           emptyMessage={
             <EmptyState
               icon={<ClipboardTextIcon size={40} />}

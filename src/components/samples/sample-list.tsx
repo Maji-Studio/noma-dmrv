@@ -126,24 +126,24 @@ function createColumns(
       accessorFn: (row) => row.creditBatchCode ?? "",
       cell: ({ row }) => (
         <span className="text-[var(--clr-dark-purple)]">
-          {row.original.creditBatchCode ?? "\u2014"}
+          {row.original.creditBatchCode ?? "Not set"}
         </span>
       ),
     },
     {
       accessorKey: "totalCarbonPercent",
       header: "Total C (%)",
-      cell: ({ row }) => row.original.totalCarbonPercent?.toFixed(1) ?? "\u2014",
+      cell: ({ row }) => row.original.totalCarbonPercent?.toFixed(1) ?? "Not recorded",
     },
     {
       accessorKey: "organicCarbonPercent",
       header: "Organic C (%)",
-      cell: ({ row }) => row.original.organicCarbonPercent?.toFixed(1) ?? "\u2014",
+      cell: ({ row }) => row.original.organicCarbonPercent?.toFixed(1) ?? "Not recorded",
     },
     {
       accessorKey: "hToCOrgRatio",
       header: "H:C org ratio",
-      cell: ({ row }) => row.original.hToCOrgRatio?.toFixed(3) ?? "\u2014",
+      cell: ({ row }) => row.original.hToCOrgRatio?.toFixed(3) ?? "Not recorded",
     },
     {
       accessorKey: "durabilityOption",
@@ -157,7 +157,7 @@ function createColumns(
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("sample", row.original)}
           readyLabel="Chemistry complete"
-          readinessNoun="sample chemistry"
+          readinessNoun="Sample chemistry"
         />
       ),
     },
@@ -277,7 +277,7 @@ export function SampleList({
     if (!focusedSampleId) return;
     if (focusedSample.error || (focusedSample.isSuccess && !focusedSample.data)) {
       setFocusedSampleId(null);
-      toast.error("Linked sample could not be opened");
+      toast.error("The linked Sample could not be opened.");
     }
   }, [
     focusedSample.data,
@@ -314,9 +314,9 @@ export function SampleList({
     setError: setFormError,
     setUpdateError: setFormError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Failed to create sample",
+      error instanceof Error ? error.message : "The Sample was not created. Check the form and try again.",
     unresolvedUpdateMessage:
-      "Resolve or remove the failed attachments and transport legs before saving this sample.",
+      "Resolve or remove the failed attachments and transport legs before saving this Sample.",
     openEditOnFailure: (sample) =>
       leaveSampleCreateIntent(createIntent.clear, () =>
         setSideSheet({ mode: "edit", entity: sample }),
@@ -346,7 +346,7 @@ export function SampleList({
       };
     },
     onSuccess: () =>
-      toast.success("Sample created successfully"),
+      toast.success("Sample created."),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
@@ -441,9 +441,9 @@ export function SampleList({
       createWithEvidence.reset();
       setDeferredLegs([]);
       setSideSheet(null);
-      toast.success("Sample updated successfully");
+      toast.success("Sample updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to update sample");
+      setFormError(error instanceof Error ? error.message : "The Sample was not saved. Try again.");
     }
   };
 
@@ -457,9 +457,9 @@ export function SampleList({
     try {
       await deleteSample.mutateAsync(deletingSampleId);
       setDeletingSampleId(null);
-      toast.success("Sample deleted successfully");
+      toast.success("Sample deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete sample");
+      setDeleteError(error instanceof Error ? error.message : "The Sample was not deleted. Try again.");
     }
   };
 
@@ -548,21 +548,21 @@ export function SampleList({
         <PageHeader
           area="verification"
           title="Lab Samples"
-          subtitle="Lab analysis of biochar samples and carbon permanence"
+          subtitle="Lab analysis of biochar Samples and carbon permanence"
         />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its lab samples." />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its lab Samples." />
       </div>
     );
   }
 
   if (fetchError) {
-    return <div className="container-max py-32"><ServerError message={fetchError.message || "Failed to load samples"} /></div>;
+    return <div className="container-max py-32"><ServerError message={fetchError.message || "The Samples could not be loaded. Refresh the page and try again."} /></div>;
   }
 
   const viewingEntity =
     displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
   const viewSubtitle = viewingEntity
-    ? [viewingEntity.creditBatchCode, viewingEntity.facilityName].filter(Boolean).join(" \u2014 ") || undefined
+    ? [viewingEntity.creditBatchCode, viewingEntity.facilityName].filter(Boolean).join(" · ") || undefined
     : undefined;
 
   return (
@@ -570,7 +570,7 @@ export function SampleList({
       <PageHeader
         area="verification"
         title="Lab Samples"
-        subtitle="Lab analysis of biochar samples and carbon permanence"
+        subtitle="Lab analysis of biochar Samples and carbon permanence"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -580,8 +580,8 @@ export function SampleList({
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} description="All lab samples" isLoading={statsLoading} />
-        <StatCard title="Avg Carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? "-"} icon={<LeafIcon size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
+        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} description="All lab Samples" isLoading={statsLoading} />
+        <StatCard title="Avg Carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? "Not available"} icon={<LeafIcon size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
         <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<FireIcon size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
         <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<CertificateIcon size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
       </div>
@@ -609,17 +609,17 @@ export function SampleList({
           <EmptyState
             padding="md"
             icon={<FlaskIcon size={48} />}
-            title={hasActiveFilters ? "No samples found" : "No samples yet"}
+            title={hasActiveFilters ? "No Samples found" : "No Samples yet"}
             description={
               hasActiveFilters
                 ? "Try adjusting your search or filters."
-                : "Lab samples carry the analysis behind biochar quality and durability."
+                : "Lab Samples carry the analysis behind biochar quality and durability."
             }
             action={
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create your first lab sample
+                  Create your first Sample
                 </Button>
               ) : undefined
             }
@@ -628,8 +628,8 @@ export function SampleList({
       >
         <DataTable.Toolbar>
           <DataTable.Search
-            placeholder="Search by sample code..."
-            aria-label="Search samples by code"
+            placeholder="Search by Sample code..."
+            aria-label="Search Samples by code"
           />
           <DataTable.Controls>
             <DataTable.FilterSelect
@@ -660,7 +660,7 @@ export function SampleList({
       <DeleteConfirmDialog
         isOpen={!!deletingSampleId}
         title="Delete Sample"
-        message="Are you sure you want to delete this sample? This action cannot be undone. Note: Samples linked to credit batches cannot be deleted."
+        message="Delete this Sample? Samples linked to credit batches cannot be deleted. This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingSampleId(null); setDeleteError(null); }}
         isPending={deleteSample.isPending}

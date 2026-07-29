@@ -27,7 +27,7 @@ export function CertificationBlock({
 
   return (
     <DashboardPanel
-      title="Certification — credit batches"
+      title="Certification: credit batches"
       meta={
         <span className="label-micro text-[var(--color-text-tertiary)]">
           {totalBatches} {totalBatches === 1 ? "batch" : "batches"}
@@ -37,8 +37,8 @@ export function CertificationBlock({
       {batches.length === 0 ? (
         <div className="px-20 py-20">
           <span className="body-small text-[var(--color-text-secondary)]">
-            No credit batches yet — create one to roll a period&apos;s removals
-            toward the registry.
+            No credit batches yet. Create one to group completed production
+            runs for certification.
           </span>
         </div>
       ) : (
@@ -73,8 +73,8 @@ export function CertificationBlock({
         <div className="border-t border-[var(--color-border-tertiary)] px-20 py-10">
           <span className="body-caption text-[var(--st-wait)]">
             {batchesWithoutSamples}{" "}
-            {batchesWithoutSamples === 1 ? "batch" : "batches"} blocked — no lab
-            samples pooled yet
+            {batchesWithoutSamples === 1 ? "batch" : "batches"} blocked. Add lab
+            Samples to each credit batch.
           </span>
         </div>
       )}
@@ -84,7 +84,7 @@ export function CertificationBlock({
           href={`/certification/removals?facility=${encodeURIComponent(facilityId)}`}
           className="group inline-flex items-center gap-8 label-micro text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
         >
-          Open certification removals
+          Open Removals
           <ArrowRightIcon
             size={13}
             weight="bold"

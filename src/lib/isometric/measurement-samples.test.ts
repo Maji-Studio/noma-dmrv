@@ -122,7 +122,7 @@ describe("captureMeasurementSampleDatapointIds", () => {
     ]);
 
     expect(() => capture(sample)).toThrow(
-      /without the required datapoint_id.*cannot bind sequestration inputs/,
+      /value with no identifier.*check the registry response/,
     );
   });
 
@@ -155,7 +155,7 @@ describe("captureMeasurementSampleDatapointIds", () => {
         response,
         requestForSample(response, expectedValues),
       ),
-    ).toThrow(/returned 1 value.*expected 2/);
+    ).toThrow(/returned 1 value.*2 are required/);
   });
 
   it("fails closed on an unexpected response property", () => {
@@ -184,7 +184,7 @@ describe("captureMeasurementSampleDatapointIds", () => {
         response,
         requestForSample(response, response.values.slice(0, 1)),
       ),
-    ).toThrow(/unexpected measurement property/);
+    ).toThrow(/contains a value the Removal template does not use/);
   });
 
   it("fails closed on duplicate response datapoint IDs", () => {
@@ -208,7 +208,7 @@ describe("captureMeasurementSampleDatapointIds", () => {
       },
     ]);
 
-    expect(() => capture(response)).toThrow(/duplicate datapoint_id/);
+    expect(() => capture(response)).toThrow(/repeats value dtp_duplicate/);
   });
 });
 

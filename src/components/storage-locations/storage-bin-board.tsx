@@ -125,7 +125,7 @@ function filterFigure(
   summary: LaneSummary | undefined,
   filter: StorageBinTypeFilter,
 ): string {
-  if (!summary) return "—";
+  if (!summary) return "Not available";
   if (filter === "all") {
     const bins = filterBinCount(summary, "all") ?? 0;
     return `${bins} ${bins === 1 ? "bin" : "bins"}`;

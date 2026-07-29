@@ -1,5 +1,6 @@
 import type { RemovalCompilationView } from "@/fn/certification";
 import { Button } from "@/components/ui";
+import { formatCount } from "@/lib/copy-utils";
 import type { ReactNode } from "react";
 import {
   CompilationBlockers,
@@ -36,6 +37,53 @@ function EmptyValue({ children }: { children: ReactNode }) {
   );
 }
 
+function registryTargetLabel(target: string): string {
+  switch (target) {
+    case "/datapoints":
+      return "Recorded values";
+    case "/measurement-samples":
+      return "Durability measurements";
+    case "/ghg-entries":
+      return "Removal record";
+    default:
+      return "Registry record";
+  }
+}
+
+function bindingSourceLabel(
+  binding: RemovalCompilationView["review"]["bindings"][number]["binding"],
+): string {
+  if (binding === "fixed") return "Template value";
+  if (binding === "measurement-sample") return "Durability measurement";
+  return "Recorded value";
+}
+
+const REGISTRY_FIELD_LABELS: Record<string, string> = {
+  carbon_contents: "Carbon content",
+  factor: "Emission factor",
+  h_c_molar_ratios: "Hydrogen-to-carbon ratio",
+  mass_distance: "Mass and distance",
+  o_c_molar_ratios: "Oxygen-to-carbon ratio",
+  product_mass: "Product mass",
+  s_fraction: "Durability fraction",
+};
+
+function registryFieldLabel(
+  inputKey: string,
+  componentDisplayName?: string,
+): string {
+  const fieldLabel = REGISTRY_FIELD_LABELS[inputKey] ?? "Registry value";
+  const componentLabel = componentDisplayName?.trim();
+  if (
+    !componentLabel ||
+    componentLabel.includes("_") ||
+    componentLabel.includes("/")
+  ) {
+    return fieldLabel;
+  }
+  return `${componentLabel}: ${fieldLabel}`;
+}
+
 export function CompiledSubmissionReview({
   compilation,
   isLoading,
@@ -49,7 +97,7 @@ export function CompiledSubmissionReview({
         aria-live="polite"
       >
         <p className="body-small text-[var(--color-text-secondary)]">
-          Compiling the registry submission…
+          Preparing the registry submission…
         </p>
       </div>
     );
@@ -62,11 +110,11 @@ export function CompiledSubmissionReview({
         role="alert"
       >
         <p className="body-small text-[var(--color-text-primary)]">
-          Submission compilation unavailable. Nothing can be submitted until
-          the review compiles successfully.
+          Submission details could not be prepared. Retry the review before
+          submitting.
         </p>
         <Button variant="weak" onClick={onRetry}>
-          Retry compilation
+          Retry review
         </Button>
       </div>
     );
@@ -77,37 +125,31 @@ export function CompiledSubmissionReview({
     <div className="flex flex-col gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-16">
       <div className="flex flex-wrap items-start justify-between gap-12">
         <div className="flex flex-col gap-2">
-          <h4 className="title-heading-3">Compiled Isometric submission</h4>
+          <h4 className="title-heading-3">Registry submission details</h4>
           <p className="body-small text-[var(--color-text-secondary)]">
-            Template {review.template.displayName} ·{" "}
-            <span className="font-mono">{review.template.id}</span> · mapping{" "}
-            <span className="font-mono">{review.template.mappingRevision}</span>
+            Template {review.template.displayName}
           </p>
         </div>
         <Button variant="weak" onClick={onRetry}>
-          Recompile
+          Refresh review
         </Button>
       </div>
 
       <CompilationBlockers blockers={blockers} />
 
-      <ReviewSection title="Outbound plan">
+      <ReviewSection title="Registry plan">
         <p className="body-small text-[var(--color-text-secondary)]">
-          {review.reportingWindow.startedOn || "—"} →{" "}
-          {review.reportingWindow.completedOn || "—"}
+          {review.reportingWindow.startedOn || "Not recorded"} to{" "}
+          {review.reportingWindow.completedOn || "Not recorded"}
         </p>
         <p className="body-small font-mono text-[var(--color-text-primary)]">
-          {review.intendedPostTargets.join(" · ") || "No POST targets compiled"}
+          {review.intendedPostTargets.map(registryTargetLabel).join(" · ") ||
+            "No registry records prepared"}
         </p>
-        {compilation.compilationHash && (
-          <p className="body-caption font-mono break-all text-[var(--color-text-tertiary)]">
-            Artifact hash · {compilation.compilationHash}
-          </p>
-        )}
         <p className="body-caption text-[var(--color-text-tertiary)]">
           {snapshot
-            ? "Stable semantic and wire values are ready. Versioned supplier references and the immutable POST snapshot are materialized once when the ledger claim assigns its version."
-            : "No immutable POST snapshot will be claimed while compilation blockers remain."}
+            ? "The submission values are ready. Supporting files and registry records are saved when you submit."
+            : "The submission is not saved until you resolve all blockers."}
         </p>
       </ReviewSection>
 
@@ -119,13 +161,11 @@ export function CompiledSubmissionReview({
             mirrored automatically when you submit.
           </EmptyValue>
         ) : review.sourceIds.length === 0 ? (
-          <EmptyValue>No supporting Source IDs.</EmptyValue>
+          <EmptyValue>No supporting files attached.</EmptyValue>
         ) : (
-          <ul className="space-y-2 font-mono body-small text-[var(--color-text-primary)]">
-            {review.sourceIds.map((sourceId) => (
-              <li key={sourceId}>{sourceId}</li>
-            ))}
-          </ul>
+          <p className="body-small text-[var(--color-text-primary)]">
+            {formatCount(review.sourceIds.length, "supporting file")} attached.
+          </p>
         )}
       </ReviewSection>
 
@@ -138,7 +178,7 @@ export function CompiledSubmissionReview({
             <ul className="font-mono body-small">
               {review.memberCreditBatches.map((batch) => (
                 <li key={batch.id}>
-                  {batch.code} · {batch.id}
+                  {batch.code}
                 </li>
               ))}
             </ul>
@@ -150,7 +190,7 @@ export function CompiledSubmissionReview({
             <ul className="font-mono body-small">
               {review.productionRuns.map((run) => (
                 <li key={run.id}>
-                  {run.code ?? "Uncoded"} · {run.id}
+                  {run.code ?? "Code not recorded"}
                 </li>
               ))}
             </ul>
@@ -158,17 +198,17 @@ export function CompiledSubmissionReview({
         </div>
       </ReviewSection>
 
-      <ReviewSection title="Resolved component/input bindings">
+      <ReviewSection title="Registry input values">
         {review.bindings.length === 0 ? (
-          <EmptyValue>No bindings resolved.</EmptyValue>
+          <EmptyValue>No registry input values available.</EmptyValue>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left body-caption">
               <thead className="text-[var(--color-text-tertiary)]">
                 <tr>
-                  <th className="pr-12 pb-6">Component / input</th>
-                  <th className="pr-12 pb-6">Binding</th>
-                  <th className="pb-6">Wire value or identity</th>
+                  <th className="pr-12 pb-6">Registry field</th>
+                  <th className="pr-12 pb-6">Source</th>
+                  <th className="pb-6">Registry value or reference</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,17 +217,21 @@ export function CompiledSubmissionReview({
                     key={`${binding.componentId}:${binding.inputKey}`}
                     className="border-t border-[var(--color-border-tertiary)]"
                   >
-                    <td className="py-6 pr-12 font-mono">
-                      {binding.componentBlueprintKey}
-                      <br />
-                      {binding.componentId} / {binding.inputKey}
+                    <td className="py-6 pr-12">
+                      {registryFieldLabel(
+                        binding.inputKey,
+                        binding.componentDisplayName,
+                      )}
                     </td>
-                    <td className="py-6 pr-12">{binding.binding}</td>
+                    <td className="py-6 pr-12">
+                      {bindingSourceLabel(binding.binding)}
+                    </td>
                     <td className="py-6 font-mono">
-                      {binding.fixedDatapointId ??
-                        (binding.wireMagnitude === undefined
-                          ? "measurement sample"
-                          : `${binding.wireMagnitude} ${binding.wireUnit ?? ""} · ${binding.wireType ?? ""}`)}
+                      {binding.binding === "fixed"
+                        ? "Set in template"
+                        : binding.wireMagnitude === undefined
+                          ? "Durability measurement"
+                          : `${binding.wireMagnitude} ${binding.wireUnit ?? ""}`}
                     </td>
                   </tr>
                 ))}
@@ -197,33 +241,32 @@ export function CompiledSubmissionReview({
         )}
       </ReviewSection>
 
-      <ReviewSection title="Measurement samples">
+      <ReviewSection title="Durability measurements">
         {review.measurementSamples.length === 0 ? (
-          <EmptyValue>No measurement-sample POSTs compiled.</EmptyValue>
+          <EmptyValue>No durability measurements prepared.</EmptyValue>
         ) : (
           <ul className="space-y-8 body-small">
             {review.measurementSamples.map((sample) => (
               <li key={sample.operationKey}>
                 <span className="font-medium">{sample.label}</span> ·{" "}
-                <span className="font-mono">{sample.measuredAt ?? "—"}</span>
-                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono body-caption">
-                  {JSON.stringify(sample.values)}
-                </pre>
+                <span className="font-mono">{sample.measuredAt ?? "Not recorded"}</span>
+                <span className="ml-6 body-caption text-[var(--color-text-tertiary)]">
+                  {formatCount(sample.values.length, "recorded value")}
+                </span>
               </li>
             ))}
           </ul>
         )}
       </ReviewSection>
 
-      <ReviewSection title="Direct sequestration datapoints (s_fraction)">
+      <ReviewSection title="1000-year durability values">
         {review.directSequestrationDatapoints.length === 0 ? (
-          <EmptyValue>No direct sequestration datapoints compiled.</EmptyValue>
+          <EmptyValue>No 1000-year durability values prepared.</EmptyValue>
         ) : (
           <ul className="space-y-2 font-mono body-small">
             {review.directSequestrationDatapoints.map((datapoint) => (
               <li key={`${datapoint.componentId}:${datapoint.inputKey}`}>
-                {datapoint.componentId} / {datapoint.inputKey}:{" "}
-                {datapoint.magnitude} {datapoint.unit} · {datapoint.type}
+                {datapoint.magnitude} {datapoint.unit}
               </li>
             ))}
           </ul>

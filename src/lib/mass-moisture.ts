@@ -71,7 +71,7 @@ export const MOISTURE_BASIS_HINT =
  * the range: `MOISTURE_BASIS_HINT` sits behind an ⓘ, so this is the only place
  * the wet basis is on screen without an interaction.
  */
-export const MOISTURE_RANGE_HELPER = "0–100% of wet mass";
+export const MOISTURE_RANGE_HELPER = "0 to 100% of wet mass";
 
 export interface MassSplit {
   /** As-received mass. */

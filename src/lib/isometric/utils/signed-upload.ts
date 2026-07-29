@@ -43,7 +43,7 @@ export function assertUploadHostAllowed(uploadUrl: string): void {
   const parsed = new URL(uploadUrl);
   if (parsed.protocol !== "https:") {
     throw new SafeError(
-      `Refusing PUT to non-HTTPS upload URL (protocol=${parsed.protocol}).`,
+      "The registry returned an unsafe upload address. Retry the submission or contact support.",
     );
   }
   const allowlist = resolveHostAllowlist(
@@ -52,7 +52,7 @@ export function assertUploadHostAllowed(uploadUrl: string): void {
   );
   if (!hostAllowed(parsed.hostname, allowlist)) {
     throw new SafeError(
-      `Refusing PUT to upload URL with host "${parsed.hostname}" — not in ISOMETRIC_UPLOAD_HOST_ALLOWLIST.`,
+      `The registry returned an unsupported upload destination, "${parsed.hostname}". Retry the submission or contact support.`,
     );
   }
 }
@@ -82,7 +82,7 @@ export async function fetchSignedUploadWithTimeout(
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new SafeError(
-        `Storage transfer timed out after ${UPLOAD_TRANSFER_TIMEOUT_MS / 1000}s.`,
+        "The file transfer timed out. Check your connection and try again.",
       );
     }
     throw err;

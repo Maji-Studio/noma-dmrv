@@ -58,7 +58,8 @@ export async function getProductionSamplesFn(
     logServerError("getProductionSamplesFn failed", error);
     return {
       success: false,
-      error: "Failed to load production samples",
+      error:
+        "In-process measurements could not be loaded. Refresh the page and try again.",
     };
   }
 }
@@ -114,7 +115,8 @@ export async function createProductionSampleFn(
     logServerError("createProductionSampleFn failed", error);
     return {
       success: false,
-      error: "Failed to create production sample",
+      error:
+        "The in-process measurement was not created. Check the form and try again.",
     };
   }
 }
@@ -163,7 +165,7 @@ export async function updateProductionSampleFn(
     logServerError("updateProductionSampleFn failed", error);
     return {
       success: false,
-      error: "Failed to update production sample",
+      error: "The in-process measurement was not saved. Try again.",
     };
   }
 }
@@ -195,7 +197,10 @@ export async function deleteProductionSampleFn(
     logServerError("deleteProductionSampleFn failed", error);
     return {
       success: false,
-      error: toActionError(error, "Failed to delete production sample"),
+      error: toActionError(
+        error,
+        "The in-process measurement was not deleted. Try again.",
+      ),
     };
   }
 }

@@ -32,7 +32,7 @@ export const reactorFormSchema = z.object({
     .trim()
     .min(1, "Identifier is required")
     .max(255, "Identifier must be less than 255 characters"),
-  facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
+  facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   reactorType: z.enum(reactorTypes, { error: "Reactor type is required" }),
 
   // Optional fields
@@ -65,7 +65,7 @@ export const createReactorSchema = z.object({
  * All fields optional except reactorId
  */
 export const updateReactorSchema = z.object({
-  reactorId: z.string().uuid("Invalid reactor ID"),
+  reactorId: z.string().uuid("Choose a valid reactor."),
   code: z
     .string()
     .min(1)
@@ -83,7 +83,7 @@ export const updateReactorSchema = z.object({
  * Schema for deleting a reactor
  */
 export const deleteReactorSchema = z.object({
-  reactorId: z.string().uuid("Invalid reactor ID"),
+  reactorId: z.string().uuid("Choose a valid reactor."),
 });
 
 // ============================================

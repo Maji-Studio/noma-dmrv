@@ -174,7 +174,7 @@ function createColumns(params: {
       accessorFn: (row) => row.isometricFeedstockTypeId ?? "",
       cell: ({ row }) => (
         <MutedValue archived={!!row.original.archivedAt}>
-          {row.original.isometricFeedstockTypeId ? <IsometricLinkedBadge /> : "—"}
+          {row.original.isometricFeedstockTypeId ? <IsometricLinkedBadge /> : "Not linked"}
         </MutedValue>
       ),
     },
@@ -282,9 +282,9 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     try {
       await createFeedstockType.mutateAsync(data);
       setSideSheet(null);
-      toast.success("Feedstock type created successfully");
+      toast.success("Feedstock type created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to create feedstock type");
+      setFormError(error instanceof Error ? error.message : "The feedstock type was not created. Check the form and try again.");
     }
   };
 
@@ -297,9 +297,9 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         ...data,
       });
       setSideSheet(null);
-      toast.success("Feedstock type updated successfully");
+      toast.success("Feedstock type updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to update feedstock type");
+      setFormError(error instanceof Error ? error.message : "The feedstock type was not saved. Try again.");
     }
   };
 
@@ -309,7 +309,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       setDeleteConflict(null);
       toast.success("Feedstock type archived");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to archive feedstock type");
+      toast.error(error instanceof Error ? error.message : "The feedstock type was not archived. Try again.");
     }
   };
 
@@ -318,7 +318,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       await unarchiveFeedstockType.mutateAsync(entity.id);
       toast.success("Feedstock type unarchived");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to unarchive feedstock type");
+      toast.error(error instanceof Error ? error.message : "The feedstock type was not restored. Try again.");
     }
   };
 
@@ -326,9 +326,9 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     if (!deletingType) return;
     try {
       await deleteFeedstockType.mutateAsync(deletingType.id);
-      toast.success("Feedstock type deleted successfully");
+      toast.success("Feedstock type deleted.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to delete feedstock type";
+      const message = error instanceof Error ? error.message : "The feedstock type was not deleted. Try again.";
       if (message.toLowerCase().includes("archive it instead")) {
         setDeleteConflict(deletingType);
       } else {

@@ -95,8 +95,8 @@ describe("formatMoisturePercent", () => {
   });
 
   it("falls back to the shared em-dash for missing readings", () => {
-    expect(formatMoisturePercent(null)).toBe("—");
-    expect(formatMoisturePercent(undefined)).toBe("—");
+    expect(formatMoisturePercent(null)).toBe("Not recorded");
+    expect(formatMoisturePercent(undefined)).toBe("Not recorded");
   });
 });
 

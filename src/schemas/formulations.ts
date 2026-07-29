@@ -179,7 +179,7 @@ export const createFormulationSchema = formulationFormSchema;
 
 export const updateFormulationSchema = z
   .object({
-    formulationId: z.string().uuid("Invalid formulation ID"),
+    formulationId: z.string().uuid("Choose a valid formulation."),
     code: z
       .string()
       .min(1)
@@ -195,7 +195,7 @@ export const updateFormulationSchema = z
   .superRefine(duplicateBlendMaterialRefinement);
 
 export const deleteFormulationSchema = z.object({
-  formulationId: z.string().uuid("Invalid formulation ID"),
+  formulationId: z.string().uuid("Choose a valid formulation."),
 });
 
 // ============================================

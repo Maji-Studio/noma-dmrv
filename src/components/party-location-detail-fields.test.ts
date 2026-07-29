@@ -24,7 +24,11 @@ describe("buildPartyLocationDetailFields", () => {
       "One-way distance from facility (per leg, km)",
       "Default destination",
     ]);
-    expect(fields.every((field) => field.value == null || field.value === "—")).toBe(true);
+    expect(
+      fields.every(
+        (field) => field.value == null || field.value === "Not set",
+      ),
+    ).toBe(true);
   });
 
   it("prefixes repeated locations while preserving each location's field order", () => {
