@@ -96,6 +96,7 @@ export function ProductionReadingsDocuments({
         accept={READINGS_ACCEPT}
         multiple={false}
         maxSizeMb={READINGS_MAX_MB}
+        helperText={`The file must be a CSV, up to ${READINGS_MAX_MB} MB.`}
         disabled={disabled}
         deferred
         deferredFiles={deferredAttachments?.attachments ?? []}
@@ -192,10 +193,12 @@ export function ProductionReadingsDocuments({
           accept={READINGS_ACCEPT}
           multiple={false}
           maxSizeMb={READINGS_MAX_MB}
+          helperText={`The file must be a CSV, up to ${READINGS_MAX_MB} MB.`}
           disabled={disabled}
           entityType={ENTITY_TYPE}
           entityId={productionRunId}
           documentType={READINGS_DOC_TYPE}
+          onUploaded={() => setUploadError(null)}
           onUploadError={(err) => setUploadError(err)}
         />
       )}

@@ -680,6 +680,8 @@ Sizing: (S) small, (M) medium, (L) large.
 - The older CSV importer, row table, sensor mapping, Parquet transformer, and
   `DataUploadSubmission` modules remain in the codebase but have no mounted
   operator entry point.
+- `getProductionRunReadingsList` has no `.limit`, and the legacy reading table
+  has no virtualization.
 - **Resolve via:** confirm the registry evidence contract for production
   monitoring. If the retained CSV is sufficient, remove the legacy structured
   pipeline and table. If a sensor-linked bulk upload is required, design that as

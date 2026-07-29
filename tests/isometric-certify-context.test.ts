@@ -462,11 +462,9 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
 
     expect(result.productionReadinessGap).toBeNull();
-    expect(result.entityReadinessGaps).not.toEqual(
-      expect.arrayContaining([
-        expect.stringContaining("Production run PR-1: Telemetry readings"),
-      ]),
-    );
+    expect(result.entityReadinessGaps).toEqual([
+      "Production run PR-1: Feedstock wet mass · Feedstock moisture · Biochar wet mass · Biochar moisture · Startup / plant diesel · Preprocess fuel · Genset diesel · Electricity",
+    ]);
   });
 
   it("flags missingDefaultTemplateId when the saved template is not in the list (drift)", async () => {

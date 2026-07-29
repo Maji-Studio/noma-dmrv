@@ -167,6 +167,8 @@ The operator workflow is file-only. A readings CSV is uploaded once as a
 does not inspect or validate its headers, timestamps, run window, sensor values,
 or other contents. The normal document security, size, and file-type checks are
 the complete validation boundary for this workflow.
+The operator picker deliberately narrows uploads to `.csv` even though the
+`sensor_data` storage rule accepts the wider tabular MIME set.
 
 The production-run create, edit, and detail surfaces do not parse the CSV or
 write `production_run_readings` rows. They list the stored filename and size,

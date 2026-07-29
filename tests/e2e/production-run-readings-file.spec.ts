@@ -121,7 +121,7 @@ test.describe("production run readings file", () => {
     await expect(dialog.getByRole("button", { name: /Re-import/ })).toHaveCount(
       0,
     );
-    await expect(dialog.getByText(/Imported readings/)).toHaveCount(0);
+    await expect(dialog.getByText(/Imported \d+ reading/)).toHaveCount(0);
 
     const stored = await loadStoredEvidence(run.id);
     expect(stored.documents).toMatchObject([

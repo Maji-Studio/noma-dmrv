@@ -95,13 +95,13 @@ describe("ProductionReadingsDocuments", () => {
     expect(html).not.toContain("Legacy import failure");
   });
 
-  it("uploads a CSV as sensor_data without an import callback", () => {
+  it("uploads a CSV as sensor_data with a completion callback", () => {
     const html = renderToStaticMarkup(
       <ProductionReadingsDocuments productionRunId="run-1" />,
     );
 
     expect(html).toContain('data-accept=".csv"');
     expect(html).toContain('data-document-type="sensor_data"');
-    expect(html).toContain('data-has-upload-callback="false"');
+    expect(html).toContain('data-has-upload-callback="true"');
   });
 });

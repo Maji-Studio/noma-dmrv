@@ -46,6 +46,9 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 12,
       preprocessingFuelLiters: 3,
       electricityKwh: 50,
+      // Legacy telemetry key: the removed gate must stay gone, so a zero count
+      // must not produce a gap.
+      readingsCount: 0,
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
