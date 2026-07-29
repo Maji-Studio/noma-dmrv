@@ -672,7 +672,7 @@ export function useGhgStatementsForFacility(
 // is an explicit operator action — `useSyncGhgStatementsFromRegistry`.
 export function useRegistryGhgStatementsForFacility(
   facilityId: string,
-  enabled = true,
+  enabled: boolean,
 ) {
   return useQuery({
     queryKey: certificationKeys.registryGhgStatementsForFacility(facilityId),

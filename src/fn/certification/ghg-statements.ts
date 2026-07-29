@@ -50,6 +50,7 @@ import {
   ghgStatementCreateRefusalMessage,
   getIsometricClientForOrg,
   getGhgStatement,
+  getGhgStatementPeriod,
   IsometricApiError,
   listGhgStatementsForProject,
   matchGhgStatementForCreate,
@@ -94,7 +95,6 @@ import {
 } from "@/data-access/certifier-ghg-remote-state";
 import {
   assertDedicatedGhgStatementProject,
-  reconcileGhgStatementsForFacility,
   reconcileRegistryGhgStatement,
 } from "./ghg-statement-reconciliation";
 import {
@@ -314,9 +314,16 @@ export async function createGhgStatementDraft(
       orgCtx,
       parsed.facilityId,
     );
-    const existingEnds = existing
+    const localEnds = existing
       .filter((statement) => !hasMissingRemotePeriod(statement))
       .map(getEffectiveReportingPeriodEndOn);
+    // The local mirror can lag Isometric until Sync. Creation already fetched
+    // the project statements, so include remote periods in the safety window.
+    const remoteEnds = remoteStatements.flatMap((statement) => {
+      const endOn = getGhgStatementPeriod(statement).endOn;
+      return endOn === null ? [] : [endOn];
+    });
+    const existingEnds = [...new Set([...localEnds, ...remoteEnds])];
     const overlap = overlappingEnd(parsed.reportingPeriodEndOn, existingEnds);
     if (overlap) {
       throw new SafeError(
@@ -934,24 +941,14 @@ export async function loadGhgStatementState(
 }
 
 // Hub listing — every GHG statement for a facility with its latest ledger
-// row and linked-removal count.
+// row and linked-removal count. This is deliberately DB-only: registry
+// reconciliation is an explicit operator action because tying it to the page
+// query made every navigation wait on the external registry.
 export async function loadGhgStatementsForFacility(
   facilityId: string,
 ): Promise<ActionResult<GhgStatementListItem[]>> {
   return withAction(async (orgCtx) => {
     await requireOrgFacility(orgCtx, facilityId);
-    try {
-      await reconcileGhgStatementsForFacility(orgCtx, facilityId);
-    } catch (error) {
-      logger.warn(
-        {
-          op: "ghg-statement:list-reconcile",
-          facilityId,
-          errorName: error instanceof Error ? error.name : typeof error,
-        },
-        "registry statement refresh failed; serving stale local list",
-      );
-    }
     const statements = await listGhgStatementsForFacility(orgCtx, facilityId);
     if (statements.length === 0) return [];
 
