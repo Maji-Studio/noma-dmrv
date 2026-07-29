@@ -79,6 +79,7 @@ function render(overrides: {
       compilationError={null}
       checks={overrides.checks ?? PASSING_CHECKS}
       readiness={{ state: "ready", reasons: [], advisories: [] }}
+      rejectionMessage={null}
     />,
   );
 }

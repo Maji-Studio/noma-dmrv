@@ -94,6 +94,7 @@ function facts(overrides: Partial<SubmissionFactsInput> = {}) {
     compilationError: null,
     checks: [check("mapping", "met")],
     readiness: readiness("ready"),
+    rejectionMessage: null,
     ...overrides,
   });
 }
@@ -252,6 +253,19 @@ describe("buildSubmissionFacts verdict precedence", () => {
     expect(facts({ readiness: readiness("submitted") })).toMatchObject({
       state: "ready",
       headline: "Ready to submit",
+    });
+  });
+
+  it("carries a registry rejection in the verdict, ahead of the checks", () => {
+    expect(
+      facts({
+        rejectionMessage: "This removal was rejected in Isometric.",
+        checks: [check("mapping", "unmet")],
+      }),
+    ).toMatchObject({
+      state: "blocked",
+      headline: "Cannot submit yet",
+      detail: "This removal was rejected in Isometric.",
     });
   });
 

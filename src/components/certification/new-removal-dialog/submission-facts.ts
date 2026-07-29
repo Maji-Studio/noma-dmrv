@@ -34,6 +34,12 @@ export interface SubmissionFactsInput {
    * would read as ready beside a disabled button.
    */
   readiness: RemovalReadiness;
+  /**
+   * Set when the registry rejected the last attempt. This is a persisted state
+   * of the removal, not an error from the click, so the verdict line owns it
+   * and `ServerError` is left to report the submit attempt itself.
+   */
+  rejectionMessage: string | null;
 }
 
 export type SubmitState = "loading" | "ready" | "blocked";
@@ -172,6 +178,7 @@ export function buildSubmissionFacts({
   compilationError,
   checks,
   readiness,
+  rejectionMessage,
 }: SubmissionFactsInput): SubmissionFacts {
   const batches = ctx.memberBatches;
   const actionChecks = actionableSubmissionChecks(checks);
@@ -209,6 +216,12 @@ export function buildSubmissionFacts({
     state = "blocked";
     headline = "Submission in progress";
     detail = "Another submission for this removal is still running.";
+  } else if (rejectionMessage) {
+    // The registry refused the last attempt. Nothing below this matters until
+    // the registry record is resolved, and the button is disabled regardless.
+    state = "blocked";
+    headline = "Cannot submit yet";
+    detail = rejectionMessage;
   } else if (checksAttention > 0) {
     state = "blocked";
     headline =
