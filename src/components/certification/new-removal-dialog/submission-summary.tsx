@@ -203,7 +203,7 @@ export function SubmissionSummary({
       {facts.warnings.length > 0 && (
         <div className="flex flex-col gap-4 border-l-2 border-[var(--st-wait)] pl-12">
           <span className="body-small font-medium text-[var(--color-text-primary)]">
-            Recorded but not submitted
+            Submission notes
           </span>
           <CompilationWarnings warnings={facts.warnings} />
         </div>
