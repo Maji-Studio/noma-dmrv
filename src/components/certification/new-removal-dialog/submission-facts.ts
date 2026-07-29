@@ -69,8 +69,9 @@ const DURABILITY_LABELS: Record<DurabilityOption, string> = {
 export function isRemovalCompilationReady(
   compilation: RemovalCompilationView | null,
 ): boolean {
+  if (!compilation) return false;
   return (
-    compilation?.blockers.length === 0 &&
+    compilation.blockers.length === 0 &&
     compilation.snapshot !== null &&
     compilation.compilationHash !== null
   );
