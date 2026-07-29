@@ -1,140 +1,50 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import {
-  FormError,
-  FormField,
-  FormTextarea,
-  ResolvedErrorRevalidator,
-  ServerError,
-} from "@/components/forms";
-import { Button, Modal } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { ServerError } from "@/components/forms";
 import {
   useApproveGhgStatementReport,
   usePrepareGhgStatementReport,
   useGhgStatementReports,
 } from "@/hooks/use-certification";
-import type { GhgStatementReportNarratives } from "@/lib/certification/ghg-statement-report/model";
-import {
-  ghgStatementReportFormSchema,
-  type GhgStatementReportFormData,
-} from "@/schemas/certification";
 
 type ReportsQuery = ReturnType<typeof useGhgStatementReports>;
-
-const EMPTY_NARRATIVES: GhgStatementReportNarratives = {
-  systemBoundaryAndMethodology: "",
-  evidenceIndex: "",
-  uncertaintyAndSensitivity: "",
-  dataQualityAndExceptions: "",
-  monitoringAndDurability: "",
-  approvalStatement: "",
-};
-
-const DEFAULT_FORM_VALUES: GhgStatementReportFormData = {
-  narratives: EMPTY_NARRATIVES,
-  humanReviewAcknowledged: false,
-};
-
-const NARRATIVE_FIELDS: Array<{
-  key: keyof GhgStatementReportNarratives;
-  label: string;
-  helper: string;
-}> = [
-  {
-    key: "systemBoundaryAndMethodology",
-    label: "System boundary and methodology",
-    helper:
-      "Describe the reviewed boundary, including energy and transport, and the methodology applied.",
-  },
-  {
-    key: "evidenceIndex",
-    label: "Evidence and Source index review",
-    helper:
-      "Describe how you checked the frozen Source bindings. The PDF lists the exact Source IDs.",
-  },
-  {
-    key: "uncertaintyAndSensitivity",
-    label: "Uncertainty and sensitivity",
-    helper: "Record the uncertainty and sensitivity checks you performed.",
-  },
-  {
-    key: "dataQualityAndExceptions",
-    label: "Data quality and exceptions",
-    helper:
-      "Record data-quality findings, exclusions, incidents, and reporting-period exceptions.",
-  },
-  {
-    key: "monitoringAndDurability",
-    label: "Monitoring and durability",
-    helper: "Record the monitoring and durability evidence you reviewed.",
-  },
-  {
-    key: "approvalStatement",
-    label: "Review statement",
-    helper:
-      "State what you reviewed before this report can move to approval.",
-  },
-];
 
 export function GhgStatementReportWorkflow({
   ghgStatementId,
   reportsQuery,
+  canGenerate = true,
+  generationUnavailableReason,
 }: {
   ghgStatementId: string;
   reportsQuery: ReportsQuery;
+  canGenerate?: boolean;
+  generationUnavailableReason?: string | null;
 }) {
   const prepare = usePrepareGhgStatementReport();
   const approve = useApproveGhgStatementReport();
-  const [prepareOpen, setPrepareOpen] = useState(false);
   const [preparationKey, setPreparationKey] = useState(() =>
     crypto.randomUUID(),
   );
   const [error, setError] = useState<string | null>(null);
+  const hasReports = Boolean(reportsQuery.data?.length);
+  const latestVersion = reportsQuery.data?.[0]?.version;
 
-  const {
-    register,
-    handleSubmit,
-    control,
-    trigger,
-    reset,
-    formState: { errors },
-  } = useForm({
-    resolver: zodResolver(ghgStatementReportFormSchema),
-    // onTouched so narrative length and keyword rules surface on blur rather
-    // than only after a server round-trip.
-    mode: "onTouched",
-    defaultValues: DEFAULT_FORM_VALUES,
-  });
-
-  const openPrepare = () => {
-    reset(DEFAULT_FORM_VALUES);
-    setError(null);
-    prepare.reset();
-    setPrepareOpen(true);
-  };
-
-  const submitPrepare = handleSubmit(async (data) => {
+  const generateReport = async () => {
     setError(null);
     try {
-      await prepare.mutateAsync({
-        ghgStatementId,
-        preparationKey,
-        ...data,
-      });
+      await prepare.mutateAsync({ ghgStatementId, preparationKey });
       setPreparationKey(crypto.randomUUID());
-      setPrepareOpen(false);
     } catch (prepareError) {
       setError(
         prepareError instanceof Error
           ? prepareError.message
-          : "Report preparation failed.",
+          : "Report generation failed.",
       );
     }
-  });
+  };
 
   const approveVersion = async (report: {
     id: string;
@@ -160,24 +70,40 @@ export function GhgStatementReportWorkflow({
     <section className="flex flex-col gap-12">
       <div className="flex items-center justify-between gap-12">
         <div>
-          <h3 className="body-medium font-medium">GHG Statement reports</h3>
+          <h3 className="body-medium font-medium">Report</h3>
           <p className="body-caption text-[var(--color-text-tertiary)]">
-            Prepare, review, and approve an immutable report before submission.
+            Generate from current Isometric data, then review before approval.
           </p>
         </div>
-        <Button size="small" variant="primary" onClick={openPrepare}>
-          Prepare report
+        <Button
+          size="small"
+          variant="primary"
+          busy={prepare.isPending}
+          disabled={!canGenerate}
+          onClick={() => void generateReport()}
+        >
+          {hasReports ? "Generate new version" : "Generate report"}
         </Button>
       </div>
+
+      {!canGenerate && (
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          {generationUnavailableReason ??
+            "A live GHG Statement with entries is required."}
+        </p>
+      )}
 
       {error && <ServerError message={error} />}
 
       {reportsQuery.isLoading ? (
-        <p className="body-small text-[var(--color-text-tertiary)]">
-          Loading report versions...
+        <p
+          aria-busy="true"
+          className="body-small text-[var(--color-text-tertiary)]"
+        >
+          Loading reports…
         </p>
       ) : reportsQuery.error ? (
-        <ServerError message="Unable to load report versions." />
+        <ServerError message="Unable to load reports." />
       ) : reportsQuery.data?.length ? (
         <div className="border border-[var(--color-border-secondary)]">
           {reportsQuery.data.map((report) => (
@@ -208,90 +134,28 @@ export function GhgStatementReportWorkflow({
                   rel="noreferrer"
                   className="label-button underline"
                 >
-                  Review or download
+                  Review
                 </a>
-                {report.lifecycle === "prepared" && (
-                  <Button
-                    size="small"
-                    variant="default"
-                    busy={approve.isPending}
-                    onClick={() => approveVersion(report)}
-                  >
-                    Approve
-                  </Button>
-                )}
+                {report.lifecycle === "prepared" &&
+                  report.version === latestVersion && (
+                    <Button
+                      size="small"
+                      variant="default"
+                      busy={approve.isPending}
+                      onClick={() => void approveVersion(report)}
+                    >
+                      Approve
+                    </Button>
+                  )}
               </div>
             </div>
           ))}
         </div>
       ) : (
         <p className="body-small text-[var(--color-text-tertiary)]">
-          No report versions prepared yet.
+          No report generated yet.
         </p>
       )}
-
-      <Modal
-        isOpen={prepareOpen}
-        onClose={() => setPrepareOpen(false)}
-        ariaLabelledBy="ghg-report-prepare-title"
-        width="lg"
-        dismissOnClickOutside={false}
-      >
-        <form onSubmit={submitPrepare} className="flex flex-col gap-20">
-          <ResolvedErrorRevalidator control={control} trigger={trigger} />
-          <header>
-            <h2 id="ghg-report-prepare-title" className="title-heading-3">
-              Prepare GHG Statement report
-            </h2>
-            <p className="body-small text-[var(--color-text-secondary)]">
-              Enter reviewed qualitative statements. Generated registry facts
-              are frozen into a new report version.
-            </p>
-          </header>
-          {NARRATIVE_FIELDS.map((field) => (
-            <FormField
-              key={field.key}
-              id={field.key}
-              label={field.label}
-              helperText={field.helper}
-              error={errors.narratives?.[field.key]?.message}
-              required
-            >
-              <FormTextarea
-                id={field.key}
-                {...register(`narratives.${field.key}`)}
-              />
-            </FormField>
-          ))}
-          <div>
-            <label className="flex items-start gap-8 body-small">
-              <input
-                type="checkbox"
-                {...register("humanReviewAcknowledged")}
-                className="mt-2 size-16"
-              />
-              I reviewed the generated facts and these qualitative statements.
-            </label>
-            {errors.humanReviewAcknowledged && (
-              <FormError message={errors.humanReviewAcknowledged.message} />
-            )}
-          </div>
-          {error && <ServerError message={error} />}
-          <div className="flex justify-end gap-12">
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => setPrepareOpen(false)}
-              disabled={prepare.isPending}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" busy={prepare.isPending}>
-              Prepare report
-            </Button>
-          </div>
-        </form>
-      </Modal>
     </section>
   );
 }

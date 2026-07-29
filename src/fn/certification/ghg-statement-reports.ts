@@ -1,6 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import versions from "../../../docs/isometric/versions.json";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import {
   approveGhgStatementReport as approveReportRow,
@@ -10,7 +11,6 @@ import {
   insertPreparedGhgStatementReport,
   issueVerifierReportToken,
   listGhgStatementReports,
-  listSubmittedRemovalSnapshots,
   type GhgStatementReportRow,
 } from "@/data-access/ghg-statement-reports";
 import {
@@ -24,10 +24,10 @@ import { withDedicatedLockConnection } from "@/db";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import {
   buildGhgStatementReportModel,
+  GHG_STATEMENT_REPORT_MODEL_VERSION,
   GhgStatementReportReconciliationError,
   type BuildGhgStatementReportModelInput,
   type GhgStatementReportModel,
-  type GhgStatementReportNarratives,
   sha256Hex,
 } from "@/lib/certification/ghg-statement-report/model";
 import { renderGhgStatementReportPdf } from "@/lib/certification/ghg-statement-report/pdf";
@@ -43,7 +43,7 @@ import {
   getGhgStatement,
   getIsometricClientForOrg,
 } from "@/lib/isometric";
-import { getStorageProvider } from "@/lib/storage";
+import { buildStorageKey, getStorageProvider } from "@/lib/storage";
 import {
   approveGhgStatementReportSchema,
   prepareGhgStatementReportSchema,
@@ -58,9 +58,12 @@ import {
   ISOMETRIC_PROVIDER,
 } from "./shared";
 
-const STANDARD_VERSION = "1.7";
-const PROTOCOL_VERSION = "1.1.1";
 const PDF_MIME_TYPE = "application/pdf";
+// Repo interpretation pins (docs/isometric/versions.json), not operator input:
+// the report must always state which methodology its totals were computed under.
+const PINNED_STANDARD_VERSION =
+  versions.certify_project_observation.current_standard_version;
+const PINNED_PROTOCOL_VERSION = versions.protocol.patch_version;
 
 export interface GhgStatementReportView {
   id: string;
@@ -89,7 +92,7 @@ function buildCheckedReportModel(
   } catch (error) {
     if (error instanceof GhgStatementReportReconciliationError) {
       throw new SafeError(
-        `${error.message} Refresh the GHG Statement and prepare a new report.`,
+        `${error.message} Refresh the GHG Statement and generate a new report.`,
       );
     }
     throw error;
@@ -112,22 +115,12 @@ function reportView(row: GhgStatementReportRow): GhgStatementReportView {
   };
 }
 
-function snapshotProjectId(snapshot: Record<string, unknown>): string | null {
-  const semantic = snapshot.semantic;
-  if (!semantic || typeof semantic !== "object" || Array.isArray(semantic)) {
-    return null;
-  }
-  const projectId = (semantic as Record<string, unknown>).projectId;
-  return typeof projectId === "string" ? projectId : null;
-}
-
 async function loadLiveReportFacts(
   orgCtx: OrgContext,
   args: {
     ghgStatementId: string;
     reportVersion: number;
     preparedAt: string;
-    narratives: GhgStatementReportNarratives;
   },
 ): Promise<LiveReportFacts> {
   const statement = await getCertifierGhgStatementById(
@@ -153,7 +146,7 @@ async function loadLiveReportFacts(
     );
   }
   if (!statementSubmission?.externalId) {
-    throw new SafeError("Create the GHG statement before preparing its report.");
+    throw new SafeError("Create the GHG Statement before generating its report.");
   }
 
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
@@ -170,7 +163,7 @@ async function loadLiveReportFacts(
     remoteStatement.reporting_period_end_at !== statement.reportingPeriodEndOn
   ) {
     throw new SafeError(
-      "The live GHG statement does not match the local project and reporting-period lineage. Refresh it before preparing a report.",
+      "The live GHG Statement does not match the local project and reporting-period lineage. Refresh it before generating a report.",
     );
   }
   if (
@@ -187,34 +180,29 @@ async function loadLiveReportFacts(
     );
   }
 
-  const [snapshots, remoteEntries] = await Promise.all([
-    listSubmittedRemovalSnapshots(orgCtx, {
-      externalRemovalIds: remoteStatement.ghg_entry_ids,
-      facilityId: statement.facilityId,
-    }),
-    Promise.all(
-      remoteStatement.ghg_entry_ids.map((entryId) =>
-        getGhgEntry(client, entryId),
-      ),
+  const remoteEntries = await Promise.all(
+    remoteStatement.ghg_entry_ids.map((entryId) =>
+      getGhgEntry(client, entryId),
     ),
-  ]);
-  for (const snapshot of snapshots) {
-    if (snapshotProjectId(snapshot.payloadSnapshot) !== project.externalProjectId) {
-      throw new SafeError(
-        `Submitted Removal ${snapshot.externalRemovalId} does not match this registry project. Prepare a report after correcting the Removal lineage.`,
-      );
-    }
-  }
+  );
   for (const [index, entry] of remoteEntries.entries()) {
     const requestedId = remoteStatement.ghg_entry_ids[index];
+    // noma supports only biochar removal credits; a REDUCTION entry's figures
+    // must never be presented as removals (see lib/isometric/projects.ts).
+    if (entry.credit_type !== "REMOVAL") {
+      throw new SafeError(
+        `Live GHG Entry ${requestedId} is not a removal credit. This report supports only removal entries.`,
+      );
+    }
     if (
       entry.id !== requestedId ||
       entry.ghg_statement_id !== remoteStatement.id ||
       entry.completed_on < remoteStatement.reporting_period_start_at ||
-      entry.completed_on > remoteStatement.reporting_period_end_at
+      entry.completed_on > remoteStatement.reporting_period_end_at ||
+      entry.started_on > entry.completed_on
     ) {
       throw new SafeError(
-        `Live GHG Entry ${requestedId} does not match this statement and reporting period. Prepare a new report after refreshing membership.`,
+        `Live GHG Entry ${requestedId} does not match this statement and reporting period. Generate a new report after refreshing membership.`,
       );
     }
   }
@@ -226,8 +214,9 @@ async function loadLiveReportFacts(
     externalGhgStatementId: remoteStatement.id,
     reportingPeriodStartOn: remoteStatement.reporting_period_start_at,
     reportingPeriodEndOn: remoteStatement.reporting_period_end_at,
-    standardVersion: STANDARD_VERSION,
-    protocolVersion: PROTOCOL_VERSION,
+    standardVersion: PINNED_STANDARD_VERSION,
+    protocolVersion: PINNED_PROTOCOL_VERSION,
+    configuredProtocolVersion: project.protocolVersion,
   };
   const normalizedEntries = remoteEntries.map((entry) => ({
     id: entry.id,
@@ -249,13 +238,11 @@ async function loadLiveReportFacts(
     preparedAt: args.preparedAt,
     documentControl,
     authoritativeStatement: {
-      externalRemovalIds: remoteStatement.ghg_entry_ids,
+      externalEntryIds: remoteStatement.ghg_entry_ids,
       pendingTotalCo2eRemovedKg:
         remoteStatement.pending_total_co2e_removed_kg,
     },
-    removalSnapshots: snapshots,
     remoteEntries: normalizedEntries,
-    narratives: args.narratives,
   };
   return {
     input,
@@ -275,7 +262,6 @@ async function loadLiveReportFacts(
           remoteStatement.ghg_statement_report_url,
         ),
       },
-      submittedRemovalSnapshots: snapshots,
       liveGhgEntries: normalizedEntries,
     },
   };
@@ -285,15 +271,18 @@ export async function rebuildGhgStatementReportModel(
   orgCtx: OrgContext,
   report: GhgStatementReportRow,
 ): Promise<GhgStatementReportModel> {
-  const narratives = report.reviewedNarratives as
-    | GhgStatementReportNarratives
-    | null;
-  if (!narratives) throw new SafeError("The report narrative is malformed.");
+  const storedModel = report.reportModel as {
+    modelVersion?: unknown;
+  } | null;
+  if (storedModel?.modelVersion !== GHG_STATEMENT_REPORT_MODEL_VERSION) {
+    throw new SafeError(
+      "This report uses an earlier format. Generate and approve a new report.",
+    );
+  }
   const facts = await loadLiveReportFacts(orgCtx, {
     ghgStatementId: report.ghgStatementId,
     reportVersion: report.version,
     preparedAt: report.preparedAt.toISOString(),
-    narratives,
   });
   return buildCheckedReportModel(facts.input);
 }
@@ -321,7 +310,7 @@ export async function assertGhgStatementReportFresh(
   const rebuilt = await rebuildGhgStatementReportModel(orgCtx, report);
   if (rebuilt.sourceFingerprint !== report.sourceFingerprint) {
     throw new SafeError(
-      "The approved report is stale because live GHG Statement or Removal inputs changed. Prepare and approve a new report.",
+      "The approved report is stale because live GHG Statement data changed. Generate and approve a new report.",
     );
   }
 }
@@ -355,7 +344,6 @@ export async function prepareGhgStatementReport(
         ghgStatementId: parsed.ghgStatementId,
         reportVersion: version,
         preparedAt: preparedAt.toISOString(),
-        narratives: parsed.narratives,
       });
       const model = buildCheckedReportModel(facts.input);
       const pdf = await renderGhgStatementReportPdf(model);
@@ -363,9 +351,13 @@ export async function prepareGhgStatementReport(
       const documentId = randomUUID();
       const checksum = sha256Hex(pdf);
       const storage = getStorageProvider();
-      const storageKey =
-        `org/${orgCtx.organizationId}/ghg-statement-reports/` +
-        `${parsed.ghgStatementId}/${reportId}.pdf`;
+      const fileName = `ghg-statement-report-v${version}.pdf`;
+      const storageKey = `org/${orgCtx.organizationId}/${buildStorageKey({
+        entityType: "ghgStatementReport",
+        entityId: reportId,
+        documentType: "pdf",
+        fileName,
+      })}`;
       await storage.putObject(storageKey, pdf, PDF_MIME_TYPE);
       try {
         const artifact = await insertPreparedGhgStatementReport(orgCtx, {
@@ -377,7 +369,6 @@ export async function prepareGhgStatementReport(
           contentChecksumSha256: checksum,
           frozenInput: facts.frozenInput,
           reportModel: model,
-          reviewedNarratives: parsed.narratives,
           preparationKey: parsed.preparationKey,
           // Seeded with a token nobody holds: the link stays inert until
           // submission issues a real one via `issueVerifierReportToken`.
@@ -387,7 +378,7 @@ export async function prepareGhgStatementReport(
             provider: storage.name,
             bucket: storage.bucket,
             key: storageKey,
-            fileName: `ghg-statement-report-v${version}.pdf`,
+            fileName,
             fileSizeBytes: pdf.byteLength,
           },
         });
@@ -417,7 +408,7 @@ export async function approveGhgStatementReport(
     const rebuilt = await rebuildGhgStatementReportModel(orgCtx, report);
     if (rebuilt.sourceFingerprint !== report.sourceFingerprint) {
       throw new SafeError(
-        "This report is stale because live inputs changed. Prepare and review a new report.",
+        "This report is stale because live inputs changed. Generate and review a new report.",
       );
     }
     const approved = await approveReportRow(orgCtx, {

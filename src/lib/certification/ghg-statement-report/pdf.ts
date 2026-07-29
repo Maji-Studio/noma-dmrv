@@ -13,6 +13,16 @@ import type {
   GhgStatementReportModel,
 } from "./model";
 
+// Column widths in points (A4 content ≈ 527pt; the GHG Entry column flexes).
+const COL = {
+  net: 58,
+  beforeUncertainty: 76,
+  stdDeviation: 58,
+  supplier: 58,
+  buffer: 58,
+} as const;
+const CELL_GAP = 6;
+
 const styles = {
   ...theme,
   ...StyleSheet.create({
@@ -48,11 +58,6 @@ const styles = {
       color: C.ink40,
       marginTop: 2,
     },
-    paragraph: {
-      fontSize: 8.5,
-      lineHeight: 1.5,
-      color: C.ink70,
-    },
     controlGrid: { flexDirection: "row", flexWrap: "wrap" },
     controlPair: { width: "50%", paddingRight: 12, marginBottom: 6 },
     controlPairWide: { width: "100%" },
@@ -69,27 +74,7 @@ const styles = {
       color: C.ink55,
       lineHeight: 1.45,
     },
-    hash: { fontFamily: MONO, fontSize: 6.5, color: C.ink55 },
-    source: {
-      fontFamily: MONO,
-      fontSize: 6.5,
-      color: C.ink70,
-      marginTop: 2,
-    },
-    review: {
-      borderLeftWidth: 3,
-      borderLeftColor: C.plum,
-      backgroundColor: C.sea,
-      padding: 9,
-      marginBottom: 7,
-    },
-    reviewLabel: {
-      fontFamily: MONO,
-      fontSize: 7,
-      color: C.plum,
-      textTransform: "uppercase",
-      marginBottom: 3,
-    },
+    entryQty: { ...theme.qty, fontSize: 8 },
     footerHash: {
       fontFamily: MONO,
       fontSize: 6.2,
@@ -113,11 +98,16 @@ const formatPreparedAt = (value: string): string => {
     : `${parsed.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 };
 
-function sectionHeading(title: string, tag?: string): ReactElement {
+function sectionHeading(
+  title: string,
+  tag?: string,
+  note?: string,
+): ReactElement {
   return v(styles.sectionHead, { minPresenceAhead: 55 },
     v([styles.rule, { backgroundColor: C.plum }], {}),
     t(styles.sectionName, title),
     tag ? t(styles.sectionTag, tag) : null,
+    note ? t(styles.sectionEqn, note) : null,
   );
 }
 
@@ -125,8 +115,9 @@ function section(
   title: string,
   children: ReactElement | ReactElement[],
   tag?: string,
+  note?: string,
 ): ReactElement {
-  return v(styles.section, {}, sectionHeading(title, tag), ...(Array.isArray(children) ? children : [children]));
+  return v(styles.section, {}, sectionHeading(title, tag, note), ...(Array.isArray(children) ? children : [children]));
 }
 
 function controlPair(
@@ -164,42 +155,77 @@ function summaryCell(
   );
 }
 
-function entryRow(entry: GhgStatementReportEntry): ReactElement {
-  const sources =
-    entry.sourceBindings.length > 0
-      ? entry.sourceBindings.join(", ")
-      : "No Source IDs were present in the frozen submission snapshot.";
-  return v(styles.tr, { wrap: false },
-    v({ flex: 1 }, {},
-      t(styles.entryHeader, entry.externalRemovalId),
-      t(styles.entryMeta, `Local Removal ${entry.localRemovalId}`),
-      t(
-        styles.entryMeta,
-        `Submitted version ${entry.removalSubmissionVersion} | ${entry.startedOn} to ${entry.completedOn}`,
-      ),
-      t(styles.hash, `Payload SHA-256 ${entry.removalPayloadHash}`),
-      t(styles.source, `Frozen Sources: ${sources}`),
+const formatCell = (value: number | null): string =>
+  value === null ? "n/a" : formatKg(value);
+
+function entryTableHeader(): ReactElement {
+  return v(styles.th, {},
+    t([styles.thText, { flex: 1 }], "GHG Entry"),
+    t([styles.thText, { width: COL.net, textAlign: "right" }], "Net"),
+    t(
+      [
+        styles.thText,
+        {
+          width: COL.beforeUncertainty,
+          textAlign: "right",
+          paddingLeft: CELL_GAP,
+        },
+      ],
+      "Before uncert.",
     ),
-    v({ width: 112, alignItems: "flex-end" }, {},
-      t(styles.entryMeta, `Net ${formatKg(entry.netRemovedKg)}`),
-      t(
-        styles.entryMeta,
-        `Before uncertainty ${formatKg(entry.netRemovedWithoutDiscountKg)}`,
-      ),
-      t(
-        styles.entryMeta,
-        `Standard deviation ${formatKg(entry.netRemovedStandardDeviationKg)}`,
-      ),
-      t(styles.entryMeta, `Supplier ${formatKg(entry.supplierCreditKg)}`),
-      t(styles.entryMeta, `Buffer ${formatKg(entry.bufferPoolKg)}`),
+    t(
+      [
+        styles.thText,
+        { width: COL.stdDeviation, textAlign: "right", paddingLeft: CELL_GAP },
+      ],
+      "Std dev",
+    ),
+    t(
+      [
+        styles.thText,
+        { width: COL.supplier, textAlign: "right", paddingLeft: CELL_GAP },
+      ],
+      "Supplier",
+    ),
+    t(
+      [
+        styles.thText,
+        { width: COL.buffer, textAlign: "right", paddingLeft: CELL_GAP },
+      ],
+      "Buffer",
     ),
   );
 }
 
-function reviewBlock(label: string, body: string): ReactElement {
-  return v(styles.review, { wrap: false },
-    t(styles.reviewLabel, label),
-    t(styles.paragraph, body),
+function entryRow(entry: GhgStatementReportEntry): ReactElement {
+  return v(styles.tr, { wrap: false },
+    v({ flex: 1, paddingRight: 8 }, {},
+      t(styles.entryHeader, entry.externalEntryId),
+      t(
+        styles.entryMeta,
+        `${entry.startedOn} to ${entry.completedOn}`,
+      ),
+    ),
+    t([styles.entryQty, { width: COL.net }], formatCell(entry.netRemovedKg)),
+    t(
+      [
+        styles.entryQty,
+        { width: COL.beforeUncertainty, paddingLeft: CELL_GAP },
+      ],
+      formatCell(entry.netRemovedWithoutDiscountKg),
+    ),
+    t(
+      [styles.entryQty, { width: COL.stdDeviation, paddingLeft: CELL_GAP }],
+      formatCell(entry.netRemovedStandardDeviationKg),
+    ),
+    t(
+      [styles.entryQty, { width: COL.supplier, paddingLeft: CELL_GAP }],
+      formatCell(entry.supplierCreditKg),
+    ),
+    t(
+      [styles.entryQty, { width: COL.buffer, paddingLeft: CELL_GAP }],
+      formatCell(entry.bufferPoolKg),
+    ),
   );
 }
 
@@ -211,8 +237,8 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
         t(styles.wordmark, "noma"),
         t(styles.wordmarkSub, "DMRV | GHG STATEMENT"),
       ),
-      t(styles.eyebrow, "QUALITATIVE SUPPORT AND RECONCILIATION"),
-      h(Text, { style: styles.title }, "GHG Statement Report"),
+      t(styles.eyebrow, "AUTOMATIC DATA RECONCILIATION"),
+      h(Text, { style: styles.title }, "GHG Statement Data Summary"),
     ),
     v(styles.metaCol, {},
       mastheadPair("Report version", String(model.reportVersion)),
@@ -248,46 +274,29 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
         "Pinned versions",
         `Isometric Standard ${control.standardVersion}; Biochar Protocol ${control.protocolVersion}`,
       ),
+      controlPair(
+        "Project protocol version",
+        control.configuredProtocolVersion ?? "Not configured",
+      ),
       controlPair("Source fingerprint", model.sourceFingerprint, {
         wide: true,
         compact: true,
       }),
+      controlPair(
+        "Scope",
+        "Registry data reconciliation only; qualitative VVB and project documentation is not included.",
+        { wide: true },
+      ),
       controlPair("Report model", String(model.modelVersion)),
     ),
   );
   const membership = section(
-    "GHG Entry and Removal index",
-    v(styles.table, {}, ...model.entries.map(entryRow)),
-    `${model.entries.length} exact members`,
-  );
-  const reviews = [
-    reviewBlock(
-      "System boundary and methodology",
-      model.narratives.systemBoundaryAndMethodology,
-    ),
-    reviewBlock("Evidence and Source index", model.narratives.evidenceIndex),
-    reviewBlock(
-      "Uncertainty and sensitivity",
-      model.narratives.uncertaintyAndSensitivity,
-    ),
-    reviewBlock(
-      "Data quality, exclusions, incidents, and exceptions",
-      model.narratives.dataQualityAndExceptions,
-    ),
-    reviewBlock(
-      "Monitoring and durability",
-      model.narratives.monitoringAndDurability,
-    ),
-  ];
-  const methodology = section(
-    "Methodology and reviewed narrative",
-    reviews,
-    "Human reviewed",
-  );
-  const approval = section(
-    "Review acknowledgment",
-    reviewBlock("Operator acknowledgment", model.narratives.approvalStatement),
-    "Required before approval",
+    "GHG Entry index",
+    v(styles.table, {}, entryTableHeader(), ...model.entries.map(entryRow)),
+    `${model.entries.length} exact ${
+      model.entries.length === 1 ? "member" : "members"
+    }`,
+    "All values kg CO2e",
   );
   const footer = v(styles.footer, { fixed: true },
     t(
@@ -309,9 +318,9 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
   return h(
     Document,
     {
-      title: `GHG Statement Report v${model.reportVersion}`,
+      title: `GHG Statement Data Summary v${model.reportVersion}`,
       author: "noma dMRV",
-      subject: "GHG Statement qualitative support and reconciliation",
+      subject: "Automatically generated GHG Statement data reconciliation",
     },
     h(
       Page,
@@ -320,8 +329,6 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
       totals,
       documentControl,
       membership,
-      methodology,
-      approval,
       footer,
     ),
   );
