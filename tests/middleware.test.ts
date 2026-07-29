@@ -23,4 +23,17 @@ describe("Auth middleware", () => {
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
   });
+
+  it("allows the verifier capability route to authorize its own token", async () => {
+    getSessionMock.mockResolvedValueOnce(null);
+
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const request = new NextRequest(
+      "http://localhost:3100/api/ghg-statement-reports/11111111-1111-4111-8111-111111111111?token=opaque",
+    );
+
+    const response = await updateSession(request);
+
+    expect(response.status).toBe(200);
+  });
 });

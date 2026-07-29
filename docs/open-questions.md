@@ -988,3 +988,22 @@ bound); these are the decisions it deliberately did not make.
 - **Resolve via:** express per-bin on-hand mass as one correlated subquery (or a
   materialised per-bin stock view) that `getStorageLocations` can ORDER BY, then
   add the option and extend the activity-sort test to cover it (M).
+
+### Report-document attachment is check-then-insert (`certification/attach-report-document-race`)
+
+- `attachReportDocument` (`src/data-access/certification.ts`) dedupes by
+  selecting an existing `documents` row for the same
+  `(organizationId, entityType, entityId, fileUrl)` before inserting, so two
+  concurrent submits of the same external report URL can both miss and write
+  duplicate ledger rows.
+- The obvious fix is a unique constraint on that tuple plus
+  `onConflictDoNothing`. It is deferred because `documents` is shared by all 16
+  entity workflows and the generic `createDocument` path: constraining it would
+  also stop an operator attaching the same external URL twice to one entity
+  with different descriptions, which no one has asked for.
+- Impact today is a duplicate ledger row on an org-admin-gated, rate-limited
+  action; the generated-report path does not go through this function at all,
+  since it reuses the report's own `documentId`.
+- **Resolve via:** decide whether same-URL-per-entity duplicates are ever valid
+  for any document type. If not, add the partial unique index (`fileUrl is not
+  null`) and switch the insert to an upsert (S).

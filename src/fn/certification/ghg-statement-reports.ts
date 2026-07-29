@@ -1,0 +1,445 @@
+"use server";
+
+import { randomUUID } from "node:crypto";
+import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
+import {
+  approveGhgStatementReport as approveReportRow,
+  getGhgStatementReportById,
+  getNextGhgStatementReportVersion,
+  getReportByPreparationKey,
+  insertPreparedGhgStatementReport,
+  issueVerifierReportToken,
+  listGhgStatementReports,
+  listSubmittedRemovalSnapshots,
+  type GhgStatementReportRow,
+} from "@/data-access/ghg-statement-reports";
+import {
+  getCertifierProjectByFacility,
+  getLatestSubmissionsForEntities,
+} from "@/data-access/certification";
+import { getCertifierGhgStatementById } from "@/data-access/certifier-ghg-statements";
+import { getFacilityById } from "@/data-access/facilities";
+import { getActiveOrganization } from "@/data-access/organizations";
+import { withDedicatedLockConnection } from "@/db";
+import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
+import {
+  buildGhgStatementReportModel,
+  GhgStatementReportReconciliationError,
+  type BuildGhgStatementReportModelInput,
+  type GhgStatementReportModel,
+  type GhgStatementReportNarratives,
+  sha256Hex,
+} from "@/lib/certification/ghg-statement-report/model";
+import { renderGhgStatementReportPdf } from "@/lib/certification/ghg-statement-report/pdf";
+import {
+  buildVerifierReportUrl,
+  generateVerifierToken,
+  hashVerifierToken,
+} from "@/lib/certification/ghg-statement-report/verifier-url";
+import { redactReportUrlSecrets } from "@/lib/certification/report-url";
+import { SafeError } from "@/lib/errors";
+import {
+  getGhgEntry,
+  getGhgStatement,
+  getIsometricClientForOrg,
+} from "@/lib/isometric";
+import { getStorageProvider } from "@/lib/storage";
+import {
+  approveGhgStatementReportSchema,
+  prepareGhgStatementReportSchema,
+  type ApproveGhgStatementReportInput,
+  type PrepareGhgStatementReportInput,
+} from "@/schemas/certification";
+import type { ActionResult } from "@/types/actions";
+import { withAction } from "../with-action";
+import {
+  GHG_STATEMENT_ENTITY_TYPE,
+  GHG_STATEMENT_SUBMISSION_TYPE,
+  ISOMETRIC_PROVIDER,
+} from "./shared";
+
+const STANDARD_VERSION = "1.7";
+const PROTOCOL_VERSION = "1.1.1";
+const PDF_MIME_TYPE = "application/pdf";
+
+export interface GhgStatementReportView {
+  id: string;
+  ghgStatementId: string;
+  documentId: string;
+  version: number;
+  lifecycle: string;
+  sourceFingerprint: string;
+  contentChecksumSha256: string;
+  preparedAt: Date;
+  approvedAt: Date | null;
+  submittedAt: Date | null;
+  reviewUrl: string;
+}
+
+interface LiveReportFacts {
+  input: BuildGhgStatementReportModelInput;
+  frozenInput: Record<string, unknown>;
+}
+
+function buildCheckedReportModel(
+  input: BuildGhgStatementReportModelInput,
+): GhgStatementReportModel {
+  try {
+    return buildGhgStatementReportModel(input);
+  } catch (error) {
+    if (error instanceof GhgStatementReportReconciliationError) {
+      throw new SafeError(
+        `${error.message} Refresh the GHG Statement and prepare a new report.`,
+      );
+    }
+    throw error;
+  }
+}
+
+function reportView(row: GhgStatementReportRow): GhgStatementReportView {
+  return {
+    id: row.id,
+    ghgStatementId: row.ghgStatementId,
+    documentId: row.documentId,
+    version: row.version,
+    lifecycle: row.lifecycle,
+    sourceFingerprint: row.sourceFingerprint,
+    contentChecksumSha256: row.contentChecksumSha256,
+    preparedAt: row.preparedAt,
+    approvedAt: row.approvedAt,
+    submittedAt: row.submittedAt,
+    reviewUrl: `/api/documents/${row.documentId}`,
+  };
+}
+
+function snapshotProjectId(snapshot: Record<string, unknown>): string | null {
+  const semantic = snapshot.semantic;
+  if (!semantic || typeof semantic !== "object" || Array.isArray(semantic)) {
+    return null;
+  }
+  const projectId = (semantic as Record<string, unknown>).projectId;
+  return typeof projectId === "string" ? projectId : null;
+}
+
+async function loadLiveReportFacts(
+  orgCtx: OrgContext,
+  args: {
+    ghgStatementId: string;
+    reportVersion: number;
+    preparedAt: string;
+    narratives: GhgStatementReportNarratives;
+  },
+): Promise<LiveReportFacts> {
+  const statement = await getCertifierGhgStatementById(
+    orgCtx,
+    args.ghgStatementId,
+  );
+  if (!statement) throw new SafeError("GHG statement not found.");
+  const [project, facility, organization, statementSubmission] =
+    await Promise.all([
+      getCertifierProjectByFacility(orgCtx, statement.facilityId),
+      getFacilityById(orgCtx, statement.facilityId),
+      getActiveOrganization(orgCtx),
+      getLatestSubmissionsForEntities(orgCtx, {
+        provider: ISOMETRIC_PROVIDER,
+        submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+        localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+        localEntityIds: [statement.id],
+      }).then((rows) => rows.get(statement.id) ?? null),
+    ]);
+  if (!project || !organization) {
+    throw new SafeError(
+      "The GHG statement document-control lineage is incomplete.",
+    );
+  }
+  if (!statementSubmission?.externalId) {
+    throw new SafeError("Create the GHG statement before preparing its report.");
+  }
+
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  const remoteStatement = await getGhgStatement(
+    client,
+    statementSubmission.externalId,
+  );
+  if (
+    remoteStatement.id !== statementSubmission.externalId ||
+    remoteStatement.project_id !== project.externalProjectId ||
+    remoteStatement.reporting_period_start_at === null ||
+    remoteStatement.reporting_period_start_at !==
+      statement.reportingPeriodStartOn ||
+    remoteStatement.reporting_period_end_at !== statement.reportingPeriodEndOn
+  ) {
+    throw new SafeError(
+      "The live GHG statement does not match the local project and reporting-period lineage. Refresh it before preparing a report.",
+    );
+  }
+  if (
+    remoteStatement.pending_total_co2e_removed_kg === null ||
+    !Number.isFinite(remoteStatement.pending_total_co2e_removed_kg)
+  ) {
+    throw new SafeError(
+      "The live GHG statement does not expose a pending net removed total. Refresh it or wait for Isometric to finish recalculating.",
+    );
+  }
+  if (remoteStatement.ghg_entry_ids.length === 0) {
+    throw new SafeError(
+      "This GHG statement has no live GHG Entry membership. Submit a Removal first.",
+    );
+  }
+
+  const [snapshots, remoteEntries] = await Promise.all([
+    listSubmittedRemovalSnapshots(orgCtx, {
+      externalRemovalIds: remoteStatement.ghg_entry_ids,
+      facilityId: statement.facilityId,
+    }),
+    Promise.all(
+      remoteStatement.ghg_entry_ids.map((entryId) =>
+        getGhgEntry(client, entryId),
+      ),
+    ),
+  ]);
+  for (const snapshot of snapshots) {
+    if (snapshotProjectId(snapshot.payloadSnapshot) !== project.externalProjectId) {
+      throw new SafeError(
+        `Submitted Removal ${snapshot.externalRemovalId} does not match this registry project. Prepare a report after correcting the Removal lineage.`,
+      );
+    }
+  }
+  for (const [index, entry] of remoteEntries.entries()) {
+    const requestedId = remoteStatement.ghg_entry_ids[index];
+    if (
+      entry.id !== requestedId ||
+      entry.ghg_statement_id !== remoteStatement.id ||
+      entry.completed_on < remoteStatement.reporting_period_start_at ||
+      entry.completed_on > remoteStatement.reporting_period_end_at
+    ) {
+      throw new SafeError(
+        `Live GHG Entry ${requestedId} does not match this statement and reporting period. Prepare a new report after refreshing membership.`,
+      );
+    }
+  }
+
+  const documentControl = {
+    organizationName: organization.name,
+    facilityCode: facility.code,
+    externalProjectId: project.externalProjectId,
+    externalGhgStatementId: remoteStatement.id,
+    reportingPeriodStartOn: remoteStatement.reporting_period_start_at,
+    reportingPeriodEndOn: remoteStatement.reporting_period_end_at,
+    standardVersion: STANDARD_VERSION,
+    protocolVersion: PROTOCOL_VERSION,
+  };
+  const normalizedEntries = remoteEntries.map((entry) => ({
+    id: entry.id,
+    startedOn: entry.started_on,
+    completedOn: entry.completed_on,
+    netRemovedKg: entry.co2e_net_removed_kg,
+    netRemovedWithoutDiscountKg:
+      entry.co2e_net_removed_without_discount_kg,
+    netRemovedStandardDeviationKg:
+      entry.co2e_net_removed_standard_deviation_kg,
+    supplierCreditKg:
+      entry.credit_allocation?.supplier_allocation_kg ?? null,
+    bufferPoolKg:
+      entry.credit_allocation?.buffer_pool_contribution_kg ?? null,
+    ghgStatementId: entry.ghg_statement_id,
+  }));
+  const input: BuildGhgStatementReportModelInput = {
+    reportVersion: args.reportVersion,
+    preparedAt: args.preparedAt,
+    documentControl,
+    authoritativeStatement: {
+      externalRemovalIds: remoteStatement.ghg_entry_ids,
+      pendingTotalCo2eRemovedKg:
+        remoteStatement.pending_total_co2e_removed_kg,
+    },
+    removalSnapshots: snapshots,
+    remoteEntries: normalizedEntries,
+    narratives: args.narratives,
+  };
+  return {
+    input,
+    frozenInput: {
+      documentControl,
+      authoritativeStatement: {
+        id: remoteStatement.id,
+        projectId: remoteStatement.project_id,
+        ghgEntryIds: [...remoteStatement.ghg_entry_ids],
+        pendingTotalCo2eRemovedKg:
+          remoteStatement.pending_total_co2e_removed_kg,
+        reportingPeriodStartOn:
+          remoteStatement.reporting_period_start_at,
+        reportingPeriodEndOn: remoteStatement.reporting_period_end_at,
+        status: remoteStatement.status,
+        priorReportUrl: redactReportUrlSecrets(
+          remoteStatement.ghg_statement_report_url,
+        ),
+      },
+      submittedRemovalSnapshots: snapshots,
+      liveGhgEntries: normalizedEntries,
+    },
+  };
+}
+
+export async function rebuildGhgStatementReportModel(
+  orgCtx: OrgContext,
+  report: GhgStatementReportRow,
+): Promise<GhgStatementReportModel> {
+  const narratives = report.reviewedNarratives as
+    | GhgStatementReportNarratives
+    | null;
+  if (!narratives) throw new SafeError("The report narrative is malformed.");
+  const facts = await loadLiveReportFacts(orgCtx, {
+    ghgStatementId: report.ghgStatementId,
+    reportVersion: report.version,
+    preparedAt: report.preparedAt.toISOString(),
+    narratives,
+  });
+  return buildCheckedReportModel(facts.input);
+}
+
+/**
+ * Mints a fresh verifier capability token for an approved report and returns
+ * the link carrying it. Each call revokes the link handed out by the previous
+ * call, which is why the URL is built at submission rather than at preparation
+ * — only the token digest is ever stored.
+ */
+export async function issueVerifierReportUrl(
+  orgCtx: OrgContext,
+  reportId: string,
+): Promise<string> {
+  return buildVerifierReportUrl(
+    reportId,
+    await issueVerifierReportToken(orgCtx, reportId),
+  );
+}
+
+export async function assertGhgStatementReportFresh(
+  orgCtx: OrgContext,
+  report: GhgStatementReportRow,
+): Promise<void> {
+  const rebuilt = await rebuildGhgStatementReportModel(orgCtx, report);
+  if (rebuilt.sourceFingerprint !== report.sourceFingerprint) {
+    throw new SafeError(
+      "The approved report is stale because live GHG Statement or Removal inputs changed. Prepare and approve a new report.",
+    );
+  }
+}
+
+export async function prepareGhgStatementReport(
+  input: PrepareGhgStatementReportInput,
+): Promise<ActionResult<GhgStatementReportView>> {
+  return withAction(async (orgCtx) => {
+    requireOrgRole(orgCtx, "admin");
+    const parsed = prepareGhgStatementReportSchema.parse(input);
+    return withDedicatedLockConnection(async (tx) => {
+      await acquireCertificationArtifactLocksSorted(tx, [
+        {
+          provider: ISOMETRIC_PROVIDER,
+          localEntityType: "ghgStatementReport",
+          localEntityId: parsed.ghgStatementId,
+        },
+      ]);
+      const existing = await getReportByPreparationKey(orgCtx, {
+        ghgStatementId: parsed.ghgStatementId,
+        preparationKey: parsed.preparationKey,
+      });
+      if (existing) return reportView(existing);
+
+      const version = await getNextGhgStatementReportVersion(
+        orgCtx,
+        parsed.ghgStatementId,
+      );
+      const preparedAt = new Date();
+      const facts = await loadLiveReportFacts(orgCtx, {
+        ghgStatementId: parsed.ghgStatementId,
+        reportVersion: version,
+        preparedAt: preparedAt.toISOString(),
+        narratives: parsed.narratives,
+      });
+      const model = buildCheckedReportModel(facts.input);
+      const pdf = await renderGhgStatementReportPdf(model);
+      const reportId = randomUUID();
+      const documentId = randomUUID();
+      const checksum = sha256Hex(pdf);
+      const storage = getStorageProvider();
+      const storageKey =
+        `org/${orgCtx.organizationId}/ghg-statement-reports/` +
+        `${parsed.ghgStatementId}/${reportId}.pdf`;
+      await storage.putObject(storageKey, pdf, PDF_MIME_TYPE);
+      try {
+        const artifact = await insertPreparedGhgStatementReport(orgCtx, {
+          reportId,
+          ghgStatementId: parsed.ghgStatementId,
+          documentId,
+          version,
+          sourceFingerprint: model.sourceFingerprint,
+          contentChecksumSha256: checksum,
+          frozenInput: facts.frozenInput,
+          reportModel: model,
+          reviewedNarratives: parsed.narratives,
+          preparationKey: parsed.preparationKey,
+          // Seeded with a token nobody holds: the link stays inert until
+          // submission issues a real one via `issueVerifierReportToken`.
+          verifierTokenHash: hashVerifierToken(generateVerifierToken()),
+          preparedAt,
+          storage: {
+            provider: storage.name,
+            bucket: storage.bucket,
+            key: storageKey,
+            fileName: `ghg-statement-report-v${version}.pdf`,
+            fileSizeBytes: pdf.byteLength,
+          },
+        });
+        return reportView(artifact.report);
+      } catch (error) {
+        await storage.deleteObject(storageKey).catch(() => undefined);
+        throw error;
+      }
+    });
+  });
+}
+
+export async function approveGhgStatementReport(
+  input: ApproveGhgStatementReportInput,
+): Promise<ActionResult<GhgStatementReportView>> {
+  return withAction(async (orgCtx) => {
+    requireOrgRole(orgCtx, "admin");
+    const parsed = approveGhgStatementReportSchema.parse(input);
+    const report = await getGhgStatementReportById(orgCtx, parsed.reportId);
+    if (
+      !report ||
+      report.ghgStatementId !== parsed.ghgStatementId ||
+      report.version !== parsed.version
+    ) {
+      throw new SafeError("GHG Statement report version not found.");
+    }
+    const rebuilt = await rebuildGhgStatementReportModel(orgCtx, report);
+    if (rebuilt.sourceFingerprint !== report.sourceFingerprint) {
+      throw new SafeError(
+        "This report is stale because live inputs changed. Prepare and review a new report.",
+      );
+    }
+    const approved = await approveReportRow(orgCtx, {
+      reportId: report.id,
+      ghgStatementId: report.ghgStatementId,
+      version: report.version,
+      sourceFingerprint: report.sourceFingerprint,
+    });
+    return reportView(approved);
+  });
+}
+
+export async function loadGhgStatementReports(
+  ghgStatementId: string,
+): Promise<ActionResult<GhgStatementReportView[]>> {
+  return withAction(async (orgCtx) => {
+    const statement = await getCertifierGhgStatementById(
+      orgCtx,
+      ghgStatementId,
+    );
+    if (!statement) throw new SafeError("GHG statement not found.");
+    const reports = await listGhgStatementReports(orgCtx, statement.id);
+    return reports.map(reportView);
+  });
+}
