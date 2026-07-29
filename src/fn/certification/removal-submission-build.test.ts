@@ -7,6 +7,12 @@ vi.mock("./sources", () => ({
 
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import { payloadHash } from "@/lib/isometric";
+import type {
+  IsometricComponentBlueprint,
+  IsometricGhgEntryTemplate,
+} from "@/lib/isometric";
+import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import { classifyRemovalSourceCandidate } from "@/lib/certification/removal-source-bindings";
 import {
   buildRemovalSubmissionBuild,
   compileRemovalSubmission,
@@ -199,6 +205,183 @@ describe("buildRemovalSubmissionBuild", () => {
       sources.collectCandidateSourceDocumentsForRemoval,
     ).not.toHaveBeenCalled();
     expect(sources.resolveSourceBindingCandidates).not.toHaveBeenCalled();
+  });
+
+  it("builds the Safety margin from dry mass with the Inventory Source attached", async () => {
+    const inventoryBinding = classifyRemovalSourceCandidate({
+      documentType: "pdf",
+      metadata: { logbookEvidenceType: "inventory" },
+      lineage: {
+        entityType: "application",
+        entityId: "application-1",
+        entityLabel: "Application APP-001",
+      },
+    });
+    expect(inventoryBinding).not.toBeNull();
+
+    const template = {
+      id: "rvt-safety-margin",
+      display_name: "Safety margin template",
+      groups: [
+        {
+          key: "co2-stored",
+          components: [
+            {
+              id: "component-sequestration",
+              blueprint_key: "carbon_rich_substance_sequestration",
+              display_name: "Sequestered biochar",
+              inputs: [
+                {
+                  type: "monitored",
+                  input_key: "product_mass",
+                  datapoint_id: null,
+                  display_name: "Product mass",
+                  quantity_kind: "mass",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          key: "miscellaneous",
+          components: [
+            {
+              id: "component-safety-margin",
+              blueprint_key: "mass_based_ci_emissions",
+              display_name: "Safety margin",
+              inputs: [
+                {
+                  type: "fixed",
+                  input_key: "carbon_intensity",
+                  datapoint_id: "datapoint-carbon-intensity",
+                  display_name: "Carbon intensity",
+                  quantity_kind: "mass_carbon_emission_factor",
+                },
+                {
+                  type: "monitored",
+                  input_key: "mass",
+                  datapoint_id: null,
+                  display_name: "Mass",
+                  quantity_kind: "mass",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    } as unknown as IsometricGhgEntryTemplate;
+    const blueprintsByKey = new Map<string, IsometricComponentBlueprint>([
+      [
+        "carbon_rich_substance_sequestration",
+        {
+          key: "carbon_rich_substance_sequestration",
+          inputs: [
+            {
+              input_key: "product_mass",
+              compatible_unit: "kg",
+              data_shape: "SCALAR",
+              description: "",
+              quantity_kind: "mass",
+            },
+          ],
+        } as IsometricComponentBlueprint,
+      ],
+      [
+        "mass_based_ci_emissions",
+        {
+          key: "mass_based_ci_emissions",
+          inputs: [
+            {
+              input_key: "mass",
+              compatible_unit: "kg",
+              data_shape: "SCALAR",
+              description: "",
+              quantity_kind: "mass",
+            },
+          ],
+        } as IsometricComponentBlueprint,
+      ],
+    ]);
+    const run = {
+      id: "run-1",
+      code: "RUN-001",
+      startTime: new Date("2026-01-01T00:00:00Z"),
+      endTime: new Date("2026-01-02T00:00:00Z"),
+      biocharDryMassKg: 1_200,
+      feedstockMassDryKg: 4_000,
+      dieselOperationLiters: 0,
+      dieselGensetLiters: 0,
+      preprocessingFuelLiters: 0,
+      electricityKwh: 0,
+      samples: [],
+    } as unknown as ProductionRunWithSamples;
+    const ctx = {
+      entityReadinessGaps: [],
+      lineages: [
+        {
+          application: {
+            id: "application-1",
+            code: "APP-001",
+            applicationDate: new Date("2026-01-03T00:00:00Z"),
+          },
+          delivery: { id: "delivery-1" },
+          productionRun: { id: "run-1" },
+          feedstocks: [],
+          warnings: [],
+        },
+      ],
+      runs: [run],
+      attributionByRunId: new Map([["run-1", 0.5]]),
+      batchesWithSamples: [],
+      durabilityGateBlockers: [],
+      transportLegs: { feedstock: [], biochar: [], sample: [] },
+      runSummary: {
+        runCount: 1,
+        totalBiocharOutputKg: 1_200,
+        appliedDryKg: 600,
+      },
+      submissionWarnings: [],
+      memberBatchClaims: [
+        {
+          creditBatchId: "batch-1",
+          applicationIds: ["application-1"],
+        },
+      ],
+      memberBatches: [{ id: "batch-1" }],
+      facilityReferenceSoilTemperature: null,
+    } as unknown as RemovalSubmissionContext;
+    const sourceCandidate = {
+      documentId: "document-inventory",
+      sourceId: "source-inventory",
+      binding: inventoryBinding!,
+    };
+
+    const build = await buildRemovalSubmissionBuild({
+      orgCtx: {} as never,
+      removalId: "removal-1",
+      ctx,
+      defaultTemplate: template,
+      blueprintsByKey,
+      externalProjectId: "project-1",
+      allowPeriodInputStub: false,
+      hasDurabilityComponents: false,
+      candidateSourceDocuments: [sourceCandidate],
+      sourceBindingCandidates: [sourceCandidate],
+    });
+
+    expect(build.monitored).toContainEqual(
+      expect.objectContaining({
+        removalTemplateComponentId: "component-safety-margin",
+        inputKey: "mass",
+        quantity: { magnitude: 600, unit: "kg" },
+      }),
+    );
+    expect(
+      build.datapointBodyByKey.get("component-safety-margin::mass"),
+    ).toMatchObject({
+      quantity: { magnitude: 600, unit: "kg" },
+      source_ids: ["source-inventory"],
+    });
   });
 
   it("materializes the immutable Source binding plan in the ledger snapshot", () => {

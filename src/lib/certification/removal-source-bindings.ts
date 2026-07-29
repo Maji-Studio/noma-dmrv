@@ -2,6 +2,7 @@ import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import { isSequestrationBlueprintFamily } from "@/lib/isometric/transformers/measurement-sample";
+import { normalizeComponentDisplayName } from "@/lib/isometric/transformers/datapoint";
 import {
   APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
   isApplicationBoundaryLogbookEvidenceType,
@@ -41,9 +42,14 @@ export type RemovalSourceIntendedTarget =
       groupKey:
         | "biomass-feedstock-transport"
         | "biochar-transport"
-        | "sampling-required-for-mrv";
-      componentBlueprintKey: "mass_distance_based_ci_emissions";
-      inputKey: "mass_distance";
+        | "sampling-required-for-mrv"
+        | "miscellaneous";
+      componentBlueprintKey:
+        | "mass_distance_based_ci_emissions"
+        | "mass_based_ci_emissions";
+      /** Exact component name discriminator after trimming and lowercasing. */
+      componentDisplayName?: string;
+      inputKey: "mass_distance" | "mass";
       /** The facility template can omit a transport category with no component. */
       optionalInTemplate?: boolean;
     };
@@ -81,6 +87,20 @@ const SOURCE_BINDING_RULES = {
       groupKey: "co2-stored",
       inputKey: "product_mass",
     },
+    additionalIntendedTargets: [
+      {
+        // The safety-margin deduction multiplies the SAME biochar mass the
+        // sequestration claim uses, so the same mass evidence justifies it.
+        // Optional: the two legacy templates declare an empty `miscellaneous`
+        // group.
+        kind: "ordinary",
+        groupKey: "miscellaneous",
+        componentBlueprintKey: "mass_based_ci_emissions",
+        componentDisplayName: "Safety margin",
+        inputKey: "mass",
+        optionalInTemplate: true,
+      },
+    ],
   },
   feedstockBillOfLading: {
     nomaRole: "feedstock_bill_of_lading",
@@ -279,12 +299,16 @@ const LEGACY_SEQUESTRATION_BLUEPRINT_KEY =
 
 function matchesIntendedComponent(
   blueprintKey: string,
+  componentDisplayName: string | undefined,
   target: RemovalSourceIntendedTarget,
 ): boolean {
   return target.kind === "sequestration"
     ? blueprintKey === LEGACY_SEQUESTRATION_BLUEPRINT_KEY ||
         isSequestrationBlueprintFamily(blueprintKey)
-    : blueprintKey === target.componentBlueprintKey;
+    : blueprintKey === target.componentBlueprintKey &&
+        (target.componentDisplayName === undefined ||
+          normalizeComponentDisplayName(componentDisplayName) ===
+            normalizeComponentDisplayName(target.componentDisplayName));
 }
 
 /**
@@ -308,7 +332,11 @@ export function buildRemovalSourceBindingPlan(args: {
           .flatMap((group) => group.components)
           .filter(
             (component) =>
-              matchesIntendedComponent(component.blueprint_key, target) &&
+              matchesIntendedComponent(
+                component.blueprint_key,
+                component.display_name,
+                target,
+              ) &&
               component.inputs.some(
                 (input) => input.input_key === target.inputKey,
               ),

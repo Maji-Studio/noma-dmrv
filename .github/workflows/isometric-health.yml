@@ -77,9 +77,9 @@ jobs:
         run: pnpm test:integration
 
       # ADR 0005 / Plan §7 (Thread B1). Asserts every (group, blueprint,
-      # input) tuple in the live template is covered by INPUT_MAPPING or
-      # PERIOD_INPUT_TUPLES, and every expected PROJECT-scope category has
-      # a matching Component in Isometric. Fixture mode — no DB required.
+      # input) tuple in the live template has an ordinary or sequestration
+      # binding. The fixture explicitly allowlists the six temporary sandbox
+      # period inputs; every other PROJECT-scope tuple fails. No DB required.
       - name: Isometric template + Project-Component coverage
         run: pnpm isometric:coverage-check -- --source=fixture
 

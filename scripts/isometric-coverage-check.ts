@@ -3,10 +3,11 @@
  *
  * Fails CI if:
  *   1. Any (group, blueprint, input) tuple in a live Removal Template is
- *      missing from INPUT_MAPPING — AND not in PERIOD_INPUT_TUPLES.
+ *      missing from INPUT_MAPPING or the explicit sequestration bindings.
  *   2. Any tuple in the template is in PERIOD_INPUT_TUPLES (= the template
  *      itself is wrong: a period input declared as REMOVAL-scope; those
- *      belong to PROJECT-scope Components authored in the Isometric UI).
+ *      belong to PROJECT-scope Components authored in the Isometric UI),
+ *      unless that exact sandbox component/input is fixture-allowlisted.
  *
  * (The former PROJECT-scope drift checks against noma's LCA journal were
  * removed with the journal itself — ADR 0018.)
@@ -49,10 +50,11 @@ const facilityFixtureSchema = z.object({
   label: z.string().min(1),
   externalProjectId: z.string().min(1),
   defaultRemovalTemplateId: z.string().min(1),
+  allowedSandboxPeriodInputs: z.array(z.string().min(1)).default([]),
 });
 
 const fixtureFileSchema = z.object({
-  facilities: z.array(facilityFixtureSchema),
+  facilities: z.array(facilityFixtureSchema).min(1),
 });
 
 type FacilityFixtureEntry = z.infer<typeof facilityFixtureSchema>;
@@ -82,17 +84,6 @@ async function loadFromFixture(): Promise<FacilityFixtureEntry[]> {
         .join("\n")}`,
     );
     process.exit(2);
-  }
-  if (parsed.data.facilities.length === 0) {
-    // Soft-skip: the daily isometric-health workflow runs this in fixture
-    // mode by default, and CI must not fail before an operator has authored
-    // the sandbox fixture entry. Fall through to the empty-array branch in
-    // main(), which logs "nothing to check" and exits 0. Populate
-    // facilities[] in the fixture to enable the assertion (see
-    // docs/isometric/sandbox-template-authoring.md).
-    console.warn(
-      `[coverage-check] Fixture ${FIXTURE_PATH} has no facility entries — skipping. Add the sandbox project to assert against.`,
-    );
   }
   return parsed.data.facilities;
 }
@@ -127,7 +118,22 @@ async function loadFromDb(): Promise<FacilityFixtureEntry[]> {
     label: p.facilityCode ?? p.facilityId,
     externalProjectId: p.externalProjectId,
     defaultRemovalTemplateId: p.defaultRemovalTemplateId!,
+    allowedSandboxPeriodInputs: [],
   }));
+}
+
+function periodInputAllowlistKey(tuple: {
+  group: string;
+  blueprint: string;
+  component: string;
+  input: string;
+}): string {
+  return [
+    tuple.group,
+    tuple.blueprint,
+    tuple.component.trim().toLowerCase(),
+    tuple.input,
+  ].join("/");
 }
 
 async function main(): Promise<void> {
@@ -145,8 +151,15 @@ async function main(): Promise<void> {
 
   const { getIsometricClientFromEnv, listGhgEntryTemplates } = await import("../src/lib/isometric");
   const client = getIsometricClientFromEnv();
-  const { lookupInputMapping, lookupPeriodInputTuple } = await import(
+  const {
+    lookupInputMapping,
+    lookupPeriodInputTuple,
+    resolveDatapointSource,
+  } = await import(
     "../src/lib/isometric/transformers/datapoint"
+  );
+  const { getSequestrationInputBinding } = await import(
+    "../src/lib/isometric/transformers/sequestration-binding"
   );
 
   let failed = 0;
@@ -179,7 +192,12 @@ async function main(): Promise<void> {
     }
 
     // Each group + component + input is one tuple to cover.
-    type Tuple = { group: string; blueprint: string; input: string };
+    type Tuple = {
+      group: string;
+      blueprint: string;
+      component: string;
+      input: string;
+    };
     const tuples: Tuple[] = [];
     for (const group of template.groups ?? []) {
       for (const component of group.components ?? []) {
@@ -188,19 +206,40 @@ async function main(): Promise<void> {
           tuples.push({
             group: group.key,
             blueprint: component.blueprint_key,
+            component: component.display_name,
             input: rtcInput.input_key,
           });
         }
       }
     }
     console.log(`  template monitored tuples: ${tuples.length}`);
+    const allowedSandboxPeriodInputs = new Set(
+      facility.allowedSandboxPeriodInputs,
+    );
+    const observedAllowedSandboxPeriodInputs = new Map<string, number>();
 
     for (const t of tuples) {
-      // Scope-conflict check runs BEFORE accepting a mapping — a tuple
-      // present in both PERIOD_INPUT_TUPLES and INPUT_MAPPING must fail
+      // Scope-conflict check runs BEFORE accepting a mapping. A period tuple
+      // must fail unless its exact component name is an explicit carve-out
       // (mirrors the guard ordering in transformers/datapoint.ts, ADR 0018).
-      const periodTuple = lookupPeriodInputTuple(t.group, t.blueprint, t.input);
+      const periodTuple = lookupPeriodInputTuple(
+        t.group,
+        t.blueprint,
+        t.input,
+        t.component,
+      );
       if (periodTuple) {
+        const allowlistKey = periodInputAllowlistKey(t);
+        if (allowedSandboxPeriodInputs.has(allowlistKey)) {
+          observedAllowedSandboxPeriodInputs.set(
+            allowlistKey,
+            (observedAllowedSandboxPeriodInputs.get(allowlistKey) ?? 0) + 1,
+          );
+          console.warn(
+            `  ⚠ sandbox-only period input allowlisted: ${allowlistKey}`,
+          );
+          continue;
+        }
         console.error(
           `  ✗ scope-conflict: template declares ${t.group}/${t.blueprint}/${t.input} as REMOVAL-scope, but it belongs to PROJECT (category="${periodTuple.category}"). Remove from template (ADR 0018).`,
         );
@@ -209,11 +248,36 @@ async function main(): Promise<void> {
       }
       const mapping = lookupInputMapping(t.group, t.blueprint, t.input);
       if (!mapping) {
+        if (
+          t.group === "co2-stored" &&
+          getSequestrationInputBinding(t.blueprint, t.input)
+        ) {
+          continue;
+        }
         console.error(
-          `  ✗ missing INPUT_MAPPING entry: ${t.group}/${t.blueprint}/${t.input}`,
+          `  ✗ missing removal input binding: ${t.group}/${t.blueprint}/${t.input}`,
+        );
+        failed += 1;
+        continue;
+      }
+      try {
+        resolveDatapointSource(mapping, t.component);
+      } catch (err) {
+        console.error(
+          `  ✗ invalid component mapping: ${t.group}/${t.blueprint}/${t.input} (${t.component}): ${err instanceof Error ? err.message : err}`,
         );
         failed += 1;
       }
+    }
+
+    for (const allowlistKey of allowedSandboxPeriodInputs) {
+      const observedCount =
+        observedAllowedSandboxPeriodInputs.get(allowlistKey) ?? 0;
+      if (observedCount === 1) continue;
+      console.error(
+        `  ✗ sandbox period-input allowlist entry must match exactly one live template input; found ${observedCount}: ${allowlistKey}`,
+      );
+      failed += 1;
     }
   }
 
