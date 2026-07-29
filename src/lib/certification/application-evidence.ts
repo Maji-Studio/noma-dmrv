@@ -92,11 +92,13 @@ export function isApplicationBoundaryLogbookEvidenceType(
 }
 
 /**
- * Document-type taxonomy behind the evidence-gap rule. The rule is implemented
- * by the certification submission gate (`buildApplicationEvidenceGaps`) and by
- * the shared SQL builder (`src/data-access/application-evidence-sql.ts`) used by
- * list readiness and dashboard counts. Both paths read the document types from
- * here so the taxonomy cannot silently drift when evidence rules change again.
+ * Document-type taxonomy behind the evidence-gap rule. The rule no longer gates
+ * certification submission. It is evaluated by the shared SQL builder
+ * (`src/data-access/application-evidence-sql.ts`), which feeds the informational
+ * evidence-health counts on the applications list and the dashboard, and by the
+ * JS twin (`src/fn/certification/application-evidence-readiness.ts`), retained
+ * as that builder's test oracle. Both read the document types from here so the
+ * taxonomy cannot silently drift when evidence rules change again.
  */
 
 /** `documents.entityType` value the evidence rule is scoped to, in both adapters. */
@@ -153,22 +155,6 @@ export type ApplicationEvidenceDocumentMatcher =
       geotagStatus: "present";
       evidenceRoleMetadataKey: "evidenceRole";
       role: ApplicationVisualEvidenceRole;
-    }
-  | {
-      kind: "unconditional-logbook-document-type";
-      uploaded: ApplicationEvidenceUploadedDocumentPredicate;
-      documentTypes: typeof APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES;
-    }
-  | {
-      kind: "conditional-logbook-document-type";
-      uploaded: ApplicationEvidenceUploadedDocumentPredicate;
-      documentType: typeof APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE;
-      evidenceTypeMetadataKey: "logbookEvidenceType";
-      evidenceTypes: typeof APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES;
-    }
-  | {
-      kind: "any-document-matcher";
-      matchers: readonly ApplicationEvidenceDocumentMatcher[];
     };
 
 export type ApplicationEvidenceGapDescriptor =
@@ -283,25 +269,6 @@ export function matchesApplicationEvidenceDocument(
           matcher.geotagStatus &&
         metadataValue(document.metadata, matcher.evidenceRoleMetadataKey) ===
           matcher.role
-      );
-    case "unconditional-logbook-document-type":
-      return (
-        isUploadedDocument(document, matcher.uploaded) &&
-        matcher.documentTypes.some((type) => type === document.documentType)
-      );
-    case "conditional-logbook-document-type":
-      return (
-        isUploadedDocument(document, matcher.uploaded) &&
-        document.documentType === matcher.documentType &&
-        matcher.evidenceTypes.some(
-          (type) =>
-            type ===
-            metadataValue(document.metadata, matcher.evidenceTypeMetadataKey),
-        )
-      );
-    case "any-document-matcher":
-      return matcher.matchers.some((candidate) =>
-        matchesApplicationEvidenceDocument(candidate, document),
       );
   }
 }

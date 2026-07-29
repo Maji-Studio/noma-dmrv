@@ -26,28 +26,6 @@ function documentMatcherSql(
         and ${documents.metadata}->>${matcher.geotagStatusMetadataKey} = ${matcher.geotagStatus}
         and ${documents.metadata}->>${matcher.evidenceRoleMetadataKey} = ${matcher.role}
       )`;
-    case "unconditional-logbook-document-type":
-      return sql`(
-        ${uploadedDocumentSql(matcher.uploaded)}
-        and ${documents.documentType} in (${sql.join(
-          matcher.documentTypes.map((type) => sql`${type}`),
-          sql`, `,
-        )})
-      )`;
-    case "conditional-logbook-document-type":
-      return sql`(
-        ${uploadedDocumentSql(matcher.uploaded)}
-        and ${documents.documentType} = ${matcher.documentType}
-        and ${documents.metadata}->>${matcher.evidenceTypeMetadataKey} in (${sql.join(
-          matcher.evidenceTypes.map((type) => sql`${type}`),
-          sql`, `,
-        )})
-      )`;
-    case "any-document-matcher":
-      return sql`(${sql.join(
-        matcher.matchers.map(documentMatcherSql),
-        sql` or `,
-      )})`;
   }
 }
 

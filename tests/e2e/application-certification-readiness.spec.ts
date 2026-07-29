@@ -2,8 +2,10 @@
  * Application evidence must remain independent from certification readiness.
  *
  * Application records can retain supporting files for verification, but the
- * active protocol does not make a typed Application logbook a Removal gate.
- * This flow guards that invariant before and after evidence upload.
+ * active protocol does not make a typed Application mass record a Removal gate.
+ * This flow guards that invariant for an Application carrying zero evidence
+ * documents: both the Removal checklist and the applications list must still
+ * read Ready.
  */
 import { and, eq } from "drizzle-orm";
 import type { Page } from "@playwright/test";
@@ -14,11 +16,9 @@ import {
   seedUngroupedReadyBatchWithChain,
 } from "./fixtures/certification-helpers";
 import { createDbConnection } from "./fixtures/db";
-import { waitForSideSheet } from "./fixtures/page-helpers";
 import type { GisBoundary } from "../../src/schemas/gis-boundary";
 
 const COLD_COMPILE_TIMEOUT_MS = 30_000;
-const EVIDENCE_FILE_NAME = "application-boundary-logbook.pdf";
 const GIS_BOUNDARY: GisBoundary = {
   version: 1,
   source: "paste",
@@ -55,9 +55,6 @@ const GIS_BOUNDARY: GisBoundary = {
   },
   notes: [],
 };
-const PDF_BYTES = Buffer.from(
-  "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF",
-);
 
 function chainRefs(seededData: SeededChainData) {
   return {
@@ -73,7 +70,13 @@ function chainRefs(seededData: SeededChainData) {
   };
 }
 
-async function makeBoundaryEvidenceIncomplete(
+/**
+ * Strip every evidence document from the Application and put it on the boundary
+ * method with a valid GIS reference. Under the current rule the GIS reference is
+ * the whole boundary requirement, so this leaves an Application that is fully
+ * ready while holding zero evidence files.
+ */
+async function clearEvidenceDocumentsAndSetBoundary(
   batch: SeededReadyBatch,
 ): Promise<void> {
   const { db, pool } = createDbConnection();
@@ -123,7 +126,7 @@ async function expectRemovalReadyWithoutApplicationEvidence(
 }
 
 test.describe("application evidence and certification readiness", () => {
-  test("keeps Application and Removal ready through evidence upload", async ({
+  test("keeps Application and Removal ready with no evidence documents", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -138,42 +141,20 @@ test.describe("application evidence and certification readiness", () => {
         chainRefs(seededData),
         `READINESS-${testRunId}`,
       );
-      await makeBoundaryEvidenceIncomplete(batch);
+      await clearEvidenceDocumentsAndSetBoundary(batch);
 
-      // A missing typed logbook is retained-evidence health, not a gate.
+      // A missing mass record is retained-evidence health, not a gate.
       await expectRemovalReadyWithoutApplicationEvidence(
         page,
         batch,
         facilityId,
       );
+
+      // The applications list badge must agree with the Removal checklist.
       await page.goto(`/applications?facility=${facilityId}`);
       const row = page.locator("tr", { hasText: batch.applicationCode });
       await expect(row).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(row.getByLabel("Ready for certification")).toBeVisible();
-
-      // Upload a classified boundary logbook from the real application editor.
-      await row.locator("td").first().click();
-      await waitForSideSheet(page);
-      await page.getByRole("button", { name: "Edit Application" }).click();
-      await page
-        .locator(`#application-${batch.applicationId}-boundary-evidence-upload`)
-        .setInputFiles({
-          name: EVIDENCE_FILE_NAME,
-          mimeType: "application/pdf",
-          buffer: PDF_BYTES,
-        });
-      await expect(
-        page.locator('[role="dialog"] li', { hasText: EVIDENCE_FILE_NAME }),
-      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-      await expect(row.getByLabel("Ready for certification")).toBeVisible({
-        timeout: COLD_COMPILE_TIMEOUT_MS,
-      });
-
-      await expectRemovalReadyWithoutApplicationEvidence(
-        page,
-        batch,
-        facilityId,
-      );
     } finally {
       await batch?.cleanup();
     }

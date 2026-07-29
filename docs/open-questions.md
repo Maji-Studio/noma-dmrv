@@ -408,27 +408,6 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   environment already pins it. Worth folding into the next auth-area change
   rather than as its own PR.
 
-### Application evidence-readiness: two implementations, one taxonomy (opened 2026-07-20)
-
-- **Problem:** the list badge / dashboard evaluate application visual-evidence
-  gaps via `applicationEvidenceGapCountSql`
-  (`src/data-access/application-evidence-sql.ts`, raw SQL folded into
-  `deriveEntityCertifyReadiness`), while the certify wizard evaluates the same
-  concept via `buildApplicationEvidenceGaps`
-  (`src/fn/certification/application-evidence-readiness.ts`, async TS). They
-  share only the `application-evidence` constants (roles / geotag predicate),
-  not the evaluation path — unlike production-run / sample / transport, which
-  both route through `deriveEntityCertifyReadiness`.
-- **Owned by #246** — "certification badges and removal gates read one
-  shared readiness source". Both surfaces now fail-closed, so the visible
-  contradiction (list "Ready", wizard blocked) is gone, but the duplicated logic
-  is a live drift risk: E2E `application-readiness-evidence.spec.ts` guards only
-  the badge side and nothing asserts badge/wizard *agreement*.
-- **To resolve:** route `buildApplicationEvidenceGaps` through the same shared
-  source as the badge (true unification) — likely cheaper than the alternative
-  regression test, which needs the full ready-batch / certifier-mapping setup the
-  wizard spec currently deems too fragile for CI (M).
-
 ### Does the app-shell scrollport deserve a permanent E2E guard? (`e2e/scrollport-guard`, opened 2026-07-29)
 
 - **Problem:** the temporary `zz-app-shell-scrollport` / `zz-redirect-route-errors`

@@ -1,3 +1,13 @@
+/**
+ * Reference (JS twin) implementation of the application evidence-gap rule.
+ *
+ * It has no production caller. Application evidence stopped gating the Removal,
+ * so the certification submission gate that used to call this was deleted. The
+ * module is retained as the readable oracle that
+ * `tests/application-evidence-gap-sql.test.ts` cross-checks the shared SQL
+ * builder (`src/data-access/application-evidence-sql.ts`) against, which is what
+ * keeps the two adapters from drifting. Do not wire it into a UI or a gate.
+ */
 import type { OrgContext } from "@/lib/auth/server";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import {
@@ -10,7 +20,6 @@ import {
   getMissingApplicationEvidenceRequirements,
   type ApplicationEvidenceGapDescriptor,
 } from "@/lib/certification/application-evidence";
-import type { BatchEntityReadinessIssue } from "@/lib/certification/batch-health";
 
 function applicationEvidenceMissingLabel(
   gap: ApplicationEvidenceGapDescriptor,
@@ -34,18 +43,6 @@ export async function buildApplicationEvidenceGaps(
   orgCtx: OrgContext,
   lineages: ChainOfCustodyData[],
 ): Promise<string[]> {
-  return (await buildApplicationEvidenceReadiness(orgCtx, lineages)).gaps;
-}
-
-export interface ApplicationEvidenceReadinessResult {
-  gaps: string[];
-  issues: BatchEntityReadinessIssue[];
-}
-
-export async function buildApplicationEvidenceReadiness(
-  orgCtx: OrgContext,
-  lineages: ChainOfCustodyData[],
-): Promise<ApplicationEvidenceReadinessResult> {
   const applicationIds = lineages.map((lineage) => lineage.application.id);
   const documents = await listDocumentsForEntityIds(
     orgCtx,
@@ -60,7 +57,6 @@ export async function buildApplicationEvidenceReadiness(
   }
 
   const gaps: string[] = [];
-  const affectedRecords: BatchEntityReadinessIssue["affectedRecords"] = [];
   for (const lineage of lineages) {
     const application = lineage.application;
     const applicationDocuments =
@@ -74,29 +70,7 @@ export async function buildApplicationEvidenceReadiness(
         applicationEvidenceGapMessage(application.code, requirement.gap),
       );
     }
-    if (missingRequirements.length > 0) {
-      affectedRecords.push({
-        id: application.id,
-        code: application.code,
-        missing: missingRequirements.map((requirement) =>
-          applicationEvidenceMissingLabel(requirement.gap),
-        ),
-      });
-    }
   }
 
-  return {
-    gaps,
-    issues:
-      affectedRecords.length > 0
-        ? [
-            {
-              key: "applications",
-              label: "Application evidence",
-              fixTarget: "applications",
-              affectedRecords,
-            },
-          ]
-        : [],
-  };
+  return gaps;
 }

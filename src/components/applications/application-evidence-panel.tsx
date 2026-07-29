@@ -492,15 +492,15 @@ export function ApplicationEvidencePanel({
           <div className="flex flex-col gap-6">
             <div className="flex items-center gap-8">
               <h5 className="body-small-bold">Record type for the next upload</h5>
-              <InfoHint side="top" label="How the logbook type is applied">
-                This classifies the next logbook file. Change an attached
-                file from the select beside it.
+              <InfoHint side="top" label="How the record type is applied">
+                This classifies the next mass record you upload. Change an
+                attached file from the select beside it.
               </InfoHint>
             </div>
             <div
               className="flex flex-wrap gap-8"
               role="radiogroup"
-              aria-label="Logbook evidence type for the next upload"
+              aria-label="Mass record type for the next upload"
             >
               {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map((type) => (
                 <label

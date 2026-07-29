@@ -167,7 +167,8 @@ export function CompiledSubmissionReview({
           </EmptyValue>
         ) : (
           <p className="body-small text-[var(--color-text-primary)]">
-            {formatCount(review.sourceIds.length, "supporting file")} attached.
+            {formatCount(review.sourceIds.length, "file")} attached to registry
+            values.
           </p>
         )}
       </ReviewSection>

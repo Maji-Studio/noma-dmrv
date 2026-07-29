@@ -5,6 +5,22 @@ Date: 2026-07-29
 > Non-authoritative interpretation of the linked Isometric sources. Confirm the
 > Certify project's protocol version before changing certification rules.
 
+## Outcome (recorded 2026-07-29, after implementation)
+
+The verdict below was **not** adopted as written. What shipped keeps and hardens
+the exclusion: `classifyRemovalSourceCandidate` returns `null` for an
+application `gis_boundary`, now as an explicit forward guard. The reasoning is
+the third bullet under the verdict, which this research also supports: a GIS
+boundary is not proof of `product_mass`, and binding it to a GHG-entry Datapoint
+would misattribute it.
+
+Deferred, not rejected: attaching the boundary GeoJSON as a Source on the
+biochar application itself, which needs `POST /biochar_applications` and its
+`source_ids`. Revisit when Noma can submit biochar applications.
+
+Read the verdict below as the starting research position, not as a live
+instruction.
+
 ## Verdict
 
 **The GIS boundary is valid supporting evidence and a GeoJSON file is an

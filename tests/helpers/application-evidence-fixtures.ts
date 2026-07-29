@@ -15,7 +15,6 @@ import type { GisBoundary } from "@/lib/geojson/types";
 // Expected-gap constants, derived from the taxonomy so a bare integer can never
 // drift away from the rule it stands for.
 export const NO_GAPS = 0;
-export const SINGLE_GAP = 1;
 export const ALL_VISUAL_ROLE_GAPS = APPLICATION_VISUAL_EVIDENCE_ROLES.length; // 3
 export const ONE_VISUAL_ROLE_SATISFIED_GAPS = ALL_VISUAL_ROLE_GAPS - 1; // 2
 export const BOUNDARY_REFERENCE_GAPS = 1;
@@ -150,7 +149,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     expectedGapCount: NO_GAPS,
   },
   {
-    // Generic PDF counts only when its logbookEvidenceType metadata qualifies.
+    // Retained records never change boundary readiness, typed or not. These two
+    // cases pin that: the GIS reference alone decides the outcome.
     key: "boundary-complete-typed-pdf",
     evidenceMethod: "boundary",
     gisBoundary: TEST_GIS_BOUNDARY,
@@ -158,7 +158,6 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     expectedGapCount: NO_GAPS,
   },
   {
-    // Typed and untyped retained records do not affect boundary readiness.
     key: "boundary-untyped-pdf",
     evidenceMethod: "boundary",
     gisBoundary: TEST_GIS_BOUNDARY,
@@ -166,12 +165,12 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     expectedGapCount: NO_GAPS,
   },
   {
-    // A missing GIS reference is incomplete even with a logbook.
+    // A missing GIS reference is incomplete even with a retained record.
     key: "boundary-missing-reference",
     evidenceMethod: "boundary",
     gisBoundary: null,
     docs: [{ documentType: "affidavit", metadata: {} }],
-    expectedGapCount: SINGLE_GAP,
+    expectedGapCount: BOUNDARY_REFERENCE_GAPS,
   },
   {
     key: "boundary-ref-no-logbook",

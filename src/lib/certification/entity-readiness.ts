@@ -145,6 +145,10 @@ export function deriveEntityCertifyReadiness(
   lifecycleState?: string | null,
 ): EntityCertifyReadiness {
   const gaps: EntityCertifyGap[] = [];
+  // No entity kind produces warnings today: application evidence was the only
+  // producer and it stopped being a readiness concern. The channel is kept as
+  // the seam for the next non-blocking entity warning, so a warning can be
+  // surfaced without re-threading it through every caller.
   const warnings: EntityCertifyWarning[] = [];
   const effectiveLifecycleState =
     lifecycleState ?? (fieldValue(entity, "status") as string | null | undefined);

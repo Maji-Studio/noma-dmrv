@@ -41,6 +41,14 @@ carry the Application-logbook-specific `Inventory` role. Preflight also waits
 for submit-time ledger generation instead of blocking an existing Removal when
 no operator-uploaded Source exists.
 
+This also closes the open question "Application evidence-readiness: two
+implementations, one taxonomy" (opened 2026-07-20). The duplication went away by
+deleting the certification submission gate rather than by unifying the two
+evaluators. The shared SQL builder is now the only path that feeds a surface,
+and what it feeds is an informational evidence-health count rather than a gate.
+The JS twin in `src/fn/certification/application-evidence-readiness.ts` survives
+only as the test oracle that keeps the SQL builder honest.
+
 ## 2026-07-29 (automatic GHG Statement data summary)
 
 GHG Statement report preparation is now a one-click export of the current

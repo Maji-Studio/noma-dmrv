@@ -159,7 +159,7 @@ describe("ApplicationEvidencePanel boundary evidence type", () => {
 
     expect(html).toContain("Record type for the next upload");
     expect(html).toContain(
-      'aria-label="Logbook evidence type for the next upload"',
+      'aria-label="Mass record type for the next upload"',
     );
   });
 });
