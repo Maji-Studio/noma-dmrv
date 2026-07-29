@@ -426,13 +426,20 @@ test.describe("Traceability Visualization", () => {
     await expect(
       adminPage.locator("header").getByText("Traceability", { exact: true })
     ).toBeVisible();
-    await expect(adminPage.getByText(/No credit batches/i)).toHaveCount(1);
+    // Two surfaces, one story: the command bar's band says there is nothing to
+    // pick, the canvas carries the explanation and the way out.
     await expect(
       adminPage.getByTestId("chain-batch-selector")
     ).toContainText("No credit batches yet");
     await expect(
       adminPage.getByTestId("chain-batch-selector-trigger")
     ).toHaveCount(0);
+    await expect(
+      adminPage.getByRole("heading", { name: "Nothing to trace yet" })
+    ).toBeVisible();
+    await expect(
+      adminPage.getByRole("button", { name: "Go to credit batches" })
+    ).toBeVisible();
     // The run filter is derived from the batch, so it only renders once a
     // batch anchors the page.
     await expect(adminPage.getByTestId("chain-run-select")).toHaveCount(0);
