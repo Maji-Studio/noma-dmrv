@@ -6,12 +6,24 @@ Symptom-to-fix lookup for issues that have actually bitten someone in this repo.
 
 ### `pnpm dev` Is Not `next dev`
 
-`pnpm dev` → `pnpm dev:docker` → `docker compose up -d && pnpm db:wait && next dev -p 3100` (see `package.json`). Consequences:
+`pnpm dev` → `pnpm dev:docker` → Docker startup, database wait, local-target
+check, migration, schema verification, then `next dev -p 3100` (see
+`package.json`). Consequences:
 
 - Extra args do **not** reach Next. `pnpm dev -- -p 3101` is a no-op; the port is hard-coded in the script.
 - `pnpm dev:manual` is the bare `next dev -p 3100` escape hatch.
 - `pnpm dev:docker:init` is the reset-and-start variant (runs `db:reset` in between).
 - A local "database not running" symptom is usually a stopped container → `pnpm docker:up`, then `pnpm db:wait` (`src/lib/cli/wait-for-db.ts`).
+- A migration or schema-verification failure stops startup before the app can
+  serve pages against an incompatible database. Read the drift the verifier
+  reports, then repair it with a new migration (`pnpm db:generate`). If local
+  migration history is inconsistent, run `pnpm db:reset` and then `pnpm db:seed`.
+  To start the app while the gate still fails (for example straight after a
+  branch switch), run `pnpm dev:manual`, which skips the whole Docker and
+  migration chain.
+- `pnpm db:assert-local` refuses to continue when `DATABASE_URL` is not
+  localhost, so the dev script never migrates staging or production. Set
+  `DB_MIGRATE_ALLOW_REMOTE=true` only for a deliberate remote migration.
 
 ### Port 3100 Already in Use
 
