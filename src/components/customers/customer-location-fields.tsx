@@ -1,6 +1,6 @@
 "use client";
 
-import type { UseFormReturn } from "react-hook-form";
+import { useController, type UseFormReturn } from "react-hook-form";
 import {
   DistanceCalcField,
   FormField,
@@ -44,12 +44,21 @@ export function CustomerLocationFields({
     register,
     watch,
     setValue,
+    control,
     formState: { errors },
   } = form;
 
   // Preprocessed Zod fields have `unknown` input types — narrow the watches.
-  const gpsLatitude = watch("gpsLatitude") as number | null | undefined;
-  const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
+  const { field: gpsLatitudeField } = useController({
+    control,
+    name: "gpsLatitude",
+  });
+  const { field: gpsLongitudeField } = useController({
+    control,
+    name: "gpsLongitude",
+  });
+  const gpsLatitude = gpsLatitudeField.value as number | null | undefined;
+  const gpsLongitude = gpsLongitudeField.value as number | null | undefined;
   const distanceFromFacilityKm = watch("distanceFromFacilityKm") as
     | number
     | null
@@ -171,14 +180,8 @@ export function CustomerLocationFields({
           latitude={gpsLatitude ?? null}
           longitude={gpsLongitude ?? null}
           onPositionChange={({ lat, lng }) => {
-            setValue("gpsLatitude", lat ?? undefined, {
-              shouldDirty: true,
-              shouldValidate: true,
-            });
-            setValue("gpsLongitude", lng ?? undefined, {
-              shouldDirty: true,
-              shouldValidate: true,
-            });
+            gpsLatitudeField.onChange(lat ?? undefined);
+            gpsLongitudeField.onChange(lng ?? undefined);
           }}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
