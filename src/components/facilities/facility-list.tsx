@@ -24,6 +24,7 @@ import {
   useUpdateFacility,
 } from "@/hooks/use-facilities";
 import { formatMass } from "@/lib/format-utils";
+import { formatCount } from "@/lib/copy-utils";
 import { ServerError } from "@/components/forms";
 import {
   EntitySideSheet,
@@ -143,7 +144,7 @@ export function FacilityList() {
       const facility = await createFacility.mutateAsync(data);
       setFacilityId(facility.id);
       setSideSheet(null);
-      toast.success("Facility created successfully");
+      toast.success("Facility created.");
       // Offer the optional certifier link for the new facility. Admin-only
       // (saving the mapping is admin-gated); non-admins create unlinked and an
       // admin links later in Settings.
@@ -151,7 +152,7 @@ export function FacilityList() {
         setLinkCertifierFacilityId(facility.id);
       }
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Failed to create facility");
+      setCreateError(error instanceof Error ? error.message : "The facility was not created. Check the form and try again.");
     }
   };
 
@@ -161,9 +162,9 @@ export function FacilityList() {
     try {
       await updateFacility.mutateAsync({ facilityId: sideSheet.entity.id, ...data });
       setSideSheet(null);
-      toast.success("Facility updated successfully");
+      toast.success("Facility updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Failed to update facility");
+      setUpdateError(error instanceof Error ? error.message : "The facility was not saved. Try again.");
     }
   };
 
@@ -182,9 +183,9 @@ export function FacilityList() {
     try {
       await archiveFacility.mutateAsync(archivingFacility.id);
       setArchivingFacility(null);
-      toast.success("Facility archived — restore it any time from the archived view");
+      toast.success("Facility archived. Restore it from the archived view.");
     } catch (error) {
-      setArchiveError(error instanceof Error ? error.message : "Failed to archive facility");
+      setArchiveError(error instanceof Error ? error.message : "The facility was not archived. Try again.");
     }
   };
 
@@ -194,7 +195,7 @@ export function FacilityList() {
       await restoreFacility.mutateAsync(facilityId);
       toast.success("Facility restored");
     } catch (error) {
-      setArchiveError(error instanceof Error ? error.message : "Failed to restore facility");
+      setArchiveError(error instanceof Error ? error.message : "The facility was not restored. Try again.");
     }
   };
 
@@ -240,7 +241,7 @@ export function FacilityList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load facilities"} />
+        <ServerError message={fetchError.message || "The facilities could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }
@@ -276,18 +277,30 @@ export function FacilityList() {
         {
           title: "Infrastructure",
           fields: [
-            { label: "Reactors", value: `${sideSheetEntity.reactorCount} reactors` },
+            {
+              label: "Reactors",
+              value: formatCount(sideSheetEntity.reactorCount, "reactor"),
+            },
             {
               label: "Feedstock bins",
-              value: `${sideSheetEntity.storageSummary.feedstockBinCount} bins`,
+              value: formatCount(
+                sideSheetEntity.storageSummary.feedstockBinCount,
+                "bin",
+              ),
             },
             {
               label: "Biochar bins",
-              value: `${sideSheetEntity.storageSummary.biocharBinCount} bins`,
+              value: formatCount(
+                sideSheetEntity.storageSummary.biocharBinCount,
+                "bin",
+              ),
             },
             {
               label: "Product bins",
-              value: `${sideSheetEntity.storageSummary.productBinCount} bins`,
+              value: formatCount(
+                sideSheetEntity.storageSummary.productBinCount,
+                "bin",
+              ),
             },
           ],
         },
@@ -349,7 +362,7 @@ export function FacilityList() {
           title="Feedstock On Hand"
           value={formatMass(feedstockOnHandKg)}
           icon={<PackageIcon size={24} weight="bold" />}
-          description={`${totalStorageBins} storage bins on this page`}
+          description={`${formatCount(totalStorageBins, "storage bin")} on this page`}
           isLoading={isLoading}
         />
       </div>

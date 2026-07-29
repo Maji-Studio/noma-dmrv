@@ -106,7 +106,7 @@ test.describe("Isometric credentials self-service", () => {
     ).toHaveCount(0);
     await expect(
       page.getByText(
-        "This facility has no Isometric project link yet. Ask an admin to link one",
+        "This facility has no Isometric project link. Ask an Admin to link one",
         { exact: false },
       ),
     ).toBeVisible();

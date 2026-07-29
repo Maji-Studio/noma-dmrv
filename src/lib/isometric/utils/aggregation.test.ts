@@ -131,6 +131,21 @@ describe("aggregateTransportMassDistance", () => {
     expect(result.warning).toContain("00000000-0000-0000-0000-000000000003");
   });
 
+  it("identifies a leg missing load mass by its named route", () => {
+    const result = aggregateTransportMassDistance(
+      [
+        leg("00000000-0000-0000-0000-000000000003", {
+          originName: "Farm A",
+          destinationName: "Plant Gate",
+          loadMassKg: null,
+        }),
+      ],
+      "Feedstock",
+    );
+
+    expect(result.warning).toContain("Farm A to Plant Gate");
+  });
+
   it("returns null and warns when legs mix factor fields", () => {
     const result = aggregateTransportMassDistance(
       [

@@ -15,7 +15,7 @@ import {
 } from "@/schemas/certification";
 
 const VISIBILITY_OPTIONS = [
-  { value: "private", label: "Private — verifier only" },
+  { value: "private", label: "Private: verifier only" },
   { value: "public", label: "Public on the registry" },
 ] as const;
 
@@ -42,7 +42,7 @@ export function RegistrySourceVisibilitySettings() {
         <span className="body-medium">
           {sourceVisibility === "public"
             ? "Public on the registry"
-            : "Private — verifier only"}
+            : "Private: verifier only"}
         </span>
         <p className="body-caption text-[var(--color-text-tertiary)]">
           Organization Owners and Admins manage this policy.
@@ -87,7 +87,7 @@ function RegistrySourceVisibilityForm({
         message:
           error instanceof Error
             ? error.message
-            : "Failed to save registry Source visibility.",
+            : "The registry Source visibility was not saved. Try again.",
       });
     }
   };

@@ -142,7 +142,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
       setServerError(
         error instanceof Error
           ? error.message
-          : "Failed to save the operating defaults.",
+          : "The operating defaults were not saved. Try again.",
       );
     }
   }
@@ -189,7 +189,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           label="Timezone"
           error={errors.defaultTimezone?.message}
           helperText="Seeds new facilities. Existing facilities keep their own."
-          hint="A facility's timezone decides which day a sample or production run is attributed to, so it is worth getting right before records exist rather than after."
+          hint="A facility's timezone decides which day a Sample or production run is attributed to. Set it before adding records."
         >
           <FormSelect
             id="default-timezone"
@@ -204,7 +204,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           label="Transport trip type"
           error={errors.defaultTripType?.message}
           helperText="Seeds new deliveries, feedstock hauls and transport legs."
-          hint="A return trip counts the distance twice in emissions accounting, which is the conservative protocol default. Choose one-way only if your hauls have an evidenced onward destination — and the per-leg field stays editable either way."
+            hint="A return trip counts the distance twice in emissions accounting, which is the conservative protocol default. Choose one-way only when evidence shows an onward destination. You can still edit each transport leg."
         >
           <FormSelect
             id="default-trip-type"

@@ -48,7 +48,7 @@ export function SupplierLocationQuickAddDialog({
       handleClose();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to create location"
+        err instanceof Error ? err.message : "The location was not created. Check the form and try again."
       );
     }
   };

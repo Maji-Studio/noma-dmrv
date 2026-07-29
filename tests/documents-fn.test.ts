@@ -168,7 +168,7 @@ describe("requestUpload", () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toMatch(/exceeds/);
+      expect(result.error).toMatch(/larger than/);
     }
     expect(insertDocument).not.toHaveBeenCalled();
   });
@@ -322,7 +322,7 @@ describe("confirmUpload", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toMatch(/exceeds/);
+      expect(result.error).toMatch(/larger than/);
     }
     expect(provider.deleted).toContain(pendingRow.storageKey);
     expect(updateDocument).toHaveBeenCalledWith(
@@ -360,7 +360,9 @@ describe("confirmUpload", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toMatch(/not found in storage/);
+      expect(result.error).toBe(
+        "The uploaded file could not be found. Upload it again.",
+      );
     }
   });
 
@@ -374,7 +376,9 @@ describe("confirmUpload", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toMatch(/already in/);
+      expect(result.error).toBe(
+        "This file is no longer waiting for confirmation. Upload it again.",
+      );
     }
   });
 

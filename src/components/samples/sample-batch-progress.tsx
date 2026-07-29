@@ -79,19 +79,19 @@ function progressHint(summary: DurabilityBatchSummary): string {
   const remaining = Math.max(0, minimum - usable);
 
   if (remaining === 0) {
-    return `This batch already meets the ≥${minimum}-sample minimum.`;
+    return `This batch already has at least ${minimum} Samples.`;
   }
 
   const usableClause = `This batch has ${usable} usable replicate${usable === 1 ? "" : "s"}`;
   const incomplete = summarizeIncompleteChemistry(summary);
 
   if (incomplete.count === 0) {
-    return `${usableClause}. Add ${remaining} more to reach the ≥${minimum} minimum.`;
+    return `${usableClause}. Add ${remaining} more to reach the minimum of ${minimum}.`;
   }
 
   const stillShort = Math.max(0, remaining - incomplete.count);
   const thenAdd = stillShort > 0 ? `, then add ${stillShort} more` : "";
-  return `${usableClause}. ${incomplete.count} recorded sample${incomplete.count === 1 ? " doesn't" : "s don't"} count yet. Enter ${incomplete.label} on ${incomplete.count === 1 ? "it" : "them"}${thenAdd} to reach the ≥${minimum} minimum.`;
+  return `${usableClause}. ${incomplete.count} recorded Sample${incomplete.count === 1 ? " doesn't" : "s don't"} count yet. Enter ${incomplete.label} on ${incomplete.count === 1 ? "it" : "them"}${thenAdd} to reach the minimum of ${minimum}.`;
 }
 
 function Panel({ children }: { children: React.ReactNode }) {

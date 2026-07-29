@@ -98,7 +98,7 @@ const SIDE_ACCENT: Record<RailSide, string> = {
 /** The outer party of a leg: supplier (inbound) or application field (outbound). */
 function legOuterName(leg: ChainGeoLeg): string {
   const name = leg.kind === "inbound" ? leg.originName : leg.destinationName;
-  return name ?? leg.outerCode ?? "Unknown";
+  return name ?? leg.outerCode ?? "Not recorded";
 }
 
 /**
@@ -113,7 +113,7 @@ function materialSummary(legs: ChainGeoLeg[]): string {
         .filter((label): label is string => Boolean(label))
     )
   );
-  if (labels.length === 0) return "—";
+  if (labels.length === 0) return "Not recorded";
   if (labels.length === 1) return labels[0];
   return `${labels[0]} +${labels.length - 1}`;
 }
@@ -168,7 +168,7 @@ function AreaDropdownRow({
             {legOuterName(leg)}
           </span>
           <span className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--clr-dark-purple-60)]">
-            {meta || "—"}
+            {meta || "Not recorded"}
           </span>
         </span>
         {leg.outerHref ? (
@@ -225,7 +225,7 @@ function AreaCard({
       : totalLegAppliedWetMassKg(shown);
   const massLabel =
     mass == null
-      ? "—"
+      ? "Not recorded"
       : `${formatMass(mass)} wet ${
           side === "inbound" ? "received" : "applied"
         }`;
@@ -357,7 +357,7 @@ function TransportLegPill({ side, legs, focusLegIds }: TransportLegPillProps) {
   const hasDistance = relevant.length > 0;
   const label = hasDistance
     ? formatDistanceKm(totalLegDistanceKm(relevant))
-    : "—";
+    : "Not set";
 
   return (
     <Tooltip content={`${label} transported`}>

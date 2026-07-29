@@ -35,7 +35,7 @@ export function resolveLatestApplicationTime(
 ): Date {
   if (lineages.length === 0) {
     throw new SafeError(
-      "Cannot derive the removal's reporting-period end: no applications in the lineage.",
+      "This Removal has no applications. Link an application before submitting.",
     );
   }
   let latest = lineages[0].application.applicationDate;
@@ -104,8 +104,8 @@ export function assertReportingWindowNotInverted(args: {
     const runStartTime = run ? runStartTimeByRunId.get(run.id) : undefined;
     if (!run || !runStartTime) {
       throw new SafeError(
-        `Application ${lineage.application.code} has no resolvable production ` +
-          "run start — cannot validate the removal's reporting window.",
+        `Application ${lineage.application.code} has no resolvable production run start. ` +
+          "Record the run start before submitting the Removal.",
       );
     }
     const applicationDate = formatUtcDate(lineage.application.applicationDate);
@@ -113,8 +113,8 @@ export function assertReportingWindowNotInverted(args: {
     if (applicationDate < runStartDate) {
       throw new SafeError(
         `Application ${lineage.application.code} is dated ${applicationDate}, ` +
-          `before its production run ${run.code} started ${runStartDate} — ` +
-          "correct the application date before submitting.",
+          `before its production run ${run.code} started ${runStartDate}. ` +
+          "Correct the application date before submitting.",
       );
     }
   }
@@ -144,12 +144,12 @@ export function readRemovalReportingWindow(row: CertificationSubmissionRow): {
     : new Date(NaN);
   if (Number.isNaN(startedOn.getTime()) || Number.isNaN(completedOn.getTime())) {
     throw new SafeError(
-      "Stale submission cannot be resumed because its reporting-window snapshot does not match the current schema.",
+      "This saved submission uses an outdated reporting window. Start a new submission.",
     );
   }
   if (startedOn.getTime() > completedOn.getTime()) {
     throw new SafeError(
-      "Stale submission cannot be resumed because its reporting-window snapshot has an inverted window (start after end).",
+      "This saved submission has an invalid reporting window. Start a new submission.",
     );
   }
   return { startedOn, completedOn };

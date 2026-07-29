@@ -59,7 +59,7 @@ export const customerFormSchema = z.object({
     .or(z.literal("")),
   contactEmail: z
     .string()
-    .email("Please enter a valid email address")
+    .email("Enter a valid email address.")
     .max(255, "Email must be less than 255 characters")
     .optional()
     .or(z.literal("")),
@@ -115,7 +115,7 @@ export const createCustomerSchema = customerFormSchema;
  * All fields optional except customerId
  */
 export const updateCustomerSchema = z.object({
-  customerId: z.string().uuid("Invalid customer ID"),
+  customerId: z.string().uuid("Choose a valid customer."),
   code: z
     .string()
     .min(1)
@@ -133,7 +133,7 @@ export const updateCustomerSchema = z.object({
  * Schema for deleting a customer
  */
 export const deleteCustomerSchema = z.object({
-  customerId: z.string().uuid("Invalid customer ID"),
+  customerId: z.string().uuid("Choose a valid customer."),
 });
 
 // ============================================
@@ -144,7 +144,7 @@ export const deleteCustomerSchema = z.object({
  * Schema for creating a customer location (server action)
  */
 export const createCustomerLocationSchema = z.object({
-  customerId: z.string().uuid("Invalid customer ID"),
+  customerId: z.string().uuid("Choose a valid customer."),
   name: z
     .string()
     .trim()
@@ -166,7 +166,7 @@ export const createCustomerLocationSchema = z.object({
  * Schema for updating a customer location (server action)
  */
 export const updateCustomerLocationSchema = z.object({
-  locationId: z.string().uuid("Invalid location ID"),
+  locationId: z.string().uuid("Choose a valid location."),
   name: z.string().trim().min(1).max(255).optional(),
   country: z.string().min(1).max(LOCATION_PART_MAX).optional(),
   stateRegion: locationPartSchema,
@@ -184,7 +184,7 @@ export const updateCustomerLocationSchema = z.object({
  * Schema for deleting a customer location
  */
 export const deleteCustomerLocationSchema = z.object({
-  locationId: z.string().uuid("Invalid location ID"),
+  locationId: z.string().uuid("Choose a valid location."),
 });
 
 // ============================================

@@ -797,13 +797,17 @@ describe("credit batch automatic production-run membership", () => {
         productionRunIds: [],
         currency: "TZS",
       }),
-    ).rejects.toThrow(/overlaps Credit batch/);
+    ).rejects.toThrow(
+      `This production cohort overlaps credit batch ${first.code}. Use a non-overlapping window for the same facility and feedstock.`,
+    );
 
     await expect(
       updateCreditBatch(ctx, second.id, {
         startDate: new Date("2024-08-10T00:00:00.000Z"),
       }),
-    ).rejects.toThrow(/overlaps Credit batch/);
+    ).rejects.toThrow(
+      `This production cohort overlaps credit batch ${first.code}. Use a non-overlapping window for the same facility and feedstock.`,
+    );
   });
 
   it("auto-attaches to a mutable Removal's credit batch", async () => {

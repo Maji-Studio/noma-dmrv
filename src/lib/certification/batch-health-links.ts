@@ -82,8 +82,8 @@ export function batchHealthFixLinkFor(
       return {
         label:
           affectedCount > 0
-            ? `Fix ${affectedCount} ${affectedCount === 1 ? "sample" : "samples"}`
-            : "Add lab sample data",
+            ? `Fix ${affectedCount} ${affectedCount === 1 ? "Sample" : "Samples"}`
+            : "Add Sample data",
         href: creditBatchId
           ? sampleCreateHref(facilityId, creditBatchId)
           : `/samples?${query(undefined, false)}`,

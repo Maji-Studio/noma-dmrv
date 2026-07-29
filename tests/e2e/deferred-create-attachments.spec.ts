@@ -182,10 +182,10 @@ test.describe("Deferred create attachments", () => {
     // Entity created, flush failed → sheet stays open in edit mode with the
     // failed item and an explanatory error.
     await expect(
-      dialog.getByText(/created, but .* failed to upload/i),
+      dialog.getByText(/created, but .* (was|were) not uploaded/i),
     ).toBeVisible({ timeout: 20000 });
     await expect(
-      dialog.getByText(/attachment(s)? failed to upload/i).first(),
+      dialog.getByText(/attachments? (was|were) not uploaded/i).first(),
     ).toBeVisible();
     await expect(dialog.getByText("ticket-deferred.pdf")).toBeVisible();
 

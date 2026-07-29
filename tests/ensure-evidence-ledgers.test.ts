@@ -46,7 +46,7 @@ describe("ensureEvidenceLedgersFromContext", () => {
     ).rejects.toBe(failure);
     expect(failure).toBeInstanceOf(SafeError);
     expect(failure.message).toBe(
-      "Unable to retire stale certification evidence. Please retry the submission.",
+      "Old certification evidence could not be replaced. Retry the submission.",
     );
     expect(log.warn).toHaveBeenCalledOnce();
   });

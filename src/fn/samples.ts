@@ -61,7 +61,7 @@ async function assertSampleNotBeforeBatchWindow(
   const samplingDay = formatFacilityDate(samplingTime, facility.timezone);
   if (samplingDay < batch.startDate) {
     throw new SafeError(
-      `Sampling date ${samplingDay} cannot be before credit batch ${batch.code}'s production window ${batch.startDate}–${batch.endDate}.`,
+      `Sample date ${samplingDay} is before credit batch ${batch.code}'s production window, ${batch.startDate} to ${batch.endDate}. Choose a date within or after the production window.`,
     );
   }
 }

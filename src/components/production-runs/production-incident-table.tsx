@@ -83,7 +83,7 @@ export function ProductionIncidentTable({
       }
       closeForm();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Failed to save incident");
+      setFormError(err instanceof Error ? err.message : "The incident was not saved. Try again.");
     }
   };
 
@@ -94,7 +94,7 @@ export function ProductionIncidentTable({
       setDeletingId(null);
       toast.success("Incident deleted");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete incident");
+      toast.error(err instanceof Error ? err.message : "The incident was not deleted. Try again.");
       setDeletingId(null);
     }
   };
@@ -153,10 +153,10 @@ export function ProductionIncidentTable({
                     {formatDateTime(incident.incidentTime)}
                   </td>
                   <td className="py-8 pr-12">
-                    {incident.severity ? formatProductionIncidentSeverity(incident.severity) : "\u2014"}
+                    {incident.severity ? formatProductionIncidentSeverity(incident.severity) : "Not recorded"}
                   </td>
-                  <td className="py-8 pr-12">{incident.reactorIdentifier ?? "\u2014"}</td>
-                  <td className="py-8 pr-12">{incident.operatorName ?? "\u2014"}</td>
+                  <td className="py-8 pr-12">{incident.reactorIdentifier ?? "Not recorded"}</td>
+                  <td className="py-8 pr-12">{incident.operatorName ?? "Not recorded"}</td>
                   <td className="py-8 pr-12 max-w-[360px] whitespace-normal">
                     {incident.description}
                   </td>

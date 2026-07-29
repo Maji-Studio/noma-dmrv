@@ -63,7 +63,7 @@ const DOCUMENT_ENTITY_LABELS: Record<DocumentEntityType, string> = {
   delivery: "Delivery",
   production_run: "Production run",
   production_incident: "Production incident",
-  production_sample: "Production sample",
+  production_sample: "In-process measurement",
   biochar_product: "Biochar product",
   feedstock: "Feedstock",
   feedstock_delivery: "Feedstock delivery",
@@ -109,7 +109,7 @@ export async function assertCanManageDocumentEntity(
   requireOrgScope(ctx);
 
   if (!isDocumentEntityType(entityType)) {
-    throw new SafeError("Unsupported document entity type");
+    throw new SafeError("Documents cannot be added to this record.");
   }
 
   switch (entityType) {
@@ -537,7 +537,7 @@ export async function deleteDocumentWithCertificationSafety(
           "failed to delete storage object",
         );
         throw new SafeError(
-          "Failed to delete the storage object. The document and certification mapping were kept; try again.",
+          "The stored file was not deleted. The document and certification link were kept. Try again.",
         );
       }
     }
@@ -634,7 +634,7 @@ export async function retireDocumentsForEntities(
           error: error instanceof Error ? error.message : String(error),
         });
         throw new SafeError(
-          "Failed to delete an attached storage object. Earlier objects may already have been deleted; the record and document metadata were kept. Retry deletion to finish storage cleanup.",
+          "An attached file was not deleted. The record and document details were kept. Try deleting the record again.",
         );
       }
     }

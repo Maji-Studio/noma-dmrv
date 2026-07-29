@@ -80,7 +80,7 @@ export function readRemovalDurabilityMeasurementSamples(
   );
   if (!parsed.success) {
     throw new SafeError(
-      "Stale submission cannot be resumed because its durability measurement-sample snapshot does not match the current payload schema.",
+      "This saved submission uses an older durability Sample format and cannot resume. Select Refresh review, then submit again.",
     );
   }
   return parsed.data.submissions as DurabilityMeasurementSampleSubmission[];

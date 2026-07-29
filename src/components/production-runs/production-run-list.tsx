@@ -33,6 +33,7 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
+import { formatCount } from "@/lib/copy-utils";
 import { useImportProductionRunReadings } from "@/hooks/use-production-run-reading-imports";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
@@ -126,7 +127,7 @@ function createColumns(
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => <span>{row.original.facilityName || "—"}</span>,
+      cell: ({ row }) => <span>{row.original.facilityName || "Not available"}</span>,
     },
     {
       id: "reactor",
@@ -298,7 +299,7 @@ export function ProductionRunList() {
       if (getRunConflict(error)) throw error;
       return error instanceof Error
         ? error.message
-        : "Failed to create production run";
+        : "The production run was not created. Check the form and try again.";
     },
     unresolvedUpdateMessage:
       "Resolve or remove the failed readings file before saving this production run.",
@@ -320,7 +321,9 @@ export function ProductionRunList() {
           const importResult = await importReadings.mutateAsync(
             attachment.documentId as string,
           );
-          toast.success(`Imported ${importResult.insertedRows} readings`);
+          toast.success(
+            `Imported ${formatCount(importResult.insertedRows, "reading")}`,
+          );
         } catch (error) {
           importFailedCount += 1;
           if (error instanceof Error && error.message.trim()) {
@@ -335,12 +338,20 @@ export function ProductionRunList() {
       const messages: string[] = [];
       if (uploadFailedCount > 0) {
         messages.push(
-          `${uploadFailedCount} ${uploadFailedCount === 1 ? "attachment" : "attachments"} failed to upload`,
+          `${uploadFailedCount} ${
+            uploadFailedCount === 1
+              ? "attachment was not uploaded"
+              : "attachments were not uploaded"
+          }`,
         );
       }
       if (importFailedCount > 0) {
         messages.push(
-          `${importFailedCount} readings ${importFailedCount === 1 ? "file" : "files"} could not be imported`,
+          `${formatCount(importFailedCount, "readings file")} ${
+            importFailedCount === 1
+              ? "was not imported"
+              : "were not imported"
+          }`,
         );
       }
       const firstImportFailureMessage = importFailureMessages[0];
@@ -355,7 +366,7 @@ export function ProductionRunList() {
       };
     },
     onSuccess: () =>
-      toast.success("Production run created successfully"),
+      toast.success("Production run created."),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
@@ -384,10 +395,10 @@ export function ProductionRunList() {
       });
       createWithEvidence.reset();
       setSideSheet(null);
-      toast.success("Production run updated successfully");
+      toast.success("Production run updated.");
     } catch (error) {
       if (getRunConflict(error)) throw error;
-      setUpdateError(error instanceof Error ? error.message : "Failed to update production run");
+      setUpdateError(error instanceof Error ? error.message : "The production run was not saved. Try again.");
     }
   };
 
@@ -402,9 +413,9 @@ export function ProductionRunList() {
         setFocusedRunId(null);
       }
       setDeletingRunId(null);
-      toast.success("Production run deleted successfully");
+      toast.success("Production run deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete production run");
+      setDeleteError(error instanceof Error ? error.message : "The production run was not deleted. Try again.");
     }
   };
 
@@ -511,7 +522,7 @@ export function ProductionRunList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load production runs"} />
+        <ServerError message={fetchError.message || "The production runs could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }

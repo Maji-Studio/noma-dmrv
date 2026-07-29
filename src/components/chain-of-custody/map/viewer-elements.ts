@@ -27,7 +27,7 @@ export function createSiteMarkerElement(input: SiteMarkerInput): HTMLDivElement 
   el.setAttribute("tabindex", "0");
   el.setAttribute(
     "aria-label",
-    input.sub ? `${input.code} — ${input.sub}` : input.code
+    input.sub ? `${input.code}: ${input.sub}` : input.code
   );
 
   const ring = document.createElement("div");

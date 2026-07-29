@@ -146,7 +146,7 @@ export function AddressSearch({
           )}
           {isError && (
             <li className="px-12 py-10 body-caption uppercase tracking-[0.08em] text-[var(--color-signal-red)]">
-              Search failed — try again
+              Addresses could not be searched. Try again.
             </li>
           )}
           {!isFetching && !isError && hits.length === 0 && (

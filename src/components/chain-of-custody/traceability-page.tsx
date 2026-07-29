@@ -551,7 +551,7 @@ export function TraceabilityPage() {
     if (chainIsError) {
       return (
         <CenteredMessage tone="error">
-          {chainError?.message || "Failed to load traceability data."}
+          {chainError?.message || "The traceability data could not be loaded. Refresh the page and try again."}
         </CenteredMessage>
       );
     }
@@ -623,7 +623,7 @@ export function TraceabilityPage() {
     if (batchIsError) {
       return (
         <CenteredMessage tone="error">
-          {batchError?.message || "Failed to load credit batch traceability data."}
+          {batchError?.message || "The credit batch traceability data could not be loaded. Refresh the page and try again."}
         </CenteredMessage>
       );
     }
@@ -710,7 +710,7 @@ export function TraceabilityPage() {
               </p>
               <p className="body-medium text-[var(--color-text-secondary)]">
                 {facility
-                  ? `${facility.code} - ${facility.name}`
+                  ? `${facility.code}: ${facility.name}`
                   : "Resolved from the selection"}
               </p>
             </div>

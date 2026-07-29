@@ -116,7 +116,7 @@ function massLabel(mass: EdgeMass | null): string | null {
 }
 
 function formatShare(fraction: number): string {
-  if (!Number.isFinite(fraction) || fraction <= 0) return "—";
+  if (!Number.isFinite(fraction) || fraction <= 0) return "Not available";
   if (fraction < SUB_ONE_PERCENT) return "<1%";
   if (fraction >= NEAR_FULL_PERCENT) return "100%";
   return `${Math.round(fraction * 100)}%`;
@@ -164,7 +164,9 @@ function computeEdgeShareLabels(edges: Edge[]): void {
 function formatDateOrNull(value: Date | string | null | undefined): string | null {
   if (!value) return null;
   const formatted = formatDate(value);
-  return formatted === "—" ? null : formatted;
+  return formatted === "Not recorded" || formatted === "Not available"
+    ? null
+    : formatted;
 }
 
 function addRow(

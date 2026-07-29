@@ -836,7 +836,7 @@ export function ProductionRunForm({
           <FormField
             id="dieselOperationLiters"
             label="Startup / plant diesel (L)"
-            hint="Diesel for reactor startup and on-site plant equipment during this run — not the generator."
+            hint="Diesel used for reactor startup and on-site plant equipment during this run. Do not include generator diesel."
             error={errors.dieselOperationLiters?.message}
             certifyRequired={isProductionRunCertifyField("dieselOperationLiters")}
             certifyStatus={certStatus("dieselOperationLiters")}
@@ -926,7 +926,7 @@ export function ProductionRunForm({
         <FormField
           id="readingsCsv"
           label="Readings CSV"
-          helperText="Columns: timestamp_utc, temperature_c, pressure_bar (dryer/reactor frequency optional). One file may span several UTC days; rows inside the run's window fill the table below."
+          helperText="Required columns: timestamp_utc, temperature_c, and pressure_bar. Dryer and reactor frequency columns are optional. A file can span several UTC days; only readings within the production run appear below."
           certifyRequired={readingsCertification.certifyRequired}
           certifyStatus={readingsCertification.certifyStatus}
         >

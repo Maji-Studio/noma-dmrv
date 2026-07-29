@@ -64,7 +64,7 @@ export async function downloadDocumentBlob(
   const response = await fetchSignedUploadWithTimeout(url, {});
   if (!response.ok) {
     throw new SafeError(
-      `Failed to read document from storage (${response.status}).`,
+      "The supporting document could not be read. Upload the file again and retry the submission.",
     );
   }
   const contentType = document.mimeType ?? "application/octet-stream";
@@ -93,7 +93,7 @@ export async function putBlobToSignedUrl(
     // certifier_sync_events. Status code alone is enough to diagnose;
     // detailed body inspection belongs in non-persistent debug logs only.
     throw new SafeError(
-      `Isometric PUT upload failed (status ${response.status}).`,
+      `Isometric did not accept the file (status ${response.status}). Try again.`,
     );
   }
 }

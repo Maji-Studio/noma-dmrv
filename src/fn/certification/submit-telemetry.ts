@@ -27,6 +27,7 @@ import {
 import { listTelemetryReadingsForRuns } from "@/data-access/telemetry-readings";
 import { SafeError } from "@/lib/errors";
 import {
+  describeIsometricApiError,
   getIsometricClientForOrg,
   IsometricApiError,
   payloadHash,
@@ -114,11 +115,11 @@ export async function submitTelemetry(
   const externalFacilityId = ctx.mapping.externalFacilityId;
   if (!externalFacilityId) {
     throw new SafeError(
-      "Paste this facility's Isometric facility ID (fcl_...) into the facility mapping before submitting telemetry. Isometric does not expose a POST /facilities endpoint - create the facility in the Certify UI first.",
+      "Add this facility's Isometric facility ID in facility settings before submitting telemetry. Create the facility in Isometric first if needed.",
     );
   }
   if (ctx.runs.length === 0) {
-    throw new SafeError("This removal has no production runs to publish.");
+    throw new SafeError("This Removal has no production runs to publish.");
   }
 
   // Mirrors submitRemoval / GHG-statement: every draft insert and stale-draft
@@ -140,7 +141,7 @@ export async function submitTelemetry(
   const openRun = ctx.runs.find((r) => r.endTime == null);
   if (openRun) {
     throw new SafeError(
-      `Run ${openRun.code} has no end time yet — complete the run before publishing telemetry`,
+      `Production run ${openRun.code} has no end time. Complete the run before publishing its readings.`,
     );
   }
   const endTimes = ctx.runs
@@ -189,7 +190,7 @@ export async function submitTelemetry(
   });
   if (aggregated.length === 0) {
     throw new SafeError(
-      "No reactor readings fall inside this removal's reporting window. Capture telemetry via the Production Run readings panel first.",
+      "No reactor readings fall inside this Removal's reporting window. Add readings to the production runs first.",
     );
   }
 
@@ -271,14 +272,16 @@ export async function submitTelemetry(
   switch (claim.kind) {
     case "blocked-in-flight":
       throw new SafeError(
-        "A telemetry submission for this removal is already in progress.",
+        "A telemetry submission for this Removal is already in progress.",
       );
     case "blocked-rejected-with-external":
       throw new SafeError(
         "This telemetry submission was rejected by Isometric. Open the registry to resolve before retrying.",
       );
     case "invalid-changed-hash":
-      throw new SafeError("Unexpected submission state for this removal.");
+      throw new SafeError(
+        "This Removal changed while the telemetry submission was being prepared. Reload and try again.",
+      );
     case "return-existing": {
       const status = await refreshStatus(client, orgCtx, latest!, claim.externalId);
       return {
@@ -459,7 +462,15 @@ export async function submitTelemetry(
           errorMessage: message,
         });
         await markSubmissionRejected(orgCtx, row.id, { errorMessage: message });
-        throw new SafeError(`Telemetry submission failed: ${message}`);
+        if (err instanceof SafeError) throw err;
+        const reason =
+          err instanceof IsometricApiError
+            ? describeIsometricApiError(
+                err,
+                "The registry could not be reached.",
+              )
+            : "The registry request failed.";
+        throw new SafeError(`Telemetry was not submitted. ${reason} Try again.`);
       }
     }
   }
@@ -584,7 +595,7 @@ function requireUploadUrl(row: CertificationSubmissionRow): string {
     typeof journaled.uploadUrl === "string" ? journaled.uploadUrl : null;
   if (!uploadUrl || !journal?.fileUploadId) {
     throw new SafeError(
-      "Resume-re-PUT decided but the journaled upload URL is missing - restart the submission.",
+      "The saved telemetry upload has expired. Start a new submission.",
     );
   }
   return uploadUrl;

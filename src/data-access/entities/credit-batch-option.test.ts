@@ -15,7 +15,7 @@ describe("toCreditBatchEntityOption", () => {
       id: "batch-1",
       code: "CB-26-001",
       name: "CB-26-001",
-      subtitle: "Jul 1 – Jul 31, 2026 · Pending",
+      subtitle: "Jul 1 to Jul 31, 2026 · Pending",
     });
   });
 });

@@ -32,7 +32,7 @@ export function readJournaledMeasurementSamples(
     typeof journaled !== "object"
   ) {
     throw new SafeError(
-      "The Removal measurement-sample journal is invalid; retry is blocked.",
+      "The saved Removal submission is damaged. Start a new submission.",
     );
   }
   const raw = (journaled as Record<string, unknown>).measurementSamples;
@@ -40,7 +40,7 @@ export function readJournaledMeasurementSamples(
   const parsed = measurementSampleJournalSchema.safeParse(raw);
   if (!parsed.success) {
     throw new SafeError(
-      "The Removal measurement-sample journal is invalid; retry is blocked.",
+      "The saved Removal submission is damaged. Start a new submission.",
     );
   }
   const supplierReferences = new Set<string>();
@@ -51,7 +51,7 @@ export function readJournaledMeasurementSamples(
       measurementSampleIds.has(entry.measurementSampleId)
     ) {
       throw new SafeError(
-        "The Removal measurement-sample journal is invalid; retry is blocked.",
+        "The saved Removal submission is damaged. Start a new submission.",
       );
     }
     supplierReferences.add(entry.supplierReferenceId);
@@ -70,7 +70,7 @@ export function addJournaledMeasurementSample(
   if (sameReference) {
     if (sameReference.measurementSampleId !== next.measurementSampleId) {
       throw new SafeError(
-        `Supplier reference "${next.supplierReferenceId}" is already journaled to a different measurement sample.`,
+        `Submission ${next.supplierReferenceId} is linked to a different registry measurement. Start a new submission.`,
       );
     }
     return [...current].sort((left, right) =>
@@ -82,7 +82,7 @@ export function addJournaledMeasurementSample(
   );
   if (sameId) {
     throw new SafeError(
-      `Measurement sample "${next.measurementSampleId}" is already journaled to a different supplier reference.`,
+      `Registry measurement ${next.measurementSampleId} is linked to a different submission. Start a new submission.`,
     );
   }
   return [...current, next].sort((left, right) =>

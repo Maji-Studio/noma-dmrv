@@ -102,7 +102,9 @@ export async function bootstrapInvitationAccountAction(
     });
     const organizationId = accepted?.invitation?.organizationId;
     if (!organizationId || organizationId !== account.organizationId) {
-      throw new SafeError("Invitation could not be accepted.");
+      throw new SafeError(
+        "The invitation was not accepted. Check that it is still valid and try again.",
+      );
     }
     await auth.api.setActiveOrganization({
       body: { organizationId },

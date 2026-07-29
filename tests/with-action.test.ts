@@ -108,7 +108,7 @@ describe("withAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Order not found",
+      error: "Order was not found. Refresh the page and try again.",
     });
   });
 
@@ -123,7 +123,7 @@ describe("withAction", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "An unexpected error occurred",
+        error: "The action could not be completed. Try again.",
       });
     } finally {
       vi.unstubAllEnvs();
@@ -141,7 +141,7 @@ describe("withAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Failed to create storage location",
+      error: "Storage location was not created. Try again.",
     });
   });
 
@@ -154,7 +154,7 @@ describe("withAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "An unexpected error occurred",
+      error: "The action could not be completed. Try again.",
     });
   });
 
@@ -167,7 +167,7 @@ describe("withAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Failed to create order",
+      error: "Order was not created. Try again.",
     });
   });
 });

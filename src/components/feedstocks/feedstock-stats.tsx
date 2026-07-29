@@ -51,7 +51,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
 
       <StatCard
         title="Avg. Moisture"
-        value={stats?.avgMoisturePercent != null ? `${stats.avgMoisturePercent.toFixed(1)}%` : "—"}
+        value={stats?.avgMoisturePercent != null ? `${stats.avgMoisturePercent.toFixed(1)}%` : "Not available"}
         icon={<DropIcon size={20} />}
         isLoading={isLoading}
         description="Average moisture content"

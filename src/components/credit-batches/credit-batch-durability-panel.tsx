@@ -48,9 +48,9 @@ function Section({ children }: { children: React.ReactNode }) {
         hint={
           <>
             Samples from this batch&apos;s production runs are pooled into one
-            batch-level figure (mean ± standard deviation) — that is what the
-            registry receives for the 200-year durability claim. Protocol
-            rules (module §8.3.1, §3 Table 2): at least 3 samples representative
+            credit batch figure with a mean and standard deviation. The
+            registry receives this figure for the 200-year durability claim. Protocol
+            rules (module §8.3.1, §3 Table 2): at least 3 Samples representative
             of the batch&apos;s full range of physical characteristics, eligible
             when the pooled mean H/C_org
             &lt; {DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org &lt;{" "}
@@ -58,7 +58,7 @@ function Section({ children }: { children: React.ReactNode }) {
           </>
         }
       >
-        Lab samples
+        Lab Samples
       </SectionLabel>
       {children}
     </section>
@@ -93,7 +93,7 @@ function SubmittedStat({
 }
 
 function num(value: number | null, digits: number): string {
-  return value == null ? "—" : value.toFixed(digits);
+  return value == null ? "Not recorded" : value.toFixed(digits);
 }
 
 function ReplicateRow({ r }: { r: DurabilitySummaryReplicate }) {
@@ -106,14 +106,14 @@ function ReplicateRow({ r }: { r: DurabilitySummaryReplicate }) {
               size={13}
               weight="fill"
               className="shrink-0 text-[var(--st-wait)]"
-              aria-label="Outlier — exceeds an eligibility ceiling"
+              aria-label="Outlier: exceeds an eligibility limit"
             />
           )}
           {r.sampleCode}
         </span>
       </td>
       <td className="px-10 py-8 body-caption text-[var(--color-text-secondary)]">
-        {r.productionRunCode ?? "—"}
+        {r.productionRunCode ?? "Not available"}
         {r.samplingDay ? ` · ${r.samplingDay}` : ""}
       </td>
       <td className="px-10 py-8 text-right tabular-nums body-caption text-[var(--color-text-secondary)]">
@@ -181,7 +181,7 @@ function SampleSummaryRows({
         <SheetLinkRow
           key={replicate.id}
           href={sampleDetailHref(facilityId, replicate.id)}
-          ariaLabel={`Open lab sample ${replicate.sampleCode}`}
+          ariaLabel={`Open lab Sample ${replicate.sampleCode}`}
           primary={
             <span className="inline-flex min-w-0 items-center gap-6">
               {replicate.outlier && (
@@ -212,7 +212,7 @@ export function sampleProvenanceLabel(
     "productionRunCode" | "samplingDay"
   >,
 ): string {
-  const source = replicate.productionRunCode ?? "Batch sample";
+  const source = replicate.productionRunCode ?? "Batch Sample";
   return replicate.samplingDay
     ? `${source} · ${formatDate(replicate.samplingDay)}`
     : source;
@@ -235,7 +235,7 @@ export function CreditBatchDurabilityPanel({
           className="body-caption text-[var(--color-text-tertiary)]"
           aria-busy="true"
         >
-          Loading durability samples…
+          Loading durability data…
         </span>
       </Section>
     );
@@ -245,7 +245,8 @@ export function CreditBatchDurabilityPanel({
     return (
       <Section>
         <span className="body-caption text-[var(--st-wait)]">
-          {error?.message ?? "Couldn't load this batch's durability samples."}
+          {error?.message ??
+            "This credit batch's durability Samples could not be loaded. Refresh the page and try again."}
         </span>
       </Section>
     );
@@ -257,15 +258,15 @@ export function CreditBatchDurabilityPanel({
         <EmptyState
           padding="md"
           icon={<FlaskIcon size={40} weight="duotone" />}
-          title="No lab samples yet"
-          description="Lab samples recorded on this batch's production runs show up here. At least three samples, taken on different runs or days, are needed before this batch can be certified."
+          title="No lab Samples yet"
+          description="Lab Samples recorded for this credit batch appear here. Record at least three Samples that represent the batch's full range of physical characteristics."
           action={
             <Link
               href={sampleCreateHref(facilityId, creditBatchId)}
               className={buttonVariants({ variant: "default", size: "small" })}
             >
               <PlusIcon size={16} aria-hidden />
-              Record a lab sample
+              Record a Sample
             </Link>
           }
         />

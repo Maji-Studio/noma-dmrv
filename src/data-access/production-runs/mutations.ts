@@ -109,7 +109,7 @@ async function allocateFeedstockMass(
 
   if (totalDryMass === 0) {
     throw new SafeError(
-      "Cannot allocate feedstock: batches in this bin have no recorded dry mass. Please update feedstock batch weights first."
+      "The feedstock batches in this bin have no recorded dry mass. Record their weights before allocating feedstock."
     );
   }
 
@@ -380,7 +380,7 @@ export async function createProductionRun(
     // slipped past the advisory lock to the friendly overlap message.
     if (isReactorStartUniqueViolation(error)) {
       throw new SafeError(
-        "Another run on this reactor already starts at that time — pick a different start time",
+        "Another production run on this reactor starts at that time. Choose a different start time.",
       );
     }
     throw error;
@@ -678,7 +678,7 @@ export async function updateProductionRun(
         .limit(1);
       if (membership) {
         throw new SafeError(
-          "Remove this run from its Credit batch before reopening it.",
+          "Remove this run from its credit batch before reopening it.",
         );
       }
     }
@@ -852,7 +852,7 @@ export async function updateProductionRun(
     // unique violation to the friendly overlap message.
     if (isReactorStartUniqueViolation(error)) {
       throw new SafeError(
-        "Another run on this reactor already starts at that time — pick a different start time",
+        "Another production run on this reactor starts at that time. Choose a different start time.",
       );
     }
     throw error;

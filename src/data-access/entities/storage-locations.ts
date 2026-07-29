@@ -82,10 +82,12 @@ function formatStorageLocationSubtitle(
       const parts = [
         typeLabel,
         blendLabel,
-        `${Math.round(totalProductKg).toLocaleString()} kg products`,
+        `${Math.round(totalProductKg).toLocaleString()} kg of product`,
       ];
       if (biocharEquivalentKg > 0) {
-        parts.push(`${Math.round(biocharEquivalentKg).toLocaleString()} kg biochar eq`);
+        parts.push(
+          `${Math.round(biocharEquivalentKg).toLocaleString()} kg biochar equivalent`,
+        );
       }
       return parts.join(" · ");
     }

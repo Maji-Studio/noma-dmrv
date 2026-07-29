@@ -74,7 +74,7 @@ export async function renderSyntheticSeedPdf(
   const document = h(
     Document,
     {
-      title: `Synthetic seed fixture — ${documentCode}`,
+      title: `Synthetic seed fixture: ${documentCode}`,
       author: "noma dMRV",
       subject: "Synthetic seed evidence fixture",
     },

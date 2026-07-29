@@ -49,7 +49,7 @@ describe("toLoggedActionError", () => {
       },
     );
 
-    expect(result).toBe("Failed to update supplier");
+    expect(result).toBe("Supplier was not saved. Try again.");
     expect(result).not.toMatch(/update "suppliers"/);
     expect(result).not.toMatch(/params:/);
   });
@@ -85,7 +85,9 @@ describe("toLoggedActionError", () => {
       { message: "delivery action failed", context: { op: "delivery:get" } },
     );
 
-    expect(result).toBe("Delivery not found");
+    expect(result).toBe(
+      "Delivery was not found. Refresh the page and try again.",
+    );
     expect(mockLoggerError).not.toHaveBeenCalled();
   });
 
@@ -95,10 +97,38 @@ describe("toLoggedActionError", () => {
       context: { op: "sample:list" },
     });
 
-    expect(result).toBe("Failed to load samples");
+    expect(result).toBe("Samples could not be loaded. Refresh the page and try again.");
     expect(mockLoggerError).toHaveBeenCalledOnce();
     const [context] = mockLoggerError.mock.calls[0] as [Record<string, unknown>];
     expect(context.errorName).toBe("string");
     expect(context.errorMessage).toBe("string error");
+  });
+
+  it("uses natural agreement for plural fallback subjects", () => {
+    const result = toLoggedActionError(
+      new Error("registry unavailable"),
+      "Failed to save Isometric credentials",
+      {
+        message: "credential action failed",
+        context: { op: "credentials:save" },
+      },
+    );
+
+    expect(result).toBe("Isometric credentials were not saved. Try again.");
+  });
+
+  it("keeps unknown fallback verbs grammatical", () => {
+    const result = toLoggedActionError(
+      new Error("database unavailable"),
+      "Failed to change member role",
+      {
+        message: "member action failed",
+        context: { op: "member:update" },
+      },
+    );
+
+    expect(result).toBe(
+      "The action to change member role could not be completed. Try again.",
+    );
   });
 });

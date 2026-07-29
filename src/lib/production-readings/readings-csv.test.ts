@@ -222,7 +222,9 @@ describe("parseReadingsCsv", () => {
         runWindowStart: DAY_START,
         runWindowEnd: TWO_DAYS_END,
       }),
-    ).toThrow(/missing required column\(s\): pressure_bar/);
+    ).toThrow(
+      "The readings CSV is missing required column: pressure_bar. Found: timestamp_utc, temperature_c.",
+    );
   });
 
   it("throws when the run has no time window", () => {

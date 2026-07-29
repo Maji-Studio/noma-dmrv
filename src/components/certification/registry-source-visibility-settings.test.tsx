@@ -45,7 +45,7 @@ describe("RegistrySourceVisibilitySettings", () => {
       "Only new Sources use this setting. Existing Sources are unchanged.",
     );
     expect(html).toContain(
-      '<option value="private" selected="">Private — verifier only</option>',
+      '<option value="private" selected="">Private: verifier only</option>',
     );
   });
 
@@ -69,7 +69,7 @@ describe("RegistrySourceVisibilitySettings", () => {
 
     const html = renderToStaticMarkup(<RegistrySourceVisibilitySettings />);
 
-    expect(html).toContain("Private — verifier only");
-    expect(html).not.toContain("Private — verifier access only");
+    expect(html).toContain("Private: verifier only");
+    expect(html).not.toContain("Private: verifier access only");
   });
 });

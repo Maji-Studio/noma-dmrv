@@ -545,7 +545,7 @@ export function makeContext(
       source: "Test dataset (annual mean)",
       temperatureFloored: false,
       method:
-        "Facility reference soil temperature (annual average; 7 °C floor) — Test dataset (annual mean)",
+        "Facility reference soil temperature (annual average; 7 °C floor): Test dataset (annual mean)",
       warnings: [],
     },
     ...overrides,

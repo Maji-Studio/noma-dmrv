@@ -14,7 +14,7 @@ describe("stock overdraw", () => {
 
   it("builds the shared inline bin message", () => {
     expect(binStockOverdrawMessage("feedstock", 100, 180)).toBe(
-      "Not enough feedstock in this bin — 100 kg available but this draw needs 180 kg. Reconcile the bin's stock (Storage Bins → the bin → Reconcile stock), then try again.",
+      "Not enough feedstock in this bin. 100 kg available but this draw needs 180 kg. Reconcile the bin's stock (Storage Bins → the bin → Reconcile stock), then try again.",
     );
   });
 

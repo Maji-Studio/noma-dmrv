@@ -22,6 +22,7 @@ import {
   type ProductionReadinessGap,
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import { pluralize } from "@/lib/copy-utils";
 
 export type RemovalReadinessState =
   | "submitted" // done from noma's side — nothing to action
@@ -118,7 +119,7 @@ function durabilityBlockerReasons(blockers: string[]): string[] {
   const shown = blockers.slice(0, DURABILITY_BLOCKER_REASON_PREVIEW_LIMIT);
   const overflow = blockers.length - shown.length;
   return overflow > 0
-    ? [...shown, `+${overflow} more sampling/eligibility issue(s)`]
+    ? [...shown, `+${overflow} more sampling or eligibility ${pluralize(overflow, "issue")}`]
     : shown;
 }
 
@@ -154,7 +155,7 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
     return `Default removal template ${facts.missingDefaultTemplateId} is no longer available`;
   }
   if (!facts.hasDefaultTemplate) {
-    return "No default removal template selected for this facility";
+    return "No default Removal template selected for this facility";
   }
   if (facts.unresolvedBlueprintKeys.length > 0) {
     const n = facts.unresolvedBlueprintKeys.length;
@@ -203,7 +204,7 @@ function evidenceMirrorDetail(
   const pending = total - mirrored;
   return pending > 0
     ? `${pending}${pending === total ? "" : ` of ${total}`} ${pending === 1 ? "file is" : "files are"} sent automatically when you submit`
-    : `${total} of ${total} files ready`;
+    : `${total} of ${total} ${total === 1 ? "file" : "files"} ready`;
 }
 
 function evidenceAdvisories(facts: RemovalReadinessFacts): string[] {
@@ -674,7 +675,7 @@ export function buildRemovalRequirementsChecklist(
           key: "transportUniformity",
           label: TRANSPORT_UNIFORMITY_LABEL,
           status: "unmet",
-          detail: `Mixed method/factor across ${describeCategories(mixed)} legs`,
+          detail: `Mixed method or factor across ${describeCategories(mixed)} transport legs`,
         };
   })();
 

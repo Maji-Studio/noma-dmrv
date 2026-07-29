@@ -309,7 +309,7 @@ export async function getOrCreateGhgStatementDraft(
     // statements. There is no soft/hard delete for GHG statements today, so
     // this is effectively unreachable; surface a retryable error rather than
     // returning undefined.
-    throw new SafeError("GHG statement could not be created. Retry.");
+    throw new SafeError("The GHG Statement was not created. Try again.");
   }
   return { statement: existing, created: false };
 }
@@ -400,7 +400,7 @@ export async function createGhgStatementForRegistryDiscovery(
   }
 
   throw new SafeError(
-    "Registry statement could not be allocated a local record. Reload and retry.",
+    "The registry GHG Statement could not be synced. Refresh the page and try again.",
   );
 }
 
@@ -518,7 +518,7 @@ export async function updateGhgStatementReportingWindow(
     )
     .limit(1);
   if (!statement) {
-    throw new SafeError("GHG statement could not be found.");
+    throw new SafeError("GHG Statement not found.");
   }
 
   const metadataPatch: Record<string, unknown> = {};
@@ -720,7 +720,7 @@ export async function reconcileRemovalMembership(
       .where(and(eq(certifierGhgStatements.id, ghgStatementId), eq(certifierGhgStatements.organizationId, ctx.organizationId)))
       .limit(1);
     if (!target) {
-      throw new SafeError("GHG statement not found for reconciliation.");
+      throw new SafeError("GHG Statement not found. Refresh the page.");
     }
     const targetFacilityId = target.facilityId;
 

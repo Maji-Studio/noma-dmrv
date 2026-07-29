@@ -36,7 +36,10 @@ export default function VerifyEmailPage() {
     if (result.success) {
       setResendSuccess(true);
     } else {
-      setError(result.error || "Failed to resend verification email");
+      setError(
+        result.error ||
+          "The verification email was not sent. Check your connection and try again.",
+      );
     }
 
     setResending(false);
@@ -76,8 +79,8 @@ export default function VerifyEmailPage() {
       <div className="bg-[var(--color-background-white)] rounded-none border border-[var(--color-border-primary)] p-32 space-y-24 shadow-sm">
         <div className="space-y-16">
           <p className="body-small text-[var(--color-text-secondary)]">
-            Please check your inbox and click the verification link to activate
-            your account.
+            Check your inbox and use the verification link to activate your
+            account.
           </p>
           <p className="body-small text-[var(--color-text-tertiary)]">
             Don&apos;t forget to check your spam folder if you don&apos;t see
@@ -91,7 +94,7 @@ export default function VerifyEmailPage() {
             role="status"
             aria-live="polite"
           >
-            Verification email sent! Please check your inbox.
+            Verification email sent. Check your inbox.
           </div>
         )}
 

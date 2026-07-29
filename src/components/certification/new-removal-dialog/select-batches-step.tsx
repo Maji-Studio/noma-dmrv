@@ -65,27 +65,27 @@ export function setupGapCopy(gap: FacilitySetupGap): {
     case "credentials":
       return {
         message:
-          "The organization's Isometric API credentials aren't configured, so the registry can't be reached. An organization owner or admin needs to set them up before this facility can be linked.",
+          "The organization's registry connection credentials are not set, so the registry cannot be reached. Ask an Owner or Admin to add them before linking this facility.",
         action: null,
       };
     case "default_template":
       return {
         message:
-          "This facility is linked, but no default removal template is set for it.",
+          "This facility is linked, but no default Removal template is set for it.",
         action: { label: "Choose a template in certification settings", toSettings: true },
       };
     case "template_resolution":
       return {
-        message: `The configured removal template (${gap.templateId}) no longer resolves on the registry. Re-select a template.`,
+        message: `The configured Removal template (${gap.templateId}) is no longer available in the registry. Select another template.`,
         action: { label: "Re-select template in certification settings", toSettings: true },
       };
     case "blueprint_keys": {
       const labels = gap.keys.map(facilityBlueprintLabel);
       return {
         message:
-          `The facility's project and template are linked, but the template references ` +
-          `${gap.keys.length} component blueprint${gap.keys.length === 1 ? "" : "s"} the registry doesn't expose: ` +
-          `${labels.join(", ")}. Review the facility's certification setup or ask an administrator to resolve the mapping with Isometric.`,
+          `The selected Removal template uses ${gap.keys.length} ` +
+          `${gap.keys.length === 1 ? "component" : "components"} the registry cannot load: ` +
+          `${labels.join(", ")}. Choose another template or ask an Admin to update the Isometric project.`,
         action: { label: "Review certification settings", toSettings: true },
       };
     }
@@ -254,7 +254,7 @@ export function SelectBatchesStep({
       <h3 className="title-heading-3 flex items-center gap-6">
         Select credit batches
         <InfoHint>
-          Only batches whose data is complete can be grouped into a removal.
+          Only batches whose data is complete can be grouped into a Removal.
         </InfoHint>
       </h3>
 

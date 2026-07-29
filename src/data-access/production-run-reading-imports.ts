@@ -52,14 +52,16 @@ export async function getProductionRunReadingsImportContext(
     throw new SafeError("Readings file is not uploaded yet");
   }
   if (!row.storageKey) {
-    throw new SafeError("Readings file has no managed storage key");
+    throw new SafeError(
+      "The readings file is not available in storage. Upload it again and retry the import.",
+    );
   }
   // An open run has no end instant, so there is no window to slot readings into.
   // Reject with a clear message rather than the old zero-duration failure (#259,
   // the misleading-error half of #207).
   if (!row.runWindowEnd) {
     throw new SafeError(
-      `Run ${row.runCode} has no end time yet — set the run's end time before importing readings`,
+      `Production run ${row.runCode} has no end time. Set its end time before importing readings.`,
     );
   }
 

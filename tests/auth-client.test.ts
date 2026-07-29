@@ -36,7 +36,7 @@ describe("Better Auth client provider", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Please verify your email before signing in.",
+      error: "Verify your email before signing in.",
     });
   });
 });

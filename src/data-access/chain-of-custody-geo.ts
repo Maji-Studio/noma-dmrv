@@ -172,7 +172,7 @@ export async function projectChainOfCustodyGeoData(
   );
   if (chain.feedstocks.length > 0 && unplottableFeedstocks.length === chain.feedstocks.length) {
     warnings.push(
-      "Feedstock origins are not geolocated — upstream transport legs cannot be plotted."
+      "Feedstock origins have no coordinates, so inbound transport legs cannot be plotted. Add coordinates to the supplier locations."
     );
   }
 

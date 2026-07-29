@@ -67,7 +67,7 @@ export function TransportEvidenceDocuments({
       setDeletingId(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Failed to delete document",
+        err instanceof Error ? err.message : "The document was not deleted. Try again.",
       );
     }
   };
@@ -81,7 +81,7 @@ export function TransportEvidenceDocuments({
       {error && (
         <ServerError
           message={
-            error instanceof Error ? error.message : "Failed to load documents"
+            error instanceof Error ? error.message : "The documents could not be loaded. Refresh the page and try again."
           }
         />
       )}

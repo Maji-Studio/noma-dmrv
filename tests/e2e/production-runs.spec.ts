@@ -58,7 +58,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
     await waitForSideSheetClose(page);
     await expect(page.getByRole("status")).toHaveText(
-      "Production run created successfully",
+      "Production run created.",
     );
   }
 
@@ -130,7 +130,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
 
     await waitForSideSheetClose(page);
     await expect(page.getByRole("status")).toHaveText(
-      "Sample created successfully",
+      "Sample created.",
     );
 
     // Verify sample appears in list
@@ -149,12 +149,12 @@ test.describe("Production Run + Sample UI CRUD", () => {
 
     const runSideSheet = page.locator('[role="dialog"]').first();
 
-    await runSideSheet.getByRole("button", { name: "Add Sample" }).click();
+    await runSideSheet.getByRole("button", { name: "Add measurement" }).click();
     const sampleDialog = page.getByTestId("production-sample-dialog");
     await expect(sampleDialog).toBeVisible();
     await expect(page.locator('[role="dialog"]')).toHaveCount(2);
     await expect(
-      sampleDialog.getByRole("heading", { name: "Add Production Sample" }),
+      sampleDialog.getByRole("heading", { name: "Add in-process measurement" }),
     ).toBeVisible();
     await sampleDialog.getByRole("button", { name: "Cancel" }).click();
     await expect(sampleDialog).toBeHidden();
@@ -177,7 +177,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
 });
 
 // Shared helpers for the production-run lifecycle and time-window specs below.
-const overlapText = /overlaps run|unfinished run/i;
+const overlapText = /overlaps run|is unfinished/i;
 
 async function openRunForm(
   page: Page,

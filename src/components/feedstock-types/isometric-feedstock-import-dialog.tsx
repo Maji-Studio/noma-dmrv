@@ -53,7 +53,7 @@ export function IsometricFeedstockImportDialog({
       setError(
         importError instanceof Error
           ? importError.message
-          : "Failed to import the feedstock type",
+          : "The feedstock type was not imported. Check the category and try again.",
       );
     }
   };

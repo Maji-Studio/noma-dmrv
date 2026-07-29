@@ -61,7 +61,9 @@ function fixLinksFor(
         { label: "Open deliveries", href: `/deliveries?facility=${facilityId}` },
       ];
     case "durability":
-      return [{ label: "Open samples", href: `/samples?facility=${facilityId}` }];
+      return [
+        { label: "Review Samples", href: `/samples?facility=${facilityId}` },
+      ];
     default:
       return [];
   }

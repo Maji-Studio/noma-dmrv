@@ -329,7 +329,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const distanceHelperText = !watchOrderId
     ? "Select an order to load the destination's stored distance."
     : storedDistanceKm == null
-      ? "No stored distance for this destination — add it on the customer location, or enter a one-off distance here."
+      ? "This destination has no stored distance. Add one to the customer location, or enter a distance for this delivery."
       : "Facility › destination distance. Edit only when routing differs.";
 
   return (
@@ -381,7 +381,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
           emptyHint={{
             message:
-              "No orders yet — a delivery fulfils an order, so record the customer order first.",
+              "A delivery fulfils an order. Record the customer order first.",
             href: contextFacilityId
               ? `/orders?facility=${encodeURIComponent(contextFacilityId)}`
               : "/orders",

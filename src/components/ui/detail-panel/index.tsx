@@ -30,6 +30,7 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms/section-label";
@@ -45,7 +46,7 @@ import {
   type SpineMeta,
 } from "@/components/forms/form-spine";
 
-const EMPTY_DETAIL_VALUE = "—";
+const EMPTY_DETAIL_VALUE = MISSING_VALUE.notRecorded;
 
 /* -------------------------------------------------------------------------------------------------
  * DetailSection - Flat section with mono label, mirrors FormSection so the
@@ -144,7 +145,7 @@ function DetailField({
     certifyStatus ??
     resolveCertFieldStatus(
       true,
-      value !== EMPTY_DETAIL_VALUE && isCertFieldValuePresent(value),
+      !isMissingValueCopy(value) && isCertFieldValuePresent(value),
     );
 
   return (

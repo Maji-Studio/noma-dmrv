@@ -131,7 +131,7 @@ export function BinMovementHistory({
           <EmptyState
             icon={<WarningCircleIcon size={32} />}
             title="Reconciliation history unavailable"
-            description="Failed to load reconciliation history."
+            description="The reconciliation history could not be loaded. Refresh the page and try again."
             padding="sm"
           />
         </div>

@@ -104,7 +104,7 @@ describe("sample credit batch window guard", () => {
     expect(result).toEqual({
       success: false,
       error:
-        "Sampling date 2026-01-14 cannot be before credit batch CB-2026-001's production window 2026-01-15–2026-01-31.",
+        "Sample date 2026-01-14 is before credit batch CB-2026-001's production window, 2026-01-15 to 2026-01-31. Choose a date within or after the production window.",
     });
     expect(mocks.getCreditBatchById).toHaveBeenCalledWith(
       expect.anything(),

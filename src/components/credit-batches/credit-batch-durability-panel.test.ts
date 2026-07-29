@@ -8,7 +8,7 @@ describe("sampleProvenanceLabel", () => {
         productionRunCode: null,
         samplingDay: "2026-06-13",
       }),
-    ).toBe("Batch sample · Jun 13, 2026");
+    ).toBe("Batch Sample · Jun 13, 2026");
   });
 
   it("shows the production run only when provenance includes one", () => {

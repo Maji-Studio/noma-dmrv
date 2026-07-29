@@ -102,13 +102,13 @@ test.describe("Certification — New-Removal wizard", () => {
       // The primary CTA (the header one; the empty-state nudge shares the label,
       // so take the first in DOM order).
       await page
-        .getByRole("button", { name: "New removal", exact: true })
+        .getByRole("button", { name: "New Removal", exact: true })
         .first()
         .click();
 
       const dialog = page.getByRole("dialog");
       await expect(
-        dialog.getByRole("heading", { name: "New removal", level: 2 }),
+        dialog.getByRole("heading", { name: "New Removal", level: 2 }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       // Step 1 chrome.
       await expect(
@@ -173,7 +173,7 @@ test.describe("Certification — New-Removal wizard", () => {
       // to the redirect + resume-entry behavior under test here).
       const dialog = page.getByRole("dialog");
       await expect(
-        dialog.getByRole("heading", { name: "New removal", level: 2 }),
+        dialog.getByRole("heading", { name: "New Removal", level: 2 }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(dialog.locator('[aria-current="step"]')).toContainText(
         "Confirm & submit",
@@ -329,7 +329,7 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
       // Surface 2 — the New-Removal wizard's selection card for the SAME batch.
       await page.goto(`/certification/removals?facility=${facilityId}`);
       await page
-        .getByRole("button", { name: "New removal", exact: true })
+        .getByRole("button", { name: "New Removal", exact: true })
         .first()
         .click();
       const dialog = page.getByRole("dialog");
@@ -390,7 +390,7 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
 
       await page.goto(`/certification/removals?facility=${facilityId}`);
       await page
-        .getByRole("button", { name: "New removal", exact: true })
+        .getByRole("button", { name: "New Removal", exact: true })
         .first()
         .click();
 

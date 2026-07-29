@@ -492,7 +492,7 @@ test.describe("Traceability Visualization", () => {
       timeout: 15000,
     });
     await expect(
-      adminPage.getByText(`${seededData.facility.code} - ${seededData.facility.name}`)
+      adminPage.getByText(`${seededData.facility.code}: ${seededData.facility.name}`)
     ).toBeVisible({ timeout: 10000 });
     await expect(
       adminPage.locator(".react-flow__node").filter({ hasText: lineage.application.code }).first()
@@ -600,7 +600,7 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
       timeout: 15000,
     });
     await expect(
-      adminPage.getByText(`${seededData.facility.code} - ${seededData.facility.name}`)
+      adminPage.getByText(`${seededData.facility.code}: ${seededData.facility.name}`)
     ).toBeVisible({ timeout: 10000 });
     await expect(
       adminPage.getByTestId(`chain-batch-radio-${batch.ids.creditBatch}`),

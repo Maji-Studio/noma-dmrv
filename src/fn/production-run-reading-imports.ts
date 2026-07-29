@@ -62,8 +62,10 @@ export async function importProductionRunReadingsFromDocumentFn(
         // out-of-window file is obvious and existing readings are untouched.
         throw new SafeError(
           parsed.parsedRows > 0
-            ? `None of the ${parsed.parsedRows} timestamped row(s) fall within this run's time window. Check the file covers the run period, or adjust the run's start and end times.`
-            : "No timestamped readings were found in this file. Check it is a canonical readings CSV with a timestamp_utc column and one row per reading.",
+            ? parsed.parsedRows === 1
+              ? "The timestamped row does not fall within this production run's time window. Check that the file covers the run, or change the run's start and end times."
+              : `None of the ${parsed.parsedRows} timestamped rows fall within this production run's time window. Check that the file covers the run, or change the run's start and end times.`
+            : "This file has no timestamped readings. Use a readings CSV with a timestamp_utc column and one row per reading.",
         );
       }
 
@@ -104,7 +106,7 @@ export async function importProductionRunReadingsFromDocumentFn(
       const message =
         error instanceof SafeError
           ? error.message
-          : "Failed to import readings";
+          : "The readings were not imported. Check the file and try again.";
       // Never let a failure to persist the outcome mask the real import error
       // or strand the document without its recoverable "failed" flag (#398):
       // record the outcome best-effort, then always re-throw the original error.
@@ -129,7 +131,9 @@ function parseReadingsForImport(args: Parameters<typeof parseReadingsCsv>[0]) {
     return parseReadingsCsv(args);
   } catch (error) {
     throw new SafeError(
-      error instanceof Error ? error.message : "Failed to parse readings CSV.",
+      error instanceof Error
+        ? error.message
+        : "The readings CSV could not be read. Check the file and try again.",
     );
   }
 }
@@ -139,7 +143,9 @@ async function readManagedDocumentText(storageKey: string): Promise<string> {
   const url = await provider.createDownloadUrl({ key: storageKey });
   const response = await fetch(url, { redirect: "error" });
   if (!response.ok) {
-    throw new SafeError(`Failed to read uploaded file (${response.status}).`);
+    throw new SafeError(
+      "The uploaded readings file could not be read. Upload it again and retry the import.",
+    );
   }
   return response.text();
 }

@@ -173,9 +173,8 @@ export function PositionPicker({
           </div>
           {!routingConfigured && (
             <InfoHint side="top">
-              Address search needs the geocoding service. Add
-              OPENROUTESERVICE_API_KEY to the environment to enable it — map
-              click and manual coordinates still work.
+              Address search is not configured. Ask an Admin to configure the
+              geocoding service. You can still click the map or enter coordinates.
             </InfoHint>
           )}
         </div>

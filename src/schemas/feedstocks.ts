@@ -38,7 +38,7 @@ const deliveryDateSchema = z.union([
   z.string().transform((val, ctx) => {
     const date = new Date(val);
     if (isNaN(date.getTime())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
       return z.NEVER;
     }
     return date;
@@ -52,8 +52,8 @@ const deliveryDateSchema = z.union([
 export const binAllocationSchema = z.object({
   storageLocationId: z
     .string()
-    .min(1, "Please select a storage bin")
-    .uuid("Please select a valid storage bin"),
+    .min(1, "Select a storage bin.")
+    .uuid("Choose a valid storage bin."),
   allocatedWetMassKg: requiredNonNegativeNumber,
 });
 
@@ -67,15 +67,15 @@ export const feedstockFormSchema = z.object({
   // --- Delivery fields ---
   facilityId: z
     .string()
-    .min(1, "Please select a facility")
-    .uuid("Please select a valid facility"),
+    .min(1, "Select a facility.")
+    .uuid("Choose a valid facility."),
   // Optional only for editing legacy records created before delivery dates.
   // The create schema below restores the required constraint.
   deliveryDate: deliveryDateSchema.optional(),
   supplierId: z
     .string()
-    .min(1, "Please select a supplier")
-    .uuid("Please select a valid supplier"),
+    .min(1, "Select a supplier.")
+    .uuid("Choose a valid supplier."),
 
   // Optional transport
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
@@ -92,8 +92,8 @@ export const feedstockFormSchema = z.object({
   // --- Material ---
   feedstockTypeId: z
     .string()
-    .min(1, "Please select a feedstock type")
-    .uuid("Please select a valid feedstock type"),
+    .min(1, "Select a feedstock type.")
+    .uuid("Choose a valid feedstock type."),
   totalWetMassKg: requiredNonNegativeNumber,
   moisturePercent: requiredMoisturePercent,
 
@@ -142,14 +142,14 @@ export const createFeedstockSchema = feedstockFormSchema.safeExtend({
 });
 
 export const updateFeedstockSchema = z.object({
-  feedstockId: z.string().uuid("Invalid feedstock ID"),
+  feedstockId: z.string().uuid("Choose a valid feedstock."),
   facilityId: z.string().uuid().optional(),
   deliveryDate: z.union([
     z.date(),
     z.string().transform((val, ctx) => {
       const date = new Date(val);
       if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
         return z.NEVER;
       }
       return date;
@@ -170,7 +170,7 @@ export const updateFeedstockSchema = z.object({
 });
 
 export const deleteFeedstockSchema = z.object({
-  feedstockId: z.string().uuid("Invalid feedstock ID"),
+  feedstockId: z.string().uuid("Choose a valid feedstock."),
 });
 
 // ============================================

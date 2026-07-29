@@ -8,11 +8,11 @@ describe("formatDayString", () => {
   });
 
   it("returns the fallback for null, undefined, or malformed input", () => {
-    expect(formatDayString(null)).toBe("—");
-    expect(formatDayString(undefined)).toBe("—");
-    expect(formatDayString("")).toBe("—");
-    expect(formatDayString("2026-08-01T12:00:00Z")).toBe("—");
-    expect(formatDayString("2026-13-01")).toBe("—");
+    expect(formatDayString(null)).toBe("Not recorded");
+    expect(formatDayString(undefined)).toBe("Not recorded");
+    expect(formatDayString("")).toBe("Not recorded");
+    expect(formatDayString("2026-08-01T12:00:00Z")).toBe("Not available");
+    expect(formatDayString("2026-13-01")).toBe("Not available");
   });
 });
 
@@ -23,9 +23,9 @@ describe("formatMass", () => {
   });
 
   it("returns the fallback for null, undefined, and NaN", () => {
-    expect(formatMass(null)).toBe("—");
-    expect(formatMass(undefined)).toBe("—");
-    expect(formatMass(Number.NaN)).toBe("—");
+    expect(formatMass(null)).toBe("Not recorded");
+    expect(formatMass(undefined)).toBe("Not recorded");
+    expect(formatMass(Number.NaN)).toBe("Not recorded");
   });
 });
 

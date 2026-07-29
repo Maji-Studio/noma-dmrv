@@ -96,12 +96,15 @@ export function GhgStatementSubmitDialog({
         },
       });
       toast.success(
-        `GHG statement ${result.remoteStatus.replace(/_/g, " ").toLowerCase()}.`,
+        `GHG Statement ${result.remoteStatus.replace(/_/g, " ").toLowerCase()}.`,
       );
       onClose();
     } catch (err) {
       setError("root.serverError", {
-        message: err instanceof Error ? err.message : "Submit failed",
+        message:
+          err instanceof Error
+            ? err.message
+            : "The GHG Statement was not submitted. Check the form and try again.",
       });
     }
   });
@@ -203,8 +206,8 @@ export function GhgStatementSubmitDialog({
             <ProductionConfirmation
               actionLabel={
                 isResubmit
-                  ? "resubmit this GHG statement to the verifier on the production Isometric registry"
-                  : "submit this GHG statement to the verifier on the production Isometric registry"
+                  ? "resubmit this GHG Statement to the verifier on the production Isometric registry"
+                  : "submit this GHG Statement to the verifier on the production Isometric registry"
               }
               registerProps={register("confirmProduction")}
               errorMessage={errors.confirmProduction?.message}

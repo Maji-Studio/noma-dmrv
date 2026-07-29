@@ -40,7 +40,10 @@ export function ForgotPasswordForm() {
       setSuccess(true);
       reset();
     } else {
-      setServerError(result.error || "Failed to send reset link");
+      setServerError(
+        result.error ||
+          "The password reset email was not sent. Check your connection and try again.",
+      );
     }
   }
 
@@ -56,8 +59,7 @@ export function ForgotPasswordForm() {
             <h3 className="body-bold mb-16">Check your email</h3>
             <p className="body-small">
               If an account exists with that email address, we&apos;ve sent a
-              password reset link. Please check your inbox and follow the
-              instructions.
+              password reset link. Check your inbox and follow the instructions.
             </p>
           </div>
 

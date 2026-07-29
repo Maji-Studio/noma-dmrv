@@ -67,7 +67,8 @@ export async function loadRemovalBreakdown(
       return {
         status: "unavailable",
         value: null,
-        message: "Couldn’t load the registry carbon result.",
+        message:
+          "The registry carbon result could not be loaded. Refresh the page and try again.",
       };
     }
 

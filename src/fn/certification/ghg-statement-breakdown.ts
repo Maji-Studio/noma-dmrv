@@ -53,7 +53,7 @@ export async function loadGhgStatementBreakdown(
       orgCtx,
       ghgStatementId,
     );
-    if (!statement) throw new SafeError("GHG statement not found.");
+    if (!statement) throw new SafeError("GHG Statement not found.");
 
     const removals = await getRemovalsByGhgStatementId(orgCtx, ghgStatementId);
     const removalIds = removals.map((removal) => removal.id);

@@ -35,7 +35,7 @@ describe("signed upload host allowlist", () => {
     ).not.toThrow();
     expect(() =>
       assertUploadHostAllowed("https://sts.amazonaws.com/token"),
-    ).toThrow(/not in ISOMETRIC_UPLOAD_HOST_ALLOWLIST/);
+    ).toThrow(/unsupported upload destination/);
   });
 
   it("allows the GCS object host but rejects other googleapis.com hosts by default", async () => {
@@ -49,7 +49,7 @@ describe("signed upload host allowlist", () => {
     ).not.toThrow();
     expect(() =>
       assertUploadHostAllowed("https://bigquery.googleapis.com/upload"),
-    ).toThrow(/not in ISOMETRIC_UPLOAD_HOST_ALLOWLIST/);
+    ).toThrow(/unsupported upload destination/);
   });
 
   it("allows broad AWS hosts only through explicit env opt-in", async () => {

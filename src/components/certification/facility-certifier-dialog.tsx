@@ -104,7 +104,7 @@ export function FacilityCertifierDialog({
 
   const projectOptions = availableProjects.map((project) => ({
     value: project.id,
-    label: `${project.name} — ${project.id}`,
+    label: `${project.name}: ${project.id}`,
   }));
 
   const templates = liveTemplates ?? loaderData.availableTemplates;
@@ -114,7 +114,7 @@ export function FacilityCertifierDialog({
     .filter((t) => t.credit_type === "REMOVAL")
     .map((t) => ({
       value: t.id,
-      label: `${t.display_name} — ${t.id}`,
+      label: `${t.display_name}: ${t.id}`,
     }));
 
   const linkedHintForSelected = watchedProjectId
@@ -142,7 +142,7 @@ export function FacilityCertifierDialog({
       setError("root.serverError", {
         type: "server",
         message:
-          error instanceof Error ? error.message : "Failed to save mapping",
+          error instanceof Error ? error.message : "The mapping was not saved. Try again.",
       });
     }
   };
@@ -150,7 +150,7 @@ export function FacilityCertifierDialog({
   const templateHelperText = (() => {
     if (!watchedProjectId) return "Pick a project to load templates.";
     if (templatesLoading) return "Loading templates…";
-    if (templateOptions.length === 0) return "This project has no removal templates.";
+    if (templateOptions.length === 0) return "This project has no Removal templates.";
     return "Used as the default when submitting credit batches.";
   })();
 
@@ -226,7 +226,7 @@ export function FacilityCertifierDialog({
 
         <FormField
           id="defaultRemovalTemplateId"
-          label="Default removal template"
+          label="Default Removal template"
           error={errors.defaultRemovalTemplateId?.message}
           helperText={templateHelperText}
         >

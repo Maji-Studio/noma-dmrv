@@ -495,7 +495,7 @@ async function lockAndVerifyMapping(
     current.defaultRemovalTemplateId !== guard.expectedDefaultRemovalTemplateId
   ) {
     throw new SafeError(
-      "Facility's default removal template changed mid-submission. Refresh and retry.",
+      "The facility's default Removal template changed during submission. Refresh and try again.",
     );
   }
 }

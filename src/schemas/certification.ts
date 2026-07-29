@@ -54,7 +54,7 @@ export const saveMappingSchema = z.object({
         .string()
         .startsWith("fcl_", {
           error:
-            "Isometric facility ID must start with 'fcl_' — copy it from the Certify UI.",
+            "Isometric facility ID must start with 'fcl_'. Copy it from Certify.",
         })
         .min(5),
     )

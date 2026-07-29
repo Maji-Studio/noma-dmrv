@@ -119,7 +119,7 @@ export const facilityAddressSchema = z
  */
 export const contactEmailSchema = z
   .string()
-  .email("Please enter a valid email address")
+  .email("Enter a valid email address.")
   .max(255, "Email must be less than 255 characters")
   .optional()
   .or(z.literal(""));
@@ -132,7 +132,7 @@ export const contactPhoneSchema = z
   .string()
   .regex(
     /^(\+?[1-9]\d{0,3}[-.\s]?)?(\(?\d{1,4}\)?[-.\s]?)?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}$/,
-    "Please enter a valid phone number"
+    "Enter a valid phone number."
   )
   .max(30, "Phone number must be less than 30 characters")
   .optional()
@@ -196,7 +196,7 @@ export const createFacilitySchema = facilityFormSchema;
  * All fields optional except facilityId
  */
 export const updateFacilitySchema = z.object({
-  facilityId: z.string().uuid("Invalid facility ID"),
+  facilityId: z.string().uuid("Choose a valid facility."),
   code: z
     .string()
     .min(1)
@@ -219,7 +219,7 @@ export const updateFacilitySchema = z.object({
  * Schema for archiving a facility (soft delete, cascades to child data)
  */
 export const archiveFacilitySchema = z.object({
-  facilityId: z.string().uuid("Invalid facility ID"),
+  facilityId: z.string().uuid("Choose a valid facility."),
 });
 
 /**

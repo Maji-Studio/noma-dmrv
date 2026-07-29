@@ -60,12 +60,17 @@ async function createProductionRunForCreditBatch(
     .click();
   await waitForSideSheetClose(page);
 
-  await page
-    .locator("tbody tr")
-    .first()
-    .getByRole("button", { name: /Actions for/ })
-    .click();
-  await page.getByRole("menuitem", { name: "Edit" }).click();
+  // A post-create list refetch can re-render the row and detach the menu's
+  // "Edit" item mid-click, so retry the open->Edit sequence instead of waiting
+  // for network idle (CI dev servers may never settle within budget).
+  await expect(async () => {
+    await page
+      .locator("tbody tr")
+      .first()
+      .getByRole("button", { name: /Actions for/ })
+      .click({ timeout: 5000 });
+    await page.getByRole("menuitem", { name: "Edit" }).click({ timeout: 5000 });
+  }).toPass({ timeout: 30000 });
   await waitForSideSheet(page);
   await page.fill('input[name="endDate"]', date);
   await page.fill('input[name="endTime"]', "12:00");

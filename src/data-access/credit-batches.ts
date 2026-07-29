@@ -627,7 +627,7 @@ export async function updateCreditBatch(
         existingBatch.endDate !== declarationSnapshot.endDate
       ) {
         throw new SafeError(
-          "The Credit batch cohort changed while this update was being prepared. Refresh and retry.",
+          "The credit batch cohort changed while this update was being prepared. Refresh and retry.",
         );
       }
       const lockedCurrentMembership = await tx
@@ -771,7 +771,9 @@ export async function updateCreditBatch(
   // Fetch full details
   const result = await getCreditBatchById(ctx, id);
   if (!result) {
-    throw new SafeError("Failed to fetch updated credit batch");
+    throw new SafeError(
+      "The updated credit batch could not be loaded. Refresh the page.",
+    );
   }
   return result;
 }

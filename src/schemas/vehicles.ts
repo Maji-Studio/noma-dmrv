@@ -107,7 +107,7 @@ export const vehicleFormSchema = z.object({
 export const createVehicleSchema = vehicleFormSchema;
 
 export const updateVehicleSchema = z.object({
-  vehicleId: z.string().uuid("Invalid vehicle ID"),
+  vehicleId: z.string().uuid("Choose a valid vehicle."),
   name: z.string().trim().min(1).max(255).optional(),
   identifier: z.string().max(50).optional().nullable(),
   vehicleType: z.string().min(1).max(50).optional(),
@@ -117,7 +117,7 @@ export const updateVehicleSchema = z.object({
 });
 
 export const deleteVehicleSchema = z.object({
-  vehicleId: z.string().uuid("Invalid vehicle ID"),
+  vehicleId: z.string().uuid("Choose a valid vehicle."),
 });
 
 // ============================================

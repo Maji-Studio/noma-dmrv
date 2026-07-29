@@ -154,7 +154,7 @@ function isCodeUniqueViolation(
 
 function duplicateCodeError(code: string, message?: string): SafeError {
   return new SafeError(
-    message ?? `Code "${code}" already exists. Please use a different code.`,
+    message ?? `Code "${code}" already exists. Use a different code.`,
   );
 }
 
@@ -236,6 +236,6 @@ export async function withAutoCode<T>(
 
   // Should never reach here, but TypeScript needs it
   throw new SafeError(
-    `Failed to generate unique code after ${MAX_RETRIES} attempts`,
+    `A unique code could not be generated after ${MAX_RETRIES} attempts. Enter a code manually.`,
   );
 }

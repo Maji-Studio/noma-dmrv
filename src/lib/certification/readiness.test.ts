@@ -128,7 +128,7 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
     const r = deriveRemovalReadiness(ready({ hasDefaultTemplate: false }));
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain(
-      "No default removal template selected for this facility",
+      "No default Removal template selected for this facility",
     );
   });
 
@@ -212,7 +212,7 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     const r = deriveRemovalReadiness(ready({ hasSubmittableRuns: false }));
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain(
-      "No production data linked yet — nothing to submit",
+      "No production data is linked. Link a production run before submitting.",
     );
   });
 
@@ -230,7 +230,7 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain("No applications linked to this batch");
     expect(r.reasons).not.toContain(
-      "No production data linked yet — nothing to submit",
+      "No production data is linked. Link a production run before submitting.",
     );
   });
 
@@ -246,7 +246,7 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
 
   it("blocks (verbatim) on durability sampling/eligibility gate blockers", () => {
     const blocker =
-      "Run PR-1 (Method A) has no samples — every Method A run must be sampled before submission (§8.3).";
+      "Credit batch CB-1 is marked as sampled but has no Samples. Add at least 3 Samples before submitting.";
     const r = deriveRemovalReadiness(
       ready({ durabilityGateBlockers: [blocker] }),
     );
@@ -260,7 +260,7 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     expect(r.state).toBe("blocked");
     // First three verbatim, then a rollup for the remaining two.
     expect(r.reasons).toContain("Run PR-0 blocked.");
-    expect(r.reasons).toContain("+2 more sampling/eligibility issue(s)");
+    expect(r.reasons).toContain("+2 more sampling or eligibility issues");
     expect(r.reasons).not.toContain("Run PR-4 blocked.");
   });
 
@@ -276,7 +276,7 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain("Missing feedstock transport legs");
     expect(r.reasons).toContain(
-      "No production data linked yet — nothing to submit",
+      "No production data is linked. Link a production run before submitting.",
     );
   });
 });
@@ -483,7 +483,9 @@ describe("buildRemovalPreflightChecklist", () => {
       ready({ hasSubmittableRuns: false }),
     );
     expect(checkFor(checks, "production").status).toBe("unmet");
-    expect(checkFor(checks, "production").detail).toContain("nothing to submit");
+    expect(checkFor(checks, "production").detail).toContain(
+      "Link a production run before submitting",
+    );
   });
 
   it("shows the specific production-lineage blocker in preflight", () => {
@@ -521,10 +523,12 @@ describe("buildRemovalPreflightChecklist", () => {
 
   it("flags durability sampling/eligibility blockers", () => {
     const checks = buildRemovalPreflightChecklist(
-      ready({ durabilityGateBlockers: ["Run PR-1 has 2 replicate(s); ≥ 3 required."] }),
+      ready({ durabilityGateBlockers: ["Run PR-1 has 2 replicates. Record at least 3."] }),
     );
     expect(checkFor(checks, "durability").status).toBe("unmet");
-    expect(checkFor(checks, "durability").detail).toContain("≥ 3 required");
+    expect(checkFor(checks, "durability").detail).toContain(
+      "Record at least 3",
+    );
   });
 
   it("skips durability when there is nothing to submit", () => {

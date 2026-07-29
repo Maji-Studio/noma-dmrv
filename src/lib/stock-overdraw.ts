@@ -19,7 +19,7 @@ export function binStockOverdrawMessage(
   availableKg: number,
   requestedKg: number,
 ): string {
-  return `Not enough ${material} in this bin — ${formatStockKg(
+  return `Not enough ${material} in this bin. ${formatStockKg(
     availableKg,
   )} available but this draw needs ${formatStockKg(
     requestedKg,

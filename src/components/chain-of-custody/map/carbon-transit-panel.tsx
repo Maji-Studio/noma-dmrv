@@ -187,7 +187,7 @@ export function CarbonTransitPanel({
     return (
       <div className="flex h-full items-center justify-center bg-[var(--color-background-white)]">
         <p className="body-medium text-[var(--color-signal-red)]">
-          {error?.message || "Failed to load traceability map data."}
+          {error?.message || "The traceability map data could not be loaded. Refresh the page and try again."}
         </p>
       </div>
     );

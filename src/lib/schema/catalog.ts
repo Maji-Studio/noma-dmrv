@@ -136,7 +136,7 @@ const TABLE_META: Record<string, TableMeta> = {
     area: "Parties",
     modulePath: "src/db/schema/parties.ts",
     summary: "Production/reactor operator records.",
-    useCases: ["Operational accountability", "Run and sample attribution"],
+    useCases: ["Operational accountability", "Run and Sample attribution"],
   },
   feedstock_deliveries: {
     area: "Feedstock",
@@ -171,7 +171,7 @@ const TABLE_META: Record<string, TableMeta> = {
   samples: {
     area: "Production",
     modulePath: "src/db/schema/production.ts",
-    summary: "Biochar sample measurements and lab metadata.",
+    summary: "Biochar Sample measurements and lab metadata.",
     useCases: ["Quality and eligibility checks", "Durability equation inputs"],
   },
   incident_reports: {

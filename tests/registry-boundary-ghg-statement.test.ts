@@ -69,7 +69,7 @@ const REPORTING_PERIOD_END = "2026-03-31";
 // completion on or before REPORTING_PERIOD_END is in-window).
 const IN_WINDOW_COMPLETED_ON = "2026-03-15";
 const MULTIPLE_DRAFTS_MESSAGE =
-  "Multiple draft GHG statements exist for this project and period in Isometric.";
+  "Multiple draft GHG Statements exist for this project and period in Isometric.";
 const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
 
 const createdFacilityIds: string[] = [];

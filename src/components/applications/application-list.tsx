@@ -103,7 +103,7 @@ function createColumns(
         const { customerName, locationName } = row.original;
         return (
           <div className="flex flex-col">
-            <span className="text-[var(--color-text-primary)]">{customerName ?? "—"}</span>
+            <span className="text-[var(--color-text-primary)]">{customerName ?? "Not available"}</span>
             {locationName && (
               <span className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">{locationName}</span>
             )}
@@ -143,7 +143,7 @@ function createColumns(
         <span>
           {row.original.applicationMethodType
             ? formatApplicationMethod(row.original.applicationMethodType as ApplicationMethod)
-            : "—"}
+            : "Not recorded"}
         </span>
       ),
     },
@@ -295,7 +295,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     executeCreate: async (data: ApplicationFormData) => {
       const result = await createApplication.mutateAsync(data);
       if (result.success === false) {
-        throw new Error(result.error || "Failed to create application");
+        throw new Error(result.error || "The application was not created. Check the form and try again.");
       }
       const createdApplication: ApplicationListItem = {
         ...result.data,
@@ -313,7 +313,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     setError: setCreateError,
     setUpdateError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Failed to create application",
+      error instanceof Error ? error.message : "The application was not created. Check the form and try again.",
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this application.",
     openEditOnFailure: (application) =>
@@ -324,7 +324,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       // the flush so readiness reflects the uploaded evidence.
       void queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
     },
-    onSuccess: () => toast.success("Application created successfully"),
+    onSuccess: () => toast.success("Application created."),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
@@ -366,12 +366,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         }
         createWithEvidence.reset();
         setSideSheet(null);
-        toast.success("Application updated successfully");
+        toast.success("Application updated.");
       } else {
-        setUpdateError(result.error || "Failed to update application");
+        setUpdateError(result.error || "The application was not saved. Try again.");
       }
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Failed to update application");
+      setUpdateError(error instanceof Error ? error.message : "The application was not saved. Try again.");
     }
   };
 
@@ -386,12 +386,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       const result = await deleteApplication.mutateAsync(deletingApplicationId);
       if (result.success) {
         setDeletingApplicationId(null);
-        toast.success("Application deleted successfully");
+        toast.success("Application deleted.");
       } else {
-        setDeleteError(result.error || "Failed to delete application");
+        setDeleteError(result.error || "The application was not deleted. Try again.");
       }
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete application");
+      setDeleteError(error instanceof Error ? error.message : "The application was not deleted. Try again.");
     }
   };
 
@@ -462,7 +462,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   if (error) {
     return (
       <div className="container-max py-32">
-        <ServerError message={error.message || "Failed to load applications"} />
+        <ServerError message={error.message || "The applications could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }

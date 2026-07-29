@@ -152,7 +152,7 @@ function CredentialsForm({
       setServerError(
         error instanceof Error
           ? error.message
-          : "Failed to save the Isometric keys.",
+          : "The Isometric keys were not saved. Try again.",
       );
     }
   }

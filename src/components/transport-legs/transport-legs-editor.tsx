@@ -58,9 +58,9 @@ function isSavedTransportLeg(
 // Feedstock and biochar legs are auto-derived (supplier distance / delivery
 // aggregation) and only ever rendered read-only; sample → lab stays manual.
 const DEFAULT_TITLES: Record<TransportEntityTypeValue, string> = {
-  feedstock: "Transport: feedstock → processing",
+  feedstock: "Transport: feedstock to processing",
   biochar: "Transport: biochar distribution",
-  sample: "Transport: sample → lab",
+  sample: "Transport: Sample to lab",
 };
 
 function formatMethod(method: string): string {
@@ -152,7 +152,7 @@ export function TransportLegsEditor({
       closeForm();
     } catch (err) {
       setFormError(
-        err instanceof Error ? err.message : "Failed to save transport leg",
+        err instanceof Error ? err.message : "The transport leg was not saved. Try again.",
       );
     }
   };
@@ -175,7 +175,7 @@ export function TransportLegsEditor({
       setDeleteTarget(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Failed to delete transport leg",
+        err instanceof Error ? err.message : "The transport leg was not deleted. Try again.",
       );
     }
   };
@@ -215,7 +215,7 @@ export function TransportLegsEditor({
       {!deferred && error && (
         <ServerError
           message={
-            error instanceof Error ? error.message : "Failed to load transport legs"
+            error instanceof Error ? error.message : "The transport legs could not be loaded. Refresh the page and try again."
           }
         />
       )}
@@ -269,9 +269,9 @@ export function TransportLegsEditor({
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 text-[var(--color-text-primary)]">
-                    {(leg.originName?.trim() || "—") +
+                    {(leg.originName?.trim() || "Not recorded") +
                       " → " +
-                      (leg.destinationName?.trim() || "—")}
+                      (leg.destinationName?.trim() || "Not recorded")}
                   </td>
                   <td className="py-8 pr-12">
                     {leg.distanceKm} km
@@ -279,7 +279,7 @@ export function TransportLegsEditor({
                   <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
                     {leg.distanceSource
                       ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
-                      : "—"}
+                      : "Not recorded"}
                   </td>
                   <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
                     {isSavedTransportLeg(leg) &&
@@ -289,11 +289,11 @@ export function TransportLegsEditor({
                         .transportEvidenceDocumentCount,
                     )
                       ? "Attached"
-                      : "—"}
+                      : "None"}
                   </td>
                   <td className="py-8 pr-12">{formatMethod(leg.transportMethodType)}</td>
                   <td className="py-8 pr-12">
-                    {leg.loadMassKg != null ? formatMass(leg.loadMassKg) : "—"}
+                    {leg.loadMassKg != null ? formatMass(leg.loadMassKg) : "Not recorded"}
                   </td>
                   {!readOnly && (
                     <td className="py-8 text-right">

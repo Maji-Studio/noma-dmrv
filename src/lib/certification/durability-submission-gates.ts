@@ -30,6 +30,7 @@
  * The COA / lab-report Source requirement (D4) lives with the measurement-sample
  * chemistry datapoints (Phase E), not here.
  */
+import { pluralize } from "@/lib/copy-utils";
 
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
@@ -94,11 +95,11 @@ export function evaluateDurabilitySubmissionGates(
         if (sample.samplingDay == null) continue;
         if (sample.samplingDay < batch.startDate) {
           blockers.push(
-            `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, before credit batch ${batch.creditBatchCode}'s production window ${batch.startDate}–${batch.endDate}. The biochar did not yet exist; correct this data error before submission (§8.3.1).`,
+            `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, before credit batch ${batch.creditBatchCode}'s production window, ${batch.startDate} to ${batch.endDate}. Correct the Sample date before submitting (§8.3.1).`,
           );
         } else if (sample.samplingDay > batch.endDate) {
           warnings.push(
-            `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, after credit batch ${batch.creditBatchCode}'s production window ${batch.startDate}–${batch.endDate}. §8.3.1 permits sampling from stored material only when samples are spatially distributed across the stored batch; confirm this with the registry.`,
+            `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, after credit batch ${batch.creditBatchCode}'s production window, ${batch.startDate} to ${batch.endDate}. §8.3.1 permits sampling from stored material only when Samples are spatially distributed across the stored batch. Confirm this with the registry.`,
           );
         }
       }
@@ -111,7 +112,7 @@ export function evaluateDurabilitySubmissionGates(
     // (b) A batch explicitly created as sampled must carry sample evidence.
     if (sampleRowCount === 0) {
       blockers.push(
-        `Credit batch ${batch.creditBatchCode} is marked sampled but has no samples (§8.3).`,
+        `Credit batch ${batch.creditBatchCode} is marked as sampled but has no Samples. Add at least ${MINIMUM_REPLICATES_PER_BATCH} Samples before submitting.`,
       );
       continue;
     }
@@ -127,7 +128,7 @@ export function evaluateDurabilitySubmissionGates(
     );
     if (!replicateCheck.meetsMinimum) {
       blockers.push(
-        `Credit batch ${batch.creditBatchCode} has ${eligibility.usableReplicateCount} replicate(s) with complete H/C_org + O/C_org chemistry; ≥ ${MINIMUM_REPLICATES_PER_BATCH} required per sampled batch (§8.3.1).`,
+        `Credit batch ${batch.creditBatchCode} has ${eligibility.usableReplicateCount} ${pluralize(eligibility.usableReplicateCount, "Sample")} with complete H/C_org and O/C_org results. Add complete results to at least ${MINIMUM_REPLICATES_PER_BATCH} Samples before submitting.`,
       );
     }
 
@@ -145,11 +146,11 @@ export function evaluateDurabilitySubmissionGates(
         );
       }
       blockers.push(
-        `Credit batch ${batch.creditBatchCode} fails biochar eligibility (${parts.join("; ")}) — module §3 Table 2.`,
+        `Credit batch ${batch.creditBatchCode} fails biochar eligibility (${parts.join("; ")}), under module §3 Table 2.`,
       );
     } else if (eligibility.eligible === null) {
       blockers.push(
-        `Credit batch ${batch.creditBatchCode} eligibility is indeterminate — missing H/C_org or O/C_org chemistry; cannot confirm it meets module §3 Table 2.`,
+        `Credit batch ${batch.creditBatchCode} is missing H/C_org or O/C_org chemistry, so its eligibility under module §3 Table 2 cannot be confirmed. Record both values before submitting.`,
       );
     }
   }

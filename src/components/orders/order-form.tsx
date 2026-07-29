@@ -270,7 +270,7 @@ export function OrderForm({
           filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
           emptyHint={{
             message:
-              "No product bins contain a biochar product yet — create one from a completed production run first.",
+              "No product bin contains a biochar product. Create one from a completed production run first.",
             href: contextFacilityId
               ? `/biochar-products?facility=${encodeURIComponent(contextFacilityId)}`
               : "/biochar-products",

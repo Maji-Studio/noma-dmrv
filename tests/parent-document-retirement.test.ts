@@ -455,7 +455,9 @@ describe("parent document retirement", () => {
     try {
       await expect(
         deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId),
-      ).rejects.toThrow(/retry deletion to finish storage cleanup/i);
+      ).rejects.toThrow(
+        /An attached file was not deleted. The record and document details were kept./i,
+      );
 
       expect(
         await db.select().from(reactors).where(eq(reactors.id, fixture.reactorId)),

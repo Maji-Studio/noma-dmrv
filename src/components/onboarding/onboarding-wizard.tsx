@@ -86,7 +86,7 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
       setCurrent(STEP.reactor);
     } catch (error) {
       setFacilityError(
-        error instanceof Error ? error.message : "Failed to create facility.",
+        error instanceof Error ? error.message : "The facility was not created. Check the form and try again.",
       );
     }
   };
@@ -99,7 +99,7 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
       setCurrent(STEP.registry);
     } catch (error) {
       setReactorError(
-        error instanceof Error ? error.message : "Failed to create reactor.",
+        error instanceof Error ? error.message : "The reactor was not created. Check the form and try again.",
       );
     }
   };
@@ -256,8 +256,8 @@ function WelcomeStep() {
       </p>
       <p className="body-small text-[var(--color-text-secondary)]">
         We&apos;ll set up your facility, its first reactor, and your registry
-        connection. Everything else — suppliers, feedstock, production runs, and
-        credit batches — you can add from the dashboard whenever you&apos;re
+        connection. You can add suppliers, feedstock, production runs, and
+        credit batches from the dashboard whenever you&apos;re
         ready.
       </p>
     </div>

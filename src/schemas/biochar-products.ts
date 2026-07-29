@@ -85,9 +85,9 @@ export type IngredientBin = z.infer<typeof ingredientBinFormSchema>;
  */
 export const biocharProductFormSchema = z.object({
   // Required fields
-  facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
+  facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   // Optional: empty = pure-biochar product (no amendment blend)
-  formulationId: emptyToNull.or(z.string().uuid("Please select a valid formulation")).nullable().optional(),
+  formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
 
   // No productionDate here: it is derived server-side from the linked production
   // run (the biochar's production date), not entered on the product form.
@@ -98,12 +98,12 @@ export const biocharProductFormSchema = z.object({
   // Optional relation fields (empty string → null, otherwise must be valid UUID)
   linkedProductionRunId: z
     .string()
-    .min(1, "Please select a production run")
-    .uuid("Invalid production run"),
+    .min(1, "Select a production run.")
+    .uuid("Choose a valid production run."),
   storageLocationId: z
     .string()
-    .min(1, "Please select a product bin")
-    .uuid("Invalid storage bin"),
+    .min(1, "Select a product bin.")
+    .uuid("Choose a valid storage bin."),
 
   // Measurement fields (setValueAs in form converts "" to null and strings to numbers)
   massKg: requiredNonNegativeNumber("Wet mass must be 0 or greater"),
@@ -129,7 +129,7 @@ export const createBiocharProductSchema = biocharProductFormSchema;
  * All fields optional except productId
  */
 export const updateBiocharProductSchema = z.object({
-  productId: z.string().uuid("Invalid product ID"),
+  productId: z.string().uuid("Choose a valid biochar product."),
   code: z
     .string()
     .min(1)
@@ -139,8 +139,8 @@ export const updateBiocharProductSchema = z.object({
   facilityId: z.string().uuid().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(biocharProductStatusValues).optional(),
-  linkedProductionRunId: z.string().uuid("Invalid production run").optional(),
-  storageLocationId: z.string().uuid("Invalid storage bin").optional(),
+  linkedProductionRunId: z.string().uuid("Choose a valid production run.").optional(),
+  storageLocationId: z.string().uuid("Choose a valid storage bin.").optional(),
   massKg: massKgSchema().optional(),
   moistureContentPercent: storedPercentSchema()
     .min(MOISTURE_MIN)
@@ -155,7 +155,7 @@ export const updateBiocharProductSchema = z.object({
  * Schema for deleting a biochar product
  */
 export const deleteBiocharProductSchema = z.object({
-  productId: z.string().uuid("Invalid product ID"),
+  productId: z.string().uuid("Choose a valid biochar product."),
 });
 
 // ============================================

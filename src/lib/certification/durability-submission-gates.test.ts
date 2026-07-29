@@ -51,7 +51,9 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
       gateBatch({ sampling: "sampled", replicates: [] }),
     ]);
     expect(r.ok).toBe(false);
-    expect(r.blockers.some((b) => /CB-1/.test(b) && /marked sampled/i.test(b))).toBe(true);
+    expect(
+      r.blockers.some((b) => /CB-1/.test(b) && /marked as sampled/i.test(b)),
+    ).toBe(true);
   });
 
   it("allows a batch stored as unsampled without local sample evidence", () => {
@@ -78,7 +80,13 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
       gateBatch({ replicates: eligibleTriplet.slice(0, 2) }),
     ]);
     expect(r.ok).toBe(false);
-    expect(r.blockers.some((b) => /replicate/i.test(b) && /3/.test(b))).toBe(true);
+    expect(
+      r.blockers.some(
+        (b) =>
+          /2 Samples with complete H\/C_org and O\/C_org results/i.test(b) &&
+          /3/.test(b),
+      ),
+    ).toBe(true);
   });
 
   it("blocks a batch whose mean H/C_org exceeds the eligibility ceiling (gate a)", () => {
@@ -175,7 +183,14 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
     ]);
 
     expect(r.ok).toBe(false);
-    expect(r.blockers.some((b) => /SAM-26-003/.test(b) && /2026-06-01–2026-06-30/.test(b) && /8\.3\.1/.test(b))).toBe(true);
+    expect(
+      r.blockers.some(
+        (b) =>
+          /SAM-26-003/.test(b) &&
+          /2026-06-01 to 2026-06-30/.test(b) &&
+          /8\.3\.1/.test(b),
+      ),
+    ).toBe(true);
   });
 
   it("counts a post-window sample as usable and warns to confirm stored-material sampling", () => {

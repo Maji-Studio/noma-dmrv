@@ -25,6 +25,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { pluralize } from "@/lib/copy-utils";
 import { OrderForm } from "./order-form";
 import type { OrderFormData, OrderFilterData } from "@/schemas/orders";
 import type { OrderWithRelations } from "@/data-access/orders";
@@ -59,13 +60,13 @@ function createColumns(
       id: "customer",
       header: "Customer",
       accessorFn: (row) => row.customerName ?? "",
-      cell: ({ row }) => row.original.customerName || "\u2014",
+      cell: ({ row }) => row.original.customerName || "Not recorded",
     },
     {
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{row.original.facilityName || "\u2014"}</span>,
+      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{row.original.facilityName || "Not available"}</span>,
     },
     {
       accessorKey: "quantityKg",
@@ -82,11 +83,11 @@ function createColumns(
             className="inline-flex items-center justify-center min-w-[40px] px-8 py-2 bg-[var(--color-surface-light)] border border-[var(--color-border-tertiary)] text-[var(--text-s)] font-medium font-mono"
             title={
               deliveryCount > 0
-                ? `${deliveredCount} of ${deliveryCount} deliveries delivered`
+                ? `${deliveredCount} of ${deliveryCount} ${pluralize(deliveryCount, "delivery", "deliveries")} delivered`
                 : "No deliveries scheduled"
             }
           >
-            {deliveryCount > 0 ? `${deliveredCount}/${deliveryCount}` : "—"}
+            {deliveryCount > 0 ? `${deliveredCount}/${deliveryCount}` : "None"}
           </span>
         );
       },
@@ -212,9 +213,9 @@ export function OrderList() {
     try {
       await createOrder.mutateAsync(data);
       closeSideSheet();
-      toast.success("Order created successfully");
+      toast.success("Order created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to create order");
+      setFormError(error instanceof Error ? error.message : "The order was not created. Check the form and try again.");
     }
   };
 
@@ -224,9 +225,9 @@ export function OrderList() {
     try {
       await updateOrder.mutateAsync({ orderId: sideSheet.entity.id, ...data });
       closeSideSheet();
-      toast.success("Order updated successfully");
+      toast.success("Order updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to update order");
+      setFormError(error instanceof Error ? error.message : "The order was not saved. Try again.");
     }
   };
 
@@ -238,9 +239,9 @@ export function OrderList() {
     try {
       await deleteOrder.mutateAsync(deletingOrderId);
       setDeletingOrderId(null);
-      toast.success("Order deleted successfully");
+      toast.success("Order deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete order");
+      setDeleteError(error instanceof Error ? error.message : "The order was not deleted. Try again.");
     }
   };
 
@@ -268,7 +269,7 @@ export function OrderList() {
   }
 
   if (fetchError) {
-    return <div className="container-max py-32"><ServerError message={fetchError.message || "Failed to load orders"} /></div>;
+    return <div className="container-max py-32"><ServerError message={fetchError.message || "The orders could not be loaded. Refresh the page and try again."} /></div>;
   }
 
   // Derived values for the side sheet

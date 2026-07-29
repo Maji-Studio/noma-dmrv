@@ -14,6 +14,7 @@ import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-at
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { formatCount } from "@/lib/copy-utils";
 import { formatFileSize } from "@/lib/format-utils";
 import {
   documentKeys,
@@ -43,18 +44,24 @@ const READINGS_MAX_MB = 25;
 
 /** One human-readable summary line for a completed import. */
 function importSummary(result: ProductionRunReadingsImportResult): string {
-  const parts = [`${result.droppedRows} outside run window`];
+  const parts = [`${formatCount(result.droppedRows, "row")} outside the run window`];
   if (result.duplicateRows > 0) {
-    parts.push(`${result.duplicateRows} already imported`);
+    parts.push(`${formatCount(result.duplicateRows, "row")} already imported`);
   }
   if (result.intraFileDuplicateRows > 0) {
-    parts.push(`${result.intraFileDuplicateRows} duplicate rows in file`);
+    parts.push(
+      `${formatCount(result.intraFileDuplicateRows, "row")} duplicated in the file`,
+    );
   }
-  if (result.skippedRows > 0) parts.push(`${result.skippedRows} skipped`);
+  if (result.skippedRows > 0) {
+    parts.push(`${formatCount(result.skippedRows, "row")} skipped`);
+  }
   if (result.invalidRequiredRows > 0) {
-    parts.push(`${result.invalidRequiredRows} missing temperature/pressure`);
+    parts.push(
+      `${formatCount(result.invalidRequiredRows, "row")} missing temperature or pressure`,
+    );
   }
-  return `Imported ${result.insertedRows} readings (${parts.join(", ")})`;
+  return `Imported ${formatCount(result.insertedRows, "reading")} (${parts.join(", ")})`;
 }
 
 /** Reads the durable, operator-safe failure the fn writes to metadata. */
@@ -107,7 +114,9 @@ export function ProductionReadingsDocuments({
         toast.success(importSummary(result));
       } catch (err) {
         setUploadError(
-          err instanceof Error ? err.message : "Failed to import readings",
+          err instanceof Error
+            ? err.message
+            : "The readings were not imported. Check the file and try again.",
         );
       } finally {
         // The import writes its outcome to the document's metadata; refetch so a
@@ -149,7 +158,7 @@ export function ProductionReadingsDocuments({
       setDeletingId(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Failed to delete file",
+        err instanceof Error ? err.message : "The file was not deleted. Try again.",
       );
     }
   };
@@ -197,7 +206,7 @@ export function ProductionReadingsDocuments({
       {error && (
         <ServerError
           message={
-            error instanceof Error ? error.message : "Failed to load files"
+            error instanceof Error ? error.message : "The files could not be loaded. Refresh the page and try again."
           }
         />
       )}

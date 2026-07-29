@@ -62,7 +62,9 @@ export function chooseGhgSubmitModeFromKnownState(
   }
   if (typeof status === "string") return "blocked-verified";
 
-  throw new SafeError("Unable to determine the GHG statement submit state.");
+  throw new SafeError(
+    "The GHG Statement status is missing. Refresh it from Isometric, then try again.",
+  );
 }
 
 // True when the registry already shows the submit we were trying to make —

@@ -64,7 +64,7 @@ function createColumns(
       header: "Facility",
       cell: ({ row }) => (
         <div className="flex flex-col">
-          <span>{row.original.facilityName || "—"}</span>
+          <span>{row.original.facilityName || "Not available"}</span>
           {row.original.facilityCode && (
             <span className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
               {row.original.facilityCode}
@@ -167,9 +167,9 @@ export function ReactorList() {
     try {
       await createReactor.mutateAsync(data);
       setSideSheet(null);
-      toast.success("Reactor created successfully");
+      toast.success("Reactor created.");
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Failed to create reactor");
+      setCreateError(error instanceof Error ? error.message : "The reactor was not created. Check the form and try again.");
     }
   };
 
@@ -179,9 +179,9 @@ export function ReactorList() {
     try {
       await updateReactor.mutateAsync({ reactorId: sideSheet.entity.id, ...data });
       setSideSheet(null);
-      toast.success("Reactor updated successfully");
+      toast.success("Reactor updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Failed to update reactor");
+      setUpdateError(error instanceof Error ? error.message : "The reactor was not saved. Try again.");
     }
   };
 
@@ -195,9 +195,9 @@ export function ReactorList() {
     try {
       await deleteReactor.mutateAsync(deletingReactorId);
       setDeletingReactorId(null);
-      toast.success("Reactor deleted successfully");
+      toast.success("Reactor deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete reactor");
+      setDeleteError(error instanceof Error ? error.message : "The reactor was not deleted. Try again.");
     }
   };
 
@@ -231,7 +231,7 @@ export function ReactorList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load reactors"} />
+        <ServerError message={fetchError.message || "The reactors could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }

@@ -119,7 +119,7 @@ describe("resolveLatestApplicationTime", () => {
 
   it("fails closed on an empty lineage list", () => {
     expect(() => resolveLatestApplicationTime([])).toThrow(
-      /no applications in the lineage/,
+      /This Removal has no applications/,
     );
   });
 });

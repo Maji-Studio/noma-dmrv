@@ -64,7 +64,7 @@ function ProductionRunPreviewRow({
         </span>
         {assignedElsewhere && (
           <span className="body-caption text-[var(--color-text-tertiary)]">
-            Assigned to {run.assignedCreditBatchCode ?? "another Credit batch"}
+            Assigned to {run.assignedCreditBatchCode ?? "another credit batch"}
           </span>
         )}
       </span>
@@ -76,7 +76,7 @@ function ProductionRunPreviewRow({
           </span>
           <span className="block body-small tabular-nums text-[var(--color-text-secondary)]">
             {run.biocharDryMassKg == null
-              ? "—"
+              ? "Not recorded"
               : formatTonnes(run.biocharDryMassKg / 1000)}
           </span>
         </span>

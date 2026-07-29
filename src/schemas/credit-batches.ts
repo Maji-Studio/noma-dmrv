@@ -63,13 +63,13 @@ export type CurrencyCode = (typeof currencyCodes)[number];
 export const creditBatchFormSchema = z
   .object({
     // === Section 1: Overview ===
-    facilityId: z.string().min(1, "Please select a facility").uuid("Invalid facility"),
+    facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
     // Declared up front (ADR 0016 amendment): resolves the production process +
     // Method A/B and scopes the run cohort to a single feedstock.
     feedstockTypeId: z
       .string()
-      .min(1, "Please select a feedstock type")
-      .uuid("Invalid feedstock type"),
+      .min(1, "Select a feedstock type.")
+      .uuid("Choose a valid feedstock type."),
     startDate: z.coerce.date({ message: "Start date is required" }),
     endDate: z.coerce.date({ message: "End date is required" }),
     sampling: z.enum(creditBatchSamplingChoices).default("sampled"),
@@ -184,7 +184,7 @@ export const createCreditBatchSchema = creditBatchFormSchema;
  * Schema for updating a credit batch (server action)
  */
 export const updateCreditBatchSchema = z.object({
-  creditBatchId: z.string().uuid("Invalid credit batch ID"),
+  creditBatchId: z.string().uuid("Choose a valid credit batch."),
   code: z
     .string()
     .min(1)
@@ -217,7 +217,7 @@ export const updateCreditBatchSchema = z.object({
  * Schema for deleting a credit batch
  */
 export const deleteCreditBatchSchema = z.object({
-  creditBatchId: z.string().uuid("Invalid credit batch ID"),
+  creditBatchId: z.string().uuid("Choose a valid credit batch."),
 });
 
 // ============================================

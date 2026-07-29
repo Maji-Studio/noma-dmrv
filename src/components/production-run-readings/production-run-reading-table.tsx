@@ -28,7 +28,7 @@ const COMPACT_TABLE_MAX_HEIGHT_CLASS = "max-h-[240px]";
 // ============================================
 
 function formatNum(v: number | null, decimals = 1): string {
-  if (v == null) return "—";
+  if (v == null) return "Not recorded";
   return v.toFixed(decimals);
 }
 
@@ -77,7 +77,7 @@ export function ProductionRunReadingTable({
       );
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Failed to delete readings"
+        err instanceof Error ? err.message : "The readings were not deleted. Try again."
       );
       setConfirmingDeleteAll(false);
     }

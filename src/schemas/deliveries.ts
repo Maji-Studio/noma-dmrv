@@ -73,7 +73,7 @@ function validateDistanceOverride(
  */
 const deliveryFormBaseSchema = z.object({
   // Required fields
-  orderId: z.string().min(1, "Please select an order").uuid("Invalid order"),
+  orderId: z.string().min(1, "Select an order.").uuid("Choose a valid order."),
   deliveryDate: z.coerce.date({ error: "Delivery date is required" }),
 
   // Optional fields
@@ -152,8 +152,8 @@ export const createDeliverySchema = z.object({
     .min(1, "Delivery code is required")
     .max(50)
     .regex(/^[A-Z0-9-]+$/),
-  orderId: z.string().min(1, "Please select an order").uuid("Invalid order"),
-  facilityId: z.string().min(1, "Facility is required").uuid("Invalid facility"),
+  orderId: z.string().min(1, "Select an order.").uuid("Choose a valid order."),
+  facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   deliveryDate: z.coerce.date(),
   biocharProductId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
@@ -195,7 +195,7 @@ export const createDeliverySchema = z.object({
  * All fields optional except deliveryId
  */
 export const updateDeliverySchema = z.object({
-  deliveryId: z.string().uuid("Invalid delivery ID"),
+  deliveryId: z.string().uuid("Choose a valid delivery."),
   code: z
     .string()
     .min(1)
@@ -244,7 +244,7 @@ export const updateDeliverySchema = z.object({
  * Schema for deleting a delivery
  */
 export const deleteDeliverySchema = z.object({
-  deliveryId: z.string().uuid("Invalid delivery ID"),
+  deliveryId: z.string().uuid("Choose a valid delivery."),
 });
 
 // ============================================

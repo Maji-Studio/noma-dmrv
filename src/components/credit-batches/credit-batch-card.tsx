@@ -90,7 +90,7 @@ export function CreditBatchCard({
             <span className="title-heading-3 leading-none">
               {creditBatch.appliedWeightTons != null
                 ? `${creditBatch.appliedWeightTons.toFixed(2)} t`
-                : "—"}
+                : "Not recorded"}
             </span>
           </div>
           <div className="flex flex-col gap-4">
@@ -102,7 +102,7 @@ export function CreditBatchCard({
                 co2eStored != null ? "text-[var(--st-ok)]" : ""
               }`}
             >
-              {co2eStored != null ? `${co2eStored.toFixed(2)} t` : "—"}
+              {co2eStored != null ? `${co2eStored.toFixed(2)} t` : "Not available"}
             </span>
           </div>
         </div>

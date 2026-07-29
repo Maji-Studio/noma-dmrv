@@ -139,8 +139,8 @@ export type { ProductionRunStatus };
  */
 const productionRunFormObject = z.object({
   // Required fields
-  facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
-  reactorId: z.string().min(1, "Please select a reactor").uuid("Please select a valid reactor"),
+  facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
+  reactorId: z.string().min(1, "Select a reactor.").uuid("Choose a valid reactor."),
 
   // Status
   status: z.enum(productionRunStatuses).default("draft"),
@@ -156,11 +156,11 @@ const productionRunFormObject = z.object({
   // re-validation of an already-combined instant).
   startTime: z.union([
     z.date(),
-    z.string().min(1, "Please enter a start time").transform((val, ctx) => {
+    z.string().min(1, "Enter a start time.").transform((val, ctx) => {
       if (TIME_ONLY_RE.test(val)) return val;
       const date = new Date(val);
       if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid start time" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid start time." });
         return z.NEVER;
       }
       return date;
@@ -177,7 +177,7 @@ const productionRunFormObject = z.object({
       if (typeof val === "string") {
         const date = new Date(val);
         if (isNaN(date.getTime())) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid end time" });
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid end time." });
           return z.NEVER;
         }
         return date;
@@ -298,7 +298,7 @@ export function makeProductionRunFormSchema(
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["endTime"],
-            message: "End must be after start — check the end date for overnight runs.",
+            message: "End time must be after start time. Check the end date for overnight runs.",
           });
           break;
         case "terminal-end-required":
@@ -374,7 +374,7 @@ export const createProductionRunSchema = productionRunFormSchema.refine(
  * All fields optional except productionRunId
  */
 export const updateProductionRunSchema = z.object({
-  productionRunId: z.string().uuid("Invalid production run ID"),
+  productionRunId: z.string().uuid("Choose a valid production run."),
   code: z
     .string()
     .min(1)
@@ -391,7 +391,7 @@ export const updateProductionRunSchema = z.object({
     z.string().transform((val, ctx) => {
       const date = new Date(val);
       if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid start time" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid start time." });
         return z.NEVER;
       }
       return date;
@@ -405,7 +405,7 @@ export const updateProductionRunSchema = z.object({
     z.string().transform((val, ctx) => {
       const date = new Date(val);
       if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid end time" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid end time." });
         return z.NEVER;
       }
       return date;
@@ -438,7 +438,7 @@ export const updateProductionRunSchema = z.object({
  * Schema for deleting a production run
  */
 export const deleteProductionRunSchema = z.object({
-  productionRunId: z.string().uuid("Invalid production run ID"),
+  productionRunId: z.string().uuid("Choose a valid production run."),
 });
 
 // ============================================

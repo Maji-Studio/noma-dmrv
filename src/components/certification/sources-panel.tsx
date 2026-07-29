@@ -68,7 +68,7 @@ function PanelCounter({
     <span className="body-caption text-[var(--color-text-tertiary)]">
       {isEditable
         ? `${total} ${total === 1 ? "file" : "files"} linked`
-        : `${ready} of ${total} files attached`}
+        : `${ready} of ${total} ${total === 1 ? "file" : "files"} attached`}
     </span>
   );
 }
@@ -115,7 +115,7 @@ function PanelBodyForRemoval({
   if (query.isError || !query.data) {
     return (
       <p className="body-small text-[var(--clr-red)]">
-        Unable to load supporting sources. Try refreshing.
+        Supporting sources could not be loaded. Refresh the page and try again.
       </p>
     );
   }

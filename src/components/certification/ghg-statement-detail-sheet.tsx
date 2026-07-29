@@ -68,7 +68,7 @@ function verifierStatusLabel(remote: GhgStatement | null): string {
   if (!remote) return "Not yet created in Isometric";
   switch (remote.status) {
     case "DRAFT":
-      return "In registry — not yet sent to the verifier";
+      return "In registry. Not sent to the verifier.";
     case "AWAITING_VERIFICATION":
       return "In verification";
     case "VERIFIED":
@@ -196,7 +196,7 @@ function DetailState({
   if (query.error || !query.data) {
     return (
       <p className="body-small text-[var(--clr-red)]" role="alert">
-        Unable to load statement details.
+        Statement details could not be loaded. Refresh the page and try again.
       </p>
     );
   }
@@ -216,11 +216,11 @@ function DetailState({
   const isResubmit = mode === "resubmit";
   const blockedNote =
     mode === "blocked-awaiting"
-      ? "In verification — no action needed."
+      ? "In verification. No action is needed."
       : mode === "blocked-verified"
-        ? "Verified — no further submission."
+        ? "Verified. No further submission is needed."
         : (mode === "submit" || mode === "resubmit") && !hasLinkedRemovals
-          ? "No linked removals yet — there's nothing to submit. Add a removal in this reporting period, then refresh."
+          ? "No Removals are linked. Add a Removal in this reporting period, then refresh."
           : null;
 
   const handleRefresh = () => {
@@ -228,7 +228,11 @@ function DetailState({
     refreshMutation.mutate(statementSubmission.id, {
       onSuccess: (r) => toast.success(`Status: ${r.status}.`),
       onError: (err) =>
-        toast.error(err instanceof Error ? err.message : "Refresh failed."),
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "The verifier status was not refreshed. Try again.",
+        ),
     });
   };
 
@@ -238,11 +242,11 @@ function DetailState({
 
       <div className="flex flex-col gap-8">
         <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Linked removals ({linkedRemovals.length})
+          Linked Removals ({linkedRemovals.length})
         </span>
         {linkedRemovals.length === 0 ? (
           <p className="body-small text-[var(--color-text-tertiary)]">
-            No removals linked yet.
+            No Removals linked yet.
           </p>
         ) : (
           <RemovalBatchesAccordion
@@ -279,7 +283,7 @@ function DetailState({
             by date range (ADR 0004). */}
         <p className="body-caption text-[var(--color-text-tertiary)]">
           Statements can&apos;t be withdrawn. To change what&apos;s included,
-          open a removal above, edit it, then resubmit — pending changes are
+          open a Removal above, edit it, then resubmit. Pending changes are
           flagged here.
         </p>
         {blockedNote && (

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { DatabaseIcon, MagnifyingGlassIcon, ArrowRightIcon, ArrowUpRightIcon, ArrowDownLeftIcon } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
+import { formatCount } from "@/lib/copy-utils";
 import type { SchemaArea, SchemaTableInfo } from "@/lib/schema/catalog";
 
 interface SchemaExplorerProps {
@@ -87,7 +88,7 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
             <DatabaseIcon size={18} weight="bold" className="text-[var(--clr-purple)]" />
             <p className="title-chapter-title text-[var(--clr-purple)]">Schema Explorer</p>
           </div>
-          <h1 className="title-heading-2">Database Schema</h1>
+          <h1 className="title-heading-2">Data structure</h1>
         </header>
 
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-16">
@@ -195,7 +196,7 @@ function TableCard({ table, accent }: { table: SchemaTableInfo; accent: string }
           {table.name}
         </p>
         <div className="flex items-center gap-[6px]">
-          <Pill label={`${table.columns.length} cols`} />
+          <Pill label={formatCount(table.columns.length, "column")} />
           {table.outboundRelationships.length > 0 && (
             <Pill label={`${table.outboundRelationships.length}`} icon={<ArrowUpRightIcon size={12} />} />
           )}

@@ -264,7 +264,8 @@ export function CreditBatchHealthStrip({
         </span>
       ) : error || !health ? (
         <span className="body-caption text-[var(--st-wait)]">
-          {error?.message ?? "Couldn't evaluate this batch's health."}
+          {error?.message ??
+            "This credit batch's readiness could not be checked. Refresh the page and try again."}
         </span>
       ) : (
         <GateBody

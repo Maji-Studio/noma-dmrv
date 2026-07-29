@@ -56,11 +56,12 @@ export function SampleEligibilityAdvisory({
         className="mt-1 shrink-0 text-[var(--color-signal-orange)]"
       />
       <p className="body-caption text-[var(--color-text-secondary)]">
-        This replicate exceeds the biochar eligibility ceiling (
-        {breaches.join("; ")}). Eligibility is judged on the production
-        run&apos;s replicate mean (H/C_org &lt; {H_TO_C_ORG_ELIGIBILITY_MAX} and
-        O/C_org &lt; {O_TO_C_ORG_ELIGIBILITY_MAX}, module §3 Table 2) — review for
-        an outlier. A run failing on its mean is blocked at submission.
+        This Sample exceeds the biochar eligibility ceiling (
+        {breaches.join("; ")}). Eligibility is judged on the credit
+        batch&apos;s Sample mean (H/C_org &lt; {H_TO_C_ORG_ELIGIBILITY_MAX} and
+        O/C_org &lt; {O_TO_C_ORG_ELIGIBILITY_MAX}, module §3 Table 2). Check
+        whether this result is an outlier. The credit batch is blocked when its
+        mean fails the eligibility check.
       </p>
     </div>
   );

@@ -104,7 +104,7 @@ describe("verifyAndPersistRemovalSourceBindings", () => {
       expect.objectContaining({
         status: "failed",
         responsePayload: expect.objectContaining({ state: "mismatch" }),
-        errorMessage: expect.stringMatching(/stale submission/i),
+        errorMessage: expect.stringMatching(/older supporting-file plan/i),
       }),
       { submissionId: "submission-test-1" },
     );

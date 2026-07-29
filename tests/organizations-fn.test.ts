@@ -149,7 +149,7 @@ describe("createOrganizationAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Failed to create organization.",
+      error: "Organization was not created. Try again.",
     });
   });
 });

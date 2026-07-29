@@ -233,7 +233,9 @@ describe("measurement-sample journal recovery", () => {
         },
         true,
       ),
-    ).rejects.toThrow(/journal mismatch/i);
+    ).rejects.toThrow(
+      "Registry measurement mts-sampled-1000 does not match submission nm-mts-removal-pb-batch-v1. Ask support to check the registry record.",
+    );
 
     expect(mocks.client.get).not.toHaveBeenCalled();
     expect(mocks.client.post).not.toHaveBeenCalled();
@@ -255,7 +257,9 @@ describe("measurement-sample journal recovery", () => {
         },
         true,
       ),
-    ).rejects.toThrow(/not found by supplier reference/i);
+    ).rejects.toThrow(
+      "Registry measurement mts-sampled-1000 cannot be found. Ask support to check the registry record before submitting again.",
+    );
 
     expect(mocks.client.get).not.toHaveBeenCalled();
     expect(mocks.client.paginate).toHaveBeenCalledWith(

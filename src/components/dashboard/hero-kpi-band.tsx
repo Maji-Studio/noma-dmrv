@@ -15,7 +15,7 @@ import type { DashboardKpi } from "@/data-access/dashboard-overview";
 const NUMBER_LOCALE = "en-US";
 
 function formatValue(kpi: DashboardKpi): string {
-  if (kpi.value == null) return "—";
+  if (kpi.value == null) return "Not available";
   const digits = Math.abs(kpi.value) >= 100 ? 0 : 1;
   return kpi.value.toLocaleString(NUMBER_LOCALE, {
     minimumFractionDigits: digits,

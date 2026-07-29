@@ -123,7 +123,9 @@ function WizardBody({
         },
         onError: (err) =>
           toast.error(
-            err instanceof Error ? err.message : "Could not create removal.",
+            err instanceof Error
+              ? err.message
+              : "The Removal was not created. Review the submission and try again.",
           ),
       },
     );
@@ -146,7 +148,7 @@ function WizardBody({
           Removal
         </h2>
         <p className="body-small text-[var(--color-text-secondary)]">
-          A submission for this removal is in progress. Wait for it to finish
+          A submission for this Removal is in progress. Wait for it to finish
           before making changes.
         </p>
         <div className="flex justify-end">
@@ -162,7 +164,7 @@ function WizardBody({
     <div className="flex flex-col gap-16">
       <div className="flex items-center justify-between gap-12">
         <h2 id="new-removal-title" className="title-heading-2">
-          New removal
+          New Removal
         </h2>
       </div>
 
@@ -191,7 +193,7 @@ function WizardBody({
             </p>
           ) : ctxQuery.error || !ctxQuery.data ? (
             <p className="body-small text-[var(--clr-red)]" role="alert">
-              Couldn&apos;t load this removal. Try refreshing the page.
+              This Removal could not be loaded. Refresh the page.
             </p>
           ) : (
             <SubmitStep

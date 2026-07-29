@@ -95,7 +95,7 @@ export async function ensureSensorForReactor(
   if (sensor) {
     if (sensor.units !== input.units) {
       throw new SafeError(
-        `Sensor ${reference} already exists in Isometric with units "${sensor.units}", which does not match the requested "${input.units}". Reconcile via the Isometric UI.`,
+        `Sensor ${reference} uses "${sensor.units}" in Isometric, but this connection requires "${input.units}". Update the sensor units in Isometric, then try again.`,
       );
     }
   } else {

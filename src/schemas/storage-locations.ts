@@ -61,7 +61,7 @@ export type StorageLocationSortKey = (typeof storageLocationSortKeys)[number];
 export const STORAGE_LOCATION_TYPE_DESCRIPTIONS: Record<StorageLocationType, string> = {
   feedstock_bin: "Holds input material. What it can feed depends on the held feedstock type usage.",
   biochar_bin: "Holds finished biochar after production, before blending or packing.",
-  product_bin: "Holds a packed, sellable product — optionally tied to one formulation.",
+  product_bin: "Holds a packed, sellable product. It can be tied to one formulation.",
 };
 
 const FORMULATION_PRODUCT_BIN_MESSAGE =
@@ -86,19 +86,19 @@ export const storageLocationFormSchema = z.object({
     .min(1, "Storage bin name is required")
     .max(255, "Name must be less than 255 characters"),
   type: z.enum(storageLocationTypes, {
-    message: "Please select a valid storage type",
+    message: "Choose a valid storage type.",
   }),
-  facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
+  facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
 
   // Optional fields
   capacityKg: positiveMassKgSchema("Capacity must be a positive number")
     .optional()
     .nullable(),
-  feedstockTypeId: emptyToNull.or(z.string().uuid("Invalid feedstock type")).nullable().optional(),
+  feedstockTypeId: emptyToNull.or(z.string().uuid("Choose a valid feedstock type.")).nullable().optional(),
   // Product bins only. Optional on purpose: a product bin with no formulation is
   // an unassigned bin, which accepts pure biochar and is claimed by the first
   // formulation put into it (`data-access/biochar-products.ts`).
-  formulationId: emptyToNull.or(z.string().uuid("Invalid formulation")).nullable().optional(),
+  formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
   storageMethod: z
     .string()
     .max(255, "Storage method must be less than 255 characters")
@@ -141,7 +141,7 @@ export const createStorageLocationSchema = storageLocationFormSchema;
  * All fields optional except storageLocationId
  */
 export const updateStorageLocationSchema = z.object({
-  storageLocationId: z.string().uuid("Invalid storage bin ID"),
+  storageLocationId: z.string().uuid("Choose a valid storage bin."),
   code: z
     .string()
     .min(1)
@@ -182,7 +182,7 @@ export const updateStorageLocationSchema = z.object({
  * Schema for deleting a storage location
  */
 export const deleteStorageLocationSchema = z.object({
-  storageLocationId: z.string().uuid("Invalid storage bin ID"),
+  storageLocationId: z.string().uuid("Choose a valid storage bin."),
 });
 
 /**

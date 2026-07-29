@@ -115,7 +115,7 @@ describe("makeProductionRunFormSchema timezone binding", () => {
         expect.arrayContaining([
           expect.objectContaining({
             path: ["endTime"],
-            message: expect.stringMatching(/End must be after start/),
+            message: expect.stringMatching(/End time must be after start time/),
           }),
         ]),
       );
@@ -161,7 +161,7 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
 
     expect(result.success).toBe(false);
     expect(messagesFor(result, "startTime")).toEqual([
-      "02:30 does not exist on 2026-03-08 in America/New York — clocks move" +
+      "02:30 does not exist on 2026-03-08 in America/New York. Clocks move" +
         " forward that day. Enter a time outside the skipped hour.",
     ]);
     // Exactly one message, on the field the operator typed into: an unresolved
@@ -185,7 +185,7 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
 
     expect(result.success).toBe(false);
     expect(messagesFor(result, "endTime")).toEqual([
-      "02:30 does not exist on 2026-03-08 in America/New York — clocks move" +
+      "02:30 does not exist on 2026-03-08 in America/New York. Clocks move" +
         " forward that day. Enter a time outside the skipped hour.",
     ]);
     expect(messagesFor(result, "startTime")).toEqual([]);
@@ -206,7 +206,7 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
 
     expect(result.success).toBe(false);
     expect(messagesFor(result, "startTime")).toEqual([
-      "01:30 occurs twice on 2026-11-01 in America/New York — clocks move" +
+      "01:30 occurs twice on 2026-11-01 in America/New York. Clocks move" +
         " back that day. Enter a time outside the repeated hour.",
     ]);
     expect(messagesFor(result, "endTime")).toEqual([]);

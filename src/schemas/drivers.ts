@@ -36,14 +36,14 @@ export const driverFormSchema = z.object({
 export const createDriverSchema = driverFormSchema;
 
 export const updateDriverSchema = z.object({
-  driverId: z.string().uuid("Invalid driver ID"),
+  driverId: z.string().uuid("Choose a valid driver."),
   name: z.string().trim().min(1).max(255).optional(),
   licenseNumber: z.string().max(50).optional().nullable(),
   contactPhone: z.string().max(30).optional().nullable(),
 });
 
 export const deleteDriverSchema = z.object({
-  driverId: z.string().uuid("Invalid driver ID"),
+  driverId: z.string().uuid("Choose a valid driver."),
 });
 
 // ============================================

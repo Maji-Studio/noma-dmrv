@@ -127,7 +127,7 @@ export function buildEntityReadinessResult(
         { id: sample.id, code: sample.sampleCode, missing: [] },
         {
           key: "lab-samples",
-          label: "Lab-sample evidence",
+          label: "Sample evidence",
           fixTarget: "labSamples",
         },
         readiness.gaps,

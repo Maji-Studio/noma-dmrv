@@ -18,6 +18,7 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
 import { SafeError } from "@/lib/errors";
+import { pluralize } from "@/lib/copy-utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
@@ -262,7 +263,7 @@ export async function upsertCertifierProject(
           .limit(1);
         if (collision) {
           throw new SafeError(
-            `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code} — ${collision.name}. Each Isometric facility maps to exactly one facility here.`,
+            `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code}: ${collision.name}. Each Isometric facility maps to one noma facility.`,
           );
         }
       }
@@ -711,8 +712,7 @@ async function stampProductionEmissionsClaimWithExecutor(
     const stampedIds = new Set(stamped.map((row) => row.id));
     const skipped = creditBatchIds.filter((id) => !stampedIds.has(id));
     throw new SafeError(
-      `Production-emissions claim failed: ${skipped.length} credit batch(es) ` +
-        "were claimed by another removal mid-submission (§8.6.2). Reload and retry.",
+      `${skipped.length} credit ${pluralize(skipped.length, "batch", "batches")} ${skipped.length === 1 ? "was" : "were"} claimed by another Removal while this submission was running (§8.6.2). Reload and submit again.`,
     );
   }
 }
