@@ -74,7 +74,7 @@ function createColumns(
     },
     {
       accessorKey: "biocharRatio",
-      header: "Biochar share",
+      header: "Biochar volume share",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
           {formatRatio(row.original.biocharRatio)}
@@ -83,7 +83,7 @@ function createColumns(
     },
     {
       id: "ingredients",
-      header: "Ingredients",
+      header: "Ingredients by volume",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)] max-w-xs truncate block">
           {formatIngredientsSummary(row.original.ingredients)}
