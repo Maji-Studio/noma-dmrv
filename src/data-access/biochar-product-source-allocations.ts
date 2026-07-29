@@ -24,6 +24,7 @@ export interface AvailableBiocharSourceLot {
   producedAt: Date;
   availableWetMassKg: number;
   availableDryMassKg: number | null;
+  feasibilityWetMassKg?: number;
 }
 
 export interface BiocharProductSourceAllocationPlanItem {
@@ -170,6 +171,14 @@ export function planBiocharProductSourceAllocations(
           "availableDryMassKg",
         );
       }
+      if (
+        lot.feasibilityWetMassKg != null &&
+        !Number.isFinite(lot.feasibilityWetMassKg)
+      ) {
+        throw new RangeError(
+          "feasibilityWetMassKg must be a finite number",
+        );
+      }
       return { ...lot };
     })
     .sort(
@@ -188,18 +197,26 @@ export function planBiocharProductSourceAllocations(
       lot.availableDryMassKg == null
         ? null
         : massKgToGrams(lot.availableDryMassKg, "availableDryMassKg"),
+    feasibilityWetMassGrams: massKgToGrams(
+      lot.feasibilityWetMassKg ?? lot.availableWetMassKg,
+      "feasibilityWetMassKg",
+    ),
   }));
   const totalWetMassGrams = preparedLots.reduce(
     (total, lot) => total + lot.wetMassGrams,
     0,
   );
-  const documentedLossGrams = Math.min(
-    massKgToGrams(documentedLossWetMassKg, "documentedLossWetMassKg"),
+  const recordedLossGrams = massKgToGrams(
+    documentedLossWetMassKg,
+    "documentedLossWetMassKg",
+  );
+  const drawableLossGrams = Math.min(
+    recordedLossGrams,
     totalWetMassGrams,
   );
   const lossByLotGrams = distributeGramsProportionally(
     preparedLots.map((lot) => lot.wetMassGrams),
-    documentedLossGrams,
+    drawableLossGrams,
   );
   const availableLots = preparedLots.map((lot, index) => {
     const availableWetMassGrams =
@@ -218,10 +235,11 @@ export function planBiocharProductSourceAllocations(
       availableDryMassGrams,
     };
   });
-  const availableWetMassGrams = availableLots.reduce(
-    (total, lot) => total + lot.availableWetMassGrams,
-    0,
-  );
+  const availableWetMassGrams =
+    preparedLots.reduce(
+      (total, lot) => total + lot.feasibilityWetMassGrams,
+      0,
+    ) - recordedLossGrams;
   const availableWetMassKg = gramsToMassKg(availableWetMassGrams);
   const requestedWetMassGrams = massKgToGrams(
     requestedWetMassKg,
@@ -450,14 +468,19 @@ export async function buildBiocharProductSourceAllocationPlan(
 
   const lots: AvailableBiocharSourceLot[] = runRows.flatMap((run) => {
     const wetMassKg = run.wetMassKg ?? 0;
-    if (wetMassKg <= MASS_EPSILON_KG) return [];
-    const dryMassKg =
-      run.dryMassKg ??
-      computeClampedDryMass(wetMassKg, run.moisturePercent);
     const legacyAllocatedWetMassKg = legacyWetByRun.get(run.id) ?? 0;
     const allocation = allocationsByRun.get(run.id);
     const allocatedWetMassKg =
       legacyAllocatedWetMassKg + (allocation?.allocatedWetMassKg ?? 0);
+    if (
+      wetMassKg <= MASS_EPSILON_KG &&
+      allocatedWetMassKg <= MASS_EPSILON_KG
+    ) {
+      return [];
+    }
+    const dryMassKg =
+      run.dryMassKg ??
+      computeClampedDryMass(wetMassKg, run.moisturePercent);
     const legacyAllocatedDryMassKg =
       dryMassKg == null || wetMassKg === 0
         ? null
@@ -470,6 +493,9 @@ export async function buildBiocharProductSourceAllocationPlan(
     const availableWetMassKg = roundMassKg(
       Math.max(0, wetMassKg - allocatedWetMassKg),
     );
+    const feasibilityWetMassKg = roundMassKg(
+      wetMassKg - allocatedWetMassKg,
+    );
     const availableDryMassKg =
       dryMassKg == null || allocatedDryMassKg == null
         ? null
@@ -480,6 +506,7 @@ export async function buildBiocharProductSourceAllocationPlan(
       producedAt: run.producedAt,
       availableWetMassKg,
       availableDryMassKg,
+      feasibilityWetMassKg,
     }];
   });
 

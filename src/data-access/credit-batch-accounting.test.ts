@@ -15,6 +15,7 @@ function application(): BatchLineageApplicationFact {
     gisBoundary: null,
     biocharAppliedTons: 4,
     biocharAppliedDryTons: 2,
+    sourceAllocation: null,
     soilTemperatureC: null,
     facility: { id: "facility-1", code: "Facility 1", name: "Facility" },
     delivery: {
@@ -59,10 +60,29 @@ describe("splitApplicationAcrossSourceAllocations", () => {
         runId: slice.biocharProduct.linkedProductionRunId,
         wetTons: slice.biocharAppliedTons,
         dryTons: slice.biocharAppliedDryTons,
+        sourceAllocation: slice.sourceAllocation,
       })),
     ).toEqual([
-      { runId: "run-a", wetTons: 1, dryTons: 0.8 },
-      { runId: "run-b", wetTons: 3, dryTons: 1.2 },
+      {
+        runId: "run-a",
+        wetTons: 1,
+        dryTons: 0.8,
+        sourceAllocation: {
+          productionRunId: "run-a",
+          allocatedWetMassKg: 50,
+          allocatedDryMassKg: 40,
+        },
+      },
+      {
+        runId: "run-b",
+        wetTons: 3,
+        dryTons: 1.2,
+        sourceAllocation: {
+          productionRunId: "run-b",
+          allocatedWetMassKg: 150,
+          allocatedDryMassKg: 60,
+        },
+      },
     ]);
     expect(
       slices.reduce((sum, slice) => sum + slice.biocharAppliedTons, 0),
@@ -78,6 +98,6 @@ describe("splitApplicationAcrossSourceAllocations", () => {
   it("preserves the legacy linked run when no allocations exist", () => {
     expect(
       splitApplicationAcrossSourceAllocations(application(), []),
-    ).toEqual([application()]);
+    ).toEqual([{ ...application(), sourceAllocation: null }]);
   });
 });

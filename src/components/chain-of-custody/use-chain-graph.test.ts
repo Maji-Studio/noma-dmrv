@@ -4,6 +4,7 @@ import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import {
   buildLineageNodes,
   reachableNodeIds,
+  useBatchChainGraph,
   useChainGraph,
 } from "./use-chain-graph";
 
@@ -96,6 +97,17 @@ describe("biochar mass labels", () => {
     });
   });
 
+  it("falls back to the production run code when no biochar bin name exists", () => {
+    const data = lineage();
+    data.productionRun!.biocharStorageName = null;
+
+    expect(
+      buildLineageNodes(data).find(
+        (node) => node.kind === "productionRun",
+      )?.code,
+    ).toBe("PR-1");
+  });
+
   it("keeps the wet and dry pair on the application flow edge", () => {
     const { edges } = useChainGraph(lineage());
     const applicationEdge = edges.find(
@@ -180,5 +192,90 @@ describe("biochar mass labels", () => {
           graphEdge.target === "biochar-product:product-1",
       )?.data?.kgLabel,
     ).toBe("Wet: 340 kg · Dry: 333.2 kg");
+  });
+
+  it("merges commingled slices without multiplying lot mass or understating applied mass", () => {
+    const first = lineage();
+    first.biocharProduct = {
+      id: "product-1",
+      code: "BP-1",
+      status: "available",
+      productionDate: new Date("2026-05-18T00:00:00Z"),
+      massKg: 850,
+      moistureContentPercent: 2,
+      formulationName: null,
+      linkedProductionRunId: "run-1",
+      href: "/biochar-products",
+    };
+    first.productionRun = {
+      ...first.productionRun!,
+      id: "run-1",
+      code: "PR-1",
+    };
+    first.sources = [{
+      productionRun: first.productionRun,
+      reactor: null,
+      feedstocks: [],
+      allocatedWetMassKg: 510,
+      allocatedDryMassKg: 499.8,
+    }];
+    first.application.biocharAppliedTons = 0.51;
+    first.application.biocharAppliedDryTons = 0.4998;
+
+    const second = lineage();
+    second.biocharProduct = {
+      ...first.biocharProduct,
+      linkedProductionRunId: "run-2",
+    };
+    second.productionRun = {
+      ...second.productionRun!,
+      id: "run-2",
+      code: "PR-2",
+    };
+    second.sources = [{
+      productionRun: second.productionRun,
+      reactor: null,
+      feedstocks: [],
+      allocatedWetMassKg: 340,
+      allocatedDryMassKg: 333.2,
+    }];
+    second.application.biocharAppliedTons = 0.34;
+    second.application.biocharAppliedDryTons = 0.3202;
+
+    const { nodes, edges } = useBatchChainGraph([first, second]);
+    const sourceLabels = ["run-1", "run-2"].map((runId) =>
+      edges.find(
+        (graphEdge) =>
+          graphEdge.source === `production-run:${runId}` &&
+          graphEdge.target === "biochar-product:product-1",
+      )?.data?.kgLabel,
+    );
+    const sourceWetMasses = sourceLabels.map((label) =>
+      Number(String(label).match(/Wet: ([\d.]+)/)?.[1]),
+    );
+
+    expect(sourceLabels).toEqual([
+      "Wet: 510 kg · Dry: 499.8 kg",
+      "Wet: 340 kg · Dry: 333.2 kg",
+    ]);
+    expect(sourceWetMasses.reduce((sum, mass) => sum + mass, 0)).toBe(850);
+
+    expect(
+      nodes.filter((node) => node.id === "application:application-1"),
+    ).toHaveLength(1);
+    expect(
+      nodes.find((node) => node.id === "application:application-1")?.data
+        .details,
+    ).toContainEqual({
+      label: "Biochar applied",
+      value: "Wet: 850 kg · Dry: 820 kg",
+    });
+    expect(
+      edges.find(
+        (graphEdge) =>
+          graphEdge.source === "delivery:delivery-1" &&
+          graphEdge.target === "application:application-1",
+      )?.data?.kgLabel,
+    ).toBe("Wet: 850 kg · Dry: 820 kg");
   });
 });

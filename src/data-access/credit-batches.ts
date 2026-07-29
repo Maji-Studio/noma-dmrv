@@ -72,8 +72,6 @@ const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
   COMPLETED_PRODUCTION_RUN_STATUS,
 ] as const;
 
-export { getApplicationsForRuns } from "./credit-batch-production-runs";
-export type { ApplicationForRun } from "./credit-batch-production-runs";
 export {
   getCo2eStoredPreviews,
   getFacilityCertifier,

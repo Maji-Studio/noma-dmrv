@@ -27,4 +27,21 @@ describe("toBiocharProductEntityOption", () => {
         "Pure biochar · Wet biochar product: 3,500kg | Dry biochar: 2,975kg available",
     });
   });
+
+  it("exposes moisture against blended product mass for order previews", () => {
+    expect(
+      toBiocharProductEntityOption({
+        id: "product-1",
+        code: "PB-01",
+        name: "North product bin",
+        productCode: "BP-01",
+        formulationName: null,
+        massKg: 100,
+        waterAddedKg: 50,
+        moisturePercent: 10,
+        totalDeliveredKg: 0,
+        totalDeliveredDryKg: 0,
+      }).mass,
+    ).toEqual({ moisturePercent: 40 });
+  });
 });

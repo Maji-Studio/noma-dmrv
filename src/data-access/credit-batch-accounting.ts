@@ -103,6 +103,7 @@ export interface BatchLineageApplicationFact {
   gisBoundary: GisBoundary | null;
   biocharAppliedTons: number;
   biocharAppliedDryTons: number | null;
+  sourceAllocation: ProductSourceAllocationFact | null;
   soilTemperatureC: number | null;
   facility: { id: string; code: string; name: string };
   delivery: {
@@ -482,7 +483,9 @@ async function loadLineageWithExecutor(
       evidenceMethod: row.evidenceMethod,
       gisBoundary: row.gisBoundary,
       biocharAppliedTons: row.biocharAppliedTons,
-      biocharAppliedDryTons: row.biocharAppliedDryTons, soilTemperatureC: row.soilTemperatureC,
+      biocharAppliedDryTons: row.biocharAppliedDryTons,
+      sourceAllocation: null,
+      soilTemperatureC: row.soilTemperatureC,
       facility: { id: row.facilityId, code: row.facilityCode, name: row.facilityName },
       delivery: { id: row.deliveryId, code: row.deliveryCode, status: row.deliveryStatus, deliveryDate: row.deliveryDate, deliveredWetMassKg: row.deliveryWetMassKg, massDryKg: row.deliveryMassDryKg },
       order: row.orderId ? { id: row.orderId, code: row.orderCode!, orderDate: row.orderDate!, quantityKg: row.orderQuantityKg } : null,

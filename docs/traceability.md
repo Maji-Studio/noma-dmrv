@@ -31,7 +31,7 @@ warning card explaining where the rollback stops.
   (`src/data-access/credit-batch-lineage-facts.ts`) — three set-based queries
   regardless of batch/application count, shared by `chain-of-custody-batch.ts`,
   `chain-of-custody.ts`, `credit-batches.ts`, `credit-batch-previews.ts`,
-  `credit-batch-production-runs.ts`, and `fn/certification/certify-context-core.ts`.
+  and `fn/certification/certify-context-core.ts`.
   A new per-batch resolver reintroduces N+1 and desyncs the page from certification.
 - These data-access modules guard with `requireOrgScope(ctx)` (org-scoped tenancy,
   [ADR 0010](adr/0010-shared-schema-org-column-tenancy.md)) — **not** the route-level

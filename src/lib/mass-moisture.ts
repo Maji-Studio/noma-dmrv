@@ -139,6 +139,25 @@ export function splitWetMassAfterAddedWater(
   };
 }
 
+export function deriveEffectiveMoisturePercent(
+  wetMassKg: number | null | undefined,
+  moisturePercent: number | null | undefined,
+  addedWaterKg: number | null | undefined,
+): number | null {
+  const split = splitWetMassAfterAddedWater(
+    wetMassKg,
+    moisturePercent,
+    addedWaterKg,
+  );
+  if (!split || !Number.isFinite(split.wetKg) || split.wetKg <= 0) {
+    return null;
+  }
+  return Math.min(
+    Math.max(split.moisturePercent, 0),
+    PERCENT_MAX,
+  );
+}
+
 /**
  * Accept the loosely-typed values React Hook Form hands back from a watched
  * numeric field (which may still be a string mid-edit) and split them.

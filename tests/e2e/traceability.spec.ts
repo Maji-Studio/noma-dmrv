@@ -44,6 +44,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
     delivery: `E2E-DL-${suffix}`,
     application: `E2E-AP-${suffix}`,
   };
+  const fieldIdentifier = `Field ${suffix}`;
 
   try {
     await db.transaction(async (tx) => {
@@ -115,13 +116,17 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         applicationDate: new Date("2026-02-16T10:30:00.000Z"),
         biocharAppliedTons: 0.21,
         biocharAppliedDryTons: 0.2,
-        fieldIdentifier: `Field ${suffix}`,
+        fieldIdentifier,
         status: "applied",
       });
     });
 
     return {
-      application: { id: ids.application, code: codes.application },
+      application: {
+        id: ids.application,
+        code: codes.application,
+        fieldIdentifier,
+      },
       delivery: { id: ids.delivery, code: codes.delivery },
       order: { id: ids.order, code: codes.order },
       productionRun: { id: ids.productionRun, code: codes.productionRun },
@@ -461,20 +466,32 @@ test.describe("Traceability Visualization", () => {
       timeout: 15000,
     });
 
-    const expectedCodes = [
-      seededData.feedstock.code,
-      seededData.reactor.code,
-      lineage.productionRun.code,
-      seededData.biocharProduct.code,
-      lineage.order.code,
-      lineage.delivery.code,
-      lineage.application.code,
+    const expectedNodes = [
+      ["feedstock", seededData.feedstock.id, seededData.feedstock.code],
+      ["reactor", seededData.reactor.id, seededData.reactor.code],
+      [
+        "production-run",
+        lineage.productionRun.id,
+        seededData.biocharStorageLocation.name,
+      ],
+      [
+        "biochar-product",
+        seededData.biocharProduct.id,
+        seededData.formulation.name,
+      ],
+      ["order", lineage.order.id, "Order"],
+      ["delivery", lineage.delivery.id, "Delivery"],
+      [
+        "application",
+        lineage.application.id,
+        lineage.application.fieldIdentifier,
+      ],
     ];
 
-    for (const code of expectedCodes) {
-      await expect(
-        adminPage.locator(".react-flow__node").filter({ hasText: code }).first()
-      ).toBeVisible({ timeout: 10000 });
+    for (const [kind, id, label] of expectedNodes) {
+      const node = adminPage.getByTestId(`rf__node-${kind}:${id}`);
+      await expect(node).toBeVisible({ timeout: 10000 });
+      await expect(node).toContainText(label);
     }
 
     const edges = adminPage.locator(".react-flow__edge");
@@ -502,9 +519,13 @@ test.describe("Traceability Visualization", () => {
         `${seededData.facility.code} - ${seededData.facility.name}`
       )
     ).toBeVisible({ timeout: 10000 });
-    await expect(
-      adminPage.locator(".react-flow__node").filter({ hasText: lineage.application.code }).first()
-    ).toBeVisible();
+    const applicationNode = adminPage.getByTestId(
+      `rf__node-application:${lineage.application.id}`,
+    );
+    await expect(applicationNode).toBeVisible();
+    await expect(applicationNode).toContainText(
+      lineage.application.fieldIdentifier,
+    );
     await expect(
       adminPage.locator(".react-flow__node").filter({ hasText: seededData.feedstock.code }).first()
     ).toBeVisible();
@@ -624,12 +645,14 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
         `[data-testid="rf__node-application:${batch.ids.applicationB}"]`
       )
     ).toBeVisible();
-    // …while the shared production run appears exactly once.
-    await expect(
-      adminPage.locator(".react-flow__node").filter({
-        hasText: batch.codes.productionRun,
-      })
-    ).toHaveCount(1);
+    // The shared production run appears exactly once.
+    const sharedRun = adminPage.getByTestId(
+      `rf__node-production-run:${batch.ids.productionRun}`,
+    );
+    await expect(sharedRun).toHaveCount(1);
+    await expect(sharedRun).toContainText(
+      seededData.biocharStorageLocation.name,
+    );
 
     // Batch anchor exposes the batch view modes.
     const segment = adminPage.getByTestId("chain-view-segment");
@@ -810,7 +833,9 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     // → delivery → application.
     await expect(trail.getByTestId("trail-step")).toHaveCount(7);
     await expect(
-      trail.getByText(batch.codes.productionRun, { exact: true })
+      trail.getByText(seededData.biocharStorageLocation.name, {
+        exact: true,
+      })
     ).toBeVisible();
 
     // Evidence rows: the delivery document and the production-run sample.

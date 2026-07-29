@@ -132,7 +132,7 @@ function ReadyCard({
           className="mt-px size-16 shrink-0 accent-[var(--color-interaction)]"
           checked={selected}
           onChange={() => onToggle(batch.id)}
-          aria-label={`Select credit batch for ${formatDateRange(batch.startDate, batch.endDate)}`}
+          aria-label={`Select credit batch for ${formatDateRange(batch.startDate, batch.endDate)}, ${batch.code}`}
         />
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">

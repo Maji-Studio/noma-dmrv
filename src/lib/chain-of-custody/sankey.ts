@@ -128,6 +128,7 @@ export function buildBatchSankey(
   const runById = new Map<string, NonNullable<SankeyLineage["productionRun"]>>();
   const lotById = new Map<string, NonNullable<SankeyLineage["biocharProduct"]>>();
   const feedstockIds = new Set<string>();
+  const applicationIds = new Set<string>();
   // Feedstock allocations keyed per run so a shared run's allocations count once.
   const allocationsByRunId = new Map<string, number>();
   // Ineligible slice of each run's allocations (issue #285): derived from the
@@ -136,6 +137,7 @@ export function buildBatchSankey(
 
   let appliedKg = 0;
   for (const lineage of lineages) {
+    applicationIds.add(lineage.application.id);
     appliedKg += tonnesToKg(lineage.application.biocharAppliedDryTons ?? 0);
     const sources =
       lineage.sources && lineage.sources.length > 0
@@ -297,7 +299,7 @@ export function buildBatchSankey(
         key: "applied",
         label: "Applied",
         massKg: appliedKg,
-        count: lineages.length,
+        count: applicationIds.size,
       },
     ],
     exits,

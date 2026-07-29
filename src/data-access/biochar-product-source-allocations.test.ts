@@ -188,6 +188,33 @@ describe("planBiocharProductSourceAllocations", () => {
     );
   });
 
+  it("lets an over-allocated lot reduce total feasibility", () => {
+    expect(() =>
+      planBiocharProductSourceAllocations(
+        [
+          lot({
+            availableWetMassKg: 0,
+            availableDryMassKg: 0,
+            feasibilityWetMassKg: -20,
+          }),
+          lot({
+            productionRunId: "run-b",
+            producedAt: LATE_DATE,
+            availableWetMassKg: 100,
+            availableDryMassKg: 80,
+            feasibilityWetMassKg: 100,
+          }),
+        ],
+        90,
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        availableWetMassKg: 80,
+        requestedWetMassKg: 90,
+      }) as InsufficientTraceableBiocharError,
+    );
+  });
+
   it("returns no allocations for a zero draw", () => {
     expect(
       planBiocharProductSourceAllocations([lot()], 0, 10),

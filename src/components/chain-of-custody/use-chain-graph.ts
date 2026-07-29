@@ -271,7 +271,7 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
     nodes.push({
       id: `production-run:${productionRun.id}`,
       kind: "productionRun",
-      code: productionRun.biocharStorageName ?? "",
+      code: productionRun.biocharStorageName ?? productionRun.code,
       href: productionRun.href,
       status: productionRun.status,
       date: formatDateOrNull(productionRun.date),
@@ -627,9 +627,42 @@ export function useBatchChainGraph(
     return { nodes: [], edges: [] };
   }
 
+  const applicationMasses = new Map<
+    string,
+    { wetTons: number | null; dryTons: number | null }
+  >();
+  for (const lineage of lineages) {
+    const totals = applicationMasses.get(lineage.application.id) ?? {
+      wetTons: null,
+      dryTons: null,
+    };
+    if (lineage.application.biocharAppliedTons != null) {
+      totals.wetTons =
+        (totals.wetTons ?? 0) +
+        lineage.application.biocharAppliedTons;
+    }
+    if (lineage.application.biocharAppliedDryTons != null) {
+      totals.dryTons =
+        (totals.dryTons ?? 0) +
+        lineage.application.biocharAppliedDryTons;
+    }
+    applicationMasses.set(lineage.application.id, totals);
+  }
+  const normalizedLineages = lineages.map((lineage) => {
+    const totals = applicationMasses.get(lineage.application.id);
+    return {
+      ...lineage,
+      application: {
+        ...lineage.application,
+        biocharAppliedTons: totals?.wetTons ?? null,
+        biocharAppliedDryTons: totals?.dryTons ?? null,
+      },
+    };
+  });
+
   const nodeById = new Map<string, LineageGraphNode>();
   const edgeById = new Map<string, Edge>();
-  for (const lineage of lineages) {
+  for (const lineage of normalizedLineages) {
     for (const node of buildLineageNodes(lineage)) {
       if (!nodeById.has(node.id)) nodeById.set(node.id, node);
     }

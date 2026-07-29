@@ -5,6 +5,7 @@ import {
   biocharProducts,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 
 /**
  * Find one product whose immutable source provenance includes this run.
@@ -17,6 +18,7 @@ export async function getProductionRunDependentProduct(
   tx: DbTransaction,
   productionRunId: string,
 ): Promise<{ id: string; code: string } | undefined> {
+  requireOrgScope(ctx);
   const [product] = await tx
     .select({ id: biocharProducts.id, code: biocharProducts.code })
     .from(biocharProducts)

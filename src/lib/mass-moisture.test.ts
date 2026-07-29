@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  deriveEffectiveMoisturePercent,
   describeMassSplit,
   formatMassSplitInline,
   formatMoisturePercent,
@@ -10,6 +11,27 @@ import {
   splitWatchedWetMass,
   splitWetMass,
 } from "./mass-moisture";
+
+describe("deriveEffectiveMoisturePercent", () => {
+  it("keeps base dry matter fixed when added water increases sellable wet mass", () => {
+    const effectiveMoisturePercent =
+      deriveEffectiveMoisturePercent(100, 10, 50);
+
+    expect(effectiveMoisturePercent).toBe(40);
+    expect(splitWetMass(100, effectiveMoisturePercent)?.dryKg).toBe(
+      60,
+    );
+  });
+
+  it("equals raw moisture when no water is added", () => {
+    expect(deriveEffectiveMoisturePercent(100, 10, 0)).toBe(10);
+  });
+
+  it("stays unknown when base moisture or blended mass is unresolved", () => {
+    expect(deriveEffectiveMoisturePercent(100, null, 50)).toBeNull();
+    expect(deriveEffectiveMoisturePercent(0, 10, 0)).toBeNull();
+  });
+});
 
 describe("splitWetMass", () => {
   it("splits a wet mass into dry matter and water on a wet basis", () => {

@@ -296,7 +296,6 @@ async function openLinkedProductForm(
   page: Page,
   seededData: SeededChainData,
   productBin: TestStorageLocation,
-  runCode: string,
   massKg: string,
 ) {
   await page.goto(
@@ -306,9 +305,11 @@ async function openLinkedProductForm(
   await page.getByRole("button", { name: "New Product" }).click();
   await waitForSideSheet(page);
 
-  await selectEntityByText(page, "Production Run", runCode);
-  await expect(page.locator('input[name="massKg"]')).toHaveValue(
-    BIOCHAR_BIN_STOCK_KG,
+  await selectEntity(
+    page,
+    "Biochar bin",
+    seededData.biocharStorageLocation.id,
+    seededData.biocharStorageLocation.name,
   );
   await selectEntity(
     page,
@@ -336,14 +337,12 @@ async function createLinkedProduct(
   page: Page,
   seededData: SeededChainData,
   productBin: TestStorageLocation,
-  runCode: string,
   massKg: string,
 ) {
   await openLinkedProductForm(
     page,
     seededData,
     productBin,
-    runCode,
     massKg,
   );
   await submitProductCreate(page);
@@ -562,14 +561,13 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
     // A 150 kg product × 0.7 = 105 kg biochar from a 100 kg-output run.
     const productBin = await createProductBin(seededData);
     try {
-      const runCode = await createCompleteRun(page, seededData, {
+      await createCompleteRun(page, seededData, {
         biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
       });
       await openLinkedProductForm(
         page,
         seededData,
         productBin,
-        runCode,
         "150",
       );
 
@@ -596,14 +594,13 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
     const productBin = await createProductBin(seededData);
     let productCreated = false;
     try {
-      const runCode = await createCompleteRun(page, seededData, {
+      await createCompleteRun(page, seededData, {
         biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
       });
       await openLinkedProductForm(
         page,
         seededData,
         productBin,
-        runCode,
         "140",
       );
       await submitProductCreate(page);
@@ -630,14 +627,13 @@ test.describe("updateBiocharProduct biochar-bin guard", () => {
     const productBin = await createProductBin(seededData);
     let productCreated = false;
     try {
-      const runCode = await createCompleteRun(page, seededData, {
+      await createCompleteRun(page, seededData, {
         biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
       });
       await createLinkedProduct(
         page,
         seededData,
         productBin,
-        runCode,
         "100",
       );
       productCreated = true;
@@ -668,14 +664,13 @@ test.describe("updateBiocharProduct biochar-bin guard", () => {
     const productBin = await createProductBin(seededData);
     let productCreated = false;
     try {
-      const runCode = await createCompleteRun(page, seededData, {
+      await createCompleteRun(page, seededData, {
         biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
       });
       await createLinkedProduct(
         page,
         seededData,
         productBin,
-        runCode,
         "100",
       );
       productCreated = true;

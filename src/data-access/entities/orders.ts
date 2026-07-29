@@ -23,7 +23,11 @@ import {
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatDate } from "@/lib/format-utils";
-import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
+import {
+  deriveEffectiveMoisturePercent,
+  formatWetDryMass,
+  splitWetMass,
+} from "@/lib/mass-moisture";
 import { requireOrgScope } from "../utils";
 
 // Total wet mass already allocated to each order by its (non-archived)
@@ -60,6 +64,8 @@ function buildSelection(
     quantityKg: orders.quantityKg,
     customerName: customers.name,
     productBinName: storageLocations.name,
+    productMassKg: biocharProducts.massKg,
+    productWaterAddedKg: biocharProducts.waterAddedKg,
     productMoisturePercent: biocharProducts.moistureContentPercent,
     totalDeliveredKg: numericAggregate(
       sql<number>`COALESCE(${allocatedMassAggregate.totalDeliveredKg}, 0)`,
@@ -77,6 +83,8 @@ export function toOrderEntityOption(r: {
   quantityKg: number;
   customerName: string | null;
   productBinName: string | null;
+  productMassKg: number | null;
+  productWaterAddedKg: number | null;
   productMoisturePercent: number | null;
   totalDeliveredKg: number;
   totalDeliveredDryKg: number;
@@ -87,7 +95,11 @@ export function toOrderEntityOption(r: {
   );
   const orderedDryKg = splitWetMass(
     r.quantityKg,
-    r.productMoisturePercent,
+    deriveEffectiveMoisturePercent(
+      r.productMassKg,
+      r.productMoisturePercent,
+      r.productWaterAddedKg,
+    ),
   )?.dryKg;
   const remainingDryKg =
     orderedDryKg == null

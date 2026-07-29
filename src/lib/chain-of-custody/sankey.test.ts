@@ -92,6 +92,33 @@ describe("buildBatchSankey", () => {
     expect(result.columns[3]).toMatchObject({ massKg: 2_500, count: 2 });
   });
 
+  it("counts distinct applications when one application has multiple source slices", () => {
+    const result = buildBatchSankey([
+      lineage({
+        application: {
+          id: "app-1",
+          biocharAppliedDryTons: 0.8,
+        },
+      }),
+      lineage({
+        application: {
+          id: "app-1",
+          biocharAppliedDryTons: 1.2,
+        },
+        productionRun: {
+          id: "run-2",
+          feedstockMassDryKg: 4_000,
+          biocharDryMassKg: 1_200,
+        },
+      }),
+    ]);
+
+    expect(result.columns[3]).toMatchObject({
+      massKg: 2_000,
+      count: 1,
+    });
+  });
+
   it("includes every source run and its feedstocks for a commingled product", () => {
     const result = buildBatchSankey([
       lineage({

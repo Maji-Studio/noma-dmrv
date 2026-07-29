@@ -60,7 +60,7 @@ export async function deriveLaneStock(
       options.storageLocationIds,
     ),
     eq(productionRuns.organizationId, ctx.organizationId),
-    eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
+    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
   ];
   if (options.excludeRunId) {
     consumptionConditions.push(ne(productionRuns.id, options.excludeRunId));

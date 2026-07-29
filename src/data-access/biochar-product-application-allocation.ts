@@ -51,8 +51,10 @@ export function splitApplicationAcrossSourceAllocations<
 >(
   application: T,
   allocations: ProductSourceAllocationFact[],
-): T[] {
-  if (allocations.length === 0) return [application];
+): Array<T & { sourceAllocation: ProductSourceAllocationFact | null }> {
+  if (allocations.length === 0) {
+    return [{ ...application, sourceAllocation: null }];
+  }
 
   const sortedAllocations = [...allocations].sort((left, right) =>
     left.productionRunId.localeCompare(right.productionRunId),
@@ -72,6 +74,7 @@ export function splitApplicationAcrossSourceAllocations<
     ...application,
     biocharAppliedTons: wetShares[index] ?? 0,
     biocharAppliedDryTons: dryShares[index],
+    sourceAllocation: allocation,
     biocharProduct: {
       ...application.biocharProduct,
       linkedProductionRunId: allocation.productionRunId,

@@ -322,7 +322,7 @@ const SEEDED_INVALIDATION_BATCH_CODE_PREFIX = "E2E-INV";
  * Seed a credit batch backed by a "complete" production run whose biochar
  * product is linked as the run's output (issue #396). Applications created
  * through the UI against a delivery of that biochar product roll up into the
- * batch's derived `appliedWeightTons` (credit-batch-production-runs.ts), so
+ * batch's derived `appliedWeightTons` (credit-batch-accounting.ts), so
  * this lineage lets a spec assert the credit-batches view reflects an
  * application create/update/delete without a page reload. Only the
  * production/credit-batch side is seeded directly — the UI has no fast path
