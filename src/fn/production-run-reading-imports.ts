@@ -1,5 +1,7 @@
 "use server";
 
+// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+
 import { getStorageProvider } from "@/lib/storage";
 import { SafeError } from "@/lib/errors";
 import { logger, sanitizeErrorMessage } from "@/lib/log";

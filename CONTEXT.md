@@ -43,16 +43,10 @@ litres via a per-facility conversion yield.
 _Avoid_: generator power, backup power.
 
 **Readings file**:
-The telemetry export operators upload per reactor — a CSV with a
-canonical **UTC** timestamp on every row (required: timestamp,
-temperature, pressure; optional: dryer/reactor frequency), matched
-directly by header name, so one file can span multiple days. A
-production run's readings are the slice of one or more readings files
-inside the run's window. Replaces the older reactor-day format
-(filename-encoded date, local time-of-day rows, and a per-reactor
-**channel mapping** step declaring which column fed which reading) —
-the canonical header does that job now, so no per-reactor mapping is
-declared or stored.
+The original telemetry CSV an operator attaches to a production run.
+noma stores the file unchanged as production-run sensor-data evidence
+and does not inspect its headers, timestamps, run window, sensor values,
+or other contents.
 _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
 **Emission estimate**:

@@ -1,3 +1,5 @@
+// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+
 import { pluralize } from "@/lib/copy-utils";
 
 /**

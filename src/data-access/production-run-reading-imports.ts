@@ -1,3 +1,5 @@
+// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, productionRunReadings, productionRuns } from "@/db/schema";

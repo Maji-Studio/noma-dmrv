@@ -1,5 +1,7 @@
 "use client";
 
+// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   importProductionRunReadingsFromDocumentFn,
