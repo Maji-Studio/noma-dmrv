@@ -21,7 +21,7 @@ policy live in [auth.md](./auth.md); the tenancy rationale in
 ## Tenancy — the #1 invariant
 
 Multi-tenancy **is implemented**. Every domain table carries
-`organizationId NOT NULL`, enforced across ~211 `src/data-access/` functions.
+`organizationId NOT NULL`, enforced uniformly in `src/data-access/`.
 Organization is the tenant boundary; facilities are org-owned and facility
 context scopes workflows *within* an org.
 
@@ -46,6 +46,30 @@ context scopes workflows *within* an org.
   `executor`, or the pool starves under parallel load.
 - Coverage: `tests/e2e/org-isolation.spec.ts`,
   `tests/e2e/organization-settings.spec.ts`.
+
+### Deliberate bearer-capability exception
+
+The external verifier download at
+`/api/ghg-statement-reports/[reportId]?token=…` is intentionally reachable
+without a noma session. It is authorized by possession of a random per-report
+token, not by making the private document public:
+
+- only the token's SHA-256 digest is stored on
+  `certifier_ghg_statement_reports`; issuing a new link rotates the digest and
+  revokes the previous link;
+- lookup by report id crosses organizations only in
+  `getVerifierReportDocument`, marked with the required
+  `// org-scope-ok: verifier capability-token lookup intentionally crosses organizations.`
+  comment;
+- token comparison is timing-safe, all capability failures return 404, and a
+  valid request gets only a short-lived signed redirect to the private object;
+- the response suppresses caching and referrer propagation, and verifier URLs
+  require HTTPS outside test/localhost.
+
+This seam exists for a verifier who has no account. It does not relax
+authentication for the Certification workspace, normal `/api/documents/[id]`
+reads, or any other data-access function. Never log or persist the plaintext
+query token; URL redaction uses `src/lib/certification/report-url.ts`.
 
 ## Server-Action Error Handling
 

@@ -2,7 +2,7 @@
 
 > **Status: Accepted** (2026-06-10). Records the integration-boundary
 > decision behind the map integration
-> (`docs/plans/2026-06-10-map-integration.md`). Narrow: it fixes *where the
+> ([archived plan](../archive/plans/2026-06-10-map-integration.md)). Narrow: it fixes *where the
 > geo calls live, who holds the key, and how the provider stays swappable* —
 > not the `PositionPicker` UI or distance semantics, which live in the plan.
 

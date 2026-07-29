@@ -61,11 +61,12 @@ selection) sit with the feature, while **server-data** hooks belong in
 
 ## Documentation Hygiene
 
-- Only **evergreen** notes belong in `/docs`. Dated plans → `docs/plans/`;
-  implementation logs, superseded docs and debugging notes → `docs/archive/`.
-- QA runs commit **only their markdown reports** under `docs/qa/artifacts/`;
-  screenshots, videos, raw driver output, and scripts stay local
-  (enforced by `.gitignore`).
+- Only **evergreen** notes belong in `/docs`. Active plans follow
+  [`docs/plans/README.md`](./plans/README.md); completed plans, implementation
+  logs, superseded docs, and debugging notes move to `docs/archive/`.
+- Reusable QA prompts stay under [`docs/qa/`](./qa/README.md). Point-in-time QA
+  reports and any committed evidence bundles move to `docs/archive/qa/`;
+  sensitive or bulky raw driver output stays local.
 - **Before creating a doc, ask:** is it evergreen, and does it duplicate an
   existing one? If it duplicates, update the existing doc — a second copy is how
   the two drift apart and start contradicting each other.

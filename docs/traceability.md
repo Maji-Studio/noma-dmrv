@@ -27,12 +27,19 @@ warning card explaining where the rollback stops.
 
 ## Invariants
 
-- **All credit-batch lineage reads go through `loadCreditBatchLineageFacts`**
-  (`src/data-access/credit-batch-lineage-facts.ts`) — three set-based queries
-  regardless of batch/application count, shared by `chain-of-custody-batch.ts`,
-  `chain-of-custody.ts`, `credit-batches.ts`, `credit-batch-previews.ts`,
-  `credit-batch-production-runs.ts`, and `fn/certification/certify-context-core.ts`.
-  A new per-batch resolver reintroduces N+1 and desyncs the page from certification.
+- **Credit-batch roll-up and accounting reads go through
+  `src/data-access/credit-batch-accounting.ts`.** Its internal lineage walk is
+  the single set-based implementation (three queries regardless of
+  batch/application count). `loadCreditBatchRollups()` returns batch identity,
+  lineage, and applied-weight facts for shallow consumers such as traceability,
+  detail, and certification context; `loadCreditBatchAccounting()` adds sample
+  chemistry and CO₂e preview assembly for full accounting consumers.
+  `chain-of-custody-batch.ts` projects the traceability payload from the shallow
+  loader instead of resolving lineage itself. Do not recreate the deleted
+  `credit-batch-lineage-facts.ts`, `credit-batch-previews.ts`, or
+  `credit-batch-production-runs.ts` seams, and do not thread preloaded facts
+  through public signatures; either move a projection into the consolidated
+  module or call the appropriate loader.
 - These data-access modules guard with `requireOrgScope(ctx)` (org-scoped tenancy,
   [ADR 0010](adr/0010-shared-schema-org-column-tenancy.md)) — **not** the route-level
   `requireAuth()` — and **every** join predicate, leftJoins
@@ -89,9 +96,9 @@ inside batch context, with a "Batch roll-up" button back.
 
 | Layer | File | Purpose |
 |-------|------|---------|
-| Data Access | `src/data-access/credit-batch-lineage-facts.ts` | Shared set-based loader; every batch lineage read goes through it |
+| Data Access | `src/data-access/credit-batch-accounting.ts` | Consolidated `loadCreditBatchRollups` (shallow lineage) and `loadCreditBatchAccounting` (full preview) |
 | Data Access | `src/data-access/chain-of-custody.ts` | Upstream lineage for one application |
-| Data Access | `src/data-access/chain-of-custody-batch.ts` | Batch roll-up — projects from facts (`projectChainOfCustodyFromBatchFacts`), does not resolve lineage itself |
+| Data Access | `src/data-access/chain-of-custody-batch.ts` | Batch roll-up — loads shallow accounting once and projects via `projectChainOfCustodyFromBatchFacts` |
 | Data Access | `src/data-access/chain-of-custody-geo.ts` | Geo payload (node coordinates + transport legs) |
 | Data Access | `src/data-access/chain-of-custody-trail.ts` | Trail evidence joins keyed by DAG node id |
 | Pure lib | `src/lib/chain-of-custody/sankey.ts` | `buildBatchSankey` — dedupe + mass-balance aggregation |
@@ -160,6 +167,8 @@ brand-recolored basemap treatment is `src/components/map/` (also used by
 See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 
 - `tests/e2e/traceability.spec.ts`, `tests/e2e/carbon-viewer.spec.ts`
+- `tests/credit-batch-accounting-contract.test.ts`,
+  `tests/credit-batch-context-set.test.ts`
 - `src/lib/chain-of-custody/sankey.test.ts`
 - `src/components/chain-of-custody/use-chain-graph.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`
