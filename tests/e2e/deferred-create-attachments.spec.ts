@@ -1,5 +1,5 @@
 /**
- * Deferred create attachments (docs/plans/2026-07-16-deferred-create-attachments.md)
+ * Deferred create attachments (docs/archive/plans/2026-07-16-deferred-create-attachments.md)
  *
  * Create forms hold real files client-side and flush them against the fresh
  * entity ID after create — one Save, no "save first, then reopen to attach".

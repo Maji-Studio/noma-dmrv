@@ -12,7 +12,7 @@
  * move `SOIL_TEMPERATURE_FLOOR_C`, the Woolf/Sanei durability coefficients, the
  * H:C eligibility ceiling, or `METHOD_B_MINIMUM_METHOD_A_SAMPLES` would let an
  * operator weaken a certification gate from a form. Those stay constants; see
- * `docs/plans/2026-07-28-admin-settings-ia-research.md` for the full triage.
+ * `docs/archive/plans/2026-07-28-admin-settings-ia-research.md` for the full triage.
  *
  * Every column is NOT NULL with a default matching the literal it replaces, and
  * `DEFAULT_ORGANIZATION_SETTINGS` (`@/config/organization-settings`) mirrors

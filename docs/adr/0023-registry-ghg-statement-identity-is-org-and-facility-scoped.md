@@ -1,6 +1,12 @@
 # A registry GHG statement's local identity is scoped per organization and facility
 
-Status: accepted (2026-07-25)
+> **Current status: Accepted and implemented** (reviewed 2026-07-29).
+> The schema owns the organization/facility-scoped remote identity and the
+> GHG-statement-specific submission-ledger unique index in
+> `src/db/schema/certification.ts`. Facility-identity and reconciliation
+> behavior is covered by `tests/ghg-statement-facility-identity.test.ts`.
+
+Historical status: accepted (2026-07-25)
 
 A **GHG Statement** discovered in (or created against) the Isometric registry is
 mirrored by a `certifier_ghg_statements` row whose identity key is now

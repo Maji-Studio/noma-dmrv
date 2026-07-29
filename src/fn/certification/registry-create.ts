@@ -24,7 +24,7 @@ import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
 // data-access ledger/sync-event writes, which data-access must not import.
 // Sources mirroring (signed-URL refresh shape) and telemetry (ADR 0006
 // journaled-step recovery) stay on their own shapes by decision — see
-// docs/plans/2026-06-10-certification-reliability-track.md, Phase 2.
+// docs/archive/plans/2026-06-10-certification-reliability-track.md, Phase 2.
 
 // Registry lookup outcome. "multiple" covers lookups that are not
 // guaranteed unique server-side (a GHG Statement period can hold several

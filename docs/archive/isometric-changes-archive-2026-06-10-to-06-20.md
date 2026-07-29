@@ -77,7 +77,7 @@ Wires the 200-year durability submission onto the **measurement-sample** path
 `INPUT_MAPPING`) and re-grains the whole durability data plane onto the **credit
 batch** (ADR 0016: the credit batch IS the protocol production batch; the sampling
 unit is the batch, never the run). Plan:
-`docs/plans/2026-06-19-tier1-durability-live-wiring.md`. **The live POST is staged,
+`docs/archive/plans/2026-06-19-tier1-durability-live-wiring.md`. **The live POST is staged,
 not on** — gated behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE = false`
 (`src/fn/certification/durability-measurement-samples.ts`) pending two operator
 sandbox confirms (see `docs/open-questions.md` →
@@ -427,7 +427,7 @@ Open question closed: `facilities/phantom-link-dialog`.
 ## 2026-06-11 (distance provenance + source-aware priority resolution — map integration Phase 1 §9)
 
 Implements decisions 2–3 of
-[`docs/plans/2026-06-10-map-integration.md`](../plans/2026-06-10-map-integration.md).
+[`docs/archive/plans/2026-06-10-map-integration.md`](./plans/2026-06-10-map-integration.md).
 Distance provenance is now part of the distance value, and the derived
 transport legs (the Eq. 3 distance carriers submitted to Isometric) resolve
 distance in the documented priority order instead of reading only the
@@ -468,7 +468,7 @@ Open question closed: `parties/distance-derivation`.
 ## 2026-06-10 (fake registry adapter + boundary tests — reliability track Phase 3)
 
 Implements Phase 3 of
-[`docs/plans/2026-06-10-certification-reliability-track.md`](../plans/2026-06-10-certification-reliability-track.md):
+[`docs/archive/plans/2026-06-10-certification-reliability-track.md`](./plans/2026-06-10-certification-reliability-track.md):
 the registry seam gains its second adapter —
 `tests/fixtures/fake-registry.ts`, an in-memory registry-shaped counterparty
 installed by faking the CLIENT (`vi.mock("@/lib/isometric/client")`), so the
@@ -522,7 +522,7 @@ exercised, not simulated. No production code changed.
 ## 2026-06-10 (registry create-or-reconcile module — reliability track Phase 2)
 
 Implements Phase 2 of
-[`docs/plans/2026-06-10-certification-reliability-track.md`](../plans/2026-06-10-certification-reliability-track.md):
+[`docs/archive/plans/2026-06-10-certification-reliability-track.md`](./plans/2026-06-10-certification-reliability-track.md):
 one implementation of *POST → on failure, reconcile by lookup → record sync
 event → claim the orphan or mark rejected* in
 `src/fn/certification/registry-create.ts` (`performRegistryCreate`), shared
@@ -566,7 +566,7 @@ returns `source: "create" | "reconciliation"`).
 ## 2026-06-10 (submission-ledger claim module — reliability track Phase 1)
 
 Implements Phase 1 of
-[`docs/plans/2026-06-10-certification-reliability-track.md`](../plans/2026-06-10-certification-reliability-track.md):
+[`docs/archive/plans/2026-06-10-certification-reliability-track.md`](./plans/2026-06-10-certification-reliability-track.md):
 the claim choreography (*read latest → tentative decide → mapping lock →
 re-resolve → authoritative re-decide → insert/reset draft*) now lives in one
 module, `src/data-access/certification-submissions.ts`, entered only through

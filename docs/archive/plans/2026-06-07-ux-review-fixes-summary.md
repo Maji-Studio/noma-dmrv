@@ -2,7 +2,7 @@
 
 The 2026-06-07 UX review has been **mostly executed and archived**. Full
 walkthrough, per-item status, and verification log:
-[docs/archive/2026-06-07-ux-review-fixes.md](../archive/2026-06-07-ux-review-fixes.md)
+[docs/archive/2026-06-07-ux-review-fixes.md](../2026-06-07-ux-review-fixes.md)
 (12 done · 1 partial · 6 open).
 
 ## Still-open items (evergreen — pick up here)

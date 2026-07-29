@@ -2,7 +2,7 @@
 
 This fix plan has been **executed and archived**. Full tiered findings with
 verified file:line refs and concrete fixes:
-[docs/archive/2026-06-07-e2e-findings-fix-plan.md](../archive/2026-06-07-e2e-findings-fix-plan.md).
+[docs/archive/2026-06-07-e2e-findings-fix-plan.md](../2026-06-07-e2e-findings-fix-plan.md).
 
 ## Stable decisions / outcomes (evergreen)
 

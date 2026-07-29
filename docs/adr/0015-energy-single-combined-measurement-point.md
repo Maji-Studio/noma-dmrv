@@ -1,7 +1,17 @@
 # Energy submits as a single combined measurement point
 
-Status: accepted (2026-06-19) — supersedes the stage-split portion of ADR 0001.
-Amended 2026-07-03 (issue #319) — see the amendment note at the end.
+> **Current status: Accepted; partially superseded** (reviewed 2026-07-29).
+> Grid electricity remains one combined `grid_electricity_use` value. The
+> “single combined diesel component” language is superseded by the 2026-07-04
+> template/code change: `Generator diesel usage` receives generator plus
+> preprocessing litres, and `Startup diesel usage` receives reactor-startup /
+> plant litres. Both are separate `fuel_usage_by_volume` components with the
+> same registry-fixed volumetric factor. Current mapping:
+> `src/lib/isometric/transformers/datapoint.ts`; current aggregation:
+> `src/lib/isometric/utils/aggregation.ts`.
+
+Historical status: accepted (2026-06-19) — supersedes the stage-split portion
+of ADR 0001. Amended 2026-07-03 (issue #319).
 
 > **Amended 2026-07-24 — version-citation correction.** The 2026-07-03
 > amendment's Energy Use Accounting v1.3 label does not match the local module

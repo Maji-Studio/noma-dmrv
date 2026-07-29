@@ -1,278 +1,201 @@
-# Sandbox Template Authoring — noma-tailored Removal Template
+# Sandbox GHG Entry Template Guide
 
-A one-time walkthrough for an admin to author a sandbox Removal Template in
-Isometric's Registry UI that noma can actually fill end-to-end. This unblocks
-the Phase 3 `submitCreditBatch` write path against
-`api.sandbox.isometric.com` / project `prj_1K9YJ33RKSBX9FFF`.
+> **Current compatibility guide.** The former `noma-mvp` walkthrough and fixed
+> DEFRA/IPCC bootstrap values were for legacy templates and are no longer the
+> active contract. Do not promote those example values or component counts.
+> Current compatibility is owned by the live template, committed mappings, and
+> the coverage check.
 
-The sandbox's two default templates (`Protocol default`,
-`Dark Earth removal template`) declare **21 monitored inputs** and **~12
-unbound fixed constants** — most of which noma can't supply today
-(`docs/open-questions.md` → `isometric/phase-3-input-coverage`,
-`isometric/phase-3-fixed-constants`). Authoring a tailored template that
-declares only the inputs noma already aggregates side-steps both gates.
+This guide applies to the sandbox project recorded in
+[`versions.json`](./versions.json). Template mutation remains an operator action
+in the Isometric UI; Certify exposes read operations, not a template-authoring
+API.
 
-## Scope (MVP)
+## Sources of truth
 
-The MVP template contains **4 components across 4 groups**, covering
-**7 monitored inputs** sourced from noma's aggregation pipeline plus
-**6 fixed-constant Datapoints** pre-bound in the template editor.
+Before editing a template, inspect:
 
-| Group key | Component (blueprint) | Monitored inputs | Fixed constants |
+- `src/lib/isometric/transformers/datapoint.ts` for ordinary monitored inputs,
+  component-name discriminators, and PROJECT-scope guards;
+- `src/lib/isometric/transformers/sequestration-binding.ts` for explicit
+  durability component inputs;
+- `src/lib/certification/removal-source-bindings.ts` for exact evidence targets;
+- the facility's durability tier and default template mapping;
+- the live template output from:
+
+  ```bash
+  pnpm tsx scripts/isometric-smoke.ts inspect-template prj_1K9YJ33RKSBX9FFF
+  ```
+
+Do not treat a value in this document as a registry-approved emission factor.
+Fixed factors and their justification Sources are registry-owned configuration.
+
+## Required template shape
+
+A usable template must:
+
+1. be a `REMOVAL` credit template for the mapped project;
+2. contain exactly one supported storage component;
+3. use a storage component compatible with the facility durability tier;
+4. declare only monitored inputs covered by an ordinary or explicit durability
+   mapping;
+5. pre-bind every fixed input to a justified registry Datapoint;
+6. keep PROJECT-scope emissions out of the Removal template;
+7. use the exact display names required for component-instance
+   discrimination.
+
+Compilation verifies quantity kind, unit, input shape, component name, and
+durability tier before any registry write.
+
+## Storage component
+
+### 1,000-year sandbox facility
+
+Use `biochar_sequestration_1000_year` under `co2-stored` with exactly:
+
+| Input | Shape | noma source |
+|---|---|---|
+| `carbon_contents` | list | Measurement-sample total-carbon replicates |
+| `product_mass` | scalar | Measurement-sample product mass |
+| `s_fraction` | list | Direct Datapoints derived from sample `s_fraction` values |
+
+This sampled path is sandbox-verified. It requires at least three complete
+replicates per member credit batch.
+
+### 200-year facility
+
+The recognized template keys are
+`biochar_sequestration_200_year_c_org` and
+`biochar_sequestration_200_year_unsampled`, but the complete binding contract
+is not confirmed. Authoring one of these keys makes the tier check pass, not the
+submission path. 200-year submission still fails closed.
+
+### Legacy storage component
+
+`carbon_rich_substance_sequestration` remains recognized only for legacy
+compatibility. Do not use it when authoring a new tier-specific template.
+
+## Ordinary monitored components
+
+The current transformer supports these monitored inputs when the template
+declares them:
+
+| Group | Blueprint | Input | noma source |
 |---|---|---|---|
-| `co2-stored` | CO₂ stored from biochar application (`carbon_rich_substance_sequestration`) | `carbon_content`, `product_mass` | — |
-| `biomass-feedstock-transport` | Biomass transportation to processing site via truck (`transport`) | `distance`, `mass` | `carbon_intensity` |
-| `biochar-transport` | Biochar transportation to storage site via truck (`transport`) | `distance`, `mass` | `carbon_intensity` |
-| `sampling-required-for-mrv` | Sample transportation via car (`distance_based_ci_emissions`) | `distance` | `carbon_intensity` |
+| `biomass-feedstock-transport` | `mass_distance_based_ci_emissions` | `mass_distance` | Feedstock transport tonne-km |
+| `biochar-transport` | `mass_distance_based_ci_emissions` | `mass_distance` | Biochar delivery transport tonne-km |
+| `sampling-required-for-mrv` | `mass_distance_based_ci_emissions` | `mass_distance` | Sample transport tonne-km |
+| `pyrolysis` | `grid_electricity_use` | `electricity_use` | Production electricity kWh |
+| `pyrolysis` | `fuel_usage_by_volume` | `volume_of_fuel` | Component-specific diesel litres |
+| `miscellaneous` | `mass_based_ci_emissions` | `mass` | Safety-margin dry biochar mass only |
 
-Omitted from MVP (incremental follow-ups):
+The transformer also contains compatibility mappings for
+`specific_volume_based_emissions / feedstock_mass` under the feedstock and
+biochar transport groups. Do not add them merely because they are recognized;
+the live project/template determines applicability.
 
-- `metered_energy_based_ci_emissions` (pyrolyzer electricity — blocked by
-  electricity-readout schema work, see `phase-3-input-coverage`)
-- `fuel_usage_by_volume` (biomass handling, processing fuel)
+## Exact component names
 
-**Do NOT add these as REMOVAL-scope components** — they live as
-`PROJECT`-scope Components per
-[ADR 0005](../adr/0005-period-emissions-as-project-components.md). A
-Removal Template that declares any of them as REMOVAL-scope trips a
-scope-conflict `SafeError` from `lookupPeriodInputTuple` in
-`src/lib/isometric/transformers/datapoint.ts` at submit time, naming the
-canonical scope:
+Certify does not expose a stable component-instance key for two components that
+share the same group/blueprint/input tuple. The current mapping therefore
+requires these display names, matched case/whitespace-insensitively:
 
-- `staff-travel/distance_based_ci_emissions/distance` → category `staff_travel`
-- `direct-emissions/ghg_direct_emissions/{concentration,mass_flow}` → category `pyrolyzer_direct`
-- `biochar-storage/fuel_usage_by_volume/volume_of_fuel` → category `biochar_storage_fuel`
-- `miscellaneous/mass_based_ci_emissions/mass` → category `miscellaneous` —
-  **except** a component named exactly `Safety margin`
-  (case/whitespace-insensitive), which is REMOVAL-scope: its `mass` maps to
-  the removal's biochar dry mass via the named carve-out in
-  `INPUT_MAPPING.miscellaneous` (see `changes.md` 2026-07-29). Any other
-  miscellaneous component still trips the guard.
-- `sampling-required-for-mrv/mass_based_ci_emissions/mass` → category `sampling_consumables`
-- `sampling-required-for-mrv/grid_electricity_use/electricity_use` → category `lab_electricity`
+| Display name | Submitted value |
+|---|---|
+| `Generator diesel usage` | Generator diesel plus preprocessing fuel |
+| `Startup diesel usage` | Reactor-startup/plant diesel |
+| `Safety margin` | Removal dry biochar mass |
 
-The operator authors the matching Project Component directly in the
-Isometric UI, attaching the source LCA PDF to the Component's Sources
-field (ADR 0018 — noma keeps no journal copy and runs no drift
-reconciliation). The nightly `pnpm isometric:coverage-check` step in
-`isometric-health.yml` reads `tests/fixtures/isometric-coverage.json`
-and asserts that every monitored tuple in the live template has an ordinary
-or sequestration binding. The active sandbox template explicitly allowlists
-only its six temporary period inputs: concentration and mass flow for
-`Pyrolyzer CO emissions` and `Pyrolyzer CH₄ emissions`, plus distance for
-`Staff travel flights` and `Staff travel local`. Any other PROJECT-scope tuple,
-including a renamed `Safety margin`, fails the check.
+A rename fails closed. If the registry template changes, update the mapping and
+its tests in the same application-code change; do not work around the guard
+with a zero.
 
-**Refresh the fixture** whenever a new sandbox project ships, a
-template gains a component, or an LCA window rolls — add or update the
-`facilities[]` entry in `tests/fixtures/isometric-coverage.json` in the
-same PR that authors the Isometric-side change.
+## PROJECT-scope components
 
-## Prerequisites
+Do not place these monitored tuples in a Removal/GHG Entry template:
 
-- Isometric account with admin access to project
-  `prj_1K9YJ33RKSBX9FFF` (sandbox demo).
-- `.env.local` already has `ISOMETRIC_ENVIRONMENT=sandbox`,
-  `ISOMETRIC_CLIENT_SECRET`, `ISOMETRIC_ACCESS_TOKEN`, and
-  `ISOMETRIC_DEMO_PROJECT_ID=prj_1K9YJ33RKSBX9FFF`. Run
-  `pnpm tsx scripts/isometric-smoke.ts inspect-template` to confirm
-  connectivity before proceeding.
+- staff travel;
+- pyrolyzer direct-gas concentration or mass flow;
+- biochar-storage fuel;
+- sampling-consumable mass;
+- laboratory electricity;
+- miscellaneous LCA overhead other than the exact `Safety margin` carve-out.
 
-## Step 1 — Create the template
+Where applicable, the operator authors them as PROJECT-scope Components in
+Isometric and attaches the supporting LCA Source there. noma intentionally has
+no project-emissions journal. The scope guard in `datapoint.ts` rejects a
+Removal template that crosses this boundary.
 
-1. Open `https://registry.sandbox.isometric.com` and sign in.
-2. Navigate to project `prj_1K9YJ33RKSBX9FFF` → **Removal Templates** →
-   **New template**.
-3. Name it `noma-mvp` (or any name; keep it short — facility settings
-   reference the `rt_…` ID, not the name).
+## Fixed inputs
 
-## Step 2 — Add the 4 components
+Every `type=fixed` input must already reference a registry Datapoint. noma
+submits monitored operational quantities only.
 
-For each row in the MVP table above, click **Add component**, then:
+For each fixed input:
 
-a. **CO₂ stored from biochar application** — group `co2-stored`,
-   blueprint `carbon_rich_substance_sequestration`.
+1. choose a source appropriate to the project, geography, activity, and pinned
+   module;
+2. create or select the Datapoint in Isometric;
+3. bind it in the template;
+4. attach its justification Source in Isometric;
+5. have the project/verifier process review the choice.
 
-b. **Biomass transportation to processing site via truck** — group
-   `biomass-feedstock-transport`, blueprint `transport`. Default
-   display name is fine.
+No fixed constant is stored in noma. Do not reintroduce a `fixed_constants`
+table or copy the retired template's placeholder values.
 
-c. **Biochar transportation to storage site via truck** — group
-   `biochar-transport`, blueprint `transport`.
+## Evidence binding contract
 
-d. **Sample transportation via car** — group
-   `sampling-required-for-mrv`, blueprint `distance_based_ci_emissions`.
+Template inputs must remain compatible with the current per-input Source plan:
 
-Leave all monitored inputs (carbon_content, product_mass, distance, mass)
-unbound — noma supplies these as Datapoints at submit time.
+- application inventory/logbook evidence supports storage `product_mass` and,
+  when present, safety-margin `mass`;
+- feedstock and delivery bills of lading support their corresponding transport
+  `mass_distance`;
+- the generated transport ledger supports each transport input present;
+- the generated durability ledger supports the tier-specific durability
+  inputs.
 
-## Step 3 — Pre-bind fixed constants
+The plan is snapshot- and hash-covered. After submission, noma verifies the
+actual Source attachment through GHG-entry component attributions and
+Datapoints.
 
-Each `type=fixed` input needs a Datapoint bound in the template editor.
-For each fixed input below, in the template editor click **Bind
-constant** → **Create new Datapoint** → enter `magnitude` + `unit` →
-save → re-open the input row and select the new Datapoint.
+## Validate before selection
 
-| Component | Input | Recommended value | Source |
-|---|---|---|---|
-| Biomass transport via truck | `carbon_intensity` | `100` gCO2e / (tonne · km) | DEFRA / IPCC default for heavy-duty diesel truck |
-| Biochar transport via truck | `carbon_intensity` | `100` gCO2e / (tonne · km) | Same |
-| Sample transport via car | `carbon_intensity` | `0.171` kgCO2e / km | DEFRA average passenger car |
+After saving the template:
 
-The CO₂ stored component (`carbon_rich_substance_sequestration`) has no
-fixed inputs in the demo blueprint — verify the same is true after
-creation; if any appear, bind them and update this doc.
+1. inspect it:
 
-If a verifier requests different emission factors, edit each Datapoint's
-magnitude in the registry UI; the template ID stays the same.
-
-## Step 4 — Save and link
-
-1. Click **Save** at the top of the template editor.
-2. Copy the new template ID (format `rt_…` or `rvt_…`).
-3. In noma, open the facility side-sheet that's linked to
-   `prj_1K9YJ33RKSBX9FFF` → **Edit Isometric mapping** → set
-   **Default removal template** to the new template → save.
-4. Verify via:
    ```bash
-   pnpm tsx scripts/isometric-smoke.ts inspect-template
+   pnpm tsx scripts/isometric-smoke.ts inspect-template prj_1K9YJ33RKSBX9FFF
    ```
-   The output should now include the new `noma-mvp` template alongside
-   the existing two. All 7 monitored inputs should show `preboundDatapoint=—`;
-   all 3 fixed `carbon_intensity` inputs should show `preboundDatapoint=dtp_…`.
 
-## Step 5 — End-to-end submit
+2. update the matching facility fixture in
+   `tests/fixtures/isometric-coverage.json` if the checked-in sandbox contract
+   changed;
+3. run:
 
-1. Open a credit batch whose facility is linked to the sandbox project
-   and has the new template set as default.
-2. Record transport legs:
-   - For the credit batch's outbound delivery: at least one
-     `entityType='delivery'` leg with `distance_km` and `load_mass_kg`.
-   - For each upstream feedstock delivery: at least one
-     `entityType='feedstock'` leg.
-   - For at least one sample taken during the production runs: at least
-     one `entityType='sample'` leg.
-3. On the Certify Panel, verify the **Transport coverage** checklist
-   shows ✓ for all three categories. The Submit button enables.
-4. Click **Submit to Isometric**. A real Removal appears in the sandbox
-   registry. The `certification_submissions` table has a row with
-   `version=1`, `status='submitted'`, and `externalId=rmv_…`.
-5. Re-click Submit — no-op (matched payload hash).
+   ```bash
+   pnpm isometric:coverage-check -- --source=fixture
+   ```
 
-## Troubleshooting
+4. when an interactive configured database is available, run:
 
-- **`SafeError: No INPUT_MAPPING entry for ...`** — A blueprint or
-  input on your template isn't covered in
-  `src/lib/isometric/transformers/datapoint.ts`. Either remove that
-  component from the template or add the entry.
-- **`SafeError: ... fixed input ... without a pre-bound datapoint`** —
-  Re-open the template in the registry UI and bind a Datapoint for
-  every fixed input.
-- **`SafeError: Aggregated source ... is null`** — The credit batch's
-  upstream chain has missing data (no transport legs, no biochar mass,
-  etc.). Fix the source data, not the template.
+   ```bash
+   pnpm isometric:coverage-check -- --source=db
+   ```
 
----
+5. select the template in the facility's Isometric mapping;
+6. compile a New Removal and review the exact monitored/fixed bindings and
+   Source plan before submitting.
 
-## Alternative — Bootstrap fixed constants on `Dark Earth removal template`
+## Failure meanings
 
-Use this path when the noma facility must submit against the broader
-`Dark Earth removal template` (`rvt_1K9YK6YRQSBXFVZ0`) rather than the
-minimal `noma-mvp` template. That template has **13 unbound fixed
-constants** that `submitCreditBatch` will refuse to submit against.
-
-Rather than clicking "Create new Datapoint" 13 times in the Registry UI,
-run the bootstrap script and paste the resulting IDs into the template
-editor.
-
-### Step A — Create the constant Datapoints
-
-```bash
-pnpm tsx scripts/isometric-smoke.ts bootstrap-fixed-constants \
-  prj_1K9YJ33RKSBX9FFF rvt_1K9YK6YRQSBXFVZ0
-```
-
-The script:
-
-1. Reads every `type=fixed` input whose `datapoint_id` is null.
-2. Looks each up in `scripts/isometric-bootstrap-constants.ts` →
-   `FIXED_CONSTANT_DEFAULTS` (keyed by `${componentDisplayName}::${inputKey}`).
-3. POSTs one Datapoint per input via `POST /datapoints`, reading the
-   `compatible_unit` straight off the live blueprint (no hardcoded units
-   in the magnitude → POST path).
-4. Uses a stable `supplier_reference_id` of
-   `nm-fc-<templateId>-<rtcId>-<inputKey>` so re-runs reconcile via
-   `findDatapointBySupplierRef` instead of POSTing duplicates.
-5. Prints a binding table of `{ status, datapoint_id, component → input }`.
-
-### Step B — Bind in the Registry UI
-
-1. Open `https://registry.sandbox.isometric.com` → project
-   `prj_1K9YJ33RKSBX9FFF` → **Removal Templates** →
-   `Dark Earth removal template` → **Edit**.
-2. For each row in the script output, locate the matching component +
-   fixed input, click **Bind constant** → **Select existing Datapoint**,
-   and paste the `datapoint id`.
-3. Save the template.
-
-### Step C — Verify
-
-```bash
-pnpm tsx scripts/isometric-smoke.ts inspect-template prj_1K9YJ33RKSBX9FFF
-```
-
-All 13 fixed inputs on `Dark Earth removal template` should now show
-`preboundDatapoint=dtp_…`. `submitCreditBatch` will get past its
-fixed-input guard.
-
-### Curated DEFRA / IPCC values
-
-The 13 defaults are static reference data (DEFRA 2024, IPCC AR6). Source
-of truth and override guidance:
-
-| Component | Input | Default | Source |
-|---|---|---|---|
-| Biomass processing fuel usage | `fuel_combustion_carbon_intensity` | 2.68 kgCO2e/L | DEFRA 2024 diesel |
-| Pyrolyzer electricity usage | `carbon_intensity` | 0.21 kgCO2e/kWh | DEFRA 2024 UK grid |
-| Pyrolyzer CH₄ emissions | `global_warming_potential` | 27 | IPCC AR6 100-yr |
-| Pyrolyzer CO emissions | `global_warming_potential` | 1.9 | IPCC AR4 indirect (no AR6 update) |
-| Biochar processing electricity usage | `grid_carbon_intensity` | 0.21 kgCO2e/kWh | DEFRA 2024 UK grid |
-| Biochar transport to storage (truck) | `carbon_intensity` | 0.107 kgCO2e/(tonne·km) | DEFRA 2024 HGV |
-| Biochar to tractor (loader) | `emissions_factor` | 2.68 kgCO2e/L | DEFRA 2024 diesel |
-| Biochar to tractor (loader) | `volume_material_per_mass` | 2.5 m³/tonne | IBI v2.1 bulk density |
-| Biochar application via tractor | `fuel_combustion_carbon_intensity` | 2.68 kgCO2e/L | DEFRA 2024 diesel |
-| Sampling consumables | `carbon_intensity` | **1.0** (placeholder) | **Replace before production** |
-| Sample transport via car | `carbon_intensity` | 0.171 kgCO2e/km | DEFRA 2024 average car |
-| Laboratory analysis electricity | `grid_carbon_intensity` | 0.21 kgCO2e/kWh | DEFRA 2024 UK grid |
-| Staff travel | `carbon_intensity` | 0.171 kgCO2e/km | DEFRA 2024 average car |
-
-Override path: edit each Datapoint's magnitude directly in the Registry
-UI — the template binding survives. Do **not** add a `fixed_constants`
-DB table or admin UI — the Registry UI already provides this, and
-fixed constants are policy-level reference data, not noma-specific
-operational data. See "What to deliberately NOT do" in
-`docs/isometric/integration-plan.md` for the full rationale.
-
-## Verifier-readiness (before production submission)
-
-Three follow-ups gate any non-sandbox use of this template:
-
-1. **Replace the sampling-consumables placeholder.**
-   `Sampling consumables / carbon_intensity = 1.0` is a deliberate stub.
-   Before production: source a real LCA value (vendor data, peer-reviewed
-   study, or recognised registry industry-average), edit the bound
-   Datapoint's magnitude in the Registry UI (template binding is
-   preserved), and update the row in
-   `scripts/isometric-bootstrap-constants.ts` so future bootstraps emit
-   the right value.
-2. **Validate region-specific factors.** Defaults are UK DEFRA 2024. If
-   operations run elsewhere (Kenya, US, EU non-UK), expect the verifier
-   to flag: grid carbon intensity (swap for host-country grid factor —
-   IEA, IFI, or national agency), diesel combustion factor (generally
-   close across jurisdictions but a national source is preferred),
-   HGV freight factor (depends on local vehicle fleet mix). Same edit
-   path as above.
-3. **Resolve all zero-stubbed monitored inputs** — period inputs belong
-   to PROJECT-scope Components authored in the Isometric UI (ADR 0005 /
-   ADR 0018); remove them from the Removal Template. No template
-   carrying a zero stub may be promoted to a production project.
+- **Missing mapping:** the template declares an unsupported monitored input.
+- **Unbound fixed input:** bind a registry Datapoint; noma will not invent one.
+- **Unsupported durability component:** tier, blueprint, or input table does not
+  match the implemented path.
+- **Unrecognized diesel/Safety margin component:** restore the exact display
+  name or ship a reviewed mapping change.
+- **PROJECT-scope conflict:** move the component out of the Removal template.
+- **Missing intended Source:** fix the evidence/lineage or template target; do
+  not attach every Source to every input.

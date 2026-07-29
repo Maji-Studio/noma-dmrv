@@ -67,9 +67,9 @@ test-results
 /output/
 # QA run artifacts: only markdown reports are tracked; screenshots, videos,
 # raw driver output, and scripts stay local (docs/organization.md)
-docs/qa/artifacts/**
-!docs/qa/artifacts/**/
-!docs/qa/artifacts/**/*.md
-docs/qa/artifacts/**/video/
-docs/qa/artifacts/**/runtime/
-docs/qa/artifacts/**/screenshots/
+docs/archive/qa/artifacts/**
+!docs/archive/qa/artifacts/**/
+!docs/archive/qa/artifacts/**/*.md
+docs/archive/qa/artifacts/**/video/
+docs/archive/qa/artifacts/**/runtime/
+docs/archive/qa/artifacts/**/screenshots/

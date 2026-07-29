@@ -1,8 +1,14 @@
 # DataUploadSubmission idempotency uses journaled-step IDs, not supplier-reference reconciliation
 
-> **Status: Accepted, design-only** (2026-05-29). Scopes Phase 5 Slice A
-> (biochar reactor time-series upload). Implementation tracked under
-> integration-plan Phase 5. Departs from the supplier-reference
+> **Current status: Accepted and implemented in the server pipeline**
+> (reviewed 2026-07-29). `src/fn/certification/submit-telemetry.ts` journals
+> FileUpload and DataUploadSubmission step IDs and implements the resume/status
+> paths described here. `tests/isometric-submission-claim.test.ts` covers the
+> ADR 0006 decision matrix. The UI remains dark: `TelemetryPanel` exists but is
+> not rendered, so this is not an operator-live workflow.
+>
+> **Historical status (2026-05-29): Accepted, design-only.** Scopes Phase 5
+> Slice A (biochar reactor time-series upload). Departs from the supplier-reference
 > reconciliation pattern used by every other outbound POST in the
 > integration (`submitRemoval`, GHG Statement create, Sources mirror,
 > Datapoint create).
