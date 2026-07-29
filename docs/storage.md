@@ -3,7 +3,7 @@
 How evidence files (lab reports, photos, COAs, calibration certificates,
 production-readings CSVs, server-generated PDFs) get into and out of S3-compatible
 object storage. Read this before touching upload flows, the documents API route,
-storage env vars, or the readings importer. For auth/org scoping see
+storage env vars, or production-run readings files. For auth/org scoping see
 [auth.md](./auth.md) and [organization.md](./organization.md); for env inventory
 and secrets see [security.md](./security.md).
 
@@ -159,30 +159,24 @@ factory in `src/lib/storage/index.ts`, **and widening the
 `StorageProviderName = "s3" | "do-spaces" | "local-fs"` union** — the name is not
 a free-form string.
 
-## Production-run readings import
+## Production-run readings files
 
-Telemetry rides the same document pipeline, then persists in a second step:
-upload a `sensor_data` document against the `production_run`, and
-`src/fn/production-run-reading-imports.ts` imports it (fires automatically on
-upload). See [ADR 0006](./adr/0006-data-upload-submission-idempotency.md) for how
-these reach the registry.
+The operator workflow is file-only. A readings CSV is uploaded once as a
+`documents` record with `entity_type='production_run'` and
+`document_type='sensor_data'`. noma stores the original object unchanged and
+does not inspect or validate its headers, timestamps, run window, sensor values,
+or other contents. The normal document security, size, and file-type checks are
+the complete validation boundary for this workflow.
 
-The importer takes a **canonical CSV** with a full UTC timestamp per row, so one
-file can span multiple days — no column-mapping step and no filename convention.
-Headers are matched case-insensitively and each canonical column has an alias list
-(`timestamp_utc` also accepts `timestamp`, `time_utc`, `time (utc)`,
-`datetime_utc`, `datetime`; `temperature_c` also `temperature`/`temp_c`/`temp`;
-etc.) — the header comment in `src/lib/production-readings/readings-csv.ts` is the
-contract. Extra columns are ignored.
+The production-run create, edit, and detail surfaces do not parse the CSV or
+write `production_run_readings` rows. They list the stored filename and size,
+allow authorized users to delete it, and open it in a new tab through
+`/api/documents/{id}` so the existing organization authorization and signed
+download flow remain in force.
 
-PLC dropouts (`---` or blank) in `temperature_c`/`pressure_bar` do **not** drop the
-row: the channel is stored as null and the row is counted in `invalidRequiredRows`
-so the import summary doesn't overstate usable telemetry. Rows are clipped to the
-run's `start_time`/`end_time`; out-of-window and unparseable-timestamp rows are
-reported separately. An import replaces existing readings only within the span it
-covers (min…max of accepted rows), so separate files for different periods are
-additive. XLSX may be stored as generic `sensor_data` evidence (the upload rule is
-tabular) but is never parsed into `production_run_readings`.
+Legacy telemetry import and registry submission modules remain in the codebase
+for historical experiments. They are not called by the operator readings-file
+upload.
 
 ## CORS (production buckets only)
 

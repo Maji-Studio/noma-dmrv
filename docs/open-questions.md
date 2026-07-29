@@ -672,20 +672,19 @@ decision or larger than a review-fix. Execution summary archived in
 [`docs/archive/2026-06-07-whole-repo-audit-snapshot.md`](./archive/2026-06-07-whole-repo-audit-snapshot.md).
 Sizing: (S) small, (M) medium, (L) large.
 
-### Unbounded readings table — pagination/virtualization (`perf/readings-table-unbounded`) — **deferred**
+### Legacy structured telemetry path (`isometric/structured-telemetry-path`) — **deferred**
 
-- The `(production_run_id, timestamp)` index **landed** (migration `0036`), so
-  the query is no longer a full scan. Still open: `getProductionRunReadingsList`
-  (`src/data-access/production-run-readings.ts`) has no `.limit`, and
-  `src/components/production-run-readings/production-run-reading-table.tsx`
-  renders every row to the DOM with no virtualization. Telemetry is the
-  highest-cardinality child entity on a run.
-- **Why it matters:** a run with thousands of readings ships the whole set to
-  the client and paints every row. Not biting at seed scale; will bite as real
-  telemetry lands.
-- **Resolve via:** decide server-side paging UX (page size, infinite-scroll vs.
-  pages), then add `.limit`/offset + `@tanstack/react-virtual` (M). UX decision
-  first.
+- The operator workflow now stores each production-run readings CSV unchanged as
+  a `sensor_data` document. It does not parse rows, populate
+  `production_run_readings`, or gate certification on a row count.
+- The older CSV importer, row table, sensor mapping, Parquet transformer, and
+  `DataUploadSubmission` modules remain in the codebase but have no mounted
+  operator entry point.
+- **Resolve via:** confirm the registry evidence contract for production
+  monitoring. If the retained CSV is sufficient, remove the legacy structured
+  pipeline and table. If a sensor-linked bulk upload is required, design that as
+  an explicit certification transform rather than making ordinary file upload
+  depend on parsing.
 
 ### Certification readiness loader lineage fan-out (`perf/overview-lineage-nplus1`) — **deferred**
 

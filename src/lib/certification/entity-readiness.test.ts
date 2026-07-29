@@ -11,7 +11,6 @@ describe("deriveEntityCertifyReadiness", () => {
     (status) => {
       const readiness = deriveEntityCertifyReadiness("productionRun", {
         status,
-        readingsCount: 0,
       });
 
       expect(readiness.state).toBe("incomplete");
@@ -31,37 +30,12 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 12,
       preprocessingFuelLiters: 3,
       electricityKwh: 50,
-      readingsCount: 1,
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("reports missing telemetry when a complete production run has no readings", () => {
-    const readiness = deriveEntityCertifyReadiness("productionRun", {
-      status: "complete",
-      feedstockWetMassKg: 5000,
-      feedstockMoisturePercent: 25,
-      biocharOutputKg: 1500,
-      biocharMoisturePercent: 10,
-      dieselOperationLiters: 0,
-      dieselGensetLiters: 12,
-      preprocessingFuelLiters: 3,
-      electricityKwh: 50,
-      readingsCount: 0,
-    });
-
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      {
-        kind: "field",
-        key: "telemetryReadings",
-        label: "Telemetry readings",
-      },
-    ]);
-  });
-
-  it("reports missing telemetry when the reading count is omitted", () => {
+  it("does not require readingsCount for a complete production run", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
       feedstockWetMassKg: 5000,
@@ -74,14 +48,7 @@ describe("deriveEntityCertifyReadiness", () => {
       electricityKwh: 50,
     });
 
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      {
-        kind: "field",
-        key: "telemetryReadings",
-        label: "Telemetry readings",
-      },
-    ]);
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
   it("reports missing entered fields", () => {
@@ -95,7 +62,6 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 12,
       preprocessingFuelLiters: 3,
       electricityKwh: null,
-      readingsCount: 1,
     });
 
     expect(readiness.state).toBe("incomplete");
@@ -119,7 +85,6 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 0,
       preprocessingFuelLiters: 0,
       electricityKwh: 0,
-      readingsCount: 1,
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
@@ -136,7 +101,6 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 12,
       preprocessingFuelLiters: 3,
       electricityKwh: 50,
-      readingsCount: 1,
     });
 
     expect(readiness.state).toBe("incomplete");

@@ -32,14 +32,6 @@ const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = 
   delivery: ["delivered"],
 };
 
-const TELEMETRY_GAP: EntityCertifyGap = {
-  kind: "field",
-  key: "telemetryReadings",
-  label: "Telemetry readings",
-  fields: ["readingsCount"],
-  detail: "Production readings CSV is required to certify",
-};
-
 const APPLICATION_EVIDENCE_WARNING: EntityCertifyWarning = {
   key: "applicationEvidence",
   label: "Application evidence",
@@ -162,24 +154,13 @@ export function deriveEntityCertifyReadiness(
 
   // Failed and cancelled runs are audit records, not certification candidates.
   // Their lifecycle state is the only actionable certification gap; surfacing
-  // output, telemetry, or document gaps would send operators to fill data that
+  // output or document gaps would send operators to fill data that
   // cannot make these outcomes certifiable.
   if (
     entityKind === "productionRun" &&
     (effectiveLifecycleState === "failed" || effectiveLifecycleState === "cancelled")
   ) {
     return { state: "incomplete", gaps, warnings };
-  }
-
-  if (entityKind === "productionRun") {
-    const readingsCount = fieldValue(entity, "readingsCount");
-    if (
-      typeof readingsCount !== "number" ||
-      !Number.isFinite(readingsCount) ||
-      readingsCount <= 0
-    ) {
-      gaps.push(TELEMETRY_GAP);
-    }
   }
 
   if (entityKind === "application") {

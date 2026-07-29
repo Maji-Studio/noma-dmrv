@@ -247,21 +247,18 @@ Facility-scoped operations dashboard at `/dashboard`
 
 ## Production Run Extensions
 
-The production-run detail page hosts three child entities: **Readings**
-(time-series telemetry), **Samples** (in-process measurements with file upload),
-and **Incidents** (severity + corrective actions).
+The production-run detail page hosts a readings-file evidence surface plus two
+child entities: **Samples** (in-process measurements with file upload) and
+**Incidents** (severity + corrective actions).
 
-Readings are document-backed, imported from a canonical CSV.
-`ProductionReadingsDocuments` stores files as
+`ProductionReadingsDocuments` stores the operator's original CSV unchanged as
 `documents.entity_type='production_run'`, `document_type='sensor_data'` via the
 normal presigned flow ([storage.md](./storage.md)).
-`src/fn/production-run-reading-imports.ts` parses via
-`src/lib/production-readings/readings-csv.ts`: columns match **by header**
-(`timestamp_utc`, `temperature_c`, `pressure_bar`, optional
-`dryer_frequency_hz`/`reactor_frequency_hz`), every row carries a full UTC
-timestamp so a file may span days, and there is no filename convention or
-mapping step. Imported rows are clipped to the run's `start_time`/`end_time`
-window and replace existing readings **only within the span they cover**.
+The operator UI does not inspect the CSV or import row-level
+`production_run_readings`. Stored files remain openable through the authorized
+`/api/documents/{id}` route and its signed-download flow. Legacy telemetry
+import and registry-submission modules remain separate from this operator
+workflow.
 
 ## Traceability Visualization
 
