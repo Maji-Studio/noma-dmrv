@@ -32,7 +32,8 @@ import type { ChainNodeSheetNode } from "../chain-node-sheet";
 import { buildLineageNodes } from "../use-chain-graph";
 import type { PopupContentByNodeId } from "./carbon-transit-map";
 import { CustodyStagesRail } from "./custody-stages-rail";
-import { RecordDetailPanel } from "./record-detail-panel";
+import { RECORD_PANEL_WIDTH_PX, RecordDetailPanel } from "./record-detail-panel";
+import { MAP_OVERLAY_GUTTER_PX } from "./viewer-constants";
 import {
   MapWarningBanner,
   NotGeolocatedChips,
@@ -93,8 +94,9 @@ export interface CarbonTransitPanelProps {
   /** Clear the shared focus (hub click / basemap click). */
   onClearSelection: () => void;
   /**
-   * Map view only: a stage-rail row click focuses the sub-chain AND opens the
-   * record in the docked detail panel. Absent = rows fall back to onNodeSelect.
+   * Map view only: a stage-rail row or map marker click focuses the sub-chain
+   * AND opens the record in the docked detail panel. Absent = clicks fall back
+   * to onNodeSelect.
    */
   onNodeDetails?: (nodeId: string) => void;
   /** Map view only: the docked panel's payload; null = closed (page-owned). */
@@ -150,6 +152,10 @@ export function CarbonTransitPanel({
   // Transient hover isolation, shared between the map (line hover) and the rail
   // (dropdown-row hover): whichever sets it, both surfaces ghost back the rest.
   const [hoverLegId, setHoverLegId] = useState<string | null>(null);
+  // Which leg the open record was reached through. Several legs can share an
+  // anchor record (a batch's outbound legs, an application with two deliveries),
+  // so the clicked leg has to be remembered rather than re-derived.
+  const [detailLegId, setDetailLegId] = useState<string | null>(null);
   // Drop the hovered leg whenever the plotted source changes — a leftover hover
   // from the previous application/batch points at a leg that no longer exists,
   // which would pin the whole map in isolation mode. Reset during render (the
@@ -159,6 +165,7 @@ export function CarbonTransitPanel({
   if (hoverSourceKey !== sourceKey) {
     setHoverSourceKey(sourceKey);
     setHoverLegId(null);
+    setDetailLegId(null);
   }
 
   const applicationGeo = useChainOfCustodyGeo(
@@ -241,6 +248,19 @@ export function CarbonTransitPanel({
     );
   }
 
+  const isMapView = view === "map";
+  // In map view a click on a rail row, a "not on the map" row or a marker all
+  // mean the same thing: focus the sub-chain AND open the record. Keeping the
+  // marker on the toggling `onNodeSelect` would move the focus out from under
+  // an already-open panel.
+  const openNode = (nodeId: string, legId?: string | null) => {
+    setDetailLegId(legId ?? null);
+    (onNodeDetails ?? onNodeSelect)(nodeId);
+  };
+  // The basemap click closes the panel as well as releasing the focus, so the
+  // two halves are never dismissed independently.
+  const clearMapView = onDetailClose ?? onClearSelection;
+
   // Keyless mode degrades inside the map: tinted field, markers still plotted,
   // a visible "basemap unavailable" note.
   const mapElement = (
@@ -251,22 +271,26 @@ export function CarbonTransitPanel({
       highlight={highlight}
       focus={mapFocus}
       hoverLegId={hoverLegId}
-      onMarkerClick={onNodeSelect}
+      onMarkerClick={isMapView ? openNode : onNodeSelect}
       onLegHover={setHoverLegId}
-      onClear={onClearSelection}
-      controlsClassName={view === "map" ? MAP_VIEW_CONTROLS_CLASS : undefined}
+      onClear={isMapView ? clearMapView : onClearSelection}
+      controlsClassName={isMapView ? MAP_VIEW_CONTROLS_CLASS : undefined}
     />
   );
 
-  if (view === "map") {
-    // A rail row goes one step further than a marker click: it opens the record.
-    const openNode = onNodeDetails ?? onNodeSelect;
-    // Extra context for the docked record panel: the leg this record anchors
-    // (so the panel can draw the From→To thread and the transport numbers) and
-    // its position-resolved geo node. Both are absent for records off the
-    // transport path, and the panel simply drops those sections.
+  if (isMapView) {
+    // Extra context for the docked record panel: the leg the record was opened
+    // through (so the panel can draw the From→To thread and the transport
+    // numbers) and its position-resolved geo node. Both are absent for records
+    // off the transport path, and the panel simply drops those sections. The
+    // anchor check drops a leg left over from a previous record.
+    const anchoredLegs = geo.legs.filter(
+      (leg) => legAnchorNodeId(geo, leg) === detailNode?.id
+    );
     const detailLeg =
-      geo.legs.find((leg) => legAnchorNodeId(geo, leg) === detailNode?.id) ?? null;
+      anchoredLegs.find((leg) => leg.id === detailLegId) ??
+      anchoredLegs[0] ??
+      null;
     const detailGeoNode =
       geo.nodes.find((node) => node.id === detailNode?.id) ?? null;
 
@@ -289,7 +313,19 @@ export function CarbonTransitPanel({
         />
         <div className="relative min-w-0 flex-1">
           {mapElement}
-          <MapWarningBanner warnings={geo.warnings} />
+          {/* The warning stack is the reason the operator is here — step it
+              clear of the docked panel rather than letting the panel bury it.
+              Map view moved the controls out of the top-left corner, so the
+              banner sits on the normal gutter when nothing is docked. */}
+          <MapWarningBanner
+            warnings={geo.warnings}
+            className="top-16"
+            style={{
+              left: detailNode
+                ? RECORD_PANEL_WIDTH_PX + MAP_OVERLAY_GUTTER_PX
+                : MAP_OVERLAY_GUTTER_PX,
+            }}
+          />
           {detailNode && onDetailClose ? (
             <RecordDetailPanel
               node={detailNode}

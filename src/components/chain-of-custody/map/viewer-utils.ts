@@ -138,19 +138,23 @@ export function chipAnchor(
  * Marker a leg resolves to: its chain-side anchor node. Rail rows, the stage
  * tracker's sub-rows and the docked record panel all key off this, so it lives
  * here rather than in any one of them.
+ *
+ * The leg's own outer party wins — the feedstock it came from, the application
+ * it went to — so a batch roll-up's N outbound legs stay on N distinct records
+ * rather than collapsing onto the biochar product they share. The remaining
+ * branches only cover payloads whose outer record never made it into `nodes`.
  */
 export function legAnchorNodeId(
   geo: ChainOfCustodyGeoData,
   leg: ChainGeoLeg
 ): string {
+  if (leg.outerNodeId && geo.nodes.some((node) => node.id === leg.outerNodeId)) {
+    return leg.outerNodeId;
+  }
   if (leg.kind === "inbound") {
     const feedstock = geo.nodes.find((node) => node.entityId === leg.entityId);
     if (feedstock) return feedstock.id;
   } else {
-    // Single-application chain: anchor outbound on the application. A batch
-    // roll-up has N applications, so anchor on the leg's own product instead.
-    const applications = geo.nodes.filter((node) => node.kind === "application");
-    if (applications.length === 1) return applications[0].id;
     const product = geo.nodes.find(
       (node) => node.kind === "biocharProduct" && node.entityId === leg.entityId
     );

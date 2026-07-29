@@ -77,10 +77,13 @@ const BAND_RULE_PX = 1.5;
 
 const ACCENT_ORIGIN = "var(--acc-prod)";
 const ACCENT_ORIGIN_INK = "var(--acc-prod-ink)";
-const ACCENT_FACILITY = "var(--acc-infra)";
+const ACCENT_FACILITY_INK = "var(--acc-infra-ink)";
 const ACCENT_SITE = "var(--acc-dist)";
 const ACCENT_SITE_INK = "var(--acc-dist-ink)";
 const ACCENT_PENDING = "var(--clr-dark-purple-30)";
+
+/** The viewer's one term for a value nobody has entered yet. */
+const MISSING_NAME = "Not recorded";
 
 /** The viewer's micro caps idiom (section labels, eyebrows, meta lines). */
 const MICRO_CAPS =
@@ -112,7 +115,7 @@ const METRIC_CLASS =
 /** The outer party of a leg: supplier (inbound) or application field (outbound). */
 function legOuterName(leg: ChainGeoLeg): string {
   const name = leg.kind === "inbound" ? leg.originName : leg.destinationName;
-  return name ?? leg.outerCode ?? "Unknown";
+  return name ?? leg.outerCode ?? MISSING_NAME;
 }
 
 /**
@@ -173,7 +176,9 @@ function transportMilestone(
       ...(missingPosition > 0
         ? [`${missingPosition} of ${legs.length} ${units} missing GPS`]
         : []),
-      ...(missingMass > 0 ? [`${missingMass} missing mass`] : []),
+      ...(missingMass > 0
+        ? [`${missingMass} ${missingMass === 1 ? "leg" : "legs"} missing mass`]
+        : []),
     ];
     return { complete: false, meta: gapParts.join(" · ") };
   }
@@ -244,6 +249,13 @@ interface MilestoneBandProps {
   title: string;
   /** Glyph colour when complete; pending is always plum. */
   accent: string;
+  /**
+   * Glyph for the complete state. Defaults to the courier's check — override it
+   * where "complete" is not a claim about the step itself: the facility band is
+   * only saying the hub is plotted, and a check there would read as "pyrolysis
+   * verified", which no map data can attest.
+   */
+  completeIcon?: typeof CheckCircleIcon;
   /** Right-edge slot: the side's distance, or the facility's in/out counts. */
   metric?: ReactNode;
   /** Sub-rows follow: the band closes with a hairline, not the section rule. */
@@ -266,6 +278,7 @@ function MilestoneBand({
   state,
   title,
   accent,
+  completeIcon: CompleteIcon = CheckCircleIcon,
   metric,
   divided,
   expanded,
@@ -277,7 +290,7 @@ function MilestoneBand({
       <span className="flex shrink-0 justify-center" style={{ width: GUTTER_PX }} aria-hidden="true">
         <span className="py-4">
           {state.complete ? (
-            <CheckCircleIcon size={MILESTONE_ICON_PX} weight="fill" style={{ color: accent }} />
+            <CompleteIcon size={MILESTONE_ICON_PX} weight="fill" style={{ color: accent }} />
           ) : (
             <CircleIcon size={MILESTONE_ICON_PX} style={{ color: ACCENT_PENDING }} />
           )}
@@ -428,6 +441,8 @@ function LegSubRow({
 interface NoPositionEntry {
   key: string;
   nodeId: string;
+  /** Set on a leg row so the panel opens that leg, not a sibling on the same record. */
+  legId?: string;
   code: string;
   detail: string;
 }
@@ -436,29 +451,34 @@ interface NoPositionEntry {
  * Everything the map cannot draw, kept visible rather than dropped: nodes that
  * inherit (or lack) a position, plus legs missing an endpoint. Clicking one
  * still focuses its sub-chain so the DAG and popups stay reachable.
+ *
+ * The two passes dedupe on different keys: a record is listed once, but every
+ * unplottable leg gets its own row — several legs can share an anchor record,
+ * and each is a separate missing endpoint the operator has to go fix.
  */
-function buildNoPositionEntries(geo: ChainOfCustodyGeoData): NoPositionEntry[] {
+function buildNoPositionEntries(
+  geo: ChainOfCustodyGeoData,
+  unplottableLegs: ChainGeoLeg[]
+): NoPositionEntry[] {
   const entries: NoPositionEntry[] = [];
-  const seen = new Set<string>();
+  const seenNodes = new Set<string>();
 
   const ungeolocated: ChainGeoNode[] = geo.nodes.filter(
     (node) => node.positionSource === "facility" || node.positionSource === "none"
   );
   for (const node of ungeolocated) {
-    if (seen.has(node.id)) continue;
-    seen.add(node.id);
+    if (seenNodes.has(node.id)) continue;
+    seenNodes.add(node.id);
     const detail =
       node.positionSource === "facility" ? "Shown at the facility" : "Not plotted";
     entries.push({ key: node.id, nodeId: node.id, code: node.code, detail });
   }
 
-  for (const leg of resolveLegEndpoints(geo).unplottable) {
-    const nodeId = legAnchorNodeId(geo, leg);
-    if (seen.has(nodeId)) continue;
-    seen.add(nodeId);
+  for (const leg of unplottableLegs) {
     entries.push({
       key: leg.id,
-      nodeId,
+      nodeId: legAnchorNodeId(geo, leg),
+      legId: leg.id,
       code: leg.outerCode ?? legOuterName(leg),
       detail: `${formatDistanceKm(leg.distanceKm)} leg, endpoint missing`,
     });
@@ -475,7 +495,7 @@ function NotOnMapCluster({
 }: {
   entries: NoPositionEntry[];
   focusNodeIds: Set<string> | null;
-  onNodeSelect: (nodeId: string) => void;
+  onNodeSelect: (nodeId: string, legId?: string | null) => void;
 }) {
   return (
     <section className={BAND_RULE}>
@@ -489,7 +509,7 @@ function NotOnMapCluster({
           <button
             key={entry.key}
             type="button"
-            onClick={() => onNodeSelect(entry.nodeId)}
+            onClick={() => onNodeSelect(entry.nodeId, entry.legId)}
             className={cn(SUB_ROW_CLASS, HAIRLINE, dimmed && "opacity-40")}
             style={{ paddingLeft: GUTTER_PX }}
           >
@@ -517,8 +537,12 @@ export interface CustodyStagesRailProps {
   /** The leg under the pointer, shared both ways with the map's line hover. */
   hoverLegId: string | null;
   onHoverLeg: (legId: string | null) => void;
-  /** Row click: focus the sub-chain and open the record's detail panel. */
-  onSelectNode: (nodeId: string) => void;
+  /**
+   * Row click: focus the sub-chain and open the record's detail panel. The leg
+   * id rides along on a leg row so the panel shows the clicked leg's numbers
+   * rather than the first one anchored on the same record.
+   */
+  onSelectNode: (nodeId: string, legId?: string | null) => void;
 }
 
 /**
@@ -540,10 +564,11 @@ export function CustodyStagesRail({
 
   const inbound = geo.legs.filter((leg) => leg.kind === "inbound");
   const outbound = geo.legs.filter((leg) => leg.kind === "outbound");
+  const resolvedLegs = resolveLegEndpoints(geo);
   const plottableLegIds = new Set(
-    resolveLegEndpoints(geo).plottable.map((entry) => entry.leg.id)
+    resolvedLegs.plottable.map((entry) => entry.leg.id)
   );
-  const noPosition = buildNoPositionEntries(geo);
+  const noPosition = buildNoPositionEntries(geo, resolvedLegs.unplottable);
 
   const inboundStage = transportMilestone(inbound, plottableLegIds, "inbound");
   const facilityStage = facilityMilestone(geo.facility);
@@ -564,7 +589,7 @@ export function CustodyStagesRail({
       accentInk={accentInk}
       dimmed={focusLegIds !== null && !focusLegIds.has(leg.id)}
       hovered={hoverLegId === leg.id}
-      onSelect={() => onSelectNode(legAnchorNodeId(geo, leg))}
+      onSelect={() => onSelectNode(legAnchorNodeId(geo, leg), leg.id)}
       onHover={onHoverLeg}
     />
   );
@@ -600,7 +625,8 @@ export function CustodyStagesRail({
         segment="middle"
         state={facilityStage}
         title="Pyrolysis"
-        accent={ACCENT_FACILITY}
+        accent={ACCENT_FACILITY_INK}
+        completeIcon={MapPinIcon}
         metric={
           <span className={cn(MICRO_CAPS, "shrink-0 whitespace-nowrap font-normal tracking-[0.08em]", INK_MUTED)}>{inbound.length} in · {outbound.length} out</span>
         }
