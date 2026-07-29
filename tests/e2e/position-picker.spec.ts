@@ -279,7 +279,12 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await expect(distanceInput).toBeVisible();
     await expect(calcButton).toBeEnabled();
     await calcButton.click();
-    await expect(distanceInput).not.toHaveValue("");
+    // Address search moved the site onto the Dodoma fixture, which is also the
+    // seeded facility position, so the stub route distance is 0.
+    const expectedKm = stubRouteDistanceKm(SEED_FACILITY_POINT, DODOMA);
+    await expect(distanceInput, STUB_PROVIDER_HINT).toHaveValue(
+      String(expectedKm)
+    );
     await expect(
       dialog.getByTestId("pending-loc-distance-distance-source")
     ).toContainText("Route calculation");
