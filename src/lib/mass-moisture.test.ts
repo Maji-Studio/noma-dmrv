@@ -4,6 +4,7 @@ import {
   formatMassSplitInline,
   formatMoisturePercent,
   formatSplitMass,
+  formatWetDryMass,
   parseWatchedNumber,
   splitWetMassAfterAddedWater,
   splitWatchedWetMass,
@@ -119,6 +120,59 @@ describe("split descriptions", () => {
 
   it("summarises a split on one line", () => {
     const split = splitWetMass(500, 12.5)!;
-    expect(formatMassSplitInline(split)).toBe("437.5 kg dry · 12.5% moisture");
+    expect(formatMassSplitInline(split)).toBe(
+      "Wet: 500 kg · Dry: 437.5 kg",
+    );
+  });
+});
+
+describe("formatWetDryMass", () => {
+  it("keeps both mass bases explicit", () => {
+    expect(formatWetDryMass({ wetKg: 850, dryKg: 820 })).toBe(
+      "Wet: 850 kg · Dry: 820 kg",
+    );
+  });
+
+  it("shows a missing value instead of hiding that mass basis", () => {
+    expect(formatWetDryMass({ wetKg: 850, dryKg: null })).toBe(
+      "Wet: 850 kg · Dry: Not recorded",
+    );
+  });
+
+  it("uses authoritative dry mass before an optional derivation", () => {
+    expect(
+      formatWetDryMass({
+        wetKg: 1_000,
+        dryKg: 810,
+        moisturePercent: 20,
+        deriveDryWhenMissing: true,
+      }),
+    ).toBe("Wet: 1,000 kg · Dry: 810 kg");
+  });
+
+  it("can derive dry mass when moisture is authoritative", () => {
+    expect(
+      formatWetDryMass({
+        wetKg: 1_000,
+        dryKg: null,
+        moisturePercent: 20,
+        deriveDryWhenMissing: true,
+      }),
+    ).toBe("Wet: 1,000 kg · Dry: 800 kg");
+  });
+
+  it("supports material labels, a pipe divider, and compact kg spacing", () => {
+    expect(
+      formatWetDryMass({
+        wetKg: 3_500,
+        dryKg: 2_975,
+        wetLabel: "Wet biochar product",
+        dryLabel: "Dry biochar",
+        separator: " | ",
+        unitSpacing: "compact",
+      }),
+    ).toBe(
+      "Wet biochar product: 3,500kg | Dry biochar: 2,975kg",
+    );
   });
 });

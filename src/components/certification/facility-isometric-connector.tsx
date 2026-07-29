@@ -143,7 +143,7 @@ export function FacilityIsometricConnector({
     ? (linkHints
         .find((hint) => hint.externalProjectId === selected)
         ?.linkedFacilities.filter((f) => f.facilityId !== facilityId)
-        .map((f) => `${f.code} (${f.name})`) ?? [])
+        .map((f) => f.name) ?? [])
     : [];
   const requiresShareAck = linkedElsewhere.length > 0;
 

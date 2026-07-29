@@ -6,10 +6,11 @@
  * source row and movement overlay is read from the same snapshot.
  */
 
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
+  biocharProductSourceAllocations,
   feedstocks,
   formulations,
   productionRunFeedstocks,
@@ -21,7 +22,10 @@ import {
   type DbReader,
 } from "./bin-movements";
 import { requireOrgScope } from "./utils";
-import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import {
+  CANCELLED_PRODUCTION_RUN_STATUS,
+  COMPLETED_PRODUCTION_RUN_STATUS,
+} from "@/lib/production-runs/lifecycle";
 
 export interface LaneStockDerivation {
   storageLocationId: string;
@@ -56,27 +60,51 @@ export async function deriveLaneStock(
       options.storageLocationIds,
     ),
     eq(productionRuns.organizationId, ctx.organizationId),
-    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
+    eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
   ];
   if (options.excludeRunId) {
     consumptionConditions.push(ne(productionRuns.id, options.excludeRunId));
   }
 
-  const allocationConditions = [
+  const legacyAllocationConditions = [
     inArray(
       productionRuns.biocharStorageLocationId,
       options.storageLocationIds,
     ),
     eq(productionRuns.organizationId, ctx.organizationId),
     ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
+    isNull(biocharProducts.sourceBiocharStorageLocationId),
+  ];
+  const sourceAllocationConditions = [
+    inArray(
+      biocharProductSourceAllocations.sourceStorageLocationId,
+      options.storageLocationIds,
+    ),
+    eq(
+      biocharProductSourceAllocations.organizationId,
+      ctx.organizationId,
+    ),
   ];
   if (options.excludeProductId) {
-    allocationConditions.push(
+    legacyAllocationConditions.push(
       ne(biocharProducts.id, options.excludeProductId),
+    );
+    sourceAllocationConditions.push(
+      ne(
+        biocharProductSourceAllocations.biocharProductId,
+        options.excludeProductId,
+      ),
     );
   }
 
-  const [intakeRows, consumptionRows, outputRows, allocationRows, movementRows] =
+  const [
+    intakeRows,
+    consumptionRows,
+    outputRows,
+    legacyAllocationRows,
+    sourceAllocationRows,
+    movementRows,
+  ] =
     await Promise.all([
       executor
         .select({
@@ -128,7 +156,10 @@ export async function deriveLaneStock(
               options.storageLocationIds,
             ),
             eq(productionRuns.organizationId, ctx.organizationId),
-            ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
+            eq(
+              productionRuns.status,
+              COMPLETED_PRODUCTION_RUN_STATUS,
+            ),
           ),
         )
         .groupBy(productionRuns.biocharStorageLocationId),
@@ -157,8 +188,21 @@ export async function deriveLaneStock(
             eq(formulations.organizationId, ctx.organizationId),
           ),
         )
-        .where(and(...allocationConditions))
+        .where(and(...legacyAllocationConditions))
         .groupBy(productionRuns.biocharStorageLocationId),
+      executor
+        .select({
+          storageLocationId:
+            biocharProductSourceAllocations.sourceStorageLocationId,
+          total: sumNumeric(
+            biocharProductSourceAllocations.allocatedWetMassKg,
+          ),
+        })
+        .from(biocharProductSourceAllocations)
+        .where(and(...sourceAllocationConditions))
+        .groupBy(
+          biocharProductSourceAllocations.sourceStorageLocationId,
+        ),
       getBinMovementLaneSums(
         ctx,
         options.storageLocationIds,
@@ -202,11 +246,17 @@ export async function deriveLaneStock(
       : undefined;
     if (stock) stock.biocharProducedKg = row.total;
   }
-  for (const row of allocationRows) {
+  for (const row of legacyAllocationRows) {
     const stock = row.storageLocationId
       ? byLocation.get(row.storageLocationId)
       : undefined;
-    if (stock) stock.biocharAllocatedKg = row.total;
+    if (stock) stock.biocharAllocatedKg += row.total;
+  }
+  for (const row of sourceAllocationRows) {
+    const stock = row.storageLocationId
+      ? byLocation.get(row.storageLocationId)
+      : undefined;
+    if (stock) stock.biocharAllocatedKg += row.total;
   }
   for (const row of movementRows) {
     const stock = byLocation.get(row.storageLocationId);

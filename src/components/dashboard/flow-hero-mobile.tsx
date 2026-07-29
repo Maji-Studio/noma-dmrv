@@ -162,7 +162,7 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
                   aria-hidden
                 />
                 <span className="border border-[var(--clr-dark-purple-30)] bg-[var(--bg)] px-6 py-2 font-[family-name:var(--font-mono)] text-[9px] leading-none">
-                  {formatTonnes(segment.tonnes)}
+                  Dry: {formatTonnes(segment.tonnes)}
                 </span>
               </div>
             )}

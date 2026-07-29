@@ -24,7 +24,10 @@ import type {
   TrailTransportLeg,
 } from "@/data-access/chain-of-custody-trail";
 import { useApplicationTrail } from "@/hooks/use-chain-of-custody";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
+import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import {
   LINEAGE_NODE_STYLES,
@@ -53,6 +56,7 @@ function formatStepDate(value: Date | string | null): string {
 /** Custody order, upstream to soil: feedstocks → run → lot → order → delivery → application. */
 export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[] {
   const steps: TrailStepDescriptor[] = [];
+  const sources = resolveChainSources(chain);
 
   const sortedFeedstocks = [...chain.feedstocks].sort((left, right) =>
     left.code.localeCompare(right.code)
@@ -61,26 +65,30 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
     steps.push({
       nodeId: `feedstock:${feedstock.id}`,
       kind: "feedstock",
-      code: feedstock.code,
+      code: feedstock.feedstockTypeName ?? "Feedstock",
       status: feedstock.status,
       date: feedstock.deliveryDate,
       massLine: formatKg(feedstock.massUsedKg ?? feedstock.massDryKg),
-      contextLine: [feedstock.feedstockTypeName, feedstock.supplierName]
+      contextLine: [feedstock.supplierName]
         .filter(Boolean)
         .join(" · ") || null,
     });
   }
 
-  if (chain.productionRun) {
+  for (const source of sources) {
+    const productionRun = source.productionRun;
     steps.push({
-      nodeId: `production-run:${chain.productionRun.id}`,
+      nodeId: `production-run:${productionRun.id}`,
       kind: "productionRun",
-      code: chain.productionRun.code,
-      status: chain.productionRun.status,
-      date: chain.productionRun.date,
-      massLine: formatKg(chain.productionRun.biocharDryMassKg),
-      contextLine: chain.reactor
-        ? `Reactor ${chain.reactor.code}`
+      code: productionRun.biocharStorageName ?? "",
+      status: productionRun.status,
+      date: productionRun.date,
+      massLine: formatWetDryMass({
+        wetKg: productionRun.biocharOutputKg,
+        dryKg: productionRun.biocharDryMassKg,
+      }),
+      contextLine: source.reactor
+        ? `Reactor ${source.reactor.identifier}`
         : null,
     });
   }
@@ -89,10 +97,17 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
     steps.push({
       nodeId: `biochar-product:${chain.biocharProduct.id}`,
       kind: "biocharProduct",
-      code: chain.biocharProduct.code,
+      code:
+        chain.biocharProduct.formulationName ?? "Pure biochar",
       status: chain.biocharProduct.status,
       date: chain.biocharProduct.productionDate,
-      massLine: formatKg(chain.biocharProduct.massKg),
+      massLine: formatWetDryMass({
+        wetKg: chain.biocharProduct.massKg,
+        dryKg: splitWetMass(
+          chain.biocharProduct.massKg,
+          chain.biocharProduct.moistureContentPercent,
+        )?.dryKg,
+      }),
       contextLine: null,
     });
   }
@@ -101,10 +116,16 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
     steps.push({
       nodeId: `order:${chain.order.id}`,
       kind: "order",
-      code: chain.order.code,
+      code: "Order",
       status: null,
       date: chain.order.orderDate,
-      massLine: formatKg(chain.order.quantityKg),
+      massLine: formatWetDryMass({
+        wetKg: chain.order.quantityKg,
+        dryKg: splitWetMass(
+          chain.order.quantityKg,
+          chain.biocharProduct?.moistureContentPercent,
+        )?.dryKg,
+      }),
       contextLine: null,
     });
   }
@@ -112,23 +133,32 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
   steps.push({
     nodeId: `delivery:${chain.delivery.id}`,
     kind: "delivery",
-    code: chain.delivery.code,
+    code: "Delivery",
     status: chain.delivery.status,
     date: chain.delivery.deliveryDate,
-    massLine: formatKg(chain.delivery.massDryKg),
+    massLine: formatWetDryMass({
+      wetKg: chain.delivery.deliveredWetMassKg,
+      dryKg: chain.delivery.massDryKg,
+    }),
     contextLine: null,
   });
 
   steps.push({
     nodeId: `application:${chain.application.id}`,
     kind: "application",
-    code: chain.application.code,
+    code: chain.application.fieldIdentifier ?? "Field application",
     status: chain.application.status,
     date: chain.application.applicationDate,
-    massLine:
-      chain.application.biocharAppliedDryTons != null
-        ? `${chain.application.biocharAppliedDryTons.toFixed(2)} t dry applied`
-        : null,
+    massLine: formatWetDryMass({
+      wetKg:
+        chain.application.biocharAppliedTons == null
+          ? null
+          : tonnesToKg(chain.application.biocharAppliedTons),
+      dryKg:
+        chain.application.biocharAppliedDryTons == null
+          ? null
+          : tonnesToKg(chain.application.biocharAppliedDryTons),
+    }),
     contextLine: chain.application.fieldIdentifier,
   });
 

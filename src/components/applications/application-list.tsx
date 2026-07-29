@@ -61,7 +61,7 @@ import {
 } from "@/schemas/applications";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
@@ -598,7 +598,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.code}
+                  {formatDateRange(batch.startDate, batch.endDate)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -679,7 +679,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             title: "Application details",
             fields: [
               { label: "Application date", value: formatDate(sideSheetEntity.applicationDate) },
-              { label: "Delivery", value: sideSheetEntity.deliveryCode || sideSheetDelivery?.code || null },
+              {
+                label: "Delivery source",
+                value: sideSheetDelivery
+                  ? `${
+                      sideSheetDelivery.productBinName ??
+                      sideSheetDelivery.formulationName ??
+                      "Biochar delivery"
+                    } · ${formatDate(sideSheetDelivery.deliveryDate)}`
+                  : null,
+              },
               {
                 label: "Biochar applied, wet (kg)",
                 ...certificationDetailField("application", "biocharAppliedTons"),

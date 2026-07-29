@@ -96,7 +96,7 @@ export function FacilityCertifierDialog({
     for (const hint of linkHints) {
       const others = hint.linkedFacilities
         .filter((f) => f.facilityId !== facilityId)
-        .map((f) => `${f.code} (${f.name})`);
+        .map((f) => f.name);
       if (others.length > 0) map.set(hint.externalProjectId, others);
     }
     return map;

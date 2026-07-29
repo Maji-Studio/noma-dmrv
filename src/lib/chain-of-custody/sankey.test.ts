@@ -92,6 +92,48 @@ describe("buildBatchSankey", () => {
     expect(result.columns[3]).toMatchObject({ massKg: 2_500, count: 2 });
   });
 
+  it("includes every source run and its feedstocks for a commingled product", () => {
+    const result = buildBatchSankey([
+      lineage({
+        productionRun: null,
+        feedstocks: [],
+        sources: [
+          {
+            productionRun: {
+              id: "run-1",
+              feedstockMassDryKg: 6_000,
+              biocharDryMassKg: 1_800,
+            },
+            feedstocks: [
+              {
+                id: "fs-1",
+                massUsedKg: 6_000,
+                eligibilityStatus: "eligible",
+              },
+            ],
+          },
+          {
+            productionRun: {
+              id: "run-2",
+              feedstockMassDryKg: 4_000,
+              biocharDryMassKg: 1_200,
+            },
+            feedstocks: [
+              {
+                id: "fs-2",
+                massUsedKg: 4_000,
+                eligibilityStatus: "eligible",
+              },
+            ],
+          },
+        ],
+      }),
+    ]);
+
+    expect(result.columns[0]).toMatchObject({ massKg: 10_000, count: 2 });
+    expect(result.columns[1]).toMatchObject({ massKg: 3_000, count: 2 });
+  });
+
   it("dedupes the ineligible-feedstock exit for a run shared across applications", () => {
     const shared = {
       productionRun: {

@@ -131,10 +131,11 @@ export function BatchPicker({
                     "text-[var(--color-text-primary)]"
                   )}
                 >
-                  {selected.code}
+                  {formatDateRange(selected.startDate, selected.endDate)}
                 </span>
                 <span className="min-w-0 truncate body-caption text-[var(--color-text-tertiary)]">
-                  {formatDateRange(selected.startDate, selected.endDate)}
+                  {countLabel(selected.productionRunCount, "run")} ·{" "}
+                  {countLabel(selected.applicationCount, "application")}
                 </span>
               </>
             ) : (
@@ -187,7 +188,7 @@ export function BatchPicker({
                                 : "text-[var(--color-text-primary)]"
                             )}
                           >
-                            {batch.code}
+                            {formatDateRange(batch.startDate, batch.endDate)}
                           </span>
                           {isSelected ? (
                             <CheckIcon
@@ -197,9 +198,6 @@ export function BatchPicker({
                               className="ml-auto shrink-0 text-[var(--color-interaction)]"
                             />
                           ) : null}
-                        </span>
-                        <span className="truncate body-caption text-[var(--color-text-secondary)]">
-                          {formatDateRange(batch.startDate, batch.endDate)}
                         </span>
                         <span className="truncate body-caption text-[var(--color-text-tertiary)]">
                           {countLabel(batch.productionRunCount, "run")} ·{" "}

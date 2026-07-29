@@ -21,7 +21,7 @@ import {
   type Application,
 } from "@/db/schema/application";
 import { certifierProjects } from "@/db/schema/certification";
-import { facilities } from "@/db/schema/facilities";
+import { facilities, storageLocations } from "@/db/schema/facilities";
 import {
   creditBatches,
   creditBatchApplications,
@@ -29,7 +29,11 @@ import {
 } from "@/db/schema/credits";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customers, customerLocations } from "@/db/schema/parties";
-import { biocharProducts, formulations } from "@/db/schema/products";
+import {
+  biocharProductSourceAllocations,
+  biocharProducts,
+  formulations,
+} from "@/db/schema/products";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
@@ -64,6 +68,7 @@ export interface ApplicationDeliveryOptionData {
   deliveryDate: Date;
   orderCode: string | null;
   formulationName: string | null;
+  productBinName: string | null;
   massDryKg: number | null;
   deliveredWetMassKg: number | null;
   orderQuantityKg: number | null;
@@ -218,10 +223,35 @@ async function getLinkedCreditBatches(
         eq(biocharProducts.organizationId, ctx.organizationId),
       ),
     )
+    .leftJoin(
+      biocharProductSourceAllocations,
+      and(
+        eq(
+          biocharProductSourceAllocations.biocharProductId,
+          biocharProducts.id,
+        ),
+        eq(
+          biocharProductSourceAllocations.organizationId,
+          ctx.organizationId,
+        ),
+      ),
+    )
     .innerJoin(
       creditBatchProductionRuns,
       and(
-        eq(creditBatchProductionRuns.productionRunId, biocharProducts.linkedProductionRunId),
+        or(
+          eq(
+            creditBatchProductionRuns.productionRunId,
+            biocharProductSourceAllocations.productionRunId,
+          ),
+          and(
+            isNull(biocharProducts.sourceBiocharStorageLocationId),
+            eq(
+              creditBatchProductionRuns.productionRunId,
+              biocharProducts.linkedProductionRunId,
+            ),
+          ),
+        )!,
         eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
       ),
     )
@@ -462,6 +492,7 @@ export async function getApplicationDeliveryOptions(
         deliveryDate: deliveries.deliveryDate,
         orderCode: orders.code,
         formulationName: formulations.name,
+        productBinName: storageLocations.name,
         massDryKg: deliveries.massDryKg,
         deliveredWetMassKg: deliveries.deliveredWetMassKg,
         orderQuantityKg: orders.quantityKg,
@@ -489,8 +520,24 @@ export async function getApplicationDeliveryOptions(
           eq(certifierProjects.organizationId, ctx.organizationId),
         ),
       )
-      .leftJoin(biocharProducts, and(eq(deliveries.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
+      .leftJoin(
+        biocharProducts,
+        and(
+          eq(
+            biocharProducts.id,
+            sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+          ),
+          eq(biocharProducts.organizationId, ctx.organizationId),
+        ),
+      )
       .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
+      .leftJoin(
+        storageLocations,
+        and(
+          eq(biocharProducts.storageLocationId, storageLocations.id),
+          eq(storageLocations.organizationId, ctx.organizationId),
+        ),
+      )
       .where(whereClause)
       .orderBy(desc(deliveries.deliveryDate)),
     db

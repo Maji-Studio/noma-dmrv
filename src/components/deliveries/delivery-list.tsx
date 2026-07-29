@@ -54,7 +54,12 @@ import type {
 } from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate, formatDistanceKm, formatMassKg } from "@/lib/format-utils";
+import {
+  formatDate,
+  formatDateRange,
+  formatDistanceKm,
+  formatMassKg,
+} from "@/lib/format-utils";
 import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
@@ -570,7 +575,7 @@ export function DeliveryList() {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.code}
+                  {formatDateRange(batch.startDate, batch.endDate)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -629,6 +634,9 @@ export function DeliveryList() {
                     <MoistureSplit
                       wetMassKg={sideSheetEntity.deliveredWetMassKg}
                       moisturePercent={sideSheetEntity.moistureContentPercent}
+                      dryMassKg={sideSheetEntity.massDryKg}
+                      wetLabel="Wet biochar product"
+                      dryLabel="Dry biochar"
                     />
                   ),
                 },

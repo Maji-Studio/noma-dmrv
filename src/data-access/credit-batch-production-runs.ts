@@ -1,11 +1,21 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  exists,
+  inArray,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import { applications } from "@/db/schema/application";
 import { deliveries, orders } from "@/db/schema/logistics";
-import { biocharProducts } from "@/db/schema/products";
+import {
+  biocharProducts,
+  biocharProductSourceAllocations,
+} from "@/db/schema/products";
 import { SafeError } from "@/lib/errors";
-import { formatCount } from "@/lib/copy-utils";
 
 import { requireOrgScope } from "./utils";
 
@@ -19,6 +29,103 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
+interface ApplicationProductRow {
+  applicationId: string;
+  biocharProductId: string;
+  linkedProductionRunId: string | null;
+  biocharAppliedTons: number;
+}
+
+interface ProductSourceAllocationRow {
+  biocharProductId: string;
+  productionRunId: string;
+  allocatedWetMassKg: number;
+}
+
+/**
+ * Split each physical application's applied wet mass across the runs that
+ * supplied its product. Allocation rows are authoritative; the legacy product
+ * link is used only when a product has no source-allocation rows.
+ */
+export function projectApplicationsAcrossSourceAllocations(
+  applicationRows: ApplicationProductRow[],
+  allocationRows: ProductSourceAllocationRow[],
+  requestedRunIds: string[],
+): ApplicationForRun[] {
+  const requestedRunIdSet = new Set(requestedRunIds);
+  const allocationsByProductId = new Map<
+    string,
+    ProductSourceAllocationRow[]
+  >();
+  for (const allocation of allocationRows) {
+    const productAllocations =
+      allocationsByProductId.get(allocation.biocharProductId) ?? [];
+    productAllocations.push(allocation);
+    allocationsByProductId.set(
+      allocation.biocharProductId,
+      productAllocations,
+    );
+  }
+
+  const projectedRows = applicationRows.flatMap(
+    (application): ApplicationForRun[] => {
+      const allocations = [
+        ...(allocationsByProductId.get(application.biocharProductId) ?? []),
+      ].sort((left, right) =>
+        left.productionRunId.localeCompare(right.productionRunId),
+      );
+
+      if (allocations.length === 0) {
+        const productionRunId = application.linkedProductionRunId;
+        return productionRunId && requestedRunIdSet.has(productionRunId)
+          ? [{
+              applicationId: application.applicationId,
+              productionRunId,
+              biocharAppliedTons: application.biocharAppliedTons,
+            }]
+          : [];
+      }
+
+      const totalAllocatedWetMassKg = allocations.reduce(
+        (total, allocation) =>
+          total + allocation.allocatedWetMassKg,
+        0,
+      );
+      if (totalAllocatedWetMassKg <= 0) {
+        if (application.biocharAppliedTons === 0) return [];
+        throw new SafeError(
+          `Application ${application.applicationId} cannot be attributed because its biochar product has zero allocated wet mass.`,
+        );
+      }
+
+      let remainingAppliedTons = application.biocharAppliedTons;
+      return allocations.flatMap((allocation, index) => {
+        const biocharAppliedTons =
+          index === allocations.length - 1
+            ? remainingAppliedTons
+            : application.biocharAppliedTons *
+              (allocation.allocatedWetMassKg /
+                totalAllocatedWetMassKg);
+        remainingAppliedTons -= biocharAppliedTons;
+
+        return requestedRunIdSet.has(allocation.productionRunId)
+          ? [{
+              applicationId: application.applicationId,
+              productionRunId: allocation.productionRunId,
+              biocharAppliedTons,
+            }]
+          : [];
+      });
+    },
+  );
+
+  return projectedRows.sort(
+    (left, right) =>
+      left.applicationId.localeCompare(right.applicationId) ||
+      left.productionRunId.localeCompare(right.productionRunId),
+  );
+}
+
 async function getApplicationsForRunsWithExecutor(
   ctx: OrgContext,
   executor: DbTransaction | typeof db,
@@ -27,10 +134,47 @@ async function getApplicationsForRunsWithExecutor(
   const ids = unique(runIds);
   if (ids.length === 0) return [];
 
-  const rows = await executor
+  const allocationForRequestedRun = executor
+    .select({ value: sql`1` })
+    .from(biocharProductSourceAllocations)
+    .where(
+      and(
+        eq(
+          biocharProductSourceAllocations.biocharProductId,
+          biocharProducts.id,
+        ),
+        eq(
+          biocharProductSourceAllocations.organizationId,
+          ctx.organizationId,
+        ),
+        inArray(
+          biocharProductSourceAllocations.productionRunId,
+          ids,
+        ),
+      ),
+    );
+  const anySourceAllocation = executor
+    .select({ value: sql`1` })
+    .from(biocharProductSourceAllocations)
+    .where(
+      and(
+        eq(
+          biocharProductSourceAllocations.biocharProductId,
+          biocharProducts.id,
+        ),
+        eq(
+          biocharProductSourceAllocations.organizationId,
+          ctx.organizationId,
+        ),
+      ),
+    );
+
+  const applicationRows = await executor
     .select({
       applicationId: applications.id,
-      productionRunId: biocharProducts.linkedProductionRunId,
+      biocharProductId: biocharProducts.id,
+      linkedProductionRunId:
+        biocharProducts.linkedProductionRunId,
       biocharAppliedTons: applications.biocharAppliedTons,
     })
     .from(applications)
@@ -44,37 +188,48 @@ async function getApplicationsForRunsWithExecutor(
       ),
     )
     .where(and(
-      inArray(biocharProducts.linkedProductionRunId, ids),
+      or(
+        exists(allocationForRequestedRun),
+        and(
+          notExists(anySourceAllocation),
+          inArray(biocharProducts.linkedProductionRunId, ids),
+        ),
+      ),
       eq(applications.organizationId, ctx.organizationId),
     ));
 
-  const runIdsByApplicationId = new Map<string, Set<string>>();
-  for (const row of rows) {
-    if (!row.productionRunId) continue;
-    const appRunIds = runIdsByApplicationId.get(row.applicationId) ?? new Set();
-    appRunIds.add(row.productionRunId);
-    runIdsByApplicationId.set(row.applicationId, appRunIds);
-  }
+  const productIds = unique(
+    applicationRows.map((row) => row.biocharProductId),
+  );
+  const allocationRows = productIds.length === 0
+    ? []
+    : await executor
+        .select({
+          biocharProductId:
+            biocharProductSourceAllocations.biocharProductId,
+          productionRunId:
+            biocharProductSourceAllocations.productionRunId,
+          allocatedWetMassKg:
+            biocharProductSourceAllocations.allocatedWetMassKg,
+        })
+        .from(biocharProductSourceAllocations)
+        .where(
+          and(
+            inArray(
+              biocharProductSourceAllocations.biocharProductId,
+              productIds,
+            ),
+            eq(
+              biocharProductSourceAllocations.organizationId,
+              ctx.organizationId,
+            ),
+          ),
+        );
 
-  const multiRunApplicationIds = Array.from(runIdsByApplicationId.entries())
-    .filter(([, appRunIds]) => appRunIds.size > 1)
-    .map(([applicationId]) => applicationId);
-  if (multiRunApplicationIds.length > 0) {
-    throw new SafeError(
-      `${formatCount(multiRunApplicationIds.length, "Application")} ${multiRunApplicationIds.length === 1 ? "is" : "are"} linked to multiple production runs. Check the linked biochar products.`,
-    );
-  }
-
-  return rows.flatMap((row) =>
-    row.productionRunId
-      ? [
-          {
-            applicationId: row.applicationId,
-            productionRunId: row.productionRunId,
-            biocharAppliedTons: row.biocharAppliedTons,
-          },
-        ]
-      : [],
+  return projectApplicationsAcrossSourceAllocations(
+    applicationRows,
+    allocationRows,
+    ids,
   );
 }
 

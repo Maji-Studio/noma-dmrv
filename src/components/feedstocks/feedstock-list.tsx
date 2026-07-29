@@ -622,6 +622,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
               <MoistureSplit
                 wetMassKg={sideSheetEntity.massWetKg}
                 moisturePercent={sideSheetEntity.moistureContentPercent}
+                dryMassKg={sideSheetEntity.massDryKg}
                 materialLabel="Feedstock"
               />
             ),

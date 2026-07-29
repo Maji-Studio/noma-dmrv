@@ -99,6 +99,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
           feedstockId: seededData.feedstock.id,
           feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
           biocharStorageLocationId: seededData.biocharStorageLocation.id,
+          productStorageLocationId: seededData.productStorageLocation.id,
           customerId: seededData.customer.id,
           customerLocationId: seededData.customerLocation.id,
           vehicleId: seededData.vehicle.id,

@@ -49,10 +49,11 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import { resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   formatMoisturePercent,
+  formatWetDryMass,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
   WET_MASS_FIELD_LABEL,
@@ -563,7 +564,16 @@ export function ProductionRunList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
         <StatCard title="Total Runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
-        <StatCard title="Biochar Output" value={`${((statsData?.totalBiocharKg ?? 0) / 1000).toFixed(1)} t`} icon={<LeafIcon size={24} weight="bold" />} description="Total biochar produced" isLoading={statsLoading} />
+        <StatCard
+          title="Biochar Output"
+          value={formatWetDryMass({
+            wetKg: statsData?.totalBiocharKg ?? 0,
+            dryKg: statsData ? statsData.totalBiocharDryKg : 0,
+          })}
+          icon={<LeafIcon size={24} weight="bold" />}
+          description="Total biochar produced"
+          isLoading={statsLoading}
+        />
         <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} description="Currently active runs" isLoading={statsLoading} />
         <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} description="Finished production runs" isLoading={statsLoading} />
       </div>
@@ -635,7 +645,7 @@ export function ProductionRunList() {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.code}
+                  {formatDateRange(batch.startDate, batch.endDate)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -709,7 +719,10 @@ export function ProductionRunList() {
             title: "Feedstock & processing",
             fields: [
               buildProductionRunFeedstockDetailField(sideSheetEntity.feedstocks),
-              { label: "Source bin", value: sideSheetEntity.feedstockStorageLocationCode },
+              {
+                label: "Source bin",
+                value: sideSheetEntity.feedstockStorageLocationName,
+              },
               { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Feedstock"), ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: formatMassKg(sideSheetEntity.feedstockWetMassKg) },
               { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Feedstock"), ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.feedstockMoisturePercent) },
               { label: "Feed rate (kg/hr)", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
@@ -719,6 +732,7 @@ export function ProductionRunList() {
               <MoistureSplit
                 wetMassKg={sideSheetEntity.feedstockWetMassKg}
                 moisturePercent={sideSheetEntity.feedstockMoisturePercent}
+                dryMassKg={sideSheetEntity.feedstockMassDryKg}
                 materialLabel="Feedstock"
               />
             ),
@@ -726,7 +740,10 @@ export function ProductionRunList() {
           {
             title: "Output",
             fields: [
-              { label: "Biochar storage", value: sideSheetEntity.biocharStorageLocationCode },
+              {
+                label: "Biochar storage",
+                value: sideSheetEntity.biocharStorageLocationName,
+              },
               { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharOutputKg"), value: formatMassKg(sideSheetEntity.biocharOutputKg) },
               { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.biocharMoisturePercent) },
             ],
@@ -734,6 +751,7 @@ export function ProductionRunList() {
               <MoistureSplit
                 wetMassKg={sideSheetEntity.biocharOutputKg}
                 moisturePercent={sideSheetEntity.biocharMoisturePercent}
+                dryMassKg={sideSheetEntity.biocharDryMassKg}
                 materialLabel="Biochar"
               />
             ),

@@ -88,10 +88,10 @@ export function RunPicker({
           {selected ? (
             <>
               <span className={cn(CODE_CLASS, "text-[var(--color-text-primary)]")}>
-                {selected.code}
+                {formatDate(selected.date)}
               </span>
               <span className="min-w-0 truncate body-caption text-[var(--color-text-tertiary)]">
-                {formatDate(selected.date)}
+                {applicationCount(selected)}
               </span>
             </>
           ) : (
@@ -170,7 +170,7 @@ export function RunPicker({
                               : "text-[var(--color-text-primary)]"
                           )}
                         >
-                          {run.code}
+                          {formatDate(run.date)}
                         </span>
                         {isSelected ? (
                           <CheckIcon
@@ -182,7 +182,7 @@ export function RunPicker({
                         ) : null}
                       </span>
                       <span className="truncate body-caption text-[var(--color-text-secondary)]">
-                        {formatDate(run.date)} · {applicationCount(run)}
+                        {applicationCount(run)}
                       </span>
                     </span>
                   </DropdownMenu.Item>

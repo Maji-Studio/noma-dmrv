@@ -22,6 +22,7 @@ import {
 } from "@/db/schema";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { requireOrgScope } from "./utils";
 import {
   getChainOfCustodyData,
@@ -245,6 +246,7 @@ function buildGeoNodes(
 ): ChainGeoNode[] {
   const { facilityGps, applicationGps, feedstockGpsById, legs } = inputs;
   const nodes: ChainGeoNode[] = [];
+  const sources = resolveChainSources(chain);
 
   const resolve = (
     kind: ChainGeoNodeKind,
@@ -282,10 +284,12 @@ function buildGeoNodes(
     };
   };
 
-  if (chain.reactor) {
-    nodes.push(
-      resolve("reactor", chain.reactor.id, chain.reactor.code, chain.reactor.identifier)
-    );
+  for (const reactor of new Map(
+    sources.flatMap((source) =>
+      source.reactor ? [[source.reactor.id, source.reactor] as const] : [],
+    ),
+  ).values()) {
+    nodes.push(resolve("reactor", reactor.id, reactor.code, reactor.identifier));
   }
 
   for (const feedstock of chain.feedstocks) {
@@ -304,9 +308,10 @@ function buildGeoNodes(
     );
   }
 
-  if (chain.productionRun) {
+  for (const source of sources) {
+    const productionRun = source.productionRun;
     nodes.push(
-      resolve("productionRun", chain.productionRun.id, chain.productionRun.code, null)
+      resolve("productionRun", productionRun.id, productionRun.code, null)
     );
   }
   if (chain.biocharProduct) {

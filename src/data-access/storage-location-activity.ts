@@ -9,8 +9,8 @@
  * "when did anything last happen here?" for a single bin, correlated to the
  * outer row, so the list can ORDER BY it before paginating.
  *
- * Both live off the same five sources on purpose. If they diverged, the board
- * would sort by one timestamp and print another.
+ * Both read the same inventory-event families on purpose. If they diverged,
+ * the board would sort by one timestamp and print another.
  */
 
 import { sql, type SQL } from "drizzle-orm";
@@ -57,10 +57,18 @@ export function storageLocationLastActivityAt(organizationId: string): SQL<Date 
 
       SELECT ${biocharProducts.createdAt}
       FROM ${biocharProducts}
+      WHERE ${biocharProducts.organizationId} = ${organizationId}
+        AND ${biocharProducts.sourceBiocharStorageLocationId} = ${storageLocations.id}
+
+      UNION ALL
+
+      SELECT ${biocharProducts.createdAt}
+      FROM ${biocharProducts}
       JOIN ${productionRuns}
         ON ${biocharProducts.linkedProductionRunId} = ${productionRuns.id}
         AND ${productionRuns.organizationId} = ${organizationId}
       WHERE ${biocharProducts.organizationId} = ${organizationId}
+        AND ${biocharProducts.sourceBiocharStorageLocationId} IS NULL
         AND ${productionRuns.biocharStorageLocationId} = ${storageLocations.id}
 
       UNION ALL

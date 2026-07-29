@@ -21,17 +21,34 @@ import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
-
+import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
 
 function formatStockSubtitle(
-  productCode: string,
   formulationName: string | null,
   massKg: number | null,
-  deliveredKg: number,
+  waterAddedKg: number | null,
+  moisturePercent: number | null,
+  deliveredWetKg: number,
+  deliveredDryKg: number,
 ): string {
-  const remaining = Math.max(0, (massKg ?? 0) - deliveredKg);
+  const remainingWetKg = Math.max(
+    0,
+    (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg,
+  );
+  const productDryKg = splitWetMass(massKg, moisturePercent)?.dryKg;
+  const remainingDryKg =
+    productDryKg == null
+      ? null
+      : Math.max(0, productDryKg - deliveredDryKg);
   const productLabel = formulationName ?? PURE_BIOCHAR_LABEL;
-  return `${productLabel} · ${Math.round(remaining).toLocaleString()} kg available · batch ${productCode}`;
+  return `${productLabel} · ${formatWetDryMass({
+    wetKg: remainingWetKg,
+    dryKg: remainingDryKg,
+    wetLabel: "Wet biochar product",
+    dryLabel: "Dry biochar",
+    separator: " | ",
+    unitSpacing: "compact",
+  })} available`;
 }
 
 // Total delivered wet mass per product batch. A delivery's product is its own
@@ -46,6 +63,9 @@ function buildDeliveredMassAggregate(ctx: OrgContext) {
       ),
     totalDeliveredKg: sumNumeric(deliveries.deliveredWetMassKg).as(
       "total_delivered_kg",
+    ),
+    totalDeliveredDryKg: sumNumeric(deliveries.massDryKg).as(
+      "total_delivered_dry_kg",
     ),
   })
   .from(deliveries)
@@ -76,30 +96,43 @@ function buildSelection(
     productCode: biocharProducts.code,
     formulationName: formulations.name,
     massKg: biocharProducts.massKg,
+    waterAddedKg: biocharProducts.waterAddedKg,
+    moisturePercent: biocharProducts.moistureContentPercent,
     totalDeliveredKg: numericAggregate(
       sql<number>`COALESCE(${deliveredMassAggregate.totalDeliveredKg}, 0)`,
+    ),
+    totalDeliveredDryKg: numericAggregate(
+      sql<number>`COALESCE(${deliveredMassAggregate.totalDeliveredDryKg}, 0)`,
     ),
   };
 }
 
-function toEntityOption(r: {
+export function toBiocharProductEntityOption(r: {
   id: string;
   code: string | null;
   name: string | null;
   productCode: string;
   formulationName: string | null;
   massKg: number | null;
+  waterAddedKg: number | null;
+  moisturePercent: number | null;
   totalDeliveredKg: number;
+  totalDeliveredDryKg: number;
 }): EntityOption {
   return {
     id: r.id,
     code: r.code ?? r.productCode,
-    name: r.name ?? r.productCode,
+    name: r.name ?? r.formulationName ?? PURE_BIOCHAR_LABEL,
+    mass: {
+      moisturePercent: r.moisturePercent,
+    },
     subtitle: formatStockSubtitle(
-      r.productCode,
       r.formulationName,
       r.massKg,
+      r.waterAddedKg,
+      r.moisturePercent,
       r.totalDeliveredKg,
+      r.totalDeliveredDryKg,
     ),
   };
 }
@@ -162,7 +195,7 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
     .orderBy(desc(biocharProducts.productionDate))
     .limit(limit);
 
-  return results.map(toEntityOption);
+  return results.map(toBiocharProductEntityOption);
 }
 
 export async function getBiocharProductEntityById(
@@ -198,5 +231,5 @@ export async function getBiocharProductEntityById(
 
   if (!result) return null;
 
-  return toEntityOption(result);
+  return toBiocharProductEntityOption(result);
 }

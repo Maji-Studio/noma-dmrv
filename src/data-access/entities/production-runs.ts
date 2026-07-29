@@ -2,24 +2,53 @@
  * Production-run options for searchable entity selection.
  */
 
-import { ilike, eq, and, isNull, type SQL } from "drizzle-orm";
+import {
+  ilike,
+  eq,
+  and,
+  isNull,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { db } from "@/db";
-import { productionRuns, facilities, storageLocations } from "@/db/schema";
+import { productionRuns, storageLocations } from "@/db/schema";
 import { productionRunDateExpr } from "@/data-access/production-runs/date-expr";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatDate } from "@/lib/format-utils";
+import { formatWetDryMass } from "@/lib/mass-moisture";
+import { formatProductionRunStatus } from "@/schemas/production-runs";
 import { requireOrgScope } from "../utils";
 
-// Deterministic integer formatting. Bare `Number.prototype.toLocaleString()`
-// follows the server's locale (thousands separator), so the label could differ
-// between environments — pin the locale.
-const INTEGER_FORMATTER = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 0,
-});
+interface ProductionRunOptionRow {
+  id: string;
+  code: string;
+  date: string | null;
+  status: (typeof productionRuns.status.enumValues)[number];
+  biocharOutputKg: number | null;
+  biocharDryMassKg: number | null;
+  biocharStorageName: string | null;
+}
 
-function formatRunDate(date: string | null, fallback: string): string {
-  return date ? formatDate(date) : fallback;
+export function toProductionRunEntityOption(
+  row: ProductionRunOptionRow,
+): EntityOption {
+  return {
+    id: row.id,
+    code: row.code,
+    name: formatDate(row.date),
+    subtitle: [
+      formatProductionRunStatus(row.status),
+      row.biocharStorageName ?? undefined,
+      formatWetDryMass({
+        wetKg: row.biocharOutputKg,
+        dryKg: row.biocharDryMassKg,
+      }),
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  };
 }
 
 export async function getProductionRunsEntity(ctx: OrgContext, params: {
@@ -43,7 +72,13 @@ export async function getProductionRunsEntity(ctx: OrgContext, params: {
 
   if (search) {
     const searchPattern = `%${search}%`;
-    conditions.push(ilike(productionRuns.code, searchPattern));
+    conditions.push(
+      or(
+        ilike(productionRuns.code, searchPattern),
+        ilike(storageLocations.name, searchPattern),
+        sql`${productionRunDateExpr()}::text ILIKE ${searchPattern}`,
+      )!,
+    );
   }
 
   const whereClause = and(...conditions);
@@ -54,18 +89,11 @@ export async function getProductionRunsEntity(ctx: OrgContext, params: {
       code: productionRuns.code,
       date: productionRunDateExpr(),
       status: productionRuns.status,
-      facilityName: facilities.name,
       biocharOutputKg: productionRuns.biocharOutputKg,
+      biocharDryMassKg: productionRuns.biocharDryMassKg,
       biocharStorageName: storageLocations.name,
     })
     .from(productionRuns)
-    .leftJoin(
-      facilities,
-      and(
-        eq(productionRuns.facilityId, facilities.id),
-        eq(facilities.organizationId, ctx.organizationId),
-      ),
-    )
     .leftJoin(
       storageLocations,
       and(
@@ -76,16 +104,7 @@ export async function getProductionRunsEntity(ctx: OrgContext, params: {
     .where(and(eq(productionRuns.organizationId, ctx.organizationId), whereClause))
     .limit(limit);
 
-  return results.map((r) => ({
-    id: r.id,
-    code: r.code,
-    name: formatRunDate(r.date, r.code),
-    subtitle: [
-      r.facilityName ? `${r.facilityName} · ${r.status}` : r.status,
-      r.biocharOutputKg !== null ? `${INTEGER_FORMATTER.format(Math.round(r.biocharOutputKg))} kg biochar` : undefined,
-      r.biocharStorageName ? `→ ${r.biocharStorageName}` : undefined,
-    ].filter(Boolean).join(" · "),
-  }));
+  return results.map(toProductionRunEntityOption);
 }
 
 export async function getProductionRunEntityById(ctx: OrgContext, id: string): Promise<EntityOption | null> {
@@ -96,18 +115,11 @@ export async function getProductionRunEntityById(ctx: OrgContext, id: string): P
       code: productionRuns.code,
       date: productionRunDateExpr(),
       status: productionRuns.status,
-      facilityName: facilities.name,
       biocharOutputKg: productionRuns.biocharOutputKg,
+      biocharDryMassKg: productionRuns.biocharDryMassKg,
       biocharStorageName: storageLocations.name,
     })
     .from(productionRuns)
-    .leftJoin(
-      facilities,
-      and(
-        eq(productionRuns.facilityId, facilities.id),
-        eq(facilities.organizationId, ctx.organizationId),
-      ),
-    )
     .leftJoin(
       storageLocations,
       and(
@@ -120,14 +132,5 @@ export async function getProductionRunEntityById(ctx: OrgContext, id: string): P
 
   if (!result) return null;
 
-  return {
-    id: result.id,
-    code: result.code,
-    name: formatRunDate(result.date, result.code),
-    subtitle: [
-      result.facilityName ? `${result.facilityName} · ${result.status}` : result.status,
-      result.biocharOutputKg !== null ? `${INTEGER_FORMATTER.format(Math.round(result.biocharOutputKg))} kg biochar` : undefined,
-      result.biocharStorageName ? `→ ${result.biocharStorageName}` : undefined,
-    ].filter(Boolean).join(" · "),
-  };
+  return toProductionRunEntityOption(result);
 }

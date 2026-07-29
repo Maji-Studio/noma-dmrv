@@ -186,7 +186,9 @@ export async function getProductionRuns(
       reactorIdentifier: reactors.identifier,
       operatorName: operators.name,
       biocharStorageLocationCode: biocharStorage.code,
+      biocharStorageLocationName: biocharStorage.name,
       feedstockStorageLocationCode: feedstockStorage.code,
+      feedstockStorageLocationName: feedstockStorage.name,
     })
     .from(productionRuns)
     .leftJoin(facilities, and(eq(productionRuns.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
@@ -246,7 +248,9 @@ export async function getProductionRuns(
     return {
       ...run,
       biocharStorageLocationCode: run.biocharStorageLocationCode ?? null,
+      biocharStorageLocationName: run.biocharStorageLocationName ?? null,
       feedstockStorageLocationCode: run.feedstockStorageLocationCode ?? null,
+      feedstockStorageLocationName: run.feedstockStorageLocationName ?? null,
       feedstocks: runFeedstocks,
       totalFeedstockMassKg: runFeedstocks.reduce((s, f) => s + f.massUsedKg, 0),
       readingsCount: readingCountByRunId.get(run.id) ?? 0,
@@ -355,17 +359,23 @@ export async function getProductionRunById(
       getProductionRunFeedstocks(ctx, productionRunId),
       run.biocharStorageLocationId
         ? db
-            .select({ code: storageLocations.code })
+            .select({
+              code: storageLocations.code,
+              name: storageLocations.name,
+            })
             .from(storageLocations)
             .where(and(eq(storageLocations.id, run.biocharStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
-            .then(([loc]) => loc?.code ?? null)
+            .then(([loc]) => loc ?? null)
         : null,
       run.feedstockStorageLocationId
         ? db
-            .select({ code: storageLocations.code })
+            .select({
+              code: storageLocations.code,
+              name: storageLocations.name,
+            })
             .from(storageLocations)
             .where(and(eq(storageLocations.id, run.feedstockStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
-            .then(([loc]) => loc?.code ?? null)
+            .then(([loc]) => loc ?? null)
         : null,
       db
         .select({ readingCount: count() })
@@ -376,8 +386,12 @@ export async function getProductionRunById(
 
   return {
     ...run,
-    biocharStorageLocationCode: biocharStorageLocation,
-    feedstockStorageLocationCode: feedstockStorageLocation,
+    biocharStorageLocationCode: biocharStorageLocation?.code ?? null,
+    biocharStorageLocationName: biocharStorageLocation?.name ?? null,
+    feedstockStorageLocationCode:
+      feedstockStorageLocation?.code ?? null,
+    feedstockStorageLocationName:
+      feedstockStorageLocation?.name ?? null,
     feedstocks: runFeedstocks,
     totalFeedstockMassKg: runFeedstocks.reduce((sum, f) => sum + f.massUsedKg, 0),
     readingsCount,
@@ -413,6 +427,13 @@ export async function getProductionRunStats(
   const [stats] = await db
     .select({
       totalBiocharKg: sum(productionRuns.biocharOutputKg),
+      totalBiocharDryKg: sum(productionRuns.biocharDryMassKg),
+      unresolvedBiocharDryCount: sql<number>`
+        COUNT(*) FILTER (
+          WHERE COALESCE(${productionRuns.biocharOutputKg}, 0) > 0
+            AND ${productionRuns.biocharDryMassKg} IS NULL
+        )
+      `,
     })
     .from(productionRuns)
     .where(completedWhereClause);
@@ -444,6 +465,10 @@ export async function getProductionRunStats(
   return {
     totalRuns: statusCounts.reduce((total, row) => total + Number(row.count), 0),
     totalBiocharKg: Number(stats.totalBiocharKg) || 0,
+    totalBiocharDryKg:
+      Number(stats.unresolvedBiocharDryCount) > 0
+        ? null
+        : Number(stats.totalBiocharDryKg) || 0,
     totalFeedstockKg: Number(feedstockStats.totalFeedstockKg) || 0,
     runningCount: statusMap["running"] ?? 0,
     completedCount: statusMap["complete"] ?? 0,

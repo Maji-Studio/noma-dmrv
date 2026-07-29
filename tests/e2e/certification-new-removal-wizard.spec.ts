@@ -147,6 +147,7 @@ test.describe("Certification — New-Removal wizard", () => {
           feedstockId: seededData.feedstock.id,
           feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
           biocharStorageLocationId: seededData.biocharStorageLocation.id,
+          productStorageLocationId: seededData.productStorageLocation.id,
           customerId: seededData.customer.id,
           customerLocationId: seededData.customerLocation.id,
           vehicleId: seededData.vehicle.id,

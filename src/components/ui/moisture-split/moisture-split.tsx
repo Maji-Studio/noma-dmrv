@@ -31,6 +31,7 @@ import {
   describeMassSplit,
   formatMoisturePercent,
   formatSplitMass,
+  formatWetDryMass,
   splitWetMass,
   type MassSplit,
 } from "@/lib/mass-moisture";
@@ -46,12 +47,18 @@ interface MoistureSplitProps {
   wetMassKg: number | null | undefined;
   /** Moisture on a wet basis, 0–100. */
   moisturePercent: number | null | undefined;
+  /** Stored authoritative dry mass, when the entity carries one. */
+  dryMassKg?: number | null;
   variant?: MoistureSplitVariant;
   /**
    * What the mass is, when the surrounding context does not already say it
    * ("Biochar", "Feedstock"). Prefixes the dry-mass label.
    */
   materialLabel?: string;
+  /** Override the wet figure label for a more specific surface. */
+  wetLabel?: string;
+  /** Override the dry figure label for a more specific surface. */
+  dryLabel?: string;
   /**
    * Replaces the default footnote. Pass the provenance when the moisture came
    * from somewhere the operator did not just type (e.g. "Moisture from delivery
@@ -84,6 +91,62 @@ function segmentWidths(split: MassSplit): { dry: number; water: number } {
     return { dry: MIN_VISIBLE_SEGMENT_PERCENT, water: PERCENT_SCALE - MIN_VISIBLE_SEGMENT_PERCENT };
   }
   return { dry: dryPercent, water: PERCENT_SCALE - dryPercent };
+}
+
+function resolveDisplaySplit(
+  wetMassKg: number | null | undefined,
+  moisturePercent: number | null | undefined,
+  dryMassKg: number | null | undefined,
+): MassSplit | null {
+  if (
+    wetMassKg != null &&
+    dryMassKg != null &&
+    Number.isFinite(wetMassKg) &&
+    Number.isFinite(dryMassKg) &&
+    wetMassKg >= 0 &&
+    dryMassKg >= 0 &&
+    dryMassKg <= wetMassKg
+  ) {
+    const waterKg = wetMassKg - dryMassKg;
+    return {
+      wetKg: wetMassKg,
+      dryKg: dryMassKg,
+      waterKg,
+      moisturePercent:
+        wetMassKg > 0 ? (waterKg / wetMassKg) * PERCENT_SCALE : 0,
+      dryFraction: wetMassKg > 0 ? dryMassKg / wetMassKg : 1,
+    };
+  }
+  return splitWetMass(wetMassKg, moisturePercent);
+}
+
+function qualifyFigureLabel(
+  label: "Wet" | "Dry",
+  materialLabel: string | undefined,
+): string {
+  if (!materialLabel) return label;
+  return `${label} ${materialLabel.charAt(0).toLowerCase()}${materialLabel.slice(1)}`;
+}
+
+function formatVisualizationMass({
+  split,
+  materialLabel,
+  wetLabel,
+  dryLabel,
+}: {
+  split: MassSplit;
+  materialLabel?: string;
+  wetLabel?: string;
+  dryLabel?: string;
+}): string {
+  return formatWetDryMass({
+    wetKg: split.wetKg,
+    dryKg: split.dryKg,
+    wetLabel: wetLabel ?? qualifyFigureLabel("Wet", materialLabel),
+    dryLabel: dryLabel ?? qualifyFigureLabel("Dry", materialLabel),
+    separator: " | ",
+    unitSpacing: "compact",
+  });
 }
 
 function SplitBar({ split, height }: { split: MassSplit; height: string }) {
@@ -121,14 +184,23 @@ function UnresolvedBar({ height }: { height: string }) {
 export function MoistureSplit({
   wetMassKg,
   moisturePercent,
+  dryMassKg,
   variant = "detail",
   materialLabel,
+  wetLabel,
+  dryLabel,
   note,
   hideWhenIncomplete = false,
   className = "",
 }: MoistureSplitProps) {
-  const split = splitWetMass(wetMassKg, moisturePercent);
-  const dryLabel = materialLabel ? `${materialLabel} dry mass` : "Dry mass";
+  const split = resolveDisplaySplit(
+    wetMassKg,
+    moisturePercent,
+    dryMassKg,
+  );
+  const unresolvedDryLabel =
+    dryLabel ??
+    (materialLabel ? `${materialLabel} dry mass` : "Dry mass");
 
   if (!split) {
     if (hideWhenIncomplete) return null;
@@ -151,7 +223,7 @@ export function MoistureSplit({
       <div className={`flex flex-col gap-6 ${className}`}>
         <UnresolvedBar height={variant === "compact" ? "h-8" : "h-12"} />
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          {missing} not recorded. {dryLabel} cannot be calculated.
+          {missing} not recorded. {unresolvedDryLabel} cannot be calculated.
         </p>
       </div>
     );
@@ -161,10 +233,13 @@ export function MoistureSplit({
     return (
       <span className={`body-caption text-[var(--color-text-secondary)] ${className}`}>
         <span className="font-mono text-[var(--color-text-primary)]">
-          {formatSplitMass(split.dryKg)}
-        </span>{" "}
-        dry ·{" "}
-        <span className="font-mono">{formatMoisturePercent(split.moisturePercent)}</span> moisture
+          {formatVisualizationMass({
+            split,
+            materialLabel,
+            wetLabel,
+            dryLabel,
+          })}
+        </span>
       </span>
     );
   }
@@ -172,12 +247,16 @@ export function MoistureSplit({
   if (variant === "compact") {
     return (
       <div className={`flex flex-col gap-6 ${className}`}>
+        <p className="body-caption font-mono text-[var(--color-text-primary)]">
+          {formatVisualizationMass({
+            split,
+            materialLabel,
+            wetLabel,
+            dryLabel,
+          })}
+        </p>
         <SplitBar split={split} height="h-8" />
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          <span className="font-mono text-[var(--color-text-primary)]">
-            {formatSplitMass(split.dryKg)}
-          </span>{" "}
-          dry of {formatSplitMass(split.wetKg)} wet ·{" "}
           {formatMoisturePercent(split.moisturePercent)} moisture
         </p>
       </div>
@@ -186,31 +265,26 @@ export function MoistureSplit({
 
   return (
     <div className={`flex flex-col gap-8 ${className}`}>
-      <div className="flex items-baseline justify-between gap-16">
-        <div className="flex items-baseline gap-8">
-          <span className="body-caption text-[var(--color-text-tertiary)]">{dryLabel}</span>
-          <span
-            className="font-mono body-medium font-medium text-[var(--color-text-primary)]"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {formatSplitMass(split.dryKg)}
-          </span>
-        </div>
-        <div className="flex items-baseline gap-8">
-          <span className="body-caption text-[var(--color-text-tertiary)]">Moisture</span>
-          <span className="font-mono body-small text-[var(--color-text-secondary)]">
-            {formatMoisturePercent(split.moisturePercent)}
-          </span>
-        </div>
-      </div>
+      <p
+        className="font-mono body-small font-medium text-[var(--color-text-primary)]"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {formatVisualizationMass({
+          split,
+          materialLabel,
+          wetLabel,
+          dryLabel,
+        })}
+      </p>
 
       <SplitBar split={split} height="h-12" />
 
       <p className="body-caption text-[var(--color-text-tertiary)]">
         {note ?? (
           <>
-            {formatSplitMass(split.wetKg)} wet · {formatSplitMass(split.waterKg)} water
+            Moisture: {formatMoisturePercent(split.moisturePercent)} · Water:{" "}
+            {formatSplitMass(split.waterKg)}
           </>
         )}
       </p>

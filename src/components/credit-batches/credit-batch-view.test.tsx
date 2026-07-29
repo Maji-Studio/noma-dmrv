@@ -15,6 +15,8 @@ function makeRun(
     code: `PR-26-00${index}`,
     date: `2026-05-${12 + index}`,
     status,
+    biocharStorageName: "Moshi Raw Biochar Curing Pad",
+    biocharOutputKg: status === "complete" ? 950 : null,
     biocharDryMassKg: status === "complete" ? 900 : null,
     feedstockMassDryKg: null,
     dieselOperationLiters: null,
@@ -157,9 +159,11 @@ describe("credit batch production-run preview", () => {
     );
     const html = renderToStaticMarkup(<>{runsSection?.content}</>);
 
-    expect(html).toContain("PR-26-001");
-    expect(html).toContain("PR-26-002");
-    expect(html).toContain("PR-26-003");
+    expect(html).not.toContain("PR-26-001");
+    expect(html).not.toContain("PR-26-002");
+    expect(html).not.toContain("PR-26-003");
+    expect(html).toContain("May 13, 2026");
+    expect(html).toContain("Moshi Raw Biochar Curing Pad");
     expect(html).toContain("Draft");
     expect(html).toContain("Running");
     expect(html).not.toContain('data-status="complete"');

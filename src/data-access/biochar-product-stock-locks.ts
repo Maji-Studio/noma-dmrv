@@ -35,6 +35,7 @@ type LockedBiocharProduct = Pick<
   | "facilityId"
   | "formulationId"
   | "biocharRatio"
+  | "sourceBiocharStorageLocationId"
   | "linkedProductionRunId"
   | "storageLocationId"
   | "massKg"
@@ -331,6 +332,7 @@ export async function lockDeleteBiocharProductStock(
   if ((snapshot.massKg ?? 0) > 0) {
     await lockBinStocks(ctx, tx, [
       snapshot.storageLocationId,
+      snapshot.sourceBiocharStorageLocationId,
       sourceRunSnapshot?.storageLocationId,
     ]);
   }
@@ -350,6 +352,8 @@ export async function lockDeleteBiocharProductStock(
   assertStockLockSnapshot(
     locked.massKg === snapshot.massKg &&
       locked.storageLocationId === snapshot.storageLocationId &&
+      locked.sourceBiocharStorageLocationId ===
+        snapshot.sourceBiocharStorageLocationId &&
       locked.linkedProductionRunId === snapshot.linkedProductionRunId,
   );
 
