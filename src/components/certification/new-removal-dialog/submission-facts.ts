@@ -171,6 +171,21 @@ function reportingWindowLabel(
   return formatDateRange(window.startedOn, window.completedOn);
 }
 
+/**
+ * The compiled count is authoritative, but the context carries the same mirror
+ * totals. Falling back to them keeps the "uploads on submit" row on screen
+ * during a failed compilation, which is exactly when an operator is deciding
+ * whether the files are their problem.
+ */
+function pendingDocumentCount(
+  ctx: RemovalCertifyContext,
+  compilation: RemovalCompilationView | null,
+): number {
+  if (compilation) return compilation.review.pendingSourceCount ?? 0;
+  const { total, mirrored } = ctx.supportingDocuments;
+  return Math.max(total - mirrored, 0);
+}
+
 export function buildSubmissionFacts({
   ctx,
   compilation,
@@ -274,7 +289,7 @@ export function buildSubmissionFacts({
         batch.sampling === "sampled" ? "Sampled" : "Not sampled",
       ),
     ),
-    pendingDocuments: compilation?.review.pendingSourceCount ?? 0,
+    pendingDocuments: pendingDocumentCount(ctx, compilation),
     checksPassed,
     checksTotal: actionChecks.length,
     checksAttention,

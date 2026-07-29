@@ -70,6 +70,7 @@ const CONTEXT = {
   mapping: null,
   isProduction: false,
   submissionWarnings: [],
+  supportingDocuments: { total: 5, mirrored: 2 },
 } as unknown as RemovalCertifyContext;
 
 function check(
@@ -331,6 +332,12 @@ describe("buildSubmissionFacts panel data", () => {
   it("has no reporting window until the submission compiles", () => {
     expect(facts({ compilation: null })).toMatchObject({
       reportingWindowLabel: null,
+    });
+  });
+
+  it("still counts pending files when the submission did not compile", () => {
+    expect(facts({ compilation: null })).toMatchObject({
+      pendingDocuments: 3,
     });
   });
 
