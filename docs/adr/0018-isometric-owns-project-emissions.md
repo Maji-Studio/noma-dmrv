@@ -9,6 +9,14 @@ Status: accepted (2026-07-02)
 > (approved 2026-06-17, reconfirmed 2026-07-02):
 > [`docs/archive/plans/2026-06-17-remove-project-emissions-journal.md`](../archive/plans/2026-06-17-remove-project-emissions-journal.md).
 
+> **Amended 2026-07-29**: the scope guard now carries one named-component
+> carve-out — `miscellaneous/mass_based_ci_emissions/mass` is REMOVAL-scope
+> for the template component `Safety margin` only (per-tonne deduction that
+> scales with each removal's claimed biochar mass). `lookupPeriodInputTuple`
+> releases a period tuple only when the matching `INPUT_MAPPING` entry names
+> the component in `sourceByComponent`; everything else still fails closed
+> (`docs/isometric/changes.md`, 2026-07-29).
+
 ## Context
 
 ADR 0005 chose "Posture B": noma journals LCA-derived emission magnitudes per

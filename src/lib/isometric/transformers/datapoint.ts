@@ -57,6 +57,35 @@ export type InputMappingTable = Record<
   Record<string, Record<string, InputMappingEntry>>
 >;
 
+function ownValue<T>(
+  record: Readonly<Record<string, T>>,
+  key: string,
+): T | undefined {
+  return Object.prototype.hasOwnProperty.call(record, key)
+    ? record[key]
+    : undefined;
+}
+
+export function normalizeComponentDisplayName(
+  componentDisplayName: string | undefined,
+): string {
+  return (componentDisplayName ?? "").trim().toLowerCase();
+}
+
+function lookupThreeLevelValue<T>(
+  table: Readonly<
+    Record<string, Readonly<Record<string, Readonly<Record<string, T>>>>>
+  >,
+  firstKey: string,
+  secondKey: string,
+  thirdKey: string,
+): T | undefined {
+  const secondLevel = ownValue(table, firstKey);
+  if (!secondLevel) return undefined;
+  const thirdLevel = ownValue(secondLevel, secondKey);
+  return thirdLevel ? ownValue(thirdLevel, thirdKey) : undefined;
+}
+
 // Resolves each pyrolysis `fuel_usage_by_volume` component to its diesel source
 // by normalized (trimmed + lowercased) display name. The Dark Earth removal
 // template declares TWO such components — "Generator diesel usage"
@@ -71,6 +100,22 @@ const PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT: Readonly<
 > = {
   "generator diesel usage": "totalGensetDieselLitres",
   "startup diesel usage": "totalStartupDieselLitres",
+};
+
+// Resolves the miscellaneous `mass_based_ci_emissions` component to its mass
+// source by normalized display name. Only "Safety margin" is a REMOVAL-scope,
+// per-removal quantity. The active sandbox template currently has an observed
+// fixed `carbon_intensity` Datapoint of 20 kgCO2e/metric_ton
+// (`dtp_1KS4PMV99SBXX88K`, verified read-only 2026-07-29); that value is
+// registry-owned configuration, not a protocol requirement. noma submits only
+// the exact biochar dry mass this removal claims. Any OTHER miscellaneous
+// mass-based CI component is annually-sourced LCA overhead and stays
+// PROJECT-scope per ADR 0005/0018 - the PERIOD_INPUT_TUPLES guard still fires
+// for it (see lookupPeriodInputTuple).
+const MISCELLANEOUS_MASS_SOURCE_BY_COMPONENT: Readonly<
+  Record<string, keyof AggregatedProductionData>
+> = {
+  "safety margin": "totalBiocharDryMassKg",
 };
 
 export const INPUT_MAPPING: InputMappingTable = {
@@ -215,22 +260,41 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Five blueprint families that used to live here as zero stubs
+  miscellaneous: {
+    mass_based_ci_emissions: {
+      mass: {
+        // sourceByComponent is the ONLY resolver here - it doubles as the
+        // named carve-out key that releases this tuple from the PROJECT-scope
+        // guard. An unrecognized miscellaneous component never reaches this
+        // entry (the guard fires first) and would fail closed in
+        // resolveDatapointSource even if it did.
+        source: "totalBiocharDryMassKg",
+        sourceByComponent: MISCELLANEOUS_MASS_SOURCE_BY_COMPONENT,
+        unit: "kg",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass",
+        bucket: "stored",
+      },
+    },
+  },
+
+  // Four blueprint families that live only as PROJECT-scope inputs
   // (`staff-travel/distance_based_ci_emissions`,
   // `direct-emissions/ghg_direct_emissions` × 2 inputs,
-  // `biochar-storage/fuel_usage_by_volume`,
-  // `miscellaneous/mass_based_ci_emissions`) and two more under
+  // `biochar-storage/fuel_usage_by_volume`) and two more under
   // `sampling-required-for-mrv` moved to PROJECT scope as Project
-  // Components per ADR 0005. They are listed in PERIOD_INPUT_TUPLES below;
-  // a Removal Template that declares any of them as REMOVAL-scope trips
-  // the scope-conflict SafeError in buildCreateDatapointRequest.
+  // Components per ADR 0005. The miscellaneous family remains PROJECT-scope
+  // except for the explicitly named Safety margin component above. All tuples
+  // remain in PERIOD_INPUT_TUPLES below; a Removal Template that declares one
+  // without a named carve-out trips the scope-conflict SafeError in
+  // buildCreateDatapointRequest.
 
   // (The former `biomass-feedstock-sourcing` / `biomass-feedstock-processing`
   // `fuel_usage_by_volume` entries carried startup/plant diesel separately.
   // Issue #319 folded that diesel into the combined `pyrolysis /
   // fuel_usage_by_volume` datapoint above — keeping them would double-count.
-  // The previous `miscellaneous` zero-stub family moved to PROJECT scope per
-  // ADR 0005.)
+  // The previous `miscellaneous` zero-stub remains guarded for every component
+  // except the named Safety margin carve-out.)
 };
 
 export function lookupInputMapping(
@@ -238,7 +302,12 @@ export function lookupInputMapping(
   blueprintKey: string,
   inputKey: string,
 ): InputMappingEntry | undefined {
-  return INPUT_MAPPING[groupKey]?.[blueprintKey]?.[inputKey];
+  return lookupThreeLevelValue(
+    INPUT_MAPPING,
+    groupKey,
+    blueprintKey,
+    inputKey,
+  );
 }
 
 // Resolves the aggregated-source field for a mapping. Usually just
@@ -252,8 +321,8 @@ export function resolveDatapointSource(
   componentDisplayName: string | undefined,
 ): keyof AggregatedProductionData {
   if (!mapping.sourceByComponent) return mapping.source;
-  const normalized = (componentDisplayName ?? "").trim().toLowerCase();
-  const resolved = mapping.sourceByComponent[normalized];
+  const normalized = normalizeComponentDisplayName(componentDisplayName);
+  const resolved = ownValue(mapping.sourceByComponent, normalized);
   if (!resolved) {
     const expected = Object.keys(mapping.sourceByComponent)
       .map((k) => `"${k}"`)
@@ -265,14 +334,15 @@ export function resolveDatapointSource(
   return resolved;
 }
 
-// Tuples that used to live in INPUT_MAPPING as `zeroStub: true` families
-// before ADR 0005. Their data lives as `PROJECT`-scope Components authored
-// and sourced entirely in the Isometric UI (ADR 0018 — noma keeps no copy);
-// a Removal Template that declares any of them as REMOVAL-scope is
-// wrong by construction. `buildCreateDatapointRequest` consults this set
-// before the INPUT_MAPPING lookup, so a conflicting mapping entry can never
-// bypass the guard and the resulting `SafeError` names the canonical scope
-// rather than just "missing mapping".
+// Tuples that lived in INPUT_MAPPING as `zeroStub: true` families before ADR
+// 0005. Their data lives as `PROJECT`-scope Components authored and sourced
+// entirely in the Isometric UI (ADR 0018 - noma keeps no copy), except for an
+// explicitly named component in a mapping's `sourceByComponent` carve-out. A
+// Removal Template that declares any other component for these tuples is wrong
+// by construction. `buildCreateDatapointRequest` consults this set before the
+// INPUT_MAPPING lookup, so a conflicting entry without a named carve-out can
+// never bypass the guard and the resulting `SafeError` names the canonical
+// scope rather than just "missing mapping".
 //
 // Keys mirror the deleted INPUT_MAPPING entries exactly. The category
 // strings are self-contained literals — this table is the guard's only
@@ -316,8 +386,25 @@ export function lookupPeriodInputTuple(
   groupKey: string,
   blueprintKey: string,
   inputKey: string,
+  // Template component display name. A period tuple is released from the
+  // PROJECT-scope guard ONLY when an INPUT_MAPPING entry for the same triple
+  // names this exact component in `sourceByComponent` - i.e. the carve-out is
+  // per component, never per tuple. Omitting the name keeps the guard armed
+  // (fail-closed default).
+  componentDisplayName?: string,
 ): { category: string } | undefined {
-  return PERIOD_INPUT_TUPLES[groupKey]?.[blueprintKey]?.[inputKey];
+  const tuple = lookupThreeLevelValue(
+    PERIOD_INPUT_TUPLES,
+    groupKey,
+    blueprintKey,
+    inputKey,
+  );
+  if (!tuple) return undefined;
+  const carveOut = lookupInputMapping(groupKey, blueprintKey, inputKey)
+    ?.sourceByComponent;
+  const normalized = normalizeComponentDisplayName(componentDisplayName);
+  if (carveOut && ownValue(carveOut, normalized)) return undefined;
+  return tuple;
 }
 
 // Sha256 hex of every mapping that controls a removal body: ordinary
@@ -393,6 +480,7 @@ export function buildCreateDatapointRequest(
     groupKey,
     componentBlueprintKey,
     inputKey,
+    componentDisplayName,
   );
   if (periodTuple) {
     // Sandbox-only escape hatch. The real fix is removing this input from
@@ -415,8 +503,19 @@ export function buildCreateDatapointRequest(
         type: "REPORTED",
       };
     }
+    const carveOut =
+      lookupInputMapping(groupKey, componentBlueprintKey, inputKey)
+        ?.sourceByComponent;
+    const recognizedCarveOuts = carveOut
+      ? Object.keys(carveOut)
+          .map((name) => `"${name}"`)
+          .join(", ")
+      : null;
     throw new SafeError(
-      `Registry component ${componentLabel} belongs at the project level, so it cannot be submitted with this Removal. Remove it from the Removal template, then add the project emissions in Isometric.`,
+      `Registry component ${componentLabel} belongs at the project level, so it cannot be submitted with this Removal. Remove it from the Removal template, then add the project emissions in Isometric.` +
+        (recognizedCarveOuts
+          ? ` This registry field can stay at Removal scope only when the component is named ${recognizedCarveOuts}.`
+          : ""),
     );
   }
 
