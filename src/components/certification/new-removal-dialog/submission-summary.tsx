@@ -159,9 +159,13 @@ export function SubmissionSummary({
 
         <dl className="flex flex-col">
           <Fact label="Destination">
-            {facts.projectLabel} ({facts.environmentLabel})
+            {facts.projectLabel
+              ? `${facts.projectLabel} (${facts.environmentLabel})`
+              : "Not linked"}
           </Fact>
-          <Fact label="Crediting window">{facts.windowLabel ?? "Not set"}</Fact>
+          <Fact label="Reporting window">
+            {facts.reportingWindowLabel ?? "Not compiled yet"}
+          </Fact>
           <Fact
             label={facts.batchCount === 1 ? "Credit batch" : "Credit batches"}
           >
@@ -200,7 +204,7 @@ export function SubmissionSummary({
       {facts.warnings.length > 0 && (
         <div className="flex flex-col gap-4 border-l-2 border-[var(--st-wait)] pl-12">
           <span className="body-small font-medium text-[var(--color-text-primary)]">
-            Recorded values not included
+            Submission notes
           </span>
           <CompilationWarnings warnings={facts.warnings} />
         </div>

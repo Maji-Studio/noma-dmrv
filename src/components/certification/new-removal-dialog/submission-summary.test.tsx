@@ -28,7 +28,15 @@ const BATCH = {
 } as MemberCreditBatch;
 
 const COMPILATION = {
-  review: { pendingSourceCount: 0 },
+  review: {
+    pendingSourceCount: 0,
+    // Midday UTC so the rendered range does not shift a day under a negative
+    // local offset.
+    reportingWindow: {
+      startedOn: "2026-07-01T12:00:00.000Z",
+      completedOn: "2026-07-31T12:00:00.000Z",
+    },
+  },
   blockers: [],
   warnings: [],
   snapshot: {},
@@ -70,6 +78,8 @@ function render(overrides: {
       isCompilationLoading={false}
       compilationError={null}
       checks={overrides.checks ?? PASSING_CHECKS}
+      readiness={{ state: "ready", reasons: [], advisories: [] }}
+      rejectionMessage={null}
     />,
   );
 }
@@ -93,7 +103,7 @@ describe("SubmissionSummary", () => {
     const html = render();
 
     expect(html).toContain("Ready to submit");
-    expect(html).toContain("All 2 checks passed. Nothing left to fix.");
+    expect(html).toContain("2 checks passed. Nothing left to fix.");
     expect(html).not.toContain("What to fix");
     expect(html).not.toContain("Removal template resolved");
   });

@@ -190,6 +190,10 @@ export function SubmitStep({
         isCompilationLoading={compilationQuery.isLoading}
         compilationError={compilationQuery.error}
         checks={checklist}
+        readiness={readiness}
+        rejectionMessage={
+          rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null
+        }
       />
 
       <DebugDrawer
@@ -201,15 +205,9 @@ export function SubmitStep({
         }}
       />
 
-      {(rejectedWithExternal || submitError) && (
-        <ServerError
-          message={
-            rejectedWithExternal
-              ? REJECTED_IN_ISOMETRIC_MSG
-              : submitError ?? undefined
-          }
-        />
-      )}
+      {/* The persisted rejected state belongs to the verdict line above; this
+          alert is only for what the last submit attempt returned. */}
+      {submitError && <ServerError message={submitError} />}
 
       <div className="flex justify-end">
         {requirementsMet ? (

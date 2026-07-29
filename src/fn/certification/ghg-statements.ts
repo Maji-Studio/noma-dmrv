@@ -32,6 +32,10 @@ import {
   type CertifierGhgStatementRow,
 } from "@/data-access/certifier-ghg-statements";
 import {
+  getApprovedGhgStatementReport,
+  markGhgStatementReportSubmitted,
+} from "@/data-access/ghg-statement-reports";
+import {
   getCreditBatchSummariesByRemovalIds,
   type CertifierRemovalRow,
   type RemovalCreditBatchSummary,
@@ -93,6 +97,14 @@ import {
   reconcileGhgStatementsForFacility,
   reconcileRegistryGhgStatement,
 } from "./ghg-statement-reconciliation";
+import {
+  assertGhgStatementReportFresh,
+  issueVerifierReportUrl,
+} from "./ghg-statement-reports";
+import {
+  redactReportSecrets,
+  redactReportUrlSecrets,
+} from "@/lib/certification/report-url";
 import {
   assertProductionConfirmed,
   GHG_STATEMENT_ENTITY_TYPE,
@@ -578,13 +590,8 @@ export async function submitGhgStatementToVerifier(
       "ghg statement submit started",
     );
 
-    // Resolve the statement (and its facility) first, then scope the ledger
-    // read to that facility (issue #277). getLatestSubmission's key already
-    // constrains type + entity to this GHG statement. NOTE: statement.facilityId
-    // is derived from this same client-supplied ghgStatementId, so the scope is
-    // lineage-consistency (fail-closed if the anchor is dangling), not a
-    // cross-facility authorization check — that needs an independent caller
-    // facility (#372). Left wired so the guard activates the moment one exists.
+    // Resolve the statement first, then scope its ledger read to the same
+    // organization and facility lineage (issue #277).
     const statement = await getCertifierGhgStatementById(
       orgCtx,
       ghgStatementId,
@@ -642,39 +649,80 @@ export async function submitGhgStatementToVerifier(
       throw new SafeError("Summary of changes is required for resubmission.");
     }
 
-    const document = await attachReportDocument(orgCtx, {
-      submissionId: submission.id,
-      reportUrl: parsed.reportUrl,
-      description: `GHG Statement report: ${facility.code}, period ending ${statement.reportingPeriodEndOn}`,
-      metadata: { ghgStatementExternalId: submission.externalId },
-    });
+    const externalReportUrl = parsed.externalReportUrl ?? parsed.reportUrl;
+    const generatedReport = parsed.reportId
+      ? await getApprovedGhgStatementReport(orgCtx, {
+          ghgStatementId,
+          reportId: parsed.reportId,
+        })
+      : null;
+    if (parsed.reportId && !generatedReport) {
+      throw new SafeError(
+        "Approve the selected generated report before submitting.",
+      );
+    }
+    if (generatedReport) {
+      await assertGhgStatementReportFresh(orgCtx, generatedReport);
+    }
+    const reportUrl = generatedReport
+      ? await issueVerifierReportUrl(orgCtx, generatedReport.id)
+      : externalReportUrl;
+    if (!reportUrl) {
+      throw new SafeError(
+        "Approve a generated report or enter an external report URL.",
+      );
+    }
+    const document = generatedReport
+      ? { id: generatedReport.documentId }
+      : await attachReportDocument(orgCtx, {
+          submissionId: submission.id,
+          reportUrl,
+          description: `External GHG Statement report: ${facility.code}, period ending ${statement.reportingPeriodEndOn}`,
+          metadata: { ghgStatementExternalId: submission.externalId },
+        });
 
     // Same payload shape for every audit event in this action — three call
     // sites (reconciled-success, failure, success) all log the same request.
     const summaryProvided = Boolean(parsed.summaryOfChanges?.trim());
     const submitRequestPayload = buildGhgSubmitRequestPayload(
       submitMode,
-      parsed.reportUrl,
+      redactReportUrlSecrets(reportUrl) ?? reportUrl,
       summaryProvided,
     );
+
+    // Both success paths (reconciled-after-failure, and the direct one) have
+    // to finalize identically, so they share one closure.
+    const finalizeSubmitSuccess = async (remote: GhgStatement) => {
+      await applyGhgRemoteState(orgCtx, submission, remote, {
+        reportUrl: redactReportUrlSecrets(reportUrl),
+        summaryOfChanges: parsed.summaryOfChanges?.trim() || null,
+        lastReportDocumentId: document.id,
+        submittedToVerifierAt: new Date().toISOString(),
+      });
+      if (generatedReport) {
+        await markGhgStatementReportSubmitted(orgCtx, generatedReport.id);
+      }
+    };
 
     let remoteAfter: GhgStatement;
     try {
       remoteAfter =
         submitMode === "resubmit"
           ? await resubmitGhgStatement(client, submission.externalId, {
-              ghg_statement_report_url: parsed.reportUrl,
+              ghg_statement_report_url: reportUrl,
               summary_of_changes: parsed.summaryOfChanges?.trim() ?? "",
             })
           : await submitGhgStatement(client, submission.externalId, {
-              ghg_statement_report_url: parsed.reportUrl,
+              ghg_statement_report_url: reportUrl,
             });
     } catch (err) {
       const providerFailure =
         err instanceof IsometricApiError
           ? {
               status: err.status ?? null,
-              body: sanitizeIsometricErrorBody(err.body),
+              body: redactReportSecrets(
+                sanitizeIsometricErrorBody(err.body),
+              ),
             }
           : null;
       logger.warn(
@@ -693,9 +741,11 @@ export async function submitGhgStatementToVerifier(
       const after = await getGhgStatement(client, submission.externalId).catch(
         () => null,
       );
-      const submitApplied = remoteBefore
-        ? after && ghgSubmitFingerprintChanged(remoteBefore, after)
-        : after && ghgSubmitAppearsApplied(after, parsed.reportUrl);
+      const submitApplied =
+        after &&
+        ghgSubmitAppearsApplied(after, reportUrl) &&
+        (!remoteBefore ||
+          ghgSubmitFingerprintChanged(remoteBefore, after));
       if (after && submitApplied) {
         await appendSyncEvent(orgCtx, {
           provider: ISOMETRIC_PROVIDER,
@@ -710,12 +760,7 @@ export async function submitGhgStatementToVerifier(
             detected_status: after.status,
           },
         });
-        await applyGhgRemoteState(orgCtx, submission, after, {
-          reportUrl: parsed.reportUrl,
-          summaryOfChanges: parsed.summaryOfChanges?.trim() || null,
-          lastReportDocumentId: document.id,
-          submittedToVerifierAt: new Date().toISOString(),
-        });
+        await finalizeSubmitSuccess(after);
         return { externalId: submission.externalId, remoteStatus: after.status };
       }
 
@@ -748,12 +793,7 @@ export async function submitGhgStatementToVerifier(
       requestPayload: submitRequestPayload,
       responsePayload: { id: remoteAfter.id, status: remoteAfter.status },
     });
-    await applyGhgRemoteState(orgCtx, submission, remoteAfter, {
-      reportUrl: parsed.reportUrl,
-      summaryOfChanges: parsed.summaryOfChanges?.trim() || null,
-      lastReportDocumentId: document.id,
-      submittedToVerifierAt: new Date().toISOString(),
-    });
+    await finalizeSubmitSuccess(remoteAfter);
 
     return { externalId: submission.externalId, remoteStatus: remoteAfter.status };
   }, { rateLimit: submitRateLimit("cert:submit-ghg-statement") });

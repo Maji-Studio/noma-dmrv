@@ -11,8 +11,13 @@ import type {
   MemberCreditBatch,
   RemovalCertifyContext,
 } from "@/fn/certification/certify-context";
-import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
+import type {
+  RemovalReadiness,
+  RemovalRequirementCheck,
+} from "@/lib/certification/readiness";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
+import type { DurabilityOption } from "@/schemas/credit-batches";
+import { allowsRemovalSubmission } from "./resume-state";
 
 /** Digits used for every dry-mass figure on this screen. */
 const TONNE_DIGITS = 1;
@@ -23,6 +28,18 @@ export interface SubmissionFactsInput {
   isCompilationLoading: boolean;
   compilationError: Error | null;
   checks: RemovalRequirementCheck[];
+  /**
+   * The same verdict `submit-step.tsx` gates the button on. Without it the
+   * panel can only see the checklist, and states that produce no checklist row
+   * would read as ready beside a disabled button.
+   */
+  readiness: RemovalReadiness;
+  /**
+   * Set when the registry rejected the last attempt. This is a persisted state
+   * of the removal, not an error from the click, so the verdict line owns it
+   * and `ServerError` is left to report the submit attempt itself.
+   */
+  rejectionMessage: string | null;
 }
 
 export type SubmitState = "loading" | "ready" | "blocked";
@@ -33,8 +50,9 @@ export interface SubmissionFacts {
   batchCount: number;
   runCount: number;
   applicationCount: number;
-  windowLabel: string | null;
-  projectLabel: string;
+  /** The window the registry actually receives, not the credit-batch bounds. */
+  reportingWindowLabel: string | null;
+  projectLabel: string | null;
   environmentLabel: string;
   isProduction: boolean;
   durabilityLabel: string;
@@ -56,8 +74,8 @@ export interface SubmissionFacts {
  * Sentence case, unlike the shared `formatDurabilityOption`, which returns
  * title case and is used on surfaces that want it that way.
  */
-const DURABILITY_LABELS: Record<string, string> = {
-  "200_year": "200-year (R₀ reflectance)",
+const DURABILITY_LABELS: Record<DurabilityOption, string> = {
+  "200_year": "200-year (H:Corg)",
   "1000_year": "1000-year (R₀ reflectance)",
 };
 
@@ -68,8 +86,9 @@ const DURABILITY_LABELS: Record<string, string> = {
 export function isRemovalCompilationReady(
   compilation: RemovalCompilationView | null,
 ): boolean {
+  if (!compilation) return false;
   return (
-    compilation?.blockers.length === 0 &&
+    compilation.blockers.length === 0 &&
     compilation.snapshot !== null &&
     compilation.compilationHash !== null
   );
@@ -105,17 +124,66 @@ function uniqueLabels(values: string[]): string {
   return [...new Set(values)].join(", ");
 }
 
-function creditingWindowLabel(batches: MemberCreditBatch[]): string | null {
-  if (batches.length === 0) return null;
-  const start = batches
-    .map((batch) => batch.startDate)
-    .sort()
-    .at(0);
-  const end = batches
-    .map((batch) => batch.endDate)
-    .sort()
-    .at(-1);
-  return start && end ? formatDateRange(start, end) : null;
+/**
+ * Compiler blockers that an unmet checklist row already states in operator
+ * language, keyed by the check that restates them. Matched on a stable fragment
+ * because the two sides are worded independently: `readiness.ts` says "No
+ * supporting evidence file is available" where `removal-submission-build.ts`
+ * says "Removal submission requires at least one supporting evidence file."
+ *
+ * Nothing else belongs here. The compiler also emits independent blockers — a
+ * template/durability tier mismatch, an environment that cannot post durability
+ * measurement samples — that no check covers. Hiding those behind an unrelated
+ * unmet check would make the operator fix one item, recompile, and only then
+ * discover the next.
+ */
+const CHECK_RESTATED_BLOCKERS: Partial<
+  Record<RemovalRequirementCheck["key"], RegExp>
+> = {
+  evidence: /at least one supporting evidence file/i,
+};
+
+function blockersNotRestatedByChecks(
+  blockers: string[],
+  checks: RemovalRequirementCheck[],
+): string[] {
+  const restated = checks
+    .filter((check) => check.status === "unmet")
+    .map((check) => CHECK_RESTATED_BLOCKERS[check.key])
+    .filter((pattern) => pattern !== undefined);
+  if (restated.length === 0) return blockers;
+  return blockers.filter(
+    (blocker) => !restated.some((pattern) => pattern.test(blocker)),
+  );
+}
+
+/**
+ * The outbound reporting window: earliest production-run start through latest
+ * application date, exactly as `removal-submission-build.ts` sends it. The
+ * credit batches' own configured bounds are a different range, so showing them
+ * here would promise the operator a window the registry never receives.
+ */
+function reportingWindowLabel(
+  compilation: RemovalCompilationView | null,
+): string | null {
+  const window = compilation?.review.reportingWindow;
+  if (!window?.startedOn || !window.completedOn) return null;
+  return formatDateRange(window.startedOn, window.completedOn);
+}
+
+/**
+ * The compiled count is authoritative, but the context carries the same mirror
+ * totals. Falling back to them keeps the "uploads on submit" row on screen
+ * during a failed compilation, which is exactly when an operator is deciding
+ * whether the files are their problem.
+ */
+function pendingDocumentCount(
+  ctx: RemovalCertifyContext,
+  compilation: RemovalCompilationView | null,
+): number {
+  if (compilation) return compilation.review.pendingSourceCount ?? 0;
+  const { total, mirrored } = ctx.supportingDocuments;
+  return Math.max(total - mirrored, 0);
 }
 
 export function buildSubmissionFacts({
@@ -124,6 +192,8 @@ export function buildSubmissionFacts({
   isCompilationLoading,
   compilationError,
   checks,
+  readiness,
+  rejectionMessage,
 }: SubmissionFactsInput): SubmissionFacts {
   const batches = ctx.memberBatches;
   const actionChecks = actionableSubmissionChecks(checks);
@@ -139,18 +209,34 @@ export function buildSubmissionFacts({
 
   let state: SubmitState = "ready";
   let headline = "Ready to submit";
+  let panelBlockers = blockers;
+  // Counts what passed, not what was evaluated: `actionChecks` also holds
+  // checks a skipped upstream left unevaluable, which never "passed".
   let detail =
-    actionChecks.length > 0
-      ? `All ${actionChecks.length} checks passed. Nothing left to fix.`
+    checksPassed > 0
+      ? `${countLabel(checksPassed, "check")} passed. Nothing left to fix.`
       : "Nothing left to fix.";
 
-  // Checks outrank compiler blockers: they name the record and link to the fix,
-  // where a blocker string is the same fault in compiler words. When both fire,
-  // the operator only needs to read one of them.
+  // Checks outrank compiler blockers in the verdict line: they name the record
+  // and link to the fix, where a blocker string is the same fault in compiler
+  // words. Blockers no check restates still render below (see
+  // `blockersNotRestatedByChecks`).
   if (isCompilationLoading) {
     state = "loading";
     headline = "Preparing the submission";
     detail = "This takes a moment.";
+  } else if (readiness.state === "inProgress") {
+    // A live submission lock. No checklist row reports it, so without this the
+    // panel would read "Ready to submit" beside a disabled button.
+    state = "blocked";
+    headline = "Submission in progress";
+    detail = "Another submission for this removal is still running.";
+  } else if (rejectionMessage) {
+    // The registry refused the last attempt. Nothing below this matters until
+    // the registry record is resolved, and the button is disabled regardless.
+    state = "blocked";
+    headline = "Cannot submit yet";
+    detail = rejectionMessage;
   } else if (checksAttention > 0) {
     state = "blocked";
     headline =
@@ -165,14 +251,21 @@ export function buildSubmissionFacts({
     state = "blocked";
     headline = "Cannot submit yet";
     detail =
-      "The submission review is unavailable. Try again. If it still fails, open submission details.";
+      "Open Technical details below to retry. It shows why the build failed.";
   } else if (!compilationReady) {
     state = "blocked";
     headline = "Cannot submit yet";
     detail =
       blockers.length > 0
-        ? "Resolve the issues below."
-        : "The submission review is incomplete. Open submission details to see what is missing.";
+        ? "Clear the blockers below."
+        : "The submission is incomplete. Open Technical details below to see what is missing.";
+  } else if (!allowsRemovalSubmission(readiness.state)) {
+    // The gate still refuses for a reason no checklist row carried. Show the
+    // readiness reasons rather than claim the removal is ready.
+    state = "blocked";
+    headline = "Cannot submit yet";
+    detail = "Clear the blockers below.";
+    panelBlockers = readiness.reasons;
   }
 
   return {
@@ -184,32 +277,30 @@ export function buildSubmissionFacts({
     batchCount: batches.length,
     runCount: sum(batches, (batch) => batch.productionRunCount),
     applicationCount: sum(batches, (batch) => batch.applicationCount),
-    windowLabel: creditingWindowLabel(batches),
-    projectLabel:
-      ctx.project?.name ?? ctx.mapping?.externalProjectId ?? "Isometric project",
+    reportingWindowLabel: reportingWindowLabel(compilation),
+    projectLabel: ctx.project?.name ?? ctx.mapping?.externalProjectId ?? null,
     environmentLabel: ctx.isProduction ? "Production" : "Sandbox",
     isProduction: ctx.isProduction,
     durabilityLabel: uniqueLabels(
-      batches.map(
-        (batch) =>
-          DURABILITY_LABELS[batch.durabilityOption] ?? batch.durabilityOption,
-      ),
+      batches.map((batch) => DURABILITY_LABELS[batch.durabilityOption]),
     ),
     samplingLabel: uniqueLabels(
       batches.map((batch) =>
         batch.sampling === "sampled" ? "Sampled" : "Not sampled",
       ),
     ),
-    pendingDocuments: compilation?.review.pendingSourceCount ?? 0,
+    pendingDocuments: pendingDocumentCount(ctx, compilation),
     checksPassed,
     checksTotal: actionChecks.length,
     checksAttention,
     state,
     headline,
     detail,
-    // Suppressed while a check covers the same fault in operator language.
-    blockers: checksAttention > 0 ? [] : blockers,
-    warnings: [...(compilation?.warnings ?? []), ...ctx.submissionWarnings],
+    blockers: blockersNotRestatedByChecks(panelBlockers, checks),
+    // The compiler and the context can reach the same advisory independently.
+    warnings: [
+      ...new Set([...(compilation?.warnings ?? []), ...ctx.submissionWarnings]),
+    ],
   };
 }
 
