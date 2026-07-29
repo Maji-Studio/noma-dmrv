@@ -1,24 +1,32 @@
-import {
-  createHash,
-  createHmac,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { env } from "@/config/env";
 
-const TOKEN_CONTEXT = "noma:ghg-statement-report:v1:";
+/**
+ * Verifier report links are bearer capabilities. The token is a per-report
+ * random value: only its SHA-256 digest is persisted on the report row, so a
+ * link is revoked by rotating (or clearing) that row, and a leaked link says
+ * nothing about any other report.
+ *
+ * The token is deliberately NOT derived from `reportId` + a global secret.
+ * That made every link recomputable from one secret and revocable only by
+ * rotating `BETTER_AUTH_SECRET`, which invalidates every session too.
+ */
+const TOKEN_BYTES = 32;
+const TOKEN_HASH_PATTERN = /^[a-f0-9]{64}$/;
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
-function capabilityToken(reportId: string): string {
-  return createHmac("sha256", env.BETTER_AUTH_SECRET)
-    .update(`${TOKEN_CONTEXT}${reportId}`)
-    .digest("base64url");
+export function generateVerifierToken(): string {
+  return randomBytes(TOKEN_BYTES).toString("base64url");
 }
 
-export function capabilityTokenHashForReport(reportId: string): string {
-  return createHash("sha256").update(capabilityToken(reportId)).digest("hex");
+export function hashVerifierToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
-export function buildVerifierReportUrl(reportId: string): string {
+export function buildVerifierReportUrl(
+  reportId: string,
+  token: string,
+): string {
   const base = new URL(env.NEXT_PUBLIC_APP_URL);
   if (
     base.protocol !== "https:" &&
@@ -33,26 +41,21 @@ export function buildVerifierReportUrl(reportId: string): string {
     `/api/ghg-statement-reports/${encodeURIComponent(reportId)}`,
     base,
   );
-  url.searchParams.set("token", capabilityToken(reportId));
+  url.searchParams.set("token", token);
   return url.toString();
 }
 
+/**
+ * A token is bound to a report by the row it was stored on: the caller looks
+ * the report up by id and passes that row's stored digest.
+ */
 export function verifyReportCapabilityToken(
-  reportId: string,
   suppliedToken: string,
   storedTokenHash: string,
 ): boolean {
-  if (!suppliedToken || !/^[a-f0-9]{64}$/.test(storedTokenHash)) return false;
-  const expectedToken = capabilityToken(reportId);
-  const supplied = Buffer.from(suppliedToken);
-  const expected = Buffer.from(expectedToken);
-  if (supplied.length !== expected.length) return false;
-  if (!timingSafeEqual(supplied, expected)) return false;
-  const suppliedHash = createHash("sha256")
-    .update(suppliedToken)
-    .digest("hex");
+  if (!suppliedToken || !TOKEN_HASH_PATTERN.test(storedTokenHash)) return false;
   return timingSafeEqual(
-    Buffer.from(suppliedHash, "hex"),
+    Buffer.from(hashVerifierToken(suppliedToken), "hex"),
     Buffer.from(storedTokenHash, "hex"),
   );
 }

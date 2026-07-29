@@ -8,6 +8,7 @@ import {
   getNextGhgStatementReportVersion,
   getReportByPreparationKey,
   insertPreparedGhgStatementReport,
+  issueVerifierReportToken,
   listGhgStatementReports,
   listSubmittedRemovalSnapshots,
   type GhgStatementReportRow,
@@ -31,7 +32,9 @@ import {
 } from "@/lib/certification/ghg-statement-report/model";
 import { renderGhgStatementReportPdf } from "@/lib/certification/ghg-statement-report/pdf";
 import {
-  capabilityTokenHashForReport,
+  buildVerifierReportUrl,
+  generateVerifierToken,
+  hashVerifierToken,
 } from "@/lib/certification/ghg-statement-report/verifier-url";
 import { redactReportUrlSecrets } from "@/lib/certification/report-url";
 import { SafeError } from "@/lib/errors";
@@ -295,6 +298,22 @@ export async function rebuildGhgStatementReportModel(
   return buildCheckedReportModel(facts.input);
 }
 
+/**
+ * Mints a fresh verifier capability token for an approved report and returns
+ * the link carrying it. Each call revokes the link handed out by the previous
+ * call, which is why the URL is built at submission rather than at preparation
+ * — only the token digest is ever stored.
+ */
+export async function issueVerifierReportUrl(
+  orgCtx: OrgContext,
+  reportId: string,
+): Promise<string> {
+  return buildVerifierReportUrl(
+    reportId,
+    await issueVerifierReportToken(orgCtx, reportId),
+  );
+}
+
 export async function assertGhgStatementReportFresh(
   orgCtx: OrgContext,
   report: GhgStatementReportRow,
@@ -360,7 +379,9 @@ export async function prepareGhgStatementReport(
           reportModel: model,
           reviewedNarratives: parsed.narratives,
           preparationKey: parsed.preparationKey,
-          verifierTokenHash: capabilityTokenHashForReport(reportId),
+          // Seeded with a token nobody holds: the link stays inert until
+          // submission issues a real one via `issueVerifierReportToken`.
+          verifierTokenHash: hashVerifierToken(generateVerifierToken()),
           preparedAt,
           storage: {
             provider: storage.name,

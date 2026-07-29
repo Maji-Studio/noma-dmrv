@@ -66,6 +66,12 @@ describe("GHG Statement verifier report route", () => {
     );
 
     expect(response.status).toBe(302);
+    // The token is checked against the stored digest alone; the report is
+    // identified by the row the digest came from, not by a derived value.
+    expect(verifyReportCapabilityToken).toHaveBeenCalledWith(
+      "opaque",
+      "a".repeat(64),
+    );
     expect(response.headers.get("location")).toBe(
       "https://storage.example/signed-report.pdf",
     );

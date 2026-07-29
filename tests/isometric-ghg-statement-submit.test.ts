@@ -54,16 +54,12 @@ vi.mock("@/data-access/certifier-ghg-statements");
 vi.mock("@/data-access/ghg-statement-reports");
 vi.mock("@/fn/certification/ghg-statement-reports", () => ({
   assertGhgStatementReportFresh: vi.fn(),
+  // Mints a fresh capability token and returns the link carrying it.
+  issueVerifierReportUrl: vi.fn(
+    async () =>
+      "https://app.example.com/api/ghg-statement-reports/55555555-5555-4555-8555-555555555555?token=opaque",
+  ),
 }));
-vi.mock(
-  "@/lib/certification/ghg-statement-report/verifier-url",
-  () => ({
-    buildVerifierReportUrl: vi.fn(
-      () =>
-        "https://app.example.com/api/ghg-statement-reports/55555555-5555-4555-8555-555555555555?token=opaque",
-    ),
-  }),
-);
 vi.mock("@/data-access/facilities", () => ({
   getFacilityById: vi.fn(),
 }));
@@ -874,6 +870,12 @@ describe("submitGhgStatementToVerifier — happy path", () => {
       "admin",
     );
     expect(ledger.attachReportDocument).not.toHaveBeenCalled();
+    // The submitted link carries a freshly minted capability token rather than
+    // a value derivable from the report id and a global secret.
+    expect(reportActions.issueVerifierReportUrl).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      REPORT_ID,
+    );
     expect(reportDA.markGhgStatementReportSubmitted).toHaveBeenCalledWith(
       makeTestOrgContext("user-test-1"),
       REPORT_ID,

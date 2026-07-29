@@ -1,33 +1,45 @@
 import { describe, expect, it } from "vitest";
 import {
   buildVerifierReportUrl,
-  capabilityTokenHashForReport,
+  generateVerifierToken,
+  hashVerifierToken,
   verifyReportCapabilityToken,
 } from "./verifier-url";
 
 const REPORT_ID = "11111111-1111-4111-8111-111111111111";
 
 describe("GHG Statement verifier capability URL", () => {
-  it("builds a stable unguessable token and verifies it timing-safely", () => {
-    const first = new URL(buildVerifierReportUrl(REPORT_ID));
-    const second = new URL(buildVerifierReportUrl(REPORT_ID));
-    const token = first.searchParams.get("token");
+  it("builds an unguessable token and verifies it against the stored hash", () => {
+    const token = generateVerifierToken();
+    const url = new URL(buildVerifierReportUrl(REPORT_ID, token));
 
-    expect(first.toString()).toBe(second.toString());
+    expect(url.searchParams.get("token")).toBe(token);
     expect(token).toMatch(/^[A-Za-z0-9_-]{40,}$/);
+    expect(verifyReportCapabilityToken(token, hashVerifierToken(token))).toBe(
+      true,
+    );
     expect(
-      verifyReportCapabilityToken(
-        REPORT_ID,
-        token ?? "",
-        capabilityTokenHashForReport(REPORT_ID),
-      ),
-    ).toBe(true);
-    expect(
-      verifyReportCapabilityToken(
-        REPORT_ID,
-        `${token}x`,
-        capabilityTokenHashForReport(REPORT_ID),
-      ),
+      verifyReportCapabilityToken(`${token}x`, hashVerifierToken(token)),
     ).toBe(false);
+  });
+
+  it("mints a distinct token per call so links are revocable by rotation", () => {
+    expect(generateVerifierToken()).not.toBe(generateVerifierToken());
+  });
+
+  it("rejects a token that was valid before rotation", () => {
+    const oldToken = generateVerifierToken();
+    const rotatedHash = hashVerifierToken(generateVerifierToken());
+
+    expect(verifyReportCapabilityToken(oldToken, rotatedHash)).toBe(false);
+  });
+
+  it("rejects empty tokens and malformed stored hashes", () => {
+    const token = generateVerifierToken();
+
+    expect(verifyReportCapabilityToken("", hashVerifierToken(token))).toBe(
+      false,
+    );
+    expect(verifyReportCapabilityToken(token, "not-a-hash")).toBe(false);
   });
 });

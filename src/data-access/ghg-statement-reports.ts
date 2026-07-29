@@ -14,6 +14,10 @@ import type {
   GhgStatementReportModel,
   GhgStatementReportNarratives,
 } from "@/lib/certification/ghg-statement-report/model";
+import {
+  generateVerifierToken,
+  hashVerifierToken,
+} from "@/lib/certification/ghg-statement-report/verifier-url";
 import { requireOrgScope } from "./utils";
 
 export type GhgStatementReportRow =
@@ -395,6 +399,40 @@ export async function approveGhgStatementReport(
     );
   }
   return row;
+}
+
+/**
+ * Mints a fresh verifier capability token for an approved report, persists only
+ * its digest, and returns the plaintext once so the caller can build the link.
+ * Issuing again rotates the token, which revokes any previously shared URL.
+ */
+export async function issueVerifierReportToken(
+  ctx: OrgContext,
+  reportId: string,
+): Promise<string> {
+  requireOrgScope(ctx);
+  const token = generateVerifierToken();
+  const updated = await db
+    .update(certifierGhgStatementReports)
+    .set({
+      verifierTokenHash: hashVerifierToken(token),
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(certifierGhgStatementReports.id, reportId),
+        inArray(certifierGhgStatementReports.lifecycle, [
+          "approved",
+          "submitted",
+        ]),
+        eq(certifierGhgStatementReports.organizationId, ctx.organizationId),
+      ),
+    )
+    .returning({ id: certifierGhgStatementReports.id });
+  if (updated.length === 0) {
+    throw new SafeError("Approved report not found.");
+  }
+  return token;
 }
 
 export async function markGhgStatementReportSubmitted(

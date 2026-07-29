@@ -21,14 +21,7 @@ export async function GET(
   }
   const token = request.nextUrl.searchParams.get("token") ?? "";
   const report = await getVerifierReportDocument(reportId);
-  if (
-    !report ||
-    !verifyReportCapabilityToken(
-      reportId,
-      token,
-      report.verifierTokenHash,
-    )
-  ) {
+  if (!report || !verifyReportCapabilityToken(token, report.verifierTokenHash)) {
     return new NextResponse("Not Found", { status: 404 });
   }
   if (!report.storageKey || report.uploadStatus !== "uploaded") {
