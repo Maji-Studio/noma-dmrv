@@ -645,7 +645,11 @@ function InlineLocationForm({
 // ============================================
 
 function LocationsSection({ supplierId }: { supplierId: string }) {
-  const [showAddDialog, setShowAddDialog] = useState(false);
+  // `editingLocation` is deliberately not cleared on close: the modal keeps its
+  // subtree mounted for the exit transition, so clearing it there would flip the
+  // dialog title and submit label to the "Add" wording mid-fade. Opening the add
+  // dialog clears it instead.
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] =
     useState<SupplierLocation | null>(null);
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
@@ -670,7 +674,10 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
         <Button
           variant="noOutline"
           size="small"
-          onClick={() => setShowAddDialog(true)}
+          onClick={() => {
+            setEditingLocation(null);
+            setIsLocationDialogOpen(true);
+          }}
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
@@ -714,9 +721,12 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
               </div>
               <div className="flex shrink-0 items-center gap-8">
                 <Button
-                  variant="default"
+                  variant="noOutline"
                   size="icon"
-                  onClick={() => setEditingLocation(loc)}
+                  onClick={() => {
+                    setEditingLocation(loc);
+                    setIsLocationDialogOpen(true);
+                  }}
                   aria-label={`Edit ${loc.name || loc.country}`}
                 >
                   <PencilIcon size={16} />
@@ -736,11 +746,8 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
       )}
 
       <SupplierLocationDialog
-        isOpen={showAddDialog || editingLocation !== null}
-        onClose={() => {
-          setShowAddDialog(false);
-          setEditingLocation(null);
-        }}
+        isOpen={isLocationDialogOpen}
+        onClose={() => setIsLocationDialogOpen(false)}
         supplierId={supplierId}
         location={editingLocation ?? undefined}
       />
