@@ -24,6 +24,7 @@ import { submitRemoval } from "@/fn/certification/submit-removal";
 import { compileRemovalSubmission } from "@/fn/certification/removal-submission-build";
 import * as isometric from "@/lib/isometric";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
+import { classifyRemovalSourceCandidate } from "@/lib/certification/removal-source-bindings";
 import * as sourceVerification from "@/lib/isometric/source-binding-verification";
 
 vi.mock("@/lib/isometric/source-binding-verification", () => ({
@@ -133,6 +134,133 @@ describe("submitRemoval — entity readiness gate", () => {
 });
 
 describe("submitRemoval — Source binding gate", () => {
+  it("compiles when GIS boundary evidence has no current GHG input target", async () => {
+    const ctx = makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
+      supportingDocuments: { total: 0, mirrored: 0 },
+    });
+    const gisBinding = classifyRemovalSourceCandidate({
+      documentType: "gis_boundary",
+      metadata: { logbookEvidenceType: "inventory" },
+      lineage: {
+        entityType: "application",
+        entityId: ctx.lineages[0]!.application.id,
+        entityLabel: `Application ${ctx.lineages[0]!.application.code}`,
+      },
+    });
+    expect(gisBinding).toBeNull();
+
+    vi.mocked(
+      sources.collectCandidateSourceDocumentsForRemoval,
+    ).mockResolvedValue([]);
+    vi.mocked(sources.resolveSourceBindingCandidates).mockResolvedValue([]);
+
+    const compiled = await compileRemovalSubmission({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+      ctx,
+      defaultTemplate: ctx.defaultTemplate!,
+      blueprintsByKey: new Map(
+        ctx.blueprintsForTemplate.map((blueprint) => [
+          blueprint.key,
+          blueprint,
+        ]),
+      ),
+      externalProjectId: ctx.mapping!.externalProjectId,
+      allowPeriodInputStub: false,
+      hasDurabilityComponents: false,
+    });
+
+    expect(compiled.blockers).toEqual([]);
+    expect(compiled.snapshot).not.toBeNull();
+    expect(compiled.transportPlan).toMatchObject({
+      candidateDocumentIds: [],
+      sourceIds: [],
+      sourceBindingPlan: [],
+    });
+  });
+
+  it("submits with the generated durability ledger and no Application logbook", async () => {
+    const ctx = makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
+      supportingDocuments: { total: 0, mirrored: 0 },
+    });
+    const durabilityBinding = classifyRemovalSourceCandidate({
+      documentType: "pdf",
+      metadata: {
+        kind: "durability_evidence_ledger",
+        removalId: REMOVAL_ID,
+        durabilityOption: "200_year",
+      },
+      lineage: {
+        entityType: "credit_batch",
+        entityId: ctx.memberBatches[0]!.id,
+        entityLabel: `Credit batch ${ctx.memberBatches[0]!.code}`,
+      },
+      removalId: REMOVAL_ID,
+    });
+    expect(durabilityBinding).not.toBeNull();
+    let generatedLedgerReady = false;
+
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      ctx,
+    );
+    vi.mocked(
+      evidenceLedgers.ensureEvidenceLedgersFromContext,
+    ).mockImplementation(async () => {
+      generatedLedgerReady = true;
+    });
+    vi.mocked(
+      sources.collectCandidateSourceDocumentsForRemoval,
+    ).mockImplementation(async () =>
+      generatedLedgerReady
+        ? [
+            {
+              documentId: "doc-durability-ledger",
+              binding: durabilityBinding!,
+            },
+          ]
+        : [],
+    );
+    vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(
+      async (_ctx, { candidates }) =>
+        candidates.map((candidate) => ({
+          ...candidate,
+          sourceId: "src-durability-ledger",
+        })),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dtp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rem") as never,
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).resolves.toMatchObject({ externalId: "rem_1" });
+
+    expect(
+      evidenceLedgers.ensureEvidenceLedgersFromContext,
+    ).toHaveBeenCalledOnce();
+    expect(
+      (
+        storedRows[0].payloadSnapshot as {
+          semantic: {
+            candidateSources: Array<{ binding: { nomaRole: string } }>;
+          };
+        }
+      ).semantic.candidateSources,
+    ).toEqual([
+      expect.objectContaining({
+        binding: expect.objectContaining({
+          nomaRole: "durability_evidence_ledger",
+        }),
+      }),
+    ]);
+  });
+
   it("materializes generated evidence ledgers before compiling the candidate Source set", async () => {
     const ctx = makeContext();
     const inventory = makeInventorySourceDocument("doc-inventory");

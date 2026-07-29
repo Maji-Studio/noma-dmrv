@@ -386,7 +386,7 @@ async function assertRemovalSourcesEditable(
       isLockedInFlight(latest))
   ) {
     throw new SafeError(
-      "Supporting sources are read-only once a Removal is submitted or while submission is in progress. Replace or remove evidence from its owning record before submission.",
+      "Registry value sources are read-only once a Removal is submitted or while submission is in progress. Replace or remove evidence from its owning record before submission.",
     );
   }
 }
