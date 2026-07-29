@@ -22,6 +22,7 @@ import {
   type Sample,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import type { GisBoundary } from "@/lib/geojson/types";
 import {
   BLUEPRINT_1000_YEAR_REPLICATES_INPUT,
   SOIL_STORAGE_MODULE_VERSION,
@@ -82,7 +83,7 @@ export interface BatchLineageApplicationFact {
   applicationDate: Date;
   fieldIdentifier: string | null;
   evidenceMethod: "visual" | "boundary";
-  gisBoundaryReference: string | null;
+  gisBoundary: GisBoundary | null;
   biocharAppliedTons: number;
   biocharAppliedDryTons: number | null;
   soilTemperatureC: number | null;
@@ -223,7 +224,7 @@ async function loadLineageWithExecutor(
           applicationDate: applications.applicationDate,
           fieldIdentifier: applications.fieldIdentifier,
           evidenceMethod: applications.evidenceMethod,
-          gisBoundaryReference: applications.gisBoundaryReference,
+          gisBoundary: applications.gisBoundary,
           biocharAppliedTons: applications.biocharAppliedTons,
           biocharAppliedDryTons: applications.biocharAppliedDryTons,
           soilTemperatureC: applications.soilTemperatureC,
@@ -355,7 +356,8 @@ async function loadLineageWithExecutor(
     facts.push({
       id: row.id, code: row.code, status: row.status,
       applicationDate: row.applicationDate, fieldIdentifier: row.fieldIdentifier,
-      evidenceMethod: row.evidenceMethod, gisBoundaryReference: row.gisBoundaryReference,
+      evidenceMethod: row.evidenceMethod,
+      gisBoundary: row.gisBoundary,
       biocharAppliedTons: row.biocharAppliedTons,
       biocharAppliedDryTons: row.biocharAppliedDryTons, soilTemperatureC: row.soilTemperatureC,
       facility: { id: row.facilityId, code: row.facilityCode, name: row.facilityName },

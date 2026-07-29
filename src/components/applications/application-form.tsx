@@ -5,7 +5,7 @@
  * Form sections:
  * 1. Application details — applicationDate, delivery, biocharAppliedTons + auto-calculated dry mass card
  * 2. Field details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
- * 3. Evidence — evidenceMethod, gisBoundaryReference, evidence panel
+ * 3. Evidence: evidenceMethod and evidence panel
  * 4. Soil temperature — soilTemperatureSource (enum toggle), soilTemperatureC
  */
 "use client";
@@ -15,20 +15,18 @@ import { formatLocalDate } from "@/lib/date-utils";
 import { formatDate } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, CameraIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormSelect, FormSection, FormSpine, PositionPicker, FormActions, makeCertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import {
   applicationFormSchema,
-  applicationEvidenceMethods,
   applicationMethods,
   soilTemperatureSources,
-  formatApplicationEvidenceMethod,
   formatApplicationMethod,
   formatSoilTemperatureSource,
   type ApplicationFormData,
@@ -38,9 +36,13 @@ import {
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
+import {
+  FieldPositionField,
+  resetFieldPosition,
+} from "./field-position-field";
+import type { FieldPositionMode } from "./field-position-field";
 import {
   applicationKgToTons,
   applicationTonsToKg,
@@ -72,11 +74,6 @@ const soilTemperatureSourceOptions: readonly { value: string; label: string }[] 
     label: formatSoilTemperatureSource(source as SoilTemperatureSource),
   }),
 );
-
-const evidenceMethodDescriptions: Record<ApplicationEvidenceMethod, string> = {
-  visual: "Geotagged photos for all three stages: stockpile, spreading, incorporation",
-  boundary: "GIS boundary map + dated logbook quantities (weighbridge, inventory, or affidavit)",
-};
 
 // ============================================
 // Dry Mass Calculation Card
@@ -167,11 +164,6 @@ export function ApplicationForm({
   // removals derive durability from petrographic reflectance + TGA.
   const hideSoilTemperature = durabilityOption === "1000_year";
 
-  // Organization operating defaults seed create mode only; an existing record
-  // always wins. Warmed once per session in FacilityProvider, so this is a
-  // cache read rather than a round trip on open.
-  const { defaults: orgDefaults } = useOrganizationDefaultValues();
-
   const defaultValues = {
     applicationDate: application?.applicationDate
       ? formatLocalDate(new Date(application.applicationDate))
@@ -185,10 +177,13 @@ export function ApplicationForm({
     gpsLatitude: application?.gpsLatitude ?? undefined,
     gpsLongitude: application?.gpsLongitude ?? undefined,
     applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
+    // The visual path is still UI-locked ("Available later"), so a new
+    // application always starts on the GIS reference path. The organization
+    // default evidence method stays inert here until visual is selectable.
     evidenceMethod:
       (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ??
-      orgDefaults.defaultEvidenceMethod,
-    gisBoundaryReference: application?.gisBoundaryReference ?? "",
+      "boundary",
+    gisBoundary: application?.gisBoundary ?? null,
     soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
     soilTemperatureC: application?.soilTemperatureC ?? undefined,
   };
@@ -200,6 +195,7 @@ export function ApplicationForm({
     trigger,
     setError,
     setValue,
+    resetField,
     getFieldState,
     formState: { errors },
   } = useForm<z.input<typeof applicationFormSchema>, unknown, ApplicationFormData>({
@@ -218,6 +214,7 @@ export function ApplicationForm({
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
+  const gisBoundary = useWatch({ control, name: "gisBoundary" });
 
   // Only delivered deliveries accept applications (issue #284) — undelivered
   // ones stay visible but disabled so operators see why they can't pick them.
@@ -230,6 +227,32 @@ export function ApplicationForm({
     disabled: d.status !== "delivered",
   }));
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
+  const derivedPosition = selectedDelivery
+    ? resolveApplicationPositionDefault({ delivery: selectedDelivery })
+    : null;
+
+  // The saved record's own delivery, not the currently selected one: the mode
+  // a stored application opens in must not flip just because the operator
+  // picked a different delivery, and it stays unresolved (so it defaults to
+  // derive) until the deliveries query settles rather than latching to manual.
+  const savedDelivery = application
+    ? deliveries.find((delivery) => delivery.id === application.deliveryId)
+    : undefined;
+  const savedDerivedPosition = savedDelivery
+    ? resolveApplicationPositionDefault({ delivery: savedDelivery })
+    : null;
+  const fieldPositionDefaultMode: FieldPositionMode =
+    application &&
+    savedDelivery &&
+    (application.gpsLatitude !== savedDerivedPosition?.gpsLatitude ||
+      application.gpsLongitude !== savedDerivedPosition?.gpsLongitude)
+      ? "manual"
+      : "derive";
+  // Null until the operator picks a mode, so the resolved mode keeps tracking
+  // the record while they have expressed no preference.
+  const [pickedFieldPositionMode, setPickedFieldPositionMode] =
+    useState<FieldPositionMode | null>(null);
+  const fieldPositionMode = pickedFieldPositionMode ?? fieldPositionDefaultMode;
 
   // Prefill soil temperature from the delivery's customer-location /
   // facility default, but only while the operator hasn't touched the
@@ -260,32 +283,31 @@ export function ApplicationForm({
     });
   }, [getFieldState, isEditMode, selectedDelivery, setValue, hideSoilTemperature]);
 
-  // Prefill the field position from the delivery's destination customer
-  // location, but only while the operator hasn't touched it (pin drag and
-  // address search set the fields dirty; prefills don't). While untouched,
-  // the position always mirrors the selected delivery — including clearing
-  // a stale prefill when the new destination has no GPS.
+  // In derive mode the position always mirrors the selected delivery's
+  // destination — on an edit too, so changing the delivery cannot leave the
+  // previous coordinates in form state behind a summary showing the new ones.
+  // It also clears a stale position when the new destination has no GPS.
+  // Manual mode owns the fields outright and is never overwritten here.
+  const derivedLatitude = derivedPosition?.gpsLatitude;
+  const derivedLongitude = derivedPosition?.gpsLongitude;
   useEffect(() => {
-    if (isEditMode || !selectedDelivery) return;
-    if (
-      getFieldState("gpsLatitude").isDirty ||
-      getFieldState("gpsLongitude").isDirty
-    ) {
-      return;
-    }
+    if (fieldPositionMode !== "derive" || !selectedDelivery) return;
 
-    const positionDefault = resolveApplicationPositionDefault({
-      delivery: selectedDelivery,
-    });
-    setValue("gpsLatitude", positionDefault?.gpsLatitude, {
+    setValue("gpsLatitude", derivedLatitude, {
       shouldDirty: false,
       shouldValidate: true,
     });
-    setValue("gpsLongitude", positionDefault?.gpsLongitude, {
+    setValue("gpsLongitude", derivedLongitude, {
       shouldDirty: false,
       shouldValidate: true,
     });
-  }, [getFieldState, isEditMode, selectedDelivery, setValue]);
+  }, [
+    derivedLatitude,
+    derivedLongitude,
+    fieldPositionMode,
+    selectedDelivery,
+    setValue,
+  ]);
 
   const moisturePercent = selectedDelivery?.moistureContentPercent ?? null;
   const appliedKgNum = typeof watchedAppliedKg === "string" ? parseFloat(watchedAppliedKg) : watchedAppliedKg;
@@ -360,8 +382,7 @@ export function ApplicationForm({
       ...data,
       biocharAppliedTons,
       biocharAppliedDryTons,
-      gisBoundaryReference:
-        data.evidenceMethod === "boundary" ? data.gisBoundaryReference : "",
+      gisBoundary: data.evidenceMethod === "boundary" ? data.gisBoundary : null,
     });
   });
 
@@ -541,16 +562,18 @@ export function ApplicationForm({
           </FormField>
         </div>
 
-        <PositionPicker
-          idPrefix="gps"
-          label="Field position"
-          accent="pink"
+        <FieldPositionField
+          derived={derivedPosition}
+          hasDelivery={!!selectedDelivery}
           latitude={gpsLatitude ?? null}
           longitude={gpsLongitude ?? null}
+          mode={fieldPositionMode}
+          onModeChange={setPickedFieldPositionMode}
           onPositionChange={({ lat, lng }) => {
             setValue("gpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
             setValue("gpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
           }}
+          onDerive={() => resetFieldPosition(resetField, derivedPosition)}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
           disabled={isSubmitting}
@@ -564,68 +587,27 @@ export function ApplicationForm({
       <FormSection
         title="Evidence"
         icon={<CameraIcon size={14} weight="bold" />}
-        hint="Isometric requires one of two evidence paths per application: geotagged stage photos, or a GIS boundary map with logbook quantities (Biochar Storage in Soil module §8.5)."
-        fields={["evidenceMethod", "gisBoundaryReference"]}
+        hint="Record the application area as a GIS reference and retain a dated logbook record for the quantity applied."
+        fields={["evidenceMethod", "gisBoundary"]}
       >
-        <div
-          className="grid grid-cols-1 gap-8 md:grid-cols-2"
-          role="radiogroup"
-          aria-label="Evidence method"
-        >
-          {applicationEvidenceMethods.map((method) => (
-            <label
-              key={method}
-              className={[
-                "flex min-h-44 cursor-pointer flex-col gap-4 border px-16 py-12 transition-colors duration-300",
-                evidenceMethod === method
-                  ? "border-[var(--color-interaction)] bg-[var(--color-background-interaction-light)]"
-                  : "border-[var(--color-border-tertiary)] bg-[var(--color-background-white)]",
-              ].join(" ")}
-            >
-              <span className="flex items-center gap-8">
-                <input
-                  type="radio"
-                  value={method}
-                  disabled={isSubmitting}
-                  className="size-16"
-                  {...register("evidenceMethod")}
-                />
-                <span className="body-small font-medium text-[var(--color-text-primary)]">
-                  {formatApplicationEvidenceMethod(method)}
-                </span>
-              </span>
-              <span className="body-caption text-[var(--color-text-tertiary)]">
-                {evidenceMethodDescriptions[method]}
-              </span>
-            </label>
-          ))}
-        </div>
-
-        {evidenceMethod === "boundary" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <FormField
-              id="gisBoundaryReference"
-              label="GIS boundary reference"
-              error={errors.gisBoundaryReference?.message}
-              helperText="Link to GIS layer data"
-            >
-              <FormInput
-                id="gisBoundaryReference"
-                type="text"
-                placeholder="e.g., https://maps.example.com/dec/plot-a"
-                disabled={isSubmitting}
-                error={!!errors.gisBoundaryReference}
-                {...register("gisBoundaryReference")}
-              />
-            </FormField>
-          </div>
-        )}
-
         <ApplicationEvidencePanel
           applicationId={application?.id}
-          mode={evidenceMethod ?? "visual"}
+          mode={evidenceMethod ?? "boundary"}
+          boundary={gisBoundary ?? null}
           disabled={isSubmitting}
           deferredAttachments={deferredAttachments}
+          onModeChange={(nextMode) =>
+            setValue("evidenceMethod", nextMode, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+          }
+          onBoundaryChange={(nextBoundary) =>
+            setValue("gisBoundary", nextBoundary, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+          }
         />
       </FormSection>
 

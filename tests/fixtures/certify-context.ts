@@ -69,7 +69,7 @@ export function factsFromMockedLineages(
         lineage.application.applicationDate ?? DEFAULT_FACT_DATE,
       fieldIdentifier: lineage.application.fieldIdentifier ?? null,
       evidenceMethod: lineage.application.evidenceMethod,
-      gisBoundaryReference: lineage.application.gisBoundaryReference ?? null,
+      gisBoundary: lineage.application.gisBoundary ?? null,
       biocharAppliedTons: lineage.application.biocharAppliedDryTons ?? 1,
       biocharAppliedDryTons: lineage.application.biocharAppliedDryTons ?? 1,
       soilTemperatureC: lineage.application.soilTemperatureC ?? 15,

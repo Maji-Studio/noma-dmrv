@@ -78,6 +78,64 @@ export const ROUTE_GEOMETRY_MAX_LEGS = 20;
 export const ROUTE_CACHE_COORD_DECIMALS = 5;
 
 // ---------------------------------------------------------------------------
+// GIS boundary normalization (server-side only)
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum raw GeoJSON text accepted by the normalization action (768 KB).
+ *
+ * Deliberately under Next's 1 MB default server-action body limit: at exactly
+ * 1 MB a file passed this check and was then refused by the framework with a
+ * generic transport error instead of the crafted size message, so the gap
+ * leaves room for RSC framing around the payload.
+ */
+export const GEOJSON_MAX_INPUT_BYTES = 768 * 1024;
+
+/** Maximum normalized envelope persisted on an application (512 KB). */
+export const GEOJSON_MAX_NORMALIZED_BYTES = 512 * 1024;
+
+/** Maximum number of area features retained in one boundary. */
+export const GEOJSON_MAX_FEATURES = 500;
+
+/** Maximum number of positions retained across all area features. */
+export const GEOJSON_MAX_VERTICES = 100_000;
+
+/** Stored coordinate precision, approximately 0.1 m at the equator. */
+export const GEOJSON_COORD_DECIMALS = 6;
+
+/** Maximum number of property keys retained on one feature. */
+export const GEOJSON_PROPERTY_KEY_CAP = 32;
+
+/** Maximum serialized property bytes retained on one feature. */
+export const GEOJSON_PROPERTY_BYTE_CAP = 8 * 1024;
+
+/**
+ * Smallest boundary area accepted, in hectares (1 m²). A collinear ring or a
+ * self-intersecting bow-tie normalizes cleanly but encloses nothing, and the
+ * evidence gate only checks that a boundary exists — so without a positive
+ * area floor a boundary with no extent would satisfy the GIS requirement.
+ */
+export const GEOJSON_MIN_AREA_HECTARES = 0.0001;
+
+/** Maximum normalization notes carried on one boundary envelope. */
+export const GEOJSON_MAX_NOTES = 32;
+
+/** Maximum characters in a single normalization note. */
+export const GEOJSON_MAX_NOTE_LENGTH = 200;
+
+/**
+ * Per-user abuse limit for boundary normalization. Each call parses, rewinds,
+ * and re-serializes up to a megabyte of text, so it is expensive in the way
+ * `withAction`'s limiter exists for. A real operator commits one boundary per
+ * application and retries a handful of times after a bad export.
+ */
+export const GIS_BOUNDARY_NORMALIZE_RATE_LIMIT = {
+  key: "gis-boundary:normalize",
+  max: 20,
+  windowMs: 60_000,
+} as const;
+
+// ---------------------------------------------------------------------------
 // MapTiler basemap (browser-safe, domain-locked public key)
 // ---------------------------------------------------------------------------
 

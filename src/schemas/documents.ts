@@ -19,8 +19,26 @@ export const DOCUMENT_TYPES = [
   "video",
   "pdf",
   "sensor_data",
+  "gis_boundary",
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  weighbridge_ticket: "Weighbridge ticket",
+  bill_of_lading: "Bill of lading",
+  other_transport_evidence: "Other transport evidence",
+  lab_report: "Lab report",
+  delivery_receipt: "Delivery receipt",
+  invoice: "Invoice",
+  pdd: "PDD",
+  affidavit: "Affidavit",
+  calibration_certificate: "Calibration certificate",
+  photo: "Photo",
+  video: "Video",
+  pdf: "PDF",
+  sensor_data: "Sensor data",
+  gis_boundary: "GIS boundary",
+};
 
 export const DOCUMENT_VISIBILITIES = ["private", "public"] as const;
 export type DocumentVisibility = (typeof DOCUMENT_VISIBILITIES)[number];
@@ -51,6 +69,12 @@ const TABULAR_MIMES = [
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ];
+const GEOJSON_MIMES = [
+  "application/geo+json",
+  "application/json",
+  "text/plain",
+  "",
+];
 
 interface UploadRule {
   maxBytes: number;
@@ -79,6 +103,7 @@ export const UPLOAD_RULES: Record<DocumentType, UploadRule> = {
   video: uploadRule(VIDEO_MIMES),
   pdf: uploadRule(PDF_MIMES),
   sensor_data: uploadRule(TABULAR_MIMES),
+  gis_boundary: uploadRule(GEOJSON_MIMES),
 };
 
 export function isAllowedMime(
@@ -100,7 +125,7 @@ export const requestUploadSchema = z
     entityId: z.string().uuid(),
     documentType: z.enum(DOCUMENT_TYPES),
     fileName: z.string().min(1).max(255),
-    contentType: z.string().min(1).max(255),
+    contentType: z.string().max(255),
     sizeBytes: z.number().int().nonnegative(),
     capturedAt: z.iso.datetime().optional(),
     gpsLatitude: z.number().min(-90).max(90).optional(),

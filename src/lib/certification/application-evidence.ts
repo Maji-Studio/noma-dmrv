@@ -12,6 +12,8 @@
  * Authoritative source (verify before any credit claim):
  * https://registry.isometric.com/module/biochar-storage-soil-environments
  */
+import type { GisBoundary } from "@/lib/geojson/types";
+
 export const APPLICATION_VISUAL_EVIDENCE_ROLES = [
   "stockpile",
   "spreading",
@@ -132,7 +134,7 @@ export interface ApplicationEvidenceDocument {
 /** Minimal application surface required by the application-evidence rule. */
 export interface ApplicationEvidenceApplication {
   evidenceMethod?: string | null;
-  gisBoundaryReference?: string | null;
+  gisBoundary?: GisBoundary | null;
 }
 
 export interface ApplicationEvidenceUploadedDocumentPredicate {
@@ -185,8 +187,8 @@ export type ApplicationEvidenceRequirement =
       gap: ApplicationEvidenceGapDescriptor;
     }
   | {
-      kind: "non-blank-application-field";
-      field: "gisBoundaryReference";
+      kind: "non-null-application-field";
+      field: "gisBoundary";
       gap: ApplicationEvidenceGapDescriptor;
     };
 
@@ -228,8 +230,8 @@ const VISUAL_EVIDENCE_REQUIREMENTS: readonly ApplicationEvidenceRequirement[] =
 
 const BOUNDARY_EVIDENCE_REQUIREMENTS = [
   {
-    kind: "non-blank-application-field",
-    field: "gisBoundaryReference",
+    kind: "non-null-application-field",
+    field: "gisBoundary",
     gap: { kind: "boundary-reference" },
   },
   {
@@ -351,9 +353,10 @@ export function getMissingApplicationEvidenceRequirements(
           return !documents.some((document) =>
             matchesApplicationEvidenceDocument(requirement.matcher, document),
           );
-        case "non-blank-application-field":
+        case "non-null-application-field":
           return (
-            (application[requirement.field]?.trim() ?? "").length === 0
+            application[requirement.field] === null ||
+            application[requirement.field] === undefined
           );
       }
     },
