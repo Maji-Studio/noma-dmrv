@@ -3,7 +3,7 @@
  * layout (a container query the utility classes have no name for), and the DOM
  * MapLibre generates or the viewer injects imperatively (markers, distance
  * chips, popups). Tokens only, per the concept build distilled in
- * docs/plans/2026-06-10-map-integration.md → Design reference.
+ * docs/archive/plans/2026-06-10-map-integration.md → Design reference.
  */
 
 /* ── map-view layout: the stages rail, the map pane, the docked record ───

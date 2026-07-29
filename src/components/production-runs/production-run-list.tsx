@@ -33,8 +33,6 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
-import { formatCount } from "@/lib/copy-utils";
-import { useImportProductionRunReadings } from "@/hooks/use-production-run-reading-imports";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -50,7 +48,6 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
-import { resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
@@ -60,14 +57,12 @@ import {
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
-import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
   buildProductionRunFeedstockDetailField,
-  buildProductionRunReadingsDetailField,
   buildProductionRunWindowDetailFields,
   productionRunStatusCertStatus,
 } from "./production-run-detail-fields";
@@ -273,7 +268,6 @@ export function ProductionRunList() {
   const updateRun = useUpdateProductionRun();
   const deleteRun = useDeleteProductionRun();
   const toast = useToast();
-  const importReadings = useImportProductionRunReadings();
 
   const runs = runsData?.items ?? [];
   const totalPages = runsData?.totalPages ?? 0;
@@ -302,69 +296,10 @@ export function ProductionRunList() {
         : "The production run was not created. Check the form and try again.";
     },
     unresolvedUpdateMessage:
-      "Resolve or remove the failed readings file before saving this production run.",
+      "Resolve or remove the failed attachment before saving this production run.",
     openEditOnFailure: (run) =>
       setSideSheet({ entity: run, mode: "edit" }),
     closeOnSuccess: () => setSideSheet(null),
-    onAfterFlush: async ({ flushResult }) => {
-      // Import every readings CSV that uploaded, including on a partial upload
-      // failure. Deferred retry skips uploaded entries, so delaying these
-      // imports would leave their documents without readings rows.
-      const readingsDocuments = flushResult.uploaded.filter(
-        (attachment) =>
-          attachment.documentType === "sensor_data" && attachment.documentId,
-      );
-      let importFailedCount = 0;
-      const importFailureMessages: string[] = [];
-      for (const attachment of readingsDocuments) {
-        try {
-          const importResult = await importReadings.mutateAsync(
-            attachment.documentId as string,
-          );
-          toast.success(
-            `Imported ${formatCount(importResult.insertedRows, "reading")}`,
-          );
-        } catch (error) {
-          importFailedCount += 1;
-          if (error instanceof Error && error.message.trim()) {
-            importFailureMessages.push(error.message.trim());
-          }
-        }
-      }
-
-      const uploadFailedCount = flushResult.failed.length;
-      if (uploadFailedCount === 0 && importFailedCount === 0) return;
-
-      const messages: string[] = [];
-      if (uploadFailedCount > 0) {
-        messages.push(
-          `${uploadFailedCount} ${
-            uploadFailedCount === 1
-              ? "attachment was not uploaded"
-              : "attachments were not uploaded"
-          }`,
-        );
-      }
-      if (importFailedCount > 0) {
-        messages.push(
-          `${formatCount(importFailedCount, "readings file")} ${
-            importFailedCount === 1
-              ? "was not imported"
-              : "were not imported"
-          }`,
-        );
-      }
-      const firstImportFailureMessage = importFailureMessages[0];
-      const importFailureDetail = firstImportFailureMessage
-        ? ` Import error: ${firstImportFailureMessage}`
-        : "";
-      return {
-        failureMessage: `Production run created, but ${messages.join(" and ")}. Resolve ${messages.length > 1 || importFailedCount > 1 || uploadFailedCount > 1 ? "them" : "it"} below.${importFailureDetail}`,
-        // Import-only failures are durable on the document and need no upload
-        // retry queue; upload failures retain the queue for retry in edit mode.
-        clearAttachmentsOnFailure: uploadFailedCount === 0,
-      };
-    },
     onSuccess: () =>
       toast.success("Production run created."),
   });
@@ -531,11 +466,6 @@ export function ProductionRunList() {
   const sideSheetOpen = !!displaySideSheet;
   const sideSheetMode = displaySideSheet?.mode ?? "create";
   const sideSheetEntity = displaySideSheet?.entity ?? null;
-  const sideSheetTimeZone = resolveFacilityTimezone(
-    facilities,
-    sideSheetEntity?.facilityId,
-  );
-
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create Production Run" : sideSheetEntity?.code ?? "";
 
@@ -748,22 +678,13 @@ export function ProductionRunList() {
             ],
           },
           {
-            title: "Readings CSV import",
-            fields: [
-              buildProductionRunReadingsDetailField(
-                sideSheetEntity.status,
-                sideSheetEntity.readingsCount,
-              ),
-            ],
+            title: "Readings file",
+            fields: [],
             content: (
-              <div className="space-y-20">
-                <ProductionReadingsDocuments productionRunId={sideSheetEntity.id} readOnly />
-                <ProductionRunReadingTable
-                  productionRunId={sideSheetEntity.id}
-                  timeZone={sideSheetTimeZone}
-                  readOnly
-                />
-              </div>
+              <ProductionReadingsDocuments
+                productionRunId={sideSheetEntity.id}
+                readOnly
+              />
             ),
           },
           {

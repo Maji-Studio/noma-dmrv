@@ -24,8 +24,6 @@ import { useForm, useWatch, Controller } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, FormActions, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, StockReconciliationLink, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
-import { ProductionRunReadingTable } from "@/components/production-run-readings";
-import { productionRunTelemetryCertification } from "./production-run-detail-fields";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
 import {
@@ -338,12 +336,6 @@ export function ProductionRunForm({
     : productionRun?.status === "complete"
       ? "satisfied"
       : "missing";
-  const readingsCertification = productionRunTelemetryCertification(
-    productionRun?.status ?? "draft",
-    productionRun?.readingsCount ?? 0,
-    isEditMode,
-  );
-
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedStatus = useWatch({ control, name: "status" });
@@ -920,30 +912,19 @@ export function ProductionRunForm({
 
       </FormSection>
 
-      {/* ── Readings CSV import ── */}
-      <FormSection title="Readings CSV import" icon={<FileCsvIcon size={14} weight="bold" />}>
+      {/* ── Readings file ── */}
+      <FormSection title="Readings file" icon={<FileCsvIcon size={14} weight="bold" />}>
 
         <FormField
           id="readingsCsv"
-          label="Readings CSV"
-          helperText="Required columns: timestamp_utc, temperature_c, and pressure_bar. Dryer and reactor frequency columns are optional. A file can span several UTC days; only readings within the production run appear below."
-          certifyRequired={readingsCertification.certifyRequired}
-          certifyStatus={readingsCertification.certifyStatus}
+          label="Readings CSV file"
+          helperText="noma stores the original CSV unchanged and does not inspect its contents."
         >
-          <div className="space-y-12">
-            <ProductionReadingsDocuments
-              productionRunId={productionRun?.id}
-              deferredAttachments={deferredAttachments}
-              disabled={isSubmitting}
-            />
-            {productionRun?.id && (
-              <ProductionRunReadingTable
-                productionRunId={productionRun.id}
-                timeZone={formTimezone}
-                compact
-              />
-            )}
-          </div>
+          <ProductionReadingsDocuments
+            productionRunId={productionRun?.id}
+            deferredAttachments={deferredAttachments}
+            disabled={isSubmitting}
+          />
         </FormField>
       </FormSection>
       </FormSpine>

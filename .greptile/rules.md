@@ -26,8 +26,13 @@ linting, dependency advice, and routine style feedback.
 - Domain terms in `CONTEXT.md` are exact. In particular, a production run is not
   a Removal, a credit batch is a production cohort, and bin stock changes only
   through bin movements.
-- Facility context is a workflow boundary even while the application is
-  single-organization. Attribution `userId` fields are not tenant boundaries.
+- **Organization isolation is the primary security boundary.** Every normal
+  domain read/write must carry the active `organizationId` through data access
+  and every relevant join; filtering only by `facilityId` is a cross-tenant
+  defect. Facility context is the workflow/view boundary inside an
+  organization. Attribution `userId` fields are neither tenant nor workflow
+  boundaries. Deliberate public/privileged seams must retain their exact
+  `// org-scope-ok:` waiver and independent authorization mechanism.
 - Production-run outcomes have distinct accounting meaning: failed is a real
   material event, cancelled is an event that never happened.
 - Archived facility children disappear from lists and options but remain

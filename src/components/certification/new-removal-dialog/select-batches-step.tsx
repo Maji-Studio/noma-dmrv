@@ -183,8 +183,9 @@ function IncompleteCard({
       <ul className="flex flex-col gap-10">
         {gaps.map((check, index) => {
           // The exact fix workflow for this gap — the same target map the batch
-          // page's health strip uses (batch→samples, run→readings, application→
-          // deliveries), so a gap resolves identically wherever it's shown.
+          // page's health strip uses (batch→samples, run→production data,
+          // application→deliveries), so a gap resolves identically wherever
+          // it's shown.
           const fix = batchHealthFixLinkFor(check, facilityId, batch.id);
           return (
             <li
