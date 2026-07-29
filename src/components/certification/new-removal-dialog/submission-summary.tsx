@@ -163,7 +163,9 @@ export function SubmissionSummary({
               ? `${facts.projectLabel} (${facts.environmentLabel})`
               : "Not linked"}
           </Fact>
-          <Fact label="Crediting window">{facts.windowLabel ?? "Not set"}</Fact>
+          <Fact label="Reporting window">
+            {facts.reportingWindowLabel ?? "Not compiled yet"}
+          </Fact>
           <Fact
             label={facts.batchCount === 1 ? "Credit batch" : "Credit batches"}
           >

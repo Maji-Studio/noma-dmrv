@@ -38,8 +38,15 @@ const SECOND_BATCH = {
   applicationCount: 3,
 } as MemberCreditBatch;
 
+// Midday UTC so the rendered range does not shift a day under a negative
+// local offset.
+const REPORTING_WINDOW = {
+  startedOn: "2026-06-05T12:00:00.000Z",
+  completedOn: "2026-08-20T12:00:00.000Z",
+};
+
 const READY_COMPILATION = {
-  review: { pendingSourceCount: 2 },
+  review: { pendingSourceCount: 2, reportingWindow: REPORTING_WINDOW },
   blockers: [],
   warnings: [],
   snapshot: {},
@@ -226,7 +233,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
 });
 
 describe("buildSubmissionFacts panel data", () => {
-  it("totals dry mass and merges the crediting window across batches", () => {
+  it("totals dry mass and reports the compiled reporting window", () => {
     expect(
       facts({
         ctx: {
@@ -239,9 +246,15 @@ describe("buildSubmissionFacts panel data", () => {
       batchCount: 2,
       runCount: 3,
       applicationCount: 4,
-      windowLabel: "Jun 5 – Aug 20, 2026",
+      reportingWindowLabel: "Jun 5 – Aug 20, 2026",
       durabilityLabel: "1000-year (R₀ reflectance), 200-year (H:Corg)",
       samplingLabel: "Sampled, Not sampled",
+    });
+  });
+
+  it("has no reporting window until the submission compiles", () => {
+    expect(facts({ compilation: null })).toMatchObject({
+      reportingWindowLabel: null,
     });
   });
 

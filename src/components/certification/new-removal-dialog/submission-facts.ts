@@ -34,7 +34,8 @@ export interface SubmissionFacts {
   batchCount: number;
   runCount: number;
   applicationCount: number;
-  windowLabel: string | null;
+  /** The window the registry actually receives, not the credit-batch bounds. */
+  reportingWindowLabel: string | null;
   projectLabel: string | null;
   environmentLabel: string;
   isProduction: boolean;
@@ -107,17 +108,18 @@ function uniqueLabels(values: string[]): string {
   return [...new Set(values)].join(", ");
 }
 
-function creditingWindowLabel(batches: MemberCreditBatch[]): string | null {
-  if (batches.length === 0) return null;
-  const start = batches
-    .map((batch) => batch.startDate)
-    .sort()
-    .at(0);
-  const end = batches
-    .map((batch) => batch.endDate)
-    .sort()
-    .at(-1);
-  return start && end ? formatDateRange(start, end) : null;
+/**
+ * The outbound reporting window: earliest production-run start through latest
+ * application date, exactly as `removal-submission-build.ts` sends it. The
+ * credit batches' own configured bounds are a different range, so showing them
+ * here would promise the operator a window the registry never receives.
+ */
+function reportingWindowLabel(
+  compilation: RemovalCompilationView | null,
+): string | null {
+  const window = compilation?.review.reportingWindow;
+  if (!window?.startedOn || !window.completedOn) return null;
+  return formatDateRange(window.startedOn, window.completedOn);
 }
 
 export function buildSubmissionFacts({
@@ -188,7 +190,7 @@ export function buildSubmissionFacts({
     batchCount: batches.length,
     runCount: sum(batches, (batch) => batch.productionRunCount),
     applicationCount: sum(batches, (batch) => batch.applicationCount),
-    windowLabel: creditingWindowLabel(batches),
+    reportingWindowLabel: reportingWindowLabel(compilation),
     projectLabel: ctx.project?.name ?? ctx.mapping?.externalProjectId ?? null,
     environmentLabel: ctx.isProduction ? "Production" : "Sandbox",
     isProduction: ctx.isProduction,
