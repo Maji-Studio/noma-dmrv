@@ -209,7 +209,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
     expect(facts({ compilation: BLOCKED_COMPILATION })).toMatchObject({
       state: "blocked",
       headline: "Cannot submit yet",
-      detail: "Resolve the issues below.",
+      detail: "Clear the blockers below.",
       blockers: BLOCKED_COMPILATION.blockers,
     });
   });
