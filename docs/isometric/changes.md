@@ -342,11 +342,12 @@ which supersedes the journal half of ADR 0005.
 ## 2026-07-29 (Safety margin mass is a Removal-scope datapoint — named carve-out)
 
 The 29 Jul Removal Template (`Dark Earth Carbon Template (29 Jul)`) added a
-`Safety margin` component under `miscellaneous / mass_based_ci_emissions`: a
-flat conservatism deduction of 20 kgCO2e per tonne of biochar. Its
-`carbon_intensity` input is a `fixed` input pre-bound on the template (noma
-submits nothing for it; attaching a justification document to that Datapoint's
-Sources is an operator action in the registry UI). Its `mass` input is
+`Safety margin` component under `miscellaneous / mass_based_ci_emissions`.
+Read-only inspection on 2026-07-29 observed its active-template fixed Datapoint
+`dtp_1KS4PMV99SBXX88K` at 20 kgCO2e/metric_ton. That value is registry-owned
+configuration, not a pinned protocol requirement. noma submits nothing for
+`carbon_intensity`; attaching its justification Source is an operator action
+in the registry UI. Its `mass` input is
 `monitored` and previously hit the ADR 0005/0018 PROJECT-scope guard: sandbox
 submitted a 0 kg no-sources stub, production failed closed.
 
@@ -356,7 +357,7 @@ named-component carve-out: `lookupPeriodInputTuple` takes the template
 component display name and releases a period tuple only when the matching
 `INPUT_MAPPING` entry names that component in `sourceByComponent`. The only
 carve-out is `"safety margin"` → `totalBiocharDryMassKg` (dry mass, bucket
-`stored` — the identical attribution-scaled reduce the sequestration
+`stored` — the identical attribution basis used by the sequestration
 `product_mass` claims). Every other `miscellaneous` component, and all six
 other period tuples, keep the fail-closed PROJECT-scope behavior; the guard's
 error text now lists the recognized carve-out names so a renamed registry

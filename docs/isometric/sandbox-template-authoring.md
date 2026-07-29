@@ -56,8 +56,12 @@ Isometric UI, attaching the source LCA PDF to the Component's Sources
 field (ADR 0018 — noma keeps no journal copy and runs no drift
 reconciliation). The nightly `pnpm isometric:coverage-check` step in
 `isometric-health.yml` reads `tests/fixtures/isometric-coverage.json`
-and asserts that every monitored tuple in the live template is in
-`INPUT_MAPPING` and not in `PERIOD_INPUT_TUPLES`.
+and asserts that every monitored tuple in the live template has an ordinary
+or sequestration binding. The active sandbox template explicitly allowlists
+only its six temporary period inputs: concentration and mass flow for
+`Pyrolyzer CO emissions` and `Pyrolyzer CH₄ emissions`, plus distance for
+`Staff travel flights` and `Staff travel local`. Any other PROJECT-scope tuple,
+including a renamed `Safety margin`, fails the check.
 
 **Refresh the fixture** whenever a new sandbox project ships, a
 template gains a component, or an LCA window rolls — add or update the
