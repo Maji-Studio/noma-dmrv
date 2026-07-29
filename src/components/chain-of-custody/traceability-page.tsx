@@ -29,8 +29,7 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
-import { ArrowLeftIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button } from "@/components/ui/button";
+import { TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
 import { PageHeader } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
@@ -50,11 +49,15 @@ import {
 import { ChainEdge } from "./chain-edge";
 import { ChainNode, type ChainNodeData } from "./chain-node";
 import { ChainNodeSheet, type ChainNodeSheetNode } from "./chain-node-sheet";
-import { CreditBatchCardSelector } from "./credit-batch-card-selector";
 import { CarbonTransitPanel } from "./map";
-import { RunFilterSelect, type RunFilterOption } from "./run-filter-select";
+// PROTOTYPE — map-view + header rework studies (?variant= and ?header=
+// switchers, dev only). The full map view and the header render through these
+// wrappers; split view keeps the real panel.
+import { PrototypeMapView } from "./map/map-prototype/prototype-map-view";
+import { type RunPickerOption } from "./run-picker";
 import { BatchSankey } from "./sankey";
 import { ApplicationTrail } from "./trail";
+import { TraceabilityHeader } from "./traceability-header";
 import { useCreditBatchCardSelection } from "./use-credit-batch-card-selection";
 import {
   reachableNodeIds,
@@ -86,19 +89,8 @@ const BATCH_VIEW_MODES: Array<{ value: BatchViewMode; label: string }> = [
   { value: "sankey", label: "Sankey" },
 ];
 
-const MASS_UNIT_MODES: Array<{
-  value: "kg" | "pct";
-  label: string;
-  title: string;
-}> = [
-  { value: "kg", label: "kg", title: "Show mass moving along each step" },
-  { value: "pct", label: "%", title: "Show each step's share of its branch" },
-];
-
 const DEFAULT_APPLICATION_VIEW: ApplicationViewMode = "lineage";
 const DEFAULT_BATCH_VIEW: BatchViewMode = "dag";
-
-const RUN_SELECTOR_WRAPPER_CLASS = "w-[320px] max-w-full";
 
 function parseApplicationView(raw: string | null): ApplicationViewMode {
   return APPLICATION_VIEW_MODES.some((mode) => mode.value === raw)
@@ -321,9 +313,9 @@ export function TraceabilityPage() {
   const [massUnit, setMassUnit] = useState<"kg" | "pct">("kg");
   // Node detail side-sheet — opened by a card click instead of navigating.
   const [sheetNode, setSheetNode] = useState<ChainNodeSheetNode | null>(null);
-  const openNodeSheet = (node: Node) => {
+  const toSheetNode = (node: Node): ChainNodeSheetNode => {
     const data = node.data as unknown as ChainNodeData;
-    setSheetNode({
+    return {
       id: node.id,
       label: data.label,
       code: data.code,
@@ -334,8 +326,18 @@ export function TraceabilityPage() {
       details: data.details,
       href: data.href,
       drillable: data.drillable,
-    });
+    };
   };
+  const openNodeSheet = (node: Node) => {
+    setSheetNode(toSheetNode(node));
+  };
+
+  // PROTOTYPE (map variant D): the same detail payload rendered as a popover
+  // INSIDE the map pane instead of the global slide-over. Closing it releases
+  // the shared focus. Delete with map-prototype/.
+  const [mapDetailNode, setMapDetailNode] = useState<ChainNodeSheetNode | null>(
+    null
+  );
 
   const {
     data: chainData,
@@ -370,8 +372,8 @@ export function TraceabilityPage() {
         )
       : undefined;
   const batchLineages = filteredBatchLineages?.map((lineage) => lineage.chain);
-  const runOptions: RunFilterOption[] = (() => {
-    const byRun = new Map<string, RunFilterOption>();
+  const runOptions: RunPickerOption[] = (() => {
+    const byRun = new Map<string, RunPickerOption>();
     for (const lineage of batchData?.lineages ?? []) {
       const run = lineage.chain.productionRun;
       if (!run) continue;
@@ -468,11 +470,13 @@ export function TraceabilityPage() {
 
   const handleBatchChange = (creditBatchId: string) => {
     setSelection(null);
+    setMapDetailNode(null);
     batchSelection.selectBatch(creditBatchId);
   };
 
   const handleRunChange = (runId: string | undefined) => {
     setSelection(null);
+    setMapDetailNode(null);
     updateParams((params) => {
       if (runId) {
         params.set("run", runId);
@@ -485,6 +489,7 @@ export function TraceabilityPage() {
   /** Batch DAG drill-down: open one member application, keeping the batch. */
   const drillDownToApplication = (applicationId: string) => {
     setSelection(null);
+    setMapDetailNode(null);
     updateParams((params) => {
       params.set("application", applicationId);
       params.delete("view");
@@ -493,6 +498,7 @@ export function TraceabilityPage() {
 
   const backToBatch = () => {
     setSelection(null);
+    setMapDetailNode(null);
     updateParams((params) => {
       params.delete("application");
       params.delete("view");
@@ -529,6 +535,28 @@ export function TraceabilityPage() {
     if (kind === "application" && entityId) {
       drillDownToApplication(entityId);
     }
+  };
+
+  // PROTOTYPE (map variant D): a rail row click focuses the sub-chain on the
+  // map (no toggle-off — the popover's close is the way back) and shows the
+  // record's details in the map-pane popover. Delete with map-prototype/.
+  const openMapNodeDetails = (nodeId: string) => {
+    setSelection((current) => ({
+      nodeId,
+      nonce: (current?.nonce ?? 0) + 1,
+    }));
+    const graphNode = (anchor === "batch" ? batchNodes : nodes).find(
+      (candidate) => candidate.id === nodeId
+    );
+    setMapDetailNode(graphNode ? toSheetNode(graphNode) : null);
+  };
+  const closeMapDetail = () => {
+    setMapDetailNode(null);
+    clearSelection();
+  };
+  const traceFromMapDetail = (nodeId: string) => {
+    setMapDetailNode(null);
+    traceFromSheet(nodeId);
   };
 
   const facility =
@@ -572,7 +600,7 @@ export function TraceabilityPage() {
     }
     if (applicationView === "map") {
       return (
-        <CarbonTransitPanel
+        <PrototypeMapView
           source={{ kind: "application", id: selectedApplicationId }}
           lineages={chainData ? [chainData] : undefined}
           view="map"
@@ -580,6 +608,10 @@ export function TraceabilityPage() {
           focusNodeIds={focusNodeIds}
           onNodeSelect={selectNode}
           onClearSelection={clearSelection}
+          onNodeDetails={openMapNodeDetails}
+          detailNode={mapDetailNode}
+          onDetailClose={closeMapDetail}
+          onDetailTrace={traceFromMapDetail}
         />
       );
     }
@@ -660,7 +692,7 @@ export function TraceabilityPage() {
     }
     if (batchView === "map") {
       return (
-        <CarbonTransitPanel
+        <PrototypeMapView
           source={{ kind: "creditBatch", id: selectedBatchId }}
           lineages={batchLineages}
           view="map"
@@ -668,6 +700,10 @@ export function TraceabilityPage() {
           focusNodeIds={focusNodeIds}
           onNodeSelect={selectNode}
           onClearSelection={clearSelection}
+          onNodeDetails={openMapNodeDetails}
+          detailNode={mapDetailNode}
+          onDetailClose={closeMapDetail}
+          onDetailTrace={traceFromMapDetail}
         />
       );
     }
@@ -697,117 +733,29 @@ export function TraceabilityPage() {
         {/* Horizontal rhythm matches the app shell (container-max); only the
             canvas below is full-bleed. */}
         <header className="shrink-0 border-b border-[var(--color-border-secondary)]">
-          <div className="container-max py-16 flex flex-col gap-16">
-          <div className="flex items-start justify-between gap-16">
-            <PageHeader
-              title="Traceability"
-              subtitle="Select a credit batch to roll up its provenance, narrow it by production run, or click an application card to trace a single rollback."
-            />
-
-            <div className="text-right max-w-[320px]">
-              <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
-                Facility
-              </p>
-              <p className="body-medium text-[var(--color-text-secondary)]">
-                {facility
-                  ? `${facility.code}: ${facility.name}`
-                  : "Resolved from the selection"}
-              </p>
-            </div>
-          </div>
-
-          <CreditBatchCardSelector
+          <TraceabilityHeader
+            facility={facility ?? null}
             batches={batchSelection.batches}
             selectedBatchId={selectedBatchId}
-            isLoading={batchSelection.isLoading}
-            isError={batchSelection.isError}
-            error={batchSelection.error}
-            onSelect={handleBatchChange}
+            batchesLoading={batchSelection.isLoading}
+            batchesError={batchSelection.isError}
+            batchesErrorDetail={batchSelection.error}
+            onSelectBatch={handleBatchChange}
+            anchor={anchor}
+            runOptions={runOptions}
+            selectedRunId={selectedRunId}
+            onRunChange={handleRunChange}
+            runFilterDisabled={batchLoading || runOptions.length === 0}
+            showBackToBatch={anchor === "application" && !!selectedBatchId}
+            onBackToBatch={backToBatch}
+            showMassToggle={showMassToggle}
+            massUnit={massUnit}
+            onMassUnitChange={setMassUnit}
+            viewModes={viewModes}
+            activeView={activeView}
+            defaultView={defaultView}
+            onViewChange={handleViewChange}
           />
-
-          <div className="flex flex-wrap items-end justify-between gap-16">
-            <div className="flex flex-wrap items-end gap-16">
-              {anchor === "batch" ? (
-                <div className={RUN_SELECTOR_WRAPPER_CLASS} data-testid="chain-run-select">
-                  <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)] mb-8">
-                    Production Run
-                  </p>
-                  <RunFilterSelect
-                    runs={runOptions}
-                    value={selectedRunId}
-                    onChange={handleRunChange}
-                    disabled={batchLoading || runOptions.length === 0}
-                  />
-                </div>
-              ) : null}
-              {anchor === "application" && selectedBatchId ? (
-                <Button
-                  variant="default"
-                  onClick={backToBatch}
-                  data-testid="chain-back-to-batch"
-                  className="border-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] text-[11px] tracking-[0.06em] text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
-                >
-                  <ArrowLeftIcon size={14} weight="bold" />
-                  Batch roll-up
-                </Button>
-              ) : null}
-            </div>
-
-            {anchor !== "none" ? (
-              <div className="flex flex-wrap items-end gap-12">
-                {showMassToggle ? (
-                  <div
-                    className="flex border-[1.5px] border-[var(--clr-dark-purple-20)]"
-                    role="group"
-                    aria-label="Edge label unit"
-                    data-testid="chain-mass-toggle"
-                  >
-                    {MASS_UNIT_MODES.map((mode) => (
-                      <button
-                        key={mode.value}
-                        type="button"
-                        aria-pressed={massUnit === mode.value}
-                        onClick={() => setMassUnit(mode.value)}
-                        title={mode.title}
-                        className={cn(
-                          "cursor-pointer border-r-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] py-10 font-mono text-[11px] font-medium uppercase tracking-[0.06em] last:border-r-0",
-                          massUnit === mode.value
-                            ? "bg-[var(--clr-dark-purple)] text-[var(--color-background-white)]"
-                            : "text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
-                        )}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                <div
-                  className="flex border-[1.5px] border-[var(--clr-dark-purple-20)]"
-                  role="group"
-                  aria-label="View mode"
-                  data-testid="chain-view-segment"
-                >
-                  {viewModes.map((mode) => (
-                    <button
-                      key={mode.value}
-                      type="button"
-                      aria-pressed={activeView === mode.value}
-                      onClick={() => handleViewChange(mode.value, defaultView)}
-                      className={cn(
-                        "cursor-pointer border-r-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] py-10 font-mono text-[11px] font-medium uppercase tracking-[0.06em] last:border-r-0",
-                        activeView === mode.value
-                          ? "bg-[var(--clr-dark-purple)] text-[var(--color-background-white)]"
-                          : "text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
-                      )}
-                    >
-                      {mode.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-          </div>
         </header>
 
         <div className="flex-1 min-h-0 relative">

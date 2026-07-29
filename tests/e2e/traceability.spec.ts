@@ -143,8 +143,9 @@ async function clearRememberedBatchSelections(page: Page) {
   }, TRACEABILITY_BATCH_STORAGE_PREFIX);
 }
 
-async function selectBatchCard(page: Page, creditBatchId: string) {
-  await page.getByTestId(`chain-batch-card-${creditBatchId}`).click();
+async function selectBatch(page: Page, creditBatchId: string) {
+  await page.getByTestId("chain-batch-selector-trigger").click();
+  await page.getByTestId(`chain-batch-option-${creditBatchId}`).click();
 }
 
 async function seedBatchOptions(seededData: SeededChainData) {
@@ -410,7 +411,7 @@ test.beforeEach(async ({ adminPage }) => {
 });
 
 test.describe("Traceability Visualization", () => {
-  test("page loads with the batch-card selector empty state", async ({
+  test("page loads with the batch dropdown selector empty state", async ({
     adminPage,
     seededData,
     cleanupTestData,
@@ -423,16 +424,14 @@ test.describe("Traceability Visualization", () => {
     await adminPage.goto(traceabilityUrl(seededData.facility.id));
 
     await expect(
-      adminPage.getByRole("heading", { name: /Traceability/i })
+      adminPage.locator("header").getByText("Traceability", { exact: true })
     ).toBeVisible();
     await expect(adminPage.getByText(/No credit batches/i)).toHaveCount(1);
     await expect(
       adminPage.getByTestId("chain-batch-selector")
-    ).toContainText("No credit batches for this facility");
+    ).toContainText("No credit batches yet");
     await expect(
-      adminPage.getByRole("radiogroup", {
-        name: "Credit batches for this facility",
-      })
+      adminPage.getByTestId("chain-batch-selector-trigger")
     ).toHaveCount(0);
     // The run filter is derived from the batch, so it only renders once a
     // batch anchors the page.
@@ -492,7 +491,9 @@ test.describe("Traceability Visualization", () => {
       timeout: 15000,
     });
     await expect(
-      adminPage.getByText(`${seededData.facility.code}: ${seededData.facility.name}`)
+      adminPage.getByTitle(
+        `${seededData.facility.code} - ${seededData.facility.name}`
+      )
     ).toBeVisible({ timeout: 10000 });
     await expect(
       adminPage.locator(".react-flow__node").filter({ hasText: lineage.application.code }).first()
@@ -544,11 +545,8 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
       new RegExp(`batch=${batches.newest.id}`),
     );
     await expect(
-      adminPage.getByTestId(`chain-batch-radio-${batches.newest.id}`),
-    ).toBeChecked();
-    await expect(
-      adminPage.getByTestId(`chain-batch-card-${batches.newest.id}`),
-    ).toContainText("Selected");
+      adminPage.getByTestId("chain-batch-selector-trigger"),
+    ).toContainText(batches.newest.code);
     const rememberedBatchId = await adminPage.evaluate(
       (key) => window.localStorage.getItem(key),
       batchStorageKey(seededData.facility.id),
@@ -577,11 +575,11 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
       new RegExp(`batch=${batches.older.id}`),
     );
     await expect(
-      adminPage.getByTestId(`chain-batch-radio-${batches.older.id}`),
-    ).toBeChecked();
+      adminPage.getByTestId("chain-batch-selector-trigger"),
+    ).toContainText(batches.older.code);
     await expect(
-      adminPage.getByTestId(`chain-batch-radio-${batches.newest.id}`),
-    ).not.toBeChecked();
+      adminPage.getByTestId("chain-batch-selector-trigger"),
+    ).not.toContainText(batches.newest.code);
   });
 
   test("batch deep link renders the merged roll-up with shared runs deduped", async ({
@@ -600,11 +598,13 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
       timeout: 15000,
     });
     await expect(
-      adminPage.getByText(`${seededData.facility.code}: ${seededData.facility.name}`)
+      adminPage.getByTitle(
+        `${seededData.facility.code} - ${seededData.facility.name}`
+      )
     ).toBeVisible({ timeout: 10000 });
     await expect(
-      adminPage.getByTestId(`chain-batch-radio-${batch.ids.creditBatch}`),
-    ).toBeChecked();
+      adminPage.getByTestId("chain-batch-selector-trigger"),
+    ).toContainText(batch.codes.creditBatch);
 
     // Both member applications render…
     await expect(
@@ -631,7 +631,7 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     await expect(segment.getByRole("button", { name: "Sankey" })).toBeVisible();
   });
 
-  test("batch card selection drills down to an application and back", async ({
+  test("batch selection drills down to an application and back", async ({
     adminPage,
     seededData,
     cleanupTestData,
@@ -648,18 +648,18 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     );
     await expect(adminPage).not.toHaveURL(/batch=/);
     await expect(
-      adminPage.getByTestId(`chain-batch-radio-${batch.ids.creditBatch}`),
-    ).not.toBeChecked();
+      adminPage.getByTestId("chain-batch-selector-trigger"),
+    ).toContainText("Choose a credit batch");
 
-    await selectBatchCard(adminPage, batch.ids.creditBatch);
+    await selectBatch(adminPage, batch.ids.creditBatch);
 
     await expect(adminPage).toHaveURL(
       new RegExp(`/traceability\\?.*batch=${batch.ids.creditBatch}`)
     );
     await expect(adminPage).not.toHaveURL(/application=/);
     await expect(
-      adminPage.getByTestId(`chain-batch-radio-${batch.ids.creditBatch}`),
-    ).toBeChecked();
+      adminPage.getByTestId("chain-batch-selector-trigger"),
+    ).toContainText(batch.codes.creditBatch);
     const rememberedBatchId = await adminPage.evaluate(
       (key) => window.localStorage.getItem(key),
       batchStorageKey(seededData.facility.id),
@@ -683,8 +683,8 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
       new RegExp(`batch=${batch.ids.creditBatch}`)
     );
     await expect(
-      adminPage.getByTestId(`chain-batch-radio-${batch.ids.creditBatch}`),
-    ).toBeChecked();
+      adminPage.getByTestId("chain-batch-selector-trigger"),
+    ).toContainText(batch.codes.creditBatch);
     // Drill-down shows the application view modes, incl. the Trail.
     await expect(
       adminPage
