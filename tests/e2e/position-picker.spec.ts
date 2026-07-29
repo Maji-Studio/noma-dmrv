@@ -253,8 +253,20 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await expect(
       dialog.getByPlaceholder(/Address search|Search address or place/i)
     ).toBeVisible();
-    await expect(dialog.getByLabel("GPS latitude")).toBeVisible();
-    await expect(dialog.getByLabel("GPS longitude")).toBeVisible();
+    const latitudeInput = dialog.getByLabel("GPS latitude");
+    const longitudeInput = dialog.getByLabel("GPS longitude");
+    await expect(latitudeInput).toBeEditable();
+    await expect(longitudeInput).toBeEditable();
+    await latitudeInput.fill(String(DAR.lat));
+    await expect(latitudeInput).toHaveValue(String(DAR.lat));
+    await longitudeInput.fill(String(DAR.lng));
+    await expect(latitudeInput).toHaveValue(String(DAR.lat));
+    await expect(longitudeInput).toHaveValue(String(DAR.lng));
+    const search = dialog.locator("#pending-loc-gps-address-search");
+    await search.fill("Dodoma");
+    await page.getByRole("option", { name: DODOMA.label }).click();
+    await expect(latitudeInput).not.toHaveValue(String(DAR.lat));
+    await expect(longitudeInput).not.toHaveValue(String(DAR.lng));
     await expect(
       dialog.getByLabel("Default soil temperature (°C)")
     ).toBeVisible();
