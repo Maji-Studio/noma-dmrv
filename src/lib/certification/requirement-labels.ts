@@ -89,7 +89,7 @@ export const CERT_REQUIREMENT_META: Record<
   entityReadiness: {
     requirementLabel: "Certifier fields on linked records",
     whyDetail:
-      "The certifier requires fields on the production runs and Samples linked to this credit batch. Missing production or lab fields block the Removal; application evidence warnings are surfaced separately.",
+      "The certifier requires fields on the production runs and Samples linked to this credit batch. Missing production or lab fields block the Removal. Complete each listed field before grouping the batch.",
   },
   mapping: {
     requirementLabel: "Facility linked to a registry project",

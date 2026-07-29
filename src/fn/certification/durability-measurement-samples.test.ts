@@ -311,7 +311,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
     );
   });
 
-  it("adds the durability ledger to every 1000-year measurement-sample input without replacing Inventory", async () => {
+  it("uses the durability ledger for every 1000-year input without requiring an Application logbook", async () => {
     const patch = vi.fn(
       async (path: string, body: { source_ids: string[] }) => ({
         id: path.split("/").at(-1),
@@ -319,15 +319,6 @@ describe("patchMeasurementSampleSourceBindings", () => {
       }),
     );
     const creditBatchId = "credit-batch-1";
-    const inventoryBinding = classifyRemovalSourceCandidate({
-      documentType: "pdf",
-      metadata: { logbookEvidenceType: "inventory" },
-      lineage: {
-        entityType: "application",
-        entityId: "application-1",
-        entityLabel: "Application APP-001",
-      },
-    })!;
     const durabilityBinding = classifyRemovalSourceCandidate({
       documentType: "pdf",
       metadata: {
@@ -344,11 +335,6 @@ describe("patchMeasurementSampleSourceBindings", () => {
     })!;
     const sourceBindingPlan = buildRemovalSourceBindingPlan({
       candidates: [
-        {
-          documentId: "document-inventory",
-          sourceId: "source-inventory",
-          binding: inventoryBinding,
-        },
         {
           documentId: "document-durability-ledger",
           sourceId: "source-durability-ledger",
@@ -411,7 +397,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
     expect(patch).toHaveBeenCalledWith(
       "/datapoints/datapoint-product-mass",
       expect.objectContaining({
-        source_ids: ["source-durability-ledger", "source-inventory"],
+        source_ids: ["source-durability-ledger"],
       }),
     );
     expect(patch).toHaveBeenCalledWith(

@@ -26,28 +26,6 @@ function documentMatcherSql(
         and ${documents.metadata}->>${matcher.geotagStatusMetadataKey} = ${matcher.geotagStatus}
         and ${documents.metadata}->>${matcher.evidenceRoleMetadataKey} = ${matcher.role}
       )`;
-    case "unconditional-logbook-document-type":
-      return sql`(
-        ${uploadedDocumentSql(matcher.uploaded)}
-        and ${documents.documentType} in (${sql.join(
-          matcher.documentTypes.map((type) => sql`${type}`),
-          sql`, `,
-        )})
-      )`;
-    case "conditional-logbook-document-type":
-      return sql`(
-        ${uploadedDocumentSql(matcher.uploaded)}
-        and ${documents.documentType} = ${matcher.documentType}
-        and ${documents.metadata}->>${matcher.evidenceTypeMetadataKey} in (${sql.join(
-          matcher.evidenceTypes.map((type) => sql`${type}`),
-          sql`, `,
-        )})
-      )`;
-    case "any-document-matcher":
-      return sql`(${sql.join(
-        matcher.matchers.map(documentMatcherSql),
-        sql` or `,
-      )})`;
   }
 }
 
@@ -93,8 +71,9 @@ function evidenceGapCountSql(
 /**
  * Correlated evidence-gap count for the current `applications` row.
  *
- * Visual evidence needs all three geotagged photo roles. Boundary evidence
- * needs both a GIS reference and a qualifying logbook document.
+ * Visual evidence health tracks all three geotagged photo roles. Boundary
+ * evidence health tracks the GIS reference only; typed logbook attachments are
+ * retained records, not Application readiness requirements.
  * Legacy null evidence methods render as visual in the application UI, so the
  * CASE deliberately treats every non-boundary value as visual too.
  */

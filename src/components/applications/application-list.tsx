@@ -303,8 +303,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         customerName: null,
         locationName: null,
         durabilityOption,
-        // Fail closed until the authoritative list query recounts uploaded
-        // evidence after this create flow completes.
+        // Optimistic placeholder only, replaced when the list query returns the
+        // authoritative count. The count is informational evidence health and
+        // does not block certification, so a stale value here is harmless.
         evidenceGapCount:
           APPLICATION_EVIDENCE_RULE_SPEC.paths.boundary.length,
       };

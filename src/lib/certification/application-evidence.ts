@@ -1,16 +1,15 @@
 /**
- * Application evidence taxonomy — mirrors the Isometric "Biochar Storage in Soil
- * Environments" module. The module requires ONE of two evidence paths per
- * storage batch:
+ * Application evidence-health taxonomy.
  *
- *  - Visual (§8.5.1): geotagged photos/videos for ALL THREE application stages —
- *    stockpile (before), spreading (during), incorporation (after). A single
- *    photo is not sufficient; each must carry GPS coordinates and a timestamp.
- *  - Boundary (§8.5.2): a GIS map of the application area plus dated logbook
- *    quantities, evidenced by weighbridge, inventory, or affidavit records.
+ * The active Biochar Protocol v1.1 project binds Agricultural Soils v1.1.
+ * Project boundaries belong in the PDD, and retained application-mass records
+ * support verification. A typed Application logbook is not a per-Application
+ * readiness or Removal-submission requirement. The logbook taxonomy below is
+ * retained only to organize optional records and their registry Source targets.
  *
- * Authoritative source (verify before any credit claim):
- * https://registry.isometric.com/module/biochar-storage-soil-environments
+ * Authoritative sources (verify before any credit claim):
+ * https://registry.isometric.com/protocol/biochar/1.1
+ * https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1
  */
 import type { GisBoundary } from "@/lib/geojson/types";
 
@@ -93,11 +92,13 @@ export function isApplicationBoundaryLogbookEvidenceType(
 }
 
 /**
- * Document-type taxonomy behind the evidence-gap rule. The rule is implemented
- * by the certification submission gate (`buildApplicationEvidenceGaps`) and by
- * the shared SQL builder (`src/data-access/application-evidence-sql.ts`) used by
- * list readiness and dashboard counts. Both paths read the document types from
- * here so the taxonomy cannot silently drift when evidence rules change again.
+ * Document-type taxonomy behind the evidence-gap rule. The rule no longer gates
+ * certification submission. It is evaluated by the shared SQL builder
+ * (`src/data-access/application-evidence-sql.ts`), which feeds the informational
+ * evidence-health counts on the applications list and the dashboard, and by the
+ * JS twin (`src/fn/certification/application-evidence-readiness.ts`), retained
+ * as that builder's test oracle. Both read the document types from here so the
+ * taxonomy cannot silently drift when evidence rules change again.
  */
 
 /** `documents.entityType` value the evidence rule is scoped to, in both adapters. */
@@ -154,22 +155,6 @@ export type ApplicationEvidenceDocumentMatcher =
       geotagStatus: "present";
       evidenceRoleMetadataKey: "evidenceRole";
       role: ApplicationVisualEvidenceRole;
-    }
-  | {
-      kind: "unconditional-logbook-document-type";
-      uploaded: ApplicationEvidenceUploadedDocumentPredicate;
-      documentTypes: typeof APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES;
-    }
-  | {
-      kind: "conditional-logbook-document-type";
-      uploaded: ApplicationEvidenceUploadedDocumentPredicate;
-      documentType: typeof APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE;
-      evidenceTypeMetadataKey: "logbookEvidenceType";
-      evidenceTypes: typeof APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES;
-    }
-  | {
-      kind: "any-document-matcher";
-      matchers: readonly ApplicationEvidenceDocumentMatcher[];
     };
 
 export type ApplicationEvidenceGapDescriptor =
@@ -177,8 +162,7 @@ export type ApplicationEvidenceGapDescriptor =
       kind: "visual-role";
       role: ApplicationVisualEvidenceRole;
     }
-  | { kind: "boundary-reference" }
-  | { kind: "boundary-logbook" };
+  | { kind: "boundary-reference" };
 
 export type ApplicationEvidenceRequirement =
   | {
@@ -234,29 +218,6 @@ const BOUNDARY_EVIDENCE_REQUIREMENTS = [
     field: "gisBoundary",
     gap: { kind: "boundary-reference" },
   },
-  {
-    kind: "document",
-    matcher: {
-      kind: "any-document-matcher",
-      matchers: [
-        {
-          kind: "unconditional-logbook-document-type",
-          uploaded: UPLOADED_DOCUMENT_PREDICATE,
-          documentTypes:
-            APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
-        },
-        {
-          kind: "conditional-logbook-document-type",
-          uploaded: UPLOADED_DOCUMENT_PREDICATE,
-          documentType:
-            APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE,
-          evidenceTypeMetadataKey: "logbookEvidenceType",
-          evidenceTypes: APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
-        },
-      ],
-    },
-    gap: { kind: "boundary-logbook" },
-  },
 ] as const satisfies readonly ApplicationEvidenceRequirement[];
 
 /**
@@ -308,25 +269,6 @@ export function matchesApplicationEvidenceDocument(
           matcher.geotagStatus &&
         metadataValue(document.metadata, matcher.evidenceRoleMetadataKey) ===
           matcher.role
-      );
-    case "unconditional-logbook-document-type":
-      return (
-        isUploadedDocument(document, matcher.uploaded) &&
-        matcher.documentTypes.some((type) => type === document.documentType)
-      );
-    case "conditional-logbook-document-type":
-      return (
-        isUploadedDocument(document, matcher.uploaded) &&
-        document.documentType === matcher.documentType &&
-        matcher.evidenceTypes.some(
-          (type) =>
-            type ===
-            metadataValue(document.metadata, matcher.evidenceTypeMetadataKey),
-        )
-      );
-    case "any-document-matcher":
-      return matcher.matchers.some((candidate) =>
-        matchesApplicationEvidenceDocument(candidate, document),
       );
   }
 }

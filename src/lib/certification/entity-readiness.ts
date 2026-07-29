@@ -32,14 +32,6 @@ const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = 
   delivery: ["delivered"],
 };
 
-const APPLICATION_EVIDENCE_WARNING: EntityCertifyWarning = {
-  key: "applicationEvidence",
-  label: "Application evidence",
-  fields: ["evidenceGapCount"],
-  detail:
-    "Application evidence is incomplete. This does not block certification.",
-};
-
 function fieldValue(
   entity: EntityReadinessRecord,
   field: string,
@@ -145,6 +137,10 @@ export function deriveEntityCertifyReadiness(
   lifecycleState?: string | null,
 ): EntityCertifyReadiness {
   const gaps: EntityCertifyGap[] = [];
+  // No entity kind produces warnings today: application evidence was the only
+  // producer and it stopped being a readiness concern. The channel is kept as
+  // the seam for the next non-blocking entity warning, so a warning can be
+  // surfaced without re-threading it through every caller.
   const warnings: EntityCertifyWarning[] = [];
   const effectiveLifecycleState =
     lifecycleState ?? (fieldValue(entity, "status") as string | null | undefined);
@@ -161,17 +157,6 @@ export function deriveEntityCertifyReadiness(
     (effectiveLifecycleState === "failed" || effectiveLifecycleState === "cancelled")
   ) {
     return { state: "incomplete", gaps, warnings };
-  }
-
-  if (entityKind === "application") {
-    const evidenceGapCount = fieldValue(entity, "evidenceGapCount");
-    if (
-      typeof evidenceGapCount !== "number" ||
-      !Number.isFinite(evidenceGapCount) ||
-      evidenceGapCount !== 0
-    ) {
-      warnings.push(APPLICATION_EVIDENCE_WARNING);
-    }
   }
 
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
