@@ -4,7 +4,10 @@ import type {
   MemberCreditBatch,
   RemovalCertifyContext,
 } from "@/fn/certification/certify-context";
-import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
+import type {
+  RemovalReadiness,
+  RemovalRequirementCheck,
+} from "@/lib/certification/readiness";
 import {
   actionableSubmissionChecks,
   buildSubmissionFacts,
@@ -38,8 +41,15 @@ const SECOND_BATCH = {
   applicationCount: 3,
 } as MemberCreditBatch;
 
+// Midday UTC so the rendered range does not shift a day under a negative
+// local offset.
+const REPORTING_WINDOW = {
+  startedOn: "2026-06-05T12:00:00.000Z",
+  completedOn: "2026-08-20T12:00:00.000Z",
+};
+
 const READY_COMPILATION = {
-  review: { pendingSourceCount: 2 },
+  review: { pendingSourceCount: 2, reportingWindow: REPORTING_WINDOW },
   blockers: [],
   warnings: [],
   snapshot: {},
@@ -60,6 +70,7 @@ const CONTEXT = {
   mapping: null,
   isProduction: false,
   submissionWarnings: [],
+  supportingDocuments: { total: 5, mirrored: 2 },
 } as unknown as RemovalCertifyContext;
 
 function check(
@@ -69,6 +80,13 @@ function check(
   return { key, label: key, requirementLabel: key, status };
 }
 
+function readiness(
+  state: RemovalReadiness["state"],
+  reasons: string[] = [],
+): RemovalReadiness {
+  return { state, reasons, advisories: [] };
+}
+
 function facts(overrides: Partial<SubmissionFactsInput> = {}) {
   return buildSubmissionFacts({
     ctx: CONTEXT,
@@ -76,6 +94,8 @@ function facts(overrides: Partial<SubmissionFactsInput> = {}) {
     isCompilationLoading: false,
     compilationError: null,
     checks: [check("mapping", "met")],
+    readiness: readiness("ready"),
+    rejectionMessage: null,
     ...overrides,
   });
 }
@@ -124,7 +144,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
     });
   });
 
-  it("puts unmet checks ahead of compiler blockers", () => {
+  it("puts unmet checks ahead of compiler blockers in the verdict", () => {
     expect(
       facts({
         compilation: BLOCKED_COMPILATION,
@@ -134,9 +154,33 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "1 issue blocks submission",
       detail: "Review the issue below.",
-      // Suppressed: the check names the same fault in operator language.
-      blockers: [],
     });
+  });
+
+  it("hides only the blocker an unmet check restates", () => {
+    const evidenceBlocker =
+      "Removal submission requires at least one supporting evidence file.";
+    const tierBlocker =
+      "This facility is on the 1000-year durability tier, but its removal template's sequestration component is wrong.";
+
+    expect(
+      facts({
+        compilation: {
+          ...BLOCKED_COMPILATION,
+          blockers: [evidenceBlocker, tierBlocker],
+        } as unknown as RemovalCompilationView,
+        checks: [check("evidence", "unmet")],
+      }).blockers,
+    ).toEqual([tierBlocker]);
+  });
+
+  it("keeps every blocker when no check restates one", () => {
+    expect(
+      facts({
+        compilation: BLOCKED_COMPILATION,
+        checks: [check("measurementDates", "unmet")],
+      }).blockers,
+    ).toEqual(BLOCKED_COMPILATION.blockers);
   });
 
   it("pluralises the blocking issue count", () => {
@@ -152,7 +196,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "Cannot submit yet",
       detail:
-        "The submission did not build. Retry, then open Debug if it fails again.",
+        "Open Technical details below to retry. It shows why the build failed.",
     };
 
     expect(facts({ compilation: null })).toMatchObject(expected);
@@ -170,7 +214,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
     });
   });
 
-  it("points at Debug when compilation is incomplete without blockers", () => {
+  it("points at Technical details when compilation is incomplete without blockers", () => {
     expect(
       facts({
         compilation: {
@@ -182,7 +226,47 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "Cannot submit yet",
       detail:
-        "The submission is incomplete. Open Debug to see what is missing.",
+        "The submission is incomplete. Open Technical details below to see what is missing.",
+    });
+  });
+
+  it("reports a live submission lock, which no checklist row carries", () => {
+    expect(facts({ readiness: readiness("inProgress") })).toMatchObject({
+      state: "blocked",
+      headline: "Submission in progress",
+      detail: "Another submission for this removal is still running.",
+    });
+  });
+
+  it("never reads ready when the submit gate still refuses", () => {
+    expect(
+      facts({
+        readiness: readiness("blocked", ["Facility not linked"]),
+      }),
+    ).toMatchObject({
+      state: "blocked",
+      headline: "Cannot submit yet",
+      blockers: ["Facility not linked"],
+    });
+  });
+
+  it("stays ready for a resubmittable removal", () => {
+    expect(facts({ readiness: readiness("submitted") })).toMatchObject({
+      state: "ready",
+      headline: "Ready to submit",
+    });
+  });
+
+  it("carries a registry rejection in the verdict, ahead of the checks", () => {
+    expect(
+      facts({
+        rejectionMessage: "This removal was rejected in Isometric.",
+        checks: [check("mapping", "unmet")],
+      }),
+    ).toMatchObject({
+      state: "blocked",
+      headline: "Cannot submit yet",
+      detail: "This removal was rejected in Isometric.",
     });
   });
 
@@ -198,16 +282,35 @@ describe("buildSubmissionFacts verdict precedence", () => {
     ).toMatchObject({
       state: "ready",
       headline: "Ready to submit",
-      detail: "All 2 checks passed. Nothing left to fix.",
+      detail: "2 checks passed. Nothing left to fix.",
       checksPassed: 2,
       checksTotal: 2,
+      checksAttention: 0,
+    });
+  });
+
+  it("counts only checks that passed, not ones left unevaluable", () => {
+    expect(
+      facts({
+        checks: [
+          check("mapping", "met"),
+          check("template", "met"),
+          check("durability", "skipped"),
+        ],
+      }),
+    ).toMatchObject({
+      state: "ready",
+      headline: "Ready to submit",
+      detail: "2 checks passed. Nothing left to fix.",
+      checksPassed: 2,
+      checksTotal: 3,
       checksAttention: 0,
     });
   });
 });
 
 describe("buildSubmissionFacts panel data", () => {
-  it("totals dry mass and merges the crediting window across batches", () => {
+  it("totals dry mass and reports the compiled reporting window", () => {
     expect(
       facts({
         ctx: {
@@ -220,9 +323,21 @@ describe("buildSubmissionFacts panel data", () => {
       batchCount: 2,
       runCount: 3,
       applicationCount: 4,
-      windowLabel: "Jun 5 – Aug 20, 2026",
-      durabilityLabel: "1000-year (R₀ reflectance), 200-year (R₀ reflectance)",
+      reportingWindowLabel: "Jun 5 – Aug 20, 2026",
+      durabilityLabel: "1000-year (R₀ reflectance), 200-year (H:Corg)",
       samplingLabel: "Sampled, Not sampled",
+    });
+  });
+
+  it("has no reporting window until the submission compiles", () => {
+    expect(facts({ compilation: null })).toMatchObject({
+      reportingWindowLabel: null,
+    });
+  });
+
+  it("still counts pending files when the submission did not compile", () => {
+    expect(facts({ compilation: null })).toMatchObject({
+      pendingDocuments: 3,
     });
   });
 

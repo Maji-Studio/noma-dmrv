@@ -2,6 +2,11 @@
  * The compiled registry payload, demoted to what it actually is: a debug
  * drawer. Closed by default and never a peer of the submission summary — the
  * operator only opens it when the submission fails to build.
+ *
+ * Labelled "Technical details" rather than "Debug" because the verdict copy
+ * sends operators here to retry a failed build, and the retry control lives
+ * inside this drawer. Naming it in developer vocabulary told them to go
+ * somewhere they would not recognise.
  */
 "use client";
 
@@ -36,7 +41,7 @@ export function DebugDrawer({
             labelClassName="label-micro text-[var(--color-text-tertiary)]"
           >
             <span className="flex w-full items-center justify-between gap-12">
-              <span>Debug</span>
+              <span>Technical details</span>
               <span className="body-caption font-normal normal-case tracking-normal text-[var(--color-text-tertiary)]">
                 Compiled registry payload
               </span>

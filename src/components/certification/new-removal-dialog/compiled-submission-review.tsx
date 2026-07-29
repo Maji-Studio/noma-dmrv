@@ -230,7 +230,7 @@ export function CompiledSubmissionReview({
         )}
       </ReviewSection>
 
-      <ReviewSection title="Captured but not represented">
+      <ReviewSection title="Submission notes">
         <CompilationWarnings warnings={warnings} showEmpty />
       </ReviewSection>
     </div>
