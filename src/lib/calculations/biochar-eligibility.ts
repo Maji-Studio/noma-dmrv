@@ -1,3 +1,5 @@
+import { pluralize } from "@/lib/copy-utils";
+
 /**
  * Biochar sample-eligibility gates — the protocol's hard characterization
  * thresholds, evaluated on the POOLED MEAN of a credit batch's replicate
@@ -125,10 +127,14 @@ export function evaluateRunEligibility(
       : meanOToCOrgRatio < O_TO_C_ORG_ELIGIBILITY_MAX;
 
   if (meanHToCOrgRatio == null) {
-    warnings.push("No usable H/C_org replicate — eligibility indeterminate.");
+    warnings.push(
+      "No Sample has a usable H/C_org ratio. Record the ratio before checking eligibility.",
+    );
   }
   if (meanOToCOrgRatio == null) {
-    warnings.push("No usable O/C_org replicate — eligibility indeterminate.");
+    warnings.push(
+      "No Sample has a usable O/C_org ratio. Record the ratio before checking eligibility.",
+    );
   }
 
   // The eligibility VERDICT is judged only on replicates carrying BOTH ratios, so
@@ -167,7 +173,7 @@ export function evaluateRunEligibility(
   });
   if (outlierReplicateIndexes.length > 0) {
     warnings.push(
-      `${outlierReplicateIndexes.length} replicate(s) individually exceed the eligibility ceilings (H/C_org ≥ ${H_TO_C_ORG_ELIGIBILITY_MAX} or O/C_org ≥ ${O_TO_C_ORG_ELIGIBILITY_MAX}); review for an outlier.`,
+      `${outlierReplicateIndexes.length} ${pluralize(outlierReplicateIndexes.length, "replicate")} exceed the eligibility limits (H/C_org ≥ ${H_TO_C_ORG_ELIGIBILITY_MAX} or O/C_org ≥ ${O_TO_C_ORG_ELIGIBILITY_MAX}). Review the flagged values for an outlier.`,
     );
   }
 

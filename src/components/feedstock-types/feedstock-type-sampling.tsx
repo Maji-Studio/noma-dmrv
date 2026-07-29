@@ -42,7 +42,9 @@ export function FeedstockTypeSampling({
       toast.success("New production process started");
     } catch (error) {
       setActionError(
-        error instanceof Error ? error.message : "Failed to start a new process",
+        error instanceof Error
+          ? error.message
+          : "The production process was not started. Try again.",
       );
     }
   };
@@ -58,7 +60,7 @@ export function FeedstockTypeSampling({
   if (eligibility.error || !eligibility.data) {
     return (
       <ServerError
-        message={eligibility.error?.message ?? "Failed to load sampling status"}
+        message={eligibility.error?.message ?? "The sampling status could not be loaded. Refresh the page and try again."}
       />
     );
   }
@@ -76,7 +78,7 @@ export function FeedstockTypeSampling({
       <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
         <div className="flex flex-col gap-4">
           <span className="body-small text-[var(--color-text-secondary)]">
-            Eligible samples
+            Eligible Samples
           </span>
           <span className="body-medium font-medium tabular-nums text-[var(--color-text-primary)]">
             {status.eligibleSampleCount} / {status.agreedBaselineSize}
@@ -128,7 +130,7 @@ export function FeedstockTypeSampling({
         }}
         onConfirm={handleStartNewProcess}
         title="Start a new production process?"
-        body="This resets the eligible-sample count for this facility and feedstock type to zero. Existing credit batches keep their recorded sampling choice."
+        body="This resets the eligible Sample count for this facility and feedstock type to zero. Existing credit batches keep their recorded sampling choice."
         confirmLabel="Start new process"
         busyLabel="Starting…"
         variant="neutral"

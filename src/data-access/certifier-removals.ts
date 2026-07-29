@@ -277,12 +277,12 @@ export async function createRemovalWithCreditBatches(
     for (const batch of batches) {
       if (batch.facilityId !== facilityId) {
         throw new SafeError(
-          "A credit batch can only join a removal in the same facility.",
+          "A credit batch can only join a Removal in the same facility.",
         );
       }
       if (batch.removalId) {
         throw new SafeError(
-          "A selected credit batch is already grouped into a removal.",
+          "A selected credit batch is already grouped into a Removal.",
         );
       }
     }

@@ -53,7 +53,9 @@ export function TelemetryPanel({ removalId }: TelemetryPanelProps) {
       }
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Telemetry submission failed.",
+        err instanceof Error
+          ? err.message
+          : "Telemetry was not submitted. Check the readings and try again.",
       );
     }
   };

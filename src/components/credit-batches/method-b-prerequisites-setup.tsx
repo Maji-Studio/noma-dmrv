@@ -69,7 +69,9 @@ export function MethodBPrerequisitesSetup({
       setOpen(false);
     } catch (error) {
       setServerError(
-        error instanceof Error ? error.message : "Failed to record prerequisites",
+        error instanceof Error
+          ? error.message
+          : "The Method-B prerequisites were not recorded. Try again.",
       );
     }
   });
@@ -78,7 +80,7 @@ export function MethodBPrerequisitesSetup({
     <div className="border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] p-12">
       <Button variant="noOutline" size="small" onClick={() => setOpen(!open)}>
         {open ? <CaretUpIcon size={16} /> : <CaretDownIcon size={16} />}
-        {open ? "Hide Method-B setup" : "Set up Method B"}
+        {open ? "Hide Method-B prerequisites" : "Set up Method-B prerequisites"}
       </Button>
 
       {open && (

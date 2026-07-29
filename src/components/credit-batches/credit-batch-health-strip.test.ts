@@ -97,7 +97,7 @@ describe("batchHealthFixLinkFor", () => {
       facilityId,
       "batch-001",
     );
-    expect(link.label).toBe("Add lab sample data");
+    expect(link.label).toBe("Add Sample data");
     expect(link.href).toBe(
       `/samples?facility=${facilityId}&create=true&createCreditBatch=batch-001`,
     );

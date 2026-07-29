@@ -55,7 +55,7 @@ function verifierStatusLabel(remote: GhgStatement | null): string {
   if (!remote) return "Not created in Isometric";
   switch (remote.status) {
     case "DRAFT":
-      return "Not sent to the verifier";
+      return "In registry. Not sent to the verifier.";
     case "AWAITING_VERIFICATION":
       return "In verification";
     case "VERIFIED":
@@ -145,7 +145,8 @@ function DetailState({
       <>
         <SlideOverPanel.Body>
           <p className="body-small text-[var(--clr-red)]" role="alert">
-            Unable to load statement details.
+            Statement details could not be loaded. Refresh the page and try
+            again.
           </p>
         </SlideOverPanel.Body>
         <CloseFooter />
@@ -195,7 +196,9 @@ function DetailState({
       onSuccess: (result) => toast.success(`Status: ${result.status}.`),
       onError: (error) =>
         toast.error(
-          error instanceof Error ? error.message : "Refresh failed.",
+          error instanceof Error
+            ? error.message
+            : "The verifier status was not refreshed. Try again.",
         ),
     });
   };
@@ -248,7 +251,7 @@ function DetailState({
           </h3>
           {linkedRemovals.length === 0 ? (
             <p className="body-small text-[var(--color-text-tertiary)]">
-              No linked Removals.
+              No Removals linked yet.
             </p>
           ) : (
             <RemovalBatchesAccordion

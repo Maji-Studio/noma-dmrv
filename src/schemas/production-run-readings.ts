@@ -13,8 +13,8 @@ import { z } from "zod";
 // ============================================
 
 export const productionRunReadingListFiltersSchema = z.object({
-  productionRunId: z.string().uuid("Invalid production run ID").optional(),
-  facilityId: z.string().uuid("Invalid facility ID").optional(),
+  productionRunId: z.string().uuid("Choose a valid production run.").optional(),
+  facilityId: z.string().uuid("Choose a valid facility.").optional(),
 });
 
 // ============================================
@@ -22,7 +22,7 @@ export const productionRunReadingListFiltersSchema = z.object({
 // ============================================
 
 export const deleteAllProductionRunReadingsSchema = z.object({
-  productionRunId: z.string().uuid("Invalid production run ID"),
+  productionRunId: z.string().uuid("Choose a valid production run."),
 });
 
 // ============================================

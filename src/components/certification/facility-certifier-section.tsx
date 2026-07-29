@@ -132,7 +132,7 @@ function CertifierMappingFields({
     <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-12">
       <Field label="Project">
         {resolvesNames && (
-          <span className="body-small">{projectName ?? "—"}</span>
+          <span className="body-small">{projectName ?? "Not available"}</span>
         )}
         <span
           className={
@@ -155,12 +155,12 @@ function CertifierMappingFields({
           View on Isometric ↗
         </a>
       </Field>
-      <Field label="Default removal template">
+      <Field label="Default Removal template">
         {resolvesNames ? (
           <>
             <span className="body-small">
               {templateName ??
-                (mapping.defaultRemovalTemplateId ? "—" : "Not set")}
+                (mapping.defaultRemovalTemplateId ? "Not available" : "Not set")}
             </span>
             {mapping.defaultRemovalTemplateId && (
               <span className="body-caption text-[var(--color-text-tertiary)]">
@@ -192,7 +192,7 @@ function CertifierMappingFields({
           </span>
         ) : (
           <span className="body-small text-[var(--color-text-tertiary)]">
-            Not set — telemetry submission disabled
+            Not set. Telemetry submission is disabled.
           </span>
         )}
       </Field>
@@ -224,8 +224,8 @@ function FacilityCertifierReadOnly({
     return (
       <Shell embedded={embedded}>
         <p className="body-small text-[var(--color-signal-red)]">
-          Failed to load certifier mapping
-          {error instanceof Error ? `: ${error.message}` : "."}
+          The certifier mapping could not be loaded. Refresh the page and try
+          again.
         </p>
       </Shell>
     );
@@ -240,8 +240,8 @@ function FacilityCertifierReadOnly({
         <CertifierMappingFields mapping={mapping} isProduction={isProduction} />
       ) : (
         <p className="body-small text-[var(--color-text-secondary)]">
-          This facility has no Isometric project link yet. Ask an admin to link
-          one — submissions from this facility are blocked until it is.
+          This facility has no Isometric project link. Ask an Admin to link one
+          before submitting from this facility.
         </p>
       )}
     </Shell>
@@ -283,7 +283,11 @@ function FacilityCertifierManage({
       toast.success("Certifier mapping removed");
       setUnlinkOpen(false);
     } catch (err) {
-      setUnlinkError(err instanceof Error ? err.message : "Failed to unlink");
+      setUnlinkError(
+        err instanceof Error
+          ? err.message
+          : "The registry project was not unlinked. Try again.",
+      );
     }
   };
 
@@ -301,8 +305,8 @@ function FacilityCertifierManage({
     return (
       <Shell embedded={embedded}>
         <p className="body-small text-[var(--color-signal-red)]">
-          Failed to load certifier mapping
-          {error instanceof Error ? `: ${error.message}` : "."}
+          The certifier mapping could not be loaded. Refresh the page and try
+          again.
         </p>
       </Shell>
     );

@@ -47,7 +47,7 @@ function ResetPasswordFormContent() {
 
     // Validate token exists
     if (!token) {
-      setServerError("Invalid reset link. Please request a new password reset.");
+      setServerError("This reset link is invalid. Request a new password reset.");
       return;
     }
 
@@ -60,7 +60,10 @@ function ResetPasswordFormContent() {
         router.push("/login");
       }, 2000);
     } else {
-      setServerError(result.error || "Failed to reset password");
+      setServerError(
+        result.error ||
+          "The password was not reset. Check the form and try again.",
+      );
     }
   }
 
@@ -72,10 +75,10 @@ function ResetPasswordFormContent() {
           className="p-24 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
           role="alert"
         >
-          <h3 className="body-bold mb-16">Invalid Reset Link</h3>
+          <h3 className="body-bold mb-16">Invalid reset link</h3>
           <p className="body-small">
-            This password reset link is invalid or has expired. Please request a
-            new password reset.
+            This password reset link is invalid or has expired. Request a new
+            password reset.
           </p>
         </div>
 

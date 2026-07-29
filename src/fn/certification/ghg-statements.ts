@@ -191,7 +191,7 @@ export interface OpenRemovalView {
 // =====================================================================
 
 const MULTIPLE_DRAFTS_MESSAGE =
-  "Multiple draft GHG statements exist for this project and period in Isometric.";
+  "Multiple draft GHG Statements exist for this project and period in Isometric.";
 
 // Domain wording for the claim module's blocked outcomes (the module owns
 // only the mapping-guard wording; claim decisions are translated here).
@@ -199,13 +199,13 @@ const GHG_CLAIM_BLOCKED_MESSAGES: Record<
   ClaimBlockedReason,
   string
 > = {
-  "in-flight": "GHG statement creation already in progress.",
+  "in-flight": "GHG Statement creation is already in progress.",
   "rejected-with-external":
-    "This GHG statement was rejected by the verifier. Resolve it in the Isometric registry before retrying.",
+    "This GHG Statement was rejected by the verifier. Resolve it in Isometric before trying again.",
   "invalid-changed-hash":
-    "The reporting period changed for an already-created GHG statement.",
+    "The reporting period changed for an existing GHG Statement. Reload and try again.",
   "state-changed":
-    "Submission state changed while creating the GHG statement. Reload and retry.",
+    "The submission changed while creating the GHG Statement. Reload and try again.",
 };
 
 // How many recent sync events to surface in a statement's detail panel.
@@ -242,7 +242,7 @@ export async function createGhgStatementDraft(
     );
     if (!project) {
       throw new SafeError(
-        "Link this facility to an Isometric project before creating a GHG statement.",
+        "Link this facility to an Isometric project before creating a GHG Statement.",
       );
     }
     assertDedicatedGhgStatementProject(
@@ -320,7 +320,7 @@ export async function createGhgStatementDraft(
     const overlap = overlappingEnd(parsed.reportingPeriodEndOn, existingEnds);
     if (overlap) {
       throw new SafeError(
-        `This reporting period overlaps an existing GHG statement ending ${overlap}. Pick an end date after ${overlap}.`,
+        `This reporting period overlaps an existing GHG Statement ending ${overlap}. Choose an end date after ${overlap}.`,
       );
     }
 
@@ -363,7 +363,7 @@ export async function createGhgStatementDraft(
       }
       if (expected.length === 0 && !knownRemoteMatch) {
         throw new SafeError(
-          "This reporting period has no submitted removals yet — a statement now would be empty. Submit a removal first, or pick a period end that includes one.",
+          "This reporting period has no submitted Removals. Submit a Removal first, or choose a period end that includes one.",
         );
       }
     }
@@ -384,7 +384,7 @@ export async function createGhgStatementDraft(
     // getOrCreate change can't silently anchor the ledger (and its registry
     // writes) to another facility's statement.
     if (statement.facilityId !== parsed.facilityId) {
-      throw new SafeError("GHG statement does not belong to this facility.");
+      throw new SafeError("This GHG Statement belongs to another facility.");
     }
 
     const semanticPayload = {
@@ -490,7 +490,7 @@ async function createGhgStatementRemote(args: {
         ghgStatementLookup,
       ),
     ambiguousMessage: MULTIPLE_DRAFTS_MESSAGE,
-    failureMessagePrefix: "GHG statement create failed",
+    failureMessagePrefix: "The GHG Statement could not be created",
     log: logger.child({
       op: "ghg-statement:create",
       ghgStatementId: statement.id,
@@ -596,7 +596,7 @@ export async function submitGhgStatementToVerifier(
       orgCtx,
       ghgStatementId,
     );
-    if (!statement) throw new SafeError("GHG statement not found.");
+    if (!statement) throw new SafeError("GHG Statement not found.");
 
     const submission = await getLatestSubmission(
       orgCtx,
@@ -609,7 +609,7 @@ export async function submitGhgStatementToVerifier(
       statement.facilityId,
     );
     if (!submission?.externalId) {
-      throw new SafeError("Create the GHG statement before submitting it.");
+      throw new SafeError("Create the GHG Statement before submitting it.");
     }
 
     const [facility, remoteBefore] = await Promise.all([
@@ -629,7 +629,7 @@ export async function submitGhgStatementToVerifier(
         ) ?? 0;
     if (linkedCount === 0) {
       throw new SafeError(
-        "This GHG statement has no linked removals, so there's nothing to submit. Submit a removal in this reporting period first.",
+      "This GHG Statement has no linked Removals. Submit a Removal in this reporting period first.",
       );
     }
 
@@ -639,11 +639,11 @@ export async function submitGhgStatementToVerifier(
     );
     if (submitMode === "blocked-awaiting") {
       throw new SafeError(
-        "This GHG statement is already awaiting verification.",
+        "This GHG Statement is already awaiting verification.",
       );
     }
     if (submitMode === "blocked-verified") {
-      throw new SafeError("This GHG statement is already verified.");
+      throw new SafeError("This GHG Statement is already verified.");
     }
     if (submitMode === "resubmit" && !parsed.summaryOfChanges?.trim()) {
       throw new SafeError("Summary of changes is required for resubmission.");
@@ -677,7 +677,7 @@ export async function submitGhgStatementToVerifier(
       : await attachReportDocument(orgCtx, {
           submissionId: submission.id,
           reportUrl,
-          description: `External GHG statement report - ${facility.code} - period ending ${statement.reportingPeriodEndOn}`,
+          description: `External GHG Statement report: ${facility.code}, period ending ${statement.reportingPeriodEndOn}`,
           metadata: { ghgStatementExternalId: submission.externalId },
         });
 
@@ -768,7 +768,7 @@ export async function submitGhgStatementToVerifier(
         err instanceof IsometricApiError
           ? describeIsometricApiError(
               err,
-              "The verifier rejected the GHG statement submit.",
+              "The verifier rejected the GHG Statement. Open it in Isometric to resolve the issue.",
             )
           : "Submit failed. Try again.";
       await appendSyncEvent(orgCtx, {
@@ -818,10 +818,12 @@ export async function refreshGhgStatementStatus(
       submission.submissionType !== GHG_STATEMENT_SUBMISSION_TYPE ||
       submission.localEntityType !== GHG_STATEMENT_ENTITY_TYPE
     ) {
-      throw new SafeError("GHG statement submission not found.");
+      throw new SafeError("GHG Statement submission not found.");
     }
     if (!submission.externalId) {
-      throw new SafeError("GHG statement submission has no remote ID.");
+      throw new SafeError(
+        "The GHG Statement has no registry reference. Sync it from the registry and try again.",
+      );
     }
     // Resolve the statement this submission anchors to, so the follow-up ledger
     // read is scoped to its facility (issue #277). The higher-consequence read
@@ -835,7 +837,7 @@ export async function refreshGhgStatementStatus(
       orgCtx,
       submission.localEntityId,
     );
-    if (!statement) throw new SafeError("GHG statement not found.");
+    if (!statement) throw new SafeError("GHG Statement not found.");
     // Only mirror remote state onto the latest version of the (provider,
     // submissionType, localEntityType, localEntityId) row. Superseded rows
     // stay frozen so the audit trail keeps showing the snapshot from when
@@ -853,7 +855,7 @@ export async function refreshGhgStatementStatus(
     );
     if (!latest || latest.id !== submission.id) {
       throw new SafeError(
-        "This GHG statement version has been superseded. Refresh the page to see the latest one.",
+        "This GHG Statement version has been superseded. Refresh the page to see the latest version.",
       );
     }
     const remote = await getGhgStatement(client, submission.externalId);
@@ -878,7 +880,7 @@ export async function loadGhgStatementState(
       orgCtx,
       ghgStatementId,
     );
-    if (!statement) throw new SafeError("GHG statement not found.");
+    if (!statement) throw new SafeError("GHG Statement not found.");
 
     const [statementSubmission, removalRows, recentSyncEvents] =
       await Promise.all([

@@ -169,7 +169,7 @@ export function formatApplicationKgFromTons(value: number | null | undefined): s
 /** Field size is a surveyed parcel area — two decimals resolve a 100 m² strip. */
 const FIELD_SIZE_HA_FRACTION_DIGITS = 2;
 /** Same em-dash the shared formatters in `@/lib/format-utils` render for null. */
-const FALLBACK_DISPLAY = "—";
+const FALLBACK_DISPLAY = "Not recorded";
 
 /**
  * Field size in hectares, one precision for every read surface (list column,

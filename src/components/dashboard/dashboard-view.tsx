@@ -102,7 +102,7 @@ export function DashboardView() {
             <EmptyState
               padding="md"
               icon={<WarningOctagonIcon size={40} />}
-              title="Couldn't load the dashboard"
+              title="The dashboard could not be loaded"
               description={error.message}
             />
           ) : (

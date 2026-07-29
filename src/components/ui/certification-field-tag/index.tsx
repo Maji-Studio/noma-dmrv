@@ -27,8 +27,8 @@ const STATUS_STYLES: Record<CertFieldStatus, string> = {
 
 const STATUS_DESCRIPTION: Record<CertFieldStatus, string> = {
   neutral: "Required for certification",
-  missing: "Required for certification — not yet provided",
-  satisfied: "Required for certification — provided",
+  missing: "Required for certification. Not provided.",
+  satisfied: "Required for certification. Provided.",
 };
 
 interface CertificationFieldTagProps {

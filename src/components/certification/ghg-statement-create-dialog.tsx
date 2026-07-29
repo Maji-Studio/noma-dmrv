@@ -54,6 +54,7 @@ import {
   partitionByWindow,
 } from "@/lib/isometric/utils/ghg-reporting-window";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { formatCount } from "@/lib/copy-utils";
 import {
   createGhgStatementSchema,
   type CreateGhgStatementInput,
@@ -71,7 +72,7 @@ interface GhgStatementCreateDialogProps {
 
 const STEPS: StepFlowStep[] = [
   { key: "period", label: "Period", description: "Choose the end" },
-  { key: "preview", label: "Contents", description: "Preview removals" },
+  { key: "preview", label: "Contents", description: "Preview Removals" },
   { key: "confirm", label: "Confirm", description: "Review and create" },
 ];
 
@@ -195,11 +196,13 @@ function DialogBody({
     }
     try {
       const result = await mutation.mutateAsync(data);
-      const linked = `${result.linkedRemovalIds.length} linked removal${result.linkedRemovalIds.length === 1 ? "" : "s"}`;
+      const linked = `${result.linkedRemovalIds.length} linked ${
+        result.linkedRemovalIds.length === 1 ? "Removal" : "Removals"
+      }`;
       if (result.outcome === "existing") {
         // ADR 0004: the create is idempotent per period, so this is a normal
         // success — but nothing was created and saying so would be a lie.
-        toast.info(`Statement already existed for this period — ${linked}.`);
+        toast.info(`A GHG Statement already exists for this period with ${linked}.`);
       } else if (result.warnings.length > 0) {
         toast.warning(
           `Created with ${result.warnings.length} warning${result.warnings.length === 1 ? "" : "s"}.`,
@@ -209,7 +212,10 @@ function DialogBody({
       }
     } catch (err) {
       setError("root.serverError", {
-        message: err instanceof Error ? err.message : "Create failed",
+        message:
+          err instanceof Error
+            ? err.message
+            : "The GHG Statement was not created. Check the period and try again.",
       });
     }
   });
@@ -231,7 +237,7 @@ function DialogBody({
             ? result.outcome === "existing"
               ? "Already in Isometric."
               : "Created in Isometric."
-            : "Choose a period, preview removals, then create."}
+            : "Choose a period, preview Removals, then create."}
         </p>
       </header>
 
@@ -409,9 +415,9 @@ function StepPeriod({
         </InfoHint>
       </h3>
       <p className="body-small text-[var(--color-text-secondary)]">
-        A GHG statement bundles the removals you&apos;ve already submitted this
-        period so a verifier can review them. Pick the period end — we&apos;ll
-        show you exactly which removals fall inside.
+        A GHG Statement bundles the Removals you&apos;ve already submitted this
+        period so a verifier can review them. Choose the period end. We&apos;ll
+        show you exactly which Removals fall inside.
       </p>
       <FormField
         id="reportingPeriodEndOn"
@@ -454,7 +460,7 @@ function ExistingPeriodsStatus({
   if (query.isError) {
     return (
       <div className="flex flex-col items-start gap-8">
-        <ServerError message="Couldn't load this facility's existing reporting periods, so this end date can't be checked for overlap yet." />
+        <ServerError message="This facility's reporting periods could not be loaded, so the end date cannot be checked for overlap. Refresh the page and try again." />
         <Button
           variant="default"
           size="small"
@@ -493,14 +499,16 @@ function RegistryStatementsPanel({
     );
   }
   if (query.error || !query.data) {
-    return <ServerError message="Unable to load registry statements." />;
+    return (
+      <ServerError message="Registry statements could not be loaded. Refresh the page and try again." />
+    );
   }
   if (query.data.length === 0) {
     return (
       <EmptyState
         icon={<ClipboardTextIcon size={32} />}
         title="No registry statements"
-        description="This project has no GHG statements in the registry."
+        description="This project has no GHG Statements in the registry."
         padding="sm"
       />
     );
@@ -539,8 +547,7 @@ function RegistryStatementRow({
       </div>
       <div className="flex items-center gap-12">
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          {statement.removalCount} removal
-          {statement.removalCount === 1 ? "" : "s"}
+          {formatCount(statement.removalCount, "Removal")}
         </span>
         <StatusBadge status={registryStatusBadgeValue(statement.status)} />
       </div>
@@ -590,14 +597,14 @@ function StepPreview({
         aria-busy="true"
         className="body-small text-[var(--color-text-tertiary)]"
       >
-        Loading open removals…
+        Loading open Removals…
       </p>
     );
   }
   if (query.error || !query.data) {
     return (
       <p className="body-small text-[var(--clr-red)]" role="alert">
-        Unable to load removals. Go back and try again.
+        Removals could not be loaded. Go back and try again.
       </p>
     );
   }
@@ -662,11 +669,11 @@ function StepPreview({
 
       <div className="flex flex-col gap-8 opacity-60">
         <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Other open removals ({outside.length})
+          Other open Removals ({outside.length})
         </span>
         {outside.length === 0 ? (
           <p className="body-caption text-[var(--color-text-tertiary)]">
-            No other open removals.
+            No other open Removals.
           </p>
         ) : (
           <RemovalBatchesAccordion
@@ -761,8 +768,10 @@ function ResultPanel({
           {alreadyExisted
             ? "already exists for this period, with"
             : "created with"}{" "}
-          <strong className="body-small-bold">{linkedCount}</strong>{" "}
-          removal{linkedCount === 1 ? "" : "s"}.
+          <strong className="body-small-bold">
+            {formatCount(linkedCount, "Removal")}
+          </strong>
+          .
         </p>
       </div>
       {warnings.length > 0 && (

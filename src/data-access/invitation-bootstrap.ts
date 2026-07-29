@@ -37,7 +37,9 @@ function assertValidInvitation(
     !invitation.expiresAt ||
     invitation.expiresAt.getTime() <= Date.now()
   ) {
-    throw new SafeError("Invitation not found, expired, or already used.");
+    throw new SafeError(
+      "This invitation is invalid, expired, or already used. Ask an Admin for a new invitation.",
+    );
   }
   return invitation;
 }

@@ -30,7 +30,7 @@ function requireKey(): string {
   const key = env.OPENROUTESERVICE_API_KEY;
   if (!key) {
     throw new SafeError(
-      "Geocoding/routing is not configured (OPENROUTESERVICE_API_KEY is missing)."
+      "Map search and routes are not configured. Ask a Platform Admin to configure the mapping service."
     );
   }
   return key;

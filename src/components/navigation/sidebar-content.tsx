@@ -277,7 +277,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     // straight back to a protected page by middleware.
     const result = await signOut();
     if (!result.success) {
-      toast.error(result.error ?? "Sign out failed. Please try again.");
+      toast.error(result.error ?? "You could not be signed out. Try again.");
       setIsSigningOut(false);
       return;
     }
