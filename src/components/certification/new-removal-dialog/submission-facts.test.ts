@@ -221,7 +221,7 @@ describe("buildSubmissionFacts panel data", () => {
       runCount: 3,
       applicationCount: 4,
       windowLabel: "Jun 5 – Aug 20, 2026",
-      durabilityLabel: "1000-year (R₀ reflectance), 200-year (R₀ reflectance)",
+      durabilityLabel: "1000-year (R₀ reflectance), 200-year (H:Corg)",
       samplingLabel: "Sampled, Not sampled",
     });
   });

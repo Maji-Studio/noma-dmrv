@@ -159,7 +159,9 @@ export function SubmissionSummary({
 
         <dl className="flex flex-col">
           <Fact label="Destination">
-            {facts.projectLabel} ({facts.environmentLabel})
+            {facts.projectLabel
+              ? `${facts.projectLabel} (${facts.environmentLabel})`
+              : "Not linked"}
           </Fact>
           <Fact label="Crediting window">{facts.windowLabel ?? "Not set"}</Fact>
           <Fact

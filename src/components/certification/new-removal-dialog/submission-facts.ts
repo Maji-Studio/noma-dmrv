@@ -13,6 +13,7 @@ import type {
 } from "@/fn/certification/certify-context";
 import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
+import type { DurabilityOption } from "@/schemas/credit-batches";
 
 /** Digits used for every dry-mass figure on this screen. */
 const TONNE_DIGITS = 1;
@@ -34,7 +35,7 @@ export interface SubmissionFacts {
   runCount: number;
   applicationCount: number;
   windowLabel: string | null;
-  projectLabel: string;
+  projectLabel: string | null;
   environmentLabel: string;
   isProduction: boolean;
   durabilityLabel: string;
@@ -56,8 +57,8 @@ export interface SubmissionFacts {
  * Sentence case, unlike the shared `formatDurabilityOption`, which returns
  * title case and is used on surfaces that want it that way.
  */
-const DURABILITY_LABELS: Record<string, string> = {
-  "200_year": "200-year (R₀ reflectance)",
+const DURABILITY_LABELS: Record<DurabilityOption, string> = {
+  "200_year": "200-year (H:Corg)",
   "1000_year": "1000-year (R₀ reflectance)",
 };
 
@@ -185,15 +186,11 @@ export function buildSubmissionFacts({
     runCount: sum(batches, (batch) => batch.productionRunCount),
     applicationCount: sum(batches, (batch) => batch.applicationCount),
     windowLabel: creditingWindowLabel(batches),
-    projectLabel:
-      ctx.project?.name ?? ctx.mapping?.externalProjectId ?? "Isometric project",
+    projectLabel: ctx.project?.name ?? ctx.mapping?.externalProjectId ?? null,
     environmentLabel: ctx.isProduction ? "Production" : "Sandbox",
     isProduction: ctx.isProduction,
     durabilityLabel: uniqueLabels(
-      batches.map(
-        (batch) =>
-          DURABILITY_LABELS[batch.durabilityOption] ?? batch.durabilityOption,
-      ),
+      batches.map((batch) => DURABILITY_LABELS[batch.durabilityOption]),
     ),
     samplingLabel: uniqueLabels(
       batches.map((batch) =>
@@ -209,7 +206,10 @@ export function buildSubmissionFacts({
     detail,
     // Suppressed while a check covers the same fault in operator language.
     blockers: checksAttention > 0 ? [] : blockers,
-    warnings: [...(compilation?.warnings ?? []), ...ctx.submissionWarnings],
+    // The compiler and the context can reach the same advisory independently.
+    warnings: [
+      ...new Set([...(compilation?.warnings ?? []), ...ctx.submissionWarnings]),
+    ],
   };
 }
 
