@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import {
+  assignEdgeRouteOffsets,
   buildLineageNodes,
   reachableNodeIds,
   useChainGraph,
@@ -180,5 +181,28 @@ describe("biochar mass labels", () => {
           graphEdge.target === "biochar-product:product-1",
       )?.data?.kgLabel,
     ).toBe("Wet: 340 kg · Dry: 333.2 kg");
+  });
+});
+
+describe("branching edge routes", () => {
+  it("gives every edge in a two-run, three-product fan a separate lane", () => {
+    const fanEdges: Edge[] = ["run-1", "run-2"].flatMap((runId) =>
+      ["product-1", "product-2", "product-3"].map((productId) => ({
+        id: `${runId}->${productId}`,
+        source: runId,
+        target: productId,
+        data: { variant: "flow" },
+      })),
+    );
+
+    assignEdgeRouteOffsets(fanEdges);
+
+    const routeOffsets = fanEdges.map(
+      (graphEdge) => graphEdge.data?.routeOffsetX,
+    );
+
+    expect(fanEdges).toHaveLength(6);
+    expect(routeOffsets.every((offset) => typeof offset === "number")).toBe(true);
+    expect(new Set(routeOffsets).size).toBe(6);
   });
 });
