@@ -377,11 +377,57 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   sticky behavior is exercised enough by existing route specs to leave
   unguarded (S).
 
+### Distance fields use two different react-hook-form wiring patterns (`forms/distance-field-controller-drift`, opened 2026-07-29)
+
+- **Observed:** `src/components/customers/customer-location-fields.tsx:CustomerLocationFields`
+  now reads and writes `distanceFromFacilityKm` / `distanceSource` through
+  `useController`, matching the GPS fields beside it. The two other
+  `DistanceCalcField` hosts still use the older wiring:
+  `src/components/suppliers/supplier-location-form.tsx:SupplierLocationForm`
+  (`watch` plus `setValue`) and
+  `src/components/transport-legs/transport-leg-form.tsx:TransportLegForm`
+  (`useWatch` plus `setValue`).
+- The old pattern is not known to be broken. `tests/e2e/position-picker.spec.ts`
+  exercises the supplier CALC path end to end, including the map-estimate to
+  manual provenance flip, and it passes. There is no confirmed repro of a
+  value-sync defect on either remaining form.
+- The cost of leaving it is convention drift: a reader of the three forms sees
+  two answers to the same question, and the next form copies whichever it lands
+  on first.
+- **Resolve via:** decide whether `useController` is the house pattern for
+  `DistanceCalcField` hosts. If it is, convert the supplier and transport-leg
+  forms and note the rule in [`forms.md`](./forms.md). If it is not, leave both
+  and delete this entry (S).
+
 ## Isometric Certify integration
 
 Registry-specific deferred decisions live in
 [Isometric Certify open questions](./open-questions-isometric.md). That
 companion inherits this file's schema, invariants, and resolution rules.
+
+### An archived research doc carries live corrections to shipped readings behavior (`isometric/readings-research-corrections`, opened 2026-07-29, `needs-registry-check`)
+
+- **Observed:** [`docs/archive/2026-07-29-production-run-readings-structured-data-research.md`](./archive/2026-07-29-production-run-readings-structured-data-research.md)
+  is filed as history, but two of its findings contradict behavior that is
+  shipped, so nothing tracks them.
+- Finding 1: the research reads Biochar Protocol v1.1.1 §9.1.2 as not containing
+  the `> 0.5 bar` pressure condition or the five-minute temperature cadence that
+  `src/db/schema/production.ts` documents on `productionRunReadings`. Either the
+  comments describe a Noma policy that the protocol does not impose, or the
+  research misread the pinned version.
+- Finding 2: §9.2.2 requires flow plus CH4, H2, CO, and CO2 concentrations for
+  the continuous direct-emissions method, and the canonical header set in
+  `src/lib/production-readings/readings-csv.ts:parseReadingsCsv` carries only
+  timestamp, temperature, and pressure. If any facility declares that method,
+  the current CSV cannot evidence it.
+- Both claims come from a local reading of the registry pages, so neither is
+  authoritative here. Confirm each against the registry before changing a gate
+  or a schema comment.
+- **Resolve via:** verify both findings through the Isometric MCP server
+  (`how_to`, then the protocol tools). Then correct the schema comments, decide
+  whether the direct-emissions channels need a canonical-CSV extension, and
+  record the outcome in [`docs/isometric/changes.md`](./isometric/changes.md)
+  (M).
 
 ## Audit follow-ups (opened 2026-05-25)
 
