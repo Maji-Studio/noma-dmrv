@@ -1,28 +1,38 @@
 # Testing
 
-Two test layers: **vitest** specs in `tests/*.test.ts` (`pnpm test`) and **Playwright**
-E2E in `tests/e2e/` (`pnpm test:e2e`). Read this before writing either — it carries the
-naming contract, env layout, and safety guards that are invisible from the spec files
+Two test layers: **Vitest** specs in both root `tests/` and colocated
+`src/**/*.test.{ts,tsx}` (`pnpm test`), plus **Playwright** E2E in `tests/e2e/`
+(`pnpm test:e2e`). Read this before writing either — it carries the naming
+contract, env layout, and safety guards that are invisible from the spec files
 themselves. Related: [security.md](./security.md) (env inventory),
 [database.md](./database.md), [troubleshooting.md](./troubleshooting.md),
 [isometric/README.md](./isometric/README.md).
 
 ## Which runner picks up which file
 
-`vitest.config.ts` excludes `**/e2e/**`. A Playwright spec outside `tests/e2e/`, or a
-vitest spec inside it, is **silently never run**. Put it in the right directory.
+`vitest.config.ts` uses Vitest's normal discovery and excludes `**/e2e/**` and
+copied `.claude/worktrees/**`. A Playwright spec outside `tests/e2e/`, or a
+Vitest spec inside it, is **silently never run**. Put it in the right
+directory.
 
-- `pnpm test` — vitest, `tests/*.test.ts`. CI gate in `.github/workflows/ci.yml`.
+- `pnpm test` — Vitest, both `tests/**/*.test.{ts,tsx}` and colocated
+  `src/**/*.test.{ts,tsx}`. Put cross-module/database contracts in `tests/`;
+  put pure module, component, schema, hook, and route-handler tests beside the
+  implementation when locality helps (for example
+  `src/lib/geojson/normalize.test.ts` and
+  `src/app/api/ghg-statement-reports/[reportId]/route.test.ts`).
 - `pnpm test:integration` — `RUN_ISOMETRIC_SANDBOX_TESTS=1`, `tests/**/*.integration.test.ts`.
 - `pnpm test:e2e` — Playwright. CI gate in `e2e.yml`; nightly `@live` in `e2e-live.yml`.
 
 ## vitest specs are not all unit tests
 
-Many require a **running Postgres** (facilities-durability-guard, credit-batch-validation,
-sample-code-unique, production-claim-write, registry-boundary-\*). `tests/setup.ts` loads
-`.env.test` and defaults `DATABASE_URL`. Without `pnpm docker:up` these fail with a raw
-connection error that looks nothing like "you forgot the database". CI runs
-`pnpm drizzle-kit push --force` before `vitest run` for exactly this reason.
+Many root specs require a **running Postgres** (facilities-durability-guard,
+credit-batch-validation, sample-code-unique, production-claim-write,
+registry-boundary-\*). Colocation does not imply purity; read the test setup and
+imports. `tests/setup.ts` applies to every Vitest spec, loads `.env.test`, and
+defaults `DATABASE_URL`. Without `pnpm docker:up` database-backed specs fail
+with a raw connection error that looks nothing like "you forgot the database".
+CI prepares the schema before `vitest run` for exactly this reason.
 
 ## E2E data naming is a hard contract
 
@@ -134,5 +144,5 @@ comment-only `// @live` marker will **not** be excluded by `--grep-invert`.
   `facility-certifier-mapping.spec.ts`) to pick up `ISOMETRIC_DEMO_PROJECT_ID` without
   duplicating it into `.env.test`. This is the usual cause of a failing local `@live` run.
 - **Convention:** whenever a live half exists, keep a hermetic UI+DB counterpart in PR CI
-  (`durability-readiness.spec.ts`, `production-processes.spec.ts` document themselves as
-  deliberately not `@live`). Don't push all new certification coverage behind the nightly.
+  (`durability-readiness.spec.ts` documents itself as deliberately not `@live`).
+  Don't push all new certification coverage behind the nightly.

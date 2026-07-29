@@ -148,7 +148,7 @@ export function CompiledSubmissionReview({
         </p>
         <p className="body-caption text-[var(--color-text-tertiary)]">
           {snapshot
-            ? "The submission values are ready. Supporting files and registry records are saved when you submit."
+            ? "The submission values are ready. Registry value sources and registry records are saved when you submit."
             : "The submission is not saved until you resolve all blockers."}
         </p>
       </ReviewSection>
@@ -167,8 +167,8 @@ export function CompiledSubmissionReview({
           </EmptyValue>
         ) : (
           <p className="body-small text-[var(--color-text-primary)]">
-            {formatCount(review.sourceIds.length, "file")} attached to registry
-            values.
+            {formatCount(review.sourceIds.length, "registry value source")}{" "}
+            attached.
           </p>
         )}
       </ReviewSection>

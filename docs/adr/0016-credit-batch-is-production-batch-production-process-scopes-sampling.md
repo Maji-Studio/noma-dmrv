@@ -1,6 +1,17 @@
 # The credit batch is the protocol production batch; a production process scopes Method A/B sampling
 
-Status: accepted (2026-06-19); amended 2026-07-02 (issue #309); amended 2026-07-04 (feedstock declared)
+> **Current status: Accepted grain decision; sampling-state mechanics partially
+> superseded by ADR 0022** (reviewed 2026-07-29). The credit batch remains the
+> production-batch/lab-sampling grain and the production process remains the
+> history/eligibility scope. Sampling regime/unlock state is no longer stored on
+> `production_processes`: the process stores an epoch and all-or-none
+> prerequisites, while `credit_batches.sampling` stores the immutable
+> `sampled`/`unsampled` choice. Eligibility for a new unsampled batch is
+> computed from current process history. Read this metadata and ADR 0022 before
+> the historical “process owns sampling_method/baseline state” passages below.
+
+Historical status: accepted (2026-06-19); amended 2026-07-02 (issue #309);
+amended 2026-07-04 (feedstock declared)
 
 > **Amendment (2026-07-02, issue #309):** the lab-sample entry point moved from the
 > production run to the **credit batch itself**. The batch's biochar is commingled across
@@ -39,10 +50,9 @@ Status: accepted (2026-06-19); amended 2026-07-02 (issue #309); amended 2026-07-
 >
 > **Amendment (2026-07-24 — version-citation correction):** the v1.3 label in
 > the Context is not the applicable local interpretation pin. Read the cited
-> Biochar Protocol rules against the v1.2 interpretation set. The Certify
-> project was separately observed on v1.1 on this date; that project
-> discrepancy requires operator resolution and does not change this ADR's
-> production-batch/process grain.
+> Biochar Protocol rules against the pinned v1.1 interpretation set. The
+> Certify project was observed on v1.1 on this date. Historical v1.2/v1.3
+> citations below do not change this ADR's production-batch/process grain.
 
 ## Context
 

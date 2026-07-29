@@ -84,7 +84,7 @@ describe("CompiledSubmissionReview", () => {
       "42 t.km",
       "Set in template",
       "2026-01-31T23:59:59.000Z",
-      "1 file attached to registry",
+      "1 registry value source attached",
       "Durability measurements",
       "CB-1",
       "PR-1",

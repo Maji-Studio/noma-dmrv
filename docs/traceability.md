@@ -27,12 +27,18 @@ warning card explaining where the rollback stops.
 
 ## Invariants
 
-- **All credit-batch lineage reads go through `loadCreditBatchLineageFacts`**
-  (`src/data-access/credit-batch-lineage-facts.ts`) — three set-based queries
-  regardless of batch/application count, shared by `chain-of-custody-batch.ts`,
-  `chain-of-custody.ts`, `credit-batches.ts`, `credit-batch-previews.ts`,
-  `credit-batch-production-runs.ts`, and `fn/certification/certify-context-core.ts`.
-  A new per-batch resolver reintroduces N+1 and desyncs the page from certification.
+- **Credit-batch roll-up and accounting reads go through
+  `src/data-access/credit-batch-accounting.ts`.** Its internal lineage walk is
+  the single set-based implementation (three queries regardless of
+  batch/application count). `loadCreditBatchRollups()` returns batch identity,
+  lineage, and applied-weight facts for shallow consumers such as traceability,
+  detail, and certification context; `loadCreditBatchAccounting()` adds sample
+  chemistry and CO₂e preview assembly for full accounting consumers.
+  `chain-of-custody-batch.ts` projects the traceability payload from the shallow
+  loader instead of resolving lineage itself. Do not recreate the deleted
+  `credit-batch-lineage-facts.ts` or `credit-batch-previews.ts` seams, and do not
+  thread preloaded facts through public signatures; either move a projection into
+  the consolidated module or call the appropriate loader.
 - These data-access modules guard with `requireOrgScope(ctx)` (org-scoped tenancy,
   [ADR 0010](adr/0010-shared-schema-org-column-tenancy.md)) — **not** the route-level
   `requireAuth()` — and **every** join predicate, leftJoins
@@ -51,10 +57,13 @@ warning card explaining where the rollback stops.
 
 ## Anchors and readings
 
-Header: **credit batch selection cards** plus a **production-run filter** whose
-options derive from the loaded batch's lineages, never an unscoped fetch. The run
-filter narrows the whole roll-up (DAG, Map, and a client-side recomputed Sankey —
-every figure derives from the filtered lineages) and deep-links as `?run=`.
+Header: one **command bar** (`traceability-header.tsx`) — page eyebrow, a
+**credit batch dropdown** (`batch-picker.tsx`), a **production-run filter**
+(`run-picker.tsx`) whose options derive from the loaded batch's lineages, never
+an unscoped fetch, the back-to-roll-up button, the kg/% and view segments, and
+the facility code. The run filter narrows the whole roll-up (DAG, Map, and a
+client-side recomputed Sankey — every figure derives from the filtered lineages)
+and deep-links as `?run=`.
 
 Batch selection is remembered per facility in localStorage under
 `noma:traceability:selected-credit-batch:<facilityId>` (`creditBatchStorageKey`),
@@ -86,16 +95,16 @@ inside batch context, with a "Batch roll-up" button back.
 
 | Layer | File | Purpose |
 |-------|------|---------|
-| Data Access | `src/data-access/credit-batch-lineage-facts.ts` | Shared set-based loader; every batch lineage read goes through it |
+| Data Access | `src/data-access/credit-batch-accounting.ts` | Consolidated `loadCreditBatchRollups` (shallow lineage) and `loadCreditBatchAccounting` (full preview) |
 | Data Access | `src/data-access/chain-of-custody.ts` | Upstream lineage for one application |
-| Data Access | `src/data-access/chain-of-custody-batch.ts` | Batch roll-up — projects from facts (`projectChainOfCustodyFromBatchFacts`), does not resolve lineage itself |
+| Data Access | `src/data-access/chain-of-custody-batch.ts` | Batch roll-up — loads shallow accounting once and projects via `projectChainOfCustodyFromBatchFacts` |
 | Data Access | `src/data-access/chain-of-custody-geo.ts` | Geo payload (node coordinates + transport legs) |
 | Data Access | `src/data-access/chain-of-custody-trail.ts` | Trail evidence joins keyed by DAG node id |
 | Pure lib | `src/lib/chain-of-custody/sankey.ts` | `buildBatchSankey` — dedupe + mass-balance aggregation |
 | Server Action | `src/fn/chain-of-custody.ts` | Validates ids; application, batch, batch-geo, trail actions |
 | React Query Hook | `src/hooks/use-chain-of-custody.ts` | Caches by application / batch id |
 | Batch List | `src/hooks/use-credit-batches.ts` | Facility-scoped, newest-first cards query |
-| Components | `src/components/chain-of-custody/` | Page, selector, run filter, DAG, `sankey/`, `trail/`, `map/` |
+| Components | `src/components/chain-of-custody/` | Page, command-bar header, batch/run pickers, DAG, `sankey/`, `trail/`, `map/` |
 | Route | `src/app/(app)/traceability/page.tsx` | Canonical entry; legacy `/chain-of-custody` redirects here with query string intact |
 
 ## Graph behavior
@@ -121,6 +130,14 @@ token and contrast rules are owned by [docs/design-system.md](design-system.md).
 The map view (both anchors) renders the Carbon Transit panel. The DAG is the
 *logical lineage* tool; the MapLibre map is the *geography* tool.
 
+- **Two layouts, one fetch** — `view="map"` pairs the custody stages rail
+  (`custody-stages-rail.tsx`: three milestones — feedstock in / pyrolysis /
+  application out — on a dashed thread, transport legs as sub-rows, a "Not on
+  the map" cluster for anything unplottable) with the map, and docks a clicked
+  record's details over the map's left edge (`record-detail-panel.tsx`, closed
+  by its own X or a basemap click, never by re-clicking the rail row — the row
+  is a selection, not a toggle). `view="split"` is the compact half beside the
+  DAG and keeps the legend plus the collapsed not-geolocated chip box.
 - **Geo payload** — `chain-of-custody-geo.ts` reuses the same lineage resolution;
   node position source falls back `own` GPS → inbound-leg origin (feedstocks) →
   facility-inherited → none.
@@ -149,6 +166,8 @@ brand-recolored basemap treatment is `src/components/map/` (also used by
 See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 
 - `tests/e2e/traceability.spec.ts`, `tests/e2e/carbon-viewer.spec.ts`
+- `tests/credit-batch-accounting-contract.test.ts`,
+  `tests/credit-batch-context-set.test.ts`
 - `src/lib/chain-of-custody/sankey.test.ts`
 - `src/components/chain-of-custody/use-chain-graph.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`

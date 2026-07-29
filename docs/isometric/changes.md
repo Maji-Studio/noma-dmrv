@@ -48,6 +48,15 @@ evaluators. The shared SQL builder is now the only path that feeds a surface,
 and what it feeds is an informational evidence-health count rather than a gate.
 The JS twin in `src/fn/certification/application-evidence-readiness.ts` survives
 only as the test oracle that keeps the SQL builder honest.
+## 2026-07-29 (interpretation docs refreshed against v1.1)
+
+[`requirements-shortlist.md`](./requirements-shortlist.md) and
+[`schema-mapping.md`](./schema-mapping.md) were rewritten against the v1.1 pin
+recorded on 2026-07-24, so they no longer carry the earlier v1.2 extraction.
+[`versions.json`](./versions.json) drops the "pending refresh" note accordingly.
+The pin itself did not move: protocol v1.1 and Standard v1.7 remain the observed
+Certify project versions, and these files stay non-authoritative local
+interpretations that must be verified against the registry.
 
 ## 2026-07-29 (automatic GHG Statement data summary)
 
@@ -428,3 +437,12 @@ snapshot by design.
 - This aligns the submission gate with the pinned agricultural-soils module:
   application evidence may be retained or supplied voluntarily, but it is not
   required in the Certify submission payload.
+
+## 2026-07-29 (GIS-only removal evidence)
+
+- The unconditional mapped-Source submission requirement is removed. A
+  Removal with only GIS boundary evidence can now be submitted.
+- A `gis_boundary` document on Application lineage is deliberately excluded
+  from the Removal Source binding plan until an Application `source_ids` or
+  equivalent boundary target exists.
+- The partial-mirroring blocker is retained.
