@@ -429,6 +429,22 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   regression test, which needs the full ready-batch / certifier-mapping setup the
   wizard spec currently deems too fragile for CI (M).
 
+### Does the app-shell scrollport deserve a permanent E2E guard? (`e2e/scrollport-guard`, opened 2026-07-29)
+
+- **Problem:** the temporary `zz-app-shell-scrollport` / `zz-redirect-route-errors`
+  specs were deleted (they pinned facility UUID `6769395d-…` that no seed or
+  fixture creates, so every route rendered the select-facility empty state and
+  the suite hung 600s×2 in CI). The layout change they were written for
+  (`md:h-screen md:overflow-hidden` in `src/app/(app)/layout.tsx`, which moves
+  the desktop scrollbar from the window into `main`) shipped and settled, but
+  nothing now asserts the scrollport frame: a regression would break
+  `position: sticky` silently on every page.
+- **To resolve:** decide whether the frame warrants a purpose-built spec on
+  `seededData.facility.id` (assert `main` is the scrollport on a normal route
+  and that the two full-bleed canvas routes do not scroll), or whether the
+  sticky behavior is exercised enough by existing route specs to leave
+  unguarded (S).
+
 ## Isometric Certify integration
 
 Registry-specific deferred decisions live in
