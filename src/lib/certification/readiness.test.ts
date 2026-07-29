@@ -282,23 +282,8 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
 });
 
 describe("evidence mirroring advisory", () => {
-  it("blocks when no supporting evidence file exists", () => {
-    const facts = ready({
-      sourceBindingRequired: true,
-      supportingDocumentCount: 0,
-      mirroredDocumentCount: 0,
-    });
-
-    expect(deriveRemovalReadiness(facts)).toMatchObject({
-      state: "blocked",
-      reasons: ["No supporting evidence file is available"],
-      advisories: [],
-    });
-  });
-
   it("shows pending automatic mirroring without blocking readiness", () => {
     const facts = ready({
-      sourceBindingRequired: true,
       supportingDocumentCount: 4,
       mirroredDocumentCount: 0,
     });

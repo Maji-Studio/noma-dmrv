@@ -4,7 +4,13 @@ PostgreSQL + Drizzle ORM for the multi-tenant, facility-scoped MRV domain. Cover
 
 ## Org Scoping — the contract
 
-The app **is multi-tenant** ([ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md)): every domain table carries `organizationId NOT NULL`. Tenancy is enforced in `src/data-access/`, not by the route layer.
+The app **is multi-tenant** ([ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md)):
+every MRV/domain table carries `organizationId NOT NULL`. Better Auth
+infrastructure (`users`, sessions, accounts, verifications, organizations,
+members, invitations) follows its own identity/membership relationships, and
+`geo_route_cache` is the explicit organization-neutral cache. These exceptions
+are not examples for new domain tables. Domain tenancy is enforced in
+`src/data-access/`, not by the route layer.
 
 - Every data-access function takes an `OrgContext`, calls `requireOrgScope(ctx)` (`src/data-access/utils.ts`), and filters `eq(table.organizationId, ctx.organizationId)`. Canonical example: `src/data-access/feedstocks.ts`.
 - There is **no `requireAuth()` in this layer** — `requireAuth` is a route guard (`src/lib/auth/server.ts`), called once in `src/app/(app)/layout.tsx`. A data-access function relying on it is an unscoped cross-tenant read.
@@ -49,7 +55,10 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
 
 ## Soft Delete — Facility and Storage-Bin Archive
 
-Facilities are never hard-deleted. `archiveFacility` (`src/data-access/facilities.ts`) stamps `archived_at` on the facility **and all 11 operational facility-scoped tables in one transaction**; `restoreFacility` clears the stamps. `NULL` = active.
+Facilities are never hard-deleted. `archiveFacility`
+(`src/data-access/facilities.ts`) stamps `archived_at` on the facility and every
+stamped operational descendant in one transaction; `restoreFacility` clears
+the stamps. `NULL` = active.
 
 - **The cascade is org-scoped as well as facility-scoped** — every `UPDATE` filters `eq(table.organizationId, ctx.organizationId)` alongside `facilityId`. A new stamped table must carry both predicates.
 - **Storage bins may also be archived individually.** This is the safe retirement path for a bin whose operational history prevents hard deletion. Facility archive stamps only rows where `archived_at IS NULL`; facility restore clears only child stamps equal to that facility's archive timestamp, so an individually archived bin stays archived.
@@ -91,7 +100,34 @@ A `staging` → `main` PR labelled `first-production-deployment` adds a second j
 
 ## Certification Tables
 
-`src/db/schema/certification.ts` is provider-neutral; Isometric-specific code lives under `src/lib/isometric/`. Tables: `certifier_credentials` (registry credentials — handle as secrets, data-access in `src/data-access/certifier-credentials.ts`), `certifier_organization_settings` (organization/provider policy, including Source visibility), `certifier_projects`, `certifier_sensors`, `certifier_ghg_statements`, `certifier_removals`, `certification_submissions`, `certifier_document_uploads`, `certifier_sync_events`. Purpose per table: [`schema-overview.md`](./schema-overview.md); submission-unit rationale: [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR 0008](./adr/0008-submission-ledger-internal-seam.md).
+`src/db/schema/certification.ts` is provider-neutral; Isometric-specific code
+lives under `src/lib/isometric/`. Tables: `certifier_credentials` (registry
+credentials — handle as secrets, data-access in
+`src/data-access/certifier-credentials.ts`),
+`certifier_organization_settings` (organization/provider policy, including
+Source visibility), `certifier_projects`, `certifier_sensors`,
+`certifier_ghg_statements`, `certifier_ghg_statement_reports`,
+`certifier_removals`, `certification_submissions`,
+`certifier_document_uploads`, `certifier_sync_events`. Purpose per table:
+[`schema-overview.md`](./schema-overview.md); submission-unit rationale:
+[ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR
+0008](./adr/0008-submission-ledger-internal-seam.md).
+
+`certifier_ghg_statement_reports` is the immutable-version record for the PDF
+sent with a GHG Statement verifier submission. Every preparation gets a
+positive version, frozen live input/model, source fingerprint, content
+checksum, private `documents` row, and a per-report verifier-token digest.
+Lifecycle is monotonic `prepared → approved → submitted`; database checks keep
+approval/submission actor timestamps coherent, while unique constraints prevent
+duplicate statement versions, preparation idempotency keys, or document reuse.
+Regeneration inserts a new row/object rather than updating a prior version's
+content.
+
+Normal report listing, review, approval, and submission reads are org-scoped.
+The public verifier download lookup is the one deliberate exception:
+`getVerifierReportDocument(reportId)` crosses organizations under the exact
+`// org-scope-ok:` waiver, then authorizes with the bearer token digest and
+private-document state. It must not be copied into ordinary data access.
 
 `certification_submissions` is the **freeze point** for certification source data. A blocking ledger status (`draft`, `submitted`, `accepted`) on a Removal, telemetry upload, or GHG Statement prevents in-place mutation of upstream production runs, lab samples, deliveries, biochar products, and feedstocks reached through current credit-batch lineage. The guard lives in data-access (`certification-lineage-guards.ts`) so stale UI membership cannot bypass it.
 

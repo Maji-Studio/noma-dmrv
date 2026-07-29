@@ -40,7 +40,7 @@ code today; breaking one compiles cleanly and fails silently.
   filters every query on `eq(table.organizationId, ctx.organizationId)`.
   Cross-entity references go through `assertSameOrg(ctx, table, id, executor)`.
   `src/data-access/utils.ts` is the source of truth; `requireAuth()` is an
-  **auth**-layer helper (`src/lib/auth/server.ts`) and appears in **zero**
+  **auth**-layer helper (`src/lib/auth/server.ts`) and does not belong in
   data-access modules. Writing a new accessor with `requireAuth()` and no org
   filter silently leaks across organizations. See
   [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md) and
@@ -128,7 +128,7 @@ Pure starter residue; org scoping came later via ADR 0010.
 ### Sample Surface Area / Volatile Matter — add columns or drop for good? (`schema/sample-lab-properties`, opened 2026-07-15)
 
 - **Context:** staging QA
-  ([`docs/qa/2026-07-15-qa-staging-production-chain.md`](./qa/2026-07-15-qa-staging-production-chain.md), S3)
+  ([archived report](./archive/qa/2026-07-15-qa-staging-production-chain.md), S3)
   found the sample form accepted **Surface Area (m²/g)** and **Volatile Matter
   (%)** then silently discarded them — no columns exist and
   `src/data-access/samples.ts` hard-coded both to `null`. Both fields were
@@ -147,54 +147,6 @@ Pure starter residue; org scoping came later via ADR 0010.
   hand-transcribed chemistry fields. Upload slot already exists (`lab_report` on
   the sample's Evidence step). **Owned by #329** — extraction approach,
   review UX, and where parsing runs are all scoped there.
-
-### Validate production-run window ⊆ credit-batch period (`production/run-window`, opened 2026-07-01)
-
-- **No cross-entity check exists** that a run's `start_time`/`end_time` window
-  falls inside its credit batch's period ([ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md));
-  both timestamps default to `now()`. Telemetry can therefore land outside the
-  batch it certifies. Bound in `src/schemas/production-runs.ts` +
-  `src/fn/production-runs.ts`. **Owned by #207.**
-
-### Bin-stock guard escape controls remain wrapper-owned (`src/data-access/bin-stock-guards.ts:assertBiocharProductDrawWithinStock`)
-
-- **Verdict:** production callers set `skipBinLane`, `binLockAlreadyHeld`, and
-  replacement-record exclusions only inside the owning `*-stock-locks.ts`
-  modules. Direct imports elsewhere only lock or derive stock, translate the
-  typed overdraw error, or run an invariant draw assertion without escape
-  controls.
-- **Owning seams:** `src/data-access/delivery-stock-locks.ts:lockDeliveryUpdateStock`,
-  `src/data-access/biochar-product-stock-locks.ts:assertBiocharProductUpdateDraw`,
-  `src/data-access/order-stock-locks.ts:assertOrderProductRepointWithinStock`,
-  and
-  `src/data-access/production-run-stock-locks.ts:assertProductionRunUpdateFeedstockDrawWithinStock`.
-- **Why no deeper seam:** the stock-lock wrappers already contain configurable
-  mutation coordination, while the shared guard's low-level invariant
-  operations remain useful to reconciliation and create paths. Another facade
-  would add indirection without containing any additional policy.
-- **Revisit when:** a production caller outside `*-stock-locks.ts` supplies a
-  guard skip/lock-held flag or replacement-record exclusion, or duplicates
-  wrapper-owned lock ordering.
-
-### Production-run lifecycle stays pure (`src/lib/production-runs/lifecycle.ts:shouldIncludeProductionRunEndTime`)
-
-- **Verdict:** the form's separate calls for allowed status options, end-time
-  inclusion, and reopening clears are consistent projections of the same pure
-  lifecycle policy. The mutation path independently merges persisted values
-  and reasserts transitions and outcomes before writing, so persistence does
-  not leak into the lifecycle module.
-- **Related anchors:**
-  `src/lib/production-runs/lifecycle.ts:allowedProductionRunStatusesFrom`,
-  `src/lib/production-runs/lifecycle.ts:shouldClearProductionRunEndTime`,
-  `src/components/production-runs/production-run-form.tsx:ProductionRunForm`,
-  and `src/data-access/production-runs/mutations.ts:updateProductionRun`.
-- **Why no deeper seam:** combining the calls would not remove duplicated
-  policy or an inconsistent outcome; it would only couple form adaptation to
-  data-access state. Keep `lifecycle.ts` free of `ctx`, transactions, and
-  persistence.
-- **Revisit when:** another adapter reimplements transition or outcome rules,
-  two lifecycle projections disagree for the same transition, or an atomic
-  persistence invariant cannot be enforced by the data-access mutation.
 
 ### #473 no-flash guarantee is now per-page, not global (`navigation/select-facility-deep-link-skeleton`, opened 2026-07-20)
 
@@ -225,9 +177,10 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ### Facility switcher unreachable while an entity side sheet is open (`navigation/sheet-blocks-facility-switch`, opened 2026-07-20)
 
-- QA 2026-07-20 (`docs/qa/artifacts/2026-07-20-qa-a-b93d/findings.md`, P2):
+- QA 2026-07-20
+  ([findings](./archive/qa/artifacts/2026-07-20-qa-a-b93d/findings.md), P2):
   with a detail or create sheet open, the modal overlay of
-  `src/components/ui/entity-side-sheet.tsx` makes the sidebar facility
+  `src/components/ui/entity-side-sheet/index.tsx:EntitySideSheet` makes the sidebar facility
   selector inert, so the operator cannot switch facilities without first
   closing the sheet. This is the modal behavior working as designed — the
   open question is the intended UX: keep the sheet modal (status quo),
@@ -238,7 +191,8 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ### Registry picker needs approved Puro Earth / CSI logo assets (`onboarding/registry-picker-logos`, opened 2026-07-22)
 
-- The onboarding plan (`docs/plans/2026-07-21-onboarding.md`) asks the wizard's
+- The archived onboarding plan
+  ([`2026-07-21-onboarding.md`](./archive/plans/2026-07-21-onboarding.md)) asks the wizard's
   registry step to show Puro Earth and CSI greyed **with their logos**.
   `src/components/certification/registry-picker.tsx` deliberately renders styled
   text wordmarks instead: we hold no approved logo files, and bundling
@@ -276,10 +230,10 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ### New organizations still inherit Dark Earth Carbon's feedstock catalog (`tenancy/starter-feedstock-catalog`, opened 2026-07-28)
 
-- `seedOrgDefaults` (`src/db/org-defaults.ts`) injects `STARTER_FEEDSTOCK_TYPES`
-  — nine rows coded `FT-26-001…009`, one operator's actual catalog — into every
-  organization at creation. Harmless while DEC is the only tenant; wrong as soon
-  as it is not.
+- `seedOrgDefaults` (`src/db/org-defaults.ts`) injects
+  `STARTER_FEEDSTOCK_TYPES`, an operator-specific starter catalog, into every
+  organization at creation. Harmless while DEC is the only tenant; wrong as
+  soon as it is not.
 - **To resolve:** a Platform-Admin choice at org creation, or an onboarding step
   that picks a catalog. Not an operating default: it creates records rather than
   seeding a form, so it does not belong on `/settings/defaults`.
@@ -353,17 +307,16 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
 
 ### Split `src/db/seed-data.ts` into domain seed modules (`db/seed-modularization`, opened 2026-06-11)
 
-- **Problem:** `seed-data.ts` is 1814 lines — the only non-generated file in
-  `src/` over the 1000-line cap — and grows as each new domain appends its block
-  to the single transaction.
+- **Problem:** `seed-data.ts` is well over the repository's 1000-line cap and
+  grows as each new domain appends its block to the single transaction.
 - **Note the lint exemption:** `eslint.config.mjs` lists
   `src/db/seed-data.ts` in the `ignores` array alongside the generated Isometric
   types, so `max-lines` will **never** flag it. Removing that exemption is part
   of this work; nothing else will surface the file.
-- **To resolve:** extract per-domain modules (e.g. `src/db/seeds/transport.ts`
-  exporting `createTransportLegsSeed(tx, ids)`) and leave `seed-data.ts` a thin
-  orchestrator. Mechanical but touchy — the blocks share the `ids` map — so do
-  it as a dedicated refactor PR (M).
+- **To resolve:** extract per-domain modules into a new domain seed-module
+  directory and leave `seed-data.ts` a thin orchestrator. Mechanical but
+  touchy — the blocks share the `ids` map — so do it as a dedicated refactor
+  PR (M).
 
 ### Postgres RLS as defense-in-depth (`tenancy/rls`, opened 2026-06-11)
 
@@ -408,27 +361,6 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   environment already pins it. Worth folding into the next auth-area change
   rather than as its own PR.
 
-### Application evidence-readiness: two implementations, one taxonomy (opened 2026-07-20)
-
-- **Problem:** the list badge / dashboard evaluate application visual-evidence
-  gaps via `applicationEvidenceGapCountSql`
-  (`src/data-access/application-evidence-sql.ts`, raw SQL folded into
-  `deriveEntityCertifyReadiness`), while the certify wizard evaluates the same
-  concept via `buildApplicationEvidenceGaps`
-  (`src/fn/certification/application-evidence-readiness.ts`, async TS). They
-  share only the `application-evidence` constants (roles / geotag predicate),
-  not the evaluation path — unlike production-run / sample / transport, which
-  both route through `deriveEntityCertifyReadiness`.
-- **Owned by #246** — "certification badges and removal gates read one
-  shared readiness source". Both surfaces now fail-closed, so the visible
-  contradiction (list "Ready", wizard blocked) is gone, but the duplicated logic
-  is a live drift risk: E2E `application-readiness-evidence.spec.ts` guards only
-  the badge side and nothing asserts badge/wizard *agreement*.
-- **To resolve:** route `buildApplicationEvidenceGaps` through the same shared
-  source as the badge (true unification) — likely cheaper than the alternative
-  regression test, which needs the full ready-batch / certifier-mapping setup the
-  wizard spec currently deems too fragile for CI (M).
-
 ### Does the app-shell scrollport deserve a permanent E2E guard? (`e2e/scrollport-guard`, opened 2026-07-29)
 
 - **Problem:** the temporary `zz-app-shell-scrollport` / `zz-redirect-route-errors`
@@ -450,39 +382,6 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
 Registry-specific deferred decisions live in
 [Isometric Certify open questions](./open-questions-isometric.md). That
 companion inherits this file's schema, invariants, and resolution rules.
-
-### Interpretation docs still derive from protocol v1.2 after the v1.1 re-pin (`isometric/v1-1-shortlist-reverification`, opened 2026-07-24, `needs-registry-check`)
-
-- **Observed:** the operator resolved `isometric/project-protocol-version` on
-  2026-07-24 by re-pinning
-  [`docs/isometric/versions.json`](./isometric/versions.json) to the Certify
-  project's authoritative **v1.1** (and separately resolved
-  `isometric/project-durability-tier` by setting the project to 1000 years in
-  the Certify UI) — resolutions recorded in
-  [`docs/isometric/changes.md`](./isometric/changes.md). But
-  `requirements-shortlist.md` and `schema-mapping.md` were extracted against
-  v1.2, whose module set and requirements differ (agricultural-soils v1.1
-  replaces soil-environments v1.2, feedstock accounting v1.2 not v1.3,
-  ghg-accounting unreferenced, no Appendix II monitoring plan / loss
-  accounting / low-C/N N₂O mandates).
-- **Gap-check ran 2026-07-24** — full report:
-  [`docs/archive/2026-07-24-isometric-gap-check-v1-1.md`](./archive/2026-07-24-isometric-gap-check-v1-1.md)
-  (151 confirmed findings; all 9 P0s map to already-tracked open P0-checklist
-  items). Headline drifts to fold into the refresh: `started_on` should derive
-  from earliest feedstock sourcing not production start (§8.6.2); the
-  electricity `ec1_grid_average…ec5_direct_connection` enum misreads EC1–EC5
-  as alternatives when they are conjunctive; the BFA market-leakage
-  interpretation mixes v1.3 significance tests into the pinned v1.2; WBC
-  contaminant thresholds DO bind under agricultural-soils v1.1;
-  `src/lib/isometric/utils/durability-aggregation.ts` header still cites the
-  superseded soil-environments v1.2. Caveat: the run's self-test missed 3 of 4
-  seeded known gaps in direct-emissions coverage — don't treat it as
-  exhaustive there.
-- **Resolve via:** refresh `requirements-shortlist.md` + `schema-mapping.md`
-  from the report, remediate or explicitly defer its FIX-class findings, then
-  delete this entry.
-- **Code anchor:** `src/fn/certification/protocol-version-preflight.ts:checkProtocolVersionAtSubmit`
-  compares `certifier_projects.protocol_version` against the versions.json pin.
 
 ## Audit follow-ups (opened 2026-05-25)
 
@@ -517,19 +416,17 @@ two oversized data-access files. Still open:
 - **Phase 3 — read-path + correctness.** Explicit column selection on
   wide-table reads, full document pagination, a central `query-config.ts`,
   narrowed React Query invalidation, and `revalidatePath` on key mutations.
-- **Phase 4 (remainder) — file size.** `src/db/seed-data.ts` (1814 lines) is now
-  the **only** non-generated file in `src/` over the 1000-line cap; the
-  previously-flagged oversized forms are gone. Flipping `max-lines` from `warn`
-  to `error` therefore only requires finishing `db/seed-modularization` above —
-  **and removing `src/db/seed-data.ts` from the eslint `ignores` array**, which
-  is why the lint does not flag it today.
+- **Phase 4 (remainder) — file size.** `src/db/seed-data.ts` remains well over
+  the 1000-line cap while the previously flagged oversized forms have been
+  split. Flipping `max-lines` from `warn` to `error` requires finishing
+  `db/seed-modularization` above — **and removing `src/db/seed-data.ts` from the
+  eslint `ignores` array**, which is why the lint does not flag it today.
 ### Structural / cross-cutting
 
-- **Duplicate-hooks factory** (`code/hooks-factory`). The `src/hooks/use-*.ts`
-  family is **9,710 lines** (measured 2026-07-20; this entry previously estimated
-  4–5k, so the case is twice as strong as it read) of near-identical
+- **Duplicate-hooks factory** (`code/hooks-factory`). The
+  `src/hooks/use-*.ts` family contains substantial near-identical
   query/mutation wiring per entity; a `createEntityHooks(...)` factory would
-  collapse most of it. Dedicated refactor PR — should not stack on in-flight
+  collapse much of it. Dedicated refactor PR — should not stack on in-flight
   feature work. See
   [`docs/architecture.md`](./architecture.md).
 
@@ -547,11 +444,11 @@ two oversized data-access files. Still open:
 
 - **Sequential datapoint POSTs in `submitRemoval`** (`perf/datapoint-fanout`).
   `src/fn/certification/submit-removal.ts` iterates `transport.datapointBodies`
-  and awaits each `createOrReconcile` sequentially — N × Isometric RTT per
-  submission. With 5–15 monitored inputs per template that is 1–9s of avoidable
-  wait. `Promise.all` with `p-limit(4)` cuts wall-time ~Nx without overwhelming
-  Isometric's per-second budget; sync-event ordering becomes interleaved — a
-  trade-off the owner should call.
+  and awaits each `performRegistryCreate` sequentially — N × Isometric RTT per
+  submission. Each monitored input adds another Isometric round trip.
+  `Promise.all` with bounded concurrency would reduce wall time without
+  overwhelming Isometric's per-second budget; sync-event ordering becomes
+  interleaved — a trade-off the owner should call.
 
 - **CI coverage script serial per-facility loop** (`perf/coverage-check-fanout`).
   The outer `for (const facility of facilities)` in
@@ -575,7 +472,7 @@ two oversized data-access files. Still open:
   (`obs/preserve-error-context`). **Half fixed.** `createGhgStatementRemote`
   (`src/fn/certification/ghg-statements.ts`) now records `status` +
   `sanitizeIsometricErrorBody(err.body)` — copy that pattern. Still lossy:
-  `createOrReconcile` in `src/fn/certification/submit-removal.ts`, which logs
+  `performRegistryCreate` in `src/fn/certification/submit-removal.ts`, which logs
   only `err.message` and drops `err.body` / `err.status` / `err.code`, so neither
   the audit ledger nor any logger receives them. **Resolve via:** include all
   three in `responsePayload` alongside `mapping_revision`; pair with the logger
@@ -587,7 +484,7 @@ two oversized data-access files. Still open:
 - **Color-only severity convention in warning notices** (`a11y/wcag-1.4.1`).
   Mostly fixed — `check-row.tsx` now maps `unmet → WarningIcon` and
   `certify-panel.tsx` no longer carries the `signal-orange` border. The residual
-  is `src/components/certification/ghg-statement-create-dialog.tsx`, whose two
+  is `src/components/certification/ghg-statement-create-dialog.tsx`, whose
   warning blocks encode severity only by a `--color-signal-orange` left border +
   matching text color. WCAG
   1.4.1 requires a non-color cue; SR-only text satisfies AT users but the
@@ -672,27 +569,28 @@ decision or larger than a review-fix. Execution summary archived in
 [`docs/archive/2026-06-07-whole-repo-audit-snapshot.md`](./archive/2026-06-07-whole-repo-audit-snapshot.md).
 Sizing: (S) small, (M) medium, (L) large.
 
-### Unbounded readings table — pagination/virtualization (`perf/readings-table-unbounded`) — **deferred**
+### Legacy structured telemetry path (`isometric/structured-telemetry-path`) — **deferred**
 
-- The `(production_run_id, timestamp)` index **landed** (migration `0036`), so
-  the query is no longer a full scan. Still open: `getProductionRunReadingsList`
-  (`src/data-access/production-run-readings.ts`) has no `.limit`, and
-  `src/components/production-run-readings/production-run-reading-table.tsx`
-  renders every row to the DOM with no virtualization. Telemetry is the
-  highest-cardinality child entity on a run.
-- **Why it matters:** a run with thousands of readings ships the whole set to
-  the client and paints every row. Not biting at seed scale; will bite as real
-  telemetry lands.
-- **Resolve via:** decide server-side paging UX (page size, infinite-scroll vs.
-  pages), then add `.limit`/offset + `@tanstack/react-virtual` (M). UX decision
-  first.
+- The operator workflow now stores each production-run readings CSV unchanged as
+  a `sensor_data` document. It does not parse rows, populate
+  `production_run_readings`, or gate certification on a row count.
+- The older CSV importer, row table, sensor mapping, Parquet transformer, and
+  `DataUploadSubmission` modules remain in the codebase but have no mounted
+  operator entry point.
+- `getProductionRunReadingsList` has no `.limit`, and the legacy reading table
+  has no virtualization.
+- **Resolve via:** confirm the registry evidence contract for production
+  monitoring. If the retained CSV is sufficient, remove the legacy structured
+  pipeline and table. If a sensor-linked bulk upload is required, design that as
+  an explicit certification transform rather than making ordinary file upload
+  depend on parsing.
 
 ### Certification readiness loader lineage fan-out (`perf/overview-lineage-nplus1`) — **deferred**
 
 - `loadCertificationOverview` rebuilds a full submission context per removal;
   each walks every application through `getChainOfCustodyData`, which issues
-  ~5–6 sequential single-row queries → on the order of R×A×6 round-trips per
-  Removals load, uncached. Same root pattern as the per-batch
+  several sequential single-row queries and multiplies round trips across
+  removals and applications. Same root pattern as the per-batch
   `getCo2eStoredPreview` fan-out in `src/data-access/credit-batches.ts` and the
   per-row `getCreditBatchById`/`getLatestSubmission` loops in
   `certify-context-core.ts`.
@@ -721,14 +619,14 @@ Sizing: (S) small, (M) medium, (L) large.
 
 ### Inline-CRUD table duplication (`refactor/inline-crud-table`) — **deferred**
 
-- **Now two tables, not three** (re-verified 2026-07-20).
+- The remaining instances,
   `src/components/production-runs/production-incident-table.tsx` and
   `production-sample-table.tsx` still share ~90% boilerplate: identical
   `inlineForm` discriminated-union state machine, header markup,
   `TableSkeleton`, empty state, edit/delete column, and `DeleteConfirmDialog`
   wiring. `production-run-readings/production-run-reading-table.tsx` has since
-  left the pattern (no `inlineForm`), and the "`formatTimestamp` copy-pasted 3×"
-  claim is dead — zero definitions remain in `src/`.
+  left the pattern (no `inlineForm`), and the former copy-pasted
+  `formatTimestamp` helper no longer exists in `src/`.
 - **Why it matters:** maintenance drift — a fix to one table's CRUD flow has to
   be mirrored in the other. Weaker at two call sites than at three; re-raise if a
   third inline-CRUD table appears.
@@ -798,8 +696,8 @@ selectors. See [`docs/testing.md`](./testing.md).
 ### Playwright hygiene (`testing/e2e-hygiene`)
 
 - `waitForLoadState("networkidle")` is used throughout `full-chain-ui.spec.ts`
-  (slow-by-design with polling queries); shard 1 carries all `certification-*`
-  files because sharding distributes by file. Consider `fullyParallel: true`
+  (slow-by-design with polling queries); certification specs cluster on a shard
+  because sharding distributes by file. Consider `fullyParallel: true`
   (shard by test) after confirming no in-file ordering deps, replacing
   networkidle waits with role-based expects, and `eslint-plugin-playwright` (S).
 
@@ -814,13 +712,13 @@ workflow.
 
 - Still open: `package.json` pins TS `^5.9.3` and there is no `tsgo` anywhere.
 - **Resolve via:** add a non-blocking `tsgo --noEmit` CI job to validate parity
-  against the 60+-table schema and Zod-heavy types; flip the blocking typecheck
+  against the large Drizzle schema and Zod-heavy types; flip the blocking typecheck
   once TS 7 ships stable (S).
 
 ### Drizzle ORM/Kit v1.0 upgrade (`db/drizzle-v1`)
 
 - v1 was at `1.0.0-rc.3` (stable line still 0.45.x). Bundles a full drizzle-kit
-  rewrite (introspection ~10s → <1s — relevant at 60+ tables), migrations folder
+  rewrite (with materially faster introspection for a schema of this size), migrations folder
   v3 (journal.json removed, per-migration folders, ends git conflicts on
   migrations), and Relational Queries v2 (breaking; official v1→v2 guide).
   Release notes warn "something will definitely break".
@@ -849,8 +747,10 @@ Playwright 1.58+ were on this list and are both already adopted — `vitest`
 ## QA 2026-07-21 remediation follow-ups (opened 2026-07-21)
 
 Product decisions deferred from the staging UX audit + Isometric integration
-remediation PR (ledgers: `docs/qa/2026-07-21-staging-ux-audit.md`,
-`docs/qa/2026-07-21-staging-isometric-integration.md`). The PR shipped the
+remediation PR (archived ledgers:
+[`2026-07-21-staging-ux-audit.md`](./archive/qa/2026-07-21-staging-ux-audit.md) and
+[`2026-07-21-staging-isometric-integration.md`](./archive/qa/2026-07-21-staging-isometric-integration.md)).
+The PR shipped the
 Layer-1 fixes (named exclusion clocks, structured Removal setup gaps, removed
 inert lifecycle badge, typed archive confirmation, Method-B baseline lower
 bound); these are the decisions it deliberately did not make.
@@ -947,7 +847,7 @@ bound); these are the decisions it deliberately did not make.
 - It only bites when the viewer's (or server's) zone skips the same wall clock on
   the same date, so it is rare — but the affected readers are load-bearing: the
   production-run edit read-back
-  (`src/components/production-runs/production-run-timing:productionRunTimingDefaults`),
+  (`src/components/production-runs/production-run-timing.ts:productionRunTimingDefaults`),
   and the facility-local sampling day in `src/fn/samples`,
   `src/fn/certification/durability-readiness`,
   `src/lib/certification/durability-batch-summary` and
@@ -991,7 +891,7 @@ bound); these are the decisions it deliberately did not make.
   asks for first when deciding where to put a delivery.
 - It is missing because on-hand mass is not a column. `binCurrentMassKg` reads
   the enriched row, and that enrichment runs **after** pagination: feedstock and
-  biochar stock come from `deriveLaneStock` (five aggregates over feedstocks,
+  biochar stock come from `deriveLaneStock` (several aggregates over feedstocks,
   production runs, production-run feedstocks, biochar products and bin
   movements), and product stock additionally subtracts delivered mass. Sorting
   on it means replicating all of that inside the paginated query.
@@ -1013,7 +913,7 @@ bound); these are the decisions it deliberately did not make.
   concurrent submits of the same external report URL can both miss and write
   duplicate ledger rows.
 - The obvious fix is a unique constraint on that tuple plus
-  `onConflictDoNothing`. It is deferred because `documents` is shared by all 16
+  `onConflictDoNothing`. It is deferred because `documents` is shared by the
   entity workflows and the generic `createDocument` path: constraining it would
   also stop an operator attaching the same external URL twice to one entity
   with different descriptions, which no one has asked for.

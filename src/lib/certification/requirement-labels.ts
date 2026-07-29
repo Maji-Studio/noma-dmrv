@@ -89,7 +89,7 @@ export const CERT_REQUIREMENT_META: Record<
   entityReadiness: {
     requirementLabel: "Certifier fields on linked records",
     whyDetail:
-      "The certifier requires fields on the production runs, applications, and Samples linked to this credit batch. Missing readings, application evidence, or other required fields block the Removal. Complete each listed field before grouping the batch.",
+      "The certifier requires fields on the production runs and Samples linked to this credit batch. Missing production or lab fields block the Removal; application evidence warnings are surfaced separately.",
   },
   mapping: {
     requirementLabel: "Facility linked to a registry project",
@@ -107,9 +107,9 @@ export const CERT_REQUIREMENT_META: Record<
       "The facility's default Removal template defines the inputs and transport categories the registry expects. Every referenced component must be available before a Removal can be assembled.",
   },
   evidence: {
-    requirementLabel: "Supporting evidence linked",
+    requirementLabel: "Registry value sources linked",
     whyDetail:
-      "Files attached to the three supported evidence roles are sent to the registry automatically when you submit. Noma then verifies that each file reached the correct registry field.",
+      "Registry value sources are sent automatically when you submit. Noma then verifies that each source reached the correct registry field.",
   },
   durability: {
     requirementLabel: "Sampling & durability eligibility",

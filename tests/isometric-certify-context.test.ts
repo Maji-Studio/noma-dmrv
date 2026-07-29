@@ -379,7 +379,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         startTime: new Date("2026-01-05T00:00:00Z"),
         biocharDryMassKg: 1000,
         samples: [],
-        readingsCount: 1,
       } as never,
     ]);
 
@@ -395,7 +394,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedGetLineage).toHaveBeenCalledWith(makeTestOrgContext(USER_ID), "app-1");
   });
 
-  it("flags resolved production runs that have no telemetry readings", async () => {
+  it("does not require row-level telemetry for resolved production runs", async () => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
@@ -438,7 +437,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         startTime: new Date("2026-01-05T00:00:00Z"),
         biocharDryMassKg: 1000,
         samples: [],
-        readingsCount: 0,
       } as never,
     ]);
 
@@ -447,11 +445,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.entityReadinessGaps).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining("Production run PR-1: Telemetry readings"),
-      ]),
-    );
+    expect(result.productionReadinessGap).toBeNull();
+    expect(result.entityReadinessGaps).toEqual([
+      "Production run PR-1: Feedstock wet mass · Feedstock moisture · Biochar wet mass · Biochar moisture · Startup / plant diesel · Preprocess fuel · Genset diesel · Electricity",
+    ]);
   });
 
   it("flags missingDefaultTemplateId when the saved template is not in the list (drift)", async () => {
@@ -601,7 +598,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         dieselGensetLiters: 0,
         electricityKwh: 0,
         samples: [],
-        readingsCount: 1,
       } as never,
     ]);
     mockedGetBatchesWithSamples.mockResolvedValue([
@@ -796,7 +792,6 @@ describe("requiredTransportCategories", () => {
         preprocessingFuelLiters: 0,
         dieselGensetLiters: 0,
         electricityKwh: 0,
-        readingsCount: 1,
         samples: [
           {
             id: "s-1",
@@ -874,7 +869,6 @@ describe("requiredTransportCategories", () => {
         preprocessingFuelLiters: 0,
         dieselGensetLiters: 0,
         electricityKwh: 0,
-        readingsCount: 1,
         samples: [],
       } as never,
     ]);

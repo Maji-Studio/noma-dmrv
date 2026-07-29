@@ -1,6 +1,6 @@
 /**
  * Brand recoloring for MapLibre basemaps + DOM marker factory, per the
- * Carbon Viewer concept build (docs/plans/2026-06-10-map-integration.md →
+ * Carbon Viewer concept build (docs/archive/plans/2026-06-10-map-integration.md →
  * "Design reference"): white land on orange-tinted paper, hairline plum
  * boundaries, all labels hidden — the map reads as a diagram, not a road map.
  *

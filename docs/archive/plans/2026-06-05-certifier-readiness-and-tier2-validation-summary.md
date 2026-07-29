@@ -2,7 +2,7 @@
 
 This plan has been **executed and archived**. Full design log, decisions, and
 file:line findings:
-[docs/archive/2026-06-05-certifier-readiness-and-tier2-validation.md](../archive/2026-06-05-certifier-readiness-and-tier2-validation.md).
+[docs/archive/2026-06-05-certifier-readiness-and-tier2-validation.md](../2026-06-05-certifier-readiness-and-tier2-validation.md).
 
 ## Stable decisions (evergreen)
 

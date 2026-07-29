@@ -67,8 +67,6 @@ export interface RemovalReadinessFacts {
   supportingDocumentCount?: number;
   /** Supporting documents with an existing Isometric Source mirror. */
   mirroredDocumentCount?: number;
-  /** Existing Removal submissions require a complete, non-empty Source set. */
-  sourceBindingRequired?: boolean;
   /**
    * Fail-closed durability sampling/eligibility blockers (decision D3) — the
    * exact list the submit pipeline hard-blocks on. Empty ⇒ sampling &
@@ -102,7 +100,7 @@ const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
 const ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT = 5;
 const DURABILITY_LABEL = "Sampling & durability eligibility met";
-const EVIDENCE_LABEL = "Supporting evidence linked";
+const EVIDENCE_LABEL = "Registry value sources linked";
 const MEASUREMENT_DATES_LABEL = "Production and application dates";
 const FUTURE_DATE_REASON_PREVIEW_LIMIT = 3;
 const FUTURE_DATE_CHECK_DISPLAY_LIMIT = 3;
@@ -215,12 +213,6 @@ function evidenceAdvisories(facts: RemovalReadinessFacts): string[] {
     : [];
 }
 
-function sourceBindingGap(facts: RemovalReadinessFacts): string | null {
-  if (!facts.sourceBindingRequired) return null;
-  const total = facts.supportingDocumentCount ?? 0;
-  return total === 0 ? "No supporting evidence file is available" : null;
-}
-
 /**
  * Folds removal status + submission preconditions into one verdict.
  * Precedence: live lock → terminal submitted row → blocked → ready.
@@ -292,8 +284,6 @@ export function deriveRemovalReadiness(
   // pipeline throws on (D3). Surfacing it here means a removal can't read
   // "ready" then bounce at submit on an unsampled run or out-of-spec chemistry.
   reasons.push(...durabilityBlockerReasons(facts.durabilityGateBlockers ?? []));
-  const sourceGap = sourceBindingGap(facts);
-  if (sourceGap) reasons.push(sourceGap);
 
   return reasons.length > 0
     ? { state: "blocked", reasons, advisories }
@@ -361,15 +351,6 @@ function withPreflightMeta(check: PreflightCheckBase): PreflightCheck {
 }
 
 function evidencePreflightCheck(facts: RemovalReadinessFacts) {
-  const sourceGap = sourceBindingGap(facts);
-  if (sourceGap) {
-    return {
-      key: "evidence" as const,
-      label: EVIDENCE_LABEL,
-      status: "unmet" as const,
-      detail: sourceGap,
-    };
-  }
   const detail = evidenceMirrorDetail(facts);
   if (!detail) return null;
   const status: PreflightCheckStatus =

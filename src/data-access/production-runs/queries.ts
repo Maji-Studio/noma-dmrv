@@ -24,7 +24,6 @@ import { db } from "@/db";
 import { formatLocalDate } from "@/lib/date-utils";
 import {
   productionRuns,
-  productionRunReadings,
   productionRunFeedstocks,
   facilities,
   reactors,
@@ -218,17 +217,6 @@ export async function getProductionRuns(
         .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
         .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
     : [];
-  const readingCountRows = runIds.length > 0
-    ? await db
-        .select({
-          productionRunId: productionRunReadings.productionRunId,
-          readingCount: count(),
-        })
-        .from(productionRunReadings)
-        .where(and(inArray(productionRunReadings.productionRunId, runIds), eq(productionRunReadings.organizationId, ctx.organizationId)))
-        .groupBy(productionRunReadings.productionRunId)
-    : [];
-
   // Group feedstocks by production run ID
   const feedstocksByRunId = new Map<string, ProductionRunFeedstockWithDetails[]>();
   for (const f of allFeedstocks) {
@@ -236,13 +224,6 @@ export async function getProductionRuns(
     existing.push(f);
     feedstocksByRunId.set(f.productionRunId, existing);
   }
-  const readingCountByRunId = new Map(
-    readingCountRows.map((row) => [
-      row.productionRunId,
-      Number(row.readingCount),
-    ]),
-  );
-
   const items: ProductionRunWithRelations[] = runList.map((run) => {
     const runFeedstocks = feedstocksByRunId.get(run.id) ?? [];
     return {
@@ -253,7 +234,6 @@ export async function getProductionRuns(
       feedstockStorageLocationName: run.feedstockStorageLocationName ?? null,
       feedstocks: runFeedstocks,
       totalFeedstockMassKg: runFeedstocks.reduce((s, f) => s + f.massUsedKg, 0),
-      readingsCount: readingCountByRunId.get(run.id) ?? 0,
     };
   });
 
@@ -353,7 +333,6 @@ export async function getProductionRunById(
     runFeedstocks,
     biocharStorageLocation,
     feedstockStorageLocation,
-    readingsCount,
   ] =
     await Promise.all([
       getProductionRunFeedstocks(ctx, productionRunId),
@@ -377,11 +356,6 @@ export async function getProductionRunById(
             .where(and(eq(storageLocations.id, run.feedstockStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
             .then(([loc]) => loc ?? null)
         : null,
-      db
-        .select({ readingCount: count() })
-        .from(productionRunReadings)
-        .where(and(eq(productionRunReadings.productionRunId, productionRunId), eq(productionRunReadings.organizationId, ctx.organizationId)))
-        .then(([row]) => Number(row?.readingCount) || 0),
     ]);
 
   return {
@@ -394,7 +368,6 @@ export async function getProductionRunById(
       feedstockStorageLocation?.name ?? null,
     feedstocks: runFeedstocks,
     totalFeedstockMassKg: runFeedstocks.reduce((sum, f) => sum + f.massUsedKg, 0),
-    readingsCount,
   };
 }
 
@@ -569,20 +542,6 @@ export async function getProductionRunsWithSamples(
       )
     );
 
-  const readingCountRows = await db
-    .select({
-      productionRunId: productionRunReadings.productionRunId,
-      readingCount: count(),
-    })
-    .from(productionRunReadings)
-    .where(
-      and(
-        inArray(productionRunReadings.productionRunId, runs.map((r) => r.id)),
-        eq(productionRunReadings.organizationId, ctx.organizationId),
-      ),
-    )
-    .groupBy(productionRunReadings.productionRunId);
-
   const samplesByRun = new Map<string, Sample[]>();
   for (const s of sampleRows) {
     // productionRunId is nullable since ADR 0016 (provenance, not the primary
@@ -593,17 +552,9 @@ export async function getProductionRunsWithSamples(
     list.push(s);
     samplesByRun.set(s.productionRunId, list);
   }
-  const readingCountByRun = new Map(
-    readingCountRows.map((row) => [
-      row.productionRunId,
-      Number(row.readingCount),
-    ]),
-  );
-
   return runs.map((r) => ({
     ...r,
     samples: samplesByRun.get(r.id) ?? [],
-    readingsCount: readingCountByRun.get(r.id) ?? 0,
   }));
 }
 

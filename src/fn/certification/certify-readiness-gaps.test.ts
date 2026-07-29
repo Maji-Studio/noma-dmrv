@@ -48,7 +48,6 @@ function productionRun(
     dieselGensetLiters: 12,
     preprocessingFuelLiters: 3,
     electricityKwh,
-    readingsCount: 1,
     samples: [],
   } as unknown as ProductionRunWithSamples;
 }
