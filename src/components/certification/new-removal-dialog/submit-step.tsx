@@ -188,6 +188,7 @@ export function SubmitStep({
         isCompilationLoading={compilationQuery.isLoading}
         compilationError={compilationQuery.error}
         checks={checklist}
+        readiness={readiness}
       />
 
       <DebugDrawer

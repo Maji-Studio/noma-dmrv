@@ -78,6 +78,7 @@ function render(overrides: {
       isCompilationLoading={false}
       compilationError={null}
       checks={overrides.checks ?? PASSING_CHECKS}
+      readiness={{ state: "ready", reasons: [], advisories: [] }}
     />,
   );
 }

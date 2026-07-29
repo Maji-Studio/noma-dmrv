@@ -4,7 +4,10 @@ import type {
   MemberCreditBatch,
   RemovalCertifyContext,
 } from "@/fn/certification/certify-context";
-import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
+import type {
+  RemovalReadiness,
+  RemovalRequirementCheck,
+} from "@/lib/certification/readiness";
 import {
   actionableSubmissionChecks,
   buildSubmissionFacts,
@@ -76,6 +79,13 @@ function check(
   return { key, label: key, requirementLabel: key, status };
 }
 
+function readiness(
+  state: RemovalReadiness["state"],
+  reasons: string[] = [],
+): RemovalReadiness {
+  return { state, reasons, advisories: [] };
+}
+
 function facts(overrides: Partial<SubmissionFactsInput> = {}) {
   return buildSubmissionFacts({
     ctx: CONTEXT,
@@ -83,6 +93,7 @@ function facts(overrides: Partial<SubmissionFactsInput> = {}) {
     isCompilationLoading: false,
     compilationError: null,
     checks: [check("mapping", "met")],
+    readiness: readiness("ready"),
     ...overrides,
   });
 }
@@ -190,6 +201,33 @@ describe("buildSubmissionFacts verdict precedence", () => {
       headline: "Cannot submit yet",
       detail:
         "The submission is incomplete. Open Technical details below to see what is missing.",
+    });
+  });
+
+  it("reports a live submission lock, which no checklist row carries", () => {
+    expect(facts({ readiness: readiness("inProgress") })).toMatchObject({
+      state: "blocked",
+      headline: "Submission in progress",
+      detail: "Another submission for this removal is still running.",
+    });
+  });
+
+  it("never reads ready when the submit gate still refuses", () => {
+    expect(
+      facts({
+        readiness: readiness("blocked", ["Facility not linked"]),
+      }),
+    ).toMatchObject({
+      state: "blocked",
+      headline: "Cannot submit yet",
+      blockers: ["Facility not linked"],
+    });
+  });
+
+  it("stays ready for a resubmittable removal", () => {
+    expect(facts({ readiness: readiness("submitted") })).toMatchObject({
+      state: "ready",
+      headline: "Ready to submit",
     });
   });
 

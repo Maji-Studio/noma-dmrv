@@ -11,9 +11,13 @@ import type {
   MemberCreditBatch,
   RemovalCertifyContext,
 } from "@/fn/certification/certify-context";
-import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
+import type {
+  RemovalReadiness,
+  RemovalRequirementCheck,
+} from "@/lib/certification/readiness";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import type { DurabilityOption } from "@/schemas/credit-batches";
+import { allowsRemovalSubmission } from "./resume-state";
 
 /** Digits used for every dry-mass figure on this screen. */
 const TONNE_DIGITS = 1;
@@ -24,6 +28,12 @@ export interface SubmissionFactsInput {
   isCompilationLoading: boolean;
   compilationError: Error | null;
   checks: RemovalRequirementCheck[];
+  /**
+   * The same verdict `submit-step.tsx` gates the button on. Without it the
+   * panel can only see the checklist, and states that produce no checklist row
+   * would read as ready beside a disabled button.
+   */
+  readiness: RemovalReadiness;
 }
 
 export type SubmitState = "loading" | "ready" | "blocked";
@@ -128,6 +138,7 @@ export function buildSubmissionFacts({
   isCompilationLoading,
   compilationError,
   checks,
+  readiness,
 }: SubmissionFactsInput): SubmissionFacts {
   const batches = ctx.memberBatches;
   const actionChecks = actionableSubmissionChecks(checks);
@@ -143,6 +154,7 @@ export function buildSubmissionFacts({
 
   let state: SubmitState = "ready";
   let headline = "Ready to submit";
+  let panelBlockers = blockers;
   // Counts what passed, not what was evaluated: `actionChecks` also holds
   // checks a skipped upstream left unevaluable, which never "passed".
   let detail =
@@ -157,6 +169,12 @@ export function buildSubmissionFacts({
     state = "loading";
     headline = "Preparing the submission";
     detail = "This takes a moment.";
+  } else if (readiness.state === "inProgress") {
+    // A live submission lock. No checklist row reports it, so without this the
+    // panel would read "Ready to submit" beside a disabled button.
+    state = "blocked";
+    headline = "Submission in progress";
+    detail = "Another submission for this removal is still running.";
   } else if (checksAttention > 0) {
     state = "blocked";
     headline =
@@ -179,6 +197,13 @@ export function buildSubmissionFacts({
       blockers.length > 0
         ? "Clear the blockers below."
         : "The submission is incomplete. Open Technical details below to see what is missing.";
+  } else if (!allowsRemovalSubmission(readiness.state)) {
+    // The gate still refuses for a reason no checklist row carried. Show the
+    // readiness reasons rather than claim the removal is ready.
+    state = "blocked";
+    headline = "Cannot submit yet";
+    detail = "Clear the blockers below.";
+    panelBlockers = readiness.reasons;
   }
 
   return {
@@ -210,7 +235,7 @@ export function buildSubmissionFacts({
     headline,
     detail,
     // Suppressed while a check covers the same fault in operator language.
-    blockers: checksAttention > 0 ? [] : blockers,
+    blockers: checksAttention > 0 ? [] : panelBlockers,
     // The compiler and the context can reach the same advisory independently.
     warnings: [
       ...new Set([...(compilation?.warnings ?? []), ...ctx.submissionWarnings]),
