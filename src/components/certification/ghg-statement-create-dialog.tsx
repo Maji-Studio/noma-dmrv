@@ -36,6 +36,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Button, EmptyState, Modal } from "@/components/ui";
+import { Accordion } from "@/components/ui/accordion";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { InfoHint } from "@/components/ui/tooltip";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
@@ -78,6 +79,11 @@ const STEPS: StepFlowStep[] = [
 
 const DIALOG_TITLE_ID = "ghg-statement-create-title";
 const DIALOG_DESCRIPTION_ID = "ghg-statement-create-description";
+const REGISTRY_STATEMENTS_ITEM = "registry-statements";
+const REGISTRY_ACCORDION_ITEM =
+  "rounded-none border-[var(--color-border-secondary)] bg-[var(--color-background-white)]";
+const REGISTRY_ACCORDION_TRIGGER =
+  "bg-[var(--color-background-white)] px-16 py-12 hover:bg-[var(--color-surface-light)]";
 
 // Period-derivation + window logic is shared with the server empty-statement
 // guard (`ghg-reporting-window.ts`) so the operator's preview and the registry
@@ -119,11 +125,16 @@ function DialogBody({
 }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [furthest, setFurthest] = useState(0);
+  const [registryStatementsExpanded, setRegistryStatementsExpanded] =
+    useState(false);
   const toast = useToast();
   const mutation = useCreateGhgStatement();
   const statementsQuery = useGhgStatementsForFacility(facilityId);
   const registryStatementsQuery =
-    useRegistryGhgStatementsForFacility(facilityId);
+    useRegistryGhgStatementsForFacility(
+      facilityId,
+      registryStatementsExpanded,
+    );
 
   const {
     register,
@@ -271,6 +282,10 @@ function DialogBody({
                 derivedStart={derivedStart}
                 statementsQuery={statementsQuery}
                 registryStatementsQuery={registryStatementsQuery}
+                registryStatementsExpanded={registryStatementsExpanded}
+                onRegistryStatementsExpandedChange={
+                  setRegistryStatementsExpanded
+                }
               />
             )}
             {stepIndex === 1 && (
@@ -395,6 +410,8 @@ function StepPeriod({
   derivedStart,
   statementsQuery,
   registryStatementsQuery,
+  registryStatementsExpanded,
+  onRegistryStatementsExpandedChange,
 }: {
   registerProps: UseFormRegisterReturn;
   error?: string;
@@ -404,6 +421,8 @@ function StepPeriod({
   registryStatementsQuery: ReturnType<
     typeof useRegistryGhgStatementsForFacility
   >;
+  registryStatementsExpanded: boolean;
+  onRegistryStatementsExpandedChange: (expanded: boolean) => void;
 }) {
   return (
     <div className="flex flex-col gap-12">
@@ -441,7 +460,11 @@ function StepPeriod({
           <PeriodWindow derivedStart={derivedStart} endOn={endOn} />
         </div>
       )}
-      <RegistryStatementsPanel query={registryStatementsQuery} />
+      <RegistryStatementsPanel
+        query={registryStatementsQuery}
+        expanded={registryStatementsExpanded}
+        onExpandedChange={onRegistryStatementsExpandedChange}
+      />
     </div>
   );
 }
@@ -481,17 +504,60 @@ function ExistingPeriodsStatus({
   );
 }
 
-function RegistryStatementsPanel({
+export function RegistryStatementsPanel({
+  query,
+  expanded,
+  onExpandedChange,
+}: {
+  query: ReturnType<typeof useRegistryGhgStatementsForFacility>;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+}) {
+  const statementCount = query.data?.length;
+
+  return (
+    <Accordion.Root
+      className="gap-0"
+      value={expanded ? [REGISTRY_STATEMENTS_ITEM] : []}
+      onValueChange={(value) =>
+        onExpandedChange(value.includes(REGISTRY_STATEMENTS_ITEM))
+      }
+    >
+      <Accordion.Item
+        value={REGISTRY_STATEMENTS_ITEM}
+        className={REGISTRY_ACCORDION_ITEM}
+      >
+        <Accordion.Header>
+          <Accordion.Trigger
+            className={REGISTRY_ACCORDION_TRIGGER}
+            labelClassName="body-small normal-case tracking-normal text-[var(--color-text-primary)]"
+          >
+            <span className="flex w-full items-center justify-between gap-12">
+              <span>Already in the registry</span>
+              <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
+                {statementCount === undefined
+                  ? "Historical statements"
+                  : formatCount(statementCount, "statement")}
+              </span>
+            </span>
+          </Accordion.Trigger>
+        </Accordion.Header>
+        <Accordion.Panel className="[&>div]:p-0">
+          <RegistryStatementsPanelContent query={query} />
+        </Accordion.Panel>
+      </Accordion.Item>
+    </Accordion.Root>
+  );
+}
+
+function RegistryStatementsPanelContent({
   query,
 }: {
   query: ReturnType<typeof useRegistryGhgStatementsForFacility>;
 }) {
   if (query.isLoading) {
     return (
-      <div
-        aria-busy="true"
-        className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16"
-      >
+      <div aria-busy="true" className="p-16">
         <p className="body-small text-[var(--color-text-tertiary)]">
           Loading registry statements…
         </p>
@@ -500,7 +566,9 @@ function RegistryStatementsPanel({
   }
   if (query.error || !query.data) {
     return (
-      <ServerError message="Registry statements could not be loaded. Refresh the page and try again." />
+      <div className="p-16">
+        <ServerError message="Registry statements could not be loaded. Refresh the page and try again." />
+      </div>
     );
   }
   if (query.data.length === 0) {
@@ -514,19 +582,16 @@ function RegistryStatementsPanel({
     );
   }
   return (
-    <section className="flex flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <h4 className="title-heading-4">Already in the registry</h4>
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          Review these before choosing a new reporting period.
-        </p>
-      </div>
-      <div className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
+    <>
+      <p className="body-caption border-b border-[var(--color-border-tertiary)] px-16 py-10 text-[var(--color-text-tertiary)]">
+        Review these before choosing a new reporting period.
+      </p>
+      <div className="flex flex-col">
         {query.data.map((statement) => (
           <RegistryStatementRow key={statement.id} statement={statement} />
         ))}
       </div>
-    </section>
+    </>
   );
 }
 
