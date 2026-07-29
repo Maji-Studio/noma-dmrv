@@ -198,9 +198,28 @@ describe("buildSubmissionFacts verdict precedence", () => {
     ).toMatchObject({
       state: "ready",
       headline: "Ready to submit",
-      detail: "All 2 checks passed. Nothing left to fix.",
+      detail: "2 checks passed. Nothing left to fix.",
       checksPassed: 2,
       checksTotal: 2,
+      checksAttention: 0,
+    });
+  });
+
+  it("counts only checks that passed, not ones left unevaluable", () => {
+    expect(
+      facts({
+        checks: [
+          check("mapping", "met"),
+          check("template", "met"),
+          check("durability", "skipped"),
+        ],
+      }),
+    ).toMatchObject({
+      state: "ready",
+      headline: "Ready to submit",
+      detail: "2 checks passed. Nothing left to fix.",
+      checksPassed: 2,
+      checksTotal: 3,
       checksAttention: 0,
     });
   });

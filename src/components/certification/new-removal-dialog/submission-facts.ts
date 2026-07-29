@@ -141,9 +141,11 @@ export function buildSubmissionFacts({
 
   let state: SubmitState = "ready";
   let headline = "Ready to submit";
+  // Counts what passed, not what was evaluated: `actionChecks` also holds
+  // checks a skipped upstream left unevaluable, which never "passed".
   let detail =
-    actionChecks.length > 0
-      ? `All ${actionChecks.length} checks passed. Nothing left to fix.`
+    checksPassed > 0
+      ? `${countLabel(checksPassed, "check")} passed. Nothing left to fix.`
       : "Nothing left to fix.";
 
   // Checks outrank compiler blockers: they name the record and link to the fix,
