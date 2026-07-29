@@ -6,6 +6,24 @@ Related: [design-system.md](./design-system.md) owns the visual contract (Canoni
 
 Canonical form to copy from: `src/components/feedstocks/feedstock-form.tsx`.
 
+## Organization operating defaults must exist before RHF mounts
+
+React Hook Form reads `defaultValues` once. Organization defaults therefore
+cannot arrive in an effect after a create form mounts: that race silently keeps
+the system fallback for the lifetime of the form. The `(app)` layout resolves
+the active organization's defaults server-side, and `FacilityProvider` seeds
+the organization-scoped React Query entry through
+`useOrganizationDefaults(..., initialData)` before child forms render. Create
+forms call `useOrganizationDefaultValues()` synchronously and apply defaults
+only in create mode; saved records always win in edit mode.
+
+Keep that hydration chain intact when adding a default. Update the config,
+schema/table, server payload, settings editor, and consuming form together.
+Changing an operating default never rewrites existing records and never changes
+a protocol constant. The settings editor deliberately waits for loaded data and
+keys its inner RHF form by the loaded values because its own `defaultValues`
+also need a remount to change.
+
 ## Schemas
 
 Schemas live in `src/schemas/<feature>.ts`, grouped by feature. Always export the inferred type (`export type MyFormData = z.infer<typeof myFormSchema>`) — never define a type in a component body when a schema already describes that shape.
@@ -38,11 +56,22 @@ Empty-string handling: HTML inputs send `""` where `.optional()` expects `undefi
 
 ## Numeric coercion — pick the right layer
 
-Two mechanisms exist. **`@/schemas/helpers` is canonical**: coercion belongs in the schema via `z.preprocess`, so server actions re-validating the same payload get the same behaviour. `@/lib/form-utils` (`numericValue` / `nullableNumericValue` / `integerValue`, applied at the register site with `setValueAs`) is the fallback for forms not yet on schema-side coercion. **Never apply both to the same field** — double coercion.
+Two mechanisms exist. **`@/schemas/helpers` is canonical for new and changed
+numeric fields**: coercion belongs in the schema via `z.preprocess`, so server
+actions re-validating the same payload get the same behaviour.
+`@/lib/form-utils` (`numericValue` / `nullableNumericValue` / `integerValue`,
+applied at the register site with `setValueAs`) remains in forms whose schemas
+expect numbers already (including the current application form). **Never apply
+both to the same field** — double coercion.
 
 **Never use `valueAsNumber: true`** — it turns `""` into `NaN`, which fails every Zod branch.
 
-Never write inline preprocess lambdas, and never hand-roll a range check that `helpers.ts` already ships.
+Do not write an inline **numeric** preprocessor or hand-roll a range check that
+`helpers.ts` already ships. Small field-specific normalization still exists for
+non-numeric select values (for example `"" → undefined` on optional application
+enums); do not mistake that scoped compatibility pattern for a second numeric
+coercion system. Extract a named/shared preprocessor when the same normalization
+repeats.
 
 | Need | Use (from `@/schemas/helpers`) |
 |---|---|
@@ -93,7 +122,20 @@ Prefer the `PositionPicker` component (map preview + address search + manual lat
 
 ## Dates
 
-**Date-only fields must use `requiredDateOnly` / `optionalDateOnly`** from `@/schemas/helpers` — not `z.iso.date()`, not `z.coerce.date()`. They parse `"YYYY-MM-DD"` at **local** midnight, because `new Date("YYYY-MM-DD")` parses as **UTC** midnight, which renders as the previous day west of UTC and walks the stored date back one day on every edit/save round-trip.
+For a new or changed `<input type="date">` whose value is parsed into a `Date`,
+use `requiredDateOnly` / `optionalDateOnly` from `@/schemas/helpers`. They parse
+`"YYYY-MM-DD"` at **local** midnight, because `new Date("YYYY-MM-DD")` parses as
+**UTC** midnight, which can render as the adjacent day and walk a stored date on
+an edit/save round-trip. `z.iso.date()` validates a string but does not produce
+a `Date`.
+
+Several established application/order/delivery/credit-batch schemas still use
+`z.coerce.date()` while their components protect the default side with
+`formatLocalDate`. Treat those as legacy contracts: do not mass-change their
+output types, but when changing one, trace its component, action, data-access,
+and database column and migrate the round trip deliberately. The
+production-run schemas are the current reference for the local date-only
+helpers.
 
 Defaults have the mirror-image hazard. **Never `toISOString()`** for a form default — use `@/lib/date-utils`:
 
@@ -212,6 +254,30 @@ For a cert input that is **not** a plain form value (a derived leg distance, an 
 Application evidence additionally passes `applicationEvidenceRole` / `applicationLogbookEvidenceType`. Storage config (`STORAGE_PROVIDER`, presigned URLs, S3 in production) is owned by [storage.md](./storage.md).
 
 Placement: in a "Documentation" section, the upload field goes **before** the notes textarea.
+
+### Application GIS boundary evidence
+
+Application evidence has two domain paths, `visual` and `boundary`, but the
+current creation UI is GIS-first: it starts on `boundary`, and the visual option
+is shown as unavailable. It therefore does not currently consume the
+organization's `defaultEvidenceMethod`, even though the settings model contains
+that default. Missing evidence remains a certification-readiness gap, not an
+application-create validation failure.
+
+GIS boundary text never goes straight into `applications.gis_boundary`.
+`normalizeGisBoundaryFn` accepts uploaded or pasted GeoJSON, authenticates and
+rate-limits the normalization, and returns the canonical versioned envelope.
+Normalization retains only Polygon/MultiPolygon area features, enforces size,
+feature, vertex, coordinate, and plausibility limits, and records source,
+capture time, notes, canonical bbox/center/area statistics, and the normalized
+FeatureCollection. Application data access calls `parseGisBoundary()` again
+before persistence so all derived statistics are recomputed from the stored
+geometry rather than trusted from the client.
+
+The normalized JSON envelope is the application's boundary reference; related
+`gis_boundary` and classified logbook uploads remain `documents` evidence. Do
+not store raw uploaded GeoJSON in the JSONB column or infer a complete boundary
+evidence path from the presence of one file alone.
 
 ## Entity select
 

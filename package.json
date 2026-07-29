@@ -31,6 +31,7 @@
     "typecheck": "tsc --noEmit",
     "check:org-scoping": "tsx scripts/check-org-scoping.ts",
     "check:spacing-scale": "tsx scripts/check-spacing-scale.ts",
+    "docs:check": "node scripts/check-doc-references.mjs",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:integration": "RUN_ISOMETRIC_SANDBOX_TESTS=1 vitest run tests/**/*.integration.test.ts",

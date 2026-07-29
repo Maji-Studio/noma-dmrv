@@ -8,7 +8,7 @@ static analysis, style, syntax, and developer workflow.
 
 | Concern | Primary owner |
 |---|---|
-| Cross-file behavior, domain invariants, authorization, facility isolation, accounting, concurrency, idempotency, migrations, and failure paths | Greptile |
+| Cross-file behavior, domain invariants, authorization, organization isolation, facility workflow scope, accounting, concurrency, idempotency, migrations, and failure paths | Greptile |
 | PR summary, changed-file overview, style, syntax, formatting, dependency advice, and tool output | CodeRabbit and CI |
 | Product intent, protocol interpretation, risk acceptance, and merge decision | Human reviewer |
 
@@ -155,4 +155,7 @@ Quarterly:
 
 The setup is healthy when CodeRabbit supplies a readable general review while
 Greptile's comments are predominantly concrete runtime, data-integrity,
-authorization, and domain-invariant findings on the latest PR head.
+authorization, and domain-invariant findings on the latest PR head. Security
+reviews must name Organization isolation as the tenant boundary; a missing
+facility predicate is a workflow-scope defect unless it also enables
+cross-organization access.

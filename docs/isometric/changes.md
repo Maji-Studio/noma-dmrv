@@ -21,6 +21,16 @@ Removal review, Source lifecycle, and transport-provenance implementation notes
 from 2026-07-27 are archived in
 [`docs/archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md`](../archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md).
 
+## 2026-07-29 (interpretation docs refreshed against v1.1)
+
+[`requirements-shortlist.md`](./requirements-shortlist.md) and
+[`schema-mapping.md`](./schema-mapping.md) were rewritten against the v1.1 pin
+recorded on 2026-07-24, so they no longer carry the earlier v1.2 extraction.
+[`versions.json`](./versions.json) drops the "pending refresh" note accordingly.
+The pin itself did not move: protocol v1.1 and Standard v1.7 remain the observed
+Certify project versions, and these files stay non-authoritative local
+interpretations that must be verified against the registry.
+
 ## 2026-07-29 (automatic GHG Statement data summary)
 
 GHG Statement report preparation is now a one-click export of the current
