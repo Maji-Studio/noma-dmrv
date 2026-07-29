@@ -117,7 +117,6 @@ export function ChainEdge({
       {labelText && labelVisible && !isEquipment ? (
         <EdgeLabelRenderer>
           <div
-            data-edge-id={id}
             className="absolute border border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-6 py-2 font-mono text-[10px] font-medium tracking-[0.04em] text-[var(--clr-dark-purple)] transition-opacity duration-150"
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
