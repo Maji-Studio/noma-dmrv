@@ -10,8 +10,10 @@ import { RunPicker, type RunPickerOption } from "./run-picker";
 const CONTROL_HEIGHT_CLASS = "h-40";
 const FACILITY_MAX_WIDTH_CLASS = "max-w-[180px]";
 
+// The h1 rule in styles/typography.css is unlayered, so it outranks Tailwind
+// utilities; the ! overrides keep the eyebrow at micro size on the h1 element.
 const EYEBROW_CLASS =
-  "shrink-0 font-mono text-[10px] font-medium uppercase tracking-[0.14em] " +
+  "shrink-0 !font-mono !text-[10px] !font-medium uppercase !tracking-[0.14em] " +
   "text-[var(--clr-dark-purple-40)]";
 
 const SEGMENT_GROUP_CLASS =

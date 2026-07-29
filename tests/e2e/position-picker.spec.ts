@@ -270,16 +270,24 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await expect(
       dialog.getByLabel("Default soil temperature (°C)")
     ).toBeVisible();
+    const distanceInput = dialog.getByRole("spinbutton", {
+      name: "One-way distance from facility (per leg, km)",
+    });
+    const calcButton = dialog.getByRole("button", {
+      name: /Calculate road distance selected facility to application site position/i,
+    });
+    await expect(distanceInput).toBeVisible();
+    await expect(calcButton).toBeEnabled();
+    await calcButton.click();
+    await expect(distanceInput).not.toHaveValue("");
     await expect(
-      dialog.getByRole("spinbutton", {
-        name: "One-way distance from facility (per leg, km)",
-      })
-    ).toBeVisible();
+      dialog.getByTestId("pending-loc-distance-distance-source")
+    ).toContainText("Route calculation");
+    await distanceInput.fill("123");
+    await expect(distanceInput).toHaveValue("123");
     await expect(
-      dialog.getByRole("button", {
-        name: /Calculate road distance selected facility to application site position/i,
-      })
-    ).toBeVisible();
+      dialog.getByTestId("pending-loc-distance-distance-source")
+    ).toContainText("Manual");
     await expect(dialog.getByLabel("Set as default destination")).toBeVisible();
     await expect(page.getByText("Application error")).toBeHidden();
   });
