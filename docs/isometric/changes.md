@@ -21,6 +21,19 @@ Removal review, Source lifecycle, and transport-provenance implementation notes
 from 2026-07-27 are archived in
 [`docs/archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md`](../archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md).
 
+## 2026-07-29 (automatic GHG Statement data summary)
+
+GHG Statement report preparation is now a one-click export of the current
+Isometric statement and its GHG Entries. The generated PDF contains registry
+identifiers, reporting dates, entry membership, calculated totals, and document
+control metadata. It does not collect or claim qualitative methodology,
+evidence, monitoring, exception, or human-review statements.
+
+The operator still reviews and explicitly approves an immutable report version
+before submission. A controlled external report URL remains available when a
+project or VVB requires its own document. The generated data summary does not
+replace such project-specific requirements.
+
 ## Registry Source visibility contract
 
 Certification Settings exposes one organization-wide Isometric Source

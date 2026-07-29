@@ -3,16 +3,12 @@ import { db } from "@/db";
 import {
   certifierGhgStatementReports,
   certifierGhgStatements,
-  certifierRemovals,
-  certificationSubmissions,
   documents,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import type {
-  FrozenRemovalSubmission,
   GhgStatementReportModel,
-  GhgStatementReportNarratives,
 } from "@/lib/certification/ghg-statement-report/model";
 import {
   generateVerifierToken,
@@ -101,69 +97,6 @@ export async function getApprovedGhgStatementReport(
   return row ?? null;
 }
 
-export async function listSubmittedRemovalSnapshots(
-  ctx: OrgContext,
-  args: { externalRemovalIds: string[]; facilityId: string },
-): Promise<FrozenRemovalSubmission[]> {
-  requireOrgScope(ctx);
-  if (args.externalRemovalIds.length === 0) return [];
-  const rows = await db
-    .selectDistinctOn([certificationSubmissions.externalId], {
-      localRemovalId: certificationSubmissions.localEntityId,
-      externalRemovalId: certificationSubmissions.externalId,
-      submissionVersion: certificationSubmissions.version,
-      payloadHash: certificationSubmissions.payloadHash,
-      payloadSnapshot: certificationSubmissions.payloadSnapshot,
-    })
-    .from(certificationSubmissions)
-    .innerJoin(
-      certifierRemovals,
-      and(
-        eq(
-          certificationSubmissions.localEntityId,
-          certifierRemovals.id,
-        ),
-        eq(certifierRemovals.organizationId, ctx.organizationId),
-      ),
-    )
-    .where(
-      and(
-        eq(certificationSubmissions.provider, "isometric"),
-        eq(certificationSubmissions.submissionType, "removal"),
-        eq(certificationSubmissions.localEntityType, "removal"),
-        inArray(
-          certificationSubmissions.externalId,
-          args.externalRemovalIds,
-        ),
-        inArray(certificationSubmissions.status, ["submitted", "accepted"]),
-        eq(certifierRemovals.facilityId, args.facilityId),
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-      ),
-    )
-    .orderBy(
-      certificationSubmissions.externalId,
-      desc(certificationSubmissions.version),
-    );
-
-  return rows.flatMap((row) =>
-    row.externalRemovalId &&
-    row.payloadHash &&
-    row.payloadSnapshot &&
-    typeof row.payloadSnapshot === "object" &&
-    !Array.isArray(row.payloadSnapshot)
-      ? [
-          {
-            localRemovalId: row.localRemovalId,
-            externalRemovalId: row.externalRemovalId,
-            submissionVersion: row.submissionVersion,
-            payloadHash: row.payloadHash,
-            payloadSnapshot: row.payloadSnapshot as Record<string, unknown>,
-          },
-        ]
-      : [],
-  );
-}
-
 export async function getNextGhgStatementReportVersion(
   ctx: OrgContext,
   ghgStatementId: string,
@@ -236,7 +169,6 @@ export async function insertPreparedGhgStatementReport(
     contentChecksumSha256: string;
     frozenInput: Record<string, unknown>;
     reportModel: GhgStatementReportModel;
-    reviewedNarratives: GhgStatementReportNarratives;
     preparationKey: string;
     verifierTokenHash: string;
     preparedAt: Date;
@@ -338,7 +270,7 @@ export async function insertPreparedGhgStatementReport(
         contentChecksumSha256: args.contentChecksumSha256,
         frozenInput: args.frozenInput,
         reportModel: args.reportModel,
-        reviewedNarratives: args.reviewedNarratives,
+        reviewedNarratives: {},
         preparationIdempotencyKey: args.preparationKey,
         verifierTokenHash: args.verifierTokenHash,
         preparedBy: ctx.userId,
@@ -395,7 +327,7 @@ export async function approveGhgStatementReport(
     .returning();
   if (!row) {
     throw new SafeError(
-      "This report version is not current or is no longer ready for approval. Prepare a new report.",
+      "This report version is not current or is no longer ready for approval. Generate a new report.",
     );
   }
   return row;
