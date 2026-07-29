@@ -1,41 +1,32 @@
 /**
- * GhgStatementDetailSheet — the read-only quick view for a GHG Statement,
- * opened from the Statements table via `?statement=<id>`. Shows the reporting
- * period, derived status, the registry record, the verifier (remote) status,
- * and the removals Isometric linked into it (as a cross-link accordion).
- *
- * It's a Modal, not a side-sheet: there's no form here — only read-only fields
- * plus the two guided actions (refresh status, submit/resubmit). The create
- * wizard is a separate centered Modal.
- *
- * Membership is read-only (ADR 0004): Isometric links removals to the statement
- * server-side by reporting-period date range, so there is no UI to assign or
- * detach a removal. To change what a statement contains, open a linked removal
- * (via the accordion), edit it, and resubmit — there is no undo/withdraw.
+ * Compact GHG Statement workflow, aligned with the Removal detail sheet.
+ * Isometric owns statement membership; noma exposes only the facts and actions
+ * needed to review, generate a report, approve, refresh, and submit.
  */
 "use client";
 
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button, Modal } from "@/components/ui";
+import { Button } from "@/components/ui";
+import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import {
-  useGhgStatementState,
   useGhgStatementReports,
+  useGhgStatementState,
   useRefreshGhgStatementStatus,
 } from "@/hooks/use-certification";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
-import type { GhgStatement } from "@/lib/isometric";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
+import type { GhgStatement } from "@/lib/isometric";
 import { chooseGhgSubmitMode } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
-import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { GhgStatementReportWorkflow } from "./ghg-statement-report-workflow";
+import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -60,15 +51,11 @@ function statementPeriod(item: GhgStatementListItem): string {
     : `Ends ${formatDate(reportingPeriodEndOn)}`;
 }
 
-// Friendly one-line phrase for the raw registry verifier status. The raw enum
-// ("DRAFT") next to a top badge reading "In registry" is the exact #250
-// collision — DRAFT here means "created in the registry, not yet sent to the
-// verifier", not the operator's mental "draft".
 function verifierStatusLabel(remote: GhgStatement | null): string {
-  if (!remote) return "Not yet created in Isometric";
+  if (!remote) return "Not created in Isometric";
   switch (remote.status) {
     case "DRAFT":
-      return "In registry — not yet sent to the verifier";
+      return "Not sent to the verifier";
     case "AWAITING_VERIFICATION":
       return "In verification";
     case "VERIFIED":
@@ -88,7 +75,9 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
         {label}
       </span>
-      <div className="body-small text-[var(--color-text-primary)]">{children}</div>
+      <div className="body-small text-[var(--color-text-primary)]">
+        {children}
+      </div>
     </div>
   );
 }
@@ -99,220 +88,217 @@ export function GhgStatementDetailSheet({
   open,
   onClose,
 }: GhgStatementDetailSheetProps) {
-  const { statement, latestSubmission } = item;
   const period = statementPeriod(item);
-  const locked = latestSubmission ? isLockedInFlight(latestSubmission) : false;
-  const derived = deriveSubmissionStatus(latestSubmission, locked, "ghgStatement");
 
   return (
-    <Modal
-      isOpen={open}
-      onClose={onClose}
-      ariaLabelledBy="ghg-detail-title"
-      width="lg"
-    >
-      <div className="flex flex-col gap-24">
-        <header className="flex flex-col gap-4">
-          <h2 id="ghg-detail-title" className="title-heading-3">
-            GHG Statement
-          </h2>
-          <p className="body-small text-[var(--color-text-secondary)]">
-            {period}
-          </p>
-        </header>
-
-        <EnvBanner isProduction={isProduction} variant="inline" />
-
-        <div className="flex items-center justify-between gap-12">
-          <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-            Status
-          </span>
-          <StatusBadge status={derived.value} label={derived.label} />
-        </div>
-
-        <GhgStatementCarbonBreakdown
-          ghgStatementId={statement.id}
-          enabled={open}
-        />
-
-        <Field label="Reporting period">{period}</Field>
-
-        {latestSubmission?.externalId && (
-          <Field label="Registry record">
-            <RegistryRecordLink
-              facilityId={statement.facilityId}
-              externalId={latestSubmission.externalId}
-              version={latestSubmission.version}
-              isProduction={isProduction}
-              kind="ghgStatement"
-            />
-          </Field>
-        )}
+    <SlideOverPanel.Root open={open} onOpenChange={(next) => !next && onClose()}>
+      <SlideOverPanel.Content size="default">
+        <SlideOverPanel.Header showClose>
+          <SlideOverPanel.Title>GHG Statement</SlideOverPanel.Title>
+          <SlideOverPanel.Description>{period}</SlideOverPanel.Description>
+        </SlideOverPanel.Header>
 
         <DetailState
-          ghgStatementId={statement.id}
-          facilityId={statement.facilityId}
+          item={item}
           isProduction={isProduction}
+          open={open}
         />
-
-        <div className="flex justify-end border-t border-[var(--color-border-tertiary)] pt-16">
-          <Button variant="default" onClick={onClose}>
-            Close
-          </Button>
-        </div>
-      </div>
-    </Modal>
+      </SlideOverPanel.Content>
+    </SlideOverPanel.Root>
   );
 }
 
-// The verifier-lifecycle detail + actions. Split out so it owns the heavier
-// `useGhgStatementState` fetch (remote status, linked removals, sync events),
-// which only runs while one statement is selected — never per table row (P2-a).
 function DetailState({
-  ghgStatementId,
-  facilityId,
+  item,
   isProduction,
+  open,
 }: {
-  ghgStatementId: string;
-  facilityId: string;
+  item: GhgStatementListItem;
   isProduction: boolean;
+  open: boolean;
 }) {
-  const query = useGhgStatementState(ghgStatementId);
-  const reportsQuery = useGhgStatementReports(ghgStatementId);
+  const { statement } = item;
+  const query = useGhgStatementState(statement.id);
+  const reportsQuery = useGhgStatementReports(statement.id);
   const refreshMutation = useRefreshGhgStatementStatus();
   const toast = useToast();
   const [submitOpen, setSubmitOpen] = useState(false);
 
   if (query.isLoading) {
     return (
-      <p
-        aria-busy="true"
-        className="body-small text-[var(--color-text-tertiary)]"
-      >
-        Loading verifier status…
-      </p>
+      <>
+        <SlideOverPanel.Body>
+          <p
+            aria-busy="true"
+            className="body-small text-[var(--color-text-tertiary)]"
+          >
+            Loading statement…
+          </p>
+        </SlideOverPanel.Body>
+        <CloseFooter />
+      </>
     );
   }
+
   if (query.error || !query.data) {
     return (
-      <p className="body-small text-[var(--clr-red)]" role="alert">
-        Unable to load statement details.
-      </p>
+      <>
+        <SlideOverPanel.Body>
+          <p className="body-small text-[var(--clr-red)]" role="alert">
+            Unable to load statement details.
+          </p>
+        </SlideOverPanel.Body>
+        <CloseFooter />
+      </>
     );
   }
 
   const { statementSubmission, linkedRemovals, remote, recentSyncEvents } =
     query.data;
+  const derived = deriveSubmissionStatus(
+    statementSubmission,
+    statementSubmission ? isLockedInFlight(statementSubmission) : false,
+    "ghgStatement",
+  );
   const mode = remote ? chooseGhgSubmitMode(remote) : "submit";
-  // Never offer "Submit to verifier" on a 0-removal statement (#245) — the
-  // server rejects it, and the button on an empty statement is exactly the
-  // dead-end the redesign kills. Membership is authoritative here (reconciled
-  // from the registry's `ghg_entry_ids`).
   const hasLinkedRemovals = linkedRemovals.length > 0;
+  const hasMembership = remote
+    ? remote.ghg_entry_ids.length > 0
+    : hasLinkedRemovals;
+  const canGenerate = Boolean(remote?.ghg_entry_ids.length);
+  const remoteUnavailable =
+    Boolean(statementSubmission?.externalId) && remote === null;
+  const generationUnavailableReason = canGenerate
+    ? null
+    : remoteUnavailable
+      ? "Live Isometric statement data is unavailable. Refresh and try again."
+      : remote
+        ? "Add a live GHG Entry before generating a report."
+        : "Create the GHG Statement before generating a report.";
   const canSubmit =
     Boolean(statementSubmission?.externalId) &&
     (mode === "submit" || mode === "resubmit") &&
-    hasLinkedRemovals;
+    hasMembership;
   const isResubmit = mode === "resubmit";
   const blockedNote =
     mode === "blocked-awaiting"
-      ? "In verification — no action needed."
+      ? "The statement is in verification. No action is needed."
       : mode === "blocked-verified"
-        ? "Verified — no further submission."
-        : (mode === "submit" || mode === "resubmit") && !hasLinkedRemovals
-          ? "No linked removals yet — there's nothing to submit. Add a removal in this reporting period, then refresh."
+        ? "The statement is verified. No further submission is available."
+        : (mode === "submit" || mode === "resubmit") && !hasMembership
+          ? "No GHG Entries are available to submit."
           : null;
 
   const handleRefresh = () => {
     if (!statementSubmission) return;
     refreshMutation.mutate(statementSubmission.id, {
-      onSuccess: (r) => toast.success(`Status: ${r.status}.`),
-      onError: (err) =>
-        toast.error(err instanceof Error ? err.message : "Refresh failed."),
+      onSuccess: (result) => toast.success(`Status: ${result.status}.`),
+      onError: (error) =>
+        toast.error(
+          error instanceof Error ? error.message : "Refresh failed.",
+        ),
     });
   };
 
   return (
-    <div className="flex flex-col gap-20 border-t border-[var(--color-border-tertiary)] pt-20">
-      <Field label="Verifier status">{verifierStatusLabel(remote)}</Field>
+    <>
+      <SlideOverPanel.Body className="flex flex-col gap-24">
+        <EnvBanner isProduction={isProduction} variant="inline" />
 
-      <div className="flex flex-col gap-8">
-        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Linked removals ({linkedRemovals.length})
-        </span>
-        {linkedRemovals.length === 0 ? (
-          <p className="body-small text-[var(--color-text-tertiary)]">
-            No removals linked yet.
-          </p>
-        ) : (
-          <RemovalBatchesAccordion
-            facilityId={facilityId}
-            entries={linkedRemovals.map(({ removal, submission, creditBatches }) => ({
-              removalId: removal.id,
-              label: submission?.externalId ?? `${removal.id.slice(0, SHORT_ID)}…`,
-              completedOn: removal.completedOn,
-              creditBatches,
-              badge: (
-                <SubmissionStatusBadge
-                  latest={submission}
-                  isLockedInFlight={
-                    submission ? isLockedInFlight(submission) : false
-                  }
-                />
-              ),
-            }))}
+        <section
+          aria-labelledby="ghg-statement-status"
+          className="border-y border-[var(--color-border-secondary)] py-12"
+        >
+          <div className="flex items-center justify-between gap-12">
+            <h3
+              id="ghg-statement-status"
+              className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]"
+            >
+              Statement status
+            </h3>
+            <StatusBadge status={derived.value} label={derived.label} />
+          </div>
+        </section>
+
+        <GhgStatementCarbonBreakdown
+          ghgStatementId={statement.id}
+          enabled={open}
+        />
+
+        <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
+          {statementSubmission?.externalId && (
+            <Field label="Registry record">
+              <RegistryRecordLink
+                facilityId={statement.facilityId}
+                externalId={statementSubmission.externalId}
+                version={statementSubmission.version}
+                isProduction={isProduction}
+                kind="ghgStatement"
+              />
+            </Field>
+          )}
+          <Field label="Verifier status">
+            {verifierStatusLabel(remote)}
+          </Field>
+        </div>
+
+        <section className="flex flex-col gap-8">
+          <h3 className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+            Linked Removals ({linkedRemovals.length})
+          </h3>
+          {linkedRemovals.length === 0 ? (
+            <p className="body-small text-[var(--color-text-tertiary)]">
+              No linked Removals.
+            </p>
+          ) : (
+            <RemovalBatchesAccordion
+              facilityId={statement.facilityId}
+              entries={linkedRemovals.map(
+                ({ removal, submission, creditBatches }) => ({
+                  removalId: removal.id,
+                  label:
+                    submission?.externalId ??
+                    `${removal.id.slice(0, SHORT_ID)}…`,
+                  completedOn: removal.completedOn,
+                  creditBatches,
+                  badge: (
+                    <SubmissionStatusBadge
+                      latest={submission}
+                      isLockedInFlight={
+                        submission ? isLockedInFlight(submission) : false
+                      }
+                    />
+                  ),
+                }),
+              )}
+            />
+          )}
+        </section>
+
+        <GhgStatementReportWorkflow
+          ghgStatementId={statement.id}
+          reportsQuery={reportsQuery}
+          canGenerate={canGenerate}
+          generationUnavailableReason={generationUnavailableReason}
+        />
+
+        {recentSyncEvents.length > 0 && (
+          <SyncEventLog
+            events={recentSyncEvents}
+            compact
+            label={`Submission history (${recentSyncEvents.length})`}
           />
         )}
-      </div>
 
-      <SyncEventLog events={recentSyncEvents} compact />
-
-      <GhgStatementReportWorkflow
-        ghgStatementId={ghgStatementId}
-        reportsQuery={reportsQuery}
-      />
-
-      <div className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
-        {/* No undo/withdraw exists for a submitted statement. The supported
-            path is amend-and-resubmit: edit a linked removal (open it above),
-            then resubmit a new version — membership itself stays server-derived
-            by date range (ADR 0004). */}
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          Statements can&apos;t be withdrawn. To change what&apos;s included,
-          open a removal above, edit it, then resubmit — pending changes are
-          flagged here.
-        </p>
         {blockedNote && (
-          <p className="body-caption text-[var(--color-text-tertiary)]">
+          <p className="body-small text-[var(--color-text-tertiary)]">
             {blockedNote}
           </p>
         )}
-        <div className="flex items-center justify-end gap-8">
-          {statementSubmission && (
-            <Button
-              variant="default"
-              size="small"
-              onClick={handleRefresh}
-              busy={refreshMutation.isPending}
-            >
-              {!refreshMutation.isPending && <ArrowsClockwiseIcon size={ICON_SIZE} />}
-              Refresh status
-            </Button>
-          )}
-          {canSubmit && (
-            <Button
-              variant="primary"
-              size="small"
-              onClick={() => setSubmitOpen(true)}
-            >
-              {isResubmit ? "Resubmit" : "Submit to verifier"}
-            </Button>
-          )}
-        </div>
-      </div>
+      </SlideOverPanel.Body>
 
       <GhgStatementSubmitDialog
-        ghgStatementId={ghgStatementId}
+        ghgStatementId={statement.id}
         isOpen={submitOpen}
         onClose={() => setSubmitOpen(false)}
         isProduction={isProduction}
@@ -325,6 +311,51 @@ function DetailState({
           )?.id ?? null
         }
       />
-    </div>
+
+      <SlideOverPanel.Footer className="justify-stretch">
+        {statementSubmission && (
+          <Button
+            variant="default"
+            className="flex-1"
+            onClick={handleRefresh}
+            busy={refreshMutation.isPending}
+          >
+            {!refreshMutation.isPending && (
+              <ArrowsClockwiseIcon size={ICON_SIZE} />
+            )}
+            Refresh
+          </Button>
+        )}
+        {canSubmit && (
+          <Button
+            variant="primary"
+            className="flex-1"
+            onClick={() => setSubmitOpen(true)}
+          >
+            {isResubmit ? "Resubmit" : "Submit"}
+          </Button>
+        )}
+        <SlideOverPanel.Close>
+          <Button
+            variant={canSubmit ? "default" : "primary"}
+            className="flex-1"
+          >
+            Close
+          </Button>
+        </SlideOverPanel.Close>
+      </SlideOverPanel.Footer>
+    </>
+  );
+}
+
+function CloseFooter() {
+  return (
+    <SlideOverPanel.Footer className="justify-stretch">
+      <SlideOverPanel.Close>
+        <Button variant="primary" className="flex-1">
+          Close
+        </Button>
+      </SlideOverPanel.Close>
+    </SlideOverPanel.Footer>
   );
 }

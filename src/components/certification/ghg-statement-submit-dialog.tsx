@@ -140,7 +140,7 @@ export function GhgStatementSubmitDialog({
                 <span className="mt-2 block text-[var(--color-text-tertiary)]">
                   {approvedReportId
                     ? "Submit the current approved immutable report."
-                    : "Prepare and approve a report to use this option."}
+                    : "Generate and approve a report to use this option."}
                 </span>
               </span>
             </label>

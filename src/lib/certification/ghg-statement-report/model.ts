@@ -1,18 +1,7 @@
 import { createHash } from "node:crypto";
-import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 
 export const GHG_STATEMENT_TOTAL_TOLERANCE_KG = 0.001;
-export const GHG_STATEMENT_REPORT_MODEL_VERSION = 1;
-const SHA256_PATTERN = /^[a-f0-9]{64}$/;
-
-export interface GhgStatementReportNarratives {
-  systemBoundaryAndMethodology: string;
-  evidenceIndex: string;
-  uncertaintyAndSensitivity: string;
-  dataQualityAndExceptions: string;
-  monitoringAndDurability: string;
-  approvalStatement: string;
-}
+export const GHG_STATEMENT_REPORT_MODEL_VERSION = 2;
 
 export interface GhgStatementReportDocumentControl {
   organizationName: string;
@@ -21,16 +10,7 @@ export interface GhgStatementReportDocumentControl {
   externalGhgStatementId: string;
   reportingPeriodStartOn: string;
   reportingPeriodEndOn: string;
-  standardVersion: string;
-  protocolVersion: string;
-}
-
-export interface FrozenRemovalSubmission {
-  localRemovalId: string;
-  externalRemovalId: string;
-  submissionVersion: number;
-  payloadHash: string;
-  payloadSnapshot: Record<string, unknown>;
+  protocolVersion: string | null;
 }
 
 export interface LiveGhgEntry {
@@ -50,20 +30,14 @@ export interface BuildGhgStatementReportModelInput {
   preparedAt: string;
   documentControl: GhgStatementReportDocumentControl;
   authoritativeStatement: {
-    externalRemovalIds: string[];
+    externalEntryIds: string[];
     pendingTotalCo2eRemovedKg: number;
   };
-  removalSnapshots: FrozenRemovalSubmission[];
   remoteEntries: LiveGhgEntry[];
-  narratives: GhgStatementReportNarratives;
 }
 
 export interface GhgStatementReportEntry {
-  localRemovalId: string;
-  externalRemovalId: string;
-  removalSubmissionVersion: number;
-  removalPayloadHash: string;
-  removalPayloadSnapshot: Record<string, unknown>;
+  externalEntryId: string;
   startedOn: string;
   completedOn: string;
   netRemovedKg: number;
@@ -71,7 +45,6 @@ export interface GhgStatementReportEntry {
   netRemovedStandardDeviationKg: number | null;
   supplierCreditKg: number | null;
   bufferPoolKg: number | null;
-  sourceBindings: string[];
 }
 
 export interface GhgStatementReportModel {
@@ -79,7 +52,6 @@ export interface GhgStatementReportModel {
   reportVersion: number;
   preparedAt: string;
   documentControl: GhgStatementReportDocumentControl;
-  narratives: GhgStatementReportNarratives;
   entries: GhgStatementReportEntry[];
   totals: {
     netRemovedKg: number;
@@ -98,15 +70,17 @@ export class GhgStatementReportReconciliationError extends Error {
   }
 }
 
+function compareCodeUnits(left: string, right: string): number {
+  // Fingerprints must not depend on locale or ICU collation differences.
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
-        // Code-unit ordering, not `localeCompare`: the sort feeds
-        // `sourceFingerprint`, and locale/ICU differences between runtimes
-        // would otherwise reorder keys and change the fingerprint.
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .sort(([left], [right]) => compareCodeUnits(left, right))
         .map(([key, child]) => [key, canonicalize(child)]),
     );
   }
@@ -145,8 +119,8 @@ function finite(label: string, value: number): number {
 }
 
 function optionalSum(
-  entries: LiveGhgEntry[],
-  select: (entry: LiveGhgEntry) => number | null,
+  entries: GhgStatementReportEntry[],
+  select: (entry: GhgStatementReportEntry) => number | null,
 ): number | null {
   let total = 0;
   for (const entry of entries) {
@@ -157,158 +131,57 @@ function optionalSum(
   return total;
 }
 
-function sourceBindings(snapshot: Record<string, unknown>): string[] {
-  const found = new Set<string>();
-  const walk = (value: unknown, key = ""): void => {
-    if (Array.isArray(value)) {
-      if (/source_?ids?|sources?/i.test(key)) {
-        for (const item of value) {
-          if (typeof item === "string" && item.trim()) found.add(item);
-        }
-      }
-      for (const item of value) walk(item, key);
-      return;
-    }
-    if (!value || typeof value !== "object") return;
-    for (const [childKey, child] of Object.entries(
-      value as Record<string, unknown>,
-    )) {
-      if (
-        /source_?id$/i.test(childKey) &&
-        typeof child === "string" &&
-        child.trim()
-      ) {
-        found.add(child);
-      }
-      walk(child, childKey);
-    }
-  };
-  walk(snapshot);
-  return [...found].sort();
-}
-
-function semanticPayload(
-  snapshot: FrozenRemovalSubmission,
-): Record<string, unknown> {
-  const semantic = snapshot.payloadSnapshot.semantic;
-  if (
-    !semantic ||
-    typeof semantic !== "object" ||
-    Array.isArray(semantic)
-  ) {
-    throw new GhgStatementReportReconciliationError(
-      `Submitted Removal ${snapshot.externalRemovalId} has no immutable semantic payload.`,
-    );
-  }
-  return semantic as Record<string, unknown>;
-}
-
 export function buildGhgStatementReportModel(
   input: BuildGhgStatementReportModelInput,
 ): GhgStatementReportModel {
-  const statementIds = [...input.authoritativeStatement.externalRemovalIds];
-  exactSet(
-    "Submitted Removal snapshot membership",
-    statementIds,
-    input.removalSnapshots.map((snapshot) => snapshot.externalRemovalId),
-  );
+  const statementEntryIds = [...input.authoritativeStatement.externalEntryIds];
   exactSet(
     "Live GHG Entry membership",
-    statementIds,
+    statementEntryIds,
     input.remoteEntries.map((entry) => entry.id),
   );
-  if (
-    new Set(
-      input.removalSnapshots.map((snapshot) => snapshot.localRemovalId),
-    ).size !== input.removalSnapshots.length
-  ) {
-    throw new GhgStatementReportReconciliationError(
-      "Submitted Removal membership is not one-to-one with local Removals.",
-    );
-  }
 
-  const snapshots = [...input.removalSnapshots].sort((left, right) =>
-    left.externalRemovalId.localeCompare(right.externalRemovalId),
-  );
-  const entriesById = new Map(
-    input.remoteEntries.map((entry) => [entry.id, entry]),
-  );
-  const entries: GhgStatementReportEntry[] = snapshots.map((snapshot) => {
-    if (
-      !SHA256_PATTERN.test(snapshot.payloadHash) ||
-      snapshot.submissionVersion < 1 ||
-      !snapshot.payloadSnapshot ||
-      typeof snapshot.payloadSnapshot !== "object" ||
-      Array.isArray(snapshot.payloadSnapshot)
-    ) {
-      throw new GhgStatementReportReconciliationError(
-        `Submitted Removal ${snapshot.externalRemovalId} has a malformed immutable snapshot.`,
-      );
-    }
-    if (payloadHash(semanticPayload(snapshot)) !== snapshot.payloadHash) {
-      throw new GhgStatementReportReconciliationError(
-        `Submitted Removal ${snapshot.externalRemovalId} payload hash does not match its immutable snapshot.`,
-      );
-    }
-    const entry = entriesById.get(snapshot.externalRemovalId);
-    if (!entry) {
-      throw new GhgStatementReportReconciliationError(
-        `Live GHG Entry ${snapshot.externalRemovalId} is missing.`,
-      );
-    }
-    for (const [label, value] of [
-      ["standard deviation", entry.netRemovedStandardDeviationKg],
-      ["supplier allocation", entry.supplierCreditKg],
-      ["buffer pool", entry.bufferPoolKg],
-    ] as const) {
-      if (value !== null && !Number.isFinite(value)) {
+  const entries = [...input.remoteEntries]
+    .sort((left, right) => compareCodeUnits(left.id, right.id))
+    .map((entry): GhgStatementReportEntry => {
+      for (const [label, value] of [
+        ["standard deviation", entry.netRemovedStandardDeviationKg],
+        ["supplier allocation", entry.supplierCreditKg],
+        ["buffer pool", entry.bufferPoolKg],
+      ] as const) {
+        if (value !== null && !Number.isFinite(value)) {
+          throw new GhgStatementReportReconciliationError(
+            `Live GHG Entry ${entry.id} ${label} is malformed.`,
+          );
+        }
+      }
+      if (
+        entry.ghgStatementId !== undefined &&
+        entry.ghgStatementId !== null &&
+        entry.ghgStatementId !==
+          input.documentControl.externalGhgStatementId
+      ) {
         throw new GhgStatementReportReconciliationError(
-          `Live GHG Entry ${entry.id} ${label} is malformed.`,
+          `Live GHG Entry ${entry.id} belongs to another GHG Statement.`,
         );
       }
-    }
-    if (
-      entry.ghgStatementId !== undefined &&
-      entry.ghgStatementId !== null &&
-      entry.ghgStatementId !== input.documentControl.externalGhgStatementId
-    ) {
-      throw new GhgStatementReportReconciliationError(
-        `Live GHG Entry ${entry.id} belongs to another GHG Statement.`,
-      );
-    }
-    return {
-      localRemovalId: snapshot.localRemovalId,
-      externalRemovalId: snapshot.externalRemovalId,
-      removalSubmissionVersion: snapshot.submissionVersion,
-      removalPayloadHash: snapshot.payloadHash,
-      removalPayloadSnapshot: canonicalize(
-        snapshot.payloadSnapshot,
-      ) as Record<string, unknown>,
-      startedOn: entry.startedOn,
-      completedOn: entry.completedOn,
-      netRemovedKg: finite("Live net removed", entry.netRemovedKg),
-      netRemovedWithoutDiscountKg: finite(
-        "Live net before uncertainty",
-        entry.netRemovedWithoutDiscountKg,
-      ),
-      netRemovedStandardDeviationKg: entry.netRemovedStandardDeviationKg,
-      supplierCreditKg: entry.supplierCreditKg,
-      bufferPoolKg: entry.bufferPoolKg,
-      sourceBindings: sourceBindings(snapshot.payloadSnapshot),
-    };
-  });
+      return {
+        externalEntryId: entry.id,
+        startedOn: entry.startedOn,
+        completedOn: entry.completedOn,
+        netRemovedKg: finite("Live net removed", entry.netRemovedKg),
+        netRemovedWithoutDiscountKg: finite(
+          "Live net before uncertainty",
+          entry.netRemovedWithoutDiscountKg,
+        ),
+        netRemovedStandardDeviationKg:
+          entry.netRemovedStandardDeviationKg,
+        supplierCreditKg: entry.supplierCreditKg,
+        bufferPoolKg: entry.bufferPoolKg,
+      };
+    });
 
-  const sortedLiveEntries = entries.map((entry) => ({
-    id: entry.externalRemovalId,
-    netRemovedKg: entry.netRemovedKg,
-    netRemovedWithoutDiscountKg: entry.netRemovedWithoutDiscountKg,
-    netRemovedStandardDeviationKg: entry.netRemovedStandardDeviationKg,
-    supplierCreditKg: entry.supplierCreditKg,
-    bufferPoolKg: entry.bufferPoolKg,
-    startedOn: entry.startedOn,
-    completedOn: entry.completedOn,
-  }));
-  const netRemovedKg = sortedLiveEntries.reduce(
+  const netRemovedKg = entries.reduce(
     (total, entry) => total + entry.netRemovedKg,
     0,
   );
@@ -324,7 +197,7 @@ export function buildGhgStatementReportModel(
       "The GHG Statement total does not match the exact live GHG Entry sum.",
     );
   }
-  const netRemovedWithoutDiscountKg = sortedLiveEntries.reduce(
+  const netRemovedWithoutDiscountKg = entries.reduce(
     (total, entry) => total + entry.netRemovedWithoutDiscountKg,
     0,
   );
@@ -332,11 +205,10 @@ export function buildGhgStatementReportModel(
     canonicalJson({
       documentControl: input.documentControl,
       statement: {
-        externalRemovalIds: [...statementIds].sort(),
+        externalEntryIds: [...statementEntryIds].sort(compareCodeUnits),
         pendingTotalCo2eRemovedKg: statementTotal,
       },
-      removalSnapshots: snapshots,
-      remoteEntries: sortedLiveEntries,
+      remoteEntries: entries,
     }),
   );
 
@@ -345,7 +217,6 @@ export function buildGhgStatementReportModel(
     reportVersion: input.reportVersion,
     preparedAt: input.preparedAt,
     documentControl: input.documentControl,
-    narratives: input.narratives,
     entries,
     totals: {
       netRemovedKg,
@@ -353,13 +224,10 @@ export function buildGhgStatementReportModel(
       uncertaintyDiscountKg:
         netRemovedWithoutDiscountKg - netRemovedKg,
       supplierCreditKg: optionalSum(
-        input.remoteEntries,
+        entries,
         (entry) => entry.supplierCreditKg,
       ),
-      bufferPoolKg: optionalSum(
-        input.remoteEntries,
-        (entry) => entry.bufferPoolKg,
-      ),
+      bufferPoolKg: optionalSum(entries, (entry) => entry.bufferPoolKg),
     },
     sourceFingerprint,
   };

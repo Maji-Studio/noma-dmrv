@@ -48,11 +48,6 @@ const styles = {
       color: C.ink40,
       marginTop: 2,
     },
-    paragraph: {
-      fontSize: 8.5,
-      lineHeight: 1.5,
-      color: C.ink70,
-    },
     controlGrid: { flexDirection: "row", flexWrap: "wrap" },
     controlPair: { width: "50%", paddingRight: 12, marginBottom: 6 },
     controlPairWide: { width: "100%" },
@@ -68,27 +63,6 @@ const styles = {
       fontSize: 7,
       color: C.ink55,
       lineHeight: 1.45,
-    },
-    hash: { fontFamily: MONO, fontSize: 6.5, color: C.ink55 },
-    source: {
-      fontFamily: MONO,
-      fontSize: 6.5,
-      color: C.ink70,
-      marginTop: 2,
-    },
-    review: {
-      borderLeftWidth: 3,
-      borderLeftColor: C.plum,
-      backgroundColor: C.sea,
-      padding: 9,
-      marginBottom: 7,
-    },
-    reviewLabel: {
-      fontFamily: MONO,
-      fontSize: 7,
-      color: C.plum,
-      textTransform: "uppercase",
-      marginBottom: 3,
     },
     footerHash: {
       fontFamily: MONO,
@@ -165,20 +139,13 @@ function summaryCell(
 }
 
 function entryRow(entry: GhgStatementReportEntry): ReactElement {
-  const sources =
-    entry.sourceBindings.length > 0
-      ? entry.sourceBindings.join(", ")
-      : "No Source IDs were present in the frozen submission snapshot.";
   return v(styles.tr, { wrap: false },
     v({ flex: 1 }, {},
-      t(styles.entryHeader, entry.externalRemovalId),
-      t(styles.entryMeta, `Local Removal ${entry.localRemovalId}`),
+      t(styles.entryHeader, entry.externalEntryId),
       t(
         styles.entryMeta,
-        `Submitted version ${entry.removalSubmissionVersion} | ${entry.startedOn} to ${entry.completedOn}`,
+        `${entry.startedOn} to ${entry.completedOn}`,
       ),
-      t(styles.hash, `Payload SHA-256 ${entry.removalPayloadHash}`),
-      t(styles.source, `Frozen Sources: ${sources}`),
     ),
     v({ width: 112, alignItems: "flex-end" }, {},
       t(styles.entryMeta, `Net ${formatKg(entry.netRemovedKg)}`),
@@ -196,13 +163,6 @@ function entryRow(entry: GhgStatementReportEntry): ReactElement {
   );
 }
 
-function reviewBlock(label: string, body: string): ReactElement {
-  return v(styles.review, { wrap: false },
-    t(styles.reviewLabel, label),
-    t(styles.paragraph, body),
-  );
-}
-
 function buildDocument(model: GhgStatementReportModel): ReactElement {
   const control = model.documentControl;
   const masthead = v(styles.masthead, {},
@@ -211,8 +171,8 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
         t(styles.wordmark, "noma"),
         t(styles.wordmarkSub, "DMRV | GHG STATEMENT"),
       ),
-      t(styles.eyebrow, "QUALITATIVE SUPPORT AND RECONCILIATION"),
-      h(Text, { style: styles.title }, "GHG Statement Report"),
+      t(styles.eyebrow, "AUTOMATIC DATA RECONCILIATION"),
+      h(Text, { style: styles.title }, "GHG Statement Data Summary"),
     ),
     v(styles.metaCol, {},
       mastheadPair("Report version", String(model.reportVersion)),
@@ -244,50 +204,25 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
         "Reporting period",
         `${control.reportingPeriodStartOn} to ${control.reportingPeriodEndOn}`,
       ),
-      controlPair(
-        "Pinned versions",
-        `Isometric Standard ${control.standardVersion}; Biochar Protocol ${control.protocolVersion}`,
-      ),
+      control.protocolVersion
+        ? controlPair("Configured protocol version", control.protocolVersion)
+        : null,
       controlPair("Source fingerprint", model.sourceFingerprint, {
         wide: true,
         compact: true,
       }),
+      controlPair(
+        "Scope",
+        "Registry data reconciliation only; qualitative VVB and project documentation is not included.",
+        { wide: true },
+      ),
       controlPair("Report model", String(model.modelVersion)),
     ),
   );
   const membership = section(
-    "GHG Entry and Removal index",
+    "GHG Entry index",
     v(styles.table, {}, ...model.entries.map(entryRow)),
     `${model.entries.length} exact members`,
-  );
-  const reviews = [
-    reviewBlock(
-      "System boundary and methodology",
-      model.narratives.systemBoundaryAndMethodology,
-    ),
-    reviewBlock("Evidence and Source index", model.narratives.evidenceIndex),
-    reviewBlock(
-      "Uncertainty and sensitivity",
-      model.narratives.uncertaintyAndSensitivity,
-    ),
-    reviewBlock(
-      "Data quality, exclusions, incidents, and exceptions",
-      model.narratives.dataQualityAndExceptions,
-    ),
-    reviewBlock(
-      "Monitoring and durability",
-      model.narratives.monitoringAndDurability,
-    ),
-  ];
-  const methodology = section(
-    "Methodology and reviewed narrative",
-    reviews,
-    "Human reviewed",
-  );
-  const approval = section(
-    "Review acknowledgment",
-    reviewBlock("Operator acknowledgment", model.narratives.approvalStatement),
-    "Required before approval",
   );
   const footer = v(styles.footer, { fixed: true },
     t(
@@ -309,9 +244,9 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
   return h(
     Document,
     {
-      title: `GHG Statement Report v${model.reportVersion}`,
+      title: `GHG Statement Data Summary v${model.reportVersion}`,
       author: "noma dMRV",
-      subject: "GHG Statement qualitative support and reconciliation",
+      subject: "Automatically generated GHG Statement data reconciliation",
     },
     h(
       Page,
@@ -320,8 +255,6 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
       totals,
       documentControl,
       membership,
-      methodology,
-      approval,
       footer,
     ),
   );

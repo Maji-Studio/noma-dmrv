@@ -5,65 +5,6 @@ import {
   canonicalJson,
   GhgStatementReportReconciliationError,
 } from "@/lib/certification/ghg-statement-report/model";
-import { payloadHash } from "@/lib/isometric/utils/payload-hash";
-
-const REMOVAL_A = "11111111-1111-4111-8111-111111111111";
-const REMOVAL_B = "22222222-2222-4222-8222-222222222222";
-const semanticB = {
-  projectId: "prj_1",
-  inputs: [{ key: "energy", value: 2 }],
-};
-const semanticA = {
-  projectId: "prj_1",
-  inputs: [{ key: "transport", value: 1 }],
-};
-
-const narratives = {
-  systemBoundaryAndMethodology:
-    "The reviewed boundary covers production, processing, transport, application, energy use, characterization, and storage.",
-  evidenceIndex:
-    "Evidence is indexed through the immutable Source bindings captured by each submitted Removal snapshot.",
-  uncertaintyAndSensitivity:
-    "The reviewer checked the reported uncertainty inputs and the current Isometric sensitivity analysis.",
-  dataQualityAndExceptions:
-    "The reviewer checked data-quality classifications, exclusions, incidents, and reporting-period exceptions.",
-  monitoringAndDurability:
-    "The reviewer checked monitoring coverage and the durability evidence referenced by each submitted Removal.",
-  approvalStatement:
-    "I reviewed the generated facts and these qualitative statements for this reporting period.",
-};
-
-const removalSnapshots = [
-  {
-    localRemovalId: REMOVAL_B,
-    externalRemovalId: "rmv_b",
-    submissionVersion: 2,
-    payloadHash: payloadHash(semanticB),
-    payloadSnapshot: {
-      semantic: semanticB,
-      memberCreditBatchIds: ["batch-b"],
-      transport: { datapointBodies: [] },
-    },
-  },
-  {
-    localRemovalId: REMOVAL_A,
-    externalRemovalId: "rmv_a",
-    submissionVersion: 1,
-    payloadHash: payloadHash(semanticA),
-    payloadSnapshot: {
-      semantic: semanticA,
-      memberCreditBatchIds: ["batch-a"],
-      sourceBindingPlan: [
-        { inputKey: "transport", sourceId: "src_transport" },
-      ],
-      transport: {
-        datapointBodies: [
-          { body: { source_ids: ["src_application"] } },
-        ],
-      },
-    },
-  },
-];
 
 const remoteEntries = [
   {
@@ -75,6 +16,7 @@ const remoteEntries = [
     netRemovedStandardDeviationKg: 3,
     supplierCreditKg: 198,
     bufferPoolKg: 4.125,
+    ghgStatementId: "ggs_1",
   },
   {
     id: "rmv_a",
@@ -85,6 +27,7 @@ const remoteEntries = [
     netRemovedStandardDeviationKg: 5,
     supplierCreditKg: 685,
     bufferPoolKg: 15,
+    ghgStatementId: "ggs_1",
   },
 ];
 
@@ -99,24 +42,18 @@ function build() {
       externalGhgStatementId: "ggs_1",
       reportingPeriodStartOn: "2026-07-01",
       reportingPeriodEndOn: "2026-07-31",
-      standardVersion: "1.7",
-      protocolVersion: "1.1.1",
+      protocolVersion: "1.1",
     },
     authoritativeStatement: {
-      externalRemovalIds: ["rmv_b", "rmv_a"],
+      externalEntryIds: ["rmv_b", "rmv_a"],
       pendingTotalCo2eRemovedKg: 902.125,
     },
-    removalSnapshots,
     remoteEntries,
-    narratives,
   });
 }
 
 describe("canonicalJson", () => {
   it("orders keys by code unit rather than locale collation", () => {
-    // `"a".localeCompare("B")` is negative in most locales, but "B" (U+0042)
-    // sorts before "a" (U+0061) by code unit. Pinning this keeps
-    // `sourceFingerprint` stable across runtimes with different ICU defaults.
     expect(canonicalJson({ a: 1, B: 2 })).toBe('{"B":2,"a":1}');
   });
 
@@ -128,12 +65,20 @@ describe("canonicalJson", () => {
 });
 
 describe("GHG Statement report model", () => {
-  it("deterministically reconciles live membership and totals to frozen Removal snapshots", () => {
+  it("deterministically reconciles live membership and totals", () => {
     const first = build();
-    const second = build();
+    const second = buildGhgStatementReportModel({
+      ...buildInput(),
+      authoritativeStatement: {
+        ...buildInput().authoritativeStatement,
+        externalEntryIds: ["rmv_a", "rmv_b"],
+      },
+      remoteEntries: [...remoteEntries].reverse(),
+    });
 
     expect(first).toEqual(second);
-    expect(first.entries.map((entry) => entry.externalRemovalId)).toEqual([
+    expect(first.modelVersion).toBe(2);
+    expect(first.entries.map((entry) => entry.externalEntryId)).toEqual([
       "rmv_a",
       "rmv_b",
     ]);
@@ -144,102 +89,80 @@ describe("GHG Statement report model", () => {
       supplierCreditKg: 883,
       bufferPoolKg: 19.125,
     });
-    expect(first.entries[0]).toMatchObject({
-      localRemovalId: REMOVAL_A,
-      removalSubmissionVersion: 1,
-      removalPayloadHash: payloadHash(semanticA),
-      sourceBindings: ["src_application", "src_transport"],
-    });
     expect(first.sourceFingerprint).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("fails closed when live membership is not exactly represented locally", () => {
+  it("fails closed when live membership is not represented exactly", () => {
     expect(() =>
       buildGhgStatementReportModel({
-        reportVersion: 1,
-        preparedAt: "2026-07-28T12:00:00.000Z",
-        documentControl: {
-          organizationName: "Test supplier",
-          facilityCode: "FAC-01",
-          externalProjectId: "prj_1",
-          externalGhgStatementId: "ggs_1",
-          reportingPeriodStartOn: "2026-07-01",
-          reportingPeriodEndOn: "2026-07-31",
-          standardVersion: "1.7",
-          protocolVersion: "1.1.1",
-        },
+        ...buildInput(),
         authoritativeStatement: {
-          externalRemovalIds: ["rmv_a", "rmv_missing"],
+          externalEntryIds: ["rmv_a", "rmv_missing"],
           pendingTotalCo2eRemovedKg: 700,
         },
-        removalSnapshots: [removalSnapshots[1]],
         remoteEntries: [remoteEntries[1]],
-        narratives,
       }),
     ).toThrowError(GhgStatementReportReconciliationError);
+  });
+
+  it("fails closed when statement membership contains duplicates", () => {
+    expect(() =>
+      buildGhgStatementReportModel({
+        ...buildInput(),
+        authoritativeStatement: {
+          externalEntryIds: ["rmv_a", "rmv_a"],
+          pendingTotalCo2eRemovedKg: 1_400,
+        },
+        remoteEntries: [remoteEntries[1], remoteEntries[1]],
+      }),
+    ).toThrowError(/one-to-one/i);
+  });
+
+  it("fails closed when an entry belongs to another statement", () => {
+    expect(() =>
+      buildGhgStatementReportModel({
+        ...buildInput(),
+        remoteEntries: [
+          remoteEntries[0],
+          { ...remoteEntries[1], ghgStatementId: "ggs_other" },
+        ],
+      }),
+    ).toThrowError(/another GHG Statement/i);
   });
 
   it("fails closed when the statement total drifts from the live entry sum", () => {
     expect(() =>
       buildGhgStatementReportModel({
-        reportVersion: 1,
-        preparedAt: "2026-07-28T12:00:00.000Z",
-        documentControl: {
-          organizationName: "Test supplier",
-          facilityCode: "FAC-01",
-          externalProjectId: "prj_1",
-          externalGhgStatementId: "ggs_1",
-          reportingPeriodStartOn: "2026-07-01",
-          reportingPeriodEndOn: "2026-07-31",
-          standardVersion: "1.7",
-          protocolVersion: "1.1.1",
-        },
+        ...buildInput(),
         authoritativeStatement: {
-          externalRemovalIds: ["rmv_a", "rmv_b"],
+          externalEntryIds: ["rmv_a", "rmv_b"],
           pendingTotalCo2eRemovedKg: 999,
         },
-        removalSnapshots,
-        remoteEntries,
-        narratives,
       }),
     ).toThrowError(/total/i);
   });
-
-  it("fails closed when a frozen Removal snapshot no longer matches its hash", () => {
-    expect(() =>
-      buildGhgStatementReportModel({
-        reportVersion: 1,
-        preparedAt: "2026-07-28T12:00:00.000Z",
-        documentControl: {
-          organizationName: "Test supplier",
-          facilityCode: "FAC-01",
-          externalProjectId: "prj_1",
-          externalGhgStatementId: "ggs_1",
-          reportingPeriodStartOn: "2026-07-01",
-          reportingPeriodEndOn: "2026-07-31",
-          standardVersion: "1.7",
-          protocolVersion: "1.1.1",
-        },
-        authoritativeStatement: {
-          externalRemovalIds: ["rmv_a", "rmv_b"],
-          pendingTotalCo2eRemovedKg: 902.125,
-        },
-        removalSnapshots: [
-          {
-            ...removalSnapshots[0],
-            payloadSnapshot: {
-              ...removalSnapshots[0].payloadSnapshot,
-              semantic: { ...semanticB, projectId: "prj_tampered" },
-            },
-          },
-          removalSnapshots[1],
-        ],
-        remoteEntries,
-        narratives,
-      }),
-    ).toThrowError(/payload hash/i);
-  });
 });
+
+function buildInput() {
+  return {
+    reportVersion: 1,
+    preparedAt: "2026-07-28T12:00:00.000Z",
+    documentControl: {
+      organizationName: "Test supplier",
+      facilityCode: "FAC-01",
+      externalProjectId: "prj_1",
+      externalGhgStatementId: "ggs_1",
+      reportingPeriodStartOn: "2026-07-01",
+      reportingPeriodEndOn: "2026-07-31",
+      protocolVersion: "1.1",
+    },
+    authoritativeStatement: {
+      externalEntryIds: ["rmv_b", "rmv_a"],
+      pendingTotalCo2eRemovedKg: 902.125,
+    },
+    remoteEntries,
+  };
+}
 
 describe("GHG Statement report migration", () => {
   it("creates the referenced organization-scoped key before its composite foreign key", () => {
