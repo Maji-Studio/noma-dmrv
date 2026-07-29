@@ -9,7 +9,6 @@ import type {
   Geometry,
   MultiPolygon,
   Polygon,
-  Position,
 } from "geojson";
 import {
   GEOJSON_COORD_DECIMALS,
