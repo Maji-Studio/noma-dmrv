@@ -135,15 +135,9 @@ export const POPUP_WIDTH_PX = 246;
 export const POPUP_OFFSET_PX = 20;
 
 // ---------------------------------------------------------------------------
-// Transport-legs rail (directional bar) + cross-surface focus dimming
+// Cross-surface focus dimming
 // ---------------------------------------------------------------------------
 
-/** Per-leg card width in the rail wings (px). */
-export const RAIL_CARD_WIDTH_PX = 168;
-/** Consolidated area-card width in the directional bar (px). */
-export const RAIL_AREA_CARD_WIDTH_PX = 208;
-/** Dropdown panel width when an area card is expanded (px). */
-export const RAIL_DROPDOWN_WIDTH_PX = 296;
 /**
  * Opacity for out-of-focus elements when a focus is active — rail cards, map
  * markers, distance chips, and leg lines all dim to this so the focused

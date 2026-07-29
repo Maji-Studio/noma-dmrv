@@ -248,9 +248,6 @@ export function CarbonTransitPanel({
       geo={geo}
       routeGeometries={routeGeometries}
       popupContent={popupContent}
-      // Neither layout overlays the bottom of the map any more, so the fit
-      // never has to reserve room for a strip.
-      railVisible={false}
       highlight={highlight}
       focus={mapFocus}
       hoverLegId={hoverLegId}
