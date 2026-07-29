@@ -140,7 +140,7 @@ describe("submitRemoval — Source binding gate", () => {
     });
     const gisBinding = classifyRemovalSourceCandidate({
       documentType: "gis_boundary",
-      metadata: {},
+      metadata: { logbookEvidenceType: "inventory" },
       lineage: {
         entityType: "application",
         entityId: ctx.lineages[0]!.application.id,

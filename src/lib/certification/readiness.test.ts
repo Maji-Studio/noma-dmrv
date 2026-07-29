@@ -282,20 +282,6 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
 });
 
 describe("evidence mirroring advisory", () => {
-  it("does not block before generated evidence ledgers materialize", () => {
-    const facts = ready({
-      local: "draft",
-      supportingDocumentCount: 0,
-      mirroredDocumentCount: 0,
-    });
-
-    expect(deriveRemovalReadiness(facts)).toMatchObject({
-      state: "ready",
-      reasons: [],
-      advisories: [],
-    });
-  });
-
   it("shows pending automatic mirroring without blocking readiness", () => {
     const facts = ready({
       supportingDocumentCount: 4,

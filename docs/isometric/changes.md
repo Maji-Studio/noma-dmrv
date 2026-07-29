@@ -400,3 +400,12 @@ snapshot by design.
 - This aligns the submission gate with the pinned agricultural-soils module:
   application evidence may be retained or supplied voluntarily, but it is not
   required in the Certify submission payload.
+
+## 2026-07-29 (GIS-only removal evidence)
+
+- The unconditional mapped-Source submission requirement is removed. A
+  Removal with only GIS boundary evidence can now be submitted.
+- A `gis_boundary` document on Application lineage is deliberately excluded
+  from the Removal Source binding plan until an Application `source_ids` or
+  equivalent boundary target exists.
+- The partial-mirroring blocker is retained.

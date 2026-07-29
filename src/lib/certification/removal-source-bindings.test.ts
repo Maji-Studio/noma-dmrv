@@ -85,7 +85,7 @@ describe("classifyRemovalSourceCandidate", () => {
     expect(
       classifyRemovalSourceCandidate({
         documentType: "gis_boundary",
-        metadata: {},
+        metadata: { logbookEvidenceType: "inventory" },
         lineage: application,
       }),
     ).toBeNull();

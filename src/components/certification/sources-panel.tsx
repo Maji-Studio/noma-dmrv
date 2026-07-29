@@ -45,7 +45,7 @@ export function SourcesPanel({ removalId, isEditable }: SourcesPanelProps) {
         </header>
         <p className="body-caption text-[var(--color-text-tertiary)]">
           Files that support registry values are mirrored automatically when
-          you submit. Application evidence stays with the Application.
+          you submit. GIS boundaries and photos remain on the Application.
         </p>
         <PanelBody removalId={removalId} isEditable={isEditable} />
       </div>
@@ -83,8 +83,8 @@ function PanelBody({
   if (!removalId) {
     return (
       <p className="body-small text-[var(--color-text-tertiary)]">
-        A Removal will be created on first submit. Its supporting files will
-        be mirrored automatically.
+        A Removal will be created on first submit. Its registry value sources
+        will be mirrored automatically.
       </p>
     );
   }
@@ -133,7 +133,7 @@ function PanelBodyForRemoval({
       <EmptyState
         icon={<FileIcon size={32} />}
         title="No registry value sources found"
-        description="GIS boundaries remain Application evidence and are not attached to mass or transport values. Add a logbook or bill of lading only when it supports one of those values."
+        description="Add a logbook or bill of lading when it supports a registry mass or transport value. GIS boundaries remain on the Application and are not attached to those values."
         padding="sm"
       />
     );
