@@ -1,446 +1,283 @@
-# Plan: Isometric Certify API integration for noma-dmrv
+# Isometric Certify Integration Contract
 
-This doc is the **forward-looking** plan and status surface. It owns
-roadmap, current architecture contracts, pre-deploy gates, and what
-still has to be built. It does **not** narrate per-PR history — that
-lives in `docs/isometric/changes.md`. Design decisions live in
-`docs/adr/`; open questions live in `docs/open-questions.md`.
+> **Current state.** This document describes the integration implemented in the
+> repository. Dated implementation history belongs in
+> [`changes.md`](./changes.md); historical decisions belong in
+> [`docs/adr`](../adr/); unresolved decisions belong in
+> [`docs/open-questions-isometric.md`](../open-questions-isometric.md).
 
-## Scope
+## Boundary
 
-Connect noma-dmrv to Isometric's Certify API so MRV data flowing
-through the biochar chain (Facility → … → CreditBatch → Removal → GHG
-Statement) can be submitted for verification, and so protocol/SOP
-requirements can be pulled programmatically.
+noma compiles operational data into Isometric GHG Entries (called Removals in
+the noma UI), reconciles those entries into GHG Statements, mirrors supporting
+evidence as Sources, and can prepare a controlled GHG Statement report.
 
-- **Auth:** env-level credentials only
-  (`X-Client-Secret` + `Authorization: Bearer <jwt>`, both pre-issued
-  via Isometric's UI; no programmatic refresh).
-- **Provider-neutral naming:** new code lives under
-  `certification.*` because the existing schema is provider-agnostic
-  (`certifierProvider` enum supports `puro_earth` and `verra`).
-  Provider-specific bits (transformers, client) stay under
-  `src/lib/isometric/`.
+Provider-neutral persistence is in `src/db/schema/certification.ts`. Pure
+Isometric HTTP/types/transformers are in `src/lib/isometric/`. Authenticated
+orchestration is in `src/fn/certification/`.
 
-## Current model (read the ADRs)
+## Credentials and authorization
 
-- **[ADR 0001 — Emission-estimate config](../adr/0001-emission-estimate-config.md)**
-  (Phase 3.7, partly superseded). Per-facility genset yield is admin
-  config, not an operational column.
-- **[ADR 0015 — Energy single combined measurement point](../adr/0015-energy-single-combined-measurement-point.md)**.
-  The active removal template takes one grid-electricity datapoint and one
-  diesel-genset datapoint; stage splits are removed.
-- **[ADR 0002 — Credit batch = GHG Statement](../adr/0002-credit-batch-as-ghg-statement.md)**
-  (Superseded). Recorded for cross-reference only.
-- **[ADR 0003 — Removal as submission unit](../adr/0003-removal-as-submission-unit.md)**.
-  The Isometric Removal is the submission unit, held locally by a
-  `certifierRemovals` row. `N credit batches → 1 Removal`. Submission
-  is single-phase `submitRemoval` aggregating the deduped,
-  applied-mass-scoped union of production runs reached through member
-  batches' application lineage.
-- **[ADR 0004 — GHG Statement as independent artifact](../adr/0004-ghg-statement-as-independent-artifact.md)**.
-  A GHG Statement is a supplier-chosen reporting period held locally by
-  `certifierGhgStatements`. Created period-first
-  (`{ project_id, end_on }`); Isometric links Removals server-side by
-  date range; reconciliation writes the FK onto local
-  `certifierRemovals.ghgStatementId`.
-- **[ADR 0005 — Period emissions as Project Components](../adr/0005-period-emissions-as-project-components.md)**
-  (journal half superseded by
-  [ADR 0018](../adr/0018-isometric-owns-project-emissions.md)).
-  LCA-derived per-period emissions (staff travel, pyrolyzer gas, lab
-  electricity, sampling consumables, miscellaneous mass) live as
-  `PROJECT`-scope Components in Isometric, amortized server-side via
-  `ProjectComponentAmortizationStrategy`. The operator authors Project
-  Components directly in the Isometric UI with the LCA PDF attached to
-  each Component's Sources field; noma keeps **no** local copy (the
-  former LCA journal + drift panel were removed per ADR 0018).
-- **[ADR 0007 — Certification workspace consolidation](../adr/0007-certification-workspace-consolidation.md)**.
-  Certification is a first-class workspace. The credit-batch surfaces show
-  readiness and membership context; creation/submission lives in the
-  New-Removal wizard (`select ready batches -> registry requirements ->
-  submit`) and GHG Statement flows.
+Application credentials are not environment-only:
 
-## Phase status
+- each organization stores one Isometric access token and client secret in
+  `certifier_credentials`;
+- both values are encrypted through `src/lib/crypto/secrets.ts`;
+- Owners/Admins manage their active organization's credentials through
+  `src/data-access/certifier-credentials.ts`;
+- application calls construct an organization-specific client with
+  `getIsometricClientForOrg(organizationId)`;
+- environment credentials are retained only for scripts and dedicated health
+  checks through `getIsometricClientFromEnv()`.
 
-| Phase | State | What it shipped |
-|---|---|---|
-| **0** — Foundation | ✅ | Generated client (`openapi-typescript`), three optional env vars, `client.ts` with retry + cursor pagination, smoke script. |
-| **1** — Facility ↔ project mapping UI | ✅ | `/facilities` side-sheet adds Certify mapping section; N→1 facility/project allowed; production-confirm gate. |
-| **2** — Template/blueprint read surfacing | ✅ | Credit-batch side-sheet Certify accordion with drift detection for stale template IDs and missing blueprint keys. |
-| **3** — Removal submission | ✅ | `submitRemoval` with full idempotency ledger; supplier-ref reconciliation; pre-flight transport coverage check. Lineage via `getApplicationLineage()`. |
-| **3.5** — Sources upload | ✅ | Mirrors noma documents to Isometric Sources via server-side proxy (POST `/sources` → fetch from noma storage → PUT to signed URL → INSERT `certifier_document_uploads`). Source IDs ride into every monitored Datapoint's `source_ids` and are part of the semantic hash. Reconciliation covers the orphan paths: `GET /sources?supplier_reference_id=…` → either `POST /sources/{id}/signed_upload_url` 200 (re-PUT) or 409 (already uploaded, insert local row only). SSRF host allowlist, advisory locks around POST+INSERT, lifecycle gating after submission, and sync-event coverage on every outbound failure. Owning-record deletion may retire an unreferenced local mapping under the same lock; persisted submission snapshots block deletion, and remote Sources are never deleted. **Known compromise (v1):** removal-wide source attribution — every Datapoint receives the same `source_ids`. Per-input refinement deferred to Phase 5 (tracked `isometric/sources-per-input-attribution`). 50 MB cap per source; streaming larger files tracked `isometric/sources-stream-large-files`. |
-| **3.6** — Tailored sandbox template | ✅ | `noma-mvp` Removal Template walkthrough + bootstrap script for fixed constants. Polymorphic transport-leg CRUD on delivery/sample/feedstock. |
-| **3.7** — Real energy data | ✅ | Per-facility genset yield replaces energy zero stubs; ADR 0015 collapses energy to the active template's combined measurement point. `/admin/emission-estimates` + `/energy` summary route. |
-| **3.7-period** — Period emissions | ✅ (journal removed) | Period-level inputs (staff travel, pyrolyzer gas, lab electricity, sampling consumables, miscellaneous) live as `PROJECT`-scope Components in Isometric (ADR 0005); the operator authors them in the Isometric UI with the LCA PDF on each Component's Sources field. noma keeps **no** local copy — the LCA-journal section + drift panel shipped under Posture B were removed per ADR 0018. The seven `zeroStub: true` families stay deleted from INPUT_MAPPING; the scope-conflict `SafeError` from `lookupPeriodInputTuple` fires before the generic missing-entry error. `MAPPING_REVISION = sha256(canonicalJson(INPUT_MAPPING))` rides on every `submitRemoval` payload + sync event. Template-coverage check + OpenAPI regen gate live in `isometric-health.yml`. |
-| **4** — GHG statement lifecycle | ❎ Superseded | Original two-phase `submitCreditBatch` removed by ADR 0003; lifecycle utilities retained and re-used by Phase 4.5. |
-| **4.5** — Multi-removal GHG Statements | ✅ | Provider-neutral `/certification/` route group (hub + Removals + GHG Statements). Period-first stepper. Membership reconciliation never steals. Unlink/repoint guard widened. |
-| **5** — Time-series + bulk | 🟢 Slice A shipped (2026-05-29 scoped → built), B + C deferred | **Slice A** — `DataUploadSubmission` of `biochar_pyrolysis_reactor_facility_time_series` (Parquet bulk upload of **60-second clock-aligned** aggregations of `production_run_readings`, one file per facility per Removal-window — hard cap surfaced by sandbox smoke 2026-05-29 with `AggregationPeriodDurationInvalidError: ... exceeds maximum allowed of 60 seconds`). New `certifier_sensors` table maps `(reactor × measurement_property) → externalSensorId + sensorReference`. New `certifier_projects.externalFacilityId` column (operator-pasted from Certify UI; no `POST /facilities` exists). Manual "Submit Telemetry" button on the Removal page; status badge surfaces the latest `GET /data-upload-submissions/{id}` poll. Idempotency uses journaled-step IDs in `payloadSnapshot` (no supplier-reference reconciliation path — see [ADR 0006](../adr/0006-data-upload-submission-idempotency.md)). Parquet writer locked to **`hyparquet-writer`** (validated end-to-end against sandbox 2026-05-29; explicit `SchemaElement[]` with `logical_type: { type: 'TIMESTAMP', isAdjustedToUTC: true, unit: 'NANOS' }` for the four timestamp columns; INT64 bigint values written directly without Date conversion). **Slice B** (`POST /biochar_applications`) and **Slice C** (`MonitoringSubmission`) tracked under `docs/open-questions.md`. Webhook receiver still pending Isometric publishing a contract. |
-| **6** — Protocol/SOP surfacing | ⏭ Deferred | Resolved as outbound links to `registry.isometric.com` / `docs.isometric.com`. Reopen only if operators report tab-switching friction. |
-| **7** — Certify workspace and readiness UX | ✅ | Credit-batch health classifier, entity certifier-readiness badges, New-Removal wizard, certifier requirements checks, deep "View on Isometric" link, and transport evidence upload UX. Facility setup is treated as incomplete unless mapping/template/protocol config is present. |
+External certification writes require organization Admin authorization. This
+includes Removal submission, telemetry submission, GHG Statement create/submit,
+generated-report preparation/approval, Source mirroring, and mapping changes.
+Data access is organization-scoped and resolves the facility from trusted
+lineage. Fine-grained “user may access facility X inside this organization”
+membership does not exist; that narrower authorization question remains open.
 
-## Pre-deploy gates
+The local New Removal grouping step writes no registry resource. It is
+organization/facility-scoped, re-derives selected-batch health on the server,
+and locks membership during creation. The later registry submission is
+Admin-only.
 
-Block deploy to any environment that has ever held real (non-sandbox)
-registry data:
+## Facility and project mapping
 
-1. **Legacy ledger cutover** — run
-   `SELECT count(*) FROM certification_submissions
-    WHERE local_entity_type IN ('creditBatch','ghgPeriod')`
-   against each target environment. ADR 0003's clean-cutover assumption
-   relies on this being 0. If > 0: author a forward data migration to
-   purge or remap. Note `cert_submissions_external_unique` is **not**
-   scoped by `localEntityType`, so a stale `creditBatch` row sharing an
-   `externalId` with a new removal would raise a unique-constraint
-   violation. Since migration `0093` it is a *partial* index that excludes
-   `submission_type = 'ghg_statement'` (those use
-   `cert_submissions_ghg_statement_external_unique`, scoped to the local
-   statement — ADR 0023); every other type keeps the global rule.
-2. **Destructive migration `0021`** — `DROP TABLE certifier_ghg_periods
-   CASCADE`, no down-migration. `migrate.yml` auto-applies on push to
-   `main`/`staging`. Confirm a DB backup exists and the table is empty
-   before the workflow fires. `CASCADE` is unnecessary (no dependents)
-   — harmless, left as-is.
-3. **Wide id-addressable surface on Removals** —
-   `submitRemovalAction` / `assignCreditBatchToRemovalAction` accept a
-   raw `removalId` from the client and currently only `requireAuth`. An
-   authenticated user can drive an external POST on any facility's
-   removal. Acceptable single-tenant; **must be decided before a second
-   facility operator is onboarded** (accept as single-tenant
-   indefinitely, or land the facility-membership model and gate every
-   removal/ghg-statement accessor on the resolved facility). Same
-   posture applies to `certifier-ghg-statements.ts`.
-4. **Period-emission Project Components present in Isometric.**
-   Replaces the original "no zero-stub template" gate now that ADR 0005
-   moves period inputs out of `INPUT_MAPPING` entirely. For every
-   category referenced by any Removal Template a facility uses, confirm
-   in the Isometric UI that `getProject().components` carries a matching
-   `PROJECT`-scope Component with the source LCA PDF attached to its
-   Sources field (ADR 0018 — Isometric is the sole system-of-record;
-   noma keeps no journal copy to cross-check). The scope-conflict
-   `SafeError` from ADR 0005/0018 prevents any zero-stub regression at
-   submit time; the nightly coverage check asserts template coverage.
-5. **Evidence-ledger font tracing** — `registerEvidenceLedgerFonts`
-   (`src/lib/certification/evidence-ledger/fonts.ts`) reads bundled TTFs
-   via a dynamic `process.cwd()` path Next's static tracer cannot follow;
-   they are pulled in by `outputFileTracingIncludes` in `next.config.ts`.
-   If that glob misses, the renderer throws `ENOENT` and — because ledger
-   generation is best-effort try/catch in `submitRemoval` — the submit
-   **silently** succeeds with no ledger Source attached. Not exercisable
-   locally; local dev does not bundle. **On the first staging deploy,**
-   run a real submit and confirm a `transport_evidence_ledger` document +
-   Source exists (or the structured log line `generated evidence ledger`).
-   Durability shares fonts + render path, so transport passing confirms
-   both. If absent, inspect the function bundle for the `.ttf` files and
-   tighten the trace key to the actual submit route(s).
+Each facility has a provider-aware `certifier_projects` mapping containing the
+external project, default GHG-entry template, protocol metadata, and optional
+external facility ID used by telemetry. Several noma facilities may share one
+Isometric project.
 
-## Architecture (file layout)
+There is no Certify facilities-list operation in the committed API surface.
+Operators therefore paste the external facility ID created in the Isometric UI.
+Project and template choices are read from the API and validated against the
+organization-specific connection.
 
-```text
-src/lib/isometric/                     # PURE — no DB, no ActionResult, no auth
-  ├─ client.ts                         # fetch wrapper: headers, retry, cursor paging
-  ├─ generated/certify.d.ts            # openapi-typescript output (committed)
-  ├─ projects.ts                       # listProjects, listRemovalTemplates,
-  │                                    #   listComponentBlueprints
-  ├─ ghg-statements.ts                 # GHG Statement typed wrappers
-  ├─ submissions.ts                    # findRemovalBySupplierRef, findDatapointBySupplierRef
-  ├─ transformers/                     # noma domain → Certify request shape
-  │   ├─ datapoint.ts                  # INPUT_MAPPING table
-  │   └─ removal.ts
-  └─ utils/
-      ├─ aggregation.ts                # mass-weighted blends; transport rollup
-      ├─ payload-hash.ts               # canonicalJson + sha256
-      ├─ supplier-ref.ts               # nm-rmv-…, nm-dpt-… stable refs
-      ├─ submission-claim.ts           # decideSubmissionClaim (pure)
-      ├─ removal-membership.ts         # GHG Statement membership decision
-      ├─ ghg-statement-state.ts        # chooseGhgSubmitMode
-      └─ reconciliation.ts             # stale-lock recovery
+## New Removal workflow
 
-src/data-access/
-  ├─ certification.ts                  # certifierProjects, sources, submissions,
-  │                                    #   document uploads, sync events
-  └─ certifier-ghg-statements.ts       # GHG Statement persistence + reconcile
+The current workflow is:
 
-src/fn/certification/                  # withAction-wrapped server actions
-  ├─ facility-mapping.ts               # Phase 1
-  ├─ certify-context.ts                # public context loaders
-  ├─ certify-context-core.ts           # context assembly + bounded fan-out
-  ├─ create-removal-with-batches.ts    # New-Removal wizard create step
-  ├─ batch-health.ts                   # credit-batch health/readiness actions
-  ├─ submit-removal.ts                 # Phase 3 (ADR 0003)
-  ├─ removal-grouping.ts               # ADR 0003 (assignCreditBatchToRemoval)
-  ├─ ghg-statements.ts                 # Phase 4.5 (ADR 0004)
-  ├─ sources-transfer.ts               # evidence mirroring
-  ├─ submit-telemetry.ts               # ADR 0006 telemetry upload
-  ├─ shared.ts
-  └─ index.ts
+1. Select ungrouped, ready credit batches for one facility.
+2. Rebuild each batch's health from current lineage and facility facts.
+3. Create one local `certifier_removals` row and assign the selected batches
+   atomically.
+4. Compile the live template, ordinary Datapoints, durability bindings,
+   reporting window, evidence plan, warnings, and semantic hash.
+5. Present the compilation for operator review.
+6. On Admin confirmation, rerun preflight, materialize generated evidence
+   ledgers, mirror required Sources, recompile, claim the submission ledger,
+   create/reconcile Datapoints and durability measurements, create/reconcile the
+   GHG Entry, then verify Source bindings.
 
-src/hooks/use-certification.ts         # all React Query hooks
-src/schemas/certification.ts           # all Zod schemas
-src/components/certification/          # all UI: facility section + dialog,
-                                       #   certify-panel (read-only bridge),
-                                       #   certification-settings,
-                                       #   submission-status-badge, sync-event-log,
-                                       #   removals-list, ghg-statements-list,
-                                       #   ghg-statement-create-dialog + submit-dialog,
-                                       #   new-removal-dialog/
-src/app/(app)/certification/           # route group: root redirect + removals +
-                                       #   ghg-statements + settings
-```
+The submission scope is the applied-mass-scoped union of production lineage for
+all member credit batches. Lineage and credit-batch roll-ups come from
+`src/data-access/credit-batch-accounting.ts`; submission code must not recreate
+that accounting independently.
 
-**Reused, do not touch:** `src/data-access/isometric.ts` +
-`src/fn/isometric.ts` are owned by the sampling/compliance code
-(Method A/B + protocol-condition validators) — new work goes into
-`certification.*`.
+An unchanged submitted Removal can be reopened and recompiled. The same
+review/readiness gates apply. An unchanged semantic payload reuses the existing
+registry version; changed reviewed data, mappings, or evidence create a
+superseding version.
 
-## Idempotency design
+## Reporting window
 
-Every outbound POST follows this pattern. `certificationSubmissions`
-is the lock + ledger; `certifierSyncEvents` is the append-only attempt
-log.
+`completed_on` is the latest application date across the Removal's lineage and
+fails closed when no application exists. `started_on` currently uses the
+earliest production start. The pinned protocol says the Reporting Period begins
+with feedstock sourcing, so the start boundary is a known implementation gap
+and must not be described as conformant.
 
-```text
-1. Compute payloadHash = sha256(canonicalJson(payload))
-2. SELECT FROM certification_submissions WHERE
-     localEntityType=? AND localEntityId=? AND submissionType=?
-   ORDER BY version DESC LIMIT 1
-3. decideSubmissionClaim(...) returns one of:
-   a. create-new-version           — INSERT version=N+1, status='draft',
-                                     lockedAt=now(), payloadHash. POST.
-                                     On 2xx: UPDATE externalId+submitted.
-                                     On 5xx/network: leave row locked.
-   b. resume                       — Stale lock + matching hash. Try
-                                     GET-by-supplier-reference-id; if
-                                     found, claim; else re-POST.
-   c. return-existing              — Matched hash + 'submitted'/'accepted';
-                                     no-op, return externalId.
-   d. blocked-in-flight            — Fresh lock; reject.
-   e. blocked-rejected-with-external — Manual resubmit required.
-   f. invalid-changed-hash         — Hash drift on a non-terminal row.
-```
+Cross-period allocation follows the recorded front-loading interpretation:
+production-side emissions attach to the earliest applicable GHG Entry for the
+batch; later-period entries carry their delivery emissions and applied-mass
+storage claim.
 
-The `payloadHash` covers source data + resolved inputs, **not**
-membership-only identifiers — a pure membership change (e.g. grouping a
-batch in/out of a Removal) must not POST a duplicate Isometric Removal.
+## Template and input contract
 
-Test coverage: `tests/isometric-submission-claim.test.ts` (18 cases —
-full decision matrix).
+The live template is read at compilation time. Every monitored ordinary input
+must resolve through `INPUT_MAPPING` in
+`src/lib/isometric/transformers/datapoint.ts`, and every durability component
+must have an explicit supported binding. Unit, quantity-kind, component-name,
+tier, and scope conflicts fail before a registry write.
 
-## Env vars
+### Energy
 
-All three are **optional** so unrelated app boot is unaffected. Client
-throws `IsometricApiError('not configured')` at call time if missing.
+Production energy uses:
 
-```ts
-ISOMETRIC_CLIENT_SECRET: z.preprocess(emptyToUndefined,
-  z.string().min(1).optional()),
-ISOMETRIC_ACCESS_TOKEN:  z.preprocess(emptyToUndefined,
-  z.string().min(1).optional()),
-ISOMETRIC_ENVIRONMENT:   z.enum(['sandbox', 'production']).optional()
-  .default('sandbox'),
-```
+- `pyrolysis / grid_electricity_use / electricity_use` for total grid kWh;
+- `Generator diesel usage`, a
+  `pyrolysis / fuel_usage_by_volume / volume_of_fuel` component receiving
+  generator plus preprocessing litres;
+- `Startup diesel usage`, another component with the same tuple receiving
+  reactor-startup/plant litres.
 
-`ISOMETRIC_PROJECT_ID` and `ISOMETRIC_BIOCHAR_REMOVAL_TEMPLATE_ID` are
-**not** env vars — they are per-facility values held in
-`certifierProjects.externalProjectId` and
-`certifierProjects.defaultRemovalTemplateId`.
+The two diesel components share a registry-fixed lifecycle factor. noma does
+not convert litres to kWh and does not submit or store that factor. The display
+names are currently the component discriminator; an unknown or renamed diesel
+component fails closed.
 
-## Migration ledger
+### Safety margin
 
-| # | Migration | Phase | Class | Effect |
-|---|---|---|---|---|
-| 0015 | `flimsy_arachne` | 0 | additive | `certifier_projects.default_removal_template_id` |
-| 0016 | `panoramic_selene` | 1 | constraint drop | Drop `certifier_projects_provider_external_unique` (allow N facilities → 1 project) |
-| 0017 | `glorious_night_thrasher` | 4 | additive | `certifier_ghg_periods` table (ADR 0002 model) |
-| 0018 | `hesitant_nico_minoru` | storage | additive + constraints | `documents` v2 storage columns + check constraints |
-| 0019 | `magical_menace` | 3.7 | additive | `certifier_projects` emission-estimate columns |
-| 0020 | `noisy_rocket_raccoon` | 3 | index | `production_runs(facility_id)` |
-| 0021 | `careless_prism` | ADR 0003 | **destructive** | `DROP TABLE certifier_ghg_periods CASCADE` — see Pre-deploy gates |
-| 0022 | `bizarre_infant_terrible` | ADR 0003 | additive | `certifier_removals` table + `credit_batches.removal_id` |
-| 0023 | `ambiguous_scarlet_spider` | 4.5 | additive | `certifier_ghg_statements` table + `certifier_removals.ghg_statement_id` |
-| 0024 | `long_red_skull` | 4.5 | index | `certifier_removals(ghg_statement_id)` |
-| 0025 | `lyrical_silver_sable` | 4.5 | unique | `certifier_ghg_statements_facility_period_unique(provider,facility_id,reporting_period_end_on)` |
-| 0026 | `spicy_nextwave` | 4.5 | index + check | `certifier_removals(facility_id)`, `credit_batches(removal_id)`, removal date chronology |
-| 0027 | `fluffy_chamber` | 3.7-period | additive | `certifier_project_emissions` table + `project_emission_category` pgEnum (ADR 0005) |
-| 0028 | `demonic_harpoon` | docs upload onDelete | constraint change | `certifier_project_emissions.source_document_id` FK `ON DELETE SET NULL` (no schema-shape change) |
-| 0029 | `heavy_umar` | 5 (Slice A) | additive | `certifier_sensors` table + `certifier_projects.external_facility_id` column (ADR 0006); no destructive ops |
-| 0030 | `nappy_omega_sentinel` | 5 (Slice A) | constraint change | Sensor uniqueness includes provider. |
-| 0031 | `lean_kronos` | certification / inventory | additive + nullable changes | Product-bin formulation metadata, nullable batch certifier, storage-location formulation linkage. |
-| 0032 | `steady_warstar` | credits | constraint drop | Dropped premature durability constraints from `credit_batches`; readiness handles missing evidence. |
-| 0033 | `brief_frank_castle` | transport | destructive + additive | Distance-only transport-leg model, derived legs, supplier/customer distance defaults. |
-| 0034 | `peaceful_firebird` | transport readiness | destructive enum change | Transport legs attach to feedstock, biochar, or sample; delivery legs removed. |
-| 0035 | `deterministic_product_bin_formulation` | inventory | data fix | Deterministic product-bin formulation backfill. |
-| 0036 | `cultured_rattler` | readiness / performance | index + constraint | Reading and transport-leg indexes; nullable Isometric-only batch certifier constraint. |
-| 0037 | `sour_lethal_legion` | schema slim-down | destructive cleanup | Dropped unused protocol-stub tables, removed `certifier_sources`, and removed legacy starter `projects` / `items` tables. |
-| 0065 | `lovely_drax` | ADR 0018 | **destructive** | `DROP TABLE certifier_project_emissions CASCADE` + `DROP TYPE project_emission_category` — the LCA journal is deleted; Isometric owns project emissions. |
+`Safety margin` is the only named Removal-scope exception under
+`miscellaneous / mass_based_ci_emissions / mass`. noma supplies the same dry
+biochar mass used by the storage claim. The carbon-intensity Datapoint and its
+justification are registry-owned fixed configuration. Other miscellaneous
+emission inputs remain PROJECT-scope and trip the scope guard if placed in a
+Removal template.
 
-## Operational health
+### PROJECT-scope emissions
 
-**`.github/workflows/isometric-health.yml`** — daily 09:17 UTC sandbox
-ping running `pnpm test:integration`. Hits three read endpoints:
-`GET /projects`, `GET /projects/{id}/removal_templates`,
-`GET /component_blueprints`. No writes, no noma DB, no app boot —
-catches upstream regressions (auth, schema drift, downtime) before
-users see a submit failure.
+Staff travel, direct pyrolyzer gases, storage fuel, lab electricity, sampling
+consumables, and other period/LCA overhead are authored as PROJECT-scope
+components in Isometric where applicable. noma keeps no project-emissions
+journal. The transformer guard prevents these tuples from being silently
+submitted as Removal-scope zeroes.
 
-Required repo secrets (Settings → Secrets and variables → Actions):
+## Durability paths
 
-- `ISOMETRIC_CLIENT_SECRET`
-- `ISOMETRIC_ACCESS_TOKEN`
-- `ISOMETRIC_DEMO_PROJECT_ID`
+The facility declares one durability tier. Compilation verifies the template's
+sequestration blueprint against that tier.
 
-Missing any → workflow runs and self-skips via
-`RUN_ISOMETRIC_SANDBOX_TESTS=1` gate in
-`tests/isometric-sandbox.integration.test.ts`.
+### Sampled 1,000-year path
 
-## Template-evolution strategy
+The sampled 1,000-year path is implemented for the Isometric sandbox:
 
-How noma stays consistent as Isometric templates, blueprints, and
-generated types drift. All four checks share `isometric-health.yml`'s
-daily 09:17 UTC ping (no PR gate) — Posture B from
-[ADR 0005](../adr/0005-period-emissions-as-project-components.md) makes
-the consequence of mapping drift bounded, so submit-time + scope-conflict
-errors are the safety net and CI is the early warning.
+- every member batch must have at least three complete replicates;
+- total-carbon values and product mass are created through a measurement
+  sample;
+- `s_fraction` is created as an explicitly bound Datapoint;
+- the component input table binds `carbon_contents` and `s_fraction` as lists
+  and `product_mass` as a scalar;
+- the registry computes the credited result.
 
-### B1 — Coverage check (`pnpm isometric:coverage-check`)
+This verifies sandbox wire compatibility only. Production remains blocked, and
+the live blueprint's difference from module Eq.6 remains an open governance
+question.
 
-Asserts, for every facility's `defaultRemovalTemplateId`:
+### 200-year path
 
-- Every `(group, blueprint, input)` tuple referenced by the live template
-  is **either** present in `INPUT_MAPPING` (with matching `quantity_kind`
-  + `compatible_unit`) **or** in the `PERIOD_INPUT_TUPLES` sentinel set
-  (in which case the template is wrong by construction per ADR 0005/0018).
+The measurement properties, aggregation, builders, and evidence-ledger format
+exist, but the H/C unit transform and complete explicit input binding are not
+confirmed. The path therefore fails closed even in sandbox. It is not a live
+submission path.
 
-(The former second assertion — reconciling `PROJECT`-scope Components
-against noma's LCA-journal rows — was removed with the journal, ADR 0018.)
+### Method B
 
-Runs as a step in `isometric-health.yml` and as a standalone `pnpm`
-script. Fail-loud (CI red) on any miss, naming the exact tuple.
+The local production-process prerequisites and immutable unsampled-batch choice
+are implemented. The registry representation for an unsampled durability claim
+is not confirmed, so no production-live Method-B submission is claimed.
 
-### B2 — Generated types staleness
+## Sources and evidence
 
-Adds a step to `isometric-health.yml` that runs `openapi-typescript`
-against the pinned Certify spec URL and `git diff --exit-code
-src/lib/isometric/generated/certify.d.ts`. Fail-loud on drift; the fix
-is local regen + commit (no auto-PR bot — those rot). Spec URL pinned in
-the workflow env so any upstream URL change is itself a diff.
+Source attribution is per input, not Removal-wide.
 
-### B3 — Mapping revision audit trail
+`src/lib/certification/removal-source-bindings.ts` classifies operator
+documents and generated evidence ledgers into an immutable plan of exact
+component/input targets:
 
-Every outbound POST embeds `__mappingRevision` in
-`certification_submissions.payloadSnapshot` (no migration; existing JSONB
-column). Value is `sha256(canonicalJson(INPUT_MAPPING))` computed once at
-process boot, reusing the existing `payload-hash.ts` utility. Surfaced
-in `certifier_sync_events.responsePayload.mapping_revision` for every
-`removal:submit:*` event so an Isometric-side issue correlates to the
-specific noma mapping revision in git history. REMOVAL-scope only —
-PROJECT-scope components are not noma-originated under Posture B.
+- feedstock bill of lading to feedstock transport `mass_distance`;
+- delivery bill of lading to biochar transport `mass_distance`;
+- application-boundary inventory/logbook evidence to sequestration
+  `product_mass` and, when present, safety-margin `mass`;
+- generated transport ledger to the transport inputs present in the template;
+- generated durability ledger to the tier-specific durability inputs.
 
-### B4 — Mapping-version dimension (deferred)
+The plan and mapping revision are hash-covered in the submission snapshot.
+After GHG-entry creation, noma follows component attributions to Components and
+Datapoints and verifies that every planned Source is attached to its intended
+target. Missing registry propagation is recorded as awaiting sync; a true
+mismatch requires resubmission.
 
-`INPUT_MAPPING` stays a 3-tuple `(group, blueprint, input)`. The Certify
-OpenAPI surface today does not expose any `blueprint_version` field;
-versioned blueprints don't have a Certify representation to model
-against. If versioning lands later, the 4-tuple vs branch-on-unit
-question reopens then with concrete examples. Tracked under
-`isometric/mapping-version-dimension` in `docs/open-questions.md`.
+Generated transport and durability ledgers are created after side-effect-free
+preflight and before Source mirroring. Generation failure blocks submission.
+Remote Sources are never deleted because submitted snapshots depend on their
+IDs.
 
-## Reuse what already exists
+## GHG Statements and generated reports
 
-These files dictate the design — every implementer should know they
-exist before adding a parallel surface:
+GHG Statements are facility-scoped local artifacts backed by Isometric
+statements. Creation adopts one exact pre-existing draft for the requested
+project/period; ambiguous matches fail closed. Membership reconciliation never
+steals a Removal from another local statement.
 
-- **`src/db/schema/certification.ts`** — the full certification
-  persistence model lives here:
-  - `certifierProjects` (facility-scoped, provider-aware project
-    registration with `externalProjectId`, `protocolSlug`,
-    `protocolVersion`, optional `webhookSecret`, JSONB `metadata`,
-    `defaultRemovalTemplateId`, emission-estimate columns).
-  - `certifierSensors` (reactor measurement-property to external sensor
-    mapping).
-  - `certifierDocumentUploads`, `certifierSyncEvents`.
-  - `certificationSubmissions` — has everything for safe idempotency:
-    `submissionType`, `localEntityType/Id`, `externalId`, `version`,
-    `status`, `payloadSnapshot`, `payloadHash`, `lockedAt`,
-    `supersededAt`.
-  - `certifierRemovals` (ADR 0003) and `certifierGhgStatements`
-    (ADR 0004).
-- **`src/data-access/chain-of-custody.ts`** —
-  `getApplicationLineage()` resolves the full chain with the correct
-  branching (`delivery.biocharProductId ?? order.biocharProductId`;
-  nullable `linkedProductionRunId`; possibly-empty feedstocks). Each
-  branch emits a warning. **Submission consumes this result; it does
-  not re-derive.**
-- **`src/fn/with-action.ts`** — `withAction(fn)` is the canonical
-  server-action wrapper. All new server actions must use it. Use
-  `SafeError` (not plain `Error`) for user-visible messages.
-- **`src/components/ui/entity-side-sheet/index.tsx`** —
-  `viewModeChildren` mounts append content under sections in view
-  mode. The credit-batch and facility Certify panels both ride this
-  slot; no new detail route is needed.
-- **`src/lib/certification/entity-readiness.ts`** and
-  **`src/lib/certification/batch-health.ts`** — client-safe readiness
-  classifiers used by badges, batch health panels, and the New-Removal
-  wizard.
+Submission requires at least one registry-linked GHG Entry and organization
+Admin confirmation. noma can use either:
 
-## What to deliberately NOT do
+- an approved generated report, or
+- a controlled external report URL.
 
-- **No fake-ID stubs.** If an endpoint isn't wired, the submit button
-  stays disabled. (The varuna prototype's stubbed-IDs path is the
-  cautionary tale.)
-- **No hand-written types.** Generate from OpenAPI; commit the
-  generated `.d.ts`.
-- **No new sync tables.** `certificationSubmissions` +
-  `certifierSyncEvents` are the source of truth.
-- **No global `ISOMETRIC_PROJECT_ID` env var.** Project linkage is
-  per-facility, in `certifierProjects`.
-- **No required env vars for Isometric credentials** — keep them
-  optional so unrelated app boot is unaffected.
-- **No re-deriving lineage.** Always go through
-  `getApplicationLineage()`.
-- **No new files at `src/data-access/isometric.ts` or
-  `src/fn/isometric.ts`** — those names are owned by the sampling /
-  compliance code. Use `certification.*`.
-- **No invented credit-batch / facility detail routes** — the existing
-  side-sheet view mode is the surface.
-- **No "skip if external ID exists" idempotency.** That leaves a
-  corruption window. Use the lock + payload-hash + reconciliation
-  flow.
-- **No `fixed_constants` DB table or admin UI for emission factors.**
-  Fixed constants are policy-level, maintained Isometric-side via
-  template bindings.
-- **No `submitCreditBatch` awareness of fixed constants.** They are
-  consumed Certify-side from the template binding; they do not flow
-  through noma's payload.
-- **No auto-binding on the template via API.** Certify has no
-  template-mutation endpoint by design — templates are author-time
-  artefacts.
-- **No extending `FIXED_CONSTANT_DEFAULTS` to monitored inputs.**
-  Monitored inputs flow through `INPUT_MAPPING` and the aggregation
-  pipeline; they are conceptually different.
+The generated report workflow is:
 
-## Deferred / next phases
+1. Load the live statement and each live GHG Entry.
+2. Build a data-only report model and source fingerprint.
+3. Render and store an immutable PDF version.
+4. Require explicit Admin approval.
+5. Rebuild the fingerprint at submit time and reject stale reports.
+6. Mint a verifier capability URL, submit/resubmit the statement, and mark the
+   report version submitted only after success or successful reconciliation.
 
-- ~~**Phase 3.5 — sources upload.**~~ ✅ Shipped (see Phase status row).
-- **Phase 5 Slice A — biochar reactor time-series via Parquet** (scoped
-  2026-05-29). DataUploadSubmission of
-  `biochar_pyrolysis_reactor_facility_time_series`. Design locked; see
-  Phase 5 row above and [ADR 0006](../adr/0006-data-upload-submission-idempotency.md).
-  Slices B (biochar_applications) and C (MonitoringSubmission) remain
-  open in `docs/open-questions.md`. The webhook receiver is still
-  pending Isometric publishing a contract. Carryover items in
-  `docs/open-questions.md` continue to belong to Phase 5 broadly:
-  external GHG amendment claiming, hash-changed partial-orphan cleanup.
-- **Phase 6 — protocol/SOP surfacing.** Resolved as outbound links to
-  authoritative pages; revisit only if operators report tab-switching
-  friction.
+The generated PDF contains identifiers, dates, membership, registry-calculated
+totals, and document-control metadata. It does not claim qualitative
+methodology, evidence sufficiency, exception resolution, or human review.
 
-## Pointers
+## Idempotency and reconciliation
 
-- **What changed when:** `docs/isometric/changes.md`
-- **Open design questions:** `docs/open-questions.md`
-- **Sandbox template authoring:** `docs/isometric/sandbox-template-authoring.md`
-- **OpenAPI surface inventory:** `docs/isometric/openapi-index.md`
-- **Refresh workflow when Isometric versions bump:**
-  `docs/isometric/update-playbook.md`
-- **Requirements & schema mapping:** `docs/isometric/README.md`
-  (the requirements KB index)
+`certification_submissions` is the lock, immutable snapshot store, and version
+ledger. `certifier_sync_events` is the attempt/audit stream.
+
+For resources with a caller-controlled supplier reference, the contract is:
+
+1. Canonicalize and hash the semantic payload.
+2. Claim the latest local ledger row under the mapping/ledger locks.
+3. Return the existing external ID for the same completed hash.
+4. For a stale same-hash attempt, look up the remote resource by supplier
+   reference before retrying the POST.
+5. For changed reviewed inputs, create a new local/remote version rather than
+   mutating the historical snapshot.
+6. Persist remote status and reconciliation facts without logging credentials
+   or PII.
+
+This pattern covers Removal/GHG Entry, Datapoint, Source, measurement-sample,
+and GHG Statement creation where the remote API supports the necessary lookup.
+`claimSubmissionDraft` in
+`src/data-access/certification-submissions.ts` is the internal Postgres-backed
+claim seam.
+
+Telemetry follows ADR 0006 because FileUpload/DataUploadSubmission has no
+supplier-reference discovery contract. It journals FileUpload ID, signed URL
+expiry, upload facts, and DataUploadSubmission ID into `payloadSnapshot` and
+resumes from those stored IDs where possible.
+
+## Telemetry status
+
+The server-side Slice A pipeline is implemented:
+
+- creates/reconciles sensors;
+- writes the Parquet payload;
+- `POST /file-uploads`;
+- uploads bytes to the signed URL;
+- `POST /data-upload-submissions`;
+- reads `/data-upload-submissions/{id}` for status;
+- journals step IDs and uses mapping locks.
+
+The UI is not live. `TelemetryPanel` and its hook exist, but the panel is not
+rendered on any current route. There is no usable “Submit Telemetry” button in
+the application. Treat the pipeline as implemented but dark until it is
+re-homed and revalidated against the sandbox.
+
+## Operational checks
+
+- `pnpm isometric:coverage-check -- --source=fixture` validates checked-in
+  template fixtures against ordinary, durability, diesel-name, safety-margin,
+  and PROJECT-scope guards.
+- `pnpm isometric:coverage-check -- --source=db` inspects configured facility
+  templates when credentials/database access are available.
+- `.github/workflows/isometric-health.yml` performs the repository's scheduled
+  sandbox/type/coverage health checks.
+- [`openapi-index.md`](./openapi-index.md) is the call-site-owned inventory of
+  the committed generated Certify surface.
+
+Do not use generated operation counts as a freshness signal. A green check
+means only that the checked contract still matches its source, not that an
+unimplemented protocol requirement has been satisfied.

@@ -13,7 +13,7 @@
  * (ADR 0008) — no port, no in-memory fake. It ends at a claimed draft row;
  * no network I/O happens inside.
  *
- * Plan: docs/plans/2026-06-10-certification-reliability-track.md (Phase 1).
+ * Plan: docs/archive/plans/2026-06-10-certification-reliability-track.md (Phase 1).
  */
 import { and, desc, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";

@@ -1,6 +1,6 @@
 /**
  * Carbon Viewer ("Geography — carbon in transit") constants, per the concept
- * build distilled in docs/plans/2026-06-10-map-integration.md → Design
+ * build distilled in docs/archive/plans/2026-06-10-map-integration.md → Design
  * reference. Marker geometry, layer ids, arc shaping, and animation timing
  * live here so the map component carries no magic numbers.
  */

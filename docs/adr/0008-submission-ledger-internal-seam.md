@@ -1,8 +1,15 @@
 # The submission ledger is an internal data-access seam tested against real Postgres
 
-> **Status: Accepted, design-only** (2026-06-10). Records a seam-placement
+> **Current status: Accepted and implemented** (reviewed 2026-07-29).
+> `claimSubmissionDraft` lives in
+> `src/data-access/certification-submissions.ts`, and its lock, concurrency,
+> resume, and in-lock re-resolution behavior is covered by the DB-backed
+> `tests/certification-submissions.test.ts` suite. The seam remains internal to
+> data access; no port or in-memory adapter was added.
+>
+> **Historical status (2026-06-10): Accepted, design-only.** Records a seam-placement
 > and test-strategy decision from the certification reliability track
-> (`docs/plans/2026-06-10-certification-reliability-track.md`, Phase 1).
+> ([archived plan](../archive/plans/2026-06-10-certification-reliability-track.md), Phase 1).
 > Deliberately narrow: it fixes *where the seam lives and how it is tested*
 > for the submission-ledger claim module — not the module's interface
 > details, which live in the plan.
