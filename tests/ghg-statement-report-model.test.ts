@@ -42,7 +42,9 @@ function build() {
       externalGhgStatementId: "ggs_1",
       reportingPeriodStartOn: "2026-07-01",
       reportingPeriodEndOn: "2026-07-31",
-      protocolVersion: "1.1",
+      standardVersion: "1.7",
+      protocolVersion: "1.1.1",
+      configuredProtocolVersion: "1.1",
     },
     authoritativeStatement: {
       externalEntryIds: ["rmv_b", "rmv_a"],
@@ -130,6 +132,32 @@ describe("GHG Statement report model", () => {
     ).toThrowError(/another GHG Statement/i);
   });
 
+  it("keeps the fingerprint stable across operator protocol-version edits", () => {
+    const base = build();
+    const edited = buildGhgStatementReportModel({
+      ...buildInput(),
+      documentControl: {
+        ...buildInput().documentControl,
+        configuredProtocolVersion: null,
+      },
+    });
+
+    expect(edited.sourceFingerprint).toBe(base.sourceFingerprint);
+  });
+
+  it("changes the fingerprint when a pinned version changes", () => {
+    const base = build();
+    const repinned = buildGhgStatementReportModel({
+      ...buildInput(),
+      documentControl: {
+        ...buildInput().documentControl,
+        protocolVersion: "1.2.0",
+      },
+    });
+
+    expect(repinned.sourceFingerprint).not.toBe(base.sourceFingerprint);
+  });
+
   it("fails closed when the statement total drifts from the live entry sum", () => {
     expect(() =>
       buildGhgStatementReportModel({
@@ -154,7 +182,9 @@ function buildInput() {
       externalGhgStatementId: "ggs_1",
       reportingPeriodStartOn: "2026-07-01",
       reportingPeriodEndOn: "2026-07-31",
-      protocolVersion: "1.1",
+      standardVersion: "1.7",
+      protocolVersion: "1.1.1",
+      configuredProtocolVersion: "1.1",
     },
     authoritativeStatement: {
       externalEntryIds: ["rmv_b", "rmv_a"],

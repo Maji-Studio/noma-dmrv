@@ -10,7 +10,16 @@ export interface GhgStatementReportDocumentControl {
   externalGhgStatementId: string;
   reportingPeriodStartOn: string;
   reportingPeriodEndOn: string;
-  protocolVersion: string | null;
+  /** Repo-pinned Isometric Standard version the totals were computed under. */
+  standardVersion: string;
+  /** Repo-pinned Biochar Protocol version the totals were computed under. */
+  protocolVersion: string;
+  /**
+   * Operator-typed Certify project protocol version (nullable free text).
+   * Display-only: excluded from the source fingerprint so a settings edit
+   * cannot masquerade as live registry drift and stale an approved report.
+   */
+  configuredProtocolVersion: string | null;
 }
 
 export interface LiveGhgEntry {
@@ -201,9 +210,15 @@ export function buildGhgStatementReportModel(
     (total, entry) => total + entry.netRemovedWithoutDiscountKg,
     0,
   );
+  // Operator-editable and display-only: neutralized in the hash so a
+  // Certification Settings edit cannot masquerade as live registry drift.
+  const fingerprintedControl = {
+    ...input.documentControl,
+    configuredProtocolVersion: null,
+  };
   const sourceFingerprint = sha256Hex(
     canonicalJson({
-      documentControl: input.documentControl,
+      documentControl: fingerprintedControl,
       statement: {
         externalEntryIds: [...statementEntryIds].sort(compareCodeUnits),
         pendingTotalCo2eRemovedKg: statementTotal,

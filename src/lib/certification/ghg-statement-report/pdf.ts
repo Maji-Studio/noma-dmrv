@@ -13,6 +13,16 @@ import type {
   GhgStatementReportModel,
 } from "./model";
 
+// Column widths in points (A4 content ≈ 527pt; the GHG Entry column flexes).
+const COL = {
+  net: 58,
+  beforeUncertainty: 76,
+  stdDeviation: 58,
+  supplier: 58,
+  buffer: 58,
+} as const;
+const CELL_GAP = 6;
+
 const styles = {
   ...theme,
   ...StyleSheet.create({
@@ -64,6 +74,7 @@ const styles = {
       color: C.ink55,
       lineHeight: 1.45,
     },
+    entryQty: { ...theme.qty, fontSize: 8 },
     footerHash: {
       fontFamily: MONO,
       fontSize: 6.2,
@@ -87,11 +98,16 @@ const formatPreparedAt = (value: string): string => {
     : `${parsed.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 };
 
-function sectionHeading(title: string, tag?: string): ReactElement {
+function sectionHeading(
+  title: string,
+  tag?: string,
+  note?: string,
+): ReactElement {
   return v(styles.sectionHead, { minPresenceAhead: 55 },
     v([styles.rule, { backgroundColor: C.plum }], {}),
     t(styles.sectionName, title),
     tag ? t(styles.sectionTag, tag) : null,
+    note ? t(styles.sectionEqn, note) : null,
   );
 }
 
@@ -99,8 +115,9 @@ function section(
   title: string,
   children: ReactElement | ReactElement[],
   tag?: string,
+  note?: string,
 ): ReactElement {
-  return v(styles.section, {}, sectionHeading(title, tag), ...(Array.isArray(children) ? children : [children]));
+  return v(styles.section, {}, sectionHeading(title, tag, note), ...(Array.isArray(children) ? children : [children]));
 }
 
 function controlPair(
@@ -138,27 +155,76 @@ function summaryCell(
   );
 }
 
+const formatCell = (value: number | null): string =>
+  value === null ? "n/a" : formatKg(value);
+
+function entryTableHeader(): ReactElement {
+  return v(styles.th, {},
+    t([styles.thText, { flex: 1 }], "GHG Entry"),
+    t([styles.thText, { width: COL.net, textAlign: "right" }], "Net"),
+    t(
+      [
+        styles.thText,
+        {
+          width: COL.beforeUncertainty,
+          textAlign: "right",
+          paddingLeft: CELL_GAP,
+        },
+      ],
+      "Before uncert.",
+    ),
+    t(
+      [
+        styles.thText,
+        { width: COL.stdDeviation, textAlign: "right", paddingLeft: CELL_GAP },
+      ],
+      "Std dev",
+    ),
+    t(
+      [
+        styles.thText,
+        { width: COL.supplier, textAlign: "right", paddingLeft: CELL_GAP },
+      ],
+      "Supplier",
+    ),
+    t(
+      [
+        styles.thText,
+        { width: COL.buffer, textAlign: "right", paddingLeft: CELL_GAP },
+      ],
+      "Buffer",
+    ),
+  );
+}
+
 function entryRow(entry: GhgStatementReportEntry): ReactElement {
   return v(styles.tr, { wrap: false },
-    v({ flex: 1 }, {},
+    v({ flex: 1, paddingRight: 8 }, {},
       t(styles.entryHeader, entry.externalEntryId),
       t(
         styles.entryMeta,
         `${entry.startedOn} to ${entry.completedOn}`,
       ),
     ),
-    v({ width: 112, alignItems: "flex-end" }, {},
-      t(styles.entryMeta, `Net ${formatKg(entry.netRemovedKg)}`),
-      t(
-        styles.entryMeta,
-        `Before uncertainty ${formatKg(entry.netRemovedWithoutDiscountKg)}`,
-      ),
-      t(
-        styles.entryMeta,
-        `Standard deviation ${formatKg(entry.netRemovedStandardDeviationKg)}`,
-      ),
-      t(styles.entryMeta, `Supplier ${formatKg(entry.supplierCreditKg)}`),
-      t(styles.entryMeta, `Buffer ${formatKg(entry.bufferPoolKg)}`),
+    t([styles.entryQty, { width: COL.net }], formatCell(entry.netRemovedKg)),
+    t(
+      [
+        styles.entryQty,
+        { width: COL.beforeUncertainty, paddingLeft: CELL_GAP },
+      ],
+      formatCell(entry.netRemovedWithoutDiscountKg),
+    ),
+    t(
+      [styles.entryQty, { width: COL.stdDeviation, paddingLeft: CELL_GAP }],
+      formatCell(entry.netRemovedStandardDeviationKg),
+    ),
+    t(
+      [styles.entryQty, { width: COL.supplier, paddingLeft: CELL_GAP }],
+      formatCell(entry.supplierCreditKg),
+    ),
+    t(
+      [styles.entryQty, { width: COL.buffer, paddingLeft: CELL_GAP }],
+      formatCell(entry.bufferPoolKg),
     ),
   );
 }
@@ -204,9 +270,14 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
         "Reporting period",
         `${control.reportingPeriodStartOn} to ${control.reportingPeriodEndOn}`,
       ),
-      control.protocolVersion
-        ? controlPair("Configured protocol version", control.protocolVersion)
-        : null,
+      controlPair(
+        "Pinned versions",
+        `Isometric Standard ${control.standardVersion}; Biochar Protocol ${control.protocolVersion}`,
+      ),
+      controlPair(
+        "Project protocol version",
+        control.configuredProtocolVersion ?? "Not configured",
+      ),
       controlPair("Source fingerprint", model.sourceFingerprint, {
         wide: true,
         compact: true,
@@ -221,8 +292,11 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
   );
   const membership = section(
     "GHG Entry index",
-    v(styles.table, {}, ...model.entries.map(entryRow)),
-    `${model.entries.length} exact members`,
+    v(styles.table, {}, entryTableHeader(), ...model.entries.map(entryRow)),
+    `${model.entries.length} exact ${
+      model.entries.length === 1 ? "member" : "members"
+    }`,
+    "All values kg CO2e",
   );
   const footer = v(styles.footer, { fixed: true },
     t(

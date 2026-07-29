@@ -1,6 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import versions from "../../../docs/isometric/versions.json";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import {
   approveGhgStatementReport as approveReportRow,
@@ -58,6 +59,11 @@ import {
 } from "./shared";
 
 const PDF_MIME_TYPE = "application/pdf";
+// Repo interpretation pins (docs/isometric/versions.json), not operator input:
+// the report must always state which methodology its totals were computed under.
+const PINNED_STANDARD_VERSION =
+  versions.certify_project_observation.current_standard_version;
+const PINNED_PROTOCOL_VERSION = versions.protocol.patch_version;
 
 export interface GhgStatementReportView {
   id: string;
@@ -201,7 +207,9 @@ async function loadLiveReportFacts(
     externalGhgStatementId: remoteStatement.id,
     reportingPeriodStartOn: remoteStatement.reporting_period_start_at,
     reportingPeriodEndOn: remoteStatement.reporting_period_end_at,
-    protocolVersion: project.protocolVersion,
+    standardVersion: PINNED_STANDARD_VERSION,
+    protocolVersion: PINNED_PROTOCOL_VERSION,
+    configuredProtocolVersion: project.protocolVersion,
   };
   const normalizedEntries = remoteEntries.map((entry) => ({
     id: entry.id,

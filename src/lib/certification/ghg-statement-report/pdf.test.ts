@@ -15,7 +15,9 @@ describe("renderGhgStatementReportPdf", () => {
         externalGhgStatementId: "ggs_1",
         reportingPeriodStartOn: "2026-07-01",
         reportingPeriodEndOn: "2026-07-31",
-        protocolVersion: "1.1",
+        standardVersion: "1.7",
+        protocolVersion: "1.1.1",
+        configuredProtocolVersion: null,
       },
       authoritativeStatement: {
         externalEntryIds: ["rmv_1"],
@@ -61,6 +63,10 @@ describe("renderGhgStatementReportPdf", () => {
       expect(text).toContain("rmv_1");
       expect(text).toContain("2026-07-01 to 2026-07-31");
       expect(text).toContain(model.sourceFingerprint);
+      expect(text).toContain(
+        "Isometric Standard 1.7; Biochar Protocol 1.1.1",
+      );
+      expect(text).toContain("Not configured");
       expect(text).toContain("Registry data reconciliation only");
       expect(text).not.toContain("Methodology and reviewed narrative");
       expect(text).not.toContain("Review acknowledgment");
