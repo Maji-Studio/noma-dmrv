@@ -250,7 +250,7 @@ export function FormulationList() {
               value: ingredient.feedstockType.name,
             },
             {
-              label: `${prefix} · share (%)`,
+              label: `${prefix} · volume share (%)`,
               value: formatRatio(ingredient.ratio),
             },
           ];
@@ -265,9 +265,12 @@ export function FormulationList() {
         ],
       },
       {
-        title: "Blend composition",
+        title: "Blend composition by volume",
         fields: [
-          { label: "Biochar · share (%)", value: formatRatio(entity.biocharRatio) },
+          {
+            label: "Biochar · volume share (%)",
+            value: formatRatio(entity.biocharRatio),
+          },
           ...ingredientFields,
         ],
         content: ingredientCount === 0 ? (

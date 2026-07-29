@@ -23,7 +23,11 @@ import {
   ResolvedErrorRevalidator,
 } from "@/components/forms";
 import { Button } from "@/components/ui";
-import { PlusIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  CubeIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import {
   formulationPercentFormSchema,
   percentFormToRatioPayload,
@@ -109,7 +113,7 @@ function AllocationBar({
             : "border-[var(--color-border-tertiary)]"
         }`}
         role="img"
-        aria-label={`Blend allocation: biochar ${formatSharePercent(biocharPercent)}%, ingredients ${formatSharePercent(ingredientPercent)}%, unallocated ${formatSharePercent(unallocated)}%`}
+        aria-label={`Blend volume allocation: biochar ${formatSharePercent(biocharPercent)}%, ingredients ${formatSharePercent(ingredientPercent)}%, unallocated ${formatSharePercent(unallocated)}%`}
       >
         {biocharPercent > 0 && (
           <div
@@ -278,10 +282,9 @@ export function FormulationForm({
         </div>
       </FormSection>
 
-      {/* Blend Composition — biochar and ingredients partition one whole */}
+      {/* Blend Composition — volume shares partition one whole */}
       <FormSection
-        title="Blend composition"
-        hint="Shares are percentages of the solid blend. Water is tracked on the product, so the total may stay under 100%."
+        title="Blend composition by volume"
         actions={
           <Button
             type="button"
@@ -295,6 +298,24 @@ export function FormulationForm({
           </Button>
         }
       >
+        <div className="flex items-start gap-12 border-l-4 border-[var(--acc-prod)] bg-[var(--st-wait-bg)] px-16 py-12">
+          <CubeIcon
+            aria-hidden
+            className="mt-2 shrink-0 text-[var(--acc-prod-ink)]"
+            size={20}
+            weight="fill"
+          />
+          <div className="space-y-2">
+            <p className="body-small font-medium text-[var(--color-text-primary)]">
+              Volume-based formulation
+            </p>
+            <p className="body-caption text-[var(--color-text-secondary)]">
+              Enter the percentage of the solid blend&apos;s volume occupied by
+              each material. Water is recorded separately on the product.
+            </p>
+          </div>
+        </div>
+
         {/* Biochar row — the base material, styled like an ingredient row */}
         <div className="border border-[var(--color-border-tertiary)] p-16 space-y-12">
           <div className="flex items-center justify-between">
@@ -312,7 +333,7 @@ export function FormulationForm({
             </p>
             <FormField
               id="biocharPercent"
-              label="Share (%)"
+              label="Volume share (%)"
               error={errors.biocharPercent?.message}
               helperText={
                 autoBalance ? "Auto-fills the remaining share" : undefined
@@ -391,7 +412,7 @@ export function FormulationForm({
 
               <FormField
                 id={`ingredients.${index}.sharePercent`}
-                label="Share (%)"
+                label="Volume share (%)"
                 error={errors.ingredients?.[index]?.sharePercent?.message}
               >
                 <FormInput
