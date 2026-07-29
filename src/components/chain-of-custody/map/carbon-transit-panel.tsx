@@ -11,6 +11,11 @@
  * left edge; `view="split"` is the compact half beside the DAG, which keeps the
  * legend and the collapsed not-geolocated chip box.
  *
+ * Map view has a second shape for a viewer too narrow to carry the rail as a
+ * column: the rail stacks above a shorter map and the record panel covers the
+ * whole viewer. It is entirely a container query in carbon-viewer.css — the
+ * component measures nothing.
+ *
  * Graceful degradation (plan decision 5): no NEXT_PUBLIC_MAPTILER_KEY → the
  * map still runs on a blank style over a tinted field (markers/legs/chips
  * plotted, "basemap unavailable" note); no routing key → legs draw as dashed
@@ -18,7 +23,7 @@
  */
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { ROUTE_GEOMETRY_MAX_LEGS } from "@/config/geo";
@@ -31,9 +36,13 @@ import { LINEAGE_NODE_STYLES } from "../chain-constants";
 import type { ChainNodeSheetNode } from "../chain-node-sheet";
 import { buildLineageNodes } from "../use-chain-graph";
 import type { PopupContentByNodeId } from "./carbon-transit-map";
-import { CustodyStagesRail } from "./custody-stages-rail";
+import { CustodyStagesRail, RAIL_WIDTH_PX } from "./custody-stages-rail";
 import { RECORD_PANEL_WIDTH_PX, RecordDetailPanel } from "./record-detail-panel";
 import { MAP_OVERLAY_GUTTER_PX } from "./viewer-constants";
+// Map-view layout (see MAP_VIEW_STACK_VARS) plus the imperative map chrome.
+// Imported here as well as in the dynamically loaded map so the rail and the
+// docked panel are laid out on first paint, not when the map chunk lands.
+import "./carbon-viewer.css";
 import {
   MapWarningBanner,
   NotGeolocatedChips,
@@ -67,6 +76,18 @@ const MAP_VIEW_CONTROLS_CLASS = "left-auto top-auto right-16 bottom-32";
 /** The panel's outer frame — the same box in both layouts. */
 const PANEL_FRAME_CLASS =
   "h-full overflow-hidden border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]";
+
+/**
+ * Map view's two fixed columns, handed to carbon-viewer.css: the rail's width
+ * is also the docked record panel's left offset, so one number sets both and
+ * the stylesheet's narrow-viewer container query can override them together.
+ * Cast because React's CSSProperties carries no index signature for custom
+ * properties.
+ */
+const MAP_VIEW_STACK_VARS = {
+  "--cv-rail-w": `${RAIL_WIDTH_PX}px`,
+  "--cv-record-panel-w": `${RECORD_PANEL_WIDTH_PX}px`,
+} as CSSProperties;
 
 /** Which anchor the panel plots: a single application or a batch roll-up. */
 export type ChainGeoSource =
@@ -294,38 +315,46 @@ export function CarbonTransitPanel({
     const detailGeoNode =
       geo.nodes.find((node) => node.id === detailNode?.id) ?? null;
 
+    // The record panel is a sibling of the map pane, not a child of it: on a
+    // narrow viewer it stops being a third column and lays itself over the
+    // whole thing, rail included, which it can only do from this level.
     return (
       <div
-        className={`flex ${PANEL_FRAME_CLASS}`}
+        className={`cv-viewer ${PANEL_FRAME_CLASS}`}
         data-testid="carbon-viewer-panel"
       >
-        {/* Keyed on the plotted source: a batch/application change remounts the
-            rail, collapsing both sides and returning the scroll to the top,
-            which matches the map refitting to the new chain. */}
-        <CustodyStagesRail
-          key={sourceKey}
-          geo={geo}
-          focusNodeIds={focusNodeIds}
-          focusLegIds={focusLegIds}
-          hoverLegId={hoverLegId}
-          onHoverLeg={setHoverLegId}
-          onSelectNode={openNode}
-        />
-        <div className="relative min-w-0 flex-1">
-          {mapElement}
-          {/* The warning stack is the reason the operator is here — step it
-              clear of the docked panel rather than letting the panel bury it.
-              Map view moved the controls out of the top-left corner, so the
-              banner sits on the normal gutter when nothing is docked. */}
-          <MapWarningBanner
-            warnings={geo.warnings}
-            className="top-16"
-            style={{
-              left: detailNode
-                ? RECORD_PANEL_WIDTH_PX + MAP_OVERLAY_GUTTER_PX
-                : MAP_OVERLAY_GUTTER_PX,
-            }}
+        <div
+          className="cv-stack relative flex h-full"
+          style={MAP_VIEW_STACK_VARS}
+        >
+          {/* Keyed on the plotted source: a batch/application change remounts
+              the rail, collapsing both sides and returning the scroll to the
+              top, which matches the map refitting to the new chain. */}
+          <CustodyStagesRail
+            key={sourceKey}
+            geo={geo}
+            focusNodeIds={focusNodeIds}
+            focusLegIds={focusLegIds}
+            hoverLegId={hoverLegId}
+            onHoverLeg={setHoverLegId}
+            onSelectNode={openNode}
           />
+          <div className="cv-pane relative min-w-0 flex-1">
+            {mapElement}
+            {/* The warning stack is the reason the operator is here — step it
+                clear of the docked panel rather than letting the panel bury it.
+                Map view moved the controls out of the top-left corner, so the
+                banner sits on the normal gutter when nothing is docked. */}
+            <MapWarningBanner
+              warnings={geo.warnings}
+              className="top-16"
+              style={{
+                left: detailNode
+                  ? RECORD_PANEL_WIDTH_PX + MAP_OVERLAY_GUTTER_PX
+                  : MAP_OVERLAY_GUTTER_PX,
+              }}
+            />
+          </div>
           {detailNode && onDetailClose ? (
             <RecordDetailPanel
               node={detailNode}

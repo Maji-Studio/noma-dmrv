@@ -43,8 +43,13 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** The rail's own width — the map pane takes whatever is left. */
-const RAIL_WIDTH_PX = 340;
+/**
+ * The rail's own width — the map pane takes whatever is left, and the docked
+ * record panel starts on the same line. Applied by `.cv-rail` in
+ * carbon-viewer.css (an inline width would outrank the narrow-viewer rules
+ * that stack the rail above the map), fed there by carbon-transit-panel.tsx.
+ */
+export const RAIL_WIDTH_PX = 340;
 
 /** Left gutter the thread and the milestone glyphs live in, inside each row. */
 const GUTTER_PX = 40;
@@ -596,8 +601,7 @@ export function CustodyStagesRail({
 
   return (
     <aside
-      className="shrink-0 overflow-y-auto border-r-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]"
-      style={{ width: RAIL_WIDTH_PX }}
+      className="cv-rail shrink-0 overflow-y-auto border-r-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]"
       data-testid="carbon-viewer-stage-rail"
     >
       <header className="border-b-[1.5px] border-[var(--clr-dark-purple-20)] px-16 py-16">

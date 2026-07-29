@@ -8,7 +8,9 @@
  * on the map. Rows are edge to edge on the rail's hairline grid, and the record
  * gets one visual moment — the courier From→To thread when it sits on a
  * transport leg, its own duotone glyph otherwise. Closing it releases the
- * shared focus (wired on the page).
+ * shared focus (wired on the page). On a viewer too narrow to hold a third
+ * column it stops docking and covers the whole viewer instead — see the
+ * container query in carbon-viewer.css.
  *
  * Nothing animates: the rail's own rows appear instantly, so a column sliding
  * out from under them reads as a separate object arriving rather than as more of
@@ -43,9 +45,10 @@ import type { ChainNodeSheetNode } from "../chain-node-sheet";
 // ---------------------------------------------------------------------------
 
 /**
- * Docked width. Clamped to the map pane below ~660px of viewer width (the rail
- * plus this panel), so the close control never lands outside the pane's
- * `overflow-hidden` and the panel stays dismissable at every breakpoint.
+ * Docked width, applied by `.cv-record-panel` in carbon-viewer.css and fed
+ * there by carbon-transit-panel.tsx. The stylesheet owns it because the same
+ * rules clamp the panel to the map pane and, on a narrow viewer, drop the dock
+ * entirely and lay the record over the whole viewer.
  */
 export const RECORD_PANEL_WIDTH_PX = 320;
 /** Accent rule across the panel's very top — the entity family's ink. */
@@ -270,12 +273,8 @@ export function RecordDetailPanel({
     <aside
       aria-label={`${label} ${code} details`}
       data-testid="carbon-viewer-detail-panel"
-      className="absolute inset-y-0 left-0 z-20 flex flex-col overflow-hidden border-r-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]"
-      style={{
-        width: RECORD_PANEL_WIDTH_PX,
-        maxWidth: "100%",
-        borderTop: `${ACCENT_RULE_PX}px solid ${accentInk}`,
-      }}
+      className="cv-record-panel absolute inset-y-0 z-20 flex flex-col overflow-hidden border-r-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]"
+      style={{ borderTop: `${ACCENT_RULE_PX}px solid ${accentInk}` }}
     >
       <header className={cn("px-16 pb-12 pt-12", HAIRLINE)}>
         <div className="flex items-center justify-between gap-8">
