@@ -177,7 +177,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
 });
 
 // Shared helpers for the production-run lifecycle and time-window specs below.
-const overlapText = /overlaps run|unfinished run/i;
+const overlapText = /overlaps run|is unfinished/i;
 
 async function openRunForm(
   page: Page,

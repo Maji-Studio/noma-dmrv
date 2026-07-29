@@ -200,7 +200,7 @@ test.describe("production run readings CSV import", () => {
       buffer: Buffer.from(READINGS_CSV),
     });
     await expect(
-      page.getByText(/Imported 0 readings.*2 already imported/).first(),
+      page.getByText(/Imported 0 readings.*2 rows already imported/).first(),
     ).toBeVisible({ timeout: 30000 });
     expect(await countReadings(run.id)).toBe(2);
   });
