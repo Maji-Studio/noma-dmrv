@@ -85,6 +85,26 @@ describe("normalizeGeoJson", () => {
     expect(boundary.stats.areaHectares).toBeGreaterThan(0);
   });
 
+  it("drops source properties that are not on the allow list", () => {
+    const boundary = expectBoundary(
+      normalize({
+        type: "FeatureCollection",
+        features: [
+          polygonFeature(RING_2D, {
+            name: "Kilema north",
+            owner_name: "A landowner",
+            owner_phone: "+255 700 000 000",
+            tenancy_notes: "Leased through 2030",
+          }),
+        ],
+      }),
+    );
+
+    expect(boundary.collection.features[0].properties).toEqual({
+      name: "Kilema north",
+    });
+  });
+
   it("flattens a GeometryCollection and carries parent properties", () => {
     const boundary = expectBoundary(
       normalize({

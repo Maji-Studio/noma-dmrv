@@ -212,11 +212,9 @@ function normalizeProperties(
   if (!isRecord(properties)) return { properties: {}, dropped: 0 };
 
   const normalized: GisBoundaryProperties = {};
-  const retainedKeys = new Set<string>();
   let dropped = 0;
   for (const key of PROPERTY_ALLOW_LIST) {
     if (!(key in properties)) continue;
-    retainedKeys.add(key);
     const candidate = { ...normalized, [key]: properties[key] };
     if (
       Object.keys(candidate).length > GEOJSON_PROPERTY_KEY_CAP ||
@@ -228,19 +226,13 @@ function normalizeProperties(
     normalized[key] = properties[key];
   }
 
-  for (const [key, value] of Object.entries(properties)) {
-    if (retainedKeys.has(key)) continue;
-    if (Object.keys(normalized).length >= GEOJSON_PROPERTY_KEY_CAP) {
-      dropped += 1;
-      continue;
-    }
-    const candidate = { ...normalized, [key]: value };
-    if (serializedBytes(candidate) > GEOJSON_PROPERTY_BYTE_CAP) {
-      dropped += 1;
-      continue;
-    }
-    normalized[key] = value;
-  }
+  // Every other source property is discarded. Cadastral and farm-management
+  // exports routinely carry landowner names, phone numbers and tenancy notes,
+  // and the boundary summary never shows what was stored, so an unlisted key
+  // would be personal data persisted invisibly on the application.
+  dropped += Object.keys(properties).filter(
+    (key) => !(key in normalized),
+  ).length;
 
   return { properties: normalized, dropped };
 }
