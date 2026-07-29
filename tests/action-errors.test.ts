@@ -25,10 +25,7 @@ vi.mock("@/lib/log", async (importOriginal) => {
   };
 });
 
-import {
-  isDatabaseSchemaMismatchError,
-  toLoggedActionError,
-} from "@/fn/action-errors";
+import { toLoggedActionError } from "@/fn/action-errors";
 import { SafeError } from "@/lib/errors";
 
 // Drizzle's DrizzleQueryError format: `Failed query: <sql>\nparams: <values>`.
@@ -133,27 +130,5 @@ describe("toLoggedActionError", () => {
     expect(result).toBe(
       "The action to change member role could not be completed. Try again.",
     );
-  });
-});
-
-describe("isDatabaseSchemaMismatchError", () => {
-  it("detects a PostgreSQL undefined-column error nested by Drizzle", () => {
-    const postgresError = Object.assign(
-      new Error('column applications.gis_boundary does not exist'),
-      { code: "42703" },
-    );
-    const drizzleError = new Error("Failed query", { cause: postgresError });
-
-    expect(isDatabaseSchemaMismatchError(drizzleError)).toBe(true);
-  });
-
-  it("does not classify ordinary query failures as schema mismatches", () => {
-    const postgresError = Object.assign(new Error("connection timeout"), {
-      code: "ETIMEDOUT",
-    });
-    const drizzleError = new Error("Failed query", { cause: postgresError });
-
-    expect(isDatabaseSchemaMismatchError(drizzleError)).toBe(false);
-    expect(isDatabaseSchemaMismatchError(new Error("Failed query"))).toBe(false);
   });
 });

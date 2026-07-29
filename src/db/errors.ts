@@ -9,6 +9,16 @@ const PG_UNIQUE_VIOLATION = "23505";
 // migration-owned invariant triggers.
 const PG_CHECK_VIOLATION = "23514";
 
+// SQLSTATEs that mean the running code addressed a relation or column the
+// database does not have — the signature of a pending migration. Deliberately
+// narrow: undefined_object (42704) and undefined_function (42883) also fire on
+// ordinary SQL defects such as a bad cast or a `uuid = text` comparison, so
+// including them would relabel code bugs as schema drift.
+const PG_SCHEMA_MISMATCH_CODES = new Set([
+  "42703", // undefined_column
+  "42P01", // undefined_table
+]);
+
 // Guard against a pathological/cyclic `.cause` chain.
 const MAX_CAUSE_DEPTH = 5;
 
@@ -66,6 +76,29 @@ export function isPgCheckViolation(
     } else {
       break;
     }
+  }
+  return false;
+}
+
+/**
+ * True when `err` reports a missing table or column, which means the running
+ * code expects a schema the database has not migrated to yet. Walks the same
+ * `.cause` chain as the violation predicates, tracking visited links so a
+ * self-referential chain cannot loop.
+ */
+export function isDatabaseSchemaMismatchError(err: unknown): boolean {
+  const visited = new Set<unknown>();
+  let current: unknown = err;
+  for (let depth = 0; current != null && depth < MAX_CAUSE_DEPTH; depth++) {
+    if (typeof current !== "object" || visited.has(current)) {
+      break;
+    }
+    visited.add(current);
+    const e = current as { code?: unknown; cause?: unknown };
+    if (typeof e.code === "string" && PG_SCHEMA_MISMATCH_CODES.has(e.code)) {
+      return true;
+    }
+    current = e.cause;
   }
   return false;
 }

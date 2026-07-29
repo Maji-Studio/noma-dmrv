@@ -6,12 +6,10 @@ import {
   type DashboardOverview,
 } from "@/data-access/dashboard-overview";
 import { requireOrgFacility } from "@/data-access/utils";
+import { isDatabaseSchemaMismatchError } from "@/db/errors";
 import { requireOrgContext } from "@/lib/auth/server";
 import type { ActionResult } from "@/types/actions";
-import {
-  isDatabaseSchemaMismatchError,
-  toLoggedActionError,
-} from "./action-errors";
+import { toLoggedActionError } from "./action-errors";
 
 const getDashboardOverviewSchema = z.object({
   facilityId: z.uuid(),
@@ -19,7 +17,7 @@ const getDashboardOverviewSchema = z.object({
 });
 
 const DASHBOARD_SCHEMA_MISMATCH_MESSAGE =
-  "The dashboard and database versions do not match. Ask an administrator to apply the latest database update, then reload this page.";
+  "The dashboard and the database may be out of sync. Ask an administrator to apply the latest database update. Then reload this page.";
 
 export type GetDashboardOverviewInput = z.input<typeof getDashboardOverviewSchema>;
 
@@ -51,16 +49,21 @@ export async function getDashboardOverviewFn(
         error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
       };
     }
+    const schemaMismatch = isDatabaseSchemaMismatchError(error);
+
     return {
       success: false,
       error: toLoggedActionError(
         error,
-        isDatabaseSchemaMismatchError(error)
+        schemaMismatch
           ? DASHBOARD_SCHEMA_MISMATCH_MESSAGE
           : "Failed to load the dashboard overview",
         {
           message: "dashboard overview action failed",
-          context: { op: "dashboard-overview:get" },
+          context: {
+            op: "dashboard-overview:get",
+            ...(schemaMismatch ? { schemaMismatch: true } : {}),
+          },
         },
       ),
     };

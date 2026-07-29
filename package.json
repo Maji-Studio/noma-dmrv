@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm dev:docker",
-    "dev:docker": "pnpm docker:up && pnpm db:wait && pnpm db:migrate && pnpm db:verify-schema && next dev -p 3100",
+    "dev:docker": "pnpm docker:up && pnpm db:wait && pnpm db:assert-local && pnpm db:migrate && pnpm db:verify-schema && next dev -p 3100",
     "dev:docker:init": "pnpm docker:up && pnpm db:wait && pnpm db:reset && pnpm db:verify-schema && next dev -p 3100",
     "dev:manual": "next dev -p 3100",
     "build": "next build",
@@ -15,6 +15,7 @@
     "docker:down": "docker compose down",
     "docker:clean": "docker compose down -v",
     "db:wait": "tsx src/lib/cli/wait-for-db.ts",
+    "db:assert-local": "tsx src/lib/cli/assert-local-db.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

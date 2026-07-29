@@ -6,43 +6,6 @@ interface LogActionErrorOptions {
   message: string;
 }
 
-const DATABASE_SCHEMA_MISMATCH_CODES = new Set([
-  "42703", // undefined_column
-  "42P01", // undefined_table
-  "42704", // undefined_object
-  "42883", // undefined_function
-]);
-
-/**
- * Detect the PostgreSQL errors that mean the running application expects a
- * database object which is not present. Drizzle wraps the original pg error in
- * `cause`, so walk the chain without exposing its SQL or identifiers.
- */
-export function isDatabaseSchemaMismatchError(error: unknown): boolean {
-  const visited = new Set<unknown>();
-  let current = error;
-
-  while (
-    typeof current === "object" &&
-    current !== null &&
-    !visited.has(current)
-  ) {
-    visited.add(current);
-    const candidate = current as { cause?: unknown; code?: unknown };
-
-    if (
-      typeof candidate.code === "string" &&
-      DATABASE_SCHEMA_MISMATCH_CODES.has(candidate.code)
-    ) {
-      return true;
-    }
-
-    current = candidate.cause;
-  }
-
-  return false;
-}
-
 export function logActionError(
   error: unknown,
   { context, message }: LogActionErrorOptions,
