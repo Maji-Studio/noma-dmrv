@@ -5,6 +5,10 @@ import * as crypto from "node:crypto";
 import * as schema from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 import { createDbConnection } from "./fixtures/db";
+import {
+  createTestFacility,
+  deleteTestFacility,
+} from "./fixtures/test-data-helpers";
 
 const LOCATION_GPS_LATITUDE = -6.8;
 const LOCATION_GPS_LONGITUDE = 39.28;
@@ -70,19 +74,10 @@ test("supplier and customer locations can be edited from their edit sheets", asy
   const customerLocationName = `E2E Customer Location ${runId}`;
   const updatedCustomerLocationName = `E2E Customer Location Updated ${runId}`;
 
+  let facilityId: string | undefined;
   try {
-    const [facility] = await db
-      .select({
-        id: schema.facilities.id,
-        name: schema.facilities.name,
-      })
-      .from(schema.facilities)
-      .where(eq(schema.facilities.organizationId, DEC_ORG_ID))
-      .limit(1);
-
-    if (!facility) {
-      throw new Error("The E2E organization needs at least one facility");
-    }
+    const facility = await createTestFacility();
+    facilityId = facility.id;
 
     await db.insert(schema.suppliers).values({
       id: supplierId,
@@ -201,6 +196,9 @@ test("supplier and customer locations can be edited from their edit sheets", asy
         .delete(schema.supplierLocations)
         .where(eq(schema.supplierLocations.id, supplierLocationId));
       await db.delete(schema.suppliers).where(eq(schema.suppliers.id, supplierId));
+      if (facilityId) {
+        await deleteTestFacility(facilityId);
+      }
     } finally {
       await pool.end();
     }
