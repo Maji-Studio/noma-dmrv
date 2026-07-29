@@ -1,7 +1,15 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { FormField, FormTextarea, ServerError } from "@/components/forms";
+import { useForm } from "react-hook-form";
+import {
+  FormError,
+  FormField,
+  FormTextarea,
+  ResolvedErrorRevalidator,
+  ServerError,
+} from "@/components/forms";
 import { Button, Modal } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
@@ -10,6 +18,10 @@ import {
   useGhgStatementReports,
 } from "@/hooks/use-certification";
 import type { GhgStatementReportNarratives } from "@/lib/certification/ghg-statement-report/model";
+import {
+  ghgStatementReportFormSchema,
+  type GhgStatementReportFormData,
+} from "@/schemas/certification";
 
 type ReportsQuery = ReturnType<typeof useGhgStatementReports>;
 
@@ -20,6 +32,11 @@ const EMPTY_NARRATIVES: GhgStatementReportNarratives = {
   dataQualityAndExceptions: "",
   monitoringAndDurability: "",
   approvalStatement: "",
+};
+
+const DEFAULT_FORM_VALUES: GhgStatementReportFormData = {
+  narratives: EMPTY_NARRATIVES,
+  humanReviewAcknowledged: false,
 };
 
 const NARRATIVE_FIELDS: Array<{
@@ -76,27 +93,37 @@ export function GhgStatementReportWorkflow({
   const [preparationKey, setPreparationKey] = useState(() =>
     crypto.randomUUID(),
   );
-  const [narratives, setNarratives] =
-    useState<GhgStatementReportNarratives>(EMPTY_NARRATIVES);
-  const [acknowledged, setAcknowledged] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const {
+    register,
+    handleSubmit,
+    control,
+    trigger,
+    reset,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(ghgStatementReportFormSchema),
+    // onTouched so narrative length and keyword rules surface on blur rather
+    // than only after a server round-trip.
+    mode: "onTouched",
+    defaultValues: DEFAULT_FORM_VALUES,
+  });
+
   const openPrepare = () => {
-    setNarratives(EMPTY_NARRATIVES);
-    setAcknowledged(false);
+    reset(DEFAULT_FORM_VALUES);
     setError(null);
     prepare.reset();
     setPrepareOpen(true);
   };
 
-  const submitPrepare = async () => {
+  const submitPrepare = handleSubmit(async (data) => {
     setError(null);
     try {
       await prepare.mutateAsync({
         ghgStatementId,
         preparationKey,
-        narratives,
-        humanReviewAcknowledged: acknowledged as true,
+        ...data,
       });
       setPreparationKey(crypto.randomUUID());
       setPrepareOpen(false);
@@ -107,7 +134,7 @@ export function GhgStatementReportWorkflow({
           : "Report preparation failed.",
       );
     }
-  };
+  });
 
   const approveVersion = async (report: {
     id: string;
@@ -210,7 +237,8 @@ export function GhgStatementReportWorkflow({
         width="lg"
         dismissOnClickOutside={false}
       >
-        <div className="flex flex-col gap-20">
+        <form onSubmit={submitPrepare} className="flex flex-col gap-20">
+          <ResolvedErrorRevalidator control={control} trigger={trigger} />
           <header>
             <h2 id="ghg-report-prepare-title" className="title-heading-3">
               Prepare GHG Statement report
@@ -226,29 +254,28 @@ export function GhgStatementReportWorkflow({
               id={field.key}
               label={field.label}
               helperText={field.helper}
+              error={errors.narratives?.[field.key]?.message}
               required
             >
               <FormTextarea
                 id={field.key}
-                value={narratives[field.key]}
-                onChange={(event) =>
-                  setNarratives({
-                    ...narratives,
-                    [field.key]: event.target.value,
-                  })
-                }
+                {...register(`narratives.${field.key}`)}
               />
             </FormField>
           ))}
-          <label className="flex items-start gap-8 body-small">
-            <input
-              type="checkbox"
-              checked={acknowledged}
-              onChange={(event) => setAcknowledged(event.target.checked)}
-              className="mt-2 size-16"
-            />
-            I reviewed the generated facts and these qualitative statements.
-          </label>
+          <div>
+            <label className="flex items-start gap-8 body-small">
+              <input
+                type="checkbox"
+                {...register("humanReviewAcknowledged")}
+                className="mt-2 size-16"
+              />
+              I reviewed the generated facts and these qualitative statements.
+            </label>
+            {errors.humanReviewAcknowledged && (
+              <FormError message={errors.humanReviewAcknowledged.message} />
+            )}
+          </div>
           {error && <ServerError message={error} />}
           <div className="flex justify-end gap-12">
             <Button
@@ -259,17 +286,11 @@ export function GhgStatementReportWorkflow({
             >
               Cancel
             </Button>
-            <Button
-              type="button"
-              variant="primary"
-              busy={prepare.isPending}
-              disabled={!acknowledged}
-              onClick={submitPrepare}
-            >
+            <Button type="submit" variant="primary" busy={prepare.isPending}>
               Prepare report
             </Button>
           </div>
-        </div>
+        </form>
       </Modal>
     </section>
   );

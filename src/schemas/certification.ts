@@ -231,14 +231,27 @@ export const ghgStatementReportNarrativesSchema = z.object({
   approvalStatement: reportNarrativeSchema,
 });
 
-export const prepareGhgStatementReportSchema = z.object({
-  ghgStatementId: z.string().uuid(),
-  preparationKey: z.string().uuid(),
+/**
+ * UI fields only. `humanReviewAcknowledged` is a `boolean` with a truthiness
+ * refinement rather than `z.literal(true)` so an unchecked box is a valid form
+ * default that fails validation with a message, instead of a type error.
+ */
+export const ghgStatementReportFormSchema = z.object({
   narratives: ghgStatementReportNarrativesSchema,
-  humanReviewAcknowledged: z.literal(true, {
+  humanReviewAcknowledged: z.boolean().refine((value) => value, {
     error: "Confirm that you reviewed the generated facts and narrative",
   }),
 });
+
+export type GhgStatementReportFormData = z.infer<
+  typeof ghgStatementReportFormSchema
+>;
+
+export const prepareGhgStatementReportSchema =
+  ghgStatementReportFormSchema.extend({
+    ghgStatementId: z.uuid(),
+    preparationKey: z.uuid(),
+  });
 
 export type PrepareGhgStatementReportInput = z.infer<
   typeof prepareGhgStatementReportSchema
