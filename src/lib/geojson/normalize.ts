@@ -436,13 +436,11 @@ export function normalizeGeoJson({
     );
   }
 
+  // scavenge() is used only for its typed re-parse: getIssues() above already
+  // rejected the whole file on any per-feature problem, so nothing reaches here
+  // with features left to salvage and `scavenged.rejected` is always empty. A
+  // file with one bad ring is refused outright rather than partially accepted.
   const scavenged = scavenge(JSON.stringify(coerced.collection));
-  for (const rejection of scavenged.rejected) {
-    const reason = rejection.reasons
-      .map((entry: { message: string }) => entry.message)
-      .join(" ");
-    notes.push(`Dropped a feature that was not valid. ${reason}`);
-  }
   if (scavenged.result.type !== "FeatureCollection") {
     return {
       ok: false,

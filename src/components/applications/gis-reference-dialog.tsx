@@ -20,8 +20,8 @@ const PASTE_HEIGHT = "h-160";
 const MONO = "[font-family:var(--font-mono)]";
 const GEOJSON_ACCEPT =
   ".geojson,.json,application/geo+json,application/json,text/plain";
-const BYTES_PER_MEGABYTE = 1024 * 1024;
-const MAX_SIZE_MB = GEOJSON_MAX_INPUT_BYTES / BYTES_PER_MEGABYTE;
+const BYTES_PER_KILOBYTE = 1024;
+const MAX_SIZE_KB = GEOJSON_MAX_INPUT_BYTES / BYTES_PER_KILOBYTE;
 
 type AddMode = "upload" | "manual";
 
@@ -89,7 +89,7 @@ function DialogBody({
     setParsedUpload(null);
     setErrorMessage(null);
     if (file.size > GEOJSON_MAX_INPUT_BYTES) {
-      setErrorMessage(`Choose a GeoJSON file up to ${MAX_SIZE_MB} MB.`);
+      setErrorMessage(`Choose a GeoJSON file up to ${MAX_SIZE_KB} KB.`);
       return;
     }
 
@@ -202,7 +202,7 @@ function DialogBody({
               Drop a .geojson file here, or click to browse
             </span>
             <span className="body-caption text-[var(--color-text-tertiary)]">
-              One file, up to {MAX_SIZE_MB} MB.
+              One file, up to {MAX_SIZE_KB} KB.
             </span>
           </label>
           <input

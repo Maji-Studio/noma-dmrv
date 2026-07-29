@@ -81,8 +81,15 @@ export const ROUTE_CACHE_COORD_DECIMALS = 5;
 // GIS boundary normalization (server-side only)
 // ---------------------------------------------------------------------------
 
-/** Maximum raw GeoJSON text accepted by the normalization action (1 MB). */
-export const GEOJSON_MAX_INPUT_BYTES = 1024 * 1024;
+/**
+ * Maximum raw GeoJSON text accepted by the normalization action (768 KB).
+ *
+ * Deliberately under Next's 1 MB default server-action body limit: at exactly
+ * 1 MB a file passed this check and was then refused by the framework with a
+ * generic transport error instead of the crafted size message, so the gap
+ * leaves room for RSC framing around the payload.
+ */
+export const GEOJSON_MAX_INPUT_BYTES = 768 * 1024;
 
 /** Maximum normalized envelope persisted on an application (512 KB). */
 export const GEOJSON_MAX_NORMALIZED_BYTES = 512 * 1024;
