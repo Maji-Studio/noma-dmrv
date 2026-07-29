@@ -41,7 +41,7 @@ export async function getFormulationsEntity(ctx: OrgContext, params: {
     id: r.id,
     code: r.code,
     name: r.name,
-    subtitle: r.biocharRatio !== null ? `${Math.round(r.biocharRatio * 100)}% biochar` : undefined,
+    subtitle: r.biocharRatio !== null ? `${Math.round(r.biocharRatio * 100)}% biochar by volume` : undefined,
   }));
 }
 
@@ -64,6 +64,6 @@ export async function getFormulationEntityById(ctx: OrgContext, id: string): Pro
     id: result.id,
     code: result.code,
     name: result.name,
-    subtitle: result.biocharRatio !== null ? `${Math.round(result.biocharRatio * 100)}% biochar` : undefined,
+    subtitle: result.biocharRatio !== null ? `${Math.round(result.biocharRatio * 100)}% biochar by volume` : undefined,
   };
 }
