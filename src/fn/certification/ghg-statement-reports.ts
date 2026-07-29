@@ -187,6 +187,13 @@ async function loadLiveReportFacts(
   );
   for (const [index, entry] of remoteEntries.entries()) {
     const requestedId = remoteStatement.ghg_entry_ids[index];
+    // noma supports only biochar removal credits; a REDUCTION entry's figures
+    // must never be presented as removals (see lib/isometric/projects.ts).
+    if (entry.credit_type !== "REMOVAL") {
+      throw new SafeError(
+        `Live GHG Entry ${requestedId} is not a removal credit. This report supports only removal entries.`,
+      );
+    }
     if (
       entry.id !== requestedId ||
       entry.ghg_statement_id !== remoteStatement.id ||
