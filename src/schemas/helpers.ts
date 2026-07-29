@@ -142,7 +142,7 @@ export const optionalPositiveNumber = z.preprocess(
  */
 export function requiredNumber(
   requiredMessage = "Required",
-  invalidMessage = "Invalid number",
+  invalidMessage = "Enter a valid number.",
 ) {
   return z.preprocess(
     toNumberOrUndefined,
@@ -160,8 +160,8 @@ export const optionalPercent = z.preprocess(
   toNumberOrNull,
   z
     .number()
-    .min(0, "Must be 0–100")
-    .max(100, "Must be 0–100")
+    .min(0, "Enter a value from 0 to 100")
+    .max(100, "Enter a value from 0 to 100")
     .nullable()
     .optional()
 );
@@ -345,11 +345,11 @@ export const requiredDateOnly = z.union([
         date.getMonth() !== Number(dateOnly[2]) - 1 ||
         date.getDate() !== Number(dateOnly[3]))
     ) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
       return z.NEVER;
     }
     if (isNaN(date.getTime())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
       return z.NEVER;
     }
     return date;

@@ -42,7 +42,7 @@ test.describe("200-year durability readiness", () => {
     // The readiness signals: the §8.3.1 ≥3 count and the §3 Table 2 verdict.
     // §8.3.1 requires no within-batch run/day distribution, so no such signal.
     const signals = panel.getByTestId("durability-readiness-signals");
-    await expect(signals).toContainText("3 of 3 usable samples");
+    await expect(signals).toContainText("3 of 3 usable Samples");
     await expect(signals).toContainText("Chemistry eligible");
     await expect(signals).not.toContainText("distinct runs/days");
 
@@ -98,7 +98,7 @@ test.describe("200-year durability readiness", () => {
     );
     await expect(
       progress.getByTestId("durability-readiness-signals"),
-    ).toContainText("3 of 3 usable samples");
+    ).toContainText("3 of 3 usable Samples");
     await expect(progress).toContainText("Chemistry eligible");
   });
 });

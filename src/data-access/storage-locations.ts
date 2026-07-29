@@ -673,7 +673,7 @@ export async function updateStorageLocation(
 
     if (conflicting) {
       throw new SafeError(
-        "This bin already holds product with a different formulation — move or remove it before changing the bin's formulation."
+        "This storage bin holds a product with a different formulation. Move or remove the product before changing the bin's formulation."
       );
     }
   }

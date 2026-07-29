@@ -9,7 +9,7 @@ describe("SubmissionNotes", () => {
         notes={[
           {
             key: "post-window",
-            summary: "3 samples were taken after production ended.",
+            summary: "3 Samples were taken after production ended.",
             detail: "Stored-material sampling detail.",
           },
           {
@@ -23,10 +23,10 @@ describe("SubmissionNotes", () => {
     expect(html).toContain("Notes");
     expect(html).toContain("Does not block submission");
     expect(html).toContain(
-      'class="body-small text-[var(--color-text-secondary)]">Advisory: 3 samples were taken after production ended.',
+      'class="body-small text-[var(--color-text-secondary)]">Advisory: 3 Samples were taken after production ended.',
     );
     expect(html).toContain(
-      'aria-label="Details for: 3 samples were taken after production ended."',
+      'aria-label="Details for: 3 Samples were taken after production ended."',
     );
   });
 

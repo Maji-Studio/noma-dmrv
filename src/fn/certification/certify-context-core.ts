@@ -679,7 +679,7 @@ export async function buildRemovalContext(
     const productionReadinessGap: ProductionReadinessGap = {
       kind: "noApplications",
       detail: scope.removalId
-        ? "No applications linked to this removal"
+        ? "No applications linked to this Removal"
         : "No applications fall within this batch period.",
       fixTarget: "applications",
     };

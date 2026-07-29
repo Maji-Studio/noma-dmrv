@@ -22,6 +22,7 @@
  * the versioned supplier reference, mirroring the datapoint/removal/sensor flows.
  */
 import type { OrgContext } from "@/lib/auth/server";
+import { pluralize } from "@/lib/copy-utils";
 import { appendSubmissionJournal } from "@/data-access/certification";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { env } from "@/config/env";
@@ -74,6 +75,9 @@ import {
 export const DURABILITY_MEASUREMENT_SAMPLES_ENABLED =
   env.ISOMETRIC_ENVIRONMENT === "sandbox";
 
+export const DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE =
+  "Durability submission is not available in the production registry yet. Wait for support to confirm availability before submitting this Removal.";
+
 /** One measurement-sample POST: its versioned supplier ref + the request body. */
 export interface DurabilityMeasurementSampleSubmission {
   /** Sync-event operation suffix, e.g. `pb:<creditBatchId>` or `soil`. */
@@ -110,12 +114,12 @@ export function assertSupportedDurabilityConfiguration(
 ): void {
   if (batches.some((batch) => batch.sampling !== "sampled")) {
     throw new SafeError(
-      "Unsampled Method B Removal submission is post-MVP and is not enabled.",
+      "Unsampled Method B Removals cannot be submitted yet. Wait for support to confirm registry availability.",
     );
   }
   if (batches.some((batch) => batch.durabilityOption !== "1000_year")) {
     throw new SafeError(
-      "200-year Removal submission is post-MVP and is not enabled.",
+      "200-year Removals cannot be submitted yet. Wait for support to confirm registry availability.",
     );
   }
 }
@@ -135,7 +139,7 @@ export function buildDurabilityMeasurementSampleSubmissions(
   );
   if (thousandYearBatches.length > 1) {
     throw new SafeError(
-      "A 1000-year Removal currently supports exactly one credit batch because the registry template requires a single product_mass datapoint. Split the credit batches into separate Removals until an aggregated removal-level product-mass mapping is verified.",
+      "A 1000-year Removal can contain one credit batch. Split these credit batches into separate Removals.",
     );
   }
 
@@ -179,12 +183,12 @@ export function buildDurabilityMeasurementSampleSubmissions(
       const incompleteReplicates = sourceBatch.samples.length - replicates.length;
       if (incompleteReplicates > 0) {
         throw new SafeError(
-          `Credit batch ${batch.creditBatchCode} has ${incompleteReplicates} sample(s) missing total carbon or the R₀ readings-at-or-above-2% fraction required for 1000-year submission.`,
+          `Credit batch ${batch.creditBatchCode} has ${incompleteReplicates} ${pluralize(incompleteReplicates, "Sample")} without total carbon or the R₀ fraction at or above 2%. Record both values before submitting a 1000-year Removal.`,
         );
       }
       if (replicates.length < MINIMUM_REPLICATES_PER_BATCH) {
         throw new SafeError(
-          `Credit batch ${batch.creditBatchCode} has ${replicates.length} complete 1000-year replicate(s); ≥ ${MINIMUM_REPLICATES_PER_BATCH} required.`,
+          `Credit batch ${batch.creditBatchCode} has ${replicates.length} complete 1000-year ${pluralize(replicates.length, "replicate")}. Record at least ${MINIMUM_REPLICATES_PER_BATCH} before submitting.`,
         );
       }
       const body = build1000YearSequestrationSample({
@@ -282,7 +286,7 @@ export async function patchMeasurementSampleSourceBindings(args: {
     if (productMassDatapointIds.length === 0) continue;
     if (!capture.creditBatchId) {
       throw new SafeError(
-        `Measurement sample ${capture.measurementSampleId} returned product_mass without a credit-batch identity; Source attribution is blocked.`,
+        `Registry measurement ${capture.measurementSampleId} is not linked to a credit batch. Ask support to check the registry mapping before submitting again.`,
       );
     }
     const creditBatchId = capture.creditBatchId;
@@ -304,7 +308,7 @@ export async function patchMeasurementSampleSourceBindings(args: {
     ).sort();
     if (inventorySourceIds.length === 0) {
       throw new SafeError(
-        `Credit batch ${creditBatchId} has no intended Inventory Source for its product_mass Datapoint; Source attribution is blocked.`,
+        `Credit batch ${creditBatchId} has no Inventory Source for its product mass. Add the Source before submitting again.`,
       );
     }
 
@@ -334,7 +338,7 @@ export async function patchMeasurementSampleSourceBindings(args: {
           sourceIds.some((sourceId) => !patched.source_ids.includes(sourceId))
         ) {
           throw new SafeError(
-            `Measurement-sample Datapoint ${datapointId} did not confirm its intended Sources; the GHG entry was not created.`,
+            `Registry value ${datapointId} did not keep its Sources. Check the Sources in Isometric before submitting again.`,
           );
         }
         patchedCount += 1;
@@ -406,17 +410,13 @@ export async function submitDurabilityMeasurementSamples(
         if (journaled && !sample) {
           return {
             found: "refused" as const,
-            message:
-              `Journaled measurement sample ${journaled.measurementSampleId} ` +
-              `was not found by supplier reference "${submission.supplierRefId}"; retry is blocked.`,
+            message: `Registry measurement ${journaled.measurementSampleId} cannot be found. Ask support to check the registry record before submitting again.`,
           };
         }
         if (journaled && sample?.id !== journaled.measurementSampleId) {
           return {
             found: "refused" as const,
-            message:
-              `Measurement sample journal mismatch: expected "${journaled.measurementSampleId}" ` +
-              `but supplier reference "${submission.supplierRefId}" resolved to "${sample?.id}".`,
+            message: `Registry measurement ${journaled.measurementSampleId} does not match submission ${submission.supplierRefId}. Ask support to check the registry record.`,
           };
         }
         if (sample) {
@@ -433,7 +433,7 @@ export async function submitDurabilityMeasurementSamples(
       onConfirmed: async (externalId) => {
         if (!resolvedSample || resolvedSample.id !== externalId) {
           throw new SafeError(
-            `Measurement sample ${submission.supplierRefId} was confirmed without a matching response body; retry is blocked.`,
+            `Registry measurement for ${submission.label} could not be confirmed. Check it in Isometric before submitting again.`,
           );
         }
         const next = addJournaledMeasurementSample(journaledSamples, {
@@ -449,12 +449,12 @@ export async function submitDurabilityMeasurementSamples(
           journaledSamples = next;
         }
       },
-      failureMessagePrefix: `Measurement sample POST failed for ${submission.label}`,
+      failureMessagePrefix: `Registry measurement for ${submission.label} could not be created`,
       log: args.log,
     });
     if (!resolvedSample) {
       throw new SafeError(
-        `Measurement sample ${submission.supplierRefId} was created or reconciled without a response body; its sequestration datapoint IDs cannot be captured.`,
+        `The registry did not return values for ${submission.label}. Check the measurement in Isometric before submitting again.`,
       );
     }
     const capture = captureMeasurementSampleDatapointIds(
@@ -487,7 +487,7 @@ function assertMeasurementSampleSupplierReference(
 ): void {
   if (sample.supplier_reference_id === expected) return;
   throw new SafeError(
-    `Measurement sample ${sample.id} supplier reference mismatch: expected "${expected}".`,
+    `Registry measurement ${sample.id} does not match submission ${expected}. Ask support to check the registry record.`,
   );
 }
 

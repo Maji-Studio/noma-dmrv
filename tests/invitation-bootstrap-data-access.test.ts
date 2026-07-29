@@ -115,7 +115,9 @@ describe("createInvitedAccount", () => {
         passwordHash: PASSWORD_HASH,
       })
     ).rejects.toEqual(
-      new SafeError("Invitation not found, expired, or already used.")
+      new SafeError(
+        "This invitation is invalid, expired, or already used. Ask an Admin for a new invitation.",
+      )
     );
     expect(mockCreateOAuthUser).not.toHaveBeenCalled();
   });

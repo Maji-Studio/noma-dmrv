@@ -22,6 +22,7 @@ import {
   CaretDownIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
+import { formatCount } from "@/lib/copy-utils";
 import type { SchemaArea, SchemaColumnInfo, SchemaRelationship, SchemaTableInfo } from "@/lib/schema/catalog";
 import columnExamples from "@/lib/schema/column-examples.json";
 import columnDescriptions from "@/lib/schema/column-descriptions.json";
@@ -113,14 +114,14 @@ const columnDefs = [
   }),
   columnHelper.accessor("hasDefault", {
     header: "Default",
-    cell: (info) => <span className="text-[var(--color-text-tertiary)]">{info.getValue() ? "yes" : "—"}</span>,
+    cell: (info) => <span className="text-[var(--color-text-tertiary)]">{info.getValue() ? "Yes" : "None"}</span>,
   }),
   columnHelper.accessor("example", {
     header: "Example",
     enableSorting: false,
     cell: (info) => {
       const val = info.getValue();
-      if (!val) return <span className="text-[var(--color-text-tertiary)]">—</span>;
+      if (!val) return <span className="text-[var(--color-text-tertiary)]">None</span>;
       return (
         <code className="text-[var(--color-text-secondary)] break-all" title={val}>
           {val.length > 40 ? val.slice(0, 37) + "..." : val}
@@ -133,7 +134,7 @@ const columnDefs = [
     enableSorting: false,
     cell: (info) => {
       const val = info.getValue();
-      if (!val) return <span className="text-[var(--color-text-tertiary)]">—</span>;
+      if (!val) return <span className="text-[var(--color-text-tertiary)]">Not available</span>;
       return (
         <span className="body-small text-[var(--color-text-secondary)]" title={val}>
           {val.length > 60 ? val.slice(0, 57) + "..." : val}
@@ -222,7 +223,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
             <DatabaseIcon size={18} weight="bold" className="text-[var(--clr-purple)]" />
             <p className="title-chapter-title text-[var(--clr-purple)]">Schema Explorer</p>
           </div>
-          <h1 className="title-heading-2">Database Schema</h1>
+          <h1 className="title-heading-2">Data structure</h1>
         </header>
 
         {/* Stats row */}
@@ -362,10 +363,12 @@ function SelectedTablePanel({ table, accent }: { table: SchemaTableInfo; accent:
         </div>
         <p className="body-medium text-[var(--color-text-secondary)]">{table.summary}</p>
         <div className="flex flex-wrap items-center gap-[8px]">
-          <StatBadge label={`${table.columns.length} columns`} />
+          <StatBadge label={formatCount(table.columns.length, "column")} />
           <StatBadge label={`${table.outboundRelationships.length} outbound`} icon={<ArrowUpRightIcon size={12} />} />
           <StatBadge label={`${table.inboundRelationships.length} inbound`} icon={<ArrowDownLeftIcon size={12} />} />
-          <StatBadge label={`${linkedToTables.length + linkedFromTables.length} linked tables`} />
+          <StatBadge
+            label={`${formatCount(linkedToTables.length + linkedFromTables.length, "linked table")}`}
+          />
         </div>
         {table.useCases.length > 0 && (
           <div className="flex flex-wrap gap-[6px]">

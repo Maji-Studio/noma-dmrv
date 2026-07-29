@@ -17,17 +17,17 @@ export function formatProductionIncidentSeverity(severity: ProductionIncidentSev
 export const productionIncidentFormSchema = z.object({
   productionRunId: z
     .string()
-    .min(1, "Please select a production run")
-    .uuid("Please select a valid production run"),
+    .min(1, "Select a production run.")
+    .uuid("Choose a valid production run."),
   incidentTime: z.union([
     z.date(),
-    z.string().min(1, "Please enter an incident time").transform((val, ctx) => {
+    z.string().min(1, "Enter an incident time.").transform((val, ctx) => {
       if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(val)) return val;
       const date = new Date(val);
       if (isNaN(date.getTime())) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Invalid incident time",
+          message: "Enter a valid incident time.",
         });
         return z.NEVER;
       }
@@ -40,7 +40,7 @@ export const productionIncidentFormSchema = z.object({
   description: z
     .string()
     .trim()
-    .min(1, "Please enter an incident description")
+    .min(1, "Enter an incident description.")
     .max(4000, "Description must be less than 4000 characters"),
   correctiveActions: z
     .string()
@@ -61,11 +61,11 @@ export const productionIncidentFormSchema = z.object({
 export const createProductionIncidentSchema = productionIncidentFormSchema;
 
 export const updateProductionIncidentSchema = productionIncidentFormSchema.extend({
-  productionIncidentId: z.string().uuid("Invalid production incident ID"),
+  productionIncidentId: z.string().uuid("Choose a valid production incident."),
 });
 
 export const deleteProductionIncidentSchema = z.object({
-  productionIncidentId: z.string().uuid("Invalid production incident ID"),
+  productionIncidentId: z.string().uuid("Choose a valid production incident."),
 });
 
 export type ProductionIncidentFormData = z.infer<typeof productionIncidentFormSchema>;

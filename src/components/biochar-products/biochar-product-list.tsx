@@ -101,7 +101,7 @@ function createColumns(
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facility?.name ?? "",
-      cell: ({ row }) => row.original.facility?.name || "\u2014",
+      cell: ({ row }) => row.original.facility?.name || "Not available",
     },
     {
       id: "formulation",
@@ -139,7 +139,7 @@ function createColumns(
       id: "storageLocation",
       header: "Storage",
       accessorFn: (row) => row.storageLocation?.name ?? "",
-      cell: ({ row }) => row.original.storageLocation?.name || "\u2014",
+      cell: ({ row }) => row.original.storageLocation?.name || "Not set",
     },
     {
       id: "actions",
@@ -244,7 +244,9 @@ export function BiocharProductList() {
     if (focusedProduct.isLoading) return;
     if (!focusedProduct.isError && focusedProduct.data) return;
 
-    toast.error("Couldn't load the linked biochar product");
+    toast.error(
+      "The linked biochar product could not be loaded. Refresh the page and try again.",
+    );
     queueMicrotask(() => {
       setFocusedProductId(null);
     });
@@ -282,9 +284,9 @@ export function BiocharProductList() {
     try {
       await createProduct.mutateAsync(data);
       setSideSheet(null);
-      toast.success("Biochar product created successfully");
+      toast.success("Biochar product created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to create biochar product");
+      setFormError(error instanceof Error ? error.message : "The biochar product was not created. Check the form and try again.");
     }
   };
 
@@ -302,9 +304,9 @@ export function BiocharProductList() {
       setFocusedProductId(null);
       setDeepLinkMode(null);
       setDeepLinkFocus(null);
-      toast.success("Biochar product updated successfully");
+      toast.success("Biochar product updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to update biochar product");
+      setFormError(error instanceof Error ? error.message : "The biochar product was not saved. Try again.");
     }
   };
 
@@ -316,9 +318,9 @@ export function BiocharProductList() {
     try {
       await deleteProduct.mutateAsync(deletingProductId);
       setDeletingProductId(null);
-      toast.success("Biochar product deleted successfully");
+      toast.success("Biochar product deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete biochar product");
+      setDeleteError(error instanceof Error ? error.message : "The biochar product was not deleted. Try again.");
     }
   };
 
@@ -388,7 +390,7 @@ export function BiocharProductList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load biochar products"} />
+        <ServerError message={fetchError.message || "The biochar products could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }
@@ -594,7 +596,7 @@ export function BiocharProductList() {
               <TransportLegsSummary
                 entityType="biochar"
                 entityId={displaySideSheet.entity.id}
-                emptyMessage="Derived automatically from this product's deliveries — record a delivery whose destination has a distance from the facility."
+                emptyMessage="Transport legs are derived from this product's deliveries. Record a delivery to a destination with a distance from the facility."
               />
             ),
           },

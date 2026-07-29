@@ -16,7 +16,7 @@ const FUEL_USAGE_BY_VOLUME_BLUEPRINT = "fuel_usage_by_volume";
 const VOLUME_OF_FUEL_INPUT_KEY = "volume_of_fuel";
 
 const DIESEL_UNMAPPED_WARNING =
-  "Diesel fuel (genset and/or startup/preprocessing) is recorded, but the active removal template declares no pyrolysis fuel-usage-by-volume component with a monitored volume-of-fuel input to carry it — removal submissions cannot include these fuel emissions (issue #319).";
+  "Genset or startup diesel is recorded, but the active Removal template has no monitored pyrolysis fuel input. Add the input in Isometric before submitting these fuel emissions.";
 
 function templateCarriesRunDiesel(
   template: IsometricGhgEntryTemplate,
@@ -70,7 +70,7 @@ function buildStraddleWarning(args: {
   return [
     `Reporting window spans multiple months (production started ${startMonth}, ` +
       `latest application ${applicationMonth}); §8.6.2 attributes operations ` +
-      "emissions to the period they occur in — consider splitting the removal.",
+      "emissions to the period when they occur. Review the dates and split the Removal if needed.",
   ];
 }
 

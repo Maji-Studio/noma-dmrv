@@ -51,7 +51,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
       setIsAddingLocation(false);
     } catch (error) {
       setCreateError(
-        error instanceof Error ? error.message : "Failed to create location"
+        error instanceof Error ? error.message : "The location was not created. Check the form and try again."
       );
     }
   };
@@ -68,7 +68,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
       setEditingLocation(null);
     } catch (error) {
       setUpdateError(
-        error instanceof Error ? error.message : "Failed to update location"
+        error instanceof Error ? error.message : "The location was not saved. Try again."
       );
     }
   };
@@ -81,7 +81,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
       setDeletingLocationId(null);
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : "Failed to delete location"
+        error instanceof Error ? error.message : "The location was not deleted. Try again."
       );
     }
   };
@@ -96,7 +96,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
     return (
       <div className="p-32 border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10">
         <p className="body-medium text-[var(--color-signal-red)]">
-          {supplierError instanceof Error ? supplierError.message : "Failed to load supplier"}
+          {supplierError instanceof Error ? supplierError.message : "The supplier could not be loaded. Refresh the page and try again."}
         </p>
       </div>
     );
@@ -132,20 +132,20 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Contact email
             </dt>
-            <dd className="body-medium mt-16">{supplier.contactEmail || "—"}</dd>
+            <dd className="body-medium mt-16">{supplier.contactEmail || "Not recorded"}</dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Contact phone
             </dt>
-            <dd className="body-medium mt-16">{supplier.contactPhone || "—"}</dd>
+            <dd className="body-medium mt-16">{supplier.contactPhone || "Not recorded"}</dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Location
             </dt>
             <dd className="body-medium mt-16">
-              {resolveSupplierLocationDisplay(supplier.location, locations) || "—"}
+              {resolveSupplierLocationDisplay(supplier.location, locations) || "Not recorded"}
             </dd>
           </div>
           <div>
@@ -156,7 +156,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
             <dd className="body-medium mt-16">
               {supplier.distanceToFacilityKm != null
                 ? `${supplier.distanceToFacilityKm} km`
-                : "—"}
+                : "Not set"}
             </dd>
           </div>
         </div>
@@ -268,29 +268,29 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                     className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-surface-light)]"
                   >
                     <td className="px-16 py-12 body-medium">
-                      {location.name || "—"}
+                      {location.name || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.country}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.stateRegion || "—"}
+                      {location.stateRegion || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.city || "—"}
+                      {location.city || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.address || "—"}
+                      {location.address || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
                       {location.gpsLatitude !== null && location.gpsLongitude !== null
                         ? `${location.gpsLatitude.toFixed(4)}, ${location.gpsLongitude.toFixed(4)}`
-                        : "—"}
+                        : "Not set"}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.distanceFromFacilityKm != null
                         ? `${location.distanceFromFacilityKm} km`
-                        : "—"}
+                        : "Not set"}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.isDefault ? "Yes" : "No"}

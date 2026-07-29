@@ -221,7 +221,7 @@ export function CertificationSettings() {
         <NotUsedNotice title="This facility is on the 1000-year durability tier">
           The reference soil temperature only feeds the 200-year model, which
           derives durability from the H:C ratio and soil temperature. The
-          1000-year tier measures R₀ reflectance on the sample instead, so there
+          1000-year tier measures R₀ reflectance on the Sample instead, so there
           is nothing to configure here. Change the facility&apos;s durability
           tier to make these values apply.
         </NotUsedNotice>
@@ -274,7 +274,7 @@ export function CertificationSettings() {
 
   const subtitle = selectedFacility
     ? `Configure how ${selectedFacility.code} reaches the registry.`
-    : "Configure how this facility's removals and GHG statements reach the registry.";
+    : "Configure how this facility's Removals and GHG Statements reach the registry.";
 
   if (!facilityId) {
     return (

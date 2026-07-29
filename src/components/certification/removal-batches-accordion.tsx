@@ -72,7 +72,7 @@ export function RemovalBatchesAccordion({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] hover:underline w-fit"
               >
-                Open removal
+                Open Removal
                 <ArrowSquareOutIcon size={12} weight="bold" aria-hidden />
               </Link>
 
@@ -82,7 +82,7 @@ export function RemovalBatchesAccordion({
                 </span>
                 {entry.creditBatches.length === 0 ? (
                   <p className="body-caption text-[var(--color-text-tertiary)]">
-                    No credit batches grouped into this removal.
+                    No credit batches grouped into this Removal.
                   </p>
                 ) : (
                   <ul className="flex flex-col gap-4">

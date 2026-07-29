@@ -89,7 +89,7 @@ function createColumns(
       header: "Supplier",
       cell: ({ row }) => (
         <div className="flex flex-col">
-          <span>{row.original.supplierName || "\u2014"}</span>
+          <span>{row.original.supplierName || "Not recorded"}</span>
           {row.original.supplierCode && (
             <span className="body-small text-[var(--color-text-tertiary)]">
               {row.original.supplierCode}
@@ -103,7 +103,7 @@ function createColumns(
       header: "Feedstock type",
       cell: ({ row }) => (
         <div className="flex flex-col">
-          <span>{row.original.feedstockTypeName || "\u2014"}</span>
+          <span>{row.original.feedstockTypeName || "Not recorded"}</span>
           {row.original.feedstockTypeCategory && (
             <span className="body-small text-[var(--color-text-tertiary)] capitalize">
               {row.original.feedstockTypeCategory}
@@ -132,7 +132,7 @@ function createColumns(
       accessorKey: "storageLocationName",
       header: "Storage bin",
       cell: ({ row }) => (
-        <span>{row.original.storageLocationCode ?? row.original.storageLocationName ?? "\u2014"}</span>
+        <span>{row.original.storageLocationCode ?? row.original.storageLocationName ?? "Not set"}</span>
       ),
     },
     {
@@ -187,7 +187,7 @@ function createColumns(
 
 function buildFeedstockTransferToast(feedstocks: FeedstockWithRelations[]) {
   const [first] = feedstocks;
-  if (!first) return "Feedstock created successfully";
+  if (!first) return "Feedstock created.";
 
   const feedstockType = first.feedstockTypeName ?? "feedstock";
   const totalDryKg = feedstocks.reduce(
@@ -283,7 +283,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     setError: setCreateError,
     setUpdateError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Failed to create feedstock",
+      error instanceof Error ? error.message : "The feedstock was not created. Check the form and try again.",
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this feedstock.",
     openEditOnFailure: (feedstock) =>
@@ -338,9 +338,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       setFocusedFeedstockId(null);
       setDeepLinkMode(null);
       setDeepLinkFocus(null);
-      toast.success("Feedstock updated successfully");
+      toast.success("Feedstock updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Failed to update feedstock");
+      setUpdateError(error instanceof Error ? error.message : "The feedstock was not saved. Try again.");
     }
   };
 
@@ -352,9 +352,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     try {
       await deleteFeedstock.mutateAsync(deletingId);
       setDeletingId(null);
-      toast.success("Feedstock deleted successfully");
+      toast.success("Feedstock deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete feedstock");
+      setDeleteError(error instanceof Error ? error.message : "The feedstock was not deleted. Try again.");
     }
   };
 
@@ -448,7 +448,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   if (fetchError) {
     return (
       <div className="flex flex-col gap-32">
-        <ServerError message={fetchError.message || "Failed to load feedstocks"} />
+        <ServerError message={fetchError.message || "The feedstocks could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }

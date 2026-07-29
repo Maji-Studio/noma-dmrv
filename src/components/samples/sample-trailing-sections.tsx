@@ -119,7 +119,9 @@ export function SampleTransportSection({
             <div className="flex flex-col gap-10 border border-[var(--color-status-error)] p-12">
               <div className="flex flex-wrap items-center justify-between gap-8">
                 <p className="body-small font-medium text-[var(--color-status-error)]">
-                  {deferredLegs.length} transport {deferredLegs.length === 1 ? "leg" : "legs"} failed to save
+                  {deferredLegs.length} transport{" "}
+                  {deferredLegs.length === 1 ? "leg was" : "legs were"} not
+                  saved
                 </p>
                 <Button
                   type="button"

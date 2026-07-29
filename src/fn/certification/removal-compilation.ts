@@ -13,7 +13,10 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
-import { DURABILITY_MEASUREMENT_SAMPLES_ENABLED } from "./durability-measurement-samples";
+import {
+  DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
+  DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
+} from "./durability-measurement-samples";
 import {
   compileRemovalSubmission,
   type CompiledRemovalSubmission,
@@ -78,9 +81,7 @@ export async function loadRemovalCompilation(
       hasDurabilityComponents &&
       !DURABILITY_MEASUREMENT_SAMPLES_ENABLED
     ) {
-      blockers.push(
-        "Durability measurement-sample POSTs run against the Isometric sandbox only. This environment targets the live registry, so this Removal cannot be submitted here.",
-      );
+      blockers.push(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
     }
 
     return {

@@ -436,7 +436,7 @@ export async function createBiocharProduct(
   }
 
   if (data.massKg == null || !Number.isFinite(data.massKg) || data.massKg < 0) {
-    throw new SafeError("Wet mass must be a non-negative finite number");
+    throw new SafeError("Wet mass must be 0 or more.");
   }
 
   if (
@@ -449,7 +449,7 @@ export async function createBiocharProduct(
   }
 
   if (data.waterAddedKg == null || !Number.isFinite(data.waterAddedKg) || data.waterAddedKg < 0) {
-    throw new SafeError("Water added must be a non-negative finite number");
+    throw new SafeError("Water added must be 0 or more.");
   }
 
   // Validate the linked production run (independent, read-only). Its date is the
@@ -703,7 +703,7 @@ export async function updateBiocharProduct(
     effectiveMassKg != null &&
     (!Number.isFinite(effectiveMassKg) || effectiveMassKg < 0)
   ) {
-    throw new SafeError("Wet mass must be a non-negative finite number");
+    throw new SafeError("Wet mass must be 0 or more.");
   }
 
   if (
@@ -719,7 +719,7 @@ export async function updateBiocharProduct(
     effectiveWaterAddedKg != null &&
     (!Number.isFinite(effectiveWaterAddedKg) || effectiveWaterAddedKg < 0)
   ) {
-    throw new SafeError("Water added must be a non-negative finite number");
+    throw new SafeError("Water added must be 0 or more.");
   }
 
   // When the linked run is (re)assigned, the product's production date follows

@@ -63,7 +63,9 @@ describe("measurement-sample submission journal", () => {
           measurementSampleId: "mts-conflict",
         },
       ),
-    ).toThrow(/already journaled.*different measurement sample/i);
+    ).toThrow(
+      "Submission ref-a is linked to a different registry measurement. Start a new submission.",
+    );
   });
 
   it("fails closed on malformed journal state", () => {
@@ -73,7 +75,9 @@ describe("measurement-sample submission journal", () => {
           measurementSamples: [{ supplierReferenceId: "ref-a" }],
         },
       }),
-    ).toThrow(/measurement-sample journal is invalid/i);
+    ).toThrow(
+      "The saved Removal submission is damaged. Start a new submission.",
+    );
   });
 
   it("fails closed on duplicate journal identities", () => {
@@ -92,6 +96,8 @@ describe("measurement-sample submission journal", () => {
           ],
         },
       }),
-    ).toThrow(/measurement-sample journal is invalid/i);
+    ).toThrow(
+      "The saved Removal submission is damaged. Start a new submission.",
+    );
   });
 });

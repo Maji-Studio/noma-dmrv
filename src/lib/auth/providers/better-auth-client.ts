@@ -84,7 +84,7 @@ function mapBetterAuthError(error: unknown): string {
     const message = rawMessage.toLowerCase();
 
     if (message.includes("email not verified")) {
-      return "Please verify your email before signing in.";
+      return "Verify your email before signing in.";
     }
     if (message.includes("invalid credentials") || message.includes("invalid email or password")) {
       return "Invalid email or password.";
@@ -93,10 +93,10 @@ function mapBetterAuthError(error: unknown): string {
       return "No account found with this email.";
     }
     if (message.includes("too many requests")) {
-      return "Too many attempts. Please try again later.";
+      return "Too many attempts. Try again later.";
     }
     if (message.includes("token expired")) {
-      return "This link has expired. Please request a new one.";
+      return "This link has expired. Request a new one.";
     }
     if (message.includes("invalid token")) {
       return "Invalid or expired link.";
@@ -105,7 +105,7 @@ function mapBetterAuthError(error: unknown): string {
     return rawMessage;
   }
 
-  return "An unexpected error occurred. Please try again.";
+  return "The account request could not be completed. Try again.";
 }
 
 /**
@@ -131,7 +131,7 @@ export async function signInWithPassword(
     if (!result.data) {
       return {
         success: false,
-        error: "Failed to sign in. Please try again.",
+        error: "You could not be signed in. Check your details and try again.",
       };
     }
 
@@ -139,7 +139,7 @@ export async function signInWithPassword(
     if (!result.data.user.emailVerified) {
       return {
         success: false,
-        error: "Please verify your email before signing in.",
+        error: "Verify your email before signing in.",
       };
     }
 
@@ -163,7 +163,7 @@ export async function signInWithPassword(
     if (!sessionId) {
       return {
         success: false,
-        error: "Authentication succeeded but no session was created. Please try again.",
+        error: "You were verified, but the session was not created. Sign in again.",
       };
     }
 
@@ -327,7 +327,7 @@ export async function requestPasswordReset(
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error("Failed to send password reset email");
+        throw new Error("The password reset email was not sent. Try again.");
       }
 
       return { success: true };

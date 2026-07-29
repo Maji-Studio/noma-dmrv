@@ -377,7 +377,7 @@ function CreateModeLocationsSection({
                       </p>
                     ) : null}
                     <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
-                      {loc.address ? `${loc.address} — ` : ""}
+                      {loc.address ? `${loc.address}, ` : ""}
                       {`${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`}
                     </p>
                   </div>
@@ -680,7 +680,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
           aria-live="assertive"
           aria-atomic="true"
         >
-          Failed to load locations. Please try refreshing.
+          Locations could not be loaded. Refresh the page and try again.
         </p>
       ) : !locations || locations.length === 0 ? (
         <p className="body-small text-[var(--color-text-tertiary)]">
@@ -700,7 +700,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
                   <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
                     {loc.address || "Location not set"}
                     {loc.gpsLatitude !== null && loc.gpsLongitude !== null
-                      ? ` — ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`
+                      ? `, ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`
                       : ""}
                   </p>
                 </div>

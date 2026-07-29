@@ -37,7 +37,7 @@ describe("readRemovalSourceBindingPlan", () => {
       readRemovalSourceBindingPlan({
         payloadSnapshot: {},
       } as never),
-    ).toThrow(/Source binding plan/i);
+    ).toThrow(/saved submission uses an older supporting-file plan/i);
   });
 
   it("fails closed when a stored sequestration target has no credit-batch scope", () => {
@@ -67,6 +67,6 @@ describe("readRemovalSourceBindingPlan", () => {
           ],
         },
       } as never),
-    ).toThrow(/Source binding plan/i);
+    ).toThrow(/saved submission uses an older supporting-file plan/i);
   });
 });

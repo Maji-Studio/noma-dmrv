@@ -87,7 +87,7 @@ export function IngredientBinField({
               error={fieldState.error?.message}
               helperText={
                 row.suggestedMassKg != null
-                  ? `Suggested: ${formatKgShort(row.suggestedMassKg)} kg — enter to confirm`
+                  ? `Suggested: ${formatKgShort(row.suggestedMassKg)} kg. Enter the mass to confirm it.`
                   : undefined
               }
             >
@@ -109,8 +109,8 @@ export function IngredientBinField({
             {showDeviation && row.deviationPercent != null && (
               <p className="body-caption text-[var(--st-wait)] mt-4">
                 {row.deviationPercent > 0 ? "+" : ""}
-                {row.deviationPercent.toFixed(0)}% vs recipe — recorded as
-                entered
+                {row.deviationPercent.toFixed(0)}% vs recipe. Recorded as
+                entered.
               </p>
             )}
           </div>

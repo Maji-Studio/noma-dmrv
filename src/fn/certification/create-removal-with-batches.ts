@@ -68,7 +68,7 @@ export async function createRemovalWithBatchesAction(
         "A selected credit batch";
 
       if (ctx.removalId !== null) {
-        throw new SafeError(`${code} is already grouped into a removal.`);
+        throw new SafeError(`${code} already belongs to a Removal.`);
       }
       if (ctx.facilityId !== facilityId) {
         throw new SafeError(`${code} belongs to a different facility.`);

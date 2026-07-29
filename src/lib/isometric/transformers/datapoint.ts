@@ -5,7 +5,10 @@ import type {
   EmissionInputBucket,
 } from "../utils/aggregation";
 import { payloadHash } from "../utils/payload-hash";
-import { SEQUESTRATION_COMPONENT_INPUT_BINDINGS } from "./sequestration-binding";
+import {
+  RegistryMappingError,
+  SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
+} from "./sequestration-binding";
 
 type DatapointType = components["schemas"]["DatapointType"];
 type QuantityKindType = components["schemas"]["QuantityKindType"];
@@ -289,10 +292,7 @@ export function resolveDatapointSource(
       .map((k) => `"${k}"`)
       .join(", ");
     throw new SafeError(
-      `Template component "${componentDisplayName}" is not a recognized pyrolysis diesel component ` +
-        `(expected, matched case/whitespace-insensitively: ${expected}). Rename the component to match, ` +
-        `or update PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT in transformers/datapoint.ts ` +
-        `(a facility-configurable mapping is planned — docs/open-questions.md).`,
+      `The pyrolysis diesel component is not recognized. Rename it in Isometric to one of these names: ${expected}.`,
     );
   }
   return resolved;
@@ -424,6 +424,12 @@ export function buildCreateDatapointRequest(
     allowPeriodInputStub,
   } = args;
   const inputKey = rtcInput.input_key;
+  const componentLabel =
+    componentDisplayName?.trim() &&
+    !componentDisplayName.includes("_") &&
+    !componentDisplayName.includes("/")
+      ? componentDisplayName
+      : "selected template component";
 
   // ADR 0005 §3 / ADR 0018 — scope-conflict check fires BEFORE the
   // INPUT_MAPPING lookup, not just before the missing-entry error: the
@@ -446,7 +452,7 @@ export function buildCreateDatapointRequest(
         description:
           `Sandbox 0-stub for project-scope period input ` +
           `"${groupKey}/${componentBlueprintKey}/${inputKey}" ` +
-          `(category="${periodTuple.category}") — pending real LCA value. ` +
+          `(category="${periodTuple.category}"). A real LCA value is still required. ` +
           `See ADR 0018 + docs/open-questions.md. Production fails closed.`,
         display_name: blueprintInput.input_key,
         project_id: projectId,
@@ -465,30 +471,32 @@ export function buildCreateDatapointRequest(
           .join(", ")
       : null;
     throw new SafeError(
-      `This input belongs to a Project-scope Component (PROJECT scope, category="${periodTuple.category}"). ` +
-        `Remove "${groupKey}/${componentBlueprintKey}/${inputKey}" from the Removal Template; publish this emission as a Project Component in the Isometric UI, with the source LCA PDF attached to its Sources field (ADR 0018).` +
+      `Registry component ${componentLabel} belongs at the project level, so it cannot be submitted with this Removal. Remove it from the Removal template, then add the project emissions in Isometric.` +
         (recognizedCarveOuts
-          ? ` Recognized Removal-scope component names for this tuple (matched case/whitespace-insensitively): ${recognizedCarveOuts}.`
+          ? ` This registry field can stay at Removal scope only when the component is named ${recognizedCarveOuts}.`
           : ""),
     );
   }
 
   const mapping = lookupInputMapping(groupKey, componentBlueprintKey, inputKey);
   if (!mapping) {
-    throw new SafeError(
-      `No INPUT_MAPPING entry for group="${groupKey}" blueprint="${componentBlueprintKey}" input="${inputKey}" — update transformers/datapoint.ts before submitting.`,
+    throw new RegistryMappingError(
+      `Registry component ${componentLabel} is not supported. Ask support to update the registry mapping before submitting.`,
+      componentBlueprintKey,
+      inputKey,
+      groupKey,
     );
   }
   if (mapping.expectedQuantityKind !== blueprintInput.quantity_kind) {
     throw new SafeError(
-      `Input "${inputKey}": blueprint expects quantity_kind="${blueprintInput.quantity_kind}" but mapping declares "${mapping.expectedQuantityKind}". Update INPUT_MAPPING.`,
+      `Registry component ${componentLabel} uses an unsupported value type. Ask support to check the registry mapping before submitting.`,
     );
   }
   if (
     mapping.unit.toLowerCase() !== blueprintInput.compatible_unit.toLowerCase()
   ) {
     throw new SafeError(
-      `Input "${inputKey}": blueprint compatible_unit="${blueprintInput.compatible_unit}" but mapping declares "${mapping.unit}". Phase 3 requires exact match; unit conversion is a Phase 4 concern.`,
+      `Registry component ${componentLabel} uses a different unit from the saved mapping. Ask support to update the registry mapping.`,
     );
   }
 
@@ -496,7 +504,7 @@ export function buildCreateDatapointRequest(
   const raw = agg[source];
   if (raw == null) {
     throw new SafeError(
-      `Input "${inputKey}": aggregated source ${String(source)} is null. Cannot build datapoint.`,
+      `Removal data has no calculated value for registry component ${componentLabel}. Check the source records before submitting.`,
     );
   }
   const magnitude = mapping.transform

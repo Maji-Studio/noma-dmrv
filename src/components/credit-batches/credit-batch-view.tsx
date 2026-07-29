@@ -47,7 +47,7 @@ function ProductionRunLink({
           )}
           <span className="body-caption tabular-nums text-[var(--color-text-tertiary)]">
             {run.biocharDryMassKg == null
-              ? "—"
+              ? "Not recorded"
               : `${formatTonnes(run.biocharDryMassKg / 1000)} dry`}
           </span>
         </>
@@ -174,8 +174,8 @@ function co2eStoredValue({
   }
   if (!preview) {
     if (isCo2ePreviewLoading) return "Calculating…";
-    if (co2ePreviewFailed) return "Couldn't calculate";
-    return "—";
+    if (co2ePreviewFailed) return "Not available";
+    return "Not available";
   }
 
   const gaps = carbonGapLabels(preview.missingInputs);

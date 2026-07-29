@@ -150,7 +150,7 @@ function AllocationBar({
           }`}
         >
           Total {formatSharePercent(total)}%
-          {isOver && " — exceeds 100%"}
+          {isOver && ". Exceeds 100%"}
         </span>
       </div>
     </div>
@@ -339,8 +339,8 @@ export function FormulationForm({
 
         {fields.length === 0 && (
           <p className="body-small text-[var(--color-text-tertiary)] py-8">
-            No ingredients added — this is a pure-biochar formulation. Click
-            &quot;Add Ingredient&quot; to blend in amendment components.
+            No blend feedstock types are added. This is a pure-biochar formulation.
+            Add a feedstock type to create a blend.
           </p>
         )}
 

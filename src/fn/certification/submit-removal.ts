@@ -41,6 +41,7 @@ import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
   assertSupportedDurabilityConfiguration,
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
+  DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
   submitDurabilityMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
@@ -87,14 +88,15 @@ import {
 // Domain wording for the claim module's blocked outcomes (the module owns
 // only the mapping-guard wording; claim decisions are translated here).
 const REMOVAL_CLAIM_BLOCKED_MESSAGES: Record<ClaimBlockedReason, string> = {
-  "in-flight": "A Removal submission for this removal is already in progress.",
+  "in-flight": "A submission for this Removal is already in progress.",
   "rejected-with-external":
     "This Removal was rejected by the verifier. Resolve the rejection in the Isometric registry before retrying.",
   // Removal policy is `supersede`; invalid-changed-hash is unreachable but
   // kept so future policy changes are explicit.
-  "invalid-changed-hash": "Unexpected submission state for this removal.",
+  "invalid-changed-hash":
+    "This Removal changed while the submission was being prepared. Reload and try again.",
   "state-changed":
-    "Submission state changed while preparing the removal. Reload and retry.",
+    "The submission changed while preparing the Removal. Reload and try again.",
 };
 
 export interface SubmitRemovalArgs {
@@ -231,11 +233,11 @@ async function submitRemovalCore(
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
   if (ctx.missingDefaultTemplateId) {
     throw new SafeError(
-      "The facility's default removal template was not found in Certify. Refresh the link in facility settings.",
+      "The facility's default Removal template was not found in Certify. Refresh the link in facility settings.",
     );
   }
   if (!ctx.defaultTemplate) {
-    throw new SafeError("Set a default removal template before submitting.");
+    throw new SafeError("Set a default Removal template before submitting.");
   }
   // Pin the narrowed (non-null) template into a const — TS loses narrowing of
   // a property access (`ctx.defaultTemplate`) inside async callbacks below.
@@ -249,12 +251,12 @@ async function submitRemovalCore(
   }
   if (ctx.unresolvedBlueprintKeys.length > 0) {
     throw new SafeError(
-      `Cannot submit: blueprints out of sync with Certify (${ctx.unresolvedBlueprintKeys.join(", ")}). Refresh in facility settings.`,
+      "The registry template is out of date. Refresh the facility link in settings before submitting.",
     );
   }
   if (defaultTemplate.groups.length === 0) {
     throw new SafeError(
-      "Default removal template has no components - nothing to submit.",
+      "The default Removal template has no fields to submit. Choose another template in facility settings.",
     );
   }
 
@@ -283,11 +285,7 @@ async function submitRemovalCore(
     group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
   );
   if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
-    throw new SafeError(
-      "Durability measurement-sample POSTs run against the Isometric sandbox " +
-        "only. This environment targets the live registry, so the required " +
-        "sequestration datapoint IDs cannot be bound.",
-    );
+    throw new SafeError(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
   }
   if (hasDurabilityComponents) {
     assertSupportedDurabilityConfiguration(ctx.batchesWithSamples);
@@ -296,7 +294,7 @@ async function submitRemovalCore(
   assertProductionConfirmed(confirmProduction);
 
   if (ctx.memberBatches.length === 0) {
-    throw new SafeError("This removal has no credit batches.");
+    throw new SafeError("This Removal has no credit batches.");
   }
   if (!facilityTier) {
     throw new SafeError(
@@ -795,9 +793,7 @@ async function runRemovalSubmission({
   // data-quality evidence. The gate is already open whenever submissions are
   // present; the explicit guard is defence-in-depth for future callers.
   if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
-    throw new SafeError(
-      "Durability measurement-sample submission is disabled. The GHG entry cannot be created without explicit sequestration datapoint bindings.",
-    );
+    throw new SafeError(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
   }
   if (durabilityMeasurementSubmissions) {
     const {

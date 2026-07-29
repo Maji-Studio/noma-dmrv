@@ -33,10 +33,10 @@ describe("formatDate", () => {
   });
 
   it("returns a dash for null and invalid dates", () => {
-    expect(formatDate(null)).toBe("—");
-    expect(formatDate(undefined)).toBe("—");
-    expect(formatDate("2026-02-31")).toBe("—");
-    expect(formatDate(new Date(Number.NaN))).toBe("—");
+    expect(formatDate(null)).toBe("Not recorded");
+    expect(formatDate(undefined)).toBe("Not recorded");
+    expect(formatDate("2026-02-31")).toBe("Not available");
+    expect(formatDate(new Date(Number.NaN))).toBe("Not available");
   });
 });
 
@@ -53,38 +53,38 @@ describe("formatDateTime", () => {
   });
 
   it("returns a dash for null and invalid values", () => {
-    expect(formatDateTime(null)).toBe("—");
-    expect(formatDateTime("not-a-date")).toBe("—");
+    expect(formatDateTime(null)).toBe("Not recorded");
+    expect(formatDateTime("not-a-date")).toBe("Not available");
   });
 });
 
 describe("formatDateRange", () => {
   it("compacts ranges within the same year", () => {
     expect(formatDateRange("2026-06-01", "2026-06-30")).toBe(
-      "Jun 1 – Jun 30, 2026",
+      "Jun 1 to Jun 30, 2026",
     );
   });
 
   it("shows both years for cross-year ranges", () => {
     expect(formatDateRange("2026-12-15", "2027-01-10")).toBe(
-      "Dec 15, 2026 – Jan 10, 2027",
+      "Dec 15, 2026 to Jan 10, 2027",
     );
   });
 
   it("accepts Date inputs and rejects incomplete or invalid ranges", () => {
     expect(
       formatDateRange(new Date(2026, 5, 1), new Date(2026, 5, 30)),
-    ).toBe("Jun 1 – Jun 30, 2026");
-    expect(formatDateRange(null, "2026-06-30")).toBe("—");
-    expect(formatDateRange("2026-06-01", "invalid")).toBe("—");
+    ).toBe("Jun 1 to Jun 30, 2026");
+    expect(formatDateRange(null, "2026-06-30")).toBe("Not recorded");
+    expect(formatDateRange("2026-06-01", "invalid")).toBe("Not available");
   });
 });
 
 describe("formatCo2e", () => {
   it("returns a dash for null, undefined, and NaN", () => {
-    expect(formatCo2e(null)).toBe("—");
-    expect(formatCo2e(undefined)).toBe("—");
-    expect(formatCo2e(Number.NaN)).toBe("—");
+    expect(formatCo2e(null)).toBe("Not available");
+    expect(formatCo2e(undefined)).toBe("Not available");
+    expect(formatCo2e(Number.NaN)).toBe("Not available");
   });
 
   it("renders whole kg below one tonne and tonnes at or above it", () => {

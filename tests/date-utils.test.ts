@@ -132,7 +132,7 @@ describe("combineDateAndTime across DST transitions", () => {
   it("names the time, date and zone in the rejection", () => {
     process.env.TZ = "UTC";
     expect(() => combineDateAndTime("2026-03-08", "02:30", NEW_YORK)).toThrow(
-      "02:30 does not exist on 2026-03-08 in America/New York — clocks move" +
+      "02:30 does not exist on 2026-03-08 in America/New York. Clocks move" +
         " forward that day. Enter a time outside the skipped hour.",
     );
   });
@@ -163,7 +163,7 @@ describe("combineDateAndTime across DST transitions", () => {
   it("names the repeated time, date and zone in the fold rejection", () => {
     process.env.TZ = "UTC";
     expect(() => combineDateAndTime("2026-11-01", "01:30", NEW_YORK)).toThrow(
-      "01:30 occurs twice on 2026-11-01 in America/New York — clocks move" +
+      "01:30 occurs twice on 2026-11-01 in America/New York. Clocks move" +
         " back that day. Enter a time outside the repeated hour.",
     );
   });

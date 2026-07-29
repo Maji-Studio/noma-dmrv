@@ -248,9 +248,9 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
       }
       expect(err).toBeInstanceOf(SafeError);
       const message = (err as Error).message;
-      expect(message).toMatch(/PROJECT/);
-      expect(message).toContain(t.category);
-      expect(message).toContain(t.input);
+      expect(message).toContain("belongs at the project level");
+      expect(message).toContain("Remove it from the Removal template");
+      expect(message).toContain("add the project emissions in Isometric");
       // The generic missing-entry message must NOT fire — that would mean the
       // scope-conflict guard didn't run first.
       expect(message).not.toMatch(/No INPUT_MAPPING entry/);
@@ -276,7 +276,7 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
     };
     try {
       expect(callWith(tuple)).toThrowError(SafeError);
-      expect(callWith(tuple)).toThrowError(/PROJECT/);
+      expect(callWith(tuple)).toThrowError(/belongs at the project level/);
       const dp = callWith(tuple, { allowPeriodInputStub: true })();
       expect(dp.quantity.magnitude).toBe(0);
     } finally {

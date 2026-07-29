@@ -324,7 +324,9 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
         totalCarbonPercent: 80,
         organicCarbonPercent: 78,
       }),
-    ).rejects.toThrow("Credit batch not found");
+    ).rejects.toThrow(
+      "Credit batch was not found in this Organization. Refresh the page and try again.",
+    );
   });
 
   it("updateSample moves the sample to another batch", async () => {
@@ -474,7 +476,9 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
         organicCarbonPercent: 78,
         randomReflectanceR0Percent: 2.1,
       }),
-    ).rejects.toThrow(/TGA non-reactive carbon data is required/);
+    ).rejects.toThrow(
+      /TGA non-reactive carbon is required for a Sample on a 1000-year credit batch/,
+    );
   });
 
   it("createSample accepts a 1000-year batch sample carrying R₀ + TGA evidence", async () => {

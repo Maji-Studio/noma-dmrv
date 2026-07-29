@@ -100,7 +100,7 @@ export const stockTakeFormSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["counted"],
-          message: persistedMass.error.issues[0]?.message ?? "Invalid mass",
+          message: persistedMass.error.issues[0]?.message ?? "Enter a valid mass.",
         });
       }
     }
@@ -124,7 +124,7 @@ export type RecordLossFormData = z.infer<typeof recordLossFormSchema>;
 
 export const recordStockTakeSchema = z
   .object({
-    storageLocationId: z.uuid("Invalid storage bin ID"),
+    storageLocationId: z.uuid("Choose a valid storage bin."),
     lane: z.enum(binMovementLanes),
     reason: reasonSchema,
     // Preview value from the client. The data-access boundary recomputes this
@@ -167,7 +167,7 @@ export const recordStockTakeSchema = z
 export type RecordStockTakeData = z.infer<typeof recordStockTakeSchema>;
 
 export const recordLossSchema = z.object({
-  storageLocationId: z.uuid("Invalid storage bin ID"),
+  storageLocationId: z.uuid("Choose a valid storage bin."),
   lane: z.enum(binMovementLanes),
   reason: reasonSchema,
   lossMassKg: requiredPositiveMassKgSchema(

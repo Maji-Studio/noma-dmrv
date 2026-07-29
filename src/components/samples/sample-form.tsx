@@ -736,7 +736,7 @@ export function SampleForm({
                   shown here (it decides which analyses follow), never edited. */}
               <p className="body-caption text-[var(--color-text-secondary)]">
                 {watchedCreditBatchId
-                  ? `${formatDurabilityOption(watchedDurabilityOption)} durability — inherited from the selected credit batch.`
+                  ? `${formatDurabilityOption(watchedDurabilityOption)} durability, inherited from the selected credit batch.`
                   : "The durability tier is inherited from the selected credit batch."}
               </p>
 
@@ -750,15 +750,15 @@ export function SampleForm({
               {is1000Year ? (
                 <details className="border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]">
                   <summary className="cursor-pointer px-12 py-8 body-small font-medium text-[var(--color-text-primary)] marker:text-[var(--color-text-tertiary)]">
-                    Eligibility ratios (H:Corg, O:Corg) — required
+                    Required eligibility ratios (H:Corg, O:Corg)
                   </summary>
                   <div className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] p-12">
                     <p className="body-caption text-[var(--color-text-tertiary)]">
                       Not used for the 1000-year durability estimate, but still
                       required by the universal eligibility check (H/C_org &lt;
-                      0.5, O/C_org &lt; 0.2) — a sample missing either ratio
-                      doesn&apos;t count toward the batch&apos;s replicate
-                      minimum.
+                      0.5, O/C_org &lt; 0.2). A Sample without both ratios does
+                      not count toward the credit batch&apos;s minimum number of
+                      replicates.
                     </p>
                     {stabilityRatioFields}
                   </div>
