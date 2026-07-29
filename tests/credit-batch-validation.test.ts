@@ -541,7 +541,9 @@ describe("Credit Batch Production-Run Validation", () => {
         facilityId: facilityA.id,
         productionRunIds: [fakeId],
       })
-    ).rejects.toThrow(`Production run ${fakeId} was not found`);
+    ).rejects.toThrow(
+      "A selected production run was not found. Refresh the credit batch and choose its production runs again.",
+    );
   });
 
   it("rejects cross-facility production run IDs", async () => {
@@ -552,7 +554,7 @@ describe("Credit Batch Production-Run Validation", () => {
         facilityId: facilityA.id,
         productionRunIds: [runInFacilityB.id],
       })
-    ).rejects.toThrow("do not belong to the selected facility");
+    ).rejects.toThrow("does not belong to the selected facility");
   });
 
   it("rejects duplicate production run IDs", async () => {
@@ -576,7 +578,7 @@ describe("Credit Batch Production-Run Validation", () => {
         facilityId: facilityA.id,
         productionRunIds: [outOfWindowRunInFacilityA.id],
       })
-    ).rejects.toThrow("fall outside the credit batch production window");
+    ).rejects.toThrow("falls outside the credit batch production window");
   });
 
   it("accepts valid same-facility runs matching the declared feedstock", async () => {
@@ -617,7 +619,7 @@ describe("Credit Batch Production-Run Validation", () => {
         facilityId: facilityA.id,
         productionRunIds: [multiFeedstockRunInFacilityA.id],
       }),
-    ).rejects.toThrow(/single feedstock/i);
+    ).rejects.toThrow(/A credit batch must contain one feedstock/i);
   });
 
   it("rejects a batch whose run has no linked feedstock", async () => {
@@ -662,7 +664,7 @@ describe("Credit Batch Production-Run Validation", () => {
       updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
         facilityId: facilityB.id,
       })
-    ).rejects.toThrow("do not belong to the selected facility");
+    ).rejects.toThrow("does not belong to the selected facility");
   });
 
   it("rejects a production run that is already assigned to another batch", async () => {
@@ -685,7 +687,7 @@ describe("Credit Batch Production-Run Validation", () => {
         facilityId: facilityA.id,
         productionRunIds: [assignedGuardRunInFacilityA.id],
       })
-    ).rejects.toThrow("already assigned to credit batches");
+    ).rejects.toThrow("is already assigned to a credit batch");
   });
 
   it("rejects cross-facility production run IDs on update", async () => {
@@ -703,7 +705,7 @@ describe("Credit Batch Production-Run Validation", () => {
       updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
         productionRunIds: [runInFacilityB.id],
       })
-    ).rejects.toThrow("do not belong to the selected facility");
+    ).rejects.toThrow("does not belong to the selected facility");
   });
 
   it("serializes batch assignment ahead of a concurrent Complete-to-Running reopen", async () => {

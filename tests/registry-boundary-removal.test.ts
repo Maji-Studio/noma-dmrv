@@ -769,7 +769,7 @@ describe("submitRemoval boundary — removal orphan (test 2)", () => {
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: fixture.removalId }),
     ).rejects.toThrowError(
       new SafeError(
-        "Stale submission cannot be resumed because its fixed-input snapshot does not match the current schema.",
+        "This saved submission uses an older input format and cannot resume. Select Refresh review, then submit again.",
       ),
     );
 

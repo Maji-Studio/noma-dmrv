@@ -216,7 +216,7 @@ beforeAll(async () => {
       .where(eq(productionRuns.id, run.id));
 
     await expect(getProductionRunById(makeTestOrgContext(TEST_USER_ID), run.id)).rejects.toThrow(
-      "Production run not found",
+      "Production run was not found. Refresh the page and try again.",
     );
   });
 

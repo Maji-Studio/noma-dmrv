@@ -331,7 +331,9 @@ describe("application mutations", () => {
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
         }),
-      ).rejects.toThrow("has not been delivered yet");
+      ).rejects.toThrow(
+        `Delivery DL-AM-${runId}-UPCOMING is not marked as delivered. Mark it as delivered before recording an application.`,
+      );
 
       const [application] = await db
         .select({ id: applications.id })
@@ -423,7 +425,9 @@ describe("application mutations", () => {
         updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
           deliveryId: upcomingDeliveryId,
         }),
-      ).rejects.toThrow("has not been delivered yet");
+      ).rejects.toThrow(
+        `Delivery DL-AM-${runId}-UPCOMING is not marked as delivered. Mark it as delivered before recording an application.`,
+      );
     } finally {
       await cleanupMutationFixture(fixture);
     }

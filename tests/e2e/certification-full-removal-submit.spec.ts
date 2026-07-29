@@ -151,7 +151,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       // `deriveRemovalReadiness(...).state === "ready"`). The COMMITTED assertion
       // stops here — no external write.
       const submitButton = dialog.getByRole("button", {
-        name: "Submit removal",
+        name: "Submit Removal",
         exact: true,
       });
       await expect(submitButton).toBeEnabled({

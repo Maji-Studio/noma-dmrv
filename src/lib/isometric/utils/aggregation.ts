@@ -149,13 +149,18 @@ export function aggregateTransportMassDistance(
 
   // Every leg needs a load mass to contribute distⱼ × massⱼ. A leg without it
   // would silently drop its tonne·km, under-counting transport emissions.
-  const missingMassLegIds = legs
-    .filter((leg) => leg.loadMassKg == null || leg.loadMassKg <= 0)
-    .map((leg) => leg.id);
-  if (missingMassLegIds.length > 0) {
+  const missingMassLegs = legs.filter(
+    (leg) => leg.loadMassKg == null || leg.loadMassKg <= 0,
+  );
+  if (missingMassLegs.length > 0) {
+    const missingMassLegLabels = missingMassLegs.map((leg) =>
+      leg.originName && leg.destinationName
+        ? `${leg.originName} to ${leg.destinationName}`
+        : leg.id,
+    );
     return {
       massDistanceTonneKm: null,
-      warning: `${categoryLabel} transport has ${formatCount(missingMassLegIds.length, "leg")} without a load mass. Record a load mass for each leg before submitting.`,
+      warning: `${categoryLabel} transport has ${formatCount(missingMassLegs.length, "leg")} without a load mass (${missingMassLegLabels.join(", ")}). Record a load mass for each leg before submitting.`,
     };
   }
 
