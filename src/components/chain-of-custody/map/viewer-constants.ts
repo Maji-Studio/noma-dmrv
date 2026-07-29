@@ -123,8 +123,8 @@ export const CHIP_STAGGER_STEPS = 3;
 // ---------------------------------------------------------------------------
 
 export const FIT_PADDING = { top: 96, bottom: 70, left: 110, right: 130 } as const;
-/** Extra right padding when the side rail is visible (map view). */
-export const FIT_PADDING_RIGHT_WITH_RAIL = 330;
+/** Gutter every overlay keeps from the map pane's edges (and from each other). */
+export const MAP_OVERLAY_GUTTER_PX = 16;
 export const FIT_MAX_ZOOM = 10.4;
 export const FIT_DURATION_MS = 700;
 export const HIGHLIGHT_EASE_DURATION_MS = 650;

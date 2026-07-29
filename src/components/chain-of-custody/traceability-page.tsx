@@ -29,8 +29,8 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
-import { TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
-import { PageHeader } from "@/components/ui";
+import { CertificateIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
 import {
@@ -250,6 +250,34 @@ function CenteredMessage({ children, tone = "secondary" }: {
   );
 }
 
+/**
+ * Zero / failed batch list. The command bar can only fit a truncated band, so
+ * the canvas carries the explanation and the next step (design-system rule:
+ * an empty state is never a bare line of text).
+ */
+function NoBatchesState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="container-max flex h-full items-center justify-center py-24">
+      <div className="w-full max-w-[640px]">
+        <EmptyState
+          icon={<CertificateIcon size={48} weight="thin" />}
+          title={title}
+          description={description}
+          action={action}
+        />
+      </div>
+    </div>
+  );
+}
+
 function LoadingState({ label }: { label: string }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center">
@@ -329,11 +357,23 @@ export function TraceabilityPage() {
   };
 
   // Map view: the same detail payload, docked INSIDE the map pane instead of
-  // the global slide-over. Closing it releases the shared focus, and any
-  // context change (batch, run, drill-down, back) clears it.
+  // the global slide-over. Closing it releases the shared focus.
   const [mapDetailNode, setMapDetailNode] = useState<ChainNodeSheetNode | null>(
     null
   );
+  // Both halves of the map's selection are keyed to the plotted source, so any
+  // change of source drops them — not just the command bar's own handlers. A
+  // facility switch, the remembered-batch resolution and a hand-edited URL all
+  // move the source without going through those, and a stale panel would then
+  // render the previous batch's record over the new chain. Reset during render
+  // (the React-recommended reset-on-prop-change) rather than via useEffect.
+  const detailSourceKey = `${anchor}|${selectedApplicationId ?? ""}|${selectedBatchId ?? ""}|${selectedRunId ?? ""}`;
+  const [detailSource, setDetailSource] = useState(detailSourceKey);
+  if (detailSource !== detailSourceKey) {
+    setDetailSource(detailSourceKey);
+    setMapDetailNode(null);
+    setSelection(null);
+  }
 
   const {
     data: chainData,
@@ -464,15 +504,13 @@ export function TraceabilityPage() {
     pathname,
   ]);
 
+  // The four navigations below all move `detailSourceKey`, so the reset above
+  // clears the selection and the docked panel for them.
   const handleBatchChange = (creditBatchId: string) => {
-    setSelection(null);
-    setMapDetailNode(null);
     batchSelection.selectBatch(creditBatchId);
   };
 
   const handleRunChange = (runId: string | undefined) => {
-    setSelection(null);
-    setMapDetailNode(null);
     updateParams((params) => {
       if (runId) {
         params.set("run", runId);
@@ -484,8 +522,6 @@ export function TraceabilityPage() {
 
   /** Batch DAG drill-down: open one member application, keeping the batch. */
   const drillDownToApplication = (applicationId: string) => {
-    setSelection(null);
-    setMapDetailNode(null);
     updateParams((params) => {
       params.set("application", applicationId);
       params.delete("view");
@@ -493,8 +529,6 @@ export function TraceabilityPage() {
   };
 
   const backToBatch = () => {
-    setSelection(null);
-    setMapDetailNode(null);
     updateParams((params) => {
       params.delete("application");
       params.delete("view");
@@ -540,14 +574,19 @@ export function TraceabilityPage() {
    * (the rail carries no "Clear focus" affordance).
    */
   const openMapNodeDetails = (nodeId: string) => {
+    const graphNode = (anchor === "batch" ? batchNodes : nodes).find(
+      (candidate) => candidate.id === nodeId
+    );
+    // A row can point at a record the active graph doesn't carry (a lineage the
+    // run filter excluded, a leg whose outer record never resolved). Focusing
+    // an unknown id would dim every surface with no panel to explain it, so the
+    // click is a no-op instead.
+    if (!graphNode) return;
     setSelection((current) => ({
       nodeId,
       nonce: (current?.nonce ?? 0) + 1,
     }));
-    const graphNode = (anchor === "batch" ? batchNodes : nodes).find(
-      (candidate) => candidate.id === nodeId
-    );
-    setMapDetailNode(graphNode ? toSheetNode(graphNode) : null);
+    setMapDetailNode(toSheetNode(graphNode));
   };
   /** The panel's close is the dismissal: it also releases the shared focus. */
   const closeMapDetail = () => {
@@ -765,7 +804,27 @@ export function TraceabilityPage() {
               <CenteredMessage>
                 Loading this facility&apos;s credit batches…
               </CenteredMessage>
-            ) : batchSelection.isError || batchSelection.batches.length === 0 ? null : (
+            ) : batchSelection.isError ? (
+              // The picker's 40px band can only truncate a failure. The canvas
+              // is free, so the full message and the way out live here.
+              <NoBatchesState
+                title="Credit batches could not be loaded"
+                description={
+                  batchSelection.error?.message ??
+                  "Refresh the page to try again. If it keeps failing, the facility's credit batches may still be indexing."
+                }
+              />
+            ) : batchSelection.batches.length === 0 ? (
+              <NoBatchesState
+                title="Nothing to trace yet"
+                description="This facility has no credit batches. Create one from Credit batches, then come back to trace its provenance."
+                action={
+                  <Button variant="weak" onClick={() => router.push("/credit-batches")}>
+                    Go to credit batches
+                  </Button>
+                }
+              />
+            ) : (
               <CenteredMessage>
                 Selecting the remembered or most recent credit batch…
               </CenteredMessage>

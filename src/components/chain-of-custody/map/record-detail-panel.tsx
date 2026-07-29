@@ -31,6 +31,7 @@ import type {
   ChainGeoNode,
   ChainGeoPositionSource,
 } from "@/data-access/chain-of-custody-geo";
+import { Button } from "@/components/ui/button";
 import { formatDistanceKm, formatMass } from "@/lib/format-utils";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { getStatusState, getStatusStateColor } from "@/lib/status-state";
@@ -41,7 +42,12 @@ import type { ChainNodeSheetNode } from "../chain-node-sheet";
 // Constants
 // ---------------------------------------------------------------------------
 
-const PANEL_WIDTH_PX = 320;
+/**
+ * Docked width. Clamped to the map pane below ~660px of viewer width (the rail
+ * plus this panel), so the close control never lands outside the pane's
+ * `overflow-hidden` and the panel stays dismissable at every breakpoint.
+ */
+export const RECORD_PANEL_WIDTH_PX = 320;
 /** Accent rule across the panel's very top — the entity family's ink. */
 const ACCENT_RULE_PX = 2;
 /** Faint accent ground under the illustration band (percent of accent ink). */
@@ -58,6 +64,8 @@ const STOP_ICON_PX = 13;
 const HERO_ICON_PX = 40;
 /** GPS pairs are shown at ~1 m resolution, the precision operators enter. */
 const COORD_DECIMALS = 5;
+/** The viewer's one term for a value nobody has entered yet. */
+const MISSING_NAME = "Not recorded";
 
 const MICRO_CAPS =
   "font-mono text-[9.5px] font-medium uppercase tracking-[0.1em]";
@@ -209,10 +217,12 @@ function IllustrationBand({ node, leg, facilityName }: IllustrationProps) {
 
   const inbound = leg.kind === "inbound";
   const facilityLabel = facilityName ?? "Facility";
-  const origin = inbound ? (leg.originName ?? leg.outerCode ?? "Unknown") : facilityLabel;
+  const origin = inbound
+    ? (leg.originName ?? leg.outerCode ?? MISSING_NAME)
+    : facilityLabel;
   const destination = inbound
     ? facilityLabel
-    : (leg.destinationName ?? leg.outerCode ?? "Unknown");
+    : (leg.destinationName ?? leg.outerCode ?? MISSING_NAME);
 
   return (
     <div className={cn("px-16 py-16", HAIRLINE)} style={{ background: wash }}>
@@ -261,7 +271,11 @@ export function RecordDetailPanel({
       aria-label={`${label} ${code} details`}
       data-testid="carbon-viewer-detail-panel"
       className="absolute inset-y-0 left-0 z-20 flex flex-col overflow-hidden border-r-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]"
-      style={{ width: PANEL_WIDTH_PX, borderTop: `${ACCENT_RULE_PX}px solid ${accentInk}` }}
+      style={{
+        width: RECORD_PANEL_WIDTH_PX,
+        maxWidth: "100%",
+        borderTop: `${ACCENT_RULE_PX}px solid ${accentInk}`,
+      }}
     >
       <header className={cn("px-16 pb-12 pt-12", HAIRLINE)}>
         <div className="flex items-center justify-between gap-8">
@@ -271,15 +285,19 @@ export function RecordDetailPanel({
           </span>
           <span className="flex shrink-0 items-center gap-8">
             <StatusPill status={status} />
-            <button
-              type="button"
+            {/* The panel's only dismissal, so it gets a real hit target rather
+                than the bare glyph. `-mr-8` keeps the icon optically on the
+                header's padding edge while the button extends past it. */}
+            <Button
+              size="icon"
+              variant="noOutline"
               onClick={onClose}
               aria-label="Close details"
               data-testid="carbon-viewer-detail-panel-close"
-              className="cursor-pointer text-[var(--clr-dark-purple-40)] transition-colors hover:text-[var(--clr-dark-purple)]"
+              className="-mr-8 text-[var(--clr-dark-purple-40)] hover:text-[var(--clr-dark-purple)]"
             >
               <XIcon size={CLOSE_ICON_PX} weight="bold" aria-hidden />
-            </button>
+            </Button>
           </span>
         </div>
         <div className={cn("mt-8 font-mono text-[15px] font-medium tracking-[0.02em]", INK_STRONG)}>

@@ -7,7 +7,9 @@
  * DAG highlights.
  */
 
+import type { CSSProperties } from "react";
 import type { ChainGeoNode } from "@/data-access/chain-of-custody-geo";
+import { cn } from "@/lib/utils";
 import { NODE_ACCENT_VAR } from "./viewer-constants";
 
 const RAIL_BOX_CLASS =
@@ -98,11 +100,25 @@ export function NotGeolocatedChips({
 // Warning banner + empty state
 // ---------------------------------------------------------------------------
 
-export function MapWarningBanner({ warnings }: { warnings: string[] }) {
+/**
+ * `className` / `style` place the stack. The default clears the top-left map
+ * controls, which is where they sit in split view; map view moves the controls
+ * and docks a record panel over that corner, so it positions the banner itself.
+ */
+export function MapWarningBanner({
+  warnings,
+  className = "left-[70px] top-16",
+  style,
+}: {
+  warnings: string[];
+  className?: string;
+  style?: CSSProperties;
+}) {
   if (warnings.length === 0) return null;
   return (
     <div
-      className="absolute left-[70px] top-16 z-10 flex max-w-[320px] flex-col gap-10"
+      className={cn("absolute z-10 flex max-w-[320px] flex-col gap-10", className)}
+      style={style}
       data-testid="carbon-viewer-warning"
     >
       {warnings.map((warning) => (
