@@ -124,6 +124,14 @@ describe("PERIOD_INPUT_TUPLES", () => {
         undefined,
       ),
     ).toEqual({ category: "miscellaneous" });
+    expect(
+      lookupPeriodInputTuple(
+        "miscellaneous",
+        "mass_based_ci_emissions",
+        "mass",
+        "constructor",
+      ),
+    ).toEqual({ category: "miscellaneous" });
   });
 
   it("does not match a tuple that lives in INPUT_MAPPING", () => {

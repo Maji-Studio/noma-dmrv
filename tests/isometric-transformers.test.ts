@@ -3,6 +3,7 @@ import type { components } from "@/lib/isometric/generated/certify";
 import {
   buildCreateDatapointRequest,
   lookupInputMapping,
+  resolveDatapointSource,
 } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import {
@@ -316,6 +317,22 @@ describe("buildCreateDatapointRequest", () => {
         supplierRefId: SUPPLIER_REF,
       }),
     ).toThrow(/PROJECT.*safety margin/i);
+  });
+
+  it("does not resolve inherited component-map keys", () => {
+    const mapping = lookupInputMapping(
+      "miscellaneous",
+      "mass_based_ci_emissions",
+      "mass",
+    );
+
+    expect(mapping).toBeDefined();
+    expect(() => resolveDatapointSource(mapping!, "constructor")).toThrow(
+      /not recognized/i,
+    );
+    expect(
+      lookupInputMapping("constructor", "mass_based_ci_emissions", "mass"),
+    ).toBeUndefined();
   });
 
   it("applies the /100 transform for carbon_content (percent → fraction)", () => {

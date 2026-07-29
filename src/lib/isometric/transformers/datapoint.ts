@@ -57,6 +57,35 @@ export type InputMappingTable = Record<
   Record<string, Record<string, InputMappingEntry>>
 >;
 
+function ownValue<T>(
+  record: Readonly<Record<string, T>>,
+  key: string,
+): T | undefined {
+  return Object.prototype.hasOwnProperty.call(record, key)
+    ? record[key]
+    : undefined;
+}
+
+export function normalizeComponentDisplayName(
+  componentDisplayName: string | undefined,
+): string {
+  return (componentDisplayName ?? "").trim().toLowerCase();
+}
+
+function lookupThreeLevelValue<T>(
+  table: Readonly<
+    Record<string, Readonly<Record<string, Readonly<Record<string, T>>>>>
+  >,
+  firstKey: string,
+  secondKey: string,
+  thirdKey: string,
+): T | undefined {
+  const secondLevel = ownValue(table, firstKey);
+  if (!secondLevel) return undefined;
+  const thirdLevel = ownValue(secondLevel, secondKey);
+  return thirdLevel ? ownValue(thirdLevel, thirdKey) : undefined;
+}
+
 // Resolves each pyrolysis `fuel_usage_by_volume` component to its diesel source
 // by normalized (trimmed + lowercased) display name. The Dark Earth removal
 // template declares TWO such components — "Generator diesel usage"
@@ -75,12 +104,14 @@ const PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT: Readonly<
 
 // Resolves the miscellaneous `mass_based_ci_emissions` component to its mass
 // source by normalized display name. Only "Safety margin" is a REMOVAL-scope,
-// per-removal quantity: a fixed conservatism deduction (20 kgCO2e per tonne of
-// biochar, held as a pre-bound `carbon_intensity` fixed input on the template)
-// that scales with the exact biochar mass this removal claims. Any OTHER
-// miscellaneous mass-based CI component is annually-sourced LCA overhead and
-// stays PROJECT-scope per ADR 0005/0018 - the PERIOD_INPUT_TUPLES guard still
-// fires for it (see lookupPeriodInputTuple).
+// per-removal quantity. The active sandbox template currently has an observed
+// fixed `carbon_intensity` Datapoint of 20 kgCO2e/metric_ton
+// (`dtp_1KS4PMV99SBXX88K`, verified read-only 2026-07-29); that value is
+// registry-owned configuration, not a protocol requirement. noma submits only
+// the exact biochar dry mass this removal claims. Any OTHER miscellaneous
+// mass-based CI component is annually-sourced LCA overhead and stays
+// PROJECT-scope per ADR 0005/0018 - the PERIOD_INPUT_TUPLES guard still fires
+// for it (see lookupPeriodInputTuple).
 const MISCELLANEOUS_MASS_SOURCE_BY_COMPONENT: Readonly<
   Record<string, keyof AggregatedProductionData>
 > = {
@@ -271,7 +302,12 @@ export function lookupInputMapping(
   blueprintKey: string,
   inputKey: string,
 ): InputMappingEntry | undefined {
-  return INPUT_MAPPING[groupKey]?.[blueprintKey]?.[inputKey];
+  return lookupThreeLevelValue(
+    INPUT_MAPPING,
+    groupKey,
+    blueprintKey,
+    inputKey,
+  );
 }
 
 // Resolves the aggregated-source field for a mapping. Usually just
@@ -285,8 +321,8 @@ export function resolveDatapointSource(
   componentDisplayName: string | undefined,
 ): keyof AggregatedProductionData {
   if (!mapping.sourceByComponent) return mapping.source;
-  const normalized = (componentDisplayName ?? "").trim().toLowerCase();
-  const resolved = mapping.sourceByComponent[normalized];
+  const normalized = normalizeComponentDisplayName(componentDisplayName);
+  const resolved = ownValue(mapping.sourceByComponent, normalized);
   if (!resolved) {
     const expected = Object.keys(mapping.sourceByComponent)
       .map((k) => `"${k}"`)
@@ -357,12 +393,17 @@ export function lookupPeriodInputTuple(
   // (fail-closed default).
   componentDisplayName?: string,
 ): { category: string } | undefined {
-  const tuple = PERIOD_INPUT_TUPLES[groupKey]?.[blueprintKey]?.[inputKey];
+  const tuple = lookupThreeLevelValue(
+    PERIOD_INPUT_TUPLES,
+    groupKey,
+    blueprintKey,
+    inputKey,
+  );
   if (!tuple) return undefined;
-  const carveOut = INPUT_MAPPING[groupKey]?.[blueprintKey]?.[inputKey]
+  const carveOut = lookupInputMapping(groupKey, blueprintKey, inputKey)
     ?.sourceByComponent;
-  const normalized = (componentDisplayName ?? "").trim().toLowerCase();
-  if (carveOut && normalized in carveOut) return undefined;
+  const normalized = normalizeComponentDisplayName(componentDisplayName);
+  if (carveOut && ownValue(carveOut, normalized)) return undefined;
   return tuple;
 }
 
