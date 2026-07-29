@@ -1,10 +1,9 @@
 /**
- * Shared application certification-readiness regression (issue #246).
+ * Application evidence must remain independent from certification readiness.
  *
- * The application list derives its badge from the same evidence requirements
- * that feed the credit-batch / Removal submission context. This authenticated
- * browser flow guards both the cross-surface verdict and the React Query
- * invalidation after evidence upload/delete.
+ * Application records can retain supporting files for verification, but the
+ * active protocol does not make a typed Application logbook a Removal gate.
+ * This flow guards that invariant before and after evidence upload.
  */
 import { and, eq } from "drizzle-orm";
 import type { Page } from "@playwright/test";
@@ -101,7 +100,7 @@ async function makeBoundaryEvidenceIncomplete(
   }
 }
 
-async function expectRemovalEvidenceGap(
+async function expectRemovalReadyWithoutApplicationEvidence(
   page: Page,
   batch: SeededReadyBatch,
   facilityId: string,
@@ -111,21 +110,20 @@ async function expectRemovalEvidenceGap(
   );
   const checklist = page.getByTestId("batch-health-strip");
   await expect(
-    checklist.getByText("Application evidence", { exact: true }),
+    checklist.getByText("All checks passed"),
   ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
   await expect(
-    checklist.getByRole("button", {
-      name: new RegExp(`^${batch.applicationCode}: boundary logbook evidence`),
-    }),
-  ).toBeVisible();
-  await expect(checklist.getByText("1 issue open")).toBeVisible();
+    checklist.getByText("Application evidence", { exact: true }),
+  ).toHaveCount(0);
   await expect(
-    checklist.getByRole("link", { name: "Fix 1 application" }),
-  ).toBeVisible();
+    page.getByText(
+      new RegExp(`${batch.applicationCode}: boundary logbook evidence`),
+    ),
+  ).toHaveCount(0);
 }
 
-test.describe("application certification readiness", () => {
-  test("keeps list and Removal readiness aligned through evidence upload and delete", async ({
+test.describe("application evidence and certification readiness", () => {
+  test("keeps Application and Removal ready through evidence upload", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -142,16 +140,16 @@ test.describe("application certification readiness", () => {
       );
       await makeBoundaryEvidenceIncomplete(batch);
 
-      // The same missing logbook blocks the Removal/batch context and the list.
-      await expectRemovalEvidenceGap(page, batch, facilityId);
+      // A missing typed logbook is retained-evidence health, not a gate.
+      await expectRemovalReadyWithoutApplicationEvidence(
+        page,
+        batch,
+        facilityId,
+      );
       await page.goto(`/applications?facility=${facilityId}`);
       const row = page.locator("tr", { hasText: batch.applicationCode });
       await expect(row).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-      await expect(
-        row.getByLabel(
-          "Incomplete for certification with 1 gap. Activate to see what is missing.",
-        ),
-      ).toBeVisible();
+      await expect(row.getByLabel("Ready for certification")).toBeVisible();
 
       // Upload a classified boundary logbook from the real application editor.
       await row.locator("td").first().click();
@@ -171,37 +169,11 @@ test.describe("application certification readiness", () => {
         timeout: COLD_COMPILE_TIMEOUT_MS,
       });
 
-      // A fresh Removal readiness load now clears the same authoritative gate.
-      await page.goto(
-        `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
+      await expectRemovalReadyWithoutApplicationEvidence(
+        page,
+        batch,
+        facilityId,
       );
-      await expect(
-        page.getByTestId("batch-health-strip").getByText("All checks passed"),
-      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-
-      // Delete the evidence in the editor; the already-mounted list row must
-      // refetch immediately instead of lingering as Ready for its 30s staleTime.
-      await page.goto(`/applications?facility=${facilityId}`);
-      const refreshedRow = page.locator("tr", { hasText: batch.applicationCode });
-      await refreshedRow.locator("td").first().click();
-      await waitForSideSheet(page);
-      await page.getByRole("button", { name: "Edit Application" }).click();
-      await page
-        .getByRole("button", { name: `Delete ${EVIDENCE_FILE_NAME}` })
-        .click();
-      const deleteDialog = page.getByRole("dialog", {
-        name: "Delete Evidence",
-      });
-      await deleteDialog
-        .getByRole("button", { name: "Delete", exact: true })
-        .click();
-      await expect(
-        refreshedRow.getByLabel(
-          "Incomplete for certification with 1 gap. Activate to see what is missing.",
-        ),
-      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-
-      await expectRemovalEvidenceGap(page, batch, facilityId);
     } finally {
       await batch?.cleanup();
     }

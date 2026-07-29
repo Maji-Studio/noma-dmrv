@@ -40,14 +40,6 @@ const TELEMETRY_GAP: EntityCertifyGap = {
   detail: "Production readings CSV is required to certify",
 };
 
-const APPLICATION_EVIDENCE_WARNING: EntityCertifyWarning = {
-  key: "applicationEvidence",
-  label: "Application evidence",
-  fields: ["evidenceGapCount"],
-  detail:
-    "Application evidence is incomplete. This does not block certification.",
-};
-
 function fieldValue(
   entity: EntityReadinessRecord,
   field: string,
@@ -179,17 +171,6 @@ export function deriveEntityCertifyReadiness(
       readingsCount <= 0
     ) {
       gaps.push(TELEMETRY_GAP);
-    }
-  }
-
-  if (entityKind === "application") {
-    const evidenceGapCount = fieldValue(entity, "evidenceGapCount");
-    if (
-      typeof evidenceGapCount !== "number" ||
-      !Number.isFinite(evidenceGapCount) ||
-      evidenceGapCount !== 0
-    ) {
-      warnings.push(APPLICATION_EVIDENCE_WARNING);
     }
   }
 

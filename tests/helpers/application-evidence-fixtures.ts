@@ -1,6 +1,6 @@
 /**
  * Shared fixture matrix for the application evidence-gap rule — one case per
- * branch of the Isometric Soil module §8.5.1/§8.5.2 taxonomy. Consumed by BOTH
+ * branch of the application evidence-health taxonomy. Consumed by BOTH
  * adapter suites so the matrices cannot drift while both stay green:
  *
  *  - `tests/application-evidence-gap-sql.test.ts` seeds these into Postgres and
@@ -18,7 +18,7 @@ export const NO_GAPS = 0;
 export const SINGLE_GAP = 1;
 export const ALL_VISUAL_ROLE_GAPS = APPLICATION_VISUAL_EVIDENCE_ROLES.length; // 3
 export const ONE_VISUAL_ROLE_SATISFIED_GAPS = ALL_VISUAL_ROLE_GAPS - 1; // 2
-export const BOUNDARY_BOTH_INPUT_GAPS = 2; // missing GIS reference + missing logbook
+export const BOUNDARY_REFERENCE_GAPS = 1;
 
 export const TEST_GIS_BOUNDARY: GisBoundary = {
   version: 1,
@@ -134,7 +134,7 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     ],
     expectedGapCount: ALL_VISUAL_ROLE_GAPS,
   },
-  // --- Boundary method (§8.5.2): GIS reference + a logbook doc ---
+  // --- Boundary method: GIS reference only; records are retained separately ---
   {
     key: "boundary-complete-weighbridge",
     evidenceMethod: "boundary",
@@ -158,12 +158,12 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     expectedGapCount: NO_GAPS,
   },
   {
-    // Untyped PDF does not attest logbook quantities.
+    // Typed and untyped retained records do not affect boundary readiness.
     key: "boundary-untyped-pdf",
     evidenceMethod: "boundary",
     gisBoundary: TEST_GIS_BOUNDARY,
     docs: [{ documentType: "pdf", metadata: {} }],
-    expectedGapCount: SINGLE_GAP,
+    expectedGapCount: NO_GAPS,
   },
   {
     // A missing GIS reference is incomplete even with a logbook.
@@ -178,14 +178,14 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     evidenceMethod: "boundary",
     gisBoundary: TEST_GIS_BOUNDARY,
     docs: [],
-    expectedGapCount: SINGLE_GAP,
+    expectedGapCount: NO_GAPS,
   },
   {
     key: "boundary-none",
     evidenceMethod: "boundary",
     gisBoundary: null,
     docs: [],
-    expectedGapCount: BOUNDARY_BOTH_INPUT_GAPS,
+    expectedGapCount: BOUNDARY_REFERENCE_GAPS,
   },
 ];
 

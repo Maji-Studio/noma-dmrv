@@ -732,8 +732,6 @@ export async function buildRemovalContext(
   const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
   const transportCoverage = buildCoverage(transportLegs, entityIds);
   const entityReadiness = await buildCertifyEntityReadiness({
-    orgCtx,
-    lineages,
     runs,
     batchesWithSamples,
     transportLegs,

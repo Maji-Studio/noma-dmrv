@@ -395,7 +395,7 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("keeps missing application evidence advisory instead of blocking certification", () => {
+  it("does not treat application evidence health as certification readiness", () => {
     const readiness = deriveEntityCertifyReadiness("application", {
       biocharAppliedTons: 10,
       biocharAppliedDryTons: 8,
@@ -404,17 +404,10 @@ describe("deriveEntityCertifyReadiness", () => {
       evidenceGapCount: 3,
     });
 
-    expect(readiness.state).toBe("ready");
-    expect(readiness.gaps).toEqual([]);
-    expect(readiness.warnings).toMatchObject([
-      {
-        key: "applicationEvidence",
-        label: "Application evidence",
-      },
-    ]);
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("keeps an omitted application evidence count advisory", () => {
+  it("does not require an application evidence count for certification", () => {
     const readiness = deriveEntityCertifyReadiness("application", {
       biocharAppliedTons: 10,
       biocharAppliedDryTons: 8,
@@ -422,14 +415,7 @@ describe("deriveEntityCertifyReadiness", () => {
       soilTemperatureC: 15,
     });
 
-    expect(readiness.state).toBe("ready");
-    expect(readiness.gaps).toEqual([]);
-    expect(readiness.warnings).toMatchObject([
-      {
-        key: "applicationEvidence",
-        label: "Application evidence",
-      },
-    ]);
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 });
 

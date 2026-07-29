@@ -193,7 +193,7 @@ describe("SourcesPanel supporting document affordances", () => {
     );
 
     expect(html).toContain(
-      "Supporting sources could not be loaded. Refresh the page and try again.",
+      "Registry value sources could not be loaded. Refresh the page and try again.",
     );
     expect(html).not.toContain("legacy-boundary-logbook.PDF");
   });

@@ -842,9 +842,9 @@ describe("requiredTransportCategories", () => {
 
     expect(result.requiredTransportCategories).toEqual(["feedstock", "biochar"]);
     expect(result.entityReadinessGaps).toEqual([]);
-    expect(result.submissionWarnings).toEqual(
+    expect(result.submissionWarnings).not.toEqual(
       expect.arrayContaining([
-        "Application APP-1: geotagged stockpile photo. This does not block submission.",
+        expect.stringContaining("Application APP-1"),
       ]),
     );
     expect(result.transportCoverage.sample.aggregationWarning).toContain("tl-s1");

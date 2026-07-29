@@ -471,11 +471,12 @@ export function ApplicationEvidencePanel({
         <div className="flex items-center justify-between gap-12">
           <div className="flex items-center gap-8">
             <FileIcon size={18} weight="bold" />
-            <h4 className="body-large font-medium">Boundary logbook</h4>
+            <h4 className="body-large font-medium">Application mass records</h4>
             {!readOnly && (
               <InfoHint side="top" label="What to attach">
-                Attach one dated record for the quantity applied. Use a
-                weighbridge record, inventory record, or affidavit.
+                Attach a dated weigh-scale ticket or equivalent record when
+                available. These records support verification and do not block
+                submission.
               </InfoHint>
             )}
           </div>
@@ -490,7 +491,7 @@ export function ApplicationEvidencePanel({
         {!readOnly && (
           <div className="flex flex-col gap-6">
             <div className="flex items-center gap-8">
-              <h5 className="body-small-bold">Type for the next upload</h5>
+              <h5 className="body-small-bold">Record type for the next upload</h5>
               <InfoHint side="top" label="How the logbook type is applied">
                 This classifies the next logbook file. Change an attached
                 file from the select beside it.

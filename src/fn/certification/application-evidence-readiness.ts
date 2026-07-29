@@ -5,7 +5,6 @@ import {
   type DocumentRow,
 } from "@/data-access/documents";
 import {
-  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS,
   APPLICATION_DOCUMENT_ENTITY_TYPE,
   APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS,
   getMissingApplicationEvidenceRequirements,
@@ -21,8 +20,6 @@ function applicationEvidenceMissingLabel(
       return `geotagged ${APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[gap.role].toLowerCase()} photo`;
     case "boundary-reference":
       return "GIS reference";
-    case "boundary-logbook":
-      return `boundary logbook evidence (${Object.values(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS).join(", ")})`;
   }
 }
 

@@ -157,7 +157,7 @@ describe("ApplicationEvidencePanel boundary evidence type", () => {
   it("labels the radio group as applying to the next upload only", () => {
     const html = renderPanel([boundaryDoc("affidavit")]);
 
-    expect(html).toContain("Type for the next upload");
+    expect(html).toContain("Record type for the next upload");
     expect(html).toContain(
       'aria-label="Logbook evidence type for the next upload"',
     );

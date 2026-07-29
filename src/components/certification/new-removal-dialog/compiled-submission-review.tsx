@@ -153,7 +153,7 @@ export function CompiledSubmissionReview({
         </p>
       </ReviewSection>
 
-      <ReviewSection title="Supporting sources">
+      <ReviewSection title="Registry value sources">
         {(review.pendingSourceCount ?? 0) > 0 ? (
           <EmptyValue>
             {review.pendingSourceCount}{" "}
@@ -161,7 +161,10 @@ export function CompiledSubmissionReview({
             mirrored automatically when you submit.
           </EmptyValue>
         ) : review.sourceIds.length === 0 ? (
-          <EmptyValue>No supporting files attached.</EmptyValue>
+          <EmptyValue>
+            No files are attached to registry values. Application evidence
+            remains on the Application.
+          </EmptyValue>
         ) : (
           <p className="body-small text-[var(--color-text-primary)]">
             {formatCount(review.sourceIds.length, "supporting file")} attached.

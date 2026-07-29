@@ -21,6 +21,26 @@ Removal review, Source lifecycle, and transport-provenance implementation notes
 from 2026-07-27 are archived in
 [`docs/archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md`](../archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md).
 
+## 2026-07-29 (application evidence removed from Removal readiness)
+
+Application evidence health no longer produces Removal submission blockers,
+advisory notes, or incomplete certification badges. The configured project uses
+Biochar Protocol v1.1, which binds Biochar Storage in Agricultural Soils v1.1.
+That module places project-boundary evidence in the PDD and does not contain the
+later Soil Environments module's per-application boundary-logbook taxonomy.
+
+Application document uploads remain available. Biochar Protocol v1.1 still
+requires weigh-scale tickets or equivalent application-mass records to be
+retained for verification for at least five years. Retained records are not
+treated as evidence that must be attached to each application before a Removal
+can be submitted.
+
+The submit pipeline now accepts the generated durability evidence ledger as the
+Source for the `product_mass` datapoint. It no longer requires that Source to
+carry the Application-logbook-specific `Inventory` role. Preflight also waits
+for submit-time ledger generation instead of blocking an existing Removal when
+no operator-uploaded Source exists.
+
 ## 2026-07-29 (automatic GHG Statement data summary)
 
 GHG Statement report preparation is now a one-click export of the current

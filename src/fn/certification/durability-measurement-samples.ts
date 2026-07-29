@@ -295,22 +295,6 @@ export async function patchMeasurementSampleSourceBindings(args: {
         entry.intendedTarget.kind === "sequestration" &&
         entry.intendedTarget.creditBatchIds.includes(creditBatchId),
     );
-    const inventorySourceIds = Array.from(
-      new Set(
-        batchBindings
-          .filter(
-            (entry) =>
-              entry.nomaRole === "inventory" &&
-              entry.intendedTarget.inputKey === "product_mass",
-          )
-          .map((entry) => entry.sourceId),
-      ),
-    ).sort();
-    if (inventorySourceIds.length === 0) {
-      throw new SafeError(
-        `Credit batch ${creditBatchId} has no Inventory Source for its product mass. Add the Source before submitting again.`,
-      );
-    }
 
     for (const [inputKey, propertyKey] of propertyKeyByInput) {
       const datapointIds =

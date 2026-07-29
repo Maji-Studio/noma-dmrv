@@ -1,21 +1,8 @@
 /**
- * Application certification readiness — shared evidence source (issue #246)
+ * Application evidence is retained independently from certification readiness.
  *
- * Regression guard for the QA contradiction where an application listed
- * "Ready" for certification with every form field filled but ZERO application
- * evidence, while the removal wizard blocked it on that same missing evidence.
- *
- * The fix folds the application-evidence gap into the shared readiness decision
- * (`deriveEntityCertifyReadiness`, fed by `applicationEvidenceGapCountSql`), so
- * the list badge is now evidence-aware for this entity-local fact. This spec
- * guards the list-badge side of that: a form-complete-but-evidence-missing
- * application must badge Incomplete (naming the evidence gap), and once
- * qualifying geotagged evidence exists the same badge must flip to Ready.
- *
- * Scope note: this spec asserts only the list badge. The wizard's server-side
- * gap computation (`buildApplicationEvidenceGaps`) is a separate implementation
- * that shares the `application-evidence` constants but not the SQL path;
- * guarding badge/wizard *agreement* is tracked in docs/open-questions.md.
+ * A form-complete Application remains ready with no evidence attachment. Adding
+ * qualifying visual evidence records must not change that certification state.
  */
 import type { Page } from "@playwright/test";
 import { and, eq } from "drizzle-orm";
@@ -120,8 +107,8 @@ async function seedFormCompleteApplication(
   return fieldIdentifier;
 }
 
-test.describe("Application certification readiness reads the shared evidence source", () => {
-  test("form-complete application badges Incomplete until evidence exists", async ({
+test.describe("Application evidence does not gate certification", () => {
+  test("form-complete application stays ready before and after evidence is added", async ({
     adminPage: page,
     seededData,
   }) => {
@@ -168,23 +155,12 @@ test.describe("Application certification readiness reads the shared evidence sou
     const row = page.locator("table tbody tr", { hasText: applicationCode });
     await expect(row).toBeVisible({ timeout: 10000 });
 
-    // Every form field is filled, yet the certification badge must NOT read
-    // "Ready": the missing visual evidence is a gap the shared decision counts.
-    const incompleteBadge = row.getByRole("button", {
-      name: /Incomplete for certification/,
-    });
-    await expect(incompleteBadge).toBeVisible();
-    await expect(incompleteBadge).toContainText("Incomplete (1)");
     await expect(
-      page.locator('[aria-label="Ready for certification"]'),
+      row.locator('[aria-label="Ready for certification"]'),
+    ).toBeVisible();
+    await expect(
+      row.getByRole("button", { name: /Incomplete for certification/ }),
     ).toHaveCount(0);
-
-    // The gap the badge reports is the evidence gap — the same missing fact the
-    // wizard also blocks on (via its own gap computation; see the scope note).
-    await incompleteBadge.hover();
-    await expect(
-      page.getByText("Geotagged photos or boundary evidence required to certify"),
-    ).toBeVisible({ timeout: 5000 });
 
     // Add qualifying geotagged evidence for all three visual stages, mirroring a
     // completed upload (uploaded photo docs carrying present-geotag metadata).
@@ -206,8 +182,7 @@ test.describe("Application certification readiness reads the shared evidence sou
       await pool.end();
     }
 
-    // Reload for a fresh server-computed evidenceGapCount — the badge now agrees
-    // the entity is certification-ready.
+    // Reload after evidence health changes. Certification remains independent.
     await page.goto(applicationsUrl);
     await page.waitForLoadState("networkidle");
     const reloadedRow = page.locator("table tbody tr", {

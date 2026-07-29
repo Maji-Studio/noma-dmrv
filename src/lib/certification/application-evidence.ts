@@ -1,16 +1,15 @@
 /**
- * Application evidence taxonomy — mirrors the Isometric "Biochar Storage in Soil
- * Environments" module. The module requires ONE of two evidence paths per
- * storage batch:
+ * Application evidence-health taxonomy.
  *
- *  - Visual (§8.5.1): geotagged photos/videos for ALL THREE application stages —
- *    stockpile (before), spreading (during), incorporation (after). A single
- *    photo is not sufficient; each must carry GPS coordinates and a timestamp.
- *  - Boundary (§8.5.2): a GIS map of the application area plus dated logbook
- *    quantities, evidenced by weighbridge, inventory, or affidavit records.
+ * The active Biochar Protocol v1.1 project binds Agricultural Soils v1.1.
+ * Project boundaries belong in the PDD, and retained application-mass records
+ * support verification. A typed Application logbook is not a per-Application
+ * readiness or Removal-submission requirement. The logbook taxonomy below is
+ * retained only to organize optional records and their registry Source targets.
  *
- * Authoritative source (verify before any credit claim):
- * https://registry.isometric.com/module/biochar-storage-soil-environments
+ * Authoritative sources (verify before any credit claim):
+ * https://registry.isometric.com/protocol/biochar/1.1
+ * https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1
  */
 import type { GisBoundary } from "@/lib/geojson/types";
 
@@ -177,8 +176,7 @@ export type ApplicationEvidenceGapDescriptor =
       kind: "visual-role";
       role: ApplicationVisualEvidenceRole;
     }
-  | { kind: "boundary-reference" }
-  | { kind: "boundary-logbook" };
+  | { kind: "boundary-reference" };
 
 export type ApplicationEvidenceRequirement =
   | {
@@ -233,29 +231,6 @@ const BOUNDARY_EVIDENCE_REQUIREMENTS = [
     kind: "non-null-application-field",
     field: "gisBoundary",
     gap: { kind: "boundary-reference" },
-  },
-  {
-    kind: "document",
-    matcher: {
-      kind: "any-document-matcher",
-      matchers: [
-        {
-          kind: "unconditional-logbook-document-type",
-          uploaded: UPLOADED_DOCUMENT_PREDICATE,
-          documentTypes:
-            APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
-        },
-        {
-          kind: "conditional-logbook-document-type",
-          uploaded: UPLOADED_DOCUMENT_PREDICATE,
-          documentType:
-            APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE,
-          evidenceTypeMetadataKey: "logbookEvidenceType",
-          evidenceTypes: APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
-        },
-      ],
-    },
-    gap: { kind: "boundary-logbook" },
   },
 ] as const satisfies readonly ApplicationEvidenceRequirement[];
 
