@@ -8,7 +8,12 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PlusIcon, TrashIcon, MapPinIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  MapPinIcon,
+  PencilIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, FormActions, FormSection } from "@/components/forms";
 import {
   customerFormSchema,
@@ -22,8 +27,9 @@ import { useCustomerLocations, useDeleteCustomerLocation } from "@/hooks/use-cus
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
-import { CustomerLocationQuickAddDialog } from "./customer-location-quick-add-dialog";
+import { CustomerLocationDialog } from "./customer-location-dialog";
 import { CustomerLocationFields } from "./customer-location-fields";
+import type { EditableCustomerLocation } from "./customer-location-form";
 
 // ============================================
 // Types
@@ -382,7 +388,13 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
 // ============================================
 
 function LocationsSection({ customerId }: { customerId: string }) {
-  const [showAddDialog, setShowAddDialog] = useState(false);
+  // `editingLocation` is deliberately not cleared on close: the modal keeps its
+  // subtree mounted for the exit transition, so clearing it there would flip the
+  // dialog title and submit label to the "Add" wording mid-fade. Opening the add
+  // dialog clears it instead.
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  const [editingLocation, setEditingLocation] =
+    useState<EditableCustomerLocation | null>(null);
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
 
   const { data: locations, isLoading, isError } = useCustomerLocations(customerId);
@@ -405,7 +417,10 @@ function LocationsSection({ customerId }: { customerId: string }) {
         <Button
           variant="noOutline"
           size="small"
-          onClick={() => setShowAddDialog(true)}
+          onClick={() => {
+            setEditingLocation(null);
+            setIsLocationDialogOpen(true);
+          }}
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
@@ -442,24 +457,37 @@ function LocationsSection({ customerId }: { customerId: string }) {
                   </p>
                 </div>
               </div>
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={() => setDeletingLocationId(loc.id)}
-                className="shrink-0"
-                aria-label={`Delete ${loc.name}`}
-              >
-                <TrashIcon size={16} />
-              </Button>
+              <div className="flex shrink-0 items-center gap-8">
+                <Button
+                  variant="noOutline"
+                  size="icon"
+                  onClick={() => {
+                    setEditingLocation(loc);
+                    setIsLocationDialogOpen(true);
+                  }}
+                  aria-label={`Edit ${loc.name || loc.country}`}
+                >
+                  <PencilIcon size={16} />
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => setDeletingLocationId(loc.id)}
+                  aria-label={`Delete ${loc.name || loc.country}`}
+                >
+                  <TrashIcon size={16} />
+                </Button>
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      <CustomerLocationQuickAddDialog
-        isOpen={showAddDialog}
-        onClose={() => setShowAddDialog(false)}
+      <CustomerLocationDialog
+        isOpen={isLocationDialogOpen}
+        onClose={() => setIsLocationDialogOpen(false)}
         customerId={customerId}
+        location={editingLocation ?? undefined}
       />
 
       <DeleteConfirmDialog

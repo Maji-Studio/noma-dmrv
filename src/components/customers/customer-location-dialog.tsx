@@ -1,6 +1,5 @@
 /**
- * Customer Location Quick Add Dialog
- * Dialog for quickly adding new customer locations from the customer edit form.
+ * Customer location dialog for creating and editing persisted locations.
  * Embeds the full CustomerLocationForm (RHF + Zod) inside QuickAddDialogShell
  * so validation stays centralized in `customerLocationFormSchema`.
  */
@@ -8,34 +7,44 @@
 
 import { useState } from "react";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
-import { useCreateCustomerLocation } from "@/hooks/use-customers";
+import {
+  useCreateCustomerLocation,
+  useUpdateCustomerLocation,
+} from "@/hooks/use-customers";
 import type { CustomerLocationFormData } from "@/schemas/customers";
-import { CustomerLocationForm } from "./customer-location-form";
+import {
+  CustomerLocationForm,
+  type EditableCustomerLocation,
+} from "./customer-location-form";
 
 // ============================================
 // Types
 // ============================================
 
-interface CustomerLocationQuickAddDialogProps {
+interface CustomerLocationDialogProps {
   isOpen: boolean;
   onClose: () => void;
   customerId: string;
+  location?: EditableCustomerLocation;
 }
 
 // ============================================
 // Component
 // ============================================
 
-export function CustomerLocationQuickAddDialog({
+export function CustomerLocationDialog({
   isOpen,
   onClose,
   customerId,
-}: CustomerLocationQuickAddDialogProps) {
+  location,
+}: CustomerLocationDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const createLocation = useCreateCustomerLocation();
+  const updateLocation = useUpdateCustomerLocation();
+  const isEditing = location !== undefined;
 
-  // Modal unmounts its children while closed, so the embedded form resets
-  // itself on every open — only the dialog-level server error needs clearing.
+  // Modal unmounts its children while closed, so the embedded form resets on
+  // every open. Only the dialog-level server error needs clearing.
   const handleClose = () => {
     setError(null);
     onClose();
@@ -44,8 +53,7 @@ export function CustomerLocationQuickAddDialog({
   const handleSubmit = async (data: CustomerLocationFormData) => {
     setError(null);
     try {
-      await createLocation.mutateAsync({
-        customerId,
+      const locationData = {
         name: data.name,
         country: data.country,
         stateRegion: data.stateRegion || null,
@@ -57,11 +65,27 @@ export function CustomerLocationQuickAddDialog({
         distanceSource: data.distanceSource,
         defaultSoilTemperatureC: data.defaultSoilTemperatureC,
         isDefault: data.isDefault,
-      });
+      };
+
+      if (location) {
+        await updateLocation.mutateAsync({
+          locationId: location.id,
+          ...locationData,
+        });
+      } else {
+        await createLocation.mutateAsync({
+          customerId,
+          ...locationData,
+        });
+      }
       handleClose();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "The location was not created. Check the form and try again."
+        err instanceof Error
+          ? err.message
+          : isEditing
+            ? "The location was not saved. Try again."
+            : "The location was not created. Check the form and try again."
       );
     }
   };
@@ -70,16 +94,21 @@ export function CustomerLocationQuickAddDialog({
     <QuickAddDialogShell
       isOpen={isOpen}
       onClose={handleClose}
-      title="Add Location"
+      title={isEditing ? "Edit Location" : "Add Location"}
       width="lg"
-      testId="location-quick-add-dialog"
+      testId={
+        isEditing ? "customer-location-edit-dialog" : "location-quick-add-dialog"
+      }
     >
       <CustomerLocationForm
+        location={location}
         onSubmit={handleSubmit}
         onCancel={handleClose}
-        isSubmitting={createLocation.isPending}
+        isSubmitting={
+          isEditing ? updateLocation.isPending : createLocation.isPending
+        }
         errorMessage={error ?? undefined}
-        submitLabel="Add Location"
+        submitLabel={isEditing ? "Save Changes" : "Add Location"}
       />
     </QuickAddDialogShell>
   );

@@ -155,6 +155,7 @@ export async function getCustomerLocationsFn(
       address: string | null;
       distanceFromFacilityKm: number | null;
       distanceSource: DistanceSourceValue | null;
+      defaultSoilTemperatureC: number | null;
       isDefault: boolean;
       createdAt: Date;
       updatedAt: Date;

@@ -108,7 +108,13 @@ export function SupplierLocationForm({
   });
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form
+      onSubmit={(event) => {
+        event.stopPropagation();
+        return handleFormSubmit(event);
+      }}
+      className="space-y-20"
+    >
       {/* Location Details Section */}
       <FormSection title="Location details" divider={false}>
         <FormField
