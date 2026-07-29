@@ -159,7 +159,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "Cannot submit yet",
       detail:
-        "The submission did not build. Retry, then open Debug if it fails again.",
+        "Open Technical details below to retry. It shows why the build failed.",
     };
 
     expect(facts({ compilation: null })).toMatchObject(expected);
@@ -177,7 +177,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
     });
   });
 
-  it("points at Debug when compilation is incomplete without blockers", () => {
+  it("points at Technical details when compilation is incomplete without blockers", () => {
     expect(
       facts({
         compilation: {
@@ -189,7 +189,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "Cannot submit yet",
       detail:
-        "The submission is incomplete. Open Debug to see what is missing.",
+        "The submission is incomplete. Open Technical details below to see what is missing.",
     });
   });
 
