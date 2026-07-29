@@ -23,7 +23,8 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
+import { TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { TransportLeg } from "@/db/schema";
 import { TransportEvidencePanel } from "./transport-evidence-documents";
@@ -77,6 +78,8 @@ function isSavedTransportLeg(
 
 function legToFormDefaults(
   leg: TransportLeg | TransportLegFormData | null | undefined,
+  /** Organization default, for a leg being created. */
+  defaultTripType: TripTypeValue,
 ) {
   return {
     originGpsLatitude: leg?.originGpsLatitude ?? null,
@@ -92,7 +95,7 @@ function legToFormDefaults(
     vehicleType: leg?.vehicleType ?? "",
     modelYear: leg?.modelYear ?? null,
     loadMassKg: leg?.loadMassKg ?? null,
-    tripType: leg?.tripType ?? DEFAULT_TRIP_TYPE,
+    tripType: leg?.tripType ?? defaultTripType,
     calculationMethodType: "distance_based" as const,
     billOfLading: leg?.billOfLading ?? "",
     weighScaleTicketRef: leg?.weighScaleTicketRef ?? "",
@@ -114,7 +117,10 @@ export function TransportLegForm({
 }: TransportLegFormProps) {
   const isEditMode = !!leg;
   const isPersisted = !!leg && isSavedTransportLeg(leg);
-  const defaultValues = legToFormDefaults(leg);
+  // Organization operating defaults seed create mode only; a saved leg always
+  // wins. Server-seeded in the `(app)` layout, so this is synchronous.
+  const { defaults: orgDefaults } = useOrganizationDefaultValues();
+  const defaultValues = legToFormDefaults(leg, orgDefaults.defaultTripType);
 
   const {
     register,

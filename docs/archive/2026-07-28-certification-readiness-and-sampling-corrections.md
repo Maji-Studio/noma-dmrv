@@ -28,3 +28,16 @@ multi-file uploader across feedstocks, deliveries, and manually managed
 transport legs. Migration 0087 added `other_transport_evidence` to
 `documentation_type`. The upload and classification workflow remains; only the
 readiness requirement, CERT status, and dashboard attention row were removed.
+
+## Retired Removal draft retry
+
+When newly recognized application boundary evidence was first mirrored during
+an already-prepared Removal submission, the payload-freshness gate retired the
+stale draft as `superseded` and asked the operator to reload. The claim layer's
+existing `after-superseded` path could mint a fresh version from the stable
+Source set, but the review UI incorrectly treated the retired attempt as an
+already-submitted Removal and made the prescribed retry unreachable.
+
+The readiness model was corrected so a latest superseded Removal attempt remains
+actionable. A successful re-version exposes its newer draft or submitted row as
+the latest attempt instead.

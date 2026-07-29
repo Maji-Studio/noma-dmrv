@@ -1,5 +1,5 @@
 {
-  "id": "b5e11e5a-2490-446b-9563-4ecc8149db35",
+  "id": "d0bdb3c4-f940-472f-8c5d-fff979d96e96",
   "prevId": "a6d32016-3726-48d2-ae78-b7b6258dedd8",
   "version": "7",
   "dialect": "postgresql",
@@ -105,9 +105,9 @@
           "notNull": true,
           "default": "'visual'"
         },
-        "gis_boundary": {
-          "name": "gis_boundary",
-          "type": "jsonb",
+        "gis_boundary_reference": {
+          "name": "gis_boundary_reference",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -8912,6 +8912,112 @@
         }
       },
       "isRLSEnabled": false
+    },
+    "public.organization_settings": {
+      "name": "organization_settings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "default_currency": {
+          "name": "default_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'TZS'"
+        },
+        "default_country": {
+          "name": "default_country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "default_timezone": {
+          "name": "default_timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'UTC'"
+        },
+        "default_trip_type": {
+          "name": "default_trip_type",
+          "type": "transport_trip_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'return'"
+        },
+        "default_evidence_method": {
+          "name": "default_evidence_method",
+          "type": "application_evidence_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'visual'"
+        },
+        "default_packaging": {
+          "name": "default_packaging",
+          "type": "packaging_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'loose'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "organization_settings_organization_id_organizations_id_fk": {
+          "name": "organization_settings_organization_id_organizations_id_fk",
+          "tableFrom": "organization_settings",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "organization_settings_organization_id_unique": {
+          "name": "organization_settings_organization_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -9055,8 +9161,7 @@
         "photo",
         "video",
         "pdf",
-        "sensor_data",
-        "gis_boundary"
+        "sensor_data"
       ]
     },
     "public.durability_option": {

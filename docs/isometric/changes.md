@@ -44,6 +44,22 @@ Earlier implementation notes are archived by date:
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
 
+## 2026-07-28 (application boundary evidence binds product mass Sources)
+
+The Removal Source classifier now maps every valid application-boundary
+logbook subtype (`weighbridge`, `inventory`, and `affidavit`) to the registry
+Inventory role for the measurement-sample `product_mass` Datapoint. Dedicated
+`weighbridge_ticket` and `affidavit` document types follow the same rule.
+
+Previously, application readiness accepted all three evidence subtypes, but
+Source classification recognized only the literal `inventory` subtype. A
+ready Removal backed by a Weighbridge record therefore created or reconciled
+its durability measurement sample, then failed closed before GHG-entry creation
+because its Source plan had no intended Inventory target. The correction reuses
+the shared application-evidence taxonomy and preserves exact application →
+credit-batch lineage resolution, Datapoint confirmation, submission journaling,
+and duplicate prevention.
+
 ## 2026-07-10 (1000-year sandbox submission verified end to end)
 
 The 1000-year removal path has now passed a live Isometric sandbox submission
@@ -299,3 +315,26 @@ which supersedes the journal half of ADR 0005.
   samples since the current epoch.
 - Blueprint routing now follows the stored batch choice. Eligibility remains a
   live decision for new batches and does not rewrite existing ones.
+
+## 2026-07-28 (restore automatic evidence-ledger Sources)
+
+- Removal submission once again materializes the generated transport and
+  durability evidence-ledger PDFs after side-effect-free preflight and before
+  Source mirroring. Generation failures now block submission with an
+  actionable error instead of allowing incomplete registry attribution.
+- Candidate Source discovery includes documents attached to each member credit
+  batch. Generated ledgers remain Removal-scoped through their metadata, so a
+  ledger for another Removal cannot be mirrored or bound accidentally.
+- Transport ledgers bind to each present `mass_distance` input. Durability
+  ledgers bind to the tier-specific measurement-sample inputs, while
+  `product_mass` still requires and retains the Inventory Source as well.
+- Durability ledger generation now covers both the 200-year H/C pathway and
+  the 1000-year carbon-content/reflectance pathway. Content hashes include the
+  durability option, preserving idempotent reuse and safe supersession.
+- Generated ledgers are excluded from the operator review hash because they do
+  not exist until submission, but remain covered by the full immutable
+  submission payload hash.
+- A submitted Removal can be reopened through its resume link. The same
+  compilation and review gates apply: an unchanged payload reuses the existing
+  registry version, while changed reviewed evidence or mappings create a
+  superseding version. Only a live submission lock blocks reopening.

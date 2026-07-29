@@ -12,7 +12,7 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import type { ColumnDef } from "@tanstack/react-table";
-import { LightningIcon, FlaskIcon, PlusIcon } from "@phosphor-icons/react";
+import { LightningIcon, FlaskIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";

@@ -59,9 +59,10 @@ describe("deriveRemovalReadiness — precedence", () => {
     expect(r.reasons).toEqual([]);
   });
 
-  it("reports submitted for a superseded removal", () => {
+  it("re-evaluates a retired superseded draft for a fresh version", () => {
     const r = deriveRemovalReadiness(ready({ local: "superseded" }));
-    expect(r.state).toBe("submitted");
+    expect(r.state).toBe("ready");
+    expect(r.reasons).toEqual([]);
   });
 
   it("treats accepted defensively as submitted (unreachable for removals)", () => {
@@ -695,7 +696,9 @@ describe("future-dated measurement dates", () => {
     expect(check).toMatchObject({ status: "unmet" });
     expect(check?.detail).toContain("PR-0007");
     expect(check?.detail).toContain("APP-0003");
-    expect(check?.fixTarget).toBeUndefined();
+    expect(check?.detail).not.toContain("Change the end time");
+    expect(check?.detail).not.toContain("Change the application date");
+    expect(check?.fixTarget).toBe("productionRunsAndApplications");
   });
 
   it("targets the matching record list for a single-kind future-date blocker", () => {

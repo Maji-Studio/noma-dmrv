@@ -2,8 +2,9 @@
  * SubmitStep — the final "Confirm & submit" step of the New-Removal wizard. It
  * folds in what used to be a separate "Requirements" step: the facility/registry-
  * level checks (project mapping, default template, cross-batch transport
- * uniformity) are shown inline as a confirmation checklist with smart fix links,
- * and the submit button is gated on the shared `deriveRemovalReadiness` verdict.
+ * uniformity) reach the operator through `SubmissionSummary` — a verdict line
+ * plus the checks that still need attention, each with a fix link — and the
+ * submit button is gated on the shared `deriveRemovalReadiness` verdict.
  * Per-batch concerns (carbon, production lineage, transport-leg presence, and the
  * batch's own entity certifier fields) were already resolved at selection — only
  * ready batches got grouped — so this screen is a true confirmation, not a place
@@ -36,10 +37,10 @@ import {
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
-import {
-  isRemovalCompilationReady,
-  SubmissionReviewTabs,
-} from "./submission-review-tabs";
+import { DebugDrawer } from "./debug-drawer";
+import { isRemovalCompilationReady } from "./submission-facts";
+import { SubmissionSummary } from "./submission-summary";
+import { allowsRemovalSubmission } from "./resume-state";
 
 const REJECTED_IN_ISOMETRIC_MSG =
   "This removal was rejected in Isometric. Resolve the registry record before retrying from noma.";
@@ -74,7 +75,7 @@ export function SubmitStep({
     compilationQuery.data ?? null,
   );
   const requirementsMet =
-    readiness.state === "ready" && compilationReady === true;
+    allowsRemovalSubmission(readiness.state) && compilationReady === true;
 
   const fireSubmit = (confirmProduction = false) => {
     if (rejectedWithExternal) {
@@ -179,25 +180,23 @@ export function SubmitStep({
   );
 
   return (
-    <div className="flex flex-col gap-12">
-      <div className="flex flex-col gap-4">
-        <h3 className="title-heading-3">Confirm &amp; submit</h3>
-        <p className="body-small text-[var(--color-text-secondary)]">
-          Review exactly what will be sent to the registry.
-        </p>
-      </div>
-
-      <SubmissionReviewTabs
-        memberBatches={ctx.memberBatches}
+    <div className="flex flex-col gap-16">
+      <SubmissionSummary
+        ctx={ctx}
         facilityId={facilityId}
+        compilation={compilationQuery.data ?? null}
+        isCompilationLoading={compilationQuery.isLoading}
+        compilationError={compilationQuery.error}
+        checks={checklist}
+      />
+
+      <DebugDrawer
         compilation={compilationQuery.data ?? null}
         isCompilationLoading={compilationQuery.isLoading}
         compilationError={compilationQuery.error}
         onRetryCompilation={() => {
           void compilationQuery.refetch();
         }}
-        checks={checklist}
-        isProduction={ctx.isProduction}
       />
 
       {(rejectedWithExternal || submitError) && (

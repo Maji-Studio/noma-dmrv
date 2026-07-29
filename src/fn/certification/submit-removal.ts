@@ -52,6 +52,7 @@ import {
   assertProductionClaimGateFresh,
   assertResumedSnapshotRevisionCurrent,
 } from "./production-claim-gate";
+import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
   readRemovalFixedInputs,
   readRemovalSourceBindingPlan,
@@ -355,6 +356,12 @@ async function submitRemovalCore(
     log,
   });
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
+
+  // Materialize the deterministic transport and durability evidence PDFs
+  // before candidate discovery. The generated documents attach to member
+  // credit batches, then enter the same candidate, mirror-lock, snapshot, and
+  // per-input attribution path as operator-provided evidence.
+  await ensureEvidenceLedgersFromContext(orgCtx, removalId, ctx, log);
 
   const reviewedCompilation = await compileRemovalSubmission({
     orgCtx,

@@ -217,7 +217,7 @@ function EvidenceDocumentList({
             </div>
             {onSetLogbookEvidenceType &&
               doc.documentType === LOGBOOK_DOC_TYPE && (
-                <div className="w-full sm:w-200">
+                <div className="w-full sm:w-192">
                   <FormSelect
                     aria-label={`Logbook evidence type for ${doc.fileName}`}
                     value={logbookEvidenceType ?? ""}

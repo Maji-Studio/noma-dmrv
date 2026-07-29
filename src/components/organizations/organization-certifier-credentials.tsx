@@ -1,27 +1,46 @@
+/**
+ * OrganizationCertifierCredentials — the organization's write-only Isometric
+ * keys. Every facility in the organization submits with them.
+ *
+ * The inputs are always on screen. Once keys are stored, each field is seeded
+ * with a masked stand-in so the form reads as "filled" rather than empty, and
+ * replacing a key is what it looks like: select the mask, type over it. A field
+ * left at its mask is sent as `undefined`, which the data-access layer reads as
+ * "keep the stored value" — so rotating only the access token does not mean
+ * retyping the client secret.
+ *
+ * There is no separate connect-and-test step. Saving IS the test: the action
+ * stores the keys and then asks Isometric to list the organization's projects
+ * with them, and reports what came back. Keys that cannot list projects are not
+ * "saved, fine" — they are broken, and the operator is standing right there
+ * able to fix them. The write happens first regardless, so a registry outage
+ * never costs someone their typing.
+ *
+ * The previous shape — a stored-credential summary row with a Remove button
+ * above an empty form — said the same thing twice and made the common case
+ * (paste a new key) the least obvious one.
+ */
 "use client";
 
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { KeyIcon, WarningCircleIcon } from "@phosphor-icons/react";
-import { useForm } from "react-hook-form";
 import {
-  FormActions,
-  FormField,
-  FormInput,
-} from "@/components/forms";
-import { Button } from "@/components/ui/button";
-import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { EmptyState } from "@/components/ui/empty-state";
+  CheckCircleIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react/dist/ssr";
+import { useForm } from "react-hook-form";
+import { FormActions, FormField, FormInput } from "@/components/forms";
 import { Skeleton } from "@/components/ui/loading-skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
+import type { CertifierCredentialsVerification } from "@/fn/certifier-credentials";
 import {
   useOrgCertifierCredentialsStatus,
-  useRemoveOrgCertifierCredentials,
   useSetOrgCertifierCredentials,
 } from "@/hooks/use-certifier-credentials";
 import {
+  CERTIFIER_CREDENTIAL_MASK,
   certifierCredentialsFormSchema,
+  certifierCredentialsRotationSchema,
   type CertifierCredentialsFormInput,
 } from "@/schemas/organizations";
 import { formatDateTime } from "@/lib/format-utils";
@@ -35,163 +54,215 @@ export function OrganizationCertifierCredentials({
   organizationId,
   organizationName,
 }: OrganizationCertifierCredentialsProps) {
-  const toast = useToast();
   const statusQuery = useOrgCertifierCredentialsStatus(organizationId);
+
+  if (statusQuery.isLoading && !statusQuery.data) {
+    return <Skeleton className="h-160 w-full" />;
+  }
+
+  if (statusQuery.error && !statusQuery.data) {
+    return (
+      <p className="body-small text-[var(--st-bad)]" role="alert">
+        Couldn&apos;t read the credential status for {organizationName}.
+        {" "}
+        {statusQuery.error.message}
+      </p>
+    );
+  }
+
+  const status = statusQuery.data;
+  const configured = status?.configured ?? false;
+
+  return (
+    <CredentialsForm
+      organizationId={organizationId}
+      configured={configured}
+      accessTokenLast4={status?.accessTokenLast4 ?? null}
+      updatedAt={status?.updatedAt ?? null}
+    />
+  );
+}
+
+function CredentialsForm({
+  organizationId,
+  configured,
+  accessTokenLast4,
+  updatedAt,
+}: {
+  organizationId: string;
+  configured: boolean;
+  accessTokenLast4: string | null;
+  updatedAt: Date | null;
+}) {
+  const toast = useToast();
   const setCredentials = useSetOrgCertifierCredentials(organizationId);
-  const removeCredentials = useRemoveOrgCertifierCredentials(organizationId);
-  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const [serverError, setServerError] = useState("");
+  const [verification, setVerification] =
+    useState<CertifierCredentialsVerification | null>(null);
+
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors },
   } = useForm<CertifierCredentialsFormInput>({
-    resolver: zodResolver(certifierCredentialsFormSchema),
-    defaultValues: { accessToken: "", clientSecret: "" },
+    resolver: zodResolver(
+      configured
+        ? certifierCredentialsRotationSchema
+        : certifierCredentialsFormSchema,
+    ),
+    defaultValues: configured
+      ? {
+          accessToken: CERTIFIER_CREDENTIAL_MASK,
+          clientSecret: CERTIFIER_CREDENTIAL_MASK,
+        }
+      : { accessToken: "", clientSecret: "" },
   });
 
   async function onSubmit(values: CertifierCredentialsFormInput) {
     setServerError("");
+    setVerification(null);
+
+    // An untouched mask — and a field cleared but never retyped — both mean
+    // "leave this one alone". Sending the mask would store bullets as a key.
+    const accessToken = changedValue(values.accessToken);
+    const clientSecret = changedValue(values.clientSecret);
+
+    if (!accessToken && !clientSecret) {
+      setServerError(
+        "Type over a key to replace it, then save. Nothing has changed yet.",
+      );
+      return;
+    }
+
     try {
-      await setCredentials.mutateAsync(values);
-      reset({ accessToken: "", clientSecret: "" });
-      toast.success("Isometric credentials saved.");
+      const result = await setCredentials.mutateAsync({
+        accessToken,
+        clientSecret,
+      });
+      reset({
+        accessToken: CERTIFIER_CREDENTIAL_MASK,
+        clientSecret: CERTIFIER_CREDENTIAL_MASK,
+      });
+      setVerification(result.verification);
+      // The toast confirms the write; the panel below carries the connection
+      // outcome, which is the part worth reading twice.
+      toast.success("Isometric keys saved.");
     } catch (error) {
       setServerError(
         error instanceof Error
           ? error.message
-          : "Failed to save Isometric credentials.",
+          : "Failed to save the Isometric keys.",
       );
     }
   }
 
-  async function confirmRemoval() {
-    setServerError("");
-    try {
-      await removeCredentials.mutateAsync();
-      toast.success("Isometric credentials removed.");
-    } catch (error) {
-      setServerError(
-        error instanceof Error
-          ? error.message
-          : "Failed to remove Isometric credentials.",
-      );
-    } finally {
-      setConfirmingRemoval(false);
-    }
-  }
-
-  const status = statusQuery.data;
+  const savedCaption = configured
+    ? [
+        accessTokenLast4 ? `Ends ${accessTokenLast4}` : null,
+        updatedAt ? `saved ${formatDateTime(updatedAt)}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : undefined;
 
   return (
-    <section className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] p-16">
-      <div className="flex flex-wrap items-start justify-between gap-12">
-        <div className="flex flex-col gap-4">
-          <h3 className="body-small font-medium text-[var(--color-text-primary)]">
-            Isometric credentials
-          </h3>
-          <p className="body-caption text-[var(--color-text-secondary)]">
-            Write-only credentials used for this organization’s registry calls.
-          </p>
-        </div>
-        {status?.configured && (
-          <StatusBadge status="complete" label="Configured" size="small" />
-        )}
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="content-measure-form flex flex-col gap-16"
+    >
+      <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
+        <FormField
+          id={`isometric-access-token-${organizationId}`}
+          label="Access token"
+          error={errors.accessToken?.message}
+          required={!configured}
+          helperText={savedCaption}
+        >
+          <FormInput
+            id={`isometric-access-token-${organizationId}`}
+            type="password"
+            autoComplete="new-password"
+            disabled={setCredentials.isPending}
+            {...register("accessToken")}
+          />
+        </FormField>
+        <FormField
+          id={`isometric-client-secret-${organizationId}`}
+          label="Client secret"
+          error={errors.clientSecret?.message}
+          required={!configured}
+          helperText={configured ? "Saved" : undefined}
+        >
+          <FormInput
+            id={`isometric-client-secret-${organizationId}`}
+            type="password"
+            autoComplete="new-password"
+            disabled={setCredentials.isPending}
+            {...register("clientSecret")}
+          />
+        </FormField>
       </div>
 
-      {statusQuery.isLoading ? (
-        <Skeleton className="h-64 w-full" />
-      ) : statusQuery.error ? (
-        <EmptyState
-          icon={<WarningCircleIcon size={32} />}
-          title="Credential status unavailable"
-          description={statusQuery.error.message}
-          padding="sm"
-        />
-      ) : status?.configured ? (
-        <div className="flex flex-wrap items-center justify-between gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] p-12">
-          <div className="flex flex-col gap-4">
-            <span className="body-small font-mono text-[var(--color-text-primary)]">
-              Access token …{status.accessTokenLast4}
-            </span>
-            {status.updatedAt && (
-              <span className="body-caption text-[var(--color-text-secondary)]">
-                Updated {formatDateTime(status.updatedAt)}
-              </span>
-            )}
-          </div>
-          <Button
-            type="button"
-            variant="weak"
-            size="small"
-            onClick={() => setConfirmingRemoval(true)}
-          >
-            Remove
-          </Button>
-        </div>
-      ) : (
-        <EmptyState
-          icon={<KeyIcon size={32} />}
-          title="Isometric credentials not configured"
-          description="Add this organization’s access token and client secret before submitting live certification data."
-          padding="sm"
-        />
-      )}
+      {verification && <VerificationNotice verification={verification} />}
 
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="content-measure-form flex flex-col gap-16"
-      >
-        <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
-          <FormField
-            id={`isometric-access-token-${organizationId}`}
-            label="Access token"
-            error={errors.accessToken?.message}
-            required
-          >
-            <FormInput
-              id={`isometric-access-token-${organizationId}`}
-              type="password"
-              autoComplete="new-password"
-              disabled={setCredentials.isPending}
-              {...register("accessToken")}
-            />
-          </FormField>
-          <FormField
-            id={`isometric-client-secret-${organizationId}`}
-            label="Client secret"
-            error={errors.clientSecret?.message}
-            required
-          >
-            <FormInput
-              id={`isometric-client-secret-${organizationId}`}
-              type="password"
-              autoComplete="new-password"
-              disabled={setCredentials.isPending}
-              {...register("clientSecret")}
-            />
-          </FormField>
-        </div>
-        <FormActions
-          isSubmitting={setCredentials.isPending}
-          errorMessage={serverError}
-          submitLabel={
-            status?.configured ? "Replace credentials" : "Set credentials"
-          }
-          submittingLabel="Saving…"
-          sticky={false}
-        />
-      </form>
-
-      <DeleteConfirmDialog
-        isOpen={confirmingRemoval}
-        title="Remove Isometric credentials"
-        message={`Remove the Isometric credentials for ${organizationName}? Live certification calls for this organization will stop until replacements are configured.`}
-        onConfirm={confirmRemoval}
-        onCancel={() => setConfirmingRemoval(false)}
-        isPending={removeCredentials.isPending}
+      <FormActions
+        isSubmitting={setCredentials.isPending}
+        errorMessage={serverError}
+        submitLabel="Save keys"
+        submittingLabel="Saving and connecting…"
+        sticky={false}
       />
-    </section>
+    </form>
   );
+}
+
+/**
+ * What Isometric said when the saved keys were used. A failure is not a form
+ * error — the keys were stored — so it does not go through `ServerError`, which
+ * would claim the save did not happen.
+ */
+function VerificationNotice({
+  verification,
+}: {
+  verification: CertifierCredentialsVerification;
+}) {
+  // Written out per branch, never interpolated: Tailwind resolves class names
+  // by scanning source text, so a composed `bg-[var(${tone}-bg)]` generates no
+  // rule at all.
+  const { Icon, container, icon } = verification.ok
+    ? {
+        Icon: CheckCircleIcon,
+        container: "border-[var(--st-ok-border)] bg-[var(--st-ok-bg)]",
+        icon: "text-[var(--st-ok)]",
+      }
+    : {
+        Icon: WarningCircleIcon,
+        container: "border-[var(--st-wait-border)] bg-[var(--st-wait-bg)]",
+        icon: "text-[var(--st-wait)]",
+      };
+
+  return (
+    <div
+      role="status"
+      className={`flex items-start gap-8 border p-12 ${container}`}
+    >
+      <Icon
+        size={16}
+        weight="fill"
+        aria-hidden
+        className={`mt-2 shrink-0 ${icon}`}
+      />
+      <p className="body-small text-[var(--color-text-primary)]">
+        {verification.message}
+      </p>
+    </div>
+  );
+}
+
+/** `undefined` when the field still holds the mask or was left blank. */
+function changedValue(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === CERTIFIER_CREDENTIAL_MASK) return undefined;
+  return trimmed;
 }

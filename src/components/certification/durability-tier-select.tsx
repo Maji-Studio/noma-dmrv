@@ -1,6 +1,6 @@
 "use client";
 
-import { LockIcon, SealCheckIcon } from "@phosphor-icons/react";
+import { LockIcon, SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { type DurabilityOption } from "@/schemas/credit-batches";
 

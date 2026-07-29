@@ -20,6 +20,7 @@ import {
 } from "@/schemas/orders";
 import type { Order } from "@/db/schema";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { useCustomers, useCustomerLocations } from "@/hooks/use-customers";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { CustomerLocationDetails } from "./customer-location-details";
@@ -76,6 +77,11 @@ export function OrderForm({
 }: OrderFormProps) {
   const isEditMode = !!order;
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
+  // Organization operating defaults seed create mode only; an existing record
+  // always wins. Warmed once per session in FacilityProvider, so this is a
+  // cache read rather than a round trip on open.
+  const { defaults: orgDefaults } = useOrganizationDefaultValues();
+
 
   const {
     register,
@@ -97,9 +103,10 @@ export function OrderForm({
         ? formatLocalDate(new Date(order.orderDate))
         : formatLocalDate(new Date()),
       quantityKg: order?.quantityKg ?? undefined,
-      packaging: (order?.packaging as PackagingType) ?? "loose",
+      packaging:
+        (order?.packaging as PackagingType) ?? orgDefaults.defaultPackaging,
       value: order?.value ?? undefined,
-      currency: order?.currency ?? "TZS",
+      currency: order?.currency ?? orgDefaults.defaultCurrency,
     },
   });
 

@@ -263,7 +263,9 @@ export async function compileRemovalSubmission(
   const blockers: string[] = [];
   const readySourceDocumentCount =
     build.sourceBindingPlan.length > 0
-      ? build.sourceBindingPlan.length
+      ? new Set(
+          build.sourceBindingPlan.map((entry) => entry.documentId),
+        ).size
       : build.sourceIds.length;
   const pendingSourceCount = Math.max(
     build.candidateDocumentIds.length - readySourceDocumentCount,
@@ -486,7 +488,19 @@ export function materializeRemovalSubmissionSnapshot(args: {
         removalId,
         version: nextVersion,
         sourceIds: [],
-      })
+      }).map((datapoint) => ({
+        ...datapoint,
+        body: {
+          ...datapoint.body,
+          source_ids: sourceIdsForDatapointTarget(
+            compiled.sourceBindingPlan,
+            {
+              componentId: datapoint.rtcId,
+              inputKey: datapoint.inputKey,
+            },
+          ),
+        },
+      }))
     : [];
 
   return {
@@ -662,7 +676,9 @@ export async function buildRemovalSubmissionBuild(args: {
     (args.sourceIds || args.sourceBindingCandidates
       ? []
       : await collectCandidateSourceDocumentsForRemoval(orgCtx, {
+          removalId,
           lineages: ctx.lineages,
+          memberBatches: ctx.memberBatches,
         }));
   const sourceBindingCandidates =
     args.sourceBindingCandidates ??
@@ -673,7 +689,9 @@ export async function buildRemovalSubmissionBuild(args: {
         }));
   const candidateDocumentIds =
     args.candidateDocumentIds ??
-    candidateSourceDocuments.map((candidate) => candidate.documentId);
+    Array.from(
+      new Set(candidateSourceDocuments.map((candidate) => candidate.documentId)),
+    ).sort();
   const sourceIds =
     args.sourceIds ??
     Array.from(

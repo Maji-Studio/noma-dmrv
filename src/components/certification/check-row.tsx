@@ -8,14 +8,15 @@
  */
 "use client";
 
-import type { ElementType, ReactNode } from "react";
+import type { ReactNode } from "react";
+import type { Icon } from "@phosphor-icons/react";
 import Link from "next/link";
 import { CheckCircleIcon, CircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
 
 export type CheckStatus = "met" | "unmet" | "skipped" | "warning";
 
-const STATUS_ICON: Record<CheckStatus, ElementType> = {
+const STATUS_ICON: Record<CheckStatus, Icon> = {
   met: CheckCircleIcon,
   unmet: WarningIcon,
   skipped: CircleIcon,

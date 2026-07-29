@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { MapPinIcon, PlusIcon, LeafIcon, XIcon } from "@phosphor-icons/react";
+import { MapPinIcon, PlusIcon, LeafIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";

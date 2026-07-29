@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SealCheckIcon } from "@phosphor-icons/react";
+import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, ServerError } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { Button, Modal } from "@/components/ui";

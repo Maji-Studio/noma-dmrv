@@ -17,9 +17,9 @@
  *  2. Settings round-trip — needs a seeded `certifier_projects` mapping against
  *     the REAL sandbox project (the connection card resolves the project from
  *     Isometric), so it's gated behind the sandbox skip. Asserts the Settings
- *     page renders the linked project in the "Registry connection — Isometric"
- *     card and that the admin-only sections — now behind the Emissions /
- *     Environment tabs (redesign) — mount. The link/edit/unlink dialog
+ *     page renders the linked project in the Certifier pane (the console's
+ *     default) and that the admin-only categories — Emissions and Diagnostics,
+ *     reached from the settings rail — mount. The link/edit/unlink dialog
  *     behaviour is covered by `facility-certifier-mapping.spec.ts`.
  *
  * Playwright loads `.env.test` only; we additionally pull `.env.local` (without
@@ -131,15 +131,13 @@ test.describe("Certification workspace — Settings", { tag: "@live" }, () => {
         page.getByRole("heading", { name: "Settings", level: 1 }),
       ).toBeVisible({ timeout: 15000 });
 
-      // A · Registry connection — the seeded project resolves into the card.
+      // A · Certifier is the console's default pane — the seeded project
+      // resolves into it, below the organization keys.
       await expect(
-        page.getByRole("heading", {
-          name: "Registry connection — Isometric",
-          level: 2,
-        }),
+        page.getByRole("heading", { name: "Certifier", level: 2 }),
       ).toBeVisible();
       await expect(page.getByText(externalProjectId).first()).toBeVisible();
-      // Admin sees the management controls (canManage = useIsAdmin()).
+      // Admin sees the management controls (canManage = viewerCanManage).
       await expect(
         page.getByRole("button", { name: "Edit", exact: true }),
       ).toBeVisible();
@@ -147,19 +145,22 @@ test.describe("Certification workspace — Settings", { tag: "@live" }, () => {
         page.getByRole("button", { name: "Unlink", exact: true }),
       ).toBeVisible();
 
-      // B/C · Admin-only sections live behind tabs (redesign): Connection is the
-      // default tab, so switch to each admin tab and assert its section mounts.
-      await page
-        .getByRole("tab", { name: "Emissions", exact: true })
-        .click();
+      // B/C · The other categories are rail entries, not tabs: clicking one
+      // swaps the pane, and only the selected pane is mounted.
+      const rail = page.getByRole("navigation", {
+        name: "Certification settings categories",
+      });
+      await rail.getByRole("button", { name: "Emissions" }).click();
       await expect(
-        page.getByRole("heading", { name: "Emission estimates", level: 2 }),
+        page.getByRole("heading", { name: "Emissions", level: 2 }),
       ).toBeVisible();
-      await page
-        .getByRole("tab", { name: "Environment", exact: true })
-        .click();
       await expect(
-        page.getByRole("heading", { name: "Environment & health", level: 2 }),
+        page.getByRole("heading", { name: "Certifier", level: 2 }),
+      ).toHaveCount(0);
+
+      await rail.getByRole("button", { name: "Diagnostics" }).click();
+      await expect(
+        page.getByRole("heading", { name: "Diagnostics", level: 2 }),
       ).toBeVisible();
     } finally {
       await mapping.cleanup();

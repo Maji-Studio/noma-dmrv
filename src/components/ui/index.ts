@@ -13,6 +13,7 @@ export * from "./modal";
 export * from "./moisture-split";
 export * from "./page-header";
 export * from "./row-actions-menu";
+export * from "./settings-rail";
 export * from "./slide-over-panel";
 export * from "./stat-card";
 export * from "./status-badge";
