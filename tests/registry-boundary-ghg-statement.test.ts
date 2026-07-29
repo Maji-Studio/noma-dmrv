@@ -54,6 +54,7 @@ import {
 import { facilities } from "@/db/schema/facilities";
 import {
   createGhgStatementDraft,
+  loadGhgStatementsForFacility,
 } from "@/fn/certification/ghg-statements";
 import { reconcileGhgStatementsFromRegistry } from "@/fn/certification/ghg-statement-sync";
 import * as authServer from "@/lib/auth/server";
@@ -219,6 +220,30 @@ beforeEach(() => {
 
 beforeAll(() => ensureTestOrg());
 
+describe("loadGhgStatementsForFacility boundary", () => {
+  it("serves the local mirror without contacting or reconciling the registry", async () => {
+    const fixture = await createFixture();
+    registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: REPORTING_PERIOD_END,
+      ghgEntryIds: [fixture.externalRemovalId!],
+    });
+    const syncResult = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+    expect(syncResult.success).toBe(true);
+    const requestCountBeforeLoad = registry.requests.length;
+
+    const result = await loadGhgStatementsForFacility(fixture.facilityId);
+
+    expect(result).toMatchObject({
+      success: true,
+      data: [{ linkedRemovalCount: 1 }],
+    });
+    expect(registry.requests).toHaveLength(requestCountBeforeLoad);
+  });
+});
+
 describe("createGhgStatementDraft boundary — orphan reconciliation (test 3)", () => {
   it("resume reconciles the single dropped draft by (project, end_on) and finalizes without re-POSTing", async () => {
     const fixture = await createFixture();
@@ -336,6 +361,26 @@ describe("createGhgStatementDraft boundary — orphan reconciliation (test 3)", 
 });
 
 describe("createGhgStatementDraft boundary — empty-statement guard (#245)", () => {
+  it("uses an unsynced remote period to exclude its Removal from a later window", async () => {
+    const fixture = await createFixture();
+    registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      startOn: "2026-01-01",
+      endOn: REPORTING_PERIOD_END,
+      ghgEntryIds: [fixture.externalRemovalId!],
+    });
+
+    const result = await createGhgStatementDraft({
+      facilityId: fixture.facilityId,
+      reportingPeriodEndOn: "2026-06-30",
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toContain("no submitted Removals");
+    expect(registry.requestCount("POST", "/ghg_statements")).toBe(0);
+  });
+
   it("fail-closes before the registry when the period holds no submitted removals", async () => {
     const fixture = await createFixture({ seedOpenRemoval: false });
 

@@ -50,6 +50,7 @@ import {
   ghgStatementCreateRefusalMessage,
   getIsometricClientForOrg,
   getGhgStatement,
+  getGhgStatementPeriod,
   IsometricApiError,
   listGhgStatementsForProject,
   matchGhgStatementForCreate,
@@ -313,9 +314,16 @@ export async function createGhgStatementDraft(
       orgCtx,
       parsed.facilityId,
     );
-    const existingEnds = existing
+    const localEnds = existing
       .filter((statement) => !hasMissingRemotePeriod(statement))
       .map(getEffectiveReportingPeriodEndOn);
+    // The local mirror can lag Isometric until Sync. Creation already fetched
+    // the project statements, so include remote periods in the safety window.
+    const remoteEnds = remoteStatements.flatMap((statement) => {
+      const endOn = getGhgStatementPeriod(statement).endOn;
+      return endOn === null ? [] : [endOn];
+    });
+    const existingEnds = [...new Set([...localEnds, ...remoteEnds])];
     const overlap = overlappingEnd(parsed.reportingPeriodEndOn, existingEnds);
     if (overlap) {
       throw new SafeError(

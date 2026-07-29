@@ -58,5 +58,6 @@ describe("RegistryStatementsPanel", () => {
 
     expect(html).toContain("Already in the registry");
     expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain("ggs_test");
   });
 });

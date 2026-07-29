@@ -535,8 +535,10 @@ export function RegistryStatementsPanel({
             <span className="flex w-full items-center justify-between gap-12">
               <span>Already in the registry</span>
               <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
-                {statementCount === undefined
-                  ? "Historical statements"
+                {query.isError
+                  ? "Unavailable"
+                  : statementCount === undefined
+                    ? "Registry statements"
                   : formatCount(statementCount, "statement")}
               </span>
             </span>
@@ -564,13 +566,14 @@ function RegistryStatementsPanelContent({
       </div>
     );
   }
-  if (query.error || !query.data) {
+  if (query.isError) {
     return (
       <div className="p-16">
         <ServerError message="Registry statements could not be loaded. Refresh the page and try again." />
       </div>
     );
   }
+  if (!query.data) return null;
   if (query.data.length === 0) {
     return (
       <EmptyState
