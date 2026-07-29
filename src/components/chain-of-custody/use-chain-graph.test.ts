@@ -184,25 +184,101 @@ describe("biochar mass labels", () => {
   });
 });
 
+/** Matches the clamp in use-chain-graph.ts; a lane never exceeds it. */
+const MAX_ROUTE_OFFSET = 70;
+
+function flowEdge(source: string, target: string): Edge {
+  return {
+    id: `${source}->${target}`,
+    source,
+    target,
+    data: { variant: "flow", routeOffsetX: null },
+  };
+}
+
+function offsetOf(graphEdge: Edge): unknown {
+  return graphEdge.data?.routeOffsetX;
+}
+
 describe("branching edge routes", () => {
   it("gives every edge in a two-run, three-product fan a separate lane", () => {
     const fanEdges: Edge[] = ["run-1", "run-2"].flatMap((runId) =>
-      ["product-1", "product-2", "product-3"].map((productId) => ({
-        id: `${runId}->${productId}`,
-        source: runId,
-        target: productId,
-        data: { variant: "flow" },
-      })),
+      ["product-1", "product-2", "product-3"].map((productId) =>
+        flowEdge(runId, productId),
+      ),
     );
 
     assignEdgeRouteOffsets(fanEdges);
 
-    const routeOffsets = fanEdges.map(
-      (graphEdge) => graphEdge.data?.routeOffsetX,
-    );
+    const routeOffsets = fanEdges.map(offsetOf);
 
     expect(fanEdges).toHaveLength(6);
     expect(routeOffsets.every((offset) => typeof offset === "number")).toBe(true);
     expect(new Set(routeOffsets).size).toBe(6);
+  });
+
+  it("keeps a clamped eight-edge fan inside the corridor without collapsing lanes", () => {
+    const fanEdges: Edge[] = ["run-1", "run-2"].flatMap((runId) =>
+      ["product-1", "product-2", "product-3", "product-4"].map((productId) =>
+        flowEdge(runId, productId),
+      ),
+    );
+
+    assignEdgeRouteOffsets(fanEdges);
+
+    const routeOffsets = fanEdges.map((graphEdge) => offsetOf(graphEdge) as number);
+
+    expect(fanEdges).toHaveLength(8);
+    expect(new Set(routeOffsets).size).toBe(8);
+    expect(Math.max(...routeOffsets.map(Math.abs))).toBe(MAX_ROUTE_OFFSET);
+  });
+
+  it("leaves an ordinary one-to-one hand-off on the default midpoint", () => {
+    const edges: Edge[] = [
+      flowEdge("run-1", "product-1"),
+      flowEdge("product-1", "order-1"),
+    ];
+
+    assignEdgeRouteOffsets(edges);
+
+    expect(offsetOf(edges[0]) ?? null).toBeNull();
+    expect(offsetOf(edges[1]) ?? null).toBeNull();
+  });
+
+  it("ignores equipment edges sharing a source with a flow fan", () => {
+    const equipmentEdge: Edge = {
+      id: "run-1->reactor-1",
+      source: "run-1",
+      target: "reactor-1",
+      data: { variant: "equipment", routeOffsetX: null },
+    };
+    const edges: Edge[] = [
+      flowEdge("run-1", "product-1"),
+      flowEdge("run-1", "product-2"),
+      equipmentEdge,
+    ];
+
+    assignEdgeRouteOffsets(edges);
+
+    expect(offsetOf(equipmentEdge) ?? null).toBeNull();
+    // Two lanes, not three: the equipment edge must not widen the fan.
+    expect(edges.slice(0, 2).map(offsetOf)).toEqual([-14, 14]);
+  });
+
+  it("orders lanes by the laid-out vertical position, not by edge id", () => {
+    const nodeY: Record<string, number> = {
+      "run-1": 0,
+      "product-a": 300,
+      "product-b": 100,
+      "product-c": 200,
+    };
+    const edges: Edge[] = ["product-a", "product-b", "product-c"].map(
+      (productId) => flowEdge("run-1", productId),
+    );
+
+    assignEdgeRouteOffsets(edges, (nodeId) => nodeY[nodeId] ?? 0);
+
+    // Id order is a, b, c; layout order is b, c, a.
+    expect(edges.map(offsetOf)).toEqual([28, -28, 0]);
   });
 });

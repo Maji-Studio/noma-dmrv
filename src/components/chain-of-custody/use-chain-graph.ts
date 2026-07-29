@@ -81,7 +81,13 @@ const NEAR_FULL_PERCENT = 0.995;
 
 /** Preferred separation between parallel fan routes, in graph coordinates. */
 const EDGE_ROUTE_LANE_GAP = 28;
-/** Keeps large fans inside the corridor between adjacent Dagre ranks. */
+/**
+ * Keeps large fans inside the corridor between adjacent Dagre ranks. 70 is
+ * safe only because `DAGRE_CONFIG.ranksep` is 208 (`chain-constants.ts`):
+ * xyflow's smooth-step path reserves a 20px gap point at each end, leaving a
+ * midpoint band of ±84, so 70 keeps 14px of clearance. Lowering `ranksep`
+ * means lowering this too, or the outer lanes cross into the node rows.
+ */
 const EDGE_ROUTE_MAX_OFFSET = 70;
 
 /** A unit must never be mixed within one fan when normalizing to a share. */
@@ -186,8 +192,16 @@ function computeEdgeShareLabels(edges: Edge[]): void {
  * the same midpoint. In a split/merge fan that makes distinct allocations
  * look like one shared line carrying several labels. Give each connected fan
  * edge its own midpoint lane while leaving ordinary 1:1 hand-offs unchanged.
+ *
+ * Call this **after** `dagre.layout`: `getNodeY` reports each node's laid-out
+ * centre, and lanes are ordered by their endpoints' vertical position so the
+ * routes do not cross. Without it, lanes fall back to edge-id order, which is
+ * only stable, not geometrically sensible.
  */
-export function assignEdgeRouteOffsets(edges: Edge[]): void {
+export function assignEdgeRouteOffsets(
+  edges: Edge[],
+  getNodeY?: (nodeId: string) => number,
+): void {
   const flowEdges = edges.filter((graphEdge) => {
     const data = graphEdge.data as ChainEdgeBuildData | undefined;
     return data?.variant === "flow";
@@ -234,7 +248,19 @@ export function assignEdgeRouteOffsets(edges: Edge[]): void {
       }
     }
 
-    component.sort((left, right) => left.id.localeCompare(right.id));
+    // Endpoint midpoint: an edge between two high cards takes a high lane.
+    const laneKeys = new Map(
+      component.map((graphEdge) => [
+        graphEdge,
+        getNodeY
+          ? getNodeY(graphEdge.source) + getNodeY(graphEdge.target)
+          : 0,
+      ]),
+    );
+    component.sort((left, right) => {
+      const delta = (laneKeys.get(left) ?? 0) - (laneKeys.get(right) ?? 0);
+      return delta !== 0 ? delta : left.id.localeCompare(right.id);
+    });
     const preferredSpan = (component.length - 1) * EDGE_ROUTE_LANE_GAP;
     const span = Math.min(preferredSpan, EDGE_ROUTE_MAX_OFFSET * 2);
     const laneGap = component.length > 1 ? span / (component.length - 1) : 0;
@@ -626,7 +652,6 @@ function layoutGraph(
   // Branch shares depend on the full (merged + deduped) edge set, so annotate
   // here — covers both the single-rollback and batch roll-up graphs.
   computeEdgeShareLabels(edges);
-  assignEdgeRouteOffsets(edges);
 
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
@@ -641,6 +666,10 @@ function layoutGraph(
   }
 
   dagre.layout(g);
+
+  // Fan lanes read the laid-out vertical positions, so they are assigned once
+  // the ranks exist.
+  assignEdgeRouteOffsets(edges, (nodeId) => g.node(nodeId)?.y ?? 0);
 
   const nodes: Node[] = lineageNodes.map((node) => {
     const position = g.node(node.id);
