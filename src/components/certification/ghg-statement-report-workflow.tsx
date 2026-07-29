@@ -149,6 +149,8 @@ export function GhgStatementReportWorkflow({
         <p className="body-small text-[var(--color-text-tertiary)]">
           Loading report versions...
         </p>
+      ) : reportsQuery.error ? (
+        <ServerError message="Unable to load report versions." />
       ) : reportsQuery.data?.length ? (
         <div className="border border-[var(--color-border-secondary)]">
           {reportsQuery.data.map((report) => (
