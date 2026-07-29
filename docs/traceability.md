@@ -51,10 +51,13 @@ warning card explaining where the rollback stops.
 
 ## Anchors and readings
 
-Header: **credit batch selection cards** plus a **production-run filter** whose
-options derive from the loaded batch's lineages, never an unscoped fetch. The run
-filter narrows the whole roll-up (DAG, Map, and a client-side recomputed Sankey —
-every figure derives from the filtered lineages) and deep-links as `?run=`.
+Header: one **command bar** (`traceability-header.tsx`) — page eyebrow, a
+**credit batch dropdown** (`batch-picker.tsx`), a **production-run filter**
+(`run-picker.tsx`) whose options derive from the loaded batch's lineages, never
+an unscoped fetch, the back-to-roll-up button, the kg/% and view segments, and
+the facility code. The run filter narrows the whole roll-up (DAG, Map, and a
+client-side recomputed Sankey — every figure derives from the filtered lineages)
+and deep-links as `?run=`.
 
 Batch selection is remembered per facility in localStorage under
 `noma:traceability:selected-credit-batch:<facilityId>` (`creditBatchStorageKey`),
@@ -95,7 +98,7 @@ inside batch context, with a "Batch roll-up" button back.
 | Server Action | `src/fn/chain-of-custody.ts` | Validates ids; application, batch, batch-geo, trail actions |
 | React Query Hook | `src/hooks/use-chain-of-custody.ts` | Caches by application / batch id |
 | Batch List | `src/hooks/use-credit-batches.ts` | Facility-scoped, newest-first cards query |
-| Components | `src/components/chain-of-custody/` | Page, selector, run filter, DAG, `sankey/`, `trail/`, `map/` |
+| Components | `src/components/chain-of-custody/` | Page, command-bar header, batch/run pickers, DAG, `sankey/`, `trail/`, `map/` |
 | Route | `src/app/(app)/traceability/page.tsx` | Canonical entry; legacy `/chain-of-custody` redirects here with query string intact |
 
 ## Graph behavior

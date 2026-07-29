@@ -83,7 +83,10 @@ export function TraceabilityHeader({
 }: TraceabilityHeaderProps) {
   return (
     <div className="container-max flex flex-wrap items-center gap-12 py-8">
-      <span className={EYEBROW_CLASS}>Traceability</span>
+      {/* The command bar replaced PageHeader, so this eyebrow carries the page's
+          only heading. Styled as an eyebrow, still an h1 for the document
+          outline and for screen-reader landmark navigation. */}
+      <h1 className={EYEBROW_CLASS}>Traceability</h1>
 
       <BatchPicker
         batches={batches}
@@ -180,6 +183,9 @@ export function TraceabilityHeader({
             )}
           >
             {facility.code}
+            {/* Only the code fits the bar; the name still has to reach a screen
+                reader, which never sees a `title` on a non-interactive span. */}
+            <span className="sr-only"> {facility.name}</span>
           </span>
         ) : (
           <span

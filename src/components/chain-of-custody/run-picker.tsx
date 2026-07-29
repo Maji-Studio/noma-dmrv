@@ -16,8 +16,15 @@ const CODE_CLASS =
 const TRIGGER_MAX_WIDTH_CLASS = "max-w-[260px]";
 const MENU_WIDTH_PX = 280;
 const MENU_MAX_HEIGHT_CLASS = "max-h-[320px]";
-const CLEARABLE_TRIGGER_PADDING_CLASS = "pr-[56px]";
-const CLEAR_BUTTON_RIGHT_CLASS = "right-[30px]";
+/**
+ * Trailing controls sit outside the trigger's text flow, caret outermost and
+ * clear inboard of it — the order every other clearable control in the app
+ * uses. The two padding tiers reserve the room they occupy.
+ */
+const TRIGGER_PADDING_CLASS = "pr-[36px]";
+const CLEARABLE_TRIGGER_PADDING_CLASS = "pr-[64px]";
+const CARET_RIGHT_CLASS = "right-12";
+const CLEAR_BUTTON_RIGHT_CLASS = "right-[34px]";
 
 export interface RunPickerOption {
   id: string;
@@ -54,14 +61,22 @@ export function RunPicker({
           render={
             <button
               type="button"
-              aria-label="Filter by production run"
+              // An aria-label REPLACES the trigger's text, so it has to carry
+              // the active filter or the picker announces only its purpose.
+              aria-label={
+                selected
+                  ? `Filter by production run: ${selected.code}`
+                  : "Filter by production run"
+              }
               data-testid="chain-run-select-trigger"
               disabled={disabled}
               className={cn(
                 BAND_CLASS,
                 TRIGGER_MAX_WIDTH_CLASS,
                 "group gap-10 px-12 text-left transition-colors",
-                selected && !disabled && CLEARABLE_TRIGGER_PADDING_CLASS,
+                selected && !disabled
+                  ? CLEARABLE_TRIGGER_PADDING_CLASS
+                  : TRIGGER_PADDING_CLASS,
                 disabled
                   ? "cursor-not-allowed opacity-50"
                   : "cursor-pointer hover:border-[var(--color-interaction)] " +
@@ -88,7 +103,10 @@ export function RunPicker({
             aria-hidden
             size={12}
             weight="bold"
-            className="ml-auto shrink-0 text-[var(--clr-dark-purple-40)] transition-transform duration-150 group-data-[popup-open]:rotate-180"
+            className={cn(
+              CARET_RIGHT_CLASS,
+              "absolute shrink-0 text-[var(--clr-dark-purple-40)] transition-transform duration-150 group-data-[popup-open]:rotate-180"
+            )}
           />
         </DropdownMenu.Trigger>
 
@@ -101,6 +119,11 @@ export function RunPicker({
               <DropdownMenu.Item
                 onClick={() => onChange(undefined)}
                 className="!px-12 !py-[9px]"
+                // Single-select menu: the check glyph is the only visual cue,
+                // so the state has to be in the role too.
+                render={
+                  <div role="menuitemradio" aria-checked={value == null} />
+                }
               >
                 <span className="flex min-w-0 flex-1 items-center gap-8">
                   <span
@@ -130,6 +153,9 @@ export function RunPicker({
                     key={run.id}
                     onClick={() => onChange(run.id)}
                     className="!px-12 !py-[9px]"
+                    render={
+                      <div role="menuitemradio" aria-checked={isSelected} />
+                    }
                   >
                     <span
                       data-testid={`chain-run-option-${run.id}`}
@@ -175,7 +201,7 @@ export function RunPicker({
           data-testid="chain-run-select-clear"
           className={cn(
             CLEAR_BUTTON_RIGHT_CLASS,
-            "absolute top-0 flex h-40 cursor-pointer items-center px-4 text-[var(--clr-dark-purple-40)] transition-colors hover:text-[var(--clr-dark-purple)]"
+            "absolute top-0 flex h-40 cursor-pointer items-center px-8 text-[var(--clr-dark-purple-40)] transition-colors hover:text-[var(--clr-dark-purple)]"
           )}
         >
           <XIcon size={13} weight="bold" aria-hidden />

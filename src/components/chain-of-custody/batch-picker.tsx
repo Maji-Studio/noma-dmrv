@@ -106,7 +106,11 @@ export function BatchPicker({
             render={
               <button
                 type="button"
-                aria-label="Credit batch"
+                // An aria-label REPLACES the trigger's text, so it has to carry
+                // the selected value or the picker announces only its purpose.
+                aria-label={
+                  selected ? `Credit batch: ${selected.code}` : "Credit batch"
+                }
                 data-testid="chain-batch-selector-trigger"
                 className={cn(
                   BORDERED_BAND_CLASS,
@@ -164,6 +168,11 @@ export function BatchPicker({
                       key={batch.id}
                       onClick={() => onSelect(batch.id)}
                       className="!px-12 !py-[9px]"
+                      // Single-select menu: the check glyph is the only visual
+                      // cue, so the state has to be in the role too.
+                      render={
+                        <div role="menuitemradio" aria-checked={isSelected} />
+                      }
                     >
                       <span
                         data-testid={`chain-batch-option-${batch.id}`}
