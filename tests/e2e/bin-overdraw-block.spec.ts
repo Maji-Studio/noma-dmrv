@@ -35,7 +35,6 @@ const DELIVERY_DATE = "2027-06-16";
 const BIOCHAR_BIN_STOCK_KG = "100";
 const ORDER_QUANTITY_KG = "200000";
 const feedstockOverdrawText = /not enough feedstock in this bin/i;
-const biocharOverdrawText = /not enough biochar in this bin/i;
 const deliveryOverdrawText =
   /cannot deliver .* only .* remain undelivered/i;
 const ACTION_LABEL_PREFIX = "Actions for ";
@@ -624,13 +623,12 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
   });
 });
 
-/** Path 4: updateBiocharProduct excludes its own prior scaled allocation. */
-test.describe("updateBiocharProduct biochar-bin guard", () => {
-  test("rejects an edited scaled draw exceeding total biochar stock", async ({
+/** Path 4: source allocations stay fixed while measurements remain editable. */
+test.describe("updateBiocharProduct source allocation", () => {
+  test("keeps source mass fixed while allowing moisture correction", async ({
     adminPage: page,
     seededData,
   }) => {
-    // Initial draw is 70 kg; replacing it with 105 kg still exceeds 100 kg.
     const productBin = await createProductBin(seededData);
     let productCreated = false;
     try {
@@ -645,46 +643,20 @@ test.describe("updateBiocharProduct biochar-bin guard", () => {
         "100",
       );
       productCreated = true;
-      await editRowByText(page, productBin.name, "massKg");
-      await page.fill('input[name="massKg"]', "150");
-      await saveEdit(page);
-
-      const error = page
-        .locator('[role="dialog"]')
-        .getByText(biocharOverdrawText);
-      await expect(error).toBeVisible({ timeout: 10000 });
-      await expect(error).toContainText(/available/i);
-    } finally {
-      await cleanupProductScenario(
+      await editRowByText(
         page,
-        seededData,
-        productBin,
-        productCreated,
+        productBin.name,
+        "moistureContentPercent",
       );
-    }
-  });
-
-  test("accepts an increased scaled draw when the product is excluded", async ({
-    adminPage: page,
-    seededData,
-  }) => {
-    // 70 → 98 kg is valid, but counting old + replacement gives a false 168 kg.
-    const productBin = await createProductBin(seededData);
-    let productCreated = false;
-    try {
-      await createCompleteRun(page, seededData, {
-        feedstockWetMassKg: BIOCHAR_BIN_STOCK_KG,
-        biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
-      });
-      await createLinkedProduct(
-        page,
-        seededData,
-        productBin,
-        "100",
+      const dialog = page.locator('[role="dialog"]');
+      await expect(
+        dialog.locator('input[name="massKg"]'),
+      ).toBeDisabled();
+      const moistureInput = dialog.locator(
+        'input[name="moistureContentPercent"]',
       );
-      productCreated = true;
-      await editRowByText(page, productBin.name, "massKg");
-      await page.fill('input[name="massKg"]', "140");
+      await expect(moistureInput).toBeEnabled();
+      await moistureInput.fill("5");
       await saveEdit(page);
       await waitForSideSheetClose(page);
     } finally {

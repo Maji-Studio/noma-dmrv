@@ -640,13 +640,23 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .from(schema.biocharProducts)
         .where(eq(schema.biocharProducts.facilityId, data.facility.id));
       if (facilityBiocharProducts.length > 0) {
+        const facilityBiocharProductIds =
+          facilityBiocharProducts.map((product) => product.id);
         await tx
           .delete(schema.biocharStorageInventory)
           .where(
             inArray(
               schema.biocharStorageInventory.biocharProductId,
-              facilityBiocharProducts.map((p) => p.id)
+              facilityBiocharProductIds,
             )
+          );
+        await tx
+          .delete(schema.biocharProductSourceAllocations)
+          .where(
+            inArray(
+              schema.biocharProductSourceAllocations.biocharProductId,
+              facilityBiocharProductIds,
+            ),
           );
       }
 
