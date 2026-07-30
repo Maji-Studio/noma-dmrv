@@ -9,6 +9,10 @@ export interface EntityOption {
   name: string;
   /** Optional subtitle for additional context (e.g., location, type) */
   subtitle?: string;
+  /** Structured mass data for forms that render a selected entity's mass. */
+  mass?: {
+    moisturePercent: number | null;
+  };
 }
 
 export type EntityType =

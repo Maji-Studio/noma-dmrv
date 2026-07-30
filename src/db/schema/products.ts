@@ -108,6 +108,12 @@ export const biocharProducts = pgTable('biochar_products', {
   // existing product's biochar-equivalent draw. NULL falls back to the live
   // formulation ratio (legacy rows), then 1 (pure biochar).
   biocharRatio: fraction('biochar_ratio'),
+  // The physical biochar bin selected as this product's source. Per-run
+  // provenance for commingled stock is snapshotted in the allocation table.
+  sourceBiocharStorageLocationId: uuid('source_biochar_storage_location_id'),
+  // Compatibility link for legacy single-run consumers. New bin-sourced
+  // products populate it only when the mass-weighted allocation contains one
+  // run; commingled products resolve through the allocation table.
   linkedProductionRunId: uuid('linked_production_run_id'),
   composition: jsonb('composition').notNull().default(sql`'{}'::jsonb`),
 
@@ -133,6 +139,10 @@ export const biocharProducts = pgTable('biochar_products', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
   unique('biochar_products_organization_id_code_unique').on(table.organizationId, table.code),
+  unique('biochar_products_id_organization_id_unique').on(
+    table.id,
+    table.organizationId,
+  ),
   check(
     'biochar_products_biochar_ratio_range',
     sql`${table.biocharRatio} is null or (${table.biocharRatio} >= 0 and ${table.biocharRatio} <= 1)`
@@ -145,7 +155,72 @@ export const biocharProducts = pgTable('biochar_products', {
     columns: [table.linkedProductionRunId, table.organizationId],
     foreignColumns: [productionRuns.id, productionRuns.organizationId],
   }),
+  foreignKey({
+    columns: [table.sourceBiocharStorageLocationId, table.organizationId],
+    foreignColumns: [storageLocations.id, storageLocations.organizationId],
+  }),
 ]);
+
+// ============================================
+// Biochar Product Source Allocations
+// ============================================
+
+/**
+ * Immutable mass-weighted provenance for biochar drawn from a commingled bin.
+ * A product may span several production runs; callers must not infer one run
+ * from the selected bin or the legacy compatibility link.
+ */
+export const biocharProductSourceAllocations = pgTable(
+  'biochar_product_source_allocations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    biocharProductId: uuid('biochar_product_id').notNull(),
+    productionRunId: uuid('production_run_id').notNull(),
+    sourceStorageLocationId: uuid('source_storage_location_id').notNull(),
+    allocatedWetMassKg: massKg('allocated_wet_mass_kg').notNull(),
+    allocatedDryMassKg: massKg('allocated_dry_mass_kg').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    unique('biochar_product_source_allocations_product_run_unique').on(
+      table.biocharProductId,
+      table.productionRunId,
+    ),
+    index('biochar_product_source_allocations_organization_id_idx').on(
+      table.organizationId,
+    ),
+    index('biochar_product_source_allocations_source_bin_idx').on(
+      table.sourceStorageLocationId,
+    ),
+    foreignKey({
+      columns: [table.biocharProductId, table.organizationId],
+      foreignColumns: [biocharProducts.id, biocharProducts.organizationId],
+    }),
+    foreignKey({
+      columns: [table.productionRunId, table.organizationId],
+      foreignColumns: [productionRuns.id, productionRuns.organizationId],
+    }),
+    foreignKey({
+      columns: [table.sourceStorageLocationId, table.organizationId],
+      foreignColumns: [storageLocations.id, storageLocations.organizationId],
+    }),
+    check(
+      'biochar_product_source_allocations_wet_non_negative',
+      sql`${table.allocatedWetMassKg} >= 0`,
+    ),
+    check(
+      'biochar_product_source_allocations_dry_non_negative',
+      sql`${table.allocatedDryMassKg} >= 0`,
+    ),
+    check(
+      'biochar_product_source_allocations_dry_lte_wet',
+      sql`${table.allocatedDryMassKg} <= ${table.allocatedWetMassKg}`,
+    ),
+  ],
+);
 
 // ============================================
 // Relations
@@ -172,7 +247,7 @@ export const formulationIngredientsRelations = relations(
 
 export const biocharProductsRelations = relations(
   biocharProducts,
-  ({ one }) => ({
+  ({ one, many }) => ({
     facility: one(facilities, {
       fields: [biocharProducts.facilityId],
       references: [facilities.id],
@@ -185,11 +260,36 @@ export const biocharProductsRelations = relations(
       fields: [biocharProducts.linkedProductionRunId],
       references: [productionRuns.id],
     }),
+    sourceBiocharStorageLocation: one(storageLocations, {
+      fields: [biocharProducts.sourceBiocharStorageLocationId],
+      references: [storageLocations.id],
+      relationName: 'biocharProductSourceStorageLocation',
+    }),
+    sourceAllocations: many(biocharProductSourceAllocations),
     storageLocation: one(storageLocations, {
       fields: [biocharProducts.storageLocationId],
       references: [storageLocations.id],
+      relationName: 'biocharProductDestinationStorageLocation',
     }),
   })
+);
+
+export const biocharProductSourceAllocationsRelations = relations(
+  biocharProductSourceAllocations,
+  ({ one }) => ({
+    biocharProduct: one(biocharProducts, {
+      fields: [biocharProductSourceAllocations.biocharProductId],
+      references: [biocharProducts.id],
+    }),
+    productionRun: one(productionRuns, {
+      fields: [biocharProductSourceAllocations.productionRunId],
+      references: [productionRuns.id],
+    }),
+    sourceStorageLocation: one(storageLocations, {
+      fields: [biocharProductSourceAllocations.sourceStorageLocationId],
+      references: [storageLocations.id],
+    }),
+  }),
 );
 
 // ============================================
@@ -199,3 +299,6 @@ export const biocharProductsRelations = relations(
 export type Formulation = InferSelectModel<typeof formulations>;
 export type FormulationIngredient = InferSelectModel<typeof formulationIngredients>;
 export type BiocharProduct = InferSelectModel<typeof biocharProducts>;
+export type BiocharProductSourceAllocation = InferSelectModel<
+  typeof biocharProductSourceAllocations
+>;

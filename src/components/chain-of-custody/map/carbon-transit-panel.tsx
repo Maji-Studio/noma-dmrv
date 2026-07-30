@@ -362,7 +362,7 @@ export function CarbonTransitPanel({
               onTrace={onDetailTrace}
               leg={detailLeg}
               geoNode={detailGeoNode}
-              facilityName={geo.facility.code}
+              facilityName={geo.facility.name}
             />
           ) : null}
         </div>

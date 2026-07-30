@@ -28,7 +28,8 @@ import { InfoHint, Tooltip } from "@/components/ui/tooltip";
 import { useBatchHealth } from "@/hooks/use-certification";
 import type { BatchHealth, BatchHealthCheck } from "@/lib/certification/batch-health";
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
-import { formatDate, formatTonnes } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import {
   batchHealthFixLinkFor,
   compactBatchHealthDetail,
@@ -61,12 +62,28 @@ function AffectedRecordChips({
     <div className="flex flex-wrap items-center gap-6 pt-4">
       {visibleRecords.map((record) => {
         const run = productionRuns.find((candidate) => candidate.id === record.id);
+        const isProductionRunRecord =
+          check.fixTarget === "productionRuns" ||
+          check.fixTarget === "sourceData";
+        const recordLabel = run
+          ? run.biocharStorageName ?? formatDate(run.date)
+          : isProductionRunRecord
+            ? "Affected production run"
+            : record.code;
         const tooltip = (
           <span className="flex flex-col gap-4">
             {run && <span>{formatDate(run.date)}</span>}
             {run && feedstockName && <span>{feedstockName}</span>}
-            {run?.biocharDryMassKg != null && (
-              <span>{formatTonnes(run.biocharDryMassKg / 1000)} dry output</span>
+            {run &&
+              (run.biocharOutputKg != null ||
+                run.biocharDryMassKg != null) && (
+              <span>
+                Biochar output:{" "}
+                {formatWetDryMass({
+                  wetKg: run.biocharOutputKg,
+                  dryKg: run.biocharDryMassKg,
+                })}
+              </span>
             )}
             <span>Missing: {record.missing.join(", ")}</span>
           </span>
@@ -76,9 +93,9 @@ function AffectedRecordChips({
             <button
               type="button"
               className="inline-flex h-28 items-center border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-8 body-caption text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-              aria-label={`${record.code}: ${record.missing.join(", ")}`}
+              aria-label={`${recordLabel}: ${record.missing.join(", ")}`}
             >
-              {record.code}
+              {recordLabel}
             </button>
           </Tooltip>
         );

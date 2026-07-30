@@ -207,7 +207,7 @@ function facilityMilestone(
     return { complete: false, meta: "No GPS position on the facility" };
   }
   const name = facility.name?.trim();
-  return { complete: true, meta: name ? `${facility.code} · ${name}` : facility.code };
+  return { complete: true, meta: name || "Facility" };
 }
 
 // ---------------------------------------------------------------------------

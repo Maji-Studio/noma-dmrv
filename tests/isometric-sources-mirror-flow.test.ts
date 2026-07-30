@@ -34,12 +34,10 @@ vi.mock("@/lib/auth/server", () => ({
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");
-vi.mock("@/data-access/credit-batches");
-vi.mock("@/data-access/credit-batch-production-runs");
+vi.mock("@/data-access/credit-batch-accounting");
 vi.mock("@/data-access/credit-batch-samples", () => ({
   getSamplesByCreditBatchIds: vi.fn(),
 }));
-vi.mock("@/data-access/chain-of-custody");
 vi.mock("@/data-access/documents");
 vi.mock("@/data-access/certifier-document-uploads");
 vi.mock("@/data-access/certifier-organization-settings");
@@ -114,10 +112,8 @@ const DOCUMENT_FIXTURE = {
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as ledgerDA from "@/data-access/certification";
 import * as submissionsDA from "@/data-access/certification-submissions";
-import * as creditBatchesDA from "@/data-access/credit-batches";
-import * as creditBatchProductionRunsDA from "@/data-access/credit-batch-production-runs";
+import * as creditBatchAccountingDA from "@/data-access/credit-batch-accounting";
 import * as creditBatchSamplesDA from "@/data-access/credit-batch-samples";
-import * as chainDA from "@/data-access/chain-of-custody";
 import * as documentsDA from "@/data-access/documents";
 import * as uploadsDA from "@/data-access/certifier-document-uploads";
 import * as organizationSettingsDA from "@/data-access/certifier-organization-settings";
@@ -152,32 +148,32 @@ beforeEach(() => {
       code: "CB-001",
     },
   ] as never);
-  vi.mocked(creditBatchesDA.getCreditBatchById).mockResolvedValue({
-    id: CREDIT_BATCH_ID,
-    code: "CB-001",
-    productionRunIds: [PRODUCTION_RUN_ID],
+  vi.mocked(creditBatchAccountingDA.loadCreditBatchRollups).mockResolvedValue({
+    [CREDIT_BATCH_ID]: {
+      batch: {
+        id: CREDIT_BATCH_ID,
+        code: "CB-001",
+      },
+      lineageFacts: {
+        applications: [
+          {
+            id: APPLICATION_ID,
+            code: "APP-001",
+            delivery: { id: DELIVERY_ID, code: "DEL-001" },
+          },
+        ],
+        runs: [
+          {
+            id: PRODUCTION_RUN_ID,
+            feedstocks: [],
+          },
+        ],
+      },
+    },
   } as never);
   vi.mocked(creditBatchSamplesDA.getSamplesByCreditBatchIds).mockResolvedValue(
     [],
   );
-  vi.mocked(creditBatchProductionRunsDA.getApplicationsForRuns).mockResolvedValue(
-    [
-      {
-        applicationId: APPLICATION_ID,
-        productionRunId: PRODUCTION_RUN_ID,
-        biocharAppliedTons: 1,
-      },
-    ],
-  );
-  vi.mocked(chainDA.getChainOfCustodyData).mockResolvedValue({
-    application: { id: APPLICATION_ID, code: "APP-001" },
-    delivery: { id: DELIVERY_ID, code: "DEL-001" },
-    order: null,
-    biocharProduct: null,
-    productionRun: null,
-    reactor: null,
-    feedstocks: [],
-  } as never);
   vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
     async (_userId, entityType, entityId) => {
       // The document lives on the application — every other entity in the

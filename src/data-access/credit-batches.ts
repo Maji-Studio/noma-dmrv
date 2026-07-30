@@ -16,7 +16,7 @@ import {
   creditBatchProductionRuns,
   type CreditBatch,
 } from "@/db/schema/credits";
-import { facilities } from "@/db/schema/facilities";
+import { facilities, storageLocations } from "@/db/schema/facilities";
 import {
   productionRuns,
   productionRunFeedstocks,
@@ -72,8 +72,6 @@ const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
   COMPLETED_PRODUCTION_RUN_STATUS,
 ] as const;
 
-export { getApplicationsForRuns } from "./credit-batch-production-runs";
-export type { ApplicationForRun } from "./credit-batch-production-runs";
 export {
   getCo2eStoredPreviews,
   getFacilityCertifier,
@@ -125,6 +123,8 @@ export interface CreditBatchProductionRunOption {
   code: string;
   date: string;
   status: ProductionRunStatus;
+  biocharStorageName: string | null;
+  biocharOutputKg: number | null;
   biocharDryMassKg: number | null;
   /**
    * Run-local production-emission inputs, surfaced so the credit-batch form can
@@ -895,6 +895,8 @@ export async function getCreditBatchProductionRunOptions(
       code: productionRuns.code,
       date: productionRunDateExpr(),
       status: productionRuns.status,
+      biocharStorageName: storageLocations.name,
+      biocharOutputKg: productionRuns.biocharOutputKg,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
       dieselOperationLiters: productionRuns.dieselOperationLiters,
@@ -905,6 +907,13 @@ export async function getCreditBatchProductionRunOptions(
       assignedCreditBatchCode: creditBatches.code,
     })
     .from(productionRuns)
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(productionRuns.biocharStorageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(
       creditBatchProductionRuns,
       and(eq(creditBatchProductionRuns.productionRunId, productionRuns.id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)),

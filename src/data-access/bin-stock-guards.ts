@@ -159,7 +159,9 @@ export async function deriveProductAvailableKg(
   const [[product], [delivered], [movement]] = await Promise.all([
     tx
       .select({
-        total: sumNumeric(biocharProducts.massKg),
+        total: sumNumeric(
+          sql`COALESCE(${biocharProducts.massKg}, 0) + COALESCE(${biocharProducts.waterAddedKg}, 0)`,
+        ),
       })
       .from(biocharProducts)
       .where(
@@ -320,11 +322,19 @@ export async function assertBiocharProductDrawWithinStock(
   requireOrgScope(ctx);
   const [product] = await tx
     .select({
-      code: biocharProducts.code,
+      productBinName: storageLocations.name,
       massKg: biocharProducts.massKg,
+      waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
     })
     .from(biocharProducts)
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(biocharProducts.storageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .where(
       and(
         eq(biocharProducts.id, params.biocharProductId),
@@ -349,14 +359,17 @@ export async function assertBiocharProductDrawWithinStock(
     params.biocharProductId,
     params.excludeDeliveryId,
   );
-  const batchAvailable = Number(product?.massKg ?? 0) - deliveredKg;
+  const batchAvailable =
+    Number(product?.massKg ?? 0) +
+    Number(product?.waterAddedKg ?? 0) -
+    deliveredKg;
   if (isOverdraw(params.requestedWetKg, batchAvailable)) {
     // Batch-specific copy: a delivery over-draw is against the product batch's
     // remaining wet mass, not a bin lane, so the #194 bin reconcile workflow is
     // the wrong lever — point the operator at the source bin or the product.
     throw new SafeError(
       deliveryStockOverdrawMessage(
-        product?.code ?? null,
+        product?.productBinName ?? null,
         batchAvailable,
         params.requestedWetKg,
       ),

@@ -276,6 +276,7 @@ function StockTakeForm({
           <MoistureSplit
             wetMassKg={countedNum}
             moisturePercent={measuredMoisturePercent}
+            materialLabel="Feedstock"
             note="Counted wet mass is converted to dry before comparison."
           />
         </div>

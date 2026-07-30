@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { toCreditBatchEntityOption } from "./credit-batch-option";
 
 describe("toCreditBatchEntityOption", () => {
-  it("uses the production date range instead of the facility name", () => {
+  it("uses the production date range and status without a visible batch code", () => {
     expect(
       toCreditBatchEntityOption({
         id: "batch-1",
@@ -14,8 +14,8 @@ describe("toCreditBatchEntityOption", () => {
     ).toEqual({
       id: "batch-1",
       code: "CB-26-001",
-      name: "CB-26-001",
-      subtitle: "Jul 1 to Jul 31, 2026 · Pending",
+      name: "Jul 1 to Jul 31, 2026",
+      subtitle: "Pending",
     });
   });
 });

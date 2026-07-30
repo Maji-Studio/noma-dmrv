@@ -550,7 +550,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     }
   });
 
-  it("takes the source advisory lock before the destination row lock for a zero-mass product", async () => {
+  it("takes the source advisory lock before the destination row lock for a bin-linked product create", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const productCode = `BP-ZERO-LOCK-${tag}`;
@@ -602,7 +602,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         status: "complete",
         startTime: new Date("2026-07-04T08:00:00Z"),
         endTime: new Date("2026-07-04T10:00:00Z"),
-        biocharOutputKg: 0,
+        biocharOutputKg: 10,
         biocharStorageLocationId: sourceBin.id,
       })
       .returning({ id: productionRuns.id });
@@ -641,7 +641,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         facilityId: facility.id,
         linkedProductionRunId: run.id,
         storageLocationId: destinationBin.id,
-        massKg: 0,
+        massKg: 1,
         moistureContentPercent: 0,
         waterAddedKg: 0,
       });
@@ -693,7 +693,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
 
       releaseSourceLock();
       await sourceLockTransaction;
-      await expect(createPromise).resolves.toMatchObject({ massKg: 0 });
+      await expect(createPromise).resolves.toMatchObject({ massKg: 1 });
     } finally {
       releaseSourceLock();
       await sourceLockTransaction?.catch(() => undefined);

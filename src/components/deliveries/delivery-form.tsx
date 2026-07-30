@@ -283,7 +283,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       deliveryAvailability.availableKg,
     )
       ? deliveryStockOverdrawMessage(
-          deliveryAvailability.productCode,
+          deliveryAvailability.productLabel,
           deliveryAvailability.availableKg,
           watchWetMass,
         )
@@ -397,6 +397,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         fields={["deliveredWetMassKg", "moistureContentPercent", "massDryKg"]}
       >
         <MassMoistureFields
+          materialLabel="Biochar"
+          wetSplitLabel="Wet biochar product"
+          drySplitLabel="Dry biochar"
           wetMassKg={watchWetMass}
           moisturePercent={watchMoisture}
           wet={{

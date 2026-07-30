@@ -111,6 +111,8 @@ function AppliedMassSplit({
         <MoistureSplit
           wetMassKg={appliedKg}
           moisturePercent={moisturePercent}
+          wetLabel="Wet biochar product"
+          dryLabel="Dry biochar"
           note="Moisture from the delivery record."
         />
       )}

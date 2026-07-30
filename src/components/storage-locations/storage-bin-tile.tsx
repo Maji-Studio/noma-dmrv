@@ -26,6 +26,7 @@ import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { RowActionsMenu } from "@/components/ui";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import {
   BIN_TYPE_META,
   binAccentStyle,
@@ -211,12 +212,21 @@ function LastActivity({ bin }: { bin: StorageLocationWithFacility }) {
   }
 
   const sign = lastActivity.type === "in" ? "+" : "−";
+  const activityMass =
+    bin.type === "feedstock_bin"
+      ? formatMassKg(lastActivity.massKg)
+      : formatWetDryMass({
+          wetKg: lastActivity.massKg,
+          dryKg: lastActivity.massDryKg,
+          separator: " | ",
+          unitSpacing: "compact",
+        });
   return (
     <p
       className="truncate body-caption text-[var(--color-text-tertiary)]"
-      title={`${lastActivity.label} · ${sign}${formatMassKg(
-        lastActivity.massKg,
-      )} · ${formatDateTime(lastActivity.date)}`}
+      title={`${lastActivity.label} · ${sign}${activityMass} · ${formatDateTime(
+        lastActivity.date,
+      )}`}
     >
       Last activity: {formatDate(lastActivity.date)}
     </p>

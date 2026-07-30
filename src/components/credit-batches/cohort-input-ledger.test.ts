@@ -10,6 +10,8 @@ function makeRun(
     code: "PR-26-001",
     date: "2026-05-13",
     status: "complete",
+    biocharStorageName: null,
+    biocharOutputKg: null,
     biocharDryMassKg: null,
     feedstockMassDryKg: null,
     dieselOperationLiters: null,

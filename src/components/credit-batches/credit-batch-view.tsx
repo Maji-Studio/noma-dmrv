@@ -19,6 +19,7 @@ import type {
   CreditBatchWithRelations,
 } from "@/data-access/credit-batches";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
 import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
@@ -37,18 +38,21 @@ function ProductionRunLink({
   return (
     <SheetLinkRow
       href={`/production-runs?facility=${facilityId}&run=${run.id}`}
-      ariaLabel={`Open production run ${run.code}`}
-      primary={run.code}
-      secondary={formatDate(run.date)}
+      ariaLabel={`Open production run from ${formatDate(run.date)}${
+        run.biocharStorageName ? ` in ${run.biocharStorageName}` : ""
+      }`}
+      primary={formatDate(run.date)}
+      secondary={run.biocharStorageName}
       meta={
         <>
           {run.status !== COMPLETED_PRODUCTION_RUN_STATUS && (
             <StatusBadge status={run.status} size="small" />
           )}
           <span className="body-caption tabular-nums text-[var(--color-text-tertiary)]">
-            {run.biocharDryMassKg == null
-              ? "Not recorded"
-              : `${formatTonnes(run.biocharDryMassKg / 1000)} dry`}
+            {formatWetDryMass({
+              wetKg: run.biocharOutputKg,
+              dryKg: run.biocharDryMassKg,
+            })}
           </span>
         </>
       }

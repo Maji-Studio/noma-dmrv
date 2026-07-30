@@ -23,7 +23,9 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { useCustomers, useCustomerLocations } from "@/hooks/use-customers";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import { useEntityById } from "@/hooks/use-entities";
 import { CustomerLocationDetails } from "./customer-location-details";
+import { OrderMassPreview } from "./order-mass-preview";
 import { useEffect } from "react";
 
 // ============================================
@@ -114,6 +116,15 @@ export function OrderForm({
   const selectedCustomerId = watchedCustomerId || undefined;
   const watchedLocationId = useWatch({ control, name: "customerLocationId" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const watchedBiocharProductId = useWatch({
+    control,
+    name: "biocharProductId",
+  });
+  const watchedQuantityKg = useWatch({ control, name: "quantityKg" });
+  const { data: selectedBiocharProduct } = useEntityById(
+    "biocharProduct",
+    watchedBiocharProductId || undefined,
+  );
 
   // Fetch related data for dropdowns
   const { data: customersData } = useCustomers({ pageSize: 100 });
@@ -270,7 +281,7 @@ export function OrderForm({
           filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
           emptyHint={{
             message:
-              "No product bin contains a biochar product. Create one from a completed production run first.",
+              "No product bin contains a biochar product. Create one from a biochar bin first.",
             href: contextFacilityId
               ? `/biochar-products?facility=${encodeURIComponent(contextFacilityId)}`
               : "/biochar-products",
@@ -279,23 +290,6 @@ export function OrderForm({
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="packaging"
-            label="Packaging"
-            error={errors.packaging?.message}
-            required
-          >
-            <FormSelect
-              id="packaging"
-              disabled={isSubmitting}
-              error={!!errors.packaging}
-              options={packagingOptions}
-              {...register("packaging")}
-            />
-          </FormField>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
           <FormField
             id="quantityKg"
             label="Quantity (kg)"
@@ -312,6 +306,30 @@ export function OrderForm({
               {...register("quantityKg", {
                 setValueAs: numericValue,
               })}
+            />
+          </FormField>
+        </div>
+
+        <OrderMassPreview
+          quantityKg={watchedQuantityKg}
+          moisturePercent={
+            selectedBiocharProduct?.mass?.moisturePercent ?? null
+          }
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
+          <FormField
+            id="packaging"
+            label="Packaging"
+            error={errors.packaging?.message}
+            required
+          >
+            <FormSelect
+              id="packaging"
+              disabled={isSubmitting}
+              error={!!errors.packaging}
+              options={packagingOptions}
+              {...register("packaging")}
             />
           </FormField>
 

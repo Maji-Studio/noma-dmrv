@@ -139,6 +139,25 @@ export function splitWetMassAfterAddedWater(
   };
 }
 
+export function deriveEffectiveMoisturePercent(
+  wetMassKg: number | null | undefined,
+  moisturePercent: number | null | undefined,
+  addedWaterKg: number | null | undefined,
+): number | null {
+  const split = splitWetMassAfterAddedWater(
+    wetMassKg,
+    moisturePercent,
+    addedWaterKg,
+  );
+  if (!split || !Number.isFinite(split.wetKg) || split.wetKg <= 0) {
+    return null;
+  }
+  return Math.min(
+    Math.max(split.moisturePercent, 0),
+    PERCENT_MAX,
+  );
+}
+
 /**
  * Accept the loosely-typed values React Hook Form hands back from a watched
  * numeric field (which may still be a string mid-edit) and split them.
@@ -181,6 +200,67 @@ export function formatSplitMass(kg: number | null | undefined): string {
   return formatMassKg(kg);
 }
 
+export interface WetDryMassFormatInput {
+  wetKg: number | null | undefined;
+  dryKg: number | null | undefined;
+  moisturePercent?: number | null;
+  /**
+   * Derive dry mass only when moisture is the entity's source of truth.
+   * A stored dry mass always takes precedence.
+   */
+  deriveDryWhenMissing?: boolean;
+  /** Label before the wet value. */
+  wetLabel?: string;
+  /** Label before the dry value. */
+  dryLabel?: string;
+  /** Divider between wet and dry figures. */
+  separator?: string;
+  /** Whether kg is separated from the number by a space. */
+  unitSpacing?: "spaced" | "compact";
+}
+
+function formatRecordedMass(
+  kg: number | null | undefined,
+  unitSpacing: "spaced" | "compact",
+): string {
+  if (kg == null || !Number.isFinite(kg) || kg < 0) {
+    return "Not recorded";
+  }
+
+  const formatted = formatSplitMass(kg);
+  return unitSpacing === "compact"
+    ? formatted.replace(/ kg$/, "kg")
+    : formatted;
+}
+
+/**
+ * Compact mass pair for tables, pickers and cards. Both labels stay visible so
+ * a lone kilogram value can never be mistaken for the other mass basis.
+ */
+export function formatWetDryMass({
+  wetKg,
+  dryKg,
+  moisturePercent,
+  deriveDryWhenMissing = false,
+  wetLabel = "Wet",
+  dryLabel = "Dry",
+  separator = " · ",
+  unitSpacing = "spaced",
+}: WetDryMassFormatInput): string {
+  const resolvedDryKg =
+    dryKg == null && deriveDryWhenMissing
+      ? splitWetMass(wetKg, moisturePercent)?.dryKg
+      : dryKg;
+
+  return `${wetLabel}: ${formatRecordedMass(
+    wetKg,
+    unitSpacing,
+  )}${separator}${dryLabel}: ${formatRecordedMass(
+    resolvedDryKg,
+    unitSpacing,
+  )}`;
+}
+
 /**
  * Screen-reader sentence for a split, spelled out in full because the bar's
  * geometry carries the meaning visually and conveys nothing to a screen reader.
@@ -189,7 +269,7 @@ export function describeMassSplit(split: MassSplit): string {
   return `${formatSplitMass(split.wetKg)} wet: ${formatSplitMass(split.dryKg)} dry mass and ${formatSplitMass(split.waterKg)} water at ${formatMoisturePercent(split.moisturePercent)} moisture.`;
 }
 
-/** Compact one-line summary — "800 kg dry · 20% moisture". */
+/** Compact one-line summary — "Wet: 1,000 kg · Dry: 800 kg". */
 export function formatMassSplitInline(split: MassSplit): string {
-  return `${formatSplitMass(split.dryKg)} dry · ${formatMoisturePercent(split.moisturePercent)} moisture`;
+  return formatWetDryMass({ wetKg: split.wetKg, dryKg: split.dryKg });
 }

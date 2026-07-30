@@ -181,16 +181,13 @@ export function TraceabilityHeader({
 
         {facility ? (
           <span
-            title={`${facility.code} - ${facility.name}`}
+            title={facility.name}
             className={cn(
               FACILITY_MAX_WIDTH_CLASS,
               "truncate pl-4 font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--clr-dark-purple-60)]"
             )}
           >
-            {facility.code}
-            {/* Only the code fits the bar; the name still has to reach a screen
-                reader, which never sees a `title` on a non-interactive span. */}
-            <span className="sr-only"> {facility.name}</span>
+            {facility.name}
           </span>
         ) : (
           <span

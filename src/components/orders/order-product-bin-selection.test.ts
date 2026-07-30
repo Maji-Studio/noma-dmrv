@@ -26,4 +26,26 @@ describe("order product-bin selection", () => {
       "eq(biocharProducts.storageLocationId, storageLocations.id)",
     );
   });
+
+  it("wires the selected product moisture into a preview after quantity and before packaging", () => {
+    const selectorIndex = orderFormSource.indexOf(
+      'name="biocharProductId"',
+    );
+    const quantityIndex = orderFormSource.indexOf('id="quantityKg"');
+    const previewIndex = orderFormSource.indexOf("<OrderMassPreview");
+    const packagingIndex = orderFormSource.indexOf('id="packaging"');
+    const valueIndex = orderFormSource.indexOf('id="value"');
+    const currencyIndex = orderFormSource.indexOf('id="currency"');
+
+    expect(orderFormSource).toContain('name: "biocharProductId"');
+    expect(orderFormSource).toContain('name: "quantityKg"');
+    expect(orderFormSource).toContain(
+      "selectedBiocharProduct?.mass?.moisturePercent",
+    );
+    expect(selectorIndex).toBeLessThan(quantityIndex);
+    expect(quantityIndex).toBeLessThan(previewIndex);
+    expect(previewIndex).toBeLessThan(packagingIndex);
+    expect(packagingIndex).toBeLessThan(valueIndex);
+    expect(valueIndex).toBeLessThan(currencyIndex);
+  });
 });

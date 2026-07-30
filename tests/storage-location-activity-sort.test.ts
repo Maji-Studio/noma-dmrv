@@ -18,7 +18,8 @@
  *   bin D  product drawn from it, via its run     (branch 4) — its own run is
  *          deliberately OLDER than bin A, so branch 3 cannot supply bin D's
  *          position; only the linked product's timestamp can.
- *   bin E  product stored in it                   (branch 5)
+ *   bin G  multi-run product drawn from it        (branch 5)
+ *   bin E  product stored in it                   (branch 6)
  *   bin Q  nothing at all                         (NULL, sorts last both ways)
  *
  * It also pins the two contract details the board depends on: nulls last in
@@ -34,7 +35,11 @@ import { getStorageLocations } from "@/data-access/storage-locations";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
 import { productionRuns } from "@/db/schema/production";
-import { biocharProducts } from "@/db/schema/products";
+import {
+  biocharProducts,
+  biocharProductSourceAllocations,
+  formulations,
+} from "@/db/schema/products";
 import { binMovements } from "@/db/schema/bin-movements";
 
 const TEST_USER_ID = "test-user-storage-activity-sort";
@@ -45,6 +50,7 @@ const T1_FEEDSTOCK_IN = new Date("2026-01-05T08:00:00Z");
 const T2_RUN_DRAW = new Date("2026-02-10T08:00:00Z");
 const T3_RUN_FILL = new Date("2026-03-11T08:00:00Z");
 const T4_PRODUCT_FROM_RUN = new Date("2026-05-05T08:00:00Z");
+const T5_MULTI_RUN_PRODUCT = new Date("2026-06-01T08:00:00Z");
 const T5_PRODUCT_STORED = new Date("2026-06-20T08:00:00Z");
 const T6_STOCK_TAKE = new Date("2026-07-25T08:00:00Z");
 
@@ -54,6 +60,8 @@ const T6_STOCK_TAKE = new Date("2026-07-25T08:00:00Z");
  * sort below bin A, which the ordering assertion would catch.
  */
 const BIN_D_RUN_CREATED = new Date("2025-11-02T08:00:00Z");
+const BIN_G_RUN_1_CREATED = new Date("2025-09-02T08:00:00Z");
+const BIN_G_RUN_2_CREATED = new Date("2025-10-02T08:00:00Z");
 
 interface ActivitySortFixture {
   facilityId: string;
@@ -65,6 +73,8 @@ interface ActivitySortFixture {
   feedstockIds: string[];
   productionRunIds: string[];
   biocharProductIds: string[];
+  sourceAllocationIds: string[];
+  formulationId: string;
 }
 
 async function createFixture(runId: string): Promise<ActivitySortFixture> {
@@ -149,10 +159,28 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
           facilityId: facility.id,
           feedstockTypeId: feedstockType.id,
         },
+        {
+          organizationId: TEST_ORG_ID,
+          code: `BIN-ACT-G-${runId}`,
+          name: `Commingled Biochar ${runId}`,
+          type: "biochar_bin" as const,
+          facilityId: facility.id,
+        },
       ])
       .returning({ id: storageLocations.id });
 
-    const [binA, binB, binC, binD, binE, quietBin] = insertedBins;
+    const [binA, binB, binC, binD, binE, quietBin, binG] =
+      insertedBins;
+
+    const [formulation] = await tx
+      .insert(formulations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FORM-ACT-${runId}`,
+        name: `Garden Blend ${runId}`,
+        biocharRatio: 1,
+      })
+      .returning({ id: formulations.id });
 
     // Branch 1: feedstock arriving in bin A.
     const insertedFeedstocks = await tx
@@ -202,12 +230,37 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
           reactorId: reactor.id,
           startTime: BIN_D_RUN_CREATED,
           biocharStorageLocationId: binD.id,
+          biocharOutputKg: 100,
+          biocharDryMassKg: 80,
           createdAt: BIN_D_RUN_CREATED,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          code: `PR-ACT-MULTI-1-${runId}`,
+          facilityId: facility.id,
+          reactorId: reactor.id,
+          startTime: BIN_G_RUN_1_CREATED,
+          biocharStorageLocationId: binG.id,
+          biocharOutputKg: 50,
+          biocharDryMassKg: 40,
+          createdAt: BIN_G_RUN_1_CREATED,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          code: `PR-ACT-MULTI-2-${runId}`,
+          facilityId: facility.id,
+          reactorId: reactor.id,
+          startTime: BIN_G_RUN_2_CREATED,
+          biocharStorageLocationId: binG.id,
+          biocharOutputKg: 100,
+          biocharDryMassKg: 80,
+          createdAt: BIN_G_RUN_2_CREATED,
         },
       ])
       .returning({ id: productionRuns.id });
 
     const binDRunId = insertedRuns[2].id;
+    const [binGRun1, binGRun2] = insertedRuns.slice(3);
 
     const insertedProducts = await tx
       .insert(biocharProducts)
@@ -219,9 +272,21 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
           code: `BP-ACT-DRAWN-${runId}`,
           facilityId: facility.id,
           linkedProductionRunId: binDRunId,
+          massKg: 50,
           createdAt: T4_PRODUCT_FROM_RUN,
         },
-        // Branch 5: a product sitting IN bin E.
+        // Branch 5: a commingled product drawn from bin G. Its two allocation
+        // rows are the authoritative wet/dry outbound mass.
+        {
+          organizationId: TEST_ORG_ID,
+          code: `BP-ACT-MULTI-${runId}`,
+          facilityId: facility.id,
+          formulationId: formulation.id,
+          sourceBiocharStorageLocationId: binG.id,
+          massKg: 100,
+          createdAt: T5_MULTI_RUN_PRODUCT,
+        },
+        // Branch 6: a product sitting IN bin E.
         {
           organizationId: TEST_ORG_ID,
           code: `BP-ACT-STORED-${runId}`,
@@ -232,15 +297,46 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
       ])
       .returning({ id: biocharProducts.id });
 
+    const insertedAllocations = await tx
+      .insert(biocharProductSourceAllocations)
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          biocharProductId: insertedProducts[1].id,
+          productionRunId: binGRun1.id,
+          sourceStorageLocationId: binG.id,
+          allocatedWetMassKg: 25,
+          allocatedDryMassKg: 20,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          biocharProductId: insertedProducts[1].id,
+          productionRunId: binGRun2.id,
+          sourceStorageLocationId: binG.id,
+          allocatedWetMassKg: 75,
+          allocatedDryMassKg: 60,
+        },
+      ])
+      .returning({ id: biocharProductSourceAllocations.id });
+
     return {
       facilityId: facility.id,
       reactorId: reactor.id,
       feedstockTypeId: feedstockType.id,
-      binIdsByAge: [binA.id, binB.id, binC.id, binD.id, binE.id],
+      binIdsByAge: [
+        binA.id,
+        binB.id,
+        binC.id,
+        binD.id,
+        binG.id,
+        binE.id,
+      ],
       quietBinId: quietBin.id,
       feedstockIds: insertedFeedstocks.map((row) => row.id),
       productionRunIds: insertedRuns.map((row) => row.id),
       biocharProductIds: insertedProducts.map((row) => row.id),
+      sourceAllocationIds: insertedAllocations.map((row) => row.id),
+      formulationId: formulation.id,
     };
   });
 }
@@ -256,12 +352,23 @@ async function cleanupFixture(fixture: ActivitySortFixture): Promise<void> {
         ]),
       );
     await tx
+      .delete(biocharProductSourceAllocations)
+      .where(
+        inArray(
+          biocharProductSourceAllocations.id,
+          fixture.sourceAllocationIds,
+        ),
+      );
+    await tx
       .delete(biocharProducts)
       .where(inArray(biocharProducts.id, fixture.biocharProductIds));
     await tx
       .delete(productionRuns)
       .where(inArray(productionRuns.id, fixture.productionRunIds));
     await tx.delete(feedstocks).where(inArray(feedstocks.id, fixture.feedstockIds));
+    await tx
+      .delete(formulations)
+      .where(eq(formulations.id, fixture.formulationId));
     await tx
       .delete(storageLocations)
       .where(
@@ -291,9 +398,11 @@ describe("storage-location lastActivityAt sort", () => {
         pageSize: PAGE_SIZE,
       });
 
-      const [binA, binB, binC, binD, binE] = fixture.binIdsByAge;
+      const [binA, binB, binC, binD, binG, binE] =
+        fixture.binIdsByAge;
       expect(newestFirst.items.map((bin) => bin.id)).toEqual([
         binE,
+        binG,
         binD,
         binC,
         binB,
@@ -315,9 +424,54 @@ describe("storage-location lastActivityAt sort", () => {
         binB,
         binC,
         binD,
+        binG,
         binE,
         fixture.quietBinId,
       ]);
+    } finally {
+      await cleanupFixture(fixture);
+    }
+  });
+
+  it("shows allocation-aware outbound activity with readable names and wet/dry mass", async () => {
+    const runId = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const fixture = await createFixture(runId);
+
+    try {
+      const { items } = await getStorageLocations(
+        makeTestOrgContext(TEST_USER_ID),
+        {
+          facilityId: fixture.facilityId,
+          sortBy: "lastActivityAt",
+          sortOrder: "desc",
+          pageSize: PAGE_SIZE,
+        },
+      );
+      const legacyBin = items.find(
+        (bin) => bin.id === fixture.binIdsByAge[3],
+      );
+      const commingledBin = items.find(
+        (bin) => bin.id === fixture.binIdsByAge[4],
+      );
+
+      expect(legacyBin?.lastActivity).toMatchObject({
+        type: "out",
+        massKg: 50,
+        massDryKg: 40,
+        label: "Pure biochar",
+      });
+      expect(legacyBin?.biocharInventory.downstreamFormulations).toEqual([
+        "Pure biochar",
+      ]);
+      expect(commingledBin?.lastActivity).toMatchObject({
+        type: "out",
+        massKg: 100,
+        massDryKg: 80,
+        label: `Garden Blend ${runId}`,
+      });
+      expect(
+        commingledBin?.biocharInventory.downstreamFormulations,
+      ).toEqual([`Garden Blend ${runId}`]);
     } finally {
       await cleanupFixture(fixture);
     }

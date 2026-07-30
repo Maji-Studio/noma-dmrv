@@ -1,7 +1,17 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  inArray,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   applications,
+  biocharProductSourceAllocations,
   biocharProducts,
   certifierProjects,
   creditBatches,
@@ -17,6 +27,7 @@ import {
   productionRuns,
   reactors,
   samples,
+  storageLocations,
   suppliers,
   type CreditBatch,
   type Sample,
@@ -42,6 +53,10 @@ import {
   DURABILITY_TIER_FALLBACK,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
+import {
+  splitApplicationAcrossSourceAllocations,
+  type ProductSourceAllocationFact,
+} from "./biochar-product-application-allocation";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
 
@@ -65,6 +80,8 @@ export interface BatchLineageRunFact {
   code: string;
   status: string | null;
   date: Date | string;
+  biocharStorageName?: string | null;
+  biocharOutputKg?: number | null;
   biocharDryMassKg: number | null;
   feedstockMassDryKg: number | null;
   reactor: {
@@ -86,6 +103,7 @@ export interface BatchLineageApplicationFact {
   gisBoundary: GisBoundary | null;
   biocharAppliedTons: number;
   biocharAppliedDryTons: number | null;
+  sourceAllocation: ProductSourceAllocationFact | null;
   soilTemperatureC: number | null;
   facility: { id: string; code: string; name: string };
   delivery: {
@@ -93,6 +111,7 @@ export interface BatchLineageApplicationFact {
     code: string;
     status: string | null;
     deliveryDate: Date;
+    deliveredWetMassKg?: number | null;
     massDryKg: number | null;
   };
   order: {
@@ -168,7 +187,7 @@ export type CreditBatchAccountingByBatch = Record<
 const uniqueSorted = (values: string[]) => [...new Set(values)].sort();
 const unique = (values: string[]) => [...new Set(values)];
 
-/** Three set-based queries regardless of batch/application count. */
+/** Four set-based queries regardless of batch/application count. */
 async function loadLineageWithExecutor(
   ctx: OrgContext,
   batchIds: string[],
@@ -185,6 +204,8 @@ async function loadLineageWithExecutor(
       runCode: productionRuns.code,
       runStatus: productionRuns.status,
       runDate: productionRunDateExpr(),
+      biocharStorageName: storageLocations.name,
+      biocharOutputKg: productionRuns.biocharOutputKg,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
       reactorId: reactors.id,
@@ -207,6 +228,13 @@ async function loadLineageWithExecutor(
         eq(reactors.organizationId, ctx.organizationId),
       ),
     )
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(productionRuns.biocharStorageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .where(
       and(
         inArray(creditBatchProductionRuns.creditBatchId, ids),
@@ -215,6 +243,40 @@ async function loadLineageWithExecutor(
     );
 
   const runIds = uniqueSorted(membershipRows.map((row) => row.runId));
+  const allocationForMemberRun = executor
+    .select({ value: sql`1` })
+    .from(biocharProductSourceAllocations)
+    .where(
+      and(
+        eq(
+          biocharProductSourceAllocations.biocharProductId,
+          biocharProducts.id,
+        ),
+        eq(
+          biocharProductSourceAllocations.organizationId,
+          ctx.organizationId,
+        ),
+        inArray(
+          biocharProductSourceAllocations.productionRunId,
+          runIds,
+        ),
+      ),
+    );
+  const anySourceAllocation = executor
+    .select({ value: sql`1` })
+    .from(biocharProductSourceAllocations)
+    .where(
+      and(
+        eq(
+          biocharProductSourceAllocations.biocharProductId,
+          biocharProducts.id,
+        ),
+        eq(
+          biocharProductSourceAllocations.organizationId,
+          ctx.organizationId,
+        ),
+      ),
+    );
   const applicationRows = runIds.length
     ? await executor
         .select({
@@ -235,6 +297,7 @@ async function loadLineageWithExecutor(
           deliveryCode: deliveries.code,
           deliveryStatus: deliveries.status,
           deliveryDate: deliveries.deliveryDate,
+          deliveryWetMassKg: deliveries.deliveredWetMassKg,
           deliveryMassDryKg: deliveries.massDryKg,
           orderId: orders.id,
           orderCode: orders.code,
@@ -287,9 +350,49 @@ async function loadLineageWithExecutor(
         )
         .where(
           and(
-            inArray(biocharProducts.linkedProductionRunId, runIds),
+            or(
+              exists(allocationForMemberRun),
+              and(
+                notExists(anySourceAllocation),
+                inArray(biocharProducts.linkedProductionRunId, runIds),
+              ),
+            ),
             eq(applications.organizationId, ctx.organizationId),
           ),
+        )
+    : [];
+
+  const productIds = uniqueSorted(
+    applicationRows.map((row) => row.productId),
+  );
+  const sourceAllocationRows = productIds.length
+    ? await executor
+        .select({
+          biocharProductId:
+            biocharProductSourceAllocations.biocharProductId,
+          productionRunId:
+            biocharProductSourceAllocations.productionRunId,
+          allocatedWetMassKg:
+            biocharProductSourceAllocations.allocatedWetMassKg,
+          allocatedDryMassKg:
+            biocharProductSourceAllocations.allocatedDryMassKg,
+        })
+        .from(biocharProductSourceAllocations)
+        .where(
+          and(
+            inArray(
+              biocharProductSourceAllocations.biocharProductId,
+              productIds,
+            ),
+            eq(
+              biocharProductSourceAllocations.organizationId,
+              ctx.organizationId,
+            ),
+          ),
+        )
+        .orderBy(
+          asc(biocharProductSourceAllocations.biocharProductId),
+          asc(biocharProductSourceAllocations.productionRunId),
         )
     : [];
 
@@ -336,6 +439,8 @@ async function loadLineageWithExecutor(
       code: row.runCode,
       status: row.runStatus,
       date: row.runDate,
+      biocharStorageName: row.biocharStorageName,
+      biocharOutputKg: row.biocharOutputKg,
       biocharDryMassKg: row.biocharDryMassKg,
       feedstockMassDryKg: row.feedstockMassDryKg,
       reactor: row.reactorId
@@ -345,27 +450,56 @@ async function loadLineageWithExecutor(
     });
   }
 
+  const allocationsByProductId = new Map<
+    string,
+    ProductSourceAllocationFact[]
+  >();
+  for (const row of sourceAllocationRows) {
+    const allocations =
+      allocationsByProductId.get(row.biocharProductId) ?? [];
+    allocations.push({
+      productionRunId: row.productionRunId,
+      allocatedWetMassKg: row.allocatedWetMassKg,
+      allocatedDryMassKg: row.allocatedDryMassKg,
+    });
+    allocationsByProductId.set(row.biocharProductId, allocations);
+  }
+
   const applicationsByRun = new Map<string, BatchLineageApplicationFact[]>();
   for (const row of applicationRows) {
-    if (!row.linkedProductionRunId) {
+    const sourceAllocations =
+      allocationsByProductId.get(row.productId) ?? [];
+    const effectiveRunId =
+      sourceAllocations[0]?.productionRunId ??
+      row.linkedProductionRunId;
+    if (!effectiveRunId) {
       throw new SafeError(
         `Application ${row.code} has no linked production run. Link a production run before certifying it.`,
       );
     }
-    const facts = applicationsByRun.get(row.linkedProductionRunId) ?? [];
-    facts.push({
+    const application: BatchLineageApplicationFact = {
       id: row.id, code: row.code, status: row.status,
       applicationDate: row.applicationDate, fieldIdentifier: row.fieldIdentifier,
       evidenceMethod: row.evidenceMethod,
       gisBoundary: row.gisBoundary,
       biocharAppliedTons: row.biocharAppliedTons,
-      biocharAppliedDryTons: row.biocharAppliedDryTons, soilTemperatureC: row.soilTemperatureC,
+      biocharAppliedDryTons: row.biocharAppliedDryTons,
+      sourceAllocation: null,
+      soilTemperatureC: row.soilTemperatureC,
       facility: { id: row.facilityId, code: row.facilityCode, name: row.facilityName },
-      delivery: { id: row.deliveryId, code: row.deliveryCode, status: row.deliveryStatus, deliveryDate: row.deliveryDate, massDryKg: row.deliveryMassDryKg },
+      delivery: { id: row.deliveryId, code: row.deliveryCode, status: row.deliveryStatus, deliveryDate: row.deliveryDate, deliveredWetMassKg: row.deliveryWetMassKg, massDryKg: row.deliveryMassDryKg },
       order: row.orderId ? { id: row.orderId, code: row.orderCode!, orderDate: row.orderDate!, quantityKg: row.orderQuantityKg } : null,
-      biocharProduct: { id: row.productId, code: row.productCode, status: row.productStatus, productionDate: row.productionDate, massKg: row.productMassKg, moistureContentPercent: row.productMoisturePercent, formulationName: row.formulationName, linkedProductionRunId: row.linkedProductionRunId },
-    });
-    applicationsByRun.set(row.linkedProductionRunId, facts);
+      biocharProduct: { id: row.productId, code: row.productCode, status: row.productStatus, productionDate: row.productionDate, massKg: row.productMassKg, moistureContentPercent: row.productMoisturePercent, formulationName: row.formulationName, linkedProductionRunId: effectiveRunId },
+    };
+    for (const slice of splitApplicationAcrossSourceAllocations(
+      application,
+      sourceAllocations,
+    )) {
+      const runId = slice.biocharProduct.linkedProductionRunId;
+      const facts = applicationsByRun.get(runId) ?? [];
+      facts.push(slice);
+      applicationsByRun.set(runId, facts);
+    }
   }
 
   const runIdsByBatch = new Map<string, string[]>();
@@ -377,13 +511,30 @@ async function loadLineageWithExecutor(
 
   return Object.fromEntries(ids.map((batchId) => {
     const productionRunIds = uniqueSorted(runIdsByBatch.get(batchId) ?? []);
-    const applications = Array.from(new Map(productionRunIds.flatMap((runId) => applicationsByRun.get(runId) ?? []).map((app) => [app.id, app])).values()).sort((a, b) => a.id.localeCompare(b.id));
+    const applications = Array.from(
+      new Map(
+        productionRunIds
+          .flatMap((runId) => applicationsByRun.get(runId) ?? [])
+          .map((app) => [
+            `${app.id}:${app.biocharProduct.linkedProductionRunId}`,
+            app,
+          ]),
+      ).values(),
+    ).sort((left, right) =>
+      left.id.localeCompare(right.id) ||
+      left.biocharProduct.linkedProductionRunId.localeCompare(
+        right.biocharProduct.linkedProductionRunId,
+      ),
+    );
+    const applicationIds = uniqueSorted(
+      applications.map((application) => application.id),
+    );
     return [batchId, {
       batchId,
       productionRunIds,
       runs: productionRunIds.map((runId) => runById.get(runId)).filter((run): run is BatchLineageRunFact => !!run),
       applications,
-      applicationIds: applications.map((app) => app.id),
+      applicationIds,
       appliedWeightTons: applications.reduce((total, app) => total + app.biocharAppliedTons, 0),
     }];
   }));
@@ -482,7 +633,41 @@ function buildCo2eStoredPreview(
   }
 
   const runById = new Map(facts.runs.map((run) => [run.id, run]));
-  const appById = new Map(facts.applications.map((app) => [app.id, app]));
+  const applicationSlicesById = new Map<
+    string,
+    BatchLineageApplicationFact[]
+  >();
+  for (const application of facts.applications) {
+    const slices = applicationSlicesById.get(application.id) ?? [];
+    slices.push(application);
+    applicationSlicesById.set(application.id, slices);
+  }
+  const appById = new Map(
+    Array.from(applicationSlicesById, ([applicationId, slices]) => {
+      const [first] = slices;
+      if (!first) return [applicationId, undefined] as const;
+      const hasUnknownDryMass = slices.some(
+        (slice) => slice.biocharAppliedDryTons == null,
+      );
+      return [
+        applicationId,
+        {
+          ...first,
+          biocharAppliedTons: slices.reduce(
+            (sum, slice) => sum + slice.biocharAppliedTons,
+            0,
+          ),
+          biocharAppliedDryTons: hasUnknownDryMass
+            ? null
+            : slices.reduce(
+                (sum, slice) =>
+                  sum + (slice.biocharAppliedDryTons ?? 0),
+                0,
+              ),
+        },
+      ] as const;
+    }),
+  );
   const lineageWarnings = facts.applications.flatMap((application) => {
     const run = runById.get(
       application.biocharProduct.linkedProductionRunId,
@@ -539,7 +724,7 @@ function buildCo2eStoredPreview(
       applicationResults.flatMap((result) => result.missingInputs),
     ),
     warnings: [
-      ...lineageWarnings,
+      ...unique(lineageWarnings),
       ...applicationResults.flatMap((result) =>
         result.warnings.map(
           (warning) => `${result.applicationCode}: ${warning}`,

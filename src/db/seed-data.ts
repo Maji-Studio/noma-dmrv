@@ -178,6 +178,15 @@ const ids = {
   biocharProduct1: demoId(1950),
   biocharProduct2: demoId(1951),
   biocharProduct3: demoId(1952),
+  biocharProductSourceAllocation1: demoId(1953),
+  biocharProductSourceAllocation2: demoId(1954),
+  biocharProductSourceAllocation3: demoId(1955),
+  biocharProductSourceAllocation4: demoId(1956),
+  biocharProductSourceAllocation5: demoId(1957),
+  biocharProductSourceAllocation6: demoId(1958),
+  biocharProductSourceAllocation7: demoId(1959),
+  biocharProductSourceAllocation8: demoId(1960),
+  biocharProductSourceAllocation9: demoId(1961),
 
   // Orders
   order1: demoId(2000),
@@ -266,6 +275,43 @@ const demoTimestamps = {
   application3Date: new Date('2026-05-29T09:00:00.000Z'),
   creditBatch1Start: new Date('2026-05-13T00:00:00.000Z'),
   creditBatch1End: new Date('2026-05-31T23:59:59.000Z'),
+} as const;
+
+/**
+ * Keep the curated product chain physically reconcilable from the biochar bin
+ * through certification. Product wet mass is the finished blend; the source
+ * allocation is only its biochar share, distributed mass-weighted across the
+ * production runs commingled in the source bin. Application mass is likewise
+ * the applied biochar share rather than the amendment ingredients.
+ */
+const curatedBiocharChainMasses = {
+  product1: {
+    productWetKg: 2450,
+    biocharRatio: 0.4,
+    orderWetKg: 2000,
+    deliveredWetKg: 2000,
+    deliveredDryKg: 1890,
+    appliedWetTons: 0.756,
+    appliedDryTons: 0.71442,
+  },
+  product2: {
+    productWetKg: 1000,
+    biocharRatio: 0.7,
+    orderWetKg: 900,
+    deliveredWetKg: 900,
+    deliveredDryKg: 856.8,
+    appliedWetTons: 0.595,
+    appliedDryTons: 0.56644,
+  },
+  product3: {
+    productWetKg: 1600,
+    biocharRatio: 0.5,
+    orderWetKg: 1400,
+    deliveredWetKg: 1400,
+    deliveredDryKg: 1316,
+    appliedWetTons: 0.65,
+    appliedDryTons: 0.611,
+  },
 } as const;
 
 async function seedDemoData() {
@@ -1184,46 +1230,129 @@ async function seedDemoData() {
           id: ids.biocharProduct1,
           code: 'BP-26-001',
           facilityId: ids.facilityMoshi,
-          productionDate: new Date('2026-05-14T08:00:00.000Z'),
+          productionDate: demoTimestamps.run3End,
           status: 'ready',
           formulationId: ids.formulationStandard,
-          linkedProductionRunId: ids.productionRun1,
-          massKg: 2450,
+          biocharRatio: curatedBiocharChainMasses.product1.biocharRatio,
+          sourceBiocharStorageLocationId: ids.storageCharMoshi,
+          linkedProductionRunId: null,
+          massKg: curatedBiocharChainMasses.product1.productWetKg,
           moistureContentPercent: 5.5,
           densityKgM3: 480,
           storageLocationId: ids.storageProdMoshi,
-          expiresAt: new Date('2027-05-14T08:00:00.000Z'),
+          expiresAt: new Date('2027-05-17T15:00:00.000Z'),
         },
         {
           id: ids.biocharProduct2,
           code: 'BP-26-002',
           facilityId: ids.facilityMoshi,
-          productionDate: new Date('2026-05-16T09:00:00.000Z'),
+          productionDate: demoTimestamps.run3End,
           status: 'ready',
           formulationId: ids.formulationPremium,
-          linkedProductionRunId: ids.productionRun2,
-          massKg: 1800,
+          biocharRatio: curatedBiocharChainMasses.product2.biocharRatio,
+          sourceBiocharStorageLocationId: ids.storageCharMoshi,
+          linkedProductionRunId: null,
+          massKg: curatedBiocharChainMasses.product2.productWetKg,
           moistureContentPercent: 4.8,
           densityKgM3: 520,
           storageLocationId: ids.storageProdPremium,
-          expiresAt: new Date('2027-05-16T09:00:00.000Z'),
+          expiresAt: new Date('2027-05-17T15:00:00.000Z'),
         },
         {
           id: ids.biocharProduct3,
           code: 'BP-26-003',
           facilityId: ids.facilityMoshi,
-          productionDate: new Date('2026-05-18T10:00:00.000Z'),
+          productionDate: demoTimestamps.run3End,
           status: 'ready',
           formulationId: ids.formulationOrganic,
-          linkedProductionRunId: ids.productionRun3,
-          massKg: 2125,
+          biocharRatio: curatedBiocharChainMasses.product3.biocharRatio,
+          sourceBiocharStorageLocationId: ids.storageCharMoshi,
+          linkedProductionRunId: null,
+          massKg: curatedBiocharChainMasses.product3.productWetKg,
           moistureContentPercent: 6.0,
           densityKgM3: 490,
           storageLocationId: ids.storageProdOrganic,
-          expiresAt: new Date('2027-05-18T10:00:00.000Z'),
+          expiresAt: new Date('2027-05-17T15:00:00.000Z'),
         },
       ]));
 
+      console.log('Creating biochar product source allocations...');
+      await tx.insert(schema.biocharProductSourceAllocations).values(
+        withBootstrapOrg<typeof schema.biocharProductSourceAllocations.$inferInsert>([
+          {
+            id: ids.biocharProductSourceAllocation1,
+            biocharProductId: ids.biocharProduct1,
+            productionRunId: ids.productionRun1,
+            sourceStorageLocationId: ids.storageCharMoshi,
+            allocatedWetMassKg: 376.627,
+            allocatedDryMassKg: 369.094,
+          },
+          {
+            id: ids.biocharProductSourceAllocation2,
+            biocharProductId: ids.biocharProduct1,
+            productionRunId: ids.productionRun2,
+            sourceStorageLocationId: ids.storageCharMoshi,
+            allocatedWetMassKg: 276.706,
+            allocatedDryMassKg: 271.172,
+          },
+          {
+            id: ids.biocharProductSourceAllocation3,
+            biocharProductId: ids.biocharProduct1,
+            productionRunId: ids.productionRun3,
+            sourceStorageLocationId: ids.storageCharMoshi,
+            allocatedWetMassKg: 326.667,
+            allocatedDryMassKg: 320.134,
+          },
+          {
+            id: ids.biocharProductSourceAllocation4,
+            biocharProductId: ids.biocharProduct2,
+            productionRunId: ids.productionRun1,
+            sourceStorageLocationId: ids.storageCharMoshi,
+            allocatedWetMassKg: 269.02,
+            allocatedDryMassKg: 263.64,
+          },
+          {
+            id: ids.biocharProductSourceAllocation5,
+            biocharProductId: ids.biocharProduct2,
+            productionRunId: ids.productionRun2,
+            sourceStorageLocationId: ids.storageCharMoshi,
+            allocatedWetMassKg: 197.647,
+            allocatedDryMassKg: 193.694,
+          },
+          {
+            id: ids.biocharProductSourceAllocation6,
+            biocharProductId: ids.biocharProduct2,
+            productionRunId: ids.productionRun3,
+            sourceStorageLocationId: ids.storageCharMoshi,
+            allocatedWetMassKg: 233.333,
+            allocatedDryMassKg: 228.666,
+          },
+          {
+            id: ids.biocharProductSourceAllocation7,
+            biocharProductId: ids.biocharProduct3,
+            productionRunId: ids.productionRun1,
+            sourceStorageLocationId: ids.storageCharMoshi,
+            allocatedWetMassKg: 307.451,
+            allocatedDryMassKg: 301.302,
+          },
+          {
+            id: ids.biocharProductSourceAllocation8,
+            biocharProductId: ids.biocharProduct3,
+            productionRunId: ids.productionRun2,
+            sourceStorageLocationId: ids.storageCharMoshi,
+            allocatedWetMassKg: 225.882,
+            allocatedDryMassKg: 221.364,
+          },
+          {
+            id: ids.biocharProductSourceAllocation9,
+            biocharProductId: ids.biocharProduct3,
+            productionRunId: ids.productionRun3,
+            sourceStorageLocationId: ids.storageCharMoshi,
+            allocatedWetMassKg: 266.667,
+            allocatedDryMassKg: 261.334,
+          },
+        ]),
+      );
       // ============================================================
       // TRANSPORT LEGS (Isometric Transportation Module v1.1)
       // One leg per feedstock, biochar product, and lab sample, so the
@@ -1344,7 +1473,7 @@ async function seedDemoData() {
           distanceKm: 228,
           distanceSource: 'document',
           transportMethodType: 'road',
-          loadMassKg: 1500,
+          loadMassKg: curatedBiocharChainMasses.product2.deliveredWetKg,
           calculationMethodType: 'distance_based',
           billOfLading: 'BOL-DL-26-002',
           weighScaleTicketRef: 'WST-DL-26-002',
@@ -1363,7 +1492,7 @@ async function seedDemoData() {
           distanceKm: 39,
           distanceSource: 'document',
           transportMethodType: 'road',
-          loadMassKg: 1800,
+          loadMassKg: curatedBiocharChainMasses.product3.deliveredWetKg,
           calculationMethodType: 'distance_based',
           billOfLading: 'BOL-DL-26-003',
           weighScaleTicketRef: 'WST-DL-26-003',
@@ -1493,7 +1622,7 @@ async function seedDemoData() {
           customerId: ids.customerCoffee,
           customerLocationId: ids.locationCoffeeNorth,
           biocharProductId: ids.biocharProduct1,
-          quantityKg: 2000,
+          quantityKg: curatedBiocharChainMasses.product1.orderWetKg,
           packaging: 'bagged',
           value: 1500000,
         },
@@ -1505,7 +1634,7 @@ async function seedDemoData() {
           customerId: ids.customerTea,
           customerLocationId: ids.locationTeaEast,
           biocharProductId: ids.biocharProduct2,
-          quantityKg: 1500,
+          quantityKg: curatedBiocharChainMasses.product2.orderWetKg,
           packaging: 'bagged',
           value: 1200000,
         },
@@ -1517,7 +1646,7 @@ async function seedDemoData() {
           customerId: ids.customerCoffee,
           customerLocationId: ids.locationCoffeeSouth,
           biocharProductId: ids.biocharProduct3,
-          quantityKg: 1800,
+          quantityKg: curatedBiocharChainMasses.product3.orderWetKg,
           packaging: 'bagged',
           value: 1350000,
         },
@@ -1536,8 +1665,9 @@ async function seedDemoData() {
           biocharProductId: ids.biocharProduct1,
           storageLocationId: ids.storageProdMoshi,
           moistureContentPercent: 5.5,
-          deliveredWetMassKg: 2000,
-          massDryKg: 1890,
+          deliveredWetMassKg:
+            curatedBiocharChainMasses.product1.deliveredWetKg,
+          massDryKg: curatedBiocharChainMasses.product1.deliveredDryKg,
           driverId: ids.driverJackson,
           vehicleId: ids.vehicleTruck1,
         },
@@ -1552,8 +1682,9 @@ async function seedDemoData() {
           biocharProductId: ids.biocharProduct2,
           storageLocationId: ids.storageProdPremium,
           moistureContentPercent: 4.8,
-          deliveredWetMassKg: 1500,
-          massDryKg: 1428,
+          deliveredWetMassKg:
+            curatedBiocharChainMasses.product2.deliveredWetKg,
+          massDryKg: curatedBiocharChainMasses.product2.deliveredDryKg,
           driverId: ids.driverAmina,
           vehicleId: ids.vehicleTruck2,
         },
@@ -1568,8 +1699,9 @@ async function seedDemoData() {
           biocharProductId: ids.biocharProduct3,
           storageLocationId: ids.storageProdOrganic,
           moistureContentPercent: 6.0,
-          deliveredWetMassKg: 1800,
-          massDryKg: 1692,
+          deliveredWetMassKg:
+            curatedBiocharChainMasses.product3.deliveredWetKg,
+          massDryKg: curatedBiocharChainMasses.product3.deliveredDryKg,
           driverId: ids.driverJackson,
           vehicleId: ids.vehicleTruck1,
         },
@@ -1587,8 +1719,10 @@ async function seedDemoData() {
           applicationDate: demoTimestamps.application1Date,
           status: 'applied',
           deliveryId: ids.delivery1,
-          biocharAppliedTons: 1.89,
-          biocharAppliedDryTons: 1.79,
+          biocharAppliedTons:
+            curatedBiocharChainMasses.product1.appliedWetTons,
+          biocharAppliedDryTons:
+            curatedBiocharChainMasses.product1.appliedDryTons,
           gpsLatitude: -3.245,
           gpsLongitude: 37.425,
           fieldSizeHa: 1.2,
@@ -1632,7 +1766,6 @@ async function seedDemoData() {
             },
             notes: [],
           },
-          co2eStoredTonnes: 4.38,
           soilTemperatureSource: 'baseline',
           soilTemperatureC: 24.5,
         },
@@ -1642,8 +1775,10 @@ async function seedDemoData() {
           applicationDate: demoTimestamps.application2Date,
           status: 'applied',
           deliveryId: ids.delivery2,
-          biocharAppliedTons: 1.43,
-          biocharAppliedDryTons: 1.36,
+          biocharAppliedTons:
+            curatedBiocharChainMasses.product2.appliedWetTons,
+          biocharAppliedDryTons:
+            curatedBiocharChainMasses.product2.appliedDryTons,
           gpsLatitude: -4.789,
           gpsLongitude: 38.312,
           fieldSizeHa: 0.8,
@@ -1687,7 +1822,6 @@ async function seedDemoData() {
             },
             notes: [],
           },
-          co2eStoredTonnes: 3.35,
           soilTemperatureSource: 'baseline',
           soilTemperatureC: 22.8,
         },
@@ -1697,8 +1831,10 @@ async function seedDemoData() {
           applicationDate: demoTimestamps.application3Date,
           status: 'applied',
           deliveryId: ids.delivery3,
-          biocharAppliedTons: 1.69,
-          biocharAppliedDryTons: 1.59,
+          biocharAppliedTons:
+            curatedBiocharChainMasses.product3.appliedWetTons,
+          biocharAppliedDryTons:
+            curatedBiocharChainMasses.product3.appliedDryTons,
           gpsLatitude: -3.289,
           gpsLongitude: 37.198,
           fieldSizeHa: 1.0,
@@ -1742,7 +1878,6 @@ async function seedDemoData() {
             },
             notes: [],
           },
-          co2eStoredTonnes: 3.88,
           soilTemperatureSource: 'baseline',
           soilTemperatureC: 25.2,
         },
@@ -2005,6 +2140,9 @@ async function seedDemoData() {
       console.log('Creating extra storage bins (scale demo)...');
 
       const extraBinBase = 9000;
+      const scaleDemoBiocharMoisturePercent = 2;
+      const scaleDemoBiocharDryFraction = 0.98;
+      const scaleDemoProductMoisturePercent = 5;
       const feedstockSupplyRotation = [
         {
           feedstockTypeId: ids.feedstockWoodchips,
@@ -2130,6 +2268,8 @@ async function seedDemoData() {
             reactorId: ids.reactorMoshi1,
             biocharStorageLocationId: binId,
             biocharOutputKg: massKg,
+            biocharMoisturePercent: scaleDemoBiocharMoisturePercent,
+            biocharDryMassKg: massKg * scaleDemoBiocharDryFraction,
           });
         } else {
           extraProducts.push({
@@ -2141,6 +2281,7 @@ async function seedDemoData() {
             status: 'testing',
             composition: {},
             massKg,
+            moistureContentPercent: scaleDemoProductMoisturePercent,
             storageLocationId: binId,
           });
         }

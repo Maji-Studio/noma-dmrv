@@ -10,7 +10,7 @@ export const stockAvailabilityRequestSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("biocharProduct"),
-    productionRunId: z.uuid(),
+    sourceBiocharStorageLocationId: z.uuid(),
     biocharProductId: optionalId,
   }),
   z.object({

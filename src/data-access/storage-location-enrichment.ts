@@ -32,6 +32,7 @@ import {
   binMovements,
   type StorageLocation,
 } from "@/db/schema";
+import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
 
@@ -43,6 +44,7 @@ export interface StorageLocationLastActivity {
   type: "in" | "out";
   date: Date;
   massKg: number;
+  massDryKg: number | null;
   label: string;
 }
 
@@ -136,7 +138,8 @@ export async function enrichStorageLocationRows(
   const [
     feedstockInventoryRows,
     biocharOutputRows,
-    biocharAllocationRows,
+    sourceDownstreamProductRows,
+    legacyDownstreamProductRows,
     productInventoryRows,
     productDeliveredRows,
     productApplicationRows,
@@ -193,9 +196,41 @@ export async function enrichStorageLocationRows(
           .groupBy(productionRuns.biocharStorageLocationId),
         tx
           .select({
+            storageLocationId:
+              biocharProducts.sourceBiocharStorageLocationId,
+            downstreamFormulations: sql<string | null>`
+              string_agg(
+                DISTINCT COALESCE(${formulations.name}, ${PURE_BIOCHAR_LABEL}),
+                ', '
+              )
+            `,
+          })
+          .from(biocharProducts)
+          .leftJoin(
+            formulations,
+            and(
+              eq(biocharProducts.formulationId, formulations.id),
+              eq(formulations.organizationId, ctx.organizationId),
+            ),
+          )
+          .where(
+            and(
+              inArray(
+                biocharProducts.sourceBiocharStorageLocationId,
+                storageLocationIds,
+              ),
+              eq(biocharProducts.organizationId, ctx.organizationId),
+            ),
+          )
+          .groupBy(biocharProducts.sourceBiocharStorageLocationId),
+        tx
+          .select({
             storageLocationId: productionRuns.biocharStorageLocationId,
             downstreamFormulations: sql<string | null>`
-              string_agg(DISTINCT ${formulations.name}, ', ' ORDER BY ${formulations.name})
+              string_agg(
+                DISTINCT COALESCE(${formulations.name}, ${PURE_BIOCHAR_LABEL}),
+                ', '
+              )
             `,
           })
           .from(productionRuns)
@@ -217,6 +252,7 @@ export async function enrichStorageLocationRows(
             and(
               inArray(productionRuns.biocharStorageLocationId, storageLocationIds),
               eq(productionRuns.organizationId, ctx.organizationId),
+              sql`${biocharProducts.sourceBiocharStorageLocationId} IS NULL`,
             ),
           )
           .groupBy(productionRuns.biocharStorageLocationId),
@@ -224,7 +260,9 @@ export async function enrichStorageLocationRows(
           .select({
             storageLocationId: biocharProducts.storageLocationId,
             batchCount: count(),
-            currentMassKg: sumNumeric(biocharProducts.massKg),
+            currentMassKg: sumNumeric(
+              sql`COALESCE(${biocharProducts.massKg}, 0) + COALESCE(${biocharProducts.waterAddedKg}, 0)`,
+            ),
             biocharEquivalentKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
@@ -334,10 +372,17 @@ export async function enrichStorageLocationRows(
           activity_type: "in" | "out";
           activity_date: Date;
           mass_kg: number | null;
+          mass_dry_kg: number | null;
           label: string;
         }>(sql`
           WITH events AS (
-            SELECT storage_location_id, 'in' as activity_type, created_at, mass_dry_kg as mass_kg, code as label
+            SELECT
+              storage_location_id,
+              'in' as activity_type,
+              created_at,
+              mass_wet_kg as mass_kg,
+              mass_dry_kg,
+              'Feedstock received' as label
             FROM feedstocks WHERE organization_id = ${ctx.organizationId} AND storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
             SELECT
@@ -345,7 +390,8 @@ export async function enrichStorageLocationRows(
               'out',
               pr.created_at,
               COALESCE(SUM(prf.mass_used_kg), pr.feedstock_mass_dry_kg, 0) as mass_kg,
-              pr.code
+              COALESCE(SUM(prf.mass_used_kg), pr.feedstock_mass_dry_kg, 0) as mass_dry_kg,
+              'Feedstock used'
             FROM production_runs pr
             LEFT JOIN production_run_feedstocks prf ON prf.production_run_id = pr.id AND prf.organization_id = ${ctx.organizationId}
             WHERE pr.organization_id = ${ctx.organizationId} AND pr.feedstock_storage_location_id IN (${storageLocationIdsSql})
@@ -356,23 +402,89 @@ export async function enrichStorageLocationRows(
               pr.feedstock_mass_dry_kg,
               pr.code
             UNION ALL
-            SELECT biochar_storage_location_id, 'in', created_at, biochar_output_kg, code
+            SELECT
+              biochar_storage_location_id,
+              'in',
+              created_at,
+              biochar_output_kg,
+              biochar_dry_mass_kg,
+              'Biochar produced'
             FROM production_runs WHERE organization_id = ${ctx.organizationId} AND biochar_storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
-            SELECT pr.biochar_storage_location_id, 'out', bp.created_at, bp.mass_kg * COALESCE(bp.biochar_ratio, f.biochar_ratio, 1), bp.code
+            SELECT
+              pr.biochar_storage_location_id,
+              'out',
+              bp.created_at,
+              COALESCE(bp.mass_kg, 0) * COALESCE(bp.biochar_ratio, f.biochar_ratio, 1),
+              CASE
+                WHEN bp.mass_kg IS NULL
+                  OR pr.biochar_output_kg IS NULL
+                  OR pr.biochar_output_kg = 0
+                  OR pr.biochar_dry_mass_kg IS NULL
+                THEN NULL
+                ELSE
+                  bp.mass_kg
+                  * COALESCE(bp.biochar_ratio, f.biochar_ratio, 1)
+                  * pr.biochar_dry_mass_kg
+                  / pr.biochar_output_kg
+              END,
+              COALESCE(f.name, ${PURE_BIOCHAR_LABEL})
             FROM biochar_products bp
             JOIN production_runs pr ON bp.linked_production_run_id = pr.id AND pr.organization_id = ${ctx.organizationId}
             LEFT JOIN formulations f ON bp.formulation_id = f.id AND f.organization_id = ${ctx.organizationId}
-            WHERE bp.organization_id = ${ctx.organizationId} AND pr.biochar_storage_location_id IN (${storageLocationIdsSql})
+            WHERE bp.organization_id = ${ctx.organizationId}
+              AND bp.source_biochar_storage_location_id IS NULL
+              AND pr.biochar_storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
-            SELECT storage_location_id, 'in', created_at, mass_kg, code
-            FROM biochar_products WHERE organization_id = ${ctx.organizationId} AND storage_location_id IN (${storageLocationIdsSql})
+            SELECT
+              bp.source_biochar_storage_location_id,
+              'out',
+              bp.created_at,
+              SUM(bpsa.allocated_wet_mass_kg),
+              SUM(bpsa.allocated_dry_mass_kg),
+              COALESCE(f.name, ${PURE_BIOCHAR_LABEL})
+            FROM biochar_products bp
+            LEFT JOIN biochar_product_source_allocations bpsa
+              ON bpsa.biochar_product_id = bp.id
+              AND bpsa.organization_id = ${ctx.organizationId}
+              AND bpsa.source_storage_location_id = bp.source_biochar_storage_location_id
+            LEFT JOIN formulations f
+              ON bp.formulation_id = f.id
+              AND f.organization_id = ${ctx.organizationId}
+            WHERE bp.organization_id = ${ctx.organizationId}
+              AND bp.source_biochar_storage_location_id IN (${storageLocationIdsSql})
+            GROUP BY
+              bp.source_biochar_storage_location_id,
+              bp.id,
+              bp.created_at,
+              f.name
+            UNION ALL
+            SELECT
+              bp.storage_location_id,
+              'in',
+              bp.created_at,
+              COALESCE(bp.mass_kg, 0) + COALESCE(bp.water_added_kg, 0),
+              CASE
+                WHEN bp.mass_kg IS NULL
+                  OR bp.moisture_content_percent IS NULL
+                THEN NULL
+                ELSE
+                  bp.mass_kg * (1 - bp.moisture_content_percent / 100.0)
+              END,
+              COALESCE(f.name, ${PURE_BIOCHAR_LABEL})
+            FROM biochar_products bp
+            LEFT JOIN formulations f
+              ON bp.formulation_id = f.id
+              AND f.organization_id = ${ctx.organizationId}
+            WHERE bp.organization_id = ${ctx.organizationId}
+              AND bp.storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
             SELECT
               ${binMovements.storageLocationId},
               CASE WHEN ${binMovements.massDeltaKg} >= 0 THEN 'in' ELSE 'out' END,
               ${binMovements.createdAt},
               ABS(${binMovements.massDeltaKg}),
+              NULL,
               CASE
                 WHEN ${binMovements.movementType} = 'loss' THEN 'Recorded loss'
                 ELSE 'Stock-take adjustment'
@@ -382,7 +494,12 @@ export async function enrichStorageLocationRows(
               AND ${binMovements.storageLocationId} IN (${storageLocationIdsSql})
           )
           SELECT DISTINCT ON (storage_location_id)
-            storage_location_id, activity_type, created_at as activity_date, mass_kg, label
+            storage_location_id,
+            activity_type,
+            created_at as activity_date,
+            mass_kg,
+            mass_dry_kg,
+            label
           FROM events
           WHERE storage_location_id IS NOT NULL
           ORDER BY storage_location_id, created_at DESC
@@ -399,12 +516,14 @@ export async function enrichStorageLocationRows(
         [],
         [],
         [],
+        [],
         {
           rows: [] as Array<{
             storage_location_id: string;
             activity_type: "in" | "out";
             activity_date: Date;
             mass_kg: number | null;
+            mass_dry_kg: number | null;
             label: string;
           }>,
         },
@@ -418,6 +537,8 @@ export async function enrichStorageLocationRows(
         type: row.activity_type,
         date: new Date(row.activity_date),
         massKg: Number(row.mass_kg ?? 0),
+        massDryKg:
+          row.mass_dry_kg == null ? null : Number(row.mass_dry_kg),
         label: row.label,
       },
     ])
@@ -429,9 +550,25 @@ export async function enrichStorageLocationRows(
   const biocharOutputMap = new Map(
     biocharOutputRows.map((row) => [row.storageLocationId ?? "", row])
   );
-  const biocharAllocationMap = new Map(
-    biocharAllocationRows.map((row) => [row.storageLocationId ?? "", row])
-  );
+  const downstreamFormulationsByLocation = new Map<string, Set<string>>();
+  for (const allocationRow of [
+    ...legacyDownstreamProductRows,
+    ...sourceDownstreamProductRows,
+  ]) {
+    if (!allocationRow.storageLocationId) continue;
+    const labels =
+      downstreamFormulationsByLocation.get(allocationRow.storageLocationId) ??
+      new Set<string>();
+    for (const label of splitAggregateLabels(
+      allocationRow.downstreamFormulations,
+    )) {
+      labels.add(label);
+    }
+    downstreamFormulationsByLocation.set(
+      allocationRow.storageLocationId,
+      labels,
+    );
+  }
   const productInventoryMap = new Map(
     productInventoryRows.map((row) => [row.storageLocationId ?? "", row])
   );
@@ -469,7 +606,6 @@ export async function enrichStorageLocationRows(
         : null;
 
     const biocharOutputRow = biocharOutputMap.get(row.id);
-    const biocharAllocationRow = biocharAllocationMap.get(row.id);
     const allocatedKg = laneStock?.biocharAllocatedKg ?? 0;
 
     const productInventoryRow = productInventoryMap.get(row.id);
@@ -497,9 +633,9 @@ export async function enrichStorageLocationRows(
         // Unclamped, movement-inclusive (see currentDryMassKg above).
         currentMassKg: laneStock?.biocharStockKg ?? 0,
         allocatedToProductsKg: allocatedKg,
-        downstreamFormulations: splitAggregateLabels(
-          biocharAllocationRow?.downstreamFormulations ?? null
-        ),
+        downstreamFormulations: [
+          ...(downstreamFormulationsByLocation.get(row.id) ?? []),
+        ].sort(),
       },
       productInventory: {
         batchCount: Number(productInventoryRow?.batchCount ?? 0),

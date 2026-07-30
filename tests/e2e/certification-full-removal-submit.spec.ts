@@ -99,6 +99,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
           feedstockId: seededData.feedstock.id,
           feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
           biocharStorageLocationId: seededData.biocharStorageLocation.id,
+          productStorageLocationId: seededData.productStorageLocation.id,
           customerId: seededData.customer.id,
           customerLocationId: seededData.customerLocation.id,
           vehicleId: seededData.vehicle.id,
@@ -126,8 +127,9 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       // The seeded ready batch renders a selectable checkbox (incomplete
       // siblings, e.g. the chain seed's own E2E-CB batch, render no checkbox).
       const checkbox = dialog.getByRole("checkbox", {
-        name: `Select credit batch ${code}`,
-        exact: true,
+        name: new RegExp(
+          `^Select credit batch for .+, ${code}$`,
+        ),
       });
       await expect(checkbox).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await checkbox.check();

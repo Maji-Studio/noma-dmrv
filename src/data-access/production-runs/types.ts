@@ -48,7 +48,9 @@ export interface ProductionRunWithRelations {
   reactorIdentifier: string | null;
   operatorName: string | null;
   biocharStorageLocationCode: string | null;
+  biocharStorageLocationName: string | null;
   feedstockStorageLocationCode: string | null;
+  feedstockStorageLocationName: string | null;
   // M:M feedstocks
   feedstocks: ProductionRunFeedstockWithDetails[];
   // Computed fields
@@ -66,6 +68,7 @@ export interface PaginatedProductionRuns {
 export interface ProductionRunStats {
   totalRuns: number;
   totalBiocharKg: number;
+  totalBiocharDryKg: number | null;
   totalFeedstockKg: number;
   runningCount: number;
   completedCount: number;

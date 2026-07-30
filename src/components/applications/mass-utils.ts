@@ -1,6 +1,7 @@
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
 
@@ -15,6 +16,7 @@ export interface ApplicationDeliveryOption {
   deliveryDate: Date | string;
   orderCode: string | null;
   formulationName: string | null;
+  productBinName: string | null;
   massDryKg: number | null;
   deliveredWetMassKg: number | null;
   orderQuantityKg: number | null;
@@ -126,16 +128,39 @@ function formatDeliveryDate(value: Date | string): string {
 }
 
 export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOption): string | null {
-  if (delivery.massDryKg != null) {
-    return `${formatKg(delivery.massDryKg)} dry`;
+  if (delivery.deliveredWetMassKg != null) {
+    return formatWetDryMass({
+      wetKg: delivery.deliveredWetMassKg,
+      dryKg: delivery.massDryKg,
+      moisturePercent: delivery.moistureContentPercent,
+      deriveDryWhenMissing: true,
+      wetLabel: "Wet biochar product",
+      dryLabel: "Dry biochar",
+      separator: " | ",
+      unitSpacing: "compact",
+    });
   }
 
-  if (delivery.deliveredWetMassKg != null) {
-    return `${formatKg(delivery.deliveredWetMassKg)} delivered`;
+  if (delivery.massDryKg != null) {
+    return formatWetDryMass({
+      wetKg: null,
+      dryKg: delivery.massDryKg,
+      wetLabel: "Wet biochar product",
+      dryLabel: "Dry biochar",
+      separator: " | ",
+      unitSpacing: "compact",
+    });
   }
 
   if (delivery.orderQuantityKg != null) {
-    return `${formatKg(delivery.orderQuantityKg)} ordered`;
+    return formatWetDryMass({
+      wetKg: delivery.orderQuantityKg,
+      dryKg: null,
+      wetLabel: "Wet biochar product",
+      dryLabel: "Dry biochar",
+      separator: " | ",
+      unitSpacing: "compact",
+    });
   }
 
   return null;
@@ -143,10 +168,10 @@ export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOpt
 
 export function formatApplicationDeliveryOptionLabel(delivery: ApplicationDeliveryOption): string {
   return [
-    delivery.orderCode ?? delivery.code,
+    delivery.productBinName,
     delivery.formulationName,
-    getApplicationDeliveryMassLabel(delivery),
     formatDeliveryDate(delivery.deliveryDate),
+    getApplicationDeliveryMassLabel(delivery),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -154,9 +179,10 @@ export function formatApplicationDeliveryOptionLabel(delivery: ApplicationDelive
 
 export function formatApplicationDeliveryHelperText(delivery: ApplicationDeliveryOption): string {
   return [
-    `Delivery ${delivery.code}`,
-    getApplicationDeliveryMassLabel(delivery),
+    delivery.productBinName,
+    delivery.formulationName,
     formatDeliveryDate(delivery.deliveryDate),
+    getApplicationDeliveryMassLabel(delivery),
   ]
     .filter(Boolean)
     .join(" · ");

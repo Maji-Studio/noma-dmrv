@@ -199,7 +199,7 @@ export function FlowHero({
             className="w-16 border-t-[1.5px] border-dashed border-[var(--clr-dark-purple-50)]"
             aria-hidden
           />
-          Mass flow (t)
+          Dry mass flow (t)
         </span>
       </div>
     </section>

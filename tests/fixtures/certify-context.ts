@@ -72,6 +72,7 @@ export function factsFromMockedLineages(
       gisBoundary: lineage.application.gisBoundary ?? null,
       biocharAppliedTons: lineage.application.biocharAppliedDryTons ?? 1,
       biocharAppliedDryTons: lineage.application.biocharAppliedDryTons ?? 1,
+      sourceAllocation: null,
       soilTemperatureC: lineage.application.soilTemperatureC ?? 15,
       facility: lineage.facility,
       delivery: {

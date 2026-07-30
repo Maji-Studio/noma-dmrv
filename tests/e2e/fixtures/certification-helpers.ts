@@ -24,6 +24,8 @@ loadEnv({ path: ".env.local", override: false });
 
 import * as crypto from "crypto";
 import { and, eq, inArray } from "drizzle-orm";
+import type { DbTransaction } from "@/db";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
 
@@ -214,6 +216,7 @@ export interface ChainSeedRefs {
   feedstockId: string;
   feedstockStorageLocationId: string;
   biocharStorageLocationId: string;
+  productStorageLocationId: string;
   customerId: string;
   customerLocationId: string;
   vehicleId: string;
@@ -226,8 +229,44 @@ export interface SeededGroupedRemoval {
 }
 
 const APPLIED_DRY_TONS = 0.095;
+const PRODUCT_WET_MASS_KG = 150;
+const PRODUCT_MOISTURE_PCT = 5;
 const BIOCHAR_OUTPUT_KG = 150;
+const BIOCHAR_MOISTURE_PCT = 5;
+const BIOCHAR_DRY_MASS_KG = deriveMassDryKg(
+  BIOCHAR_OUTPUT_KG,
+  BIOCHAR_MOISTURE_PCT,
+);
+const DELIVERED_WET_MASS_KG = 105;
+const DELIVERED_DRY_MASS_KG = deriveMassDryKg(
+  DELIVERED_WET_MASS_KG,
+  PRODUCT_MOISTURE_PCT,
+);
 const CREDIT_BATCH_H_TO_CORG_RATIO = 0.4;
+
+async function getFormulationBiocharRatio(
+  tx: DbTransaction,
+  formulationId: string,
+): Promise<number> {
+  const [formulation] = await tx
+    .select({ biocharRatio: schema.formulations.biocharRatio })
+    .from(schema.formulations)
+    .where(
+      and(
+        eq(schema.formulations.organizationId, DEC_ORG_ID),
+        eq(schema.formulations.id, formulationId),
+      ),
+    )
+    .limit(1);
+
+  if (!formulation) {
+    throw new Error(
+      `Fixture seed failed: formulation ${formulationId} was not found`,
+    );
+  }
+
+  return formulation.biocharRatio ?? 1;
+}
 
 /**
  * Seed the minimal traceability chain a Removal needs to resolve a production
@@ -260,6 +299,21 @@ export async function seedGroupedRemovalWithChain(
 
   try {
     await db.transaction(async (tx) => {
+      const productBiocharRatio = await getFormulationBiocharRatio(
+        tx,
+        refs.formulationId,
+      );
+      const allocatedWetMassKg =
+        PRODUCT_WET_MASS_KG * productBiocharRatio;
+      const allocatedDryMassKg = deriveMassDryKg(
+        allocatedWetMassKg,
+        BIOCHAR_MOISTURE_PCT,
+      );
+      const productionStartTime = new Date(
+        Date.now() - 6 * 60 * 60 * 1000,
+      );
+      const productionEndTime = new Date(Date.now() - 2 * 60 * 60 * 1000);
+
       await tx.insert(schema.productionRuns).values({
         organizationId: DEC_ORG_ID,
         id: id.productionRun,
@@ -272,9 +326,11 @@ export async function seedGroupedRemovalWithChain(
         // and the registry rejects a measured_at in the future (live 400,
         // 2026-07-24). Sampling at "now" is then permitted post-production
         // sampling (§8.3.1) rather than an impossible pre-window sample.
-        startTime: new Date(Date.now() - 6 * 60 * 60 * 1000),
-        endTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        startTime: productionStartTime,
+        endTime: productionEndTime,
         biocharOutputKg: BIOCHAR_OUTPUT_KG,
+        biocharMoisturePercent: BIOCHAR_MOISTURE_PCT,
+        biocharDryMassKg: BIOCHAR_DRY_MASS_KG,
         biocharStorageLocationId: refs.biocharStorageLocationId,
         feedstockStorageLocationId: refs.feedstockStorageLocationId,
       });
@@ -291,11 +347,23 @@ export async function seedGroupedRemovalWithChain(
         code: `E2E-BP-RVW-${testRunId}`,
         facilityId: refs.facilityId,
         formulationId: refs.formulationId,
+        biocharRatio: productBiocharRatio,
+        sourceBiocharStorageLocationId: refs.biocharStorageLocationId,
         linkedProductionRunId: id.productionRun,
-        storageLocationId: refs.biocharStorageLocationId,
-        productionDate: new Date(),
+        storageLocationId: refs.productStorageLocationId,
+        productionDate: productionStartTime,
         status: "ready",
-        massKg: BIOCHAR_OUTPUT_KG,
+        massKg: PRODUCT_WET_MASS_KG,
+        moistureContentPercent: PRODUCT_MOISTURE_PCT,
+        waterAddedKg: 0,
+      });
+      await tx.insert(schema.biocharProductSourceAllocations).values({
+        organizationId: DEC_ORG_ID,
+        biocharProductId: id.biocharProduct,
+        productionRunId: id.productionRun,
+        sourceStorageLocationId: refs.biocharStorageLocationId,
+        allocatedWetMassKg,
+        allocatedDryMassKg,
       });
       await tx.insert(schema.orders).values({
         organizationId: DEC_ORG_ID,
@@ -317,10 +385,10 @@ export async function seedGroupedRemovalWithChain(
         deliveryDate: new Date(),
         orderId: id.order,
         biocharProductId: id.biocharProduct,
-        storageLocationId: refs.biocharStorageLocationId,
-        deliveredWetMassKg: 105,
-        massDryKg: 100,
-        moistureContentPercent: 5,
+        storageLocationId: refs.productStorageLocationId,
+        deliveredWetMassKg: DELIVERED_WET_MASS_KG,
+        massDryKg: DELIVERED_DRY_MASS_KG,
+        moistureContentPercent: PRODUCT_MOISTURE_PCT,
         status: "delivered",
         vehicleId: refs.vehicleId,
       });
@@ -418,6 +486,14 @@ export async function seedGroupedRemovalWithChain(
             .delete(schema.deliveries)
             .where(eq(schema.deliveries.id, id.delivery));
           await tx.delete(schema.orders).where(eq(schema.orders.id, id.order));
+          await tx
+            .delete(schema.biocharProductSourceAllocations)
+            .where(
+              eq(
+                schema.biocharProductSourceAllocations.biocharProductId,
+                id.biocharProduct,
+              ),
+            );
           await tx
             .delete(schema.biocharProducts)
             .where(eq(schema.biocharProducts.id, id.biocharProduct));
@@ -565,8 +641,6 @@ export async function seedUngroupedIncompleteBatch(
 // → "ready", which the grouped helper above deliberately does NOT reach. The
 // extra inputs a "ready" batch needs over the grouped seed:
 //
-//   • the production run carries `biocharDryMassKg` (the grouped seed sets only
-//     `biocharOutputKg`) — `aggregateProductionRuns` weights carbon by it;
 //   • a `samples` row carrying `organicCarbonPercent` + `hToCOrgRatio` — the
 //     CO₂e-stored preview's `weightedOrganicCarbonPercent`/`weightedHToCorgRatio`
 //     come from samples, NOT the credit batch's own `hToCorgRatio` column
@@ -630,7 +704,7 @@ export interface SeededReadyBatch {
  * Seed an UNGROUPED credit batch whose chain reaches `deriveBatchHealth →
  * "ready"` (selectable in the New-Removal wizard). Modeled on
  * `seedGroupedRemovalWithChain` but never creates a removal, and adds the
- * carbon sample + run dry mass + transport legs the readiness gate requires.
+ * carbon samples and transport legs the readiness gate requires.
  */
 export async function seedUngroupedReadyBatchWithChain(
   refs: ChainSeedRefs,
@@ -689,6 +763,21 @@ export async function seedUngroupedReadyBatchWithChain(
 
   try {
     await db.transaction(async (tx) => {
+      const productBiocharRatio = await getFormulationBiocharRatio(
+        tx,
+        refs.formulationId,
+      );
+      const allocatedWetMassKg =
+        PRODUCT_WET_MASS_KG * productBiocharRatio;
+      const allocatedDryMassKg = deriveMassDryKg(
+        allocatedWetMassKg,
+        READY_BIOCHAR_MOISTURE_PCT,
+      );
+      const productionStartTime = new Date(
+        Date.now() - 6 * 60 * 60 * 1000,
+      );
+      const productionEndTime = new Date(Date.now() - 2 * 60 * 60 * 1000);
+
       const [existingMapping] = await tx
         .select({
           id: schema.certifierProjects.id,
@@ -755,8 +844,8 @@ export async function seedUngroupedReadyBatchWithChain(
         // and the registry rejects a measured_at in the future (live 400,
         // 2026-07-24). Sampling at "now" is then permitted post-production
         // sampling (§8.3.1) rather than an impossible pre-window sample.
-        startTime: new Date(Date.now() - 6 * 60 * 60 * 1000),
-        endTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        startTime: productionStartTime,
+        endTime: productionEndTime,
         biocharOutputKg: READY_BIOCHAR_OUTPUT_KG,
         biocharMoisturePercent: READY_BIOCHAR_MOISTURE_PCT,
         biocharDryMassKg: READY_BIOCHAR_DRY_MASS_KG,
@@ -783,11 +872,23 @@ export async function seedUngroupedReadyBatchWithChain(
         code: `E2E-BP-RDY-${testRunId}`,
         facilityId: refs.facilityId,
         formulationId: refs.formulationId,
+        biocharRatio: productBiocharRatio,
+        sourceBiocharStorageLocationId: refs.biocharStorageLocationId,
         linkedProductionRunId: id.productionRun,
-        storageLocationId: refs.biocharStorageLocationId,
-        productionDate: new Date(),
+        storageLocationId: refs.productStorageLocationId,
+        productionDate: productionStartTime,
         status: "ready",
-        massKg: READY_BIOCHAR_OUTPUT_KG,
+        massKg: PRODUCT_WET_MASS_KG,
+        moistureContentPercent: PRODUCT_MOISTURE_PCT,
+        waterAddedKg: 0,
+      });
+      await tx.insert(schema.biocharProductSourceAllocations).values({
+        organizationId: DEC_ORG_ID,
+        biocharProductId: id.biocharProduct,
+        productionRunId: id.productionRun,
+        sourceStorageLocationId: refs.biocharStorageLocationId,
+        allocatedWetMassKg,
+        allocatedDryMassKg,
       });
       await tx.insert(schema.orders).values({
         organizationId: DEC_ORG_ID,
@@ -809,10 +910,10 @@ export async function seedUngroupedReadyBatchWithChain(
         deliveryDate: new Date(),
         orderId: id.order,
         biocharProductId: id.biocharProduct,
-        storageLocationId: refs.biocharStorageLocationId,
-        deliveredWetMassKg: 105,
-        massDryKg: 100,
-        moistureContentPercent: 5,
+        storageLocationId: refs.productStorageLocationId,
+        deliveredWetMassKg: DELIVERED_WET_MASS_KG,
+        massDryKg: DELIVERED_DRY_MASS_KG,
+        moistureContentPercent: PRODUCT_MOISTURE_PCT,
         status: "delivered",
         vehicleId: refs.vehicleId,
       });
@@ -994,6 +1095,14 @@ export async function seedUngroupedReadyBatchWithChain(
             .delete(schema.deliveries)
             .where(eq(schema.deliveries.id, id.delivery));
           await tx.delete(schema.orders).where(eq(schema.orders.id, id.order));
+          await tx
+            .delete(schema.biocharProductSourceAllocations)
+            .where(
+              eq(
+                schema.biocharProductSourceAllocations.biocharProductId,
+                id.biocharProduct,
+              ),
+            );
           await tx
             .delete(schema.biocharProducts)
             .where(eq(schema.biocharProducts.id, id.biocharProduct));

@@ -27,12 +27,12 @@ export function binStockOverdrawMessage(
 }
 
 export function deliveryStockOverdrawMessage(
-  productCode: string | null,
+  productLabel: string | null,
   availableKg: number,
   requestedKg: number,
 ): string {
-  return `Cannot deliver ${formatStockKg(requestedKg)} from product ${
-    productCode ?? "this batch"
+  return `Cannot deliver ${formatStockKg(requestedKg)} from product bin ${
+    productLabel ?? "this batch"
   }: only ${formatStockKg(
     availableKg,
   )} remain undelivered. Reconcile the source bin or adjust the product before delivering.`;
