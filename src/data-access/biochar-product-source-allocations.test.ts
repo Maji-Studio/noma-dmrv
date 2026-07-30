@@ -154,7 +154,7 @@ describe("planBiocharProductSourceAllocations", () => {
     ]);
   });
 
-  it("blocks when any available run has unresolved dry mass", () => {
+  it("blocks when an allocated run has unresolved dry mass", () => {
     const lots = [
       lot({
         availableWetMassKg: 10,
@@ -175,6 +175,30 @@ describe("planBiocharProductSourceAllocations", () => {
         productionRunId: "run-b",
       }) as UnresolvedBiocharDryMassError,
     );
+  });
+
+  it("does not block on an unresolved run that receives zero grams", () => {
+    const plan = planBiocharProductSourceAllocations(
+      [
+        lot(),
+        lot({
+          productionRunId: "run-b",
+          producedAt: LATE_DATE,
+          availableWetMassKg: 0.001,
+          availableDryMassKg: null,
+        }),
+      ],
+      0.001,
+    );
+
+    expect(plan.allocations).toEqual([
+      {
+        productionRunId: "run-a",
+        producedAt: EARLY_DATE,
+        allocatedWetMassKg: 0.001,
+        allocatedDryMassKg: 0.001,
+      },
+    ]);
   });
 
   it("reports traceable stock after proportional loss when a draw is too large", () => {

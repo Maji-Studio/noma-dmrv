@@ -262,17 +262,6 @@ export function planBiocharProductSourceAllocations(
     };
   }
 
-  const unresolvedDryMassLot = availableLots.find(
-    (lot) =>
-      lot.availableWetMassGrams > 0 &&
-      lot.availableDryMassGrams == null,
-  );
-  if (unresolvedDryMassLot) {
-    throw new UnresolvedBiocharDryMassError(
-      unresolvedDryMassLot.productionRunId,
-    );
-  }
-
   const allocatedWetMassByLotGrams = distributeGramsProportionally(
     availableLots.map((lot) => lot.availableWetMassGrams),
     requestedWetMassGrams,

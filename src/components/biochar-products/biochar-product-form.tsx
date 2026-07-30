@@ -507,7 +507,7 @@ export function BiocharProductForm({
               : undefined,
             error: errors.moistureContentPercent?.message,
             required: true,
-            disabled: isSubmitting || isEditMode,
+            disabled: isSubmitting,
             placeholder: "e.g. 2",
             helperText: "Typically 1 to 2% for biochar",
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
