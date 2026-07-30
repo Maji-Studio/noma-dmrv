@@ -16,6 +16,7 @@ describe("toOrderEntityOption", () => {
         productMoisturePercent: 15,
         totalDeliveredKg: 100,
         totalDeliveredDryKg: 85,
+        unresolvedDeliveredDryCount: 0,
       }),
     ).toEqual({
       id: "order-1",
@@ -40,9 +41,31 @@ describe("toOrderEntityOption", () => {
         productMoisturePercent: 10,
         totalDeliveredKg: 0,
         totalDeliveredDryKg: 0,
+        unresolvedDeliveredDryCount: 0,
       }).subtitle,
     ).toBe(
       "Wet biochar product: 100kg | Dry biochar: 60kg remaining",
+    );
+  });
+
+  it("keeps remaining dry mass unknown when a delivery has no dry mass", () => {
+    expect(
+      toOrderEntityOption({
+        id: "order-1",
+        code: "OR-26-001",
+        orderDate: new Date("2026-05-17T00:00:00.000Z"),
+        quantityKg: 100,
+        customerName: "North Farm",
+        productBinName: "Finished product north",
+        productMassKg: 100,
+        productWaterAddedKg: 0,
+        productMoisturePercent: 10,
+        totalDeliveredKg: 10,
+        totalDeliveredDryKg: 0,
+        unresolvedDeliveredDryCount: 1,
+      }).subtitle,
+    ).toBe(
+      "Wet biochar product: 90kg | Dry biochar: Not recorded remaining",
     );
   });
 });

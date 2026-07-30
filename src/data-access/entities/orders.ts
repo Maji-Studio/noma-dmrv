@@ -12,7 +12,7 @@
 
 import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { numericAggregate, sumNumeric } from "@/db/aggregate";
+import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
   customers,
@@ -42,6 +42,9 @@ function buildAllocatedMassAggregate(ctx: OrgContext) {
     totalDeliveredDryKg: sumNumeric(deliveries.massDryKg).as(
       "total_delivered_dry_kg",
     ),
+    unresolvedDeliveredDryCount: countRows(
+      isNull(deliveries.massDryKg),
+    ).as("unresolved_delivered_dry_count"),
   })
   .from(deliveries)
   .where(
@@ -73,6 +76,9 @@ function buildSelection(
     totalDeliveredDryKg: numericAggregate(
       sql<number>`COALESCE(${allocatedMassAggregate.totalDeliveredDryKg}, 0)`,
     ),
+    unresolvedDeliveredDryCount: numericAggregate(
+      sql<number>`COALESCE(${allocatedMassAggregate.unresolvedDeliveredDryCount}, 0)`,
+    ),
   };
 }
 
@@ -88,6 +94,7 @@ export function toOrderEntityOption(r: {
   productMoisturePercent: number | null;
   totalDeliveredKg: number;
   totalDeliveredDryKg: number;
+  unresolvedDeliveredDryCount: number;
 }): EntityOption {
   const remainingWetKg = Math.max(
     0,
@@ -102,7 +109,7 @@ export function toOrderEntityOption(r: {
     ),
   )?.dryKg;
   const remainingDryKg =
-    orderedDryKg == null
+    orderedDryKg == null || r.unresolvedDeliveredDryCount > 0
       ? null
       : Math.max(0, orderedDryKg - r.totalDeliveredDryKg);
   return {
