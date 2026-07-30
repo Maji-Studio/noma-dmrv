@@ -80,7 +80,7 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
     steps.push({
       nodeId: `production-run:${productionRun.id}`,
       kind: "productionRun",
-      code: productionRun.biocharStorageName ?? "",
+      code: productionRun.biocharStorageName ?? productionRun.code,
       status: productionRun.status,
       date: productionRun.date,
       massLine: formatWetDryMass({

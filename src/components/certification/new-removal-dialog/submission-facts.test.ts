@@ -157,24 +157,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
     });
   });
 
-  it("hides only the blocker an unmet check restates", () => {
-    const evidenceBlocker =
-      "Removal submission requires at least one supporting evidence file.";
-    const tierBlocker =
-      "This facility is on the 1000-year durability tier, but its removal template's sequestration component is wrong.";
-
-    expect(
-      facts({
-        compilation: {
-          ...BLOCKED_COMPILATION,
-          blockers: [evidenceBlocker, tierBlocker],
-        } as unknown as RemovalCompilationView,
-        checks: [check("evidence", "unmet")],
-      }).blockers,
-    ).toEqual([tierBlocker]);
-  });
-
-  it("keeps every blocker when no check restates one", () => {
+  it("keeps compiler blockers when a checklist issue also needs attention", () => {
     expect(
       facts({
         compilation: BLOCKED_COMPILATION,

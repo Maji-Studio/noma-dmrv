@@ -21,7 +21,11 @@ import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
-import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
+import {
+  deriveEffectiveMoisturePercent,
+  formatWetDryMass,
+  splitWetMass,
+} from "@/lib/mass-moisture";
 
 function formatStockSubtitle(
   formulationName: string | null,
@@ -124,7 +128,11 @@ export function toBiocharProductEntityOption(r: {
     code: r.code ?? r.productCode,
     name: r.name ?? r.formulationName ?? PURE_BIOCHAR_LABEL,
     mass: {
-      moisturePercent: r.moisturePercent,
+      moisturePercent: deriveEffectiveMoisturePercent(
+        r.massKg,
+        r.moisturePercent,
+        r.waterAddedKg,
+      ),
     },
     subtitle: formatStockSubtitle(
       r.formulationName,

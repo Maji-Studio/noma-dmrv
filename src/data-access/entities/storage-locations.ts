@@ -241,7 +241,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
         ),
         0
       )
-    `).as("total_allocated_wet_kg"),
+    `).as("legacy_allocated_wet_kg"),
     totalAllocatedDryKg: numericAggregate(sql<number>`
       COALESCE(
         SUM(
@@ -254,7 +254,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
         ),
         0
       )
-    `).as("total_allocated_dry_kg"),
+    `).as("legacy_allocated_dry_kg"),
   })
   .from(productionRuns)
   .innerJoin(
@@ -285,10 +285,10 @@ function buildInventoryAggregates(ctx: OrgContext) {
       biocharProductSourceAllocations.sourceStorageLocationId,
     totalAllocatedWetKg: sumNumeric(
       biocharProductSourceAllocations.allocatedWetMassKg,
-    ).as("total_allocated_wet_kg"),
+    ).as("source_allocated_wet_kg"),
     totalAllocatedDryKg: sumNumeric(
       biocharProductSourceAllocations.allocatedDryMassKg,
-    ).as("total_allocated_dry_kg"),
+    ).as("source_allocated_dry_kg"),
   })
   .from(biocharProductSourceAllocations)
   .where(

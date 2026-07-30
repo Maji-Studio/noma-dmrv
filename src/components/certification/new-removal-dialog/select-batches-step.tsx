@@ -132,7 +132,7 @@ function ReadyCard({
           className="mt-px size-16 shrink-0 accent-[var(--color-interaction)]"
           checked={selected}
           onChange={() => onToggle(batch.id)}
-          aria-label={`Select credit batch for ${formatDateRange(batch.startDate, batch.endDate)}`}
+          aria-label={`Select credit batch for ${formatDateRange(batch.startDate, batch.endDate)}, ${batch.code}`}
         />
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">
@@ -183,8 +183,9 @@ function IncompleteCard({
       <ul className="flex flex-col gap-10">
         {gaps.map((check, index) => {
           // The exact fix workflow for this gap — the same target map the batch
-          // page's health strip uses (batch→samples, run→readings, application→
-          // deliveries), so a gap resolves identically wherever it's shown.
+          // page's health strip uses (batch→samples, run→production data,
+          // application→deliveries), so a gap resolves identically wherever
+          // it's shown.
           const fix = batchHealthFixLinkFor(check, facilityId, batch.id);
           return (
             <li

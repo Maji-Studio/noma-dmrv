@@ -327,13 +327,14 @@ export async function createBiocharProduct(
       );
     }
 
-    if (!sourceBiocharStorageLocationId && sourceBinId) {
+    if (sourceBinId) {
       await assertBiocharDrawWithinStock(ctx, tx, {
         biocharStorageLocationId: sourceBinId,
         requestedBiocharKg: biocharEquivalentKg(
           massKg,
           biocharRatio,
         ),
+        binLockAlreadyHeld: true,
       });
     }
 

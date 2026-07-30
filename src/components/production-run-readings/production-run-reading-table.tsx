@@ -7,6 +7,8 @@
  */
 "use client";
 
+// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+
 import { useState } from "react";
 import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import {

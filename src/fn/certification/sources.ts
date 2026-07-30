@@ -130,7 +130,9 @@ async function collectLineageEntities(
 
   for (const memberBatchId of memberBatchIds) {
     const accounting = accountingByBatch[memberBatchId];
-    if (!accounting) continue;
+    if (!accounting) {
+      throw new SafeError(`Credit batch ${memberBatchId} could not be loaded.`);
+    }
     const { batch, lineageFacts } = accounting;
     add({
       entityType: "credit_batch",
@@ -379,7 +381,7 @@ async function assertRemovalSourcesEditable(
       isLockedInFlight(latest))
   ) {
     throw new SafeError(
-      "Supporting sources are read-only once a Removal is submitted or while submission is in progress. Replace or remove evidence from its owning record before submission.",
+      "Registry value sources are read-only once a Removal is submitted or while submission is in progress. Replace or remove evidence from its owning record before submission.",
     );
   }
 }

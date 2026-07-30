@@ -189,7 +189,7 @@ export function SubmissionSummary({
           <Fact label="Durability">{facts.durabilityLabel}</Fact>
           <Fact label="Sampling">{facts.samplingLabel}</Fact>
           {facts.pendingDocuments > 0 && (
-            <Fact label="Supporting files">
+            <Fact label="Registry value sources">
               The app uploads {countLabel(facts.pendingDocuments, "file")} when
               you submit
             </Fact>

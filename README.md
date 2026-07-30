@@ -101,10 +101,15 @@ database operation.
 
 - [Architecture](docs/architecture.md)
 - [Domain glossary](CONTEXT.md)
+- [Adding a feature](TEMPLATE_USAGE.md)
+- [Authentication and organization scope](docs/auth.md)
 - [Database](docs/database.md)
+- [Schema overview](docs/schema-overview.md)
 - [Forms](docs/forms.md)
 - [Security](docs/security.md)
+- [Object storage](docs/storage.md)
 - [Testing](docs/testing.md)
+- [Traceability](docs/traceability.md)
 - [Isometric requirements knowledge base](docs/isometric/README.md)
 - [Troubleshooting](docs/troubleshooting.md)
 

@@ -3,7 +3,7 @@
 How evidence files (lab reports, photos, COAs, calibration certificates,
 production-readings CSVs, server-generated PDFs) get into and out of S3-compatible
 object storage. Read this before touching upload flows, the documents API route,
-storage env vars, or the readings importer. For auth/org scoping see
+storage env vars, or production-run readings files. For auth/org scoping see
 [auth.md](./auth.md) and [organization.md](./organization.md); for env inventory
 and secrets see [security.md](./security.md).
 
@@ -41,12 +41,13 @@ the real provider.
   fallback, tokens minted before a dev-server restart stop verifying — a
   confusing local-only failure.
 
-## Reads always go through the app
+## Reads always go through an app route
 
 The client never talks to the bucket except for the one-shot presigned PUT. All
-reads go through `/api/documents/[id]`, which mints a fresh signed GET per
-request. **The app never embeds signed URLs in HTML or the DB** — so users never
-see "URL expired".
+ordinary reads go through `/api/documents/[id]`; external verifier reads go
+through `/api/ghg-statement-reports/[reportId]?token=…`. Both mint a fresh
+signed GET per request. **The app never embeds signed storage URLs in HTML or
+the DB** — so users never see "URL expired".
 
 ## Bucket and prefix convention
 
@@ -59,20 +60,40 @@ S3-compatible PUT, GET, HEAD, DELETE, and `putObject`, but it is never stored in
 the DB. The local-fs provider ignores it entirely. This keeps the logical key
 stable when an environment moves bucket or prefix.
 
-**Logical key** (stored in `documents.storage_key`, no leading `/`):
+**Ordinary logical key** (stored in `documents.storage_key`, no leading `/`):
 
 ```text
-{entityType}/{entityId}/{documentType}/{ulid}.{ext}
+org/{organizationId}/{entityType}/{entityId}/{documentType}/{ulid}.{ext}
 ```
 
+- `buildStorageKey()` builds only the
+  `{entityType}/{entityId}/{documentType}/{ulid}.{ext}` suffix; the owning
+  server action prepends `org/{ctx.organizationId}/`. Never accept the
+  organization segment from client input.
 - Original filename lives in `documents.file_name`, NOT in the key — avoids
   URL-encoding pain and PII leakage via names like `"Smith - Confidential.pdf"`.
-  ULID sorts by upload time; `entityType`/`entityId` lead so bucket browsing
-  mirrors app navigation.
+  ULID sorts by upload time; `entityType`/`entityId` lead within each
+  organization namespace so bucket browsing mirrors app navigation.
 - `buildStorageKey()` (`src/lib/storage/keys.ts`) is the only place keys are
   built — never construct one by hand. **It may return a key with no extension**:
   `extractExtension` accepts only `[a-z0-9]{1,12}` and drops anything else, so
   code that infers content type from the key extension will break.
+
+**Generated objects use deterministic logical namespaces where idempotent
+reuse matters:**
+
+```text
+org/{organizationId}/transport-evidence/{facilityId}/{removalId}/{contentHash}.pdf
+org/{organizationId}/durability-evidence/{facilityId}/{removalId}/{contentHash}.pdf
+org/{organizationId}/ghgStatementReport/{reportId}/pdf/{ulid}.pdf
+```
+
+Transport and durability ledgers key by their semantic model hash so identical
+content reuses the current artifact/Source; changed content creates a new object
+before older local ledgers are retired. A GHG Statement report always allocates
+a new report version and object, so it uses the ordinary key builder under the
+`ghgStatementReport` entity namespace. These are logical keys: the
+S3-compatible provider may still prepend `STORAGE_PREFIX` physically.
 
 ## Visibility and read authz
 
@@ -93,6 +114,22 @@ Non-UUID `id` → 400. A row with neither `storageKey` nor `fileUrl`, or a
 Flipping public is a one-row `UPDATE documents SET visibility = 'public'` — no
 provider call, no object copy, portable across providers that don't honor ACLs.
 
+### Verifier capability route
+
+Generated GHG Statement report documents remain
+`documents.visibility = 'private'`. They are reviewed by signed-in operators
+through `/api/documents/[id]`, while the external verifier receives
+`/api/ghg-statement-reports/[reportId]?token=…`.
+
+The public route looks up the report/document pair, verifies the supplied
+per-report bearer token against the stored SHA-256 digest, confirms the private
+document has an uploaded storage key, then returns `302` to a fresh signed GET.
+It never exposes the bucket key directly as authorization. Missing/invalid
+capabilities use 404; successful responses set `private, no-store` and
+`no-referrer`. The cross-organization lookup is deliberate and carries the
+required `// org-scope-ok:` waiver; every other report-management path stays
+org-scoped.
+
 ### Legacy `fileUrl` redirects are fail-closed
 
 Rows carrying a legacy `fileUrl` instead of a `storageKey` redirect the browser
@@ -110,10 +147,13 @@ checks are best-effort UX, because presigned PUTs can't reliably enforce
 content-length across S3-compatible providers. On rejection the object is deleted
 immediately and `upload_status` becomes `'failed'`.
 
-**2. Server-side `putObject`** — for artifacts the server generates itself (the
-transport evidence ledger PDF, `src/fn/certification/evidence-ledger-core.ts`).
-It overwrites any existing object at the key and **skips the confirmUpload
-size/MIME gate entirely**.
+**2. Server-side `putObject`** — for artifacts the server generates itself:
+transport/durability evidence ledgers
+(`src/fn/certification/evidence-ledger-core.ts`) and GHG Statement report PDFs
+(`src/fn/certification/ghg-statement-reports.ts`). It overwrites any existing
+object at the supplied key and **skips the `confirmUpload` size/MIME gate
+entirely**; callers must render trusted bytes, set content type explicitly, and
+persist their own checksum/metadata.
 
 Client orchestration: `src/hooks/use-file-upload.ts` and
 `src/components/forms/form-file-upload.tsx` ([design-system.md](./design-system.md)).
@@ -122,7 +162,7 @@ Client orchestration: `src/hooks/use-file-upload.ts` and
 
 Every documents server action goes through
 `assertCanManageDocumentEntity(ctx, entityType, entityId)` — **the storage layer
-itself has no authz.** `DOCUMENT_ENTITY_TYPES` (14 entities) enumerates what a
+itself has no authz.** `DOCUMENT_ENTITY_TYPES` enumerates what a user-uploaded
 document can hang off.
 
 Per-documentType size and MIME rules live in `src/schemas/documents.ts`
@@ -159,30 +199,26 @@ factory in `src/lib/storage/index.ts`, **and widening the
 `StorageProviderName = "s3" | "do-spaces" | "local-fs"` union** — the name is not
 a free-form string.
 
-## Production-run readings import
+## Production-run readings files
 
-Telemetry rides the same document pipeline, then persists in a second step:
-upload a `sensor_data` document against the `production_run`, and
-`src/fn/production-run-reading-imports.ts` imports it (fires automatically on
-upload). See [ADR 0006](./adr/0006-data-upload-submission-idempotency.md) for how
-these reach the registry.
+The operator workflow is file-only. A readings CSV is uploaded once as a
+`documents` record with `entity_type='production_run'` and
+`document_type='sensor_data'`. noma stores the original object unchanged and
+does not inspect or validate its headers, timestamps, run window, sensor values,
+or other contents. The normal document security, size, and file-type checks are
+the complete validation boundary for this workflow.
+The operator picker deliberately narrows uploads to `.csv` even though the
+`sensor_data` storage rule accepts the wider tabular MIME set.
 
-The importer takes a **canonical CSV** with a full UTC timestamp per row, so one
-file can span multiple days — no column-mapping step and no filename convention.
-Headers are matched case-insensitively and each canonical column has an alias list
-(`timestamp_utc` also accepts `timestamp`, `time_utc`, `time (utc)`,
-`datetime_utc`, `datetime`; `temperature_c` also `temperature`/`temp_c`/`temp`;
-etc.) — the header comment in `src/lib/production-readings/readings-csv.ts` is the
-contract. Extra columns are ignored.
+The production-run create, edit, and detail surfaces do not parse the CSV or
+write `production_run_readings` rows. They list the stored filename and size,
+allow authorized users to delete it, and open it in a new tab through
+`/api/documents/{id}` so the existing organization authorization and signed
+download flow remain in force.
 
-PLC dropouts (`---` or blank) in `temperature_c`/`pressure_bar` do **not** drop the
-row: the channel is stored as null and the row is counted in `invalidRequiredRows`
-so the import summary doesn't overstate usable telemetry. Rows are clipped to the
-run's `start_time`/`end_time`; out-of-window and unparseable-timestamp rows are
-reported separately. An import replaces existing readings only within the span it
-covers (min…max of accepted rows), so separate files for different periods are
-additive. XLSX may be stored as generic `sensor_data` evidence (the upload rule is
-tabular) but is never parsed into `production_run_readings`.
+Legacy telemetry import and registry submission modules remain in the codebase
+for historical experiments. They are not called by the operator readings-file
+upload.
 
 ## CORS (production buckets only)
 

@@ -29,7 +29,7 @@ from source data instead:
   `CreditBatchWithRelations` and the credit-batch wizard's `SelectableBatch`.
 - **CO₂e stored** — reads the existing preview engine
   (`buildCo2eStoredPreview` / `getCo2eStoredPreviews` in
-  `src/data-access/credit-batch-previews.ts`); the wizard and the dashboard
+  `src/data-access/credit-batch-accounting.ts`); the wizard and the dashboard
   KPI both fan out through it instead of reading a stored column.
 - **Ineligible feedstock mass** — derived in `src/lib/chain-of-custody/sankey.ts`
   from lineage allocations whose feedstock is flagged

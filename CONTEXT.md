@@ -43,16 +43,10 @@ litres via a per-facility conversion yield.
 _Avoid_: generator power, backup power.
 
 **Readings file**:
-The telemetry export operators upload per reactor — a CSV with a
-canonical **UTC** timestamp on every row (required: timestamp,
-temperature, pressure; optional: dryer/reactor frequency), matched
-directly by header name, so one file can span multiple days. A
-production run's readings are the slice of one or more readings files
-inside the run's window. Replaces the older reactor-day format
-(filename-encoded date, local time-of-day rows, and a per-reactor
-**channel mapping** step declaring which column fed which reading) —
-the canonical header does that job now, so no per-reactor mapping is
-declared or stored.
+The original telemetry CSV an operator attaches to a production run.
+noma stores the file unchanged as production-run sensor-data evidence
+and does not inspect its headers, timestamps, run window, sensor values,
+or other contents.
 _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
 **Emission estimate**:
@@ -316,6 +310,21 @@ Verification failed*, read from `latestSubmission.metadata.remoteStatus`.
 _Avoid_: equating a GHG Statement with one credit batch; attributing a
 verifier status to a Removal.
 
+**GHG Statement report**:
+The supplier-generated, versioned PDF that explains one **GHG Statement** and
+its authoritative Isometric GHG Entry totals to the verifier. noma prepares a
+frozen version from live registry facts, an Owner/Admin reviews and approves
+it, and Statement submission supplies its URL to Isometric. Versions progress
+*prepared → approved → submitted*; their frozen content is never overwritten,
+while lifecycle metadata and the revocable token digest advance in place.
+Changed live facts require a new version. The verifier URL is a bearer capability whose
+random per-report token is stored only as a digest and may be rotated to revoke
+the previous link. Distinct from Isometric's **GHG Statement** record and from
+the Submission ledger. An explicit external report URL remains a separate
+submission fallback and has no generated report version. _Avoid_: public
+document (the storage object remains private); reusing a prior version after
+live inputs changed; verifier login link.
+
 **Reporting period**:
 The time window a **GHG Statement** covers — the supplier chooses the
 end date, Isometric derives the start. Distinct from the LCA window
@@ -403,6 +412,10 @@ acceptable proofs of biochar spreading the record satisfies — *visual*
 incorporation) or *boundary* (a GIS field-boundary reference plus
 logbook records). Exactly one method is declared per application;
 what counts as missing evidence follows from the declared method.
+The domain, schema, readiness logic, and document model support both paths.
+The current creation UI is deliberately GIS-first: it defaults to *boundary*
+and shows *visual* as unavailable, while missing boundary/logbook evidence is
+an advisory readiness gap rather than a blocker on creating the application.
 _Avoid_: proof type, documentation mode.
 
 **Geotag flag**:

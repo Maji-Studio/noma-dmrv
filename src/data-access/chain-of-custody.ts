@@ -227,8 +227,10 @@ export function projectChainOfCustodyFromBatchFacts(
         ...feedstock,
         href: CHAIN_HREFS.feedstock,
       })),
-      allocatedWetMassKg: null,
-      allocatedDryMassKg: null,
+      allocatedWetMassKg:
+        application.sourceAllocation?.allocatedWetMassKg ?? null,
+      allocatedDryMassKg:
+        application.sourceAllocation?.allocatedDryMassKg ?? null,
     }],
     warnings,
   };

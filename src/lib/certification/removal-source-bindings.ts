@@ -217,6 +217,23 @@ export function classifyRemovalSourceCandidate(
   facts: CandidateDocumentFacts,
 ): ClassifiedRemovalSource | null {
   const { lineage } = facts;
+  // A GIS boundary supports the Application's storage-area evidence. The
+  // current Removal integration only binds Sources to GHG-entry Datapoints,
+  // so classifying this file here would falsely attach it to product mass.
+  // Keep it out of this binding plan until biochar Application source_ids (or
+  // an equivalent boundary target) are submitted.
+  //
+  // This is a FORWARD guard: it preserves today's behaviour rather than
+  // changing it, because `src/schemas/documents.ts` currently refuses the
+  // metadata that would let a `gis_boundary` reach the logbook branch below.
+  // It exists so the exclusion survives if that schema later widens.
+  if (
+    lineage.entityType === "application" &&
+    facts.documentType === "gis_boundary"
+  ) {
+    return null;
+  }
+
   let rule: SourceBindingRule | null = null;
   const metadata = metadataRecord(facts.metadata);
   const logbookEvidenceType = metadata.logbookEvidenceType;

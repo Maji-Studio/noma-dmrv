@@ -32,22 +32,6 @@ const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = 
   delivery: ["delivered"],
 };
 
-const TELEMETRY_GAP: EntityCertifyGap = {
-  kind: "field",
-  key: "telemetryReadings",
-  label: "Telemetry readings",
-  fields: ["readingsCount"],
-  detail: "Production readings CSV is required to certify",
-};
-
-const APPLICATION_EVIDENCE_WARNING: EntityCertifyWarning = {
-  key: "applicationEvidence",
-  label: "Application evidence",
-  fields: ["evidenceGapCount"],
-  detail:
-    "Application evidence is incomplete. This does not block certification.",
-};
-
 function fieldValue(
   entity: EntityReadinessRecord,
   field: string,
@@ -153,6 +137,10 @@ export function deriveEntityCertifyReadiness(
   lifecycleState?: string | null,
 ): EntityCertifyReadiness {
   const gaps: EntityCertifyGap[] = [];
+  // No entity kind produces warnings today: application evidence was the only
+  // producer and it stopped being a readiness concern. The channel is kept as
+  // the seam for the next non-blocking entity warning, so a warning can be
+  // surfaced without re-threading it through every caller.
   const warnings: EntityCertifyWarning[] = [];
   const effectiveLifecycleState =
     lifecycleState ?? (fieldValue(entity, "status") as string | null | undefined);
@@ -162,35 +150,13 @@ export function deriveEntityCertifyReadiness(
 
   // Failed and cancelled runs are audit records, not certification candidates.
   // Their lifecycle state is the only actionable certification gap; surfacing
-  // output, telemetry, or document gaps would send operators to fill data that
+  // output or document gaps would send operators to fill data that
   // cannot make these outcomes certifiable.
   if (
     entityKind === "productionRun" &&
     (effectiveLifecycleState === "failed" || effectiveLifecycleState === "cancelled")
   ) {
     return { state: "incomplete", gaps, warnings };
-  }
-
-  if (entityKind === "productionRun") {
-    const readingsCount = fieldValue(entity, "readingsCount");
-    if (
-      typeof readingsCount !== "number" ||
-      !Number.isFinite(readingsCount) ||
-      readingsCount <= 0
-    ) {
-      gaps.push(TELEMETRY_GAP);
-    }
-  }
-
-  if (entityKind === "application") {
-    const evidenceGapCount = fieldValue(entity, "evidenceGapCount");
-    if (
-      typeof evidenceGapCount !== "number" ||
-      !Number.isFinite(evidenceGapCount) ||
-      evidenceGapCount !== 0
-    ) {
-      warnings.push(APPLICATION_EVIDENCE_WARNING);
-    }
   }
 
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {

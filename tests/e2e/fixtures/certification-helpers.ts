@@ -714,7 +714,6 @@ export async function seedUngroupedReadyBatchWithChain(
   const id = {
     productionRun: crypto.randomUUID(),
     productionRunFeedstock: crypto.randomUUID(),
-    productionRunReading: crypto.randomUUID(),
     samples: Array.from({ length: READY_SAMPLE_REPLICATE_COUNT }, () =>
       crypto.randomUUID(),
     ),
@@ -859,15 +858,6 @@ export async function seedUngroupedReadyBatchWithChain(
         electricityKwh: READY_ELECTRICITY_KWH,
         biocharStorageLocationId: refs.biocharStorageLocationId,
         feedstockStorageLocationId: refs.feedstockStorageLocationId,
-      });
-      await tx.insert(schema.productionRunReadings).values({
-        organizationId: DEC_ORG_ID,
-        id: id.productionRunReading,
-        productionRunId: id.productionRun,
-        timestamp: new Date(),
-        temperatureC: 550,
-        pressureBar: 0,
-        gasFlowRate: 0,
       });
       await tx.insert(schema.productionRunFeedstocks).values({
         organizationId: DEC_ORG_ID,
@@ -1116,11 +1106,6 @@ export async function seedUngroupedReadyBatchWithChain(
           await tx
             .delete(schema.biocharProducts)
             .where(eq(schema.biocharProducts.id, id.biocharProduct));
-          await tx
-            .delete(schema.productionRunReadings)
-            .where(
-              eq(schema.productionRunReadings.id, id.productionRunReading),
-            );
           await tx
             .delete(schema.productionRunFeedstocks)
             .where(

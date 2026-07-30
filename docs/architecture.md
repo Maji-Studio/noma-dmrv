@@ -41,11 +41,16 @@ components (UI)
 
 ## Key Patterns
 
-### `withAction()` — the only way to write a server action
+### `withAction()` — the preferred pattern for new and changed server actions
 
 `src/fn/with-action.ts` is canonical. It calls `requireOrgContext()`, injects
 `ctx`, converts `ZodError` into a prefixed message, and formats `ActionResult`.
-Do **not** hand-roll try/catch or a manual auth call in `fn/`.
+Use it for new actions and migrate a legacy direct wrapper when materially
+changing that action. Some older entity modules still call
+`requireOrgContext()` and format `ActionResult` in their own try/catch; their
+presence is compatibility debt, not a pattern to copy. Until migrated, those
+wrappers must keep routing unexpected failures through the shared safe logging
+and error conversion helpers rather than returning raw `error.message`.
 
 ```typescript
 export async function createItem(input: CreateItem) {
@@ -98,8 +103,8 @@ See [forms.md](./forms.md).
 bindings into every record. Import only from `fn/`, `data-access/`, and the
 isometric client boundary — never a client component. NDJSON out, level via
 `LOG_LEVEL`. Redacts `email`/`token`/`secret`/`authorization` keys at any depth —
-a backstop, not a license to log PII. In-house (~50 lines) instead of pino due to
-a Turbopack/Vercel runtime bug.
+a backstop, not a license to log PII. The in-house implementation replaces pino
+because of a Turbopack/Vercel runtime bug.
 
 ## Routing & Auth
 
@@ -107,9 +112,10 @@ a Turbopack/Vercel runtime bug.
   `src/app/(app)/admin/*` admin-only · `src/app/api/*` API routes.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
 - **Three configuration surfaces, deliberately not one.** `/settings`
-  (`Members` · `Defaults`) is org configuration, gated on org Owner/Admin, and
-  is the only one an operator can reach. `/certification/settings` is registry
-  configuration and stays there by ADR
+  (`Members` · `Defaults`) is org configuration. Every member can view the
+  Members roster; only Owners/Admins (and Platform Admins) can mutate membership
+  or open Defaults. `/certification/settings` is registry configuration and
+  stays there by ADR
   [0007](./adr/0007-certification-workspace-consolidation.md). `/admin` is
   cross-tenant platform administration (`users.role === "admin"`) and is now
   only the organization directory — `/admin` itself redirects to
@@ -122,8 +128,16 @@ a Turbopack/Vercel runtime bug.
   explicitly allowed through.
 - Data-access org checks remain the source of truth for authorization; the proxy
   is routing, not authz. See [auth.md](./auth.md).
-- Three API routes: `/api/auth/[...all]`, `/api/storage-local/[...key]`, and
-  `/api/documents/[id]` — the last resolves tenancy via `getOrgContext()`.
+- Four API route families: `/api/auth/[...all]`,
+  `/api/storage-local/[...key]`, `/api/documents/[id]`, and
+  `/api/ghg-statement-reports/[reportId]`. Documents are normally resolved
+  through `getOrgContext()`. The report route is the one deliberate public
+  bearer-capability seam: middleware lets it through, then the route verifies a
+  per-report token against the stored digest and redirects to a freshly signed
+  private-object URL. Its cross-org lookup is marked
+  `// org-scope-ok: verifier capability-token lookup intentionally crosses organizations.`
+  Do not generalize that waiver to other reads; see [auth.md](./auth.md) and
+  [storage.md](./storage.md).
 
 ## State and Data Fetching
 
@@ -132,9 +146,11 @@ a Turbopack/Vercel runtime bug.
   an inline `useQuery` when a hook already covers the server action.
 - Query keys come from typed factories per hook (e.g.
   `facilityKeys.detailWithRelations(facilityId)`), not hand-built arrays.
-- `staleTime` is per-hook and deliberate (5s–5m, often a named module constant
-  like `DASHBOARD_OVERVIEW_STALE_TIME_MS`). There is no global default to copy —
-  read the neighbouring hook and match its intent.
+- `src/app/providers.tsx` sets global query defaults:
+  `staleTime: 30_000` and `refetchOnWindowFocus: false`. Hooks override
+  `staleTime` deliberately where the data needs a different freshness window
+  (including `0`, 5s–5m, and `Infinity`). Read the neighbouring hook and match
+  its intent instead of repeating the global values mechanically.
 - Invalidate related keys after every mutation.
 - No `"use cache"`, no Cache Components — React Query owns all caching. See
   [modern-patterns.md](./modern-patterns.md).
@@ -211,18 +227,28 @@ new submission versions or correction-workflow records, never in-place edits.
 
 **Workspace:** `/certification` (ADR
 [0007](./adr/0007-certification-workspace-consolidation.md)) is a first-class
-sidebar group with four routes — Removals · GHG Statements · Production
-Processes · Settings. Root `/certification` redirects to Removals preserving
-`?facility=`. Removals has list, side-sheet (`?removal=`), detail
+sidebar group with three concrete routes — Removals · GHG Statements ·
+Settings. Root `/certification` redirects to Removals preserving `?facility=`.
+Removals has list, side-sheet (`?removal=`), detail
 (`/removals/[removalId]`) and review (`/[removalId]/review`) surfaces; new
 Removals are created through the New-Removal wizard. Settings holds the
 facility↔project link and emission/LCA config.
 
 **`CertificationRegistryGuard`** (`src/components/certification/`) gates the
 operational `/certification/*` routes on the facility having a registry link;
-Settings stays open. It is mounted in the certification layout and independently
-on production-processes. **New operational certification routes must sit inside
-that guard.**
+Settings stays open. It is mounted in the certification layout. **New
+operational certification routes must sit inside that guard.**
+
+**Generated GHG Statement report:** an Owner/Admin prepares a versioned PDF from
+live Isometric statement and GHG Entry facts, reviews it through the normal
+org-scoped document route, then approves it. Submission rotates a random
+per-report verifier token, stores only its SHA-256 digest, and sends Isometric
+the public capability URL. Prepared/approved/submitted versions are retained;
+regeneration creates a new row and object rather than overwriting earlier
+evidence. The verifier URL is a narrow exception to normal session auth, not a
+weaker authentication mode for Certification generally. The submit dialog also
+retains a mutually exclusive explicit external-report URL fallback; it does not
+create a generated report row or use this capability route.
 
 Credit-batch detail and health surfaces show readiness/membership/blockers but
 never submit — submission is consolidated in the workspace. Phase status and
@@ -235,8 +261,15 @@ only from the Isometric MCP — see [isometric/README.md](./isometric/README.md)
 Facility-scoped operations dashboard at `/dashboard`
 (`src/app/(app)/dashboard/page.tsx` → `DashboardView`).
 
-- Reads split across `src/data-access/dashboard-overview.ts` (range-scoped KPI
-  strip, sparklines, deltas, feedstock mix, custody ribbon),
+- Fresh organizations first see the computed setup guide (or the member
+  setup-in-progress state); it collapses to a strip and disappears as setup
+  records are created. Setup steps are derived, not saved checklist state.
+- The current Flow Hero body is a four-stat KPI band, the traceability hero
+  (`Overview` · `Flow` · `Needs attention`), then Attention, Recent activity,
+  and Certification panels. Week/month/all only changes the range-scoped KPI
+  and mass-flow values.
+- One `getDashboardOverview` action supplies the page. Its aggregate lives in
+  `src/data-access/dashboard-overview.ts`, with shared predicates/loaders in
   `dashboard-attention.ts`, `dashboard-stations.ts`, and
   `dashboard-structural-gaps.ts`.
 - **Attention items** are computed from existing MRV records only. They have no
@@ -247,21 +280,18 @@ Facility-scoped operations dashboard at `/dashboard`
 
 ## Production Run Extensions
 
-The production-run detail page hosts three child entities: **Readings**
-(time-series telemetry), **Samples** (in-process measurements with file upload),
-and **Incidents** (severity + corrective actions).
+The production-run detail page hosts a readings-file evidence surface plus two
+child entities: **Samples** (in-process measurements with file upload) and
+**Incidents** (severity + corrective actions).
 
-Readings are document-backed, imported from a canonical CSV.
-`ProductionReadingsDocuments` stores files as
+`ProductionReadingsDocuments` stores the operator's original CSV unchanged as
 `documents.entity_type='production_run'`, `document_type='sensor_data'` via the
 normal presigned flow ([storage.md](./storage.md)).
-`src/fn/production-run-reading-imports.ts` parses via
-`src/lib/production-readings/readings-csv.ts`: columns match **by header**
-(`timestamp_utc`, `temperature_c`, `pressure_bar`, optional
-`dryer_frequency_hz`/`reactor_frequency_hz`), every row carries a full UTC
-timestamp so a file may span days, and there is no filename convention or
-mapping step. Imported rows are clipped to the run's `start_time`/`end_time`
-window and replace existing readings **only within the span they cover**.
+The operator UI does not inspect the CSV or import row-level
+`production_run_readings`. Stored files remain openable through the authorized
+`/api/documents/{id}` route and its signed-download flow. Legacy telemetry
+import and registry-submission modules remain separate from this operator
+workflow.
 
 ## Traceability Visualization
 

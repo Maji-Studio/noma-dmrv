@@ -12,7 +12,7 @@
 
 import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { numericAggregate, sumNumeric } from "@/db/aggregate";
+import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
   customers,
@@ -23,7 +23,11 @@ import {
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatDate } from "@/lib/format-utils";
-import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
+import {
+  deriveEffectiveMoisturePercent,
+  formatWetDryMass,
+  splitWetMass,
+} from "@/lib/mass-moisture";
 import { requireOrgScope } from "../utils";
 
 // Total wet mass already allocated to each order by its (non-archived)
@@ -38,6 +42,9 @@ function buildAllocatedMassAggregate(ctx: OrgContext) {
     totalDeliveredDryKg: sumNumeric(deliveries.massDryKg).as(
       "total_delivered_dry_kg",
     ),
+    unresolvedDeliveredDryCount: countRows(
+      isNull(deliveries.massDryKg),
+    ).as("unresolved_delivered_dry_count"),
   })
   .from(deliveries)
   .where(
@@ -60,12 +67,17 @@ function buildSelection(
     quantityKg: orders.quantityKg,
     customerName: customers.name,
     productBinName: storageLocations.name,
+    productMassKg: biocharProducts.massKg,
+    productWaterAddedKg: biocharProducts.waterAddedKg,
     productMoisturePercent: biocharProducts.moistureContentPercent,
     totalDeliveredKg: numericAggregate(
       sql<number>`COALESCE(${allocatedMassAggregate.totalDeliveredKg}, 0)`,
     ),
     totalDeliveredDryKg: numericAggregate(
       sql<number>`COALESCE(${allocatedMassAggregate.totalDeliveredDryKg}, 0)`,
+    ),
+    unresolvedDeliveredDryCount: numericAggregate(
+      sql<number>`COALESCE(${allocatedMassAggregate.unresolvedDeliveredDryCount}, 0)`,
     ),
   };
 }
@@ -77,9 +89,12 @@ export function toOrderEntityOption(r: {
   quantityKg: number;
   customerName: string | null;
   productBinName: string | null;
+  productMassKg: number | null;
+  productWaterAddedKg: number | null;
   productMoisturePercent: number | null;
   totalDeliveredKg: number;
   totalDeliveredDryKg: number;
+  unresolvedDeliveredDryCount: number;
 }): EntityOption {
   const remainingWetKg = Math.max(
     0,
@@ -87,10 +102,14 @@ export function toOrderEntityOption(r: {
   );
   const orderedDryKg = splitWetMass(
     r.quantityKg,
-    r.productMoisturePercent,
+    deriveEffectiveMoisturePercent(
+      r.productMassKg,
+      r.productMoisturePercent,
+      r.productWaterAddedKg,
+    ),
   )?.dryKg;
   const remainingDryKg =
-    orderedDryKg == null
+    orderedDryKg == null || r.unresolvedDeliveredDryCount > 0
       ? null
       : Math.max(0, orderedDryKg - r.totalDeliveredDryKg);
   return {

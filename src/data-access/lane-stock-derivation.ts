@@ -22,10 +22,7 @@ import {
   type DbReader,
 } from "./bin-movements";
 import { requireOrgScope } from "./utils";
-import {
-  CANCELLED_PRODUCTION_RUN_STATUS,
-  COMPLETED_PRODUCTION_RUN_STATUS,
-} from "@/lib/production-runs/lifecycle";
+import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
 export interface LaneStockDerivation {
   storageLocationId: string;
@@ -60,7 +57,7 @@ export async function deriveLaneStock(
       options.storageLocationIds,
     ),
     eq(productionRuns.organizationId, ctx.organizationId),
-    eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
+    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
   ];
   if (options.excludeRunId) {
     consumptionConditions.push(ne(productionRuns.id, options.excludeRunId));
@@ -156,9 +153,9 @@ export async function deriveLaneStock(
               options.storageLocationIds,
             ),
             eq(productionRuns.organizationId, ctx.organizationId),
-            eq(
+            ne(
               productionRuns.status,
-              COMPLETED_PRODUCTION_RUN_STATUS,
+              CANCELLED_PRODUCTION_RUN_STATUS,
             ),
           ),
         )

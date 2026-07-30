@@ -380,7 +380,7 @@ export async function enrichStorageLocationRows(
               storage_location_id,
               'in' as activity_type,
               created_at,
-              mass_dry_kg as mass_kg,
+              mass_wet_kg as mass_kg,
               mass_dry_kg,
               'Feedstock received' as label
             FROM feedstocks WHERE organization_id = ${ctx.organizationId} AND storage_location_id IN (${storageLocationIdsSql})

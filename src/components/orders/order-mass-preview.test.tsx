@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { deriveEffectiveMoisturePercent } from "@/lib/mass-moisture";
 import { OrderMassPreview } from "./order-mass-preview";
 
 describe("OrderMassPreview", () => {
@@ -22,5 +23,19 @@ describe("OrderMassPreview", () => {
 
     expect(html).toContain("Wet mass not recorded");
     expect(html).toContain("Dry biochar cannot be calculated");
+  });
+
+  it("previews dry mass from effective moisture after added water", () => {
+    const html = renderToStaticMarkup(
+      <OrderMassPreview
+        quantityKg="100"
+        moisturePercent={deriveEffectiveMoisturePercent(100, 10, 50)}
+      />,
+    );
+
+    expect(html).toContain(
+      "Wet biochar product: 100kg | Dry biochar: 60kg",
+    );
+    expect(html).not.toContain("Dry biochar: 90kg");
   });
 });

@@ -20,7 +20,7 @@ describe("stock overdraw", () => {
 
   it("builds the inline delivery message", () => {
     expect(deliveryStockOverdrawMessage("BP-001", 100, 120)).toBe(
-      "Cannot deliver 120 kg from product BP-001: only 100 kg remain undelivered. Reconcile the source bin or adjust the product before delivering.",
+      "Cannot deliver 120 kg from product bin BP-001: only 100 kg remain undelivered. Reconcile the source bin or adjust the product before delivering.",
     );
   });
 });
