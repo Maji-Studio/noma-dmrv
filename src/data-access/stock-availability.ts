@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { biocharProducts, orders, productionRuns } from "@/db/schema";
+import { biocharProducts, orders, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { StockAvailabilityRequest } from "@/schemas/stock-availability";
 import {
@@ -13,7 +13,7 @@ import { requireOrgScope } from "./utils";
 
 export interface StockAvailability {
   availableKg: number | null;
-  productCode: string | null;
+  productLabel: string | null;
 }
 
 async function getProductionRunFeedstockAvailability(
@@ -30,7 +30,7 @@ async function getProductionRunFeedstockAvailability(
       request.storageLocationId,
       request.productionRunId,
     ),
-    productCode: null,
+    productLabel: null,
   };
 }
 
@@ -38,29 +38,14 @@ async function getBiocharProductAvailability(
   ctx: OrgContext,
   request: Extract<StockAvailabilityRequest, { kind: "biocharProduct" }>,
 ): Promise<StockAvailability> {
-  const [run] = await db
-    .select({
-      biocharStorageLocationId: productionRuns.biocharStorageLocationId,
-    })
-    .from(productionRuns)
-    .where(
-      and(
-        eq(productionRuns.id, request.productionRunId),
-        eq(productionRuns.organizationId, ctx.organizationId),
-      ),
-    )
-    .limit(1);
-
   return {
-    availableKg: run?.biocharStorageLocationId
-      ? await deriveBiocharAvailableKg(
-          ctx,
-          db,
-          run.biocharStorageLocationId,
-          request.biocharProductId,
-        )
-      : null,
-    productCode: null,
+    availableKg: await deriveBiocharAvailableKg(
+      ctx,
+      db,
+      request.sourceBiocharStorageLocationId,
+      request.biocharProductId,
+    ),
+    productLabel: null,
   };
 }
 
@@ -80,16 +65,24 @@ async function getDeliveryAvailability(
     .limit(1);
   const productId = request.biocharProductId ?? order?.biocharProductId;
   if (!productId) {
-    return { availableKg: null, productCode: null };
+    return { availableKg: null, productLabel: null };
   }
 
   const [product] = await db
     .select({
-      code: biocharProducts.code,
+      productBinName: storageLocations.name,
       massKg: biocharProducts.massKg,
+      waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
     })
     .from(biocharProducts)
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(biocharProducts.storageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .where(
       and(
         eq(biocharProducts.id, productId),
@@ -98,7 +91,7 @@ async function getDeliveryAvailability(
     )
     .limit(1);
   if (!product) {
-    return { availableKg: null, productCode: null };
+    return { availableKg: null, productLabel: null };
   }
 
   const deliveredKg = await deriveBiocharProductDeliveredKg(
@@ -107,7 +100,10 @@ async function getDeliveryAvailability(
     productId,
     request.deliveryId,
   );
-  const batchAvailableKg = Number(product.massKg ?? 0) - deliveredKg;
+  const batchAvailableKg =
+    Number(product.massKg ?? 0) +
+    Number(product.waterAddedKg ?? 0) -
+    deliveredKg;
   const binAvailableKg = product.storageLocationId
     ? await deriveProductAvailableKg(
         ctx,
@@ -119,7 +115,7 @@ async function getDeliveryAvailability(
 
   return {
     availableKg: Math.min(batchAvailableKg, binAvailableKg),
-    productCode: product.code,
+    productLabel: product.productBinName ?? "this product batch",
   };
 }
 

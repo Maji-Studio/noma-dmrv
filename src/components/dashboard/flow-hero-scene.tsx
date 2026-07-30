@@ -558,7 +558,7 @@ export function FlowHeroScene({
               style={{ left: pctX(pos.x), top: pctY(pos.y), background: SCENE_BG }}
               aria-hidden
             >
-              {formatTonnes(segment.tonnes)}
+              Dry: {formatTonnes(segment.tonnes)}
             </div>
           );
         })}
@@ -641,7 +641,7 @@ export function FlowHeroScene({
           ))}
           {outIndex[hoveredStation.key] != null && (
             <div className="mt-10 border-t border-[var(--clr-dark-purple-10)] pt-8 font-[family-name:var(--font-mono)] text-[9.5px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]">
-              Out → {formatTonnes(massFlow[outIndex[hoveredStation.key]!]?.tonnes ?? 0)} in
+              Dry out → {formatTonnes(massFlow[outIndex[hoveredStation.key]!]?.tonnes ?? 0)} in
               period
             </div>
           )}

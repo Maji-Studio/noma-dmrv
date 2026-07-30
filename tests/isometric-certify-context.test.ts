@@ -11,7 +11,6 @@ import {
   getCreditBatchById,
   getCreditBatchRemovalId,
 } from "@/data-access/credit-batches";
-import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
 import {
   listDocumentsForEntityIds,
 } from "@/data-access/documents";
@@ -37,10 +36,6 @@ import {
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
   getCreditBatchRemovalId: vi.fn(),
-}));
-
-vi.mock("@/data-access/credit-batch-production-runs", () => ({
-  getApplicationsForRuns: vi.fn(),
 }));
 
 vi.mock("@/data-access/certification", () => ({
@@ -92,7 +87,6 @@ vi.mock("@/lib/isometric", async () => {
 
 const mockedGetCreditBatch = vi.mocked(getCreditBatchById);
 const mockedGetCreditBatchRemovalId = vi.mocked(getCreditBatchRemovalId);
-const mockedGetApplicationsForRuns = vi.mocked(getApplicationsForRuns);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
@@ -109,12 +103,6 @@ const USER_ID = "user-1";
 const CREDIT_BATCH_ID = "cb-1";
 const FACILITY_ID = "fac-1";
 const EXTERNAL_PROJECT_ID = "prj_test";
-const APPLICATION_FOR_PR_1 = {
-  applicationId: "app-1",
-  productionRunId: "pr-1",
-  biocharAppliedTons: 1,
-};
-
 function mockNormalizedLineageFacts(): void {
   mockedLoadAccounting.mockImplementation(async (ctx, batchIds) => {
     const entries = await Promise.all(
@@ -123,13 +111,12 @@ function mockNormalizedLineageFacts(): void {
           skipPreview: true,
         });
         const productionRunIds = batch?.productionRunIds ?? [];
-        const applicationRows = await mockedGetApplicationsForRuns(
-          ctx,
-          productionRunIds,
-        );
+        const applicationIds = productionRunIds.includes("pr-1")
+          ? ["app-1"]
+          : [];
         const lineages = await Promise.all(
-          applicationRows.map((application) =>
-            mockedGetLineage(ctx, application.applicationId),
+          applicationIds.map((applicationId) =>
+            mockedGetLineage(ctx, applicationId),
           ),
         );
         const lineageFacts = factsFromMockedLineages(
@@ -227,9 +214,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       productionRunIds: [],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
-    mockedGetApplicationsForRuns.mockImplementation(async (_userId, runIds) =>
-      runIds.includes("pr-1") ? [APPLICATION_FOR_PR_1] : [],
-    );
     mockedGetLineage.mockResolvedValue(
       undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
     );
@@ -715,9 +699,6 @@ describe("requiredTransportCategories", () => {
       productionRunIds: [],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
-    mockedGetApplicationsForRuns.mockImplementation(async (_userId, runIds) =>
-      runIds.includes("pr-1") ? [APPLICATION_FOR_PR_1] : [],
-    );
     mockedGetLegs.mockResolvedValue([]);
     mockedGetLineage.mockResolvedValue(
       undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,

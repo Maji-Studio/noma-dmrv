@@ -14,6 +14,7 @@ import {
   feedstockTypes,
   productionRuns,
   biocharProducts,
+  biocharProductSourceAllocations,
   biocharStorageInventory,
   binMovements,
   formulations,
@@ -876,6 +877,8 @@ export async function deleteStorageLocation(
     [{ value: feedstockRunCount }],
     [{ value: biocharRunCount }],
     [{ value: productCount }],
+    [{ value: sourcedProductCount }],
+    [{ value: sourceAllocationCount }],
     [{ value: deliveryCount }],
     [{ value: inventoryCount }],
     [{ value: movementCount }],
@@ -898,6 +901,14 @@ export async function deleteStorageLocation(
       .where(and(eq(biocharProducts.storageLocationId, storageLocationId), eq(biocharProducts.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
+      .from(biocharProducts)
+      .where(and(eq(biocharProducts.sourceBiocharStorageLocationId, storageLocationId), eq(biocharProducts.organizationId, ctx.organizationId))),
+    db
+      .select({ value: count() })
+      .from(biocharProductSourceAllocations)
+      .where(and(eq(biocharProductSourceAllocations.sourceStorageLocationId, storageLocationId), eq(biocharProductSourceAllocations.organizationId, ctx.organizationId))),
+    db
+      .select({ value: count() })
       .from(deliveries)
       .where(and(eq(deliveries.storageLocationId, storageLocationId), eq(deliveries.organizationId, ctx.organizationId))),
     db
@@ -915,6 +926,8 @@ export async function deleteStorageLocation(
     Number(feedstockRunCount) > 0 ? "production runs using it as a feedstock bin" : null,
     Number(biocharRunCount) > 0 ? "production runs using it as a biochar bin" : null,
     Number(productCount) > 0 ? "biochar products stored in it" : null,
+    Number(sourcedProductCount) > 0 ? "biochar products sourced from it" : null,
+    Number(sourceAllocationCount) > 0 ? "product source allocations drawing from it" : null,
     Number(deliveryCount) > 0 ? "deliveries drawing from it" : null,
     Number(inventoryCount) > 0 ? "storage inventory records" : null,
     Number(movementCount) > 0 ? "reconciliation or movement history" : null,

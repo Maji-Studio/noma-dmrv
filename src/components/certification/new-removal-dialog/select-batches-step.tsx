@@ -124,19 +124,19 @@ function ReadyCard({
       }`}
     >
       <div className="flex items-start justify-between gap-12">
-        <span className="body-small font-mono text-[var(--color-text-primary)]">
-          {batch.code}
+        <span className="body-small text-[var(--color-text-primary)]">
+          {formatDateRange(batch.startDate, batch.endDate)}
         </span>
         <input
           type="checkbox"
           className="mt-px size-16 shrink-0 accent-[var(--color-interaction)]"
           checked={selected}
           onChange={() => onToggle(batch.id)}
-          aria-label={`Select credit batch ${batch.code}`}
+          aria-label={`Select credit batch for ${formatDateRange(batch.startDate, batch.endDate)}, ${batch.code}`}
         />
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        {formatDateRange(batch.startDate, batch.endDate)}
+        Credit batch
       </span>
       <div className="grid grid-cols-2 gap-8">
         <Metric label="Weight" value={formatTonnes(batch.appliedWeightTons)} />
@@ -168,8 +168,8 @@ function IncompleteCard({
   return (
     <div className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16">
       <div className="flex items-start justify-between gap-12">
-        <span className="body-small font-mono text-[var(--color-text-secondary)]">
-          {batch.code}
+        <span className="body-small text-[var(--color-text-secondary)]">
+          {formatDateRange(batch.startDate, batch.endDate)}
         </span>
         <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-signal-orange-strong)]">
           <WarningIcon size={14} weight="fill" aria-hidden />
@@ -178,7 +178,7 @@ function IncompleteCard({
         </span>
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        {formatDateRange(batch.startDate, batch.endDate)}
+        Credit batch
       </span>
       <ul className="flex flex-col gap-10">
         {gaps.map((check, index) => {

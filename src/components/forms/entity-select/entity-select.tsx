@@ -22,7 +22,6 @@ import { VehicleQuickAddDialog } from "./vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
 import { FormulationQuickAddDialog } from "./formulation-quick-add-dialog";
 import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
-import { getEntityOptionCodeLabel } from "./option-display";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
 
 // Icons
@@ -138,6 +137,20 @@ function SpinnerIcon({ className }: { className?: string }) {
   );
 }
 
+export function EntityOptionText({ option }: { option: EntityOption }) {
+  return (
+    <>
+      <span className="block truncate text-[var(--text-s)] text-[var(--color-text-primary)]">
+        {option.name}
+      </span>
+      {option.subtitle && (
+        <span className="block body-small text-[var(--color-text-secondary)] mt-2">
+          {option.subtitle}
+        </span>
+      )}
+    </>
+  );
+}
 
 const SEARCH_VISIBILITY_THRESHOLD = 5;
 
@@ -519,44 +532,25 @@ export function EntitySelect({
                 </li>
               ) : null
             ) : (
-              options.map((option, index) => {
-                const codeLabel = getEntityOptionCodeLabel(option);
-                return (
-                  <li
-                    key={option.id}
-                    role="option"
-                    aria-selected={option.id === value}
-                    data-testid={`entity-option-${option.id}`}
-                    onClick={() => handleSelect(option)}
-                    onMouseEnter={() => setHighlightedIndex(index)}
-                    className={cn(
-                      "px-12 py-8 cursor-pointer transition-colors",
-                      index === clampedHighlightedIndex &&
-                        "bg-[var(--color-background-medium)]",
-                      option.id === value &&
-                        "bg-[var(--color-background-interaction-light)]"
-                    )}
-                  >
-                    <span className="flex items-baseline justify-between gap-8">
-                      <span className="truncate text-[var(--text-s)] text-[var(--color-text-primary)]">
-                        {option.name}
-                      </span>
-                      {codeLabel && (
-                        // Show the auto-code so legacy duplicate names stay
-                        // tellable-apart at pick time (issue #252).
-                        <span className="shrink-0 font-mono text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-                          {codeLabel}
-                        </span>
-                      )}
-                    </span>
-                    {option.subtitle && (
-                      <span className="block body-small text-[var(--color-text-secondary)] mt-2">
-                        {option.subtitle}
-                      </span>
-                    )}
-                  </li>
-                );
-              })
+              options.map((option, index) => (
+                <li
+                  key={option.id}
+                  role="option"
+                  aria-selected={option.id === value}
+                  data-testid={`entity-option-${option.id}`}
+                  onClick={() => handleSelect(option)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  className={cn(
+                    "px-12 py-8 cursor-pointer transition-colors",
+                    index === clampedHighlightedIndex &&
+                      "bg-[var(--color-background-medium)]",
+                    option.id === value &&
+                      "bg-[var(--color-background-interaction-light)]"
+                  )}
+                >
+                  <EntityOptionText option={option} />
+                </li>
+              ))
             )}
 
             {/* Quick-add option */}

@@ -11,6 +11,7 @@
 
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { formatDate } from "@/lib/format-utils";
 
 // Per-run categorical palette for the dry-output composition bar. Accent hues
 // (not semantic good/warn/critical) so adjacent segments stay distinguishable;
@@ -135,7 +136,9 @@ export function CohortInputLedger({
       ? runs
           .map((run, index) => ({
             id: run.id,
-            code: run.code,
+            label: [formatDate(run.date), run.biocharStorageName]
+              .filter(Boolean)
+              .join(" · "),
             kg: run.biocharDryMassKg ?? 0,
             color: COHORT_RUN_COLORS[index % COHORT_RUN_COLORS.length],
           }))
@@ -190,7 +193,7 @@ export function CohortInputLedger({
                   width: `${(segment.kg / dryOutputKg) * 100}%`,
                   background: segment.color,
                 }}
-                title={`${segment.code}: ${formatTonnesFromKg(segment.kg)} t dry output`}
+                title={`${segment.label}: ${formatTonnesFromKg(segment.kg)} t dry output`}
               />
             ))}
           </div>
@@ -204,7 +207,7 @@ export function CohortInputLedger({
                   className="h-8 w-8 shrink-0"
                   style={{ background: segment.color }}
                 />
-                {segment.code}
+                {segment.label}
               </span>
             ))}
           </div>

@@ -614,6 +614,7 @@ export function FeedstockForm({
           </div>
 
           <MassMoistureFields
+            materialLabel="Feedstock"
             wetMassKg={watchWetMass}
             moisturePercent={watchMoisture}
             wet={{

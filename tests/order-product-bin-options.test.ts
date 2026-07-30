@@ -50,6 +50,7 @@ describe("order product-bin options", () => {
           facilityId: facility.id,
           storageLocationId: productBin.id,
           massKg: 250,
+          moistureContentPercent: 15,
         })
         .returning({ id: biocharProducts.id });
 
@@ -83,9 +84,11 @@ describe("order product-bin options", () => {
       id: productId,
       code: `BIN-OPB-${tag}`,
       name: `Order Product Bin ${tag}`,
-      subtitle: expect.stringMatching(
-        new RegExp(`250 kg available · batch BP-OPB-${tag}$`),
-      ),
+      mass: {
+        moisturePercent: 15,
+      },
+      subtitle:
+        "Pure biochar · Wet biochar product: 250kg | Dry biochar: 212.5kg available",
     });
   });
 
@@ -99,9 +102,11 @@ describe("order product-bin options", () => {
       id: productId,
       code: `BIN-OPB-${tag}`,
       name: `Order Product Bin ${tag}`,
-      subtitle: expect.stringMatching(
-        new RegExp(`250 kg available · batch BP-OPB-${tag}$`),
-      ),
+      mass: {
+        moisturePercent: 15,
+      },
+      subtitle:
+        "Pure biochar · Wet biochar product: 250kg | Dry biochar: 212.5kg available",
     });
   });
 });

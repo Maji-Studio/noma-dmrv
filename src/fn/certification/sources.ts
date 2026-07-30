@@ -23,9 +23,7 @@ import {
   getCertifierRemovalById,
   getCreditBatchesByRemovalId,
 } from "@/data-access/certifier-removals";
-import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { getCreditBatchById } from "@/data-access/credit-batches";
-import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
+import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import {
   getDocumentById,
   listDocumentsForEntity,
@@ -112,16 +110,17 @@ export interface CandidateDocumentsForRemoval {
   hasMapping: boolean;
 }
 
-// Walks every member credit batch's chain-of-custody and collects only the
-// three entity types that can own an MVP Removal Source role.
+// Walks every member credit batch's allocation-aware lineage and collects only
+// the operational entities that can own an MVP Removal Source role.
 async function collectLineageEntities(
   orgCtx: OrgContext,
   memberBatchIds: string[],
 ): Promise<CandidateLineageEntity[]> {
   if (memberBatchIds.length === 0) return [];
 
-  const batches = await Promise.all(
-    memberBatchIds.map((id) => getCreditBatchById(orgCtx, id, { skipPreview: true })),
+  const accountingByBatch = await loadCreditBatchRollups(
+    orgCtx,
+    memberBatchIds,
   );
   const seen = new Map<string, CandidateLineageEntity>();
   const add = (e: CandidateLineageEntity) => {
@@ -129,41 +128,37 @@ async function collectLineageEntities(
     if (!seen.has(k)) seen.set(k, e);
   };
 
-  for (const batch of batches) {
-    if (!batch) continue;
+  for (const memberBatchId of memberBatchIds) {
+    const accounting = accountingByBatch[memberBatchId];
+    if (!accounting) {
+      throw new SafeError(`Credit batch ${memberBatchId} could not be loaded.`);
+    }
+    const { batch, lineageFacts } = accounting;
     add({
       entityType: "credit_batch",
       entityId: batch.id,
       entityLabel: `Credit batch ${batch.code}`,
     });
 
-    const applicationsForRuns = await getApplicationsForRuns(
-      orgCtx,
-      batch.productionRunIds,
-    );
-    const applicationIds = Array.from(
-      new Set(applicationsForRuns.map((row) => row.applicationId)),
-    );
-    const lineages = await Promise.all(
-      applicationIds.map((aid) => getChainOfCustodyData(orgCtx, aid)),
-    );
-
-    for (const lineage of lineages) {
+    for (const application of lineageFacts.applications) {
       add({
         entityType: "application",
-        entityId: lineage.application.id,
-        entityLabel: `Application ${lineage.application.code}`,
+        entityId: application.id,
+        entityLabel: `Application ${application.code}`,
       });
       add({
         entityType: "delivery",
-        entityId: lineage.delivery.id,
-        entityLabel: `Delivery ${lineage.delivery.code}`,
+        entityId: application.delivery.id,
+        entityLabel: `Delivery ${application.delivery.code}`,
       });
-      for (const fs of lineage.feedstocks) {
+    }
+
+    for (const run of lineageFacts.runs) {
+      for (const feedstock of run.feedstocks) {
         add({
           entityType: "feedstock",
-          entityId: fs.id,
-          entityLabel: `Feedstock ${fs.code}`,
+          entityId: feedstock.id,
+          entityLabel: `Feedstock ${feedstock.code}`,
         });
       }
     }

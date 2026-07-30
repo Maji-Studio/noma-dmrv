@@ -438,6 +438,18 @@ snapshot by design.
   application evidence may be retained or supplied voluntarily, but it is not
   required in the Certify submission payload.
 
+## 2026-07-29 (mass-weighted biochar-bin provenance)
+
+- Biochar products now draw from a biochar bin. Each draw is allocated across
+  every contributing production run in proportion to its remaining wet mass;
+  wet and dry kilograms are stored separately on immutable allocation rows.
+- Certification, Sources discovery, credit-batch accounting, mutation guards,
+  and direct application traceability now follow those allocation rows. A
+  mixed-bin product exposes every contributing run and feedstock instead of
+  presenting one arbitrary production-run code.
+- Seeded products use the same mass-weighted model. The seeded source bin
+  balances from 2,550 kg wet produced to 2,480 kg allocated, 18 kg documented
+  loss, and 52 kg wet remaining.
 ## 2026-07-29 (GIS-only removal evidence)
 
 - The unconditional mapped-Source submission requirement is removed. A

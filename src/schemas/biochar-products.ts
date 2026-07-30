@@ -10,6 +10,7 @@ import {
   optionalPositiveNumber,
   requiredMassKgSchema,
   requiredNumber,
+  requiredPositiveMassKgSchema,
   storedPercentSchema,
 } from "./helpers";
 
@@ -89,24 +90,30 @@ export const biocharProductFormSchema = z.object({
   // Optional: empty = pure-biochar product (no amendment blend)
   formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
 
-  // No productionDate here: it is derived server-side from the linked production
-  // run (the biochar's production date), not entered on the product form.
+  // No productionDate here: it is derived server-side from the oldest
+  // production-run lot allocated from the selected source bin.
 
   // Status field
   status: z.enum(biocharProductStatusValues).default("testing"),
 
-  // Optional relation fields (empty string → null, otherwise must be valid UUID)
-  linkedProductionRunId: z
+  // Source and destination bins. The server resolves the source-bin draw to
+  // immutable production-run lots; operators never need to choose an internal
+  // production-run record.
+  sourceBiocharStorageLocationId: z
     .string()
-    .min(1, "Select a production run.")
-    .uuid("Choose a valid production run."),
+    .min(1, "Select a biochar bin.")
+    .uuid("Choose a valid biochar bin."),
   storageLocationId: z
     .string()
     .min(1, "Select a product bin.")
     .uuid("Choose a valid storage bin."),
 
   // Measurement fields (setValueAs in form converts "" to null and strings to numbers)
-  massKg: requiredNonNegativeNumber("Wet mass must be 0 or greater"),
+  massKg: requiredPositiveMassKgSchema(
+    "Wet mass is required",
+    "Wet mass must be a number",
+    "Wet mass must be greater than 0",
+  ),
   moistureContentPercent: requiredPercent,
   densityKgM3: optionalPositiveNumber,
   waterAddedKg: requiredNonNegativeNumber("Water added must be 0 or greater"),
@@ -139,7 +146,10 @@ export const updateBiocharProductSchema = z.object({
   facilityId: z.string().uuid().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(biocharProductStatusValues).optional(),
-  linkedProductionRunId: z.string().uuid("Choose a valid production run.").optional(),
+  sourceBiocharStorageLocationId: z
+    .string()
+    .uuid("Choose a valid biochar bin.")
+    .optional(),
   storageLocationId: z.string().uuid("Choose a valid storage bin.").optional(),
   massKg: massKgSchema().optional(),
   moistureContentPercent: storedPercentSchema()

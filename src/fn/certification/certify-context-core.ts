@@ -416,7 +416,14 @@ export async function resolveScopeForRemoval(
     removalId,
     removal,
     memberBatches,
-    lineages: Array.from(new Map(lineages.map((lineage) => [lineage.application.id, lineage])).values()),
+    lineages: [
+      ...new Map(
+        lineages.map((lineage) => [
+          `${lineage.application.id}:${lineage.productionRun?.id ?? "missing"}`,
+          lineage,
+        ]),
+      ).values(),
+    ],
   };
 }
 

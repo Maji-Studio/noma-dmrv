@@ -42,7 +42,7 @@ vi.mock("./formulation-quick-add-dialog", () => ({
   FormulationQuickAddDialog: () => null,
 }));
 
-import { EntitySelect } from "./entity-select";
+import { EntityOptionText, EntitySelect } from "./entity-select";
 
 beforeEach(() => {
   entityState.options = [];
@@ -95,5 +95,24 @@ describe("EntitySelect selected-value display", () => {
 
     expect(html).toContain("Select reactor");
     expect(html).not.toContain("Loading selection…");
+  });
+});
+
+describe("EntitySelect open option display", () => {
+  it("shows the option name and subtitle without exposing its internal code", () => {
+    const html = renderToStaticMarkup(
+      <EntityOptionText
+        option={{
+          id: "reactor-1",
+          code: "RE-001",
+          name: "North Kiln",
+          subtitle: "Pyrolysis reactor",
+        }}
+      />,
+    );
+
+    expect(html).toContain("North Kiln");
+    expect(html).toContain("Pyrolysis reactor");
+    expect(html).not.toContain("RE-001");
   });
 });

@@ -17,7 +17,6 @@ import {
   feedstocks,
   feedstockTypes,
   operators,
-  biocharProducts,
   creditBatches,
   creditBatchProductionRuns,
 } from "@/db/schema";
@@ -61,6 +60,7 @@ import {
   assertProductionRunTimesNotFuture,
   type ProductionRunMutationOptions,
 } from "./future-time";
+import { getProductionRunDependentProduct } from "./product-dependencies";
 
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
@@ -649,14 +649,11 @@ export async function updateProductionRun(
     );
 
     if (lockedTargetStatus !== locked.status && lockedTargetStatus !== "complete") {
-      const [linkedProduct] = await tx
-        .select({ id: biocharProducts.id })
-        .from(biocharProducts)
-        .where(and(
-          eq(biocharProducts.linkedProductionRunId, productionRunId),
-          eq(biocharProducts.organizationId, ctx.organizationId),
-        ))
-        .limit(1);
+      const linkedProduct = await getProductionRunDependentProduct(
+        ctx,
+        tx,
+        productionRunId,
+      );
       if (linkedProduct) {
         throw new SafeError(
           "Remove linked Biochar products before changing this run's outcome.",
@@ -914,14 +911,11 @@ export async function deleteProductionRun(
       "delete",
     );
 
-    const [dependentProduct] = await tx
-      .select({ id: biocharProducts.id, code: biocharProducts.code })
-      .from(biocharProducts)
-      .where(and(
-        eq(biocharProducts.linkedProductionRunId, productionRunId),
-        eq(biocharProducts.organizationId, ctx.organizationId),
-      ))
-      .limit(1);
+    const dependentProduct = await getProductionRunDependentProduct(
+      ctx,
+      tx,
+      productionRunId,
+    );
     const [dependentCreditBatch] = await tx
       .select({ id: creditBatches.id, code: creditBatches.code })
       .from(creditBatchProductionRuns)

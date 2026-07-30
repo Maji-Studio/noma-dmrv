@@ -19,7 +19,7 @@ export function toCreditBatchEntityOption(
   return {
     id: row.id,
     code: row.code,
-    name: row.code,
-    subtitle: `${formatDateRange(row.startDate, row.endDate)} · ${formatCreditBatchStatus(row.status)}`,
+    name: formatDateRange(row.startDate, row.endDate),
+    subtitle: formatCreditBatchStatus(row.status),
   };
 }

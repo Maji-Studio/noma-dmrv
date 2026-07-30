@@ -2,7 +2,15 @@
  * Credit-batch options for searchable entity selection.
  */
 
-import { ilike, or, eq, and, isNull, type SQL } from "drizzle-orm";
+import {
+  ilike,
+  or,
+  eq,
+  and,
+  isNull,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -29,7 +37,11 @@ export async function getCreditBatchesEntity(ctx: OrgContext, params: {
     conditions.push(
       or(
         ilike(creditBatches.code, searchPattern),
-        ilike(creditBatches.registry, searchPattern)
+        ilike(creditBatches.registry, searchPattern),
+        sql`${creditBatches.startDate}::text ILIKE ${searchPattern}`,
+        sql`${creditBatches.endDate}::text ILIKE ${searchPattern}`,
+        sql`to_char(${creditBatches.startDate}, 'Mon FMDD') ILIKE ${searchPattern}`,
+        sql`to_char(${creditBatches.endDate}, 'Mon FMDD, YYYY') ILIKE ${searchPattern}`,
       )!
     );
   }
