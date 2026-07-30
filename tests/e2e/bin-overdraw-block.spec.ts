@@ -126,6 +126,7 @@ async function openCompleteRunForm(
     feedstockWetMassKg?: string;
     feedstockMoisturePercent?: string;
     biocharOutputKg?: string;
+    biocharMoisturePercent?: string;
   },
 ) {
   await page.goto(
@@ -171,6 +172,10 @@ async function openCompleteRunForm(
   await page.fill(
     'input[name="biocharOutputKg"]',
     values.biocharOutputKg ?? "1",
+  );
+  await page.fill(
+    'input[name="biocharMoisturePercent"]',
+    values.biocharMoisturePercent ?? "0",
   );
   return existingRunCodes;
 }
