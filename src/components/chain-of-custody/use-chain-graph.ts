@@ -79,6 +79,17 @@ const STORAGE_REMAINDER_EPSILON_KG = 0.5;
 const SUB_ONE_PERCENT = 0.01;
 const NEAR_FULL_PERCENT = 0.995;
 
+/** Preferred separation between parallel fan routes, in graph coordinates. */
+const EDGE_ROUTE_LANE_GAP = 28;
+/**
+ * Keeps large fans inside the corridor between adjacent Dagre ranks. 70 is
+ * safe only because `DAGRE_CONFIG.ranksep` is 208 (`chain-constants.ts`):
+ * xyflow's smooth-step path reserves a 20px gap point at each end, leaving a
+ * midpoint band of ±84, so 70 keeps 14px of clearance. Lowering `ranksep`
+ * means lowering this too, or the outer lanes cross into the node rows.
+ */
+const EDGE_ROUTE_MAX_OFFSET = 70;
+
 /** A unit must never be mixed within one fan when normalizing to a share. */
 type EdgeMassUnit = "kg" | "tDry";
 
@@ -100,6 +111,8 @@ export interface ChainEdgeBuildData {
   unit: EdgeMassUnit | null;
   kgLabel: string | null;
   pctLabel: string | null;
+  /** Horizontal offset from the default midpoint for split/merge fan routing. */
+  routeOffsetX: number | null;
   [key: string]: unknown;
 }
 
@@ -171,6 +184,92 @@ function computeEdgeShareLabels(edges: Edge[]): void {
       fraction = 1;
     }
     data.pctLabel = formatShare(fraction);
+  }
+}
+
+/**
+ * React Flow's smooth-step default sends every edge between two ranks through
+ * the same midpoint. In a split/merge fan that makes distinct allocations
+ * look like one shared line carrying several labels. Give each connected fan
+ * edge its own midpoint lane while leaving ordinary 1:1 hand-offs unchanged.
+ *
+ * Call this **after** `dagre.layout`: `getNodeY` reports each node's laid-out
+ * centre, and lanes are ordered by their endpoints' vertical position so the
+ * routes do not cross. Without it, lanes fall back to edge-id order, which is
+ * only stable, not geometrically sensible.
+ */
+export function assignEdgeRouteOffsets(
+  edges: Edge[],
+  getNodeY?: (nodeId: string) => number,
+): void {
+  const flowEdges = edges.filter((graphEdge) => {
+    const data = graphEdge.data as ChainEdgeBuildData | undefined;
+    return data?.variant === "flow";
+  });
+  const bySource = new Map<string, Edge[]>();
+  const byTarget = new Map<string, Edge[]>();
+
+  for (const graphEdge of flowEdges) {
+    const sourceEdges = bySource.get(graphEdge.source) ?? [];
+    sourceEdges.push(graphEdge);
+    bySource.set(graphEdge.source, sourceEdges);
+
+    const targetEdges = byTarget.get(graphEdge.target) ?? [];
+    targetEdges.push(graphEdge);
+    byTarget.set(graphEdge.target, targetEdges);
+  }
+
+  const fanEdges = new Set(
+    flowEdges.filter(
+      (graphEdge) =>
+        (bySource.get(graphEdge.source)?.length ?? 0) > 1 ||
+        (byTarget.get(graphEdge.target)?.length ?? 0) > 1,
+    ),
+  );
+  const visited = new Set<Edge>();
+
+  for (const firstEdge of fanEdges) {
+    if (visited.has(firstEdge)) continue;
+    const component: Edge[] = [];
+    const queue = [firstEdge];
+    visited.add(firstEdge);
+
+    while (queue.length > 0) {
+      const graphEdge = queue.pop()!;
+      component.push(graphEdge);
+      const neighbors = [
+        ...(bySource.get(graphEdge.source) ?? []),
+        ...(byTarget.get(graphEdge.target) ?? []),
+      ];
+      for (const neighbor of neighbors) {
+        if (!fanEdges.has(neighbor) || visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+
+    // Endpoint midpoint: an edge between two high cards takes a high lane.
+    const laneKeys = new Map(
+      component.map((graphEdge) => [
+        graphEdge,
+        getNodeY
+          ? getNodeY(graphEdge.source) + getNodeY(graphEdge.target)
+          : 0,
+      ]),
+    );
+    component.sort((left, right) => {
+      const delta = (laneKeys.get(left) ?? 0) - (laneKeys.get(right) ?? 0);
+      return delta !== 0 ? delta : left.id.localeCompare(right.id);
+    });
+    const preferredSpan = (component.length - 1) * EDGE_ROUTE_LANE_GAP;
+    const span = Math.min(preferredSpan, EDGE_ROUTE_MAX_OFFSET * 2);
+    const laneGap = component.length > 1 ? span / (component.length - 1) : 0;
+    const centerIndex = (component.length - 1) / 2;
+
+    component.forEach((graphEdge, index) => {
+      const data = graphEdge.data as ChainEdgeBuildData;
+      data.routeOffsetX = (index - centerIndex) * laneGap;
+    });
   }
 }
 
@@ -428,6 +527,7 @@ function edge(
       unit: mass?.unit ?? null,
       kgLabel: opts?.massLabel ?? massLabel(mass),
       pctLabel: null,
+      routeOffsetX: null,
     } satisfies ChainEdgeBuildData,
   };
 }
@@ -566,6 +666,10 @@ function layoutGraph(
   }
 
   dagre.layout(g);
+
+  // Fan lanes read the laid-out vertical positions, so they are assigned once
+  // the ranks exist.
+  assignEdgeRouteOffsets(edges, (nodeId) => g.node(nodeId)?.y ?? 0);
 
   const nodes: Node[] = lineageNodes.map((node) => {
     const position = g.node(node.id);
