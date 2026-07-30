@@ -72,7 +72,10 @@ test.describe("Certification — New-Removal wizard", () => {
         }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(
-        sampleDialog.getByText(batch.code, { exact: true }),
+        sampleDialog.getByText(
+          `Characterises credit batch ${batch.code}`,
+          { exact: true },
+        ),
       ).toBeVisible();
       await expect(page).not.toHaveURL(
         new RegExp(

@@ -515,9 +515,7 @@ test.describe("Traceability Visualization", () => {
       timeout: 15000,
     });
     await expect(
-      adminPage.getByTitle(
-        `${seededData.facility.code} - ${seededData.facility.name}`
-      )
+      adminPage.getByTitle(seededData.facility.name)
     ).toBeVisible({ timeout: 10000 });
     const applicationNode = adminPage.getByTestId(
       `rf__node-application:${lineage.application.id}`,
@@ -574,7 +572,7 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     );
     await expect(
       adminPage.getByTestId("chain-batch-selector-trigger"),
-    ).toContainText(batches.newest.code);
+    ).toHaveAccessibleName(`Credit batch: ${batches.newest.code}`);
     const rememberedBatchId = await adminPage.evaluate(
       (key) => window.localStorage.getItem(key),
       batchStorageKey(seededData.facility.id),
@@ -604,10 +602,10 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     );
     await expect(
       adminPage.getByTestId("chain-batch-selector-trigger"),
-    ).toContainText(batches.older.code);
+    ).toHaveAccessibleName(`Credit batch: ${batches.older.code}`);
     await expect(
       adminPage.getByTestId("chain-batch-selector-trigger"),
-    ).not.toContainText(batches.newest.code);
+    ).not.toHaveAccessibleName(`Credit batch: ${batches.newest.code}`);
   });
 
   test("batch deep link renders the merged roll-up with shared runs deduped", async ({
@@ -626,13 +624,11 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
       timeout: 15000,
     });
     await expect(
-      adminPage.getByTitle(
-        `${seededData.facility.code} - ${seededData.facility.name}`
-      )
+      adminPage.getByTitle(seededData.facility.name)
     ).toBeVisible({ timeout: 10000 });
     await expect(
       adminPage.getByTestId("chain-batch-selector-trigger"),
-    ).toContainText(batch.codes.creditBatch);
+    ).toHaveAccessibleName(`Credit batch: ${batch.codes.creditBatch}`);
 
     // Both member applications render…
     await expect(
@@ -689,7 +685,7 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     await expect(adminPage).not.toHaveURL(/application=/);
     await expect(
       adminPage.getByTestId("chain-batch-selector-trigger"),
-    ).toContainText(batch.codes.creditBatch);
+    ).toHaveAccessibleName(`Credit batch: ${batch.codes.creditBatch}`);
     const rememberedBatchId = await adminPage.evaluate(
       (key) => window.localStorage.getItem(key),
       batchStorageKey(seededData.facility.id),
@@ -714,7 +710,7 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     );
     await expect(
       adminPage.getByTestId("chain-batch-selector-trigger"),
-    ).toContainText(batch.codes.creditBatch);
+    ).toHaveAccessibleName(`Credit batch: ${batch.codes.creditBatch}`);
     // Drill-down shows the application view modes, incl. the Trail.
     await expect(
       adminPage
