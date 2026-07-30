@@ -22,9 +22,25 @@ import { CustomerLocationFields } from "./customer-location-fields";
 // Component
 // ============================================
 
+export type EditableCustomerLocation = Pick<
+  CustomerLocation,
+  | "id"
+  | "name"
+  | "country"
+  | "stateRegion"
+  | "city"
+  | "gpsLatitude"
+  | "gpsLongitude"
+  | "address"
+  | "distanceFromFacilityKm"
+  | "distanceSource"
+  | "defaultSoilTemperatureC"
+  | "isDefault"
+>;
+
 interface CustomerLocationFormProps {
   /** Existing location data for editing (undefined for create mode) */
-  location?: CustomerLocation;
+  location?: EditableCustomerLocation;
   /** Form submission handler */
   onSubmit: (data: CustomerLocationFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -81,7 +97,13 @@ export function CustomerLocationForm({
   });
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form
+      onSubmit={(event) => {
+        event.stopPropagation();
+        return handleFormSubmit(event);
+      }}
+      className="space-y-20"
+    >
       <CustomerLocationFields
         form={form}
         isSubmitting={isSubmitting}

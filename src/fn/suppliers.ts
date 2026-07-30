@@ -485,13 +485,13 @@ export async function updateSupplierLocationFn(
     const validated = updateSupplierLocationSchema.parse(data);
 
     const location = await updateSupplierLocation(ctx, validated.locationId, {
-      name: validated.name,
+      name: validated.name || null,
       country: validated.country,
-      stateRegion: validated.stateRegion,
-      city: validated.city,
+      stateRegion: validated.stateRegion || null,
+      city: validated.city || null,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
-      address: validated.address,
+      address: validated.address || null,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
       distanceSource: resolveDistanceSource(
         validated.distanceFromFacilityKm,

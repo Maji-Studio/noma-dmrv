@@ -42,8 +42,6 @@ export function CustomerLocationFields({
 }: CustomerLocationFieldsProps) {
   const {
     register,
-    watch,
-    setValue,
     control,
     formState: { errors },
   } = form;
@@ -57,13 +55,21 @@ export function CustomerLocationFields({
     control,
     name: "gpsLongitude",
   });
+  const { field: distanceFromFacilityField } = useController({
+    control,
+    name: "distanceFromFacilityKm",
+  });
+  const { field: distanceSourceField } = useController({
+    control,
+    name: "distanceSource",
+  });
   const gpsLatitude = gpsLatitudeField.value as number | null | undefined;
   const gpsLongitude = gpsLongitudeField.value as number | null | undefined;
-  const distanceFromFacilityKm = watch("distanceFromFacilityKm") as
+  const distanceFromFacilityKm = distanceFromFacilityField.value as
     | number
     | null
     | undefined;
-  const distanceSource = watch("distanceSource");
+  const distanceSource = distanceSourceField.value;
 
   // CALC endpoints: the globally selected facility → this destination site.
   const { selectedFacility } = useFacilityContext();
@@ -224,11 +230,8 @@ export function CustomerLocationFields({
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}
             onDistanceChange={(km, source) => {
-              setValue("distanceFromFacilityKm", km ?? undefined, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-              setValue("distanceSource", source, { shouldDirty: true });
+              distanceFromFacilityField.onChange(km ?? undefined);
+              distanceSourceField.onChange(source);
             }}
             origin={facilityPoint}
             destination={locationPoint}
