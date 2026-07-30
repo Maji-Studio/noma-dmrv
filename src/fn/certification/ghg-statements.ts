@@ -279,12 +279,12 @@ export async function createGhgStatementDraft(
             ghgStatementCreateRefusalMessage(blocking.statement),
           );
         }
-        // Nothing is minted here — the registry statement already exists and
-        // is already on the ledger; this only re-reconciles it.
+        // List membership can lag detail, so reconcile the existing statement
+        // from its authoritative representation without minting anything.
         const reconciled = await reconcileRegistryGhgStatement(orgCtx, {
           facilityId: parsed.facilityId,
           externalProjectId: project.externalProjectId,
-          remote: singleMatch,
+          remote: await getGhgStatement(client, singleMatch.id),
         });
         return { outcome: "existing" as const, ...reconciled };
       }

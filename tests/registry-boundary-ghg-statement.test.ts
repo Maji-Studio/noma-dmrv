@@ -698,7 +698,7 @@ describe("registry-list GHG statement reconciliation", () => {
       status: "draft",
       lockedAt: new Date(),
     });
-    registry.seedGhgStatement({
+    const remote = registry.seedGhgStatement({
       projectId: fixture.externalProjectId,
       endOn: REPORTING_PERIOD_END,
       ghgEntryIds: [fixture.externalRemovalId!],
@@ -711,6 +711,9 @@ describe("registry-list GHG statement reconciliation", () => {
       success: true,
       data: { reconciledCount: 0, warningCount: 1 },
     });
+    expect(
+      registry.requestCount("GET", `/ghg_statements/${remote.id}`),
+    ).toBe(0);
     const rows = await db
       .select()
       .from(certifierGhgStatements)
@@ -756,6 +759,35 @@ describe("registry-list GHG statement reconciliation", () => {
       .from(certifierRemovals)
       .where(eq(certifierRemovals.id, fixture.removalId!));
     expect(removal.ghgStatementId).toBeNull();
+  });
+
+  it("reconciles membership from statement detail when the list summary is stale", async () => {
+    const fixture = await createFixture();
+    const remote = registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: REPORTING_PERIOD_END,
+      ghgEntryIds: [fixture.externalRemovalId!],
+    });
+    registry.overrideListedGhgStatement(remote.id, {
+      ghg_entry_ids: [],
+    });
+
+    const result = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { reconciledCount: 1 },
+    });
+    const [removal] = await db
+      .select()
+      .from(certifierRemovals)
+      .where(eq(certifierRemovals.id, fixture.removalId!));
+    expect(removal.ghgStatementId).not.toBeNull();
+    expect(
+      registry.requestCount("GET", `/ghg_statements/${remote.id}`),
+    ).toBe(1);
   });
 
   it("moves a removal between statements in one registry sweep", async () => {

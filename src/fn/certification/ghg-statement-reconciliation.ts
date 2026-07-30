@@ -22,6 +22,7 @@ import { reconcileGhgStatementRemoteState } from "@/data-access/certifier-ghg-re
 import { requireOrgFacility } from "@/data-access/utils";
 import { SafeError } from "@/lib/errors";
 import {
+  getGhgStatement,
   getGhgStatementPeriod,
   getIsometricClientForOrg,
   listGhgStatementsForProject,
@@ -99,26 +100,39 @@ export async function reconcileGhgStatementsForFacility(
     );
   }
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
-  const remotes = await listGhgStatementsForProject(
+  const listedRemotes = await listGhgStatementsForProject(
     client,
     project.externalProjectId,
+  );
+  const operatorCreateInFlight =
+    await hasInFlightGhgStatementForFacility(orgCtx, facilityId);
+  if (operatorCreateInFlight) {
+    return {
+      statements: listedRemotes.map(toRegistryGhgStatementView),
+      reconciledCount: 0,
+      warningCount: 1,
+      skippedCount: listedRemotes.length,
+    };
+  }
+  // The project list can lag statement membership while the detail endpoint
+  // already exposes newly attached GHG Entries. Reconciliation changes local
+  // ownership, counts, and submission state, so it must use the authoritative
+  // detail representation rather than a potentially stale list summary.
+  const remotes = await Promise.all(
+    listedRemotes.map((statement) =>
+      getGhgStatement(client, statement.id),
+    ),
   );
   const projectFacilityIds = await listFacilityIdsForExternalProject(
     orgCtx,
     project.externalProjectId,
   );
 
-  const operatorCreateInFlight =
-    await hasInFlightGhgStatementForFacility(orgCtx, facilityId);
-  let warningCount = operatorCreateInFlight ? 1 : 0;
+  let warningCount = 0;
   let reconciledCount = 0;
   let skippedCount = 0;
   const ownedRemotes: GhgStatement[] = [];
   for (const remote of remotes) {
-    if (operatorCreateInFlight) {
-      skippedCount += 1;
-      continue;
-    }
     const facilityIds = await listFacilityIdsForExternalRemovals(
       orgCtx,
       remote.ghg_entry_ids,

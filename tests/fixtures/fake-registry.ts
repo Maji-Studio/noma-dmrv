@@ -100,6 +100,10 @@ export class FakeIsometricRegistry {
   readonly ghgStatements: FakeGhgStatementRecord[] = [];
   readonly requests: LoggedRequest[] = [];
 
+  private readonly listedGhgStatementOverrides = new Map<
+    string,
+    Partial<FakeGhgStatementRecord>
+  >();
   private readonly failures = new Map<
     string,
     Array<FailureInjection | null>
@@ -156,6 +160,17 @@ export class FakeIsometricRegistry {
     };
     this.ghgStatements.push(statement);
     return statement;
+  }
+
+  /**
+   * Model a project-list summary that lags the authoritative statement detail.
+   * The real sync must reconcile membership from GET /ghg_statements/{id}.
+   */
+  overrideListedGhgStatement(
+    id: string,
+    override: Partial<FakeGhgStatementRecord>,
+  ): void {
+    this.listedGhgStatementOverrides.set(id, override);
   }
 
   requestCount(method: string, path: string): number {
@@ -312,7 +327,13 @@ export class FakeIsometricRegistry {
     if (method === "GET" && path === "/ghg_statements") {
       // No server-side filter: findDraftGhgStatementsByPeriod filters
       // client-side over the paged list.
-      return paginateSlice(this.ghgStatements, query);
+      return paginateSlice(
+        this.ghgStatements.map((statement) => ({
+          ...statement,
+          ...this.listedGhgStatementOverrides.get(statement.id),
+        })),
+        query,
+      );
     }
     const statementById = path.match(/^\/ghg_statements\/([^/]+)$/);
     if (method === "GET" && statementById) {

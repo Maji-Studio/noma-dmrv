@@ -413,8 +413,7 @@ async function submitRemovalCore(
   // Without this, that changed artifact could be claimed and sent unreviewed.
   assertReviewedCompilationHash(expectedCompilationHash, initialBuild);
   const {
-    agg,
-    latestApplicationTime,
+    reportingWindow,
     candidateDocumentIds,
     candidateSourceDocuments,
     sourceIds,
@@ -591,8 +590,8 @@ async function submitRemovalCore(
         template: defaultTemplate,
         blueprintsByKey,
         reportingWindow: {
-          startedOn: agg.earliestStartTime,
-          completedOn: latestApplicationTime,
+          startedOn: reportingWindow.startedOn,
+          completedOn: reportingWindow.completedOn,
         },
         externalProjectId,
         durabilityMeasurementSubmissions,
