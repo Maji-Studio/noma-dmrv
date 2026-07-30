@@ -16,7 +16,6 @@ import { formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
   formatWetDryMass,
-  splitWetMass,
   splitWetMassAfterAddedWater,
 } from "@/lib/mass-moisture";
 import {
@@ -416,9 +415,7 @@ export function BiocharProductForm({
             sourceBinName={selectedSourceBiocharBin?.name ?? null}
             sourceAvailability={selectedSourceBiocharBin?.subtitle ?? null}
             sourceWetMassKg={requestedBiocharKg}
-            sourceDryMassKg={
-              splitWetMass(requestedBiocharKg, moistureNum)?.dryKg ?? null
-            }
+            sourceDryMassKg={null}
             destinationWetMassKg={effectiveWetMassKg}
             destinationDryMassKg={finalMassSplit?.dryKg ?? null}
             destinationBinLabel={

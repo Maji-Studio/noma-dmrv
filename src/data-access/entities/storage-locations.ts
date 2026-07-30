@@ -12,6 +12,7 @@ import {
   and,
   inArray,
   isNull,
+  lt,
   ne,
   sql,
   type SQL,
@@ -41,6 +42,7 @@ import { formatWetDryMass } from "@/lib/mass-moisture";
 import { requireOrgScope } from "../utils";
 import {
   CANCELLED_PRODUCTION_RUN_STATUS,
+  COMPLETED_PRODUCTION_RUN_STATUS,
 } from "@/lib/production-runs/lifecycle";
 
 export function formatStorageLocationSubtitle(
@@ -224,7 +226,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
   .from(productionRuns)
   .where(and(
     eq(productionRuns.organizationId, ctx.organizationId),
-    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
+    eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
   ))
   .groupBy(productionRuns.biocharStorageLocationId)
   .as("biochar_output_agg");
@@ -315,6 +317,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
     and(
       eq(binMovements.organizationId, ctx.organizationId),
       eq(binMovements.lane, "biochar"),
+      lt(binMovements.massDeltaKg, 0),
     ),
   )
   .groupBy(binMovements.storageLocationId)
