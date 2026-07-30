@@ -65,7 +65,7 @@ export function RunPicker({
               // the active filter or the picker announces only its purpose.
               aria-label={
                 selected
-                  ? `Filter by production run: ${selected.code}`
+                  ? `Filter by production run: ${formatDate(selected.date)}`
                   : "Filter by production run"
               }
               data-testid="chain-run-select-trigger"
