@@ -18,8 +18,8 @@ describe("deriveEffectiveMoisturePercent", () => {
       deriveEffectiveMoisturePercent(100, 10, 50);
 
     expect(effectiveMoisturePercent).toBe(40);
-    expect(splitWetMass(100, effectiveMoisturePercent)?.dryKg).toBe(
-      60,
+    expect(splitWetMass(150, effectiveMoisturePercent)?.dryKg).toBe(
+      90,
     );
   });
 
