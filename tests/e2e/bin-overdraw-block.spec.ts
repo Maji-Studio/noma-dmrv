@@ -567,6 +567,7 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
     const productBin = await createProductBin(seededData);
     try {
       await createCompleteRun(page, seededData, {
+        feedstockWetMassKg: BIOCHAR_BIN_STOCK_KG,
         biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
       });
       await openLinkedProductForm(
@@ -600,6 +601,7 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
     let productCreated = false;
     try {
       await createCompleteRun(page, seededData, {
+        feedstockWetMassKg: BIOCHAR_BIN_STOCK_KG,
         biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
       });
       await openLinkedProductForm(
@@ -633,6 +635,7 @@ test.describe("updateBiocharProduct biochar-bin guard", () => {
     let productCreated = false;
     try {
       await createCompleteRun(page, seededData, {
+        feedstockWetMassKg: BIOCHAR_BIN_STOCK_KG,
         biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
       });
       await createLinkedProduct(
@@ -670,6 +673,7 @@ test.describe("updateBiocharProduct biochar-bin guard", () => {
     let productCreated = false;
     try {
       await createCompleteRun(page, seededData, {
+        feedstockWetMassKg: BIOCHAR_BIN_STOCK_KG,
         biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
       });
       await createLinkedProduct(
