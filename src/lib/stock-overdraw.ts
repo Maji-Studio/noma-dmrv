@@ -31,7 +31,7 @@ export function deliveryStockOverdrawMessage(
   availableKg: number,
   requestedKg: number,
 ): string {
-  return `Cannot deliver ${formatStockKg(requestedKg)} from product ${
+  return `Cannot deliver ${formatStockKg(requestedKg)} from product bin ${
     productLabel ?? "this batch"
   }: only ${formatStockKg(
     availableKg,
