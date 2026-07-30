@@ -130,7 +130,9 @@ async function collectLineageEntities(
 
   for (const memberBatchId of memberBatchIds) {
     const accounting = accountingByBatch[memberBatchId];
-    if (!accounting) continue;
+    if (!accounting) {
+      throw new SafeError(`Credit batch ${memberBatchId} could not be loaded.`);
+    }
     const { batch, lineageFacts } = accounting;
     add({
       entityType: "credit_batch",
