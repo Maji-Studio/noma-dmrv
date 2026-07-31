@@ -32,6 +32,21 @@ describe("check-ux-copy dash scanner", () => {
     expect(violations).toMatchObject([{ line: 1, character: "en dash" }]);
   });
 
+  it("flags lone dash fragments beside JSX and template interpolations", () => {
+    const violations = findDashViolations(
+      [
+        "const jsx = <p>{left} — {right}</p>;",
+        "const template = `${left} – ${right}`;",
+      ].join("\n"),
+      "sample.tsx",
+    );
+
+    expect(violations).toMatchObject([
+      { line: 1, character: "em dash" },
+      { line: 2, character: "en dash" },
+    ]);
+  });
+
   it("flags an em dash in JSX text", () => {
     const violations = findDashViolations(
       "export function Note() {\n  return <p>Ready — submit now.</p>;\n}\n",
@@ -88,8 +103,13 @@ describe("check-ux-copy dash scanner", () => {
 
   it("allows a lone dash used as an empty-value placeholder glyph", () => {
     const violations = findDashViolations(
-      'const emptyCell = "—";\nconst padded = " — ";\n',
-      "sample.ts",
+      [
+        'const emptyCell = "—";',
+        'const padded = " — ";',
+        "const template = `—`;",
+        "const jsx = <span> — </span>;",
+      ].join("\n"),
+      "sample.tsx",
     );
 
     expect(violations).toEqual([]);
@@ -123,6 +143,34 @@ describe("check-ux-copy dash scanner", () => {
       expect(result.status).toBe(1);
       expect(result.stderr).toContain("src/entity-only.tsx:1");
       expect(result.stderr).toContain("dash entity");
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("fails the CLI for escaped Unicode dash copy", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "check-ux-copy-"));
+    const fixture = join(projectRoot, "src", "escaped-dash.ts");
+
+    try {
+      mkdirSync(dirname(fixture), { recursive: true });
+      writeFileSync(
+        fixture,
+        [
+          String.raw`export const first = "Ready \u2014 submit now.";`,
+          String.raw`export const second = "Ready \u{2014} submit now.";`,
+        ].join("\n") + "\n",
+      );
+
+      const result = spawnSync(process.execPath, [TSX_CLI, CHECK_UX_COPY_SCRIPT], {
+        cwd: projectRoot,
+        encoding: "utf8",
+      });
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("src/escaped-dash.ts:1");
+      expect(result.stderr).toContain("src/escaped-dash.ts:2");
+      expect(result.stderr).toContain("em dash");
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }

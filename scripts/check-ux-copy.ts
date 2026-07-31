@@ -29,6 +29,8 @@ const EXCLUDED_DIRS = [join("src", "lib", "isometric", "generated")];
 const BANNED = /[–—]/;
 /** JSX renders HTML entities, so an entity-encoded dash is still a dash. */
 const BANNED_JSX_ENTITY = /&(?:mdash|ndash|#8211|#8212|#x201[34]);/i;
+/** TypeScript decodes these escapes before exposing literal node text. */
+const BANNED_UNICODE_ESCAPE = /\\u(?:201[34]|\{0*201[34]\})/i;
 const BANNED_NAMES: Record<string, string> = {
   "–": "en dash",
   "—": "em dash",
@@ -71,6 +73,23 @@ function isCopyBearingNode(node: ts.Node): node is ts.LiteralLikeNode {
   );
 }
 
+function isStandaloneDashPlaceholder(node: ts.LiteralLikeNode): boolean {
+  const trimmed = node.text.trim();
+  if (trimmed.length !== 1 || !BANNED.test(trimmed)) return false;
+
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return true;
+  }
+  if (!ts.isJsxText(node)) return false;
+
+  const parent = node.parent;
+  if (!ts.isJsxElement(parent) && !ts.isJsxFragment(parent)) return false;
+  return parent.children.every(
+    (child) =>
+      child === node || (ts.isJsxText(child) && child.text.trim() === ""),
+  );
+}
+
 /**
  * Every dash-bearing copy node in one source text. Exported for
  * `tests/check-ux-copy.test.ts` — the scanner is the whole gate, and a gate
@@ -84,19 +103,19 @@ export function findDashViolations(
     fileName,
     source,
     ts.ScriptTarget.Latest,
-    /* setParentNodes */ false,
+    /* setParentNodes */ true,
     fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
 
   const violations: Omit<Violation, "file">[] = [];
   const visit = (node: ts.Node): void => {
     if (isCopyBearingNode(node)) {
-      // A string that IS a lone dash is an empty-value placeholder glyph
-      // (PDF and table cells render "—" for missing data), not prose — the
-      // ban targets dashes used as sentence punctuation.
-      const trimmed = node.text.trim();
-      const literalMatch =
-        trimmed.length > 1 ? BANNED.exec(node.text) : null;
+      // A whole literal or sole JSX child that IS a lone dash is an empty-value
+      // placeholder glyph, not prose. A dash next to an interpolation is still
+      // punctuation even when the parser exposes it as a one-character node.
+      const literalMatch = isStandaloneDashPlaceholder(node)
+        ? null
+        : BANNED.exec(node.text);
       const entityMatch = BANNED_JSX_ENTITY.exec(node.text);
       const match = literalMatch ?? entityMatch;
       if (match) {
@@ -127,7 +146,13 @@ function main(): void {
   const violations: Violation[] = [];
   for (const file of walkSourceFiles(SCANNED_DIR)) {
     const source = readFileSync(file, "utf8");
-    if (!BANNED.test(source) && !BANNED_JSX_ENTITY.test(source)) continue;
+    if (
+      !BANNED.test(source) &&
+      !BANNED_JSX_ENTITY.test(source) &&
+      !BANNED_UNICODE_ESCAPE.test(source)
+    ) {
+      continue;
+    }
     for (const violation of findDashViolations(source, file)) {
       violations.push({ ...violation, file: relative(ROOT, file) });
     }
