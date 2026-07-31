@@ -42,7 +42,11 @@ vi.mock("./formulation-quick-add-dialog", () => ({
   FormulationQuickAddDialog: () => null,
 }));
 
-import { EntityOptionText, EntitySelect } from "./entity-select";
+import {
+  EntityOptionText,
+  EntitySelect,
+  shouldRenderCreateAction,
+} from "./entity-select";
 
 beforeEach(() => {
   entityState.options = [];
@@ -99,6 +103,18 @@ describe("EntitySelect selected-value display", () => {
 });
 
 describe("EntitySelect open option display", () => {
+  it("keeps an explicitly allowed create action with non-empty options", () => {
+    expect(
+      shouldRenderCreateAction({
+        allowCreate: true,
+        hasCreateAction: true,
+        isLoading: false,
+        hasFetchError: false,
+        optionCount: 1,
+      }),
+    ).toBe(true);
+  });
+
   it("shows the option name and subtitle without exposing its internal code", () => {
     const html = renderToStaticMarkup(
       <EntityOptionText
