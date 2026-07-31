@@ -304,8 +304,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     (message) =>
       message === productStockOverdrawMessage() ||
       message === binStockOverdrawMessage("product") ||
-      /cannot deliver .*remain undelivered/i.test(message) ||
-      /remains on this order/i.test(message),
+      /^Only .+ remains on this order\. Reduce the delivered mass\.$/.test(
+        message,
+      ),
   );
   const deliveredWetMassError =
     errors.deliveredWetMassKg?.message ??
@@ -325,7 +326,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
   const handleFormSubmit = handleSubmit((data) => {
-    if (deliveryOrderBalanceError) return;
     // A distance note only explains an override — never persist one without.
     const normalized =
       data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;

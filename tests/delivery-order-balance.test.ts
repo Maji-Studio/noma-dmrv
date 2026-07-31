@@ -9,6 +9,7 @@ import {
   orders,
 } from "@/db/schema";
 import { createDelivery, updateDelivery } from "@/data-access/deliveries";
+import { updateOrder } from "@/data-access/orders";
 import { getStockAvailability } from "@/data-access/stock-availability";
 import {
   ensureTestOrg,
@@ -210,6 +211,62 @@ describe("delivery order balance", () => {
           .from(deliveries)
           .where(eq(deliveries.orderId, seeded.orderId)),
       ).resolves.toEqual([{ deliveredWetMassKg: 60 }]);
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
+  it("rejects shrinking an order below its existing delivery allocations", async () => {
+    const seeded = await seedOrder(100);
+
+    try {
+      await createDelivery(ctx, {
+        code: `DL-ORDER-BAL-${seeded.tag}-SHRINK`,
+        orderId: seeded.orderId,
+        facilityId: seeded.facilityId,
+        deliveryDate: new Date("2026-08-01T00:00:00Z"),
+        status: "upcoming",
+        deliveredWetMassKg: 60,
+      });
+
+      await expect(
+        updateOrder(ctx, seeded.orderId, { quantityKg: 59 }),
+      ).rejects.toThrow(
+        "Order quantity cannot be less than the 60 kg already allocated to deliveries.",
+      );
+      await expect(
+        updateOrder(ctx, seeded.orderId, { quantityKg: 60 }),
+      ).resolves.toMatchObject({ quantityKg: 60 });
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
+  it("allows unrelated edits to a legacy delivery that already exceeds its order", async () => {
+    const seeded = await seedOrder(50);
+
+    try {
+      const [legacyDelivery] = await db
+        .insert(deliveries)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `DL-ORDER-BAL-${seeded.tag}-LEGACY`,
+          orderId: seeded.orderId,
+          facilityId: seeded.facilityId,
+          deliveryDate: new Date("2026-08-01T00:00:00Z"),
+          status: "upcoming",
+          deliveredWetMassKg: 60,
+        })
+        .returning({ id: deliveries.id });
+
+      await expect(
+        updateDelivery(ctx, legacyDelivery.id, {
+          code: `DL-ORDER-BAL-${seeded.tag}-RENAMED`,
+        }),
+      ).resolves.toMatchObject({
+        code: `DL-ORDER-BAL-${seeded.tag}-RENAMED`,
+        deliveredWetMassKg: 60,
+      });
     } finally {
       await seeded.cleanup();
     }

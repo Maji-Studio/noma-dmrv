@@ -817,12 +817,17 @@ export async function updateDelivery(
       data.deliveredWetMassKg !== undefined
         ? data.deliveredWetMassKg
         : lockedDelivery.deliveredWetMassKg;
-    await assertDeliveryWithinOrderBalance(ctx, tx, {
-      orderId: lockedEffectiveOrderId,
-      orderQuantityKg: lockedEffectiveOrder.quantityKg,
-      requestedWetKg: lockedEffectiveWetMass,
-      excludeDeliveryId: deliveryId,
-    });
+    if (
+      data.orderId !== undefined ||
+      data.deliveredWetMassKg !== undefined
+    ) {
+      await assertDeliveryWithinOrderBalance(ctx, tx, {
+        orderId: lockedEffectiveOrderId,
+        orderQuantityKg: lockedEffectiveOrder.quantityKg,
+        requestedWetKg: lockedEffectiveWetMass,
+        excludeDeliveryId: deliveryId,
+      });
+    }
     const lockedExistingBiocharProductId =
       lockedDelivery.biocharProductId ??
       lockedExistingOrder?.biocharProductId ??

@@ -95,6 +95,7 @@ import {
   lockBiocharTransportRouteTopology,
   syncBiocharProductTransportLegs,
 } from "./transport-legs";
+import { assertOrderQuantityCoversAllocations } from "./delivery-order-balance";
 
 // ============================================
 // Read Operations
@@ -661,6 +662,13 @@ export async function updateOrder(
 
     if (!locked) {
       throw new SafeError("Order not found");
+    }
+
+    if (data.quantityKg !== undefined) {
+      await assertOrderQuantityCoversAllocations(ctx, tx, {
+        orderId,
+        orderQuantityKg: data.quantityKg,
+      });
     }
 
     if (

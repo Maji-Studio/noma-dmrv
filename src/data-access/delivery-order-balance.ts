@@ -5,7 +5,7 @@ import { deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { deliveryOrderBalanceMessage } from "@/lib/delivery-order-balance";
 import { SafeError } from "@/lib/errors";
-import { isStockOverdraw } from "@/lib/stock-overdraw";
+import { formatStockKg, isStockOverdraw } from "@/lib/stock-overdraw";
 import { requireOrgScope } from "./utils";
 
 type QueryExecutor = typeof db | DbTransaction;
@@ -31,6 +31,24 @@ async function deriveAllocatedWetKg(
     .where(and(...conditions));
 
   return Number(row?.allocatedWetKg ?? 0);
+}
+
+export async function assertOrderQuantityCoversAllocations(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  params: { orderId: string; orderQuantityKg: number },
+): Promise<void> {
+  requireOrgScope(ctx);
+  const allocatedWetKg = await deriveAllocatedWetKg(
+    ctx,
+    tx,
+    params.orderId,
+  );
+  if (isStockOverdraw(allocatedWetKg, params.orderQuantityKg)) {
+    throw new SafeError(
+      `Order quantity cannot be less than the ${formatStockKg(allocatedWetKg)} already allocated to deliveries.`,
+    );
+  }
 }
 
 export async function getDeliveryOrderAvailableKg(
