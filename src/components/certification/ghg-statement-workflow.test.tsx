@@ -113,6 +113,32 @@ describe("GhgStatementWorkflow", () => {
     expect(html).toContain("Version 1 approved.");
   });
 
+  it("renders the inline submit action on the verifier step when submittable", () => {
+    const html = renderToStaticMarkup(
+      <GhgStatementWorkflow
+        ghgStatementId="11111111-1111-4111-8111-111111111111"
+        created
+        verifierStep={{
+          status: "active",
+          detail: "Submit the approved report to the verifier.",
+        }}
+        onSubmit={() => undefined}
+        submitLabel="Submit"
+        reportsQuery={reportsQuery([
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            version: 1,
+            lifecycle: "approved",
+            reviewUrl: "/api/documents/report",
+          },
+        ])}
+      />,
+    );
+
+    expect(html).toContain("Submit the approved report to the verifier.");
+    expect(html).toContain(">Submit<");
+  });
+
   it("collapses older report versions behind a disclosure", () => {
     const html = renderToStaticMarkup(
       <GhgStatementWorkflow

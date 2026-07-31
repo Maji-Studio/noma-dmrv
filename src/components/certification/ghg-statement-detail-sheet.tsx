@@ -114,7 +114,7 @@ function deriveVerifierStep(
       return hasApprovedReport
         ? {
             status: "active",
-            detail: "Submit the approved report with the button below.",
+            detail: "Submit the approved report to the verifier.",
           }
         : { status: "skipped" };
   }
@@ -284,6 +284,8 @@ function DetailState({
             canGenerate={canGenerate}
             generationUnavailableReason={generationUnavailableReason}
             verifierStep={verifierStep}
+            onSubmit={canSubmit ? () => setSubmitOpen(true) : undefined}
+            submitLabel={isResubmit ? "Resubmit" : "Submit"}
           />
         </section>
 
@@ -403,20 +405,8 @@ function DetailState({
             Refresh
           </Button>
         )}
-        {canSubmit && (
-          <Button
-            variant="primary"
-            className="flex-1"
-            onClick={() => setSubmitOpen(true)}
-          >
-            {isResubmit ? "Resubmit" : "Submit"}
-          </Button>
-        )}
         <SlideOverPanel.Close>
-          <Button
-            variant={canSubmit ? "default" : "primary"}
-            className="flex-1"
-          >
+          <Button variant="primary" className="flex-1">
             Close
           </Button>
         </SlideOverPanel.Close>

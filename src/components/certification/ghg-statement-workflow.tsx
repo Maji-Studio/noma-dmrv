@@ -6,8 +6,8 @@
  *   1. Created in registry   — registry record link when present
  *   2. Report generated      — inline Generate / Generate new version action
  *   3. Report approved       — Review link + inline Approve action
- *   4. Submitted to verifier — status detail; the Submit action stays in the
- *                              sheet footer (mirrors the Removal sheet)
+ *   4. Submitted to verifier — status detail + inline Submit/Resubmit action
+ *                              (opens the sheet's submit dialog)
  *
  * The component owns the generate/approve mutations. The created and verifier
  * step models are computed by the detail sheet, which holds the remote
@@ -47,6 +47,13 @@ interface GhgStatementWorkflowProps {
   generationUnavailableReason?: string | null;
   /** Computed by the sheet from the remote statement + submit mode. */
   verifierStep: WorkflowStepModel;
+  /**
+   * Opens the submit dialog. Present only while the statement is actually
+   * submittable, so the final step carries its own action instead of pointing
+   * at a detached footer button.
+   */
+  onSubmit?: () => void;
+  submitLabel?: string;
 }
 
 function reportBadge(lifecycle: string): {
@@ -72,6 +79,8 @@ export function GhgStatementWorkflow({
   canGenerate = true,
   generationUnavailableReason,
   verifierStep,
+  onSubmit,
+  submitLabel = "Submit",
 }: GhgStatementWorkflowProps) {
   const prepare = usePrepareGhgStatementReport();
   const approve = useApproveGhgStatementReport();
@@ -220,7 +229,18 @@ export function GhgStatementWorkflow({
           status={verifierStep.status}
           label="Submitted to verifier"
           detail={verifierStep.detail}
-        />
+        >
+          {onSubmit && (
+            <Button
+              size="small"
+              variant="primary"
+              className="shrink-0 self-center"
+              onClick={onSubmit}
+            >
+              {submitLabel}
+            </Button>
+          )}
+        </CheckRow>
       </ol>
 
       {error && <ServerError message={error} />}
