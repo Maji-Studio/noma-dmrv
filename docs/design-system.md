@@ -284,7 +284,7 @@ All live in `src/components/ui/<name>` (lowercase paths — capitalised paths
 only resolve on macOS and break CI). Most re-export from the barrel:
 
 ```tsx
-import { Button, EmptyState, Modal, PageHeader, StatCard } from "@/components/ui";
+import { Button, EmptyState, MassPair, Modal, PageHeader, StatCard } from "@/components/ui";
 ```
 
 The barrel is **incomplete** — `Accordion`, `CertificationFieldTag`,
@@ -364,7 +364,17 @@ restore for free.
   **StepFlow never validates**; the parent owns the active index and gates
   forward progress by disabling its own Next button.
 - **`StatCard`** — the one KPI card. **Always carries a 24px Phosphor icon.**
+  `value` accepts a `ReactNode`: use the default `valueLayout="headline"` for a
+  single scalar or short text value, and `valueLayout="breakdown"` for a
+  structured comparison such as `MassPair`. Breakdown layout gives the value
+  the full card width and does not apply headline typography to its children.
   Optional `sparkline` slot takes any node.
+- **`MassPair`** — the shared wet/dry comparison for KPI cards and dense table
+  cells. It keeps both labels visible, renders missing values as "Not recorded",
+  and keeps both figures in kg with up to one decimal. Use the default summary
+  variant in `StatCard valueLayout="breakdown"`; use `variant="compact"` with
+  `layout="stacked"` in table cells. Its figures own their mono numeric style;
+  do not wrap them in a body typography class.
 - **`ListPagination`** — same rows-per-page + first/previous/next/last contract
   as `DataTable.Pagination`. Facilities and Credit Batches are the sanctioned
   KPI-rich card-list hubs; ordinary entity lists stay data tables.
@@ -389,9 +399,10 @@ restore for free.
 
 One vocabulary, one arithmetic, one visual — all from `@/lib/mass-moisture`
 (`splitWetMass`, `formatMoisturePercent`, `formatSplitMass`, the
-`*_FIELD_LABEL` constants) and `MoistureSplit`
-(`@/components/ui/moisture-split`). **Never retype a moisture label, re-derive
-the split inline, or format a percentage by hand.**
+`*_FIELD_LABEL` constants), `MoistureSplit`
+(`@/components/ui/moisture-split`), and `MassPair`
+(`@/components/ui/mass-pair`). **Never retype a moisture label, re-derive the
+split inline, or format a percentage by hand.**
 
 - **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
   ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
@@ -405,9 +416,11 @@ the split inline, or format a percentage by hand.**
   the `.moisture-water-hatch` void for water. It does **not** take the
   production/infrastructure/distribution accent — moisture means the same thing
   in every area, and that is what lets one component appear across five.
-- **Split figures are always kg** (`formatSplitMass`), never the auto-tonne
-  `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in tonnes both
-  round to "1.5 t", claiming no water was removed.
+- **Split figures are always kg** (`formatSplitMass` and `MassPair`), never the
+  auto-tonne `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in
+  tonnes both round to "1.5 t", claiming no water was removed. The rule also
+  applies to large KPI pairs: never switch wet and dry independently, because
+  mixed units and collapsed precision break direct comparison.
 - Read side-sheet sections mirror the form: wet-mass and moisture stay
   `DetailPanelField`s; the split goes in the section's `content` slot and
   carries the dry mass. Do **not** add a separate "Dry Mass (derived)" row.

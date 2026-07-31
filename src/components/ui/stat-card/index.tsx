@@ -63,8 +63,10 @@ export interface StatCardProps
     VariantProps<typeof statCardVariants> {
   /** The title/label for the stat */
   title: string;
-  /** The main value to display */
-  value: string | number;
+  /** The main value or structured metric breakdown to display. */
+  value: React.ReactNode;
+  /** Headline is the default large value; breakdown gives structured values the full card width. */
+  valueLayout?: "headline" | "breakdown";
   /** Optional description text */
   description?: string;
   /** Optional icon to display */
@@ -139,6 +141,7 @@ const StatCardContent = React.forwardRef<
       className,
       title,
       value,
+      valueLayout = "headline",
       description,
       icon,
       trend,
@@ -153,6 +156,42 @@ const StatCardContent = React.forwardRef<
   ) => {
     if (isLoading) {
       return <StatCardSkeleton />;
+    }
+
+    if (valueLayout === "breakdown") {
+      return (
+        <div
+          ref={ref}
+          className={cn(
+            statCardVariants({ interactive }),
+            "px-20 py-16",
+            className
+          )}
+          {...props}
+        >
+          <div className="flex flex-col gap-8">
+            <div className="flex items-start justify-between gap-12">
+              <span className="label-micro text-[var(--color-text-secondary)]">
+                {title}
+              </span>
+              {icon && (
+                <div className="flex h-32 w-32 shrink-0 items-center justify-center text-[var(--color-text-secondary)]">
+                  {icon}
+                </div>
+              )}
+            </div>
+            <div>{value}</div>
+            {trend && (trendValue || trendLabel) ? (
+              <TrendBadge trend={trend} value={trendValue} label={trendLabel} />
+            ) : description ? (
+              <p className="body-caption text-[var(--color-text-tertiary)]">
+                {description}
+              </p>
+            ) : null}
+          </div>
+          {sparkline && <div className="mt-12">{sparkline}</div>}
+        </div>
+      );
     }
 
     return (

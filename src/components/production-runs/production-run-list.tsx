@@ -40,6 +40,7 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
+import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
@@ -51,7 +52,6 @@ import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import { resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   formatMoisturePercent,
-  formatWetDryMass,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
   WET_MASS_FIELD_LABEL,
@@ -497,12 +497,14 @@ export function ProductionRunList() {
         <StatCard title="Total Runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
         <StatCard
           title="Biochar Output"
-          value={formatWetDryMass({
-            wetKg: statsData?.totalBiocharKg ?? 0,
-            dryKg: statsData ? statsData.totalBiocharDryKg : 0,
-          })}
+          value={
+            <MassPair
+              wetKg={statsData?.totalBiocharKg ?? 0}
+              dryKg={statsData ? statsData.totalBiocharDryKg : 0}
+            />
+          }
+          valueLayout="breakdown"
           icon={<LeafIcon size={24} weight="bold" />}
-          description="Total biochar produced"
           isLoading={statsLoading}
         />
         <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} description="Currently active runs" isLoading={statsLoading} />
