@@ -70,15 +70,16 @@ export function formatStorageLocationSubtitle(
   unresolvedProductDryCount: number,
   biocharEquivalentKg: number,
   formulationName: string | null,
+  remainingMass?: EntityOption["remainingMass"],
 ): string {
   switch (type) {
     case "feedstock_bin": {
       const typeLabel = formatStorageLocationType(type);
-      const onHandKg = Math.max(0, totalStoredKg - totalConsumedKg);
+      const onHandKg =
+        remainingMass?.dryKg ?? Math.max(0, totalStoredKg - totalConsumedKg);
       if (!feedstockTypeName && onHandKg === 0) {
         return `${typeLabel} · Empty · Feedstock type locks on first intake`;
       }
-
       const parts: string[] = [typeLabel];
       if (feedstockTypeName) {
         parts.push(
@@ -95,14 +96,16 @@ export function formatStorageLocationSubtitle(
     }
     case "biochar_bin": {
       const typeLabel = formatStorageLocationType(type);
-      const availableWetKg = Math.max(
-        0,
-        totalProducedWetKg -
-          totalAllocatedWetKg -
-          documentedLossWetKg,
-      );
+      const availableWetKg =
+        remainingMass?.wetKg ??
+        Math.max(
+          0,
+          totalProducedWetKg - totalAllocatedWetKg - documentedLossWetKg,
+        );
       const availableDryKg =
-        unresolvedProducedDryCount > 0 || documentedLossWetKg > 0
+        remainingMass && "dryKg" in remainingMass
+          ? remainingMass.dryKg
+          : unresolvedProducedDryCount > 0 || documentedLossWetKg > 0
           ? null
           : Math.max(0, totalProducedDryKg - totalAllocatedDryKg);
       if (availableWetKg === 0) {
@@ -121,17 +124,21 @@ export function formatStorageLocationSubtitle(
       const typeLabel = formatStorageLocationType(type);
       // A product bin is bound to one formulation (or pure biochar when unset).
       const blendLabel = formulationName ?? PURE_BIOCHAR_LABEL;
-      if (totalProductKg === 0) {
+      const availableWetKg = remainingMass?.wetKg ?? totalProductKg;
+      if (availableWetKg === 0) {
         return `${typeLabel} · ${blendLabel} · Empty`;
       }
-
       const productDryKg =
-        unresolvedProductDryCount > 0 ? null : totalProductDryKg;
+        remainingMass && "dryKg" in remainingMass
+          ? remainingMass.dryKg
+          : unresolvedProductDryCount > 0
+            ? null
+            : totalProductDryKg;
       const parts = [
         typeLabel,
         blendLabel,
         `${formatWetDryMass({
-          wetKg: totalProductKg,
+          wetKg: availableWetKg,
           dryKg: productDryKg,
           wetLabel: "Wet biochar product",
           dryLabel: "Dry biochar",
@@ -154,7 +161,6 @@ export function formatStorageLocationSubtitle(
 function formatFeedstockTypeUsage(usage: string): string {
   return usage === "pyrolysis" ? "Pyrolysis" : "Blend";
 }
-
 const heldFeedstockTypes = alias(feedstockTypes, "held_feedstock_types");
 
 type StorageLocationReadExecutor = Pick<typeof db, "select">;
@@ -572,6 +578,7 @@ export function toStorageLocationEntityOption(
       row.unresolvedProductDryCount,
       row.biocharEquivalentKg,
       row.formulationName,
+      remainingMass,
     ),
   };
 }
