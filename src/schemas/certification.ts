@@ -205,6 +205,7 @@ export function buildSubmitGhgStatementDialogSchema(args: {
 export const prepareGhgStatementReportSchema = z.object({
   ghgStatementId: z.uuid(),
   preparationKey: z.uuid(),
+  ensureFirst: z.boolean().optional(),
 });
 
 export type PrepareGhgStatementReportInput = z.infer<

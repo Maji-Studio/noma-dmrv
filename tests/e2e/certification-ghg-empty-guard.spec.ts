@@ -63,7 +63,9 @@ test.describe("Certification — GHG statement empty-period guard", () => {
       ).toBeVisible();
 
       // Pick a period end that provably contains no removals.
-      await dialog.getByLabel("Reporting period end").fill(EMPTY_PERIOD_END);
+      await dialog
+        .getByRole("textbox", { name: /Reporting period end/i })
+        .fill(EMPTY_PERIOD_END);
 
       // Advance to the Contents step (the date is valid + non-overlapping).
       await dialog.getByRole("button", { name: "Next", exact: true }).click();

@@ -345,6 +345,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
         <GhgStatementDetailSheet
           item={selected}
           isProduction={isProduction}
+          canManageReports={summaryQuery.data?.viewerCanManage ?? false}
           open
           onClose={() => setStatementId(null)}
         />

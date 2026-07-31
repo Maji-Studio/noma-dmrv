@@ -8,9 +8,9 @@
  *
  * Terminal events only (no `pending` rows are written).
  */
-import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
 import type { CertifierSyncEventRow } from "@/data-access/certification";
 import { formatDateTime } from "@/lib/format-utils";
+import { DisclosureSummary } from "./disclosure-summary";
 
 const COMPACT_DEFAULT_LIMIT = 5;
 
@@ -50,61 +50,22 @@ export function SyncEventLog({
   if (compact) {
     return (
       <details className="group">
-        <summary className="flex cursor-pointer items-center gap-6 list-none [&::-webkit-details-marker]:hidden body-caption text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]">
-          <CaretDownIcon
-            size={10}
-            weight="bold"
-            className="transition-transform duration-150 group-open:rotate-180"
-          />
-          <span className="underline underline-offset-2">{triggerLabel}</span>
-        </summary>
-        <ol className="mt-8 flex flex-col gap-6 border-l border-[var(--color-border-secondary)] pl-12">
-          {visible.map((event) => (
-            <li
-              key={event.id}
-              className="flex flex-col gap-2 body-caption"
-            >
-              <div className="flex items-center gap-8">
-                <span
-                  className={
-                    event.status === "succeeded"
-                      ? "text-[var(--color-status-success)]"
-                      : event.status === "failed"
-                        ? "text-[var(--clr-red)]"
-                        : "text-[var(--color-text-tertiary)]"
-                  }
-                >
-                  {event.status}
-                </span>
-                <span className="font-mono text-[var(--color-text-tertiary)]">
-                  {event.operation}
-                </span>
-                <span className="text-[var(--color-text-tertiary)]">
-                  {formatDateTime(event.attemptedAt)}
-                </span>
-              </div>
-              {event.errorMessage && (
-                <p className="body-caption text-[var(--color-text-secondary)] pl-2 break-words">
-                  {event.errorMessage}
-                </p>
-              )}
-            </li>
-          ))}
-        </ol>
+        <DisclosureSummary>{triggerLabel}</DisclosureSummary>
+        <div className="mt-8">
+          <SyncEventList events={visible} />
+        </div>
       </details>
     );
   }
 
   return (
     <details className="group">
-      <summary className="flex cursor-pointer items-center gap-8 list-none [&::-webkit-details-marker]:hidden body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+      <DisclosureSummary
+        className="gap-8 uppercase tracking-wide"
+        underline={false}
+      >
         {triggerLabel}
-        <CaretDownIcon
-          size={12}
-          weight="bold"
-          className="transition-transform duration-150 group-open:rotate-180"
-        />
-      </summary>
+      </DisclosureSummary>
       <div className="mt-12 overflow-x-auto">
       <table className="w-full min-w-[520px] border-collapse text-left">
         <thead>
@@ -147,6 +108,46 @@ export function SyncEventLog({
       </table>
       </div>
     </details>
+  );
+}
+
+/**
+ * The bare compact event list, for surfaces that already provide their own
+ * disclosure (the GHG statement sheet's history accordion). `SyncEventLog`
+ * compact wraps this in a `<details>`.
+ */
+export function SyncEventList({ events }: { events: CertifierSyncEventRow[] }) {
+  return (
+    <ol className="flex flex-col gap-6 border-l border-[var(--color-border-secondary)] pl-12">
+      {events.map((event) => (
+        <li key={event.id} className="flex flex-col gap-2 body-caption">
+          <div className="flex items-center gap-8">
+            <span
+              className={
+                event.status === "succeeded"
+                  ? "text-[var(--color-status-success)]"
+                  : event.status === "failed"
+                    ? "text-[var(--clr-red)]"
+                    : "text-[var(--color-text-tertiary)]"
+              }
+            >
+              {event.status}
+            </span>
+            <span className="font-mono text-[var(--color-text-tertiary)]">
+              {event.operation}
+            </span>
+            <span className="text-[var(--color-text-tertiary)]">
+              {formatDateTime(event.attemptedAt)}
+            </span>
+          </div>
+          {event.errorMessage && (
+            <p className="body-caption text-[var(--color-text-secondary)] pl-2 break-words">
+              {event.errorMessage}
+            </p>
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }
 

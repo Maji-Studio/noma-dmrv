@@ -1,43 +1,58 @@
 /**
- * Compact GHG Statement workflow, aligned with the Removal detail sheet.
- * Isometric owns statement membership; noma exposes only the facts and actions
- * needed to review, generate a report, approve, refresh, and submit.
+ * GhgStatementDetailSheet — the read-only quick view for a GHG Statement,
+ * aligned with the Removal detail sheet: status first, the carbon headline at
+ * a glance, then the four-step workflow (create → generate → approve →
+ * submit). Secondary context (linked Removals, submission history) collapses
+ * into accordions so the operator only scans what the current task needs.
+ * Isometric owns statement membership (ADR 0004), so the Removals list stays
+ * read-only.
  */
 "use client";
 
-import type { ReactNode } from "react";
 import { useState } from "react";
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
+import { Accordion } from "@/components/ui/accordion";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import {
   useGhgStatementReports,
+  useGhgStatementBreakdown,
   useGhgStatementState,
   useRefreshGhgStatementStatus,
 } from "@/hooks/use-certification";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
-import type { GhgStatement } from "@/lib/isometric";
-import { chooseGhgSubmitMode } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
-import { GhgStatementReportWorkflow } from "./ghg-statement-report-workflow";
+import {
+  findApprovedGhgStatementReport,
+  GhgStatementWorkflow,
+} from "./ghg-statement-workflow";
+import { deriveGhgStatementWorkflowState } from "./ghg-statement-workflow-state";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
+import { GhgStatementTechnicalDetails } from "./ghg-statement-technical-details";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
 import { SubmissionStatusBadge } from "./submission-status-badge";
-import { SyncEventLog } from "./sync-event-log";
+import { SyncEventList } from "./sync-event-log";
+import {
+  CERTIFICATION_ACCORDION_ITEM,
+  CERTIFICATION_ACCORDION_LABEL,
+  CERTIFICATION_ACCORDION_TRIGGER,
+} from "./certification-accordion-styles";
 
 const ICON_SIZE = 14;
 const SHORT_ID = 8;
 
+
 interface GhgStatementDetailSheetProps {
   item: GhgStatementListItem;
   isProduction: boolean;
+  canManageReports: boolean;
   open: boolean;
   onClose: () => void;
 }
@@ -51,40 +66,10 @@ function statementPeriod(item: GhgStatementListItem): string {
     : `Ends ${formatDate(reportingPeriodEndOn)}`;
 }
 
-function verifierStatusLabel(remote: GhgStatement | null): string {
-  if (!remote) return "Not created in Isometric";
-  switch (remote.status) {
-    case "DRAFT":
-      return "In registry. Not sent to the verifier.";
-    case "AWAITING_VERIFICATION":
-      return "In verification";
-    case "VERIFIED":
-      return "Verified";
-    case "CREDITS_ISSUED":
-      return "Credits issued";
-    case "FAILED_VERIFICATION":
-      return "Verification failed";
-    default:
-      return remote.status;
-  }
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-        {label}
-      </span>
-      <div className="body-small text-[var(--color-text-primary)]">
-        {children}
-      </div>
-    </div>
-  );
-}
-
 export function GhgStatementDetailSheet({
   item,
   isProduction,
+  canManageReports,
   open,
   onClose,
 }: GhgStatementDetailSheetProps) {
@@ -101,6 +86,7 @@ export function GhgStatementDetailSheet({
         <DetailState
           item={item}
           isProduction={isProduction}
+          canManageReports={canManageReports}
           open={open}
         />
       </SlideOverPanel.Content>
@@ -111,15 +97,18 @@ export function GhgStatementDetailSheet({
 function DetailState({
   item,
   isProduction,
+  canManageReports,
   open,
 }: {
   item: GhgStatementListItem;
   isProduction: boolean;
+  canManageReports: boolean;
   open: boolean;
 }) {
   const { statement } = item;
   const query = useGhgStatementState(statement.id);
   const reportsQuery = useGhgStatementReports(statement.id);
+  const breakdownQuery = useGhgStatementBreakdown(statement.id, open);
   const refreshMutation = useRefreshGhgStatementStatus();
   const toast = useToast();
   const [submitOpen, setSubmitOpen] = useState(false);
@@ -156,39 +145,37 @@ function DetailState({
 
   const { statementSubmission, linkedRemovals, remote, recentSyncEvents } =
     query.data;
+  const locked = statementSubmission
+    ? isLockedInFlight(statementSubmission)
+    : false;
   const derived = deriveSubmissionStatus(
     statementSubmission,
-    statementSubmission ? isLockedInFlight(statementSubmission) : false,
+    locked,
     "ghgStatement",
   );
-  const mode = remote ? chooseGhgSubmitMode(remote) : "submit";
-  const hasLinkedRemovals = linkedRemovals.length > 0;
-  const hasMembership = remote
-    ? remote.ghg_entry_ids.length > 0
-    : hasLinkedRemovals;
-  const canGenerate = Boolean(remote?.ghg_entry_ids.length);
-  const remoteUnavailable =
-    Boolean(statementSubmission?.externalId) && remote === null;
-  const generationUnavailableReason = canGenerate
-    ? null
-    : remoteUnavailable
-      ? "Live Isometric statement data is unavailable. Refresh and try again."
-      : remote
-        ? "Add a live GHG Entry before generating a report."
-        : "Create the GHG Statement before generating a report.";
-  const canSubmit =
-    Boolean(statementSubmission?.externalId) &&
-    (mode === "submit" || mode === "resubmit") &&
-    hasMembership;
+  const created = Boolean(statementSubmission?.externalId);
+  const approvedReport = findApprovedGhgStatementReport(
+    reportsQuery.data ?? [],
+  );
+  const workflowState = deriveGhgStatementWorkflowState({
+    created,
+    canManageReports,
+    remote,
+    linkedRemovalCount: linkedRemovals.length,
+    hasApprovedReport: Boolean(approvedReport),
+    rollup: breakdownQuery.isLoading
+      ? { status: "loading" }
+      : breakdownQuery.error
+        ? { status: "error" }
+        : breakdownQuery.data
+          ? {
+              status: breakdownQuery.data.status,
+              message: breakdownQuery.data.message,
+            }
+          : { status: "loading" },
+  });
+  const { mode } = workflowState;
   const isResubmit = mode === "resubmit";
-  const blockedNote =
-    mode === "blocked-awaiting"
-      ? "The statement is in verification. No action is needed."
-      : mode === "blocked-verified"
-        ? "The statement is verified. No further submission is available."
-        : (mode === "submit" || mode === "resubmit") && !hasMembership
-          ? "No GHG Entries are available to submit."
-          : null;
 
   const handleRefresh = () => {
     if (!statementSubmission) return;
@@ -223,81 +210,142 @@ function DetailState({
           </div>
         </section>
 
-        <GhgStatementCarbonBreakdown
-          ghgStatementId={statement.id}
-          enabled={open}
-        />
-
-        <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
-          {statementSubmission?.externalId && (
-            <Field label="Registry record">
-              <RegistryRecordLink
-                facilityId={statement.facilityId}
-                externalId={statementSubmission.externalId}
-                version={statementSubmission.version}
-                isProduction={isProduction}
-                kind="ghgStatement"
-              />
-            </Field>
-          )}
-          <Field label="Verifier status">
-            {verifierStatusLabel(remote)}
-          </Field>
-        </div>
+        <GhgStatementCarbonBreakdown query={breakdownQuery} />
 
         <section className="flex flex-col gap-8">
           <h3 className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-            Linked Removals ({linkedRemovals.length})
+            Workflow
           </h3>
-          {linkedRemovals.length === 0 ? (
-            <p className="body-small text-[var(--color-text-tertiary)]">
-              No Removals linked yet.
-            </p>
-          ) : (
-            <RemovalBatchesAccordion
-              facilityId={statement.facilityId}
-              entries={linkedRemovals.map(
-                ({ removal, submission, creditBatches }) => ({
-                  removalId: removal.id,
-                  label:
-                    submission?.externalId ??
-                    `${removal.id.slice(0, SHORT_ID)}…`,
-                  completedOn: removal.completedOn,
-                  creditBatches,
-                  badge: (
-                    <SubmissionStatusBadge
-                      latest={submission}
-                      isLockedInFlight={
-                        submission ? isLockedInFlight(submission) : false
-                      }
-                    />
-                  ),
-                }),
-              )}
-            />
-          )}
+          <GhgStatementWorkflow
+            ghgStatementId={statement.id}
+            reportsQuery={reportsQuery}
+            created={created}
+            canManageReports={canManageReports}
+            registryRecord={
+              statementSubmission?.externalId ? (
+                <RegistryRecordLink
+                  facilityId={statement.facilityId}
+                  externalId={statementSubmission.externalId}
+                  version={statementSubmission.version}
+                  isProduction={isProduction}
+                  kind="ghgStatement"
+                />
+              ) : undefined
+            }
+            canGenerate={workflowState.canGenerate}
+            autoGenerationReady={
+              remote?.status === "DRAFT" && workflowState.rollupReady
+            }
+            generationUnavailableReason={
+              workflowState.generationUnavailableReason
+            }
+            verifierStep={workflowState.verifierStep}
+            onSubmit={
+              workflowState.canSubmit ? () => setSubmitOpen(true) : undefined
+            }
+            submitLabel={isResubmit ? "Resubmit" : "Submit"}
+          />
         </section>
 
-        <GhgStatementReportWorkflow
-          ghgStatementId={statement.id}
-          reportsQuery={reportsQuery}
-          canGenerate={canGenerate}
-          generationUnavailableReason={generationUnavailableReason}
-        />
+        <Accordion.Root className="gap-8" multiple>
+          <Accordion.Item
+            value="linked-removals"
+            className={CERTIFICATION_ACCORDION_ITEM}
+          >
+            <Accordion.Header>
+              <Accordion.Trigger
+                className={CERTIFICATION_ACCORDION_TRIGGER}
+                labelClassName={CERTIFICATION_ACCORDION_LABEL}
+              >
+                <span className="flex w-full items-center justify-between gap-12">
+                  <span>Linked Removals</span>
+                  <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
+                    {linkedRemovals.length}
+                  </span>
+                </span>
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Panel className="[&>div]:p-12">
+              {linkedRemovals.length === 0 ? (
+                <p className="body-small text-[var(--color-text-tertiary)]">
+                  No Removals linked yet.
+                </p>
+              ) : (
+                <RemovalBatchesAccordion
+                  facilityId={statement.facilityId}
+                  entries={linkedRemovals.map(
+                    ({ removal, submission, creditBatches }) => ({
+                      removalId: removal.id,
+                      label:
+                        submission?.externalId ??
+                        `${removal.id.slice(0, SHORT_ID)}…`,
+                      completedOn: removal.completedOn,
+                      creditBatches,
+                      badge: (
+                        <SubmissionStatusBadge
+                          latest={submission}
+                          isLockedInFlight={
+                            submission ? isLockedInFlight(submission) : false
+                          }
+                        />
+                      ),
+                    }),
+                  )}
+                />
+              )}
+            </Accordion.Panel>
+          </Accordion.Item>
 
-        {recentSyncEvents.length > 0 && (
-          <SyncEventLog
-            events={recentSyncEvents}
-            compact
-            label={`Submission history (${recentSyncEvents.length})`}
-          />
-        )}
+          {recentSyncEvents.length > 0 && (
+            <Accordion.Item
+              value="submission-history"
+              className={CERTIFICATION_ACCORDION_ITEM}
+            >
+              <Accordion.Header>
+                <Accordion.Trigger
+                  className={CERTIFICATION_ACCORDION_TRIGGER}
+                  labelClassName={CERTIFICATION_ACCORDION_LABEL}
+                >
+                  <span className="flex w-full items-center justify-between gap-12">
+                    <span>Submission history</span>
+                    <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
+                      {recentSyncEvents.length}
+                    </span>
+                  </span>
+                </Accordion.Trigger>
+              </Accordion.Header>
+              <Accordion.Panel className="[&>div]:p-16">
+                <SyncEventList events={recentSyncEvents} />
+              </Accordion.Panel>
+            </Accordion.Item>
+          )}
 
-        {blockedNote && (
-          <p className="body-small text-[var(--color-text-tertiary)]">
-            {blockedNote}
-          </p>
-        )}
+          {canManageReports && (
+            <Accordion.Item
+              value="technical-details"
+              className={CERTIFICATION_ACCORDION_ITEM}
+            >
+              <Accordion.Header>
+                <Accordion.Trigger
+                  className={CERTIFICATION_ACCORDION_TRIGGER}
+                  labelClassName={CERTIFICATION_ACCORDION_LABEL}
+                >
+                  Technical details
+                </Accordion.Trigger>
+              </Accordion.Header>
+              <Accordion.Panel className="[&>div]:p-16">
+                <GhgStatementTechnicalDetails
+                  statement={statement}
+                  statementSubmission={statementSubmission}
+                  remote={remote}
+                  isLockedInFlight={locked}
+                  mode={mode}
+                  latestReport={reportsQuery.data?.[0] ?? null}
+                />
+              </Accordion.Panel>
+            </Accordion.Item>
+          )}
+        </Accordion.Root>
       </SlideOverPanel.Body>
 
       <GhgStatementSubmitDialog
@@ -306,13 +354,7 @@ function DetailState({
         onClose={() => setSubmitOpen(false)}
         isProduction={isProduction}
         isResubmit={isResubmit}
-        approvedReportId={
-          reportsQuery.data?.find(
-            (report) =>
-              report.lifecycle === "approved" ||
-              report.lifecycle === "submitted",
-          )?.id ?? null
-        }
+        approvedReportId={approvedReport?.id ?? null}
       />
 
       <SlideOverPanel.Footer className="justify-stretch">
@@ -329,20 +371,8 @@ function DetailState({
             Refresh
           </Button>
         )}
-        {canSubmit && (
-          <Button
-            variant="primary"
-            className="flex-1"
-            onClick={() => setSubmitOpen(true)}
-          >
-            {isResubmit ? "Resubmit" : "Submit"}
-          </Button>
-        )}
         <SlideOverPanel.Close>
-          <Button
-            variant={canSubmit ? "default" : "primary"}
-            className="flex-1"
-          >
+          <Button variant="primary" className="flex-1">
             Close
           </Button>
         </SlideOverPanel.Close>

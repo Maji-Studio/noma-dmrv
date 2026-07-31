@@ -11,27 +11,29 @@ import { RegistryCarbonResultCard } from "./registry-carbon-result-card";
 import { RegistryObservationMessage } from "./removal-carbon-breakdown";
 
 interface GhgStatementCarbonBreakdownProps {
-  ghgStatementId: string;
-  /** Gate the fetch — the sheet only enables it while open. */
-  enabled?: boolean;
+  query: ReturnType<typeof useGhgStatementBreakdown>;
 }
 
 export function GhgStatementCarbonBreakdown({
-  ghgStatementId,
-  enabled = true,
+  query,
 }: GhgStatementCarbonBreakdownProps) {
-  const query = useGhgStatementBreakdown(
-    ghgStatementId,
-    enabled,
-  );
-
   if (query.isLoading) return <CarbonBreakdownSkeleton />;
   if (query.isError || !query.data) {
     return (
       <RegistryObservationMessage
-        message="Registry roll-up unavailable."
+        message="The registry roll-up could not be loaded. Try again."
         onRetry={() => void query.refetch()}
       />
+    );
+  }
+  // "pending" is an expected lifecycle state (Isometric has not finished
+  // calculating the members), not a failure: one quiet line, no retry button.
+  // Only "unavailable" (a failed registry fetch) earns the retry panel.
+  if (query.data.status === "pending") {
+    return (
+      <p className="body-caption text-[var(--color-text-tertiary)]">
+        {query.data.message}
+      </p>
     );
   }
   if (query.data.status !== "available") {
@@ -47,6 +49,7 @@ export function GhgStatementCarbonBreakdown({
     <RegistryCarbonResultCard
       data={query.data.value}
       scopeLabel="GHG Statement"
+      variant="compact"
     />
   );
 }
