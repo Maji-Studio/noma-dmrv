@@ -41,8 +41,7 @@ import {
 const TIME_ONLY_RE = /^\d{2}:\d{2}$/;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const CANCELLATION_REASON_MAX_LENGTH = 2000;
-const DRY_MASS_BALANCE_MESSAGE =
-  "Dry biochar output cannot exceed dry feedstock input";
+export const DRY_MASS_BALANCE_MESSAGE = "Dry output exceeds dry input.";
 
 /**
  * Outcome of {@link resolveInstant}. `instant` is null both when the pair is

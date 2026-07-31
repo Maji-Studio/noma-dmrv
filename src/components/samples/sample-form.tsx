@@ -46,6 +46,7 @@ import {
 } from "@/schemas/samples";
 import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import { SampleBatchProgress } from "./sample-batch-progress";
+import { getSampleCarbonReconciliationErrors } from "./sample-carbon-reconciliation";
 import { SampleNutrientFields } from "./sample-nutrient-fields";
 import {
   SampleEvidenceSection,
@@ -180,7 +181,9 @@ export function SampleForm({
   const watchedDurabilityOption = watch("durabilityOption");
   const watchedHydrogenPercent = watch("totalHydrogenPercent");
   const watchedOxygenPercent = watch("totalOxygenPercent");
+  const watchedTotalCarbonPercent = watch("totalCarbonPercent");
   const watchedOrganicCarbonPercent = watch("organicCarbonPercent");
+  const watchedInorganicCarbonPercent = watch("inorganicCarbonPercent");
   const watchedOToCOrgRatio = watch("oToCOrgRatio");
   const watchedNutrientClaimEnabled = watch("nutrientClaimEnabled");
 
@@ -245,6 +248,17 @@ export function SampleForm({
     (watchedOToCOrgRatio as number | null | undefined) ?? calculatedOToCRatio;
 
   const is1000Year = watchedDurabilityOption === "1000_year";
+  const liveCarbonErrors = getSampleCarbonReconciliationErrors({
+    totalCarbonPercent: watchedTotalCarbonPercent,
+    organicCarbonPercent: watchedOrganicCarbonPercent,
+    inorganicCarbonPercent: watchedInorganicCarbonPercent,
+  });
+  const organicCarbonError =
+    liveCarbonErrors.organicCarbonPercent ??
+    errors.organicCarbonPercent?.message;
+  const inorganicCarbonError =
+    liveCarbonErrors.inorganicCarbonPercent ??
+    errors.inorganicCarbonPercent?.message;
 
   // The H:Corg / O:Corg input pair stays visible for both durability tiers.
   const stabilityRatioFields = (
@@ -501,7 +515,7 @@ export function SampleForm({
                 <FormField
                   id="organicCarbonPercent"
                   label="Organic carbon (%)"
-                  error={errors.organicCarbonPercent?.message}
+                  error={organicCarbonError}
                   helperText="Basis for the H:Corg / O:Corg eligibility ratios and durable-carbon accounting (both tiers)."
                   required
                   certifyRequired={isSampleCertifyField("organicCarbonPercent")}
@@ -513,7 +527,7 @@ export function SampleForm({
                     step="any"
                     placeholder="e.g., 72.0"
                     disabled={isSubmitting}
-                    error={!!errors.organicCarbonPercent}
+                    error={!!organicCarbonError}
                     {...register("organicCarbonPercent", {
                       setValueAs: numericValue,
                     })}
@@ -524,7 +538,7 @@ export function SampleForm({
               <FormField
                 id="inorganicCarbonPercent"
                 label="Inorganic carbon (%)"
-                error={errors.inorganicCarbonPercent?.message}
+                error={inorganicCarbonError}
               >
                 <FormInput
                   id="inorganicCarbonPercent"
@@ -532,7 +546,7 @@ export function SampleForm({
                   step="any"
                   placeholder="e.g., 3.5"
                   disabled={isSubmitting}
-                  error={!!errors.inorganicCarbonPercent}
+                  error={!!inorganicCarbonError}
                   {...register("inorganicCarbonPercent", {
                     setValueAs: numericValue,
                   })}

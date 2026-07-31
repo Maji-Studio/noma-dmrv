@@ -704,6 +704,40 @@ test.describe("createDelivery product-batch guard", () => {
   });
 });
 
+/** Upcoming deliveries allocate order quantity without drawing physical stock. */
+test.describe("createDelivery order-balance guard", () => {
+  test("shows and blocks an order over-allocation while typing", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await createOrder(page, seededData);
+    await page.goto(`${DELIVERIES_URL}?facility=${seededData.facility.id}`);
+    const newDeliveryButton = page
+      .locator("header")
+      .getByRole("button", { name: "New Delivery" });
+    await expect(newDeliveryButton).toBeVisible();
+    await newDeliveryButton.click();
+    await waitForSideSheet(page);
+
+    await page.fill('input[name="deliveryDate"]', DELIVERY_DATE);
+    await page.selectOption('select[name="status"]', "upcoming");
+    await selectEntityByText(page, "Order", seededData.customer.name);
+    await page.fill('input[name="deliveredWetMassKg"]', "200001");
+
+    const error = page.locator("#deliveredWetMassKg-error");
+    await expect(error).toHaveText(
+      "Exceeds order balance: 200,000 kg remaining.",
+      { timeout: 10000 },
+    );
+    await submitDeliveryCreate(page);
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
+    await expect(error).toBeVisible();
+
+    await page.fill('input[name="deliveredWetMassKg"]', "190000");
+    await expect(error).toBeHidden();
+  });
+});
+
 /** Path 6: updateDelivery excludes its own prior delivered mass. */
 test.describe("updateDelivery product-batch guard", () => {
   test("rejects an edited delivery exceeding total product stock", async ({

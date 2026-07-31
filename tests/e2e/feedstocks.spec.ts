@@ -101,6 +101,57 @@ test.describe("Feedstock UI CRUD", () => {
     ).toHaveValue("");
   });
 
+  test("shows concise allocation feedback while entering split masses", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.getByRole("button", { name: "New Feedstock" }).click();
+    await waitForSideSheet(page);
+
+    await selectEntity(
+      page,
+      "Feedstock Type",
+      seededData.feedstockType.id,
+      seededData.feedstockType.name,
+    );
+
+    const dialog = page.getByRole("dialog");
+    await dialog.locator('input[name="totalWetMassKg"]').fill("1000");
+    await dialog.getByRole("button", { name: "Add Bin" }).click();
+
+    const firstAllocation = dialog.locator(
+      'input[name="allocations.0.allocatedWetMassKg"]',
+    );
+    const secondAllocation = dialog.locator(
+      'input[name="allocations.1.allocatedWetMassKg"]',
+    );
+
+    await firstAllocation.fill("800");
+    await expect(
+      dialog.getByText("200.00 kg not allocated.", { exact: true }),
+    ).toBeVisible();
+    await expect(firstAllocation).toBeFocused();
+
+    await secondAllocation.fill("300");
+    await expect(
+      dialog.getByText("100.00 kg over delivery. Add a justification.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText("200.00 kg not allocated.", { exact: true }),
+    ).toHaveCount(0);
+    await expect(secondAllocation).toBeFocused();
+
+    await secondAllocation.fill("200");
+    await expect(
+      dialog.getByText("100.00 kg over delivery. Add a justification.", {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+  });
+
   test("explains the CERT badge on hover instead of leaving it bare (Phase 1, §6)", async ({
     adminPage: page,
     seededData,

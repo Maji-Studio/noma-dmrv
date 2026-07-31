@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  binStockOverdrawInlineMessage,
   binStockOverdrawMessage,
+  deliveryStockOverdrawInlineMessage,
   deliveryStockOverdrawMessage,
   isStockOverdraw,
   productStockOverdrawMessage,
@@ -37,6 +39,15 @@ describe("stock overdraw", () => {
   it("builds the delivery-to-application message", () => {
     expect(deliveryStockOverdrawMessage()).toBe(
       "Not enough biochar in this delivery",
+    );
+  });
+
+  it("keeps field-level stock messages compact", () => {
+    expect(binStockOverdrawInlineMessage("feedstock", 800)).toBe(
+      "Exceeds available feedstock: 800 kg.",
+    );
+    expect(deliveryStockOverdrawInlineMessage(800)).toBe(
+      "Exceeds available product: 800 kg.",
     );
   });
 });

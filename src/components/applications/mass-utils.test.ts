@@ -3,6 +3,7 @@ import type { ApplicationDeliveryOption } from "./mass-utils";
 import {
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
+  getManualDryAppliedMassError,
   getApplicationDeliveryMassLabel,
 } from "./mass-utils";
 
@@ -32,6 +33,17 @@ function delivery(
 }
 
 describe("application delivery option mass", () => {
+  it("returns a blocking error when manual dry mass exceeds wet mass", () => {
+    expect(getManualDryAppliedMassError(1_000, 1_000.002)).toBe(
+      "Dry mass cannot exceed wet mass.",
+    );
+  });
+
+  it("clears the manual dry-mass error at or below wet mass", () => {
+    expect(getManualDryAppliedMassError(1_000, 1_000.001)).toBeUndefined();
+    expect(getManualDryAppliedMassError(1_000, 900)).toBeUndefined();
+  });
+
   it("shows wet and dry mass together", () => {
     expect(getApplicationDeliveryMassLabel(delivery())).toBe(
       "Wet biochar product: 850kg | Dry biochar: 820kg",

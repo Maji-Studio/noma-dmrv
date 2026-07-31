@@ -38,6 +38,7 @@ import {
   type ProductionRunFormData,
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
+import { productionRunMassBalanceFeedback } from "./production-run-mass-balance";
 import {
   allowedProductionRunStatusesFrom,
   shouldClearProductionRunEndTime,
@@ -49,6 +50,7 @@ import type { StorageLocationType } from "@/schemas/storage-locations";
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import {
+  binStockOverdrawInlineMessage,
   binStockOverdrawMessage,
   isStockOverdraw,
 } from "@/lib/stock-overdraw";
@@ -387,7 +389,10 @@ export function ProductionRunForm({
     feedstockAvailability &&
     feedstockAvailability.availableKg !== null &&
     isStockOverdraw(previewDryMass, feedstockAvailability.availableKg)
-      ? binStockOverdrawMessage("feedstock")
+      ? binStockOverdrawInlineMessage(
+          "feedstock",
+          feedstockAvailability.availableKg,
+        )
       : undefined;
   const feedstockFieldFingerprint = [
     watchedSourceBinId,
@@ -412,6 +417,14 @@ export function ProductionRunForm({
     watchedBiocharMoisture <= 100
       ? deriveMassDryKg(watchedBiocharKg, watchedBiocharMoisture)
       : null;
+  const massBalanceFeedback = productionRunMassBalanceFeedback({
+    feedstockWetMassKg: watchWetMass,
+    feedstockMoisturePercent: watchMoisture,
+    biocharOutputKg: watchedBiocharKg,
+    biocharMoisturePercent: watchedBiocharMoisture,
+  });
+  const biocharOutputError =
+    errors.biocharOutputKg?.message ?? massBalanceFeedback.dryError;
 
   // Track previous facility to detect real changes
   const prevFacilityRef = useRef(watchedFacilityId);
@@ -790,7 +803,8 @@ export function ProductionRunForm({
           moisturePercent={watchedBiocharMoisture}
           wet={{
             id: "biocharOutputKg",
-            error: errors.biocharOutputKg?.message,
+            error: biocharOutputError,
+            warning: massBalanceFeedback.wetWarning,
             disabled: isSubmitting,
             placeholder: "e.g. 150",
             certifyRequired: isProductionRunCertifyField("biocharOutputKg"),

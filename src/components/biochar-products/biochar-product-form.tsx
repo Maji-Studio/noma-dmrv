@@ -48,6 +48,7 @@ import {
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import {
+  binStockOverdrawInlineMessage,
   binStockOverdrawMessage,
   isStockOverdraw,
 } from "@/lib/stock-overdraw";
@@ -336,7 +337,10 @@ export function BiocharProductForm({
     biocharAvailability &&
     biocharAvailability.availableKg !== null &&
     isStockOverdraw(requestedBiocharKg, biocharAvailability.availableKg)
-      ? binStockOverdrawMessage("biochar")
+      ? binStockOverdrawInlineMessage(
+          "biochar",
+          biocharAvailability.availableKg,
+        )
       : undefined;
   const massFieldFingerprint = [
     sourceBiocharStorageLocationId,

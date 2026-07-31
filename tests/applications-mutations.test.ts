@@ -324,6 +324,71 @@ describe("application mutations", () => {
     }
   });
 
+  it("rejects manual dry applied mass above wet applied mass", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+    const code = `AP-AM-${runId}-DRY-OVER-WET`;
+
+    try {
+      await db
+        .update(deliveries)
+        .set({ moistureContentPercent: null })
+        .where(eq(deliveries.id, fixture.deliveryIds[0]));
+
+      await expect(
+        createApplication(makeTestOrgContext(TEST_USER_ID), {
+          code,
+          deliveryId: fixture.deliveryIds[0],
+          applicationDate: new Date("2025-07-08"),
+          biocharAppliedTons: 2,
+          biocharAppliedDryTons: 2.001,
+        }),
+      ).rejects.toThrow("Dry mass cannot exceed wet mass.");
+
+      const [application] = await db
+        .select({ id: applications.id })
+        .from(applications)
+        .where(eq(applications.code, code));
+
+      expect(application).toBeUndefined();
+    } finally {
+      await db.delete(applications).where(eq(applications.code, code));
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("rejects an update that raises manual dry mass above stored wet mass", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      await db
+        .update(deliveries)
+        .set({ moistureContentPercent: null })
+        .where(eq(deliveries.id, fixture.deliveryIds[0]));
+
+      const application = await createApplication(
+        makeTestOrgContext(TEST_USER_ID),
+        {
+          code: `AP-AM-${runId}-DRY-UPDATE`,
+          deliveryId: fixture.deliveryIds[0],
+          applicationDate: new Date("2025-07-08"),
+          biocharAppliedTons: 2,
+          biocharAppliedDryTons: 1.5,
+        },
+      );
+      fixture.applicationIds.push(application.id);
+
+      await expect(
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+          biocharAppliedDryTons: 2.001,
+        }),
+      ).rejects.toThrow("Dry mass cannot exceed wet mass.");
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
   it("rejects create against a delivery not yet marked delivered", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);

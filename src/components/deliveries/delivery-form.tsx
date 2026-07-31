@@ -36,10 +36,12 @@ import { useStockAvailability } from "@/hooks/use-stock-availability";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import {
   binStockOverdrawMessage,
+  deliveryStockOverdrawInlineMessage,
   formatStockKg,
   isStockOverdraw,
   productStockOverdrawMessage,
 } from "@/lib/stock-overdraw";
+import { deliveryOrderBalanceMessage } from "@/lib/delivery-order-balance";
 
 // ============================================
 // Constants for select options
@@ -283,7 +285,13 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       watchWetMass,
       deliveryAvailability.availableKg,
     )
-      ? productStockOverdrawMessage()
+      ? deliveryStockOverdrawInlineMessage(deliveryAvailability.availableKg)
+      : undefined;
+  const deliveryOrderBalanceError =
+    typeof watchWetMass === "number" &&
+    deliveryAvailability?.orderAvailableKg != null &&
+    isStockOverdraw(watchWetMass, deliveryAvailability.orderAvailableKg)
+      ? deliveryOrderBalanceMessage(deliveryAvailability.orderAvailableKg)
       : undefined;
   const deliveryMassFingerprint = [
     watchOrderId,
@@ -295,10 +303,13 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     deliveryMassFingerprint,
     (message) =>
       message === productStockOverdrawMessage() ||
-      message === binStockOverdrawMessage("product"),
+      message === binStockOverdrawMessage("product") ||
+      /cannot deliver .*remain undelivered/i.test(message) ||
+      /exceeds order balance/i.test(message),
   );
   const deliveredWetMassError =
     errors.deliveredWetMassKg?.message ??
+    deliveryOrderBalanceError ??
     deliveryStockError ??
     routedServerError.inlineError;
 
@@ -314,6 +325,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
   const handleFormSubmit = handleSubmit((data) => {
+    if (deliveryOrderBalanceError) return;
     // A distance note only explains an override — never persist one without.
     const normalized =
       data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;

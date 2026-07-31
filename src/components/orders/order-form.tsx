@@ -26,6 +26,7 @@ import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-chan
 import { useEntityById } from "@/hooks/use-entities";
 import { CustomerLocationDetails } from "./customer-location-details";
 import { OrderMassPreview } from "./order-mass-preview";
+import { orderAvailabilityWarning } from "./order-availability";
 import { useEffect } from "react";
 
 // ============================================
@@ -124,6 +125,10 @@ export function OrderForm({
   const { data: selectedBiocharProduct } = useEntityById(
     "biocharProduct",
     watchedBiocharProductId || undefined,
+  );
+  const availabilityWarning = orderAvailabilityWarning(
+    watchedQuantityKg,
+    selectedBiocharProduct?.remainingMass?.wetKg,
   );
 
   // Fetch related data for dropdowns
@@ -294,6 +299,7 @@ export function OrderForm({
             id="quantityKg"
             label="Quantity (kg)"
             error={errors.quantityKg?.message}
+            warning={availabilityWarning}
             required
           >
             <FormInput

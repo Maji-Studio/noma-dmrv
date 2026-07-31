@@ -14,6 +14,21 @@ export function formatStockKg(kg: number): string {
   return `${Math.round(kg).toLocaleString()} kg`;
 }
 
+/** Compact field feedback; detailed reconciliation guidance belongs nearby. */
+export function binStockOverdrawInlineMessage(
+  material: StockMaterial,
+  availableKg: number,
+): string {
+  return `Exceeds available ${material}: ${formatStockKg(availableKg)}.`;
+}
+
+/** Compact delivery-form feedback; the server keeps the detailed race message. */
+export function deliveryStockOverdrawInlineMessage(
+  availableKg: number,
+): string {
+  return `Exceeds available product: ${formatStockKg(availableKg)}.`;
+}
+
 export function binStockOverdrawMessage(
   material: StockMaterial,
 ): string {
