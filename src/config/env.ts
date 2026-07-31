@@ -238,18 +238,26 @@ const envSchema = z.object({
   // local-fs in production-like environments. In dev/test it's optional and the
   // local-fs provider falls back to an ephemeral random secret with a warning.
 
-  // Production fail-closed: never serve stubbed geo answers in prod. CI is
-  // carved out because hermetic e2e builds a production bundle (e2e.yml:
-  // `pnpm build && pnpm start`) with GEO_PROVIDER=stub by design — same
-  // precedent as the storage placeholder env there. Real deployments never
-  // run with CI set at runtime, so the safeguard still holds where it matters.
+  // Hermetic-CI exception shared by the production fail-closed gates below.
+  // ci.yml and e2e.yml compile production bundles against localhost with
+  // placeholder config by design (e2e.yml runs `pnpm build && pnpm start`
+  // with GEO_PROVIDER=stub and no real secrets). Requiring BOTH the CI flag
+  // and a local app URL keeps every gate armed for any build or runtime that
+  // targets a real domain, even when a platform sets CI during the build.
   const isCI = ["1", "true"].includes((process.env.CI ?? "").toLowerCase());
-  if (data.NODE_ENV === "production" && !isCI && data.GEO_PROVIDER === "stub") {
+  const isHermeticCiBuild = isCI && isLocalAppUrl(data.NEXT_PUBLIC_APP_URL);
+
+  // Production fail-closed: never serve stubbed geo answers in prod.
+  if (
+    data.NODE_ENV === "production" &&
+    !isHermeticCiBuild &&
+    data.GEO_PROVIDER === "stub"
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["GEO_PROVIDER"],
       message:
-        "GEO_PROVIDER must not be 'stub' in production — stub adapters return fixture distances.",
+        "GEO_PROVIDER must not be 'stub' in production: stub adapters return fixture distances.",
     });
   }
 
@@ -258,13 +266,13 @@ const envSchema = z.object({
   // real deployment is fail-OPEN. It both selects the registry base URL
   // (`BASE_URLS` in isometric/client.ts) and enables the sandbox-only
   // durability measurement-sample POSTs, so an unset value would silently route
-  // every registry call to the sandbox. CI is carved out for the same
-  // hermetic-production-bundle reason as GEO_PROVIDER above.
+  // every registry call to the sandbox. Hermetic CI builds are excepted for
+  // the reason documented on `isHermeticCiBuild` above.
   // `data` already carries the default, so only the raw value distinguishes
   // "explicitly sandbox" from "never set".
   if (
     data.NODE_ENV === "production" &&
-    !isCI &&
+    !isHermeticCiBuild &&
     !process.env.ISOMETRIC_ENVIRONMENT
   ) {
     ctx.addIssue({
@@ -276,11 +284,15 @@ const envSchema = z.object({
   }
 
   // Production fail-closed: certifier-credential encryption must be possible
-  // from boot, not discovered broken on the first credential write/read. CI is
-  // carved out for the same hermetic-production-bundle reason as GEO_PROVIDER;
-  // real deployments must carry the key (docs/security.md - sourced from the
+  // from boot, not discovered broken on the first credential write/read.
+  // Hermetic CI builds are excepted (ci.yml's build job carries no key); real
+  // deployments must carry the key (docs/security.md - sourced from the
   // staging/production 1Password items).
-  if (data.NODE_ENV === "production" && !isCI && !data.CREDENTIALS_ENCRYPTION_KEY) {
+  if (
+    data.NODE_ENV === "production" &&
+    !isHermeticCiBuild &&
+    !data.CREDENTIALS_ENCRYPTION_KEY
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["CREDENTIALS_ENCRYPTION_KEY"],
@@ -290,9 +302,7 @@ const envSchema = z.object({
   }
 
   const allowsCiLocalFsStorage =
-    isCI &&
-    data.STORAGE_PROVIDER === "local-fs" &&
-    isLocalAppUrl(data.NEXT_PUBLIC_APP_URL);
+    isHermeticCiBuild && data.STORAGE_PROVIDER === "local-fs";
 
   // Production fail-closed: never serve filesystem-backed storage in real
   // deployments. CI may use local-fs only against localhost for hermetic
