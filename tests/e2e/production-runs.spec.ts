@@ -246,6 +246,9 @@ test.describe("Production Run lifecycle (#254)", () => {
     seededData,
   }) => {
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+    await expect(
+      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+    ).toBeVisible({ timeout: 15000 });
     await page.getByRole("button", { name: "New Production Run" }).click();
     await waitForSideSheet(page);
 
@@ -305,12 +308,15 @@ test.describe("Production Run lifecycle (#254)", () => {
     seededData,
   }) => {
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+    await expect(
+      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+    ).toBeVisible({ timeout: 15000 });
     await page.getByRole("button", { name: "New Production Run" }).click();
     await waitForSideSheet(page);
 
     const dialog = page.locator('[role="dialog"]');
-    const feedstockRequirement = dialog.getByText(
-      "A complete run needs a source bin, moisture %, and wet mass to compute consumed feedstock.",
+    const feedstockRequirement = dialog.locator(
+      "#feedstockMoisturePercent-error",
     );
 
     await dialog.locator('select[name="status"]').selectOption("complete");
@@ -326,7 +332,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     await expect(feedstockRequirement).not.toBeVisible();
 
     await submitCreate(page);
-    await expect(feedstockRequirement).toBeVisible();
+    await expect(feedstockRequirement).toHaveText("Enter feedstock moisture.");
   });
 
   test("offers only legal initial statuses", async ({

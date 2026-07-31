@@ -34,9 +34,12 @@ const DELIVERY_DATE = "2027-06-16";
 
 const BIOCHAR_BIN_STOCK_KG = "100";
 const ORDER_QUANTITY_KG = "200000";
-const feedstockOverdrawText = /^Not enough feedstock in this bin$/;
-const biocharOverdrawText = /^Not enough biochar in this bin$/;
-const deliveryOverdrawText = /^Not enough biochar in this product$/;
+const feedstockOverdrawText =
+  /^Only .+ of dry feedstock is available\. At .+% moisture, enter at most .+ wet mass\.$/;
+const biocharOverdrawText =
+  /^Only .+ of biochar is available\. Reduce the mass\.$/;
+const deliveryOverdrawText =
+  /^Only .+ of biochar is available\. Reduce the delivered mass\.$/;
 const ACTION_LABEL_PREFIX = "Actions for ";
 
 async function getListedActionCodes(page: Page): Promise<Set<string>> {
@@ -712,6 +715,9 @@ test.describe("createDelivery order-balance guard", () => {
   }) => {
     await createOrder(page, seededData);
     await page.goto(`${DELIVERIES_URL}?facility=${seededData.facility.id}`);
+    await expect(
+      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+    ).toBeVisible({ timeout: 15000 });
     const newDeliveryButton = page
       .locator("header")
       .getByRole("button", { name: "New Delivery" });

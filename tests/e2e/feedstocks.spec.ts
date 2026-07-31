@@ -106,6 +106,9 @@ test.describe("Feedstock UI CRUD", () => {
     seededData,
   }) => {
     await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await expect(
+      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+    ).toBeVisible({ timeout: 15000 });
     await page.getByRole("button", { name: "New Feedstock" }).click();
     await waitForSideSheet(page);
 
