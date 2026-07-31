@@ -17,6 +17,8 @@ import {
   type EditableCustomerLocation,
 } from "./customer-location-form";
 
+const CUSTOMER_LOCATION_DIALOG_ID_PREFIX = "customer-location-dialog";
+
 // ============================================
 // Types
 // ============================================
@@ -101,6 +103,7 @@ export function CustomerLocationDialog({
       }
     >
       <CustomerLocationForm
+        idPrefix={CUSTOMER_LOCATION_DIALOG_ID_PREFIX}
         location={location}
         onSubmit={handleSubmit}
         onCancel={handleClose}

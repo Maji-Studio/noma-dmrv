@@ -15,6 +15,8 @@ import type { SupplierLocation } from "@/db/schema/parties";
 import type { SupplierLocationFormData } from "@/schemas/suppliers";
 import { SupplierLocationForm } from "./supplier-location-form";
 
+const SUPPLIER_LOCATION_DIALOG_ID_PREFIX = "supplier-location-dialog";
+
 // ============================================
 // Types
 // ============================================
@@ -84,6 +86,7 @@ export function SupplierLocationDialog({
       }
     >
       <SupplierLocationForm
+        idPrefix={SUPPLIER_LOCATION_DIALOG_ID_PREFIX}
         location={location}
         onSubmit={handleSubmit}
         onCancel={handleClose}
