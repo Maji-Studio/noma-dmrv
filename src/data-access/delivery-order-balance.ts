@@ -5,7 +5,7 @@ import { deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { deliveryOrderBalanceMessage } from "@/lib/delivery-order-balance";
 import { SafeError } from "@/lib/errors";
-import { isStockOverdraw } from "@/lib/stock-overdraw";
+import { formatStockMinimumKg, isStockOverdraw } from "@/lib/stock-overdraw";
 import { requireOrgScope } from "./utils";
 
 type QueryExecutor = typeof db | DbTransaction;
@@ -33,29 +33,41 @@ async function deriveAllocatedWetKg(
   return Number(row?.allocatedWetKg ?? 0);
 }
 
-export async function getDeliveryOrderAvailableKg(
+export async function assertOrderQuantityCoversAllocations(
   ctx: OrgContext,
-  orderId: string,
-  excludeDeliveryId?: string,
-): Promise<number | null> {
+  tx: DbTransaction,
+  params: { orderId: string; orderQuantityKg: number },
+): Promise<void> {
   requireOrgScope(ctx);
-  const [order] = await db
-    .select({ quantityKg: orders.quantityKg })
-    .from(orders)
-    .where(and(
-      eq(orders.id, orderId),
-      eq(orders.organizationId, ctx.organizationId),
-    ))
-    .limit(1);
-  if (!order) return null;
-
   const allocatedWetKg = await deriveAllocatedWetKg(
     ctx,
-    db,
-    orderId,
-    excludeDeliveryId,
+    tx,
+    params.orderId,
   );
-  return Math.max(0, Number(order.quantityKg) - allocatedWetKg);
+  if (isStockOverdraw(allocatedWetKg, params.orderQuantityKg)) {
+    throw new SafeError(
+      `Order quantity cannot be less than the ${formatStockMinimumKg(allocatedWetKg)} already allocated to deliveries.`,
+    );
+  }
+}
+
+export async function deriveDeliveryOrderAvailableKg(
+  ctx: OrgContext,
+  dbOrTx: QueryExecutor,
+  params: {
+    orderId: string;
+    orderQuantityKg: number;
+    excludeDeliveryId?: string;
+  },
+): Promise<number> {
+  requireOrgScope(ctx);
+  const allocatedWetKg = await deriveAllocatedWetKg(
+    ctx,
+    dbOrTx,
+    params.orderId,
+    params.excludeDeliveryId,
+  );
+  return Math.max(0, Number(params.orderQuantityKg) - allocatedWetKg);
 }
 
 export async function assertDeliveryWithinOrderBalance(

@@ -50,14 +50,13 @@ import {
   calculateDryMass,
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
-  formatKg,
-  getManualDryAppliedMassError,
   resolveApplicationPositionDefault,
   resolveApplicationSoilTemperatureDefault,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 import {
   deliveryStockOverdrawMessage,
+  formatStockLimitKg,
   isStockOverdraw,
 } from "@/lib/stock-overdraw";
 
@@ -170,6 +169,11 @@ export function ApplicationForm({
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
   // removals derive durability from petrographic reflectance + TGA.
   const hideSoilTemperature = durabilityOption === "1000_year";
+  const initialDelivery = application
+    ? deliveries.find((delivery) => delivery.id === application.deliveryId)
+    : undefined;
+  const initialDeliveryHasMoisture =
+    initialDelivery?.moistureContentPercent != null;
 
   const defaultValues = {
     applicationDate: application?.applicationDate
@@ -177,7 +181,13 @@ export function ApplicationForm({
       : formatLocalDate(new Date()),
     deliveryId: application?.deliveryId ?? "",
     biocharAppliedTons: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
-    biocharAppliedDryTons: applicationTonsToKg(application?.biocharAppliedDryTons) ?? undefined,
+    // A delivery moisture owns the dry-mass calculation. Do not seed the
+    // hidden manual field with the previously derived value: lowering wet
+    // mass on edit would otherwise fail the client dry <= wet refinement on
+    // a value the operator cannot see or change.
+    biocharAppliedDryTons: initialDeliveryHasMoisture
+      ? undefined
+      : applicationTonsToKg(application?.biocharAppliedDryTons) ?? undefined,
     fieldSizeHa: application?.fieldSizeHa ?? undefined,
     fieldIdentifier: application?.fieldIdentifier ?? "",
     cropType: application?.cropType ?? "",
@@ -218,10 +228,6 @@ export function ApplicationForm({
   const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
-  const watchedAppliedDryKg = useWatch({
-    control,
-    name: "biocharAppliedDryTons",
-  });
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
@@ -321,6 +327,14 @@ export function ApplicationForm({
   ]);
 
   const moisturePercent = selectedDelivery?.moistureContentPercent ?? null;
+  useEffect(() => {
+    if (moisturePercent == null) return;
+
+    setValue("biocharAppliedDryTons", undefined, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+  }, [moisturePercent, setValue]);
   const appliedKgNum = typeof watchedAppliedKg === "string" ? parseFloat(watchedAppliedKg) : watchedAppliedKg;
   const appliedKgValid = appliedKgNum != null && !isNaN(appliedKgNum) && appliedKgNum > 0 ? appliedKgNum : null;
 
@@ -334,11 +348,7 @@ export function ApplicationForm({
     availableKg !== null &&
     appliedKgValid !== null &&
     isStockOverdraw(appliedKgValid, availableKg)
-      ? `Only ${formatKg(availableKg)} remains in this delivery. Reduce the applied mass.`
-      : undefined;
-  const manualDryAppliedMassError =
-    moisturePercent == null && selectedDelivery
-      ? getManualDryAppliedMassError(watchedAppliedKg, watchedAppliedDryKg)
+      ? `Only ${formatStockLimitKg(availableKg)} remains in this delivery. Reduce the applied mass.`
       : undefined;
   const applicationMassFingerprint = [
     selectedDeliveryId,
@@ -355,7 +365,7 @@ export function ApplicationForm({
     routedServerError.inlineError;
 
   const handleFormSubmit = handleSubmit(async (data) => {
-    if (applicationStockError || manualDryAppliedMassError) return;
+    if (applicationStockError) return;
 
     // Custody ordering (issue #284): the server rejects this too — but a
     // legacy application can still reference an undelivered delivery (the
@@ -468,7 +478,7 @@ export function ApplicationForm({
             hint="As-received mass at delivery, water included."
             helperText={
               availableKg !== null
-                ? `${formatKg(availableKg)} available from this delivery`
+                ? `${formatStockLimitKg(availableKg)} available from this delivery`
                 : undefined
             }
           >
@@ -490,10 +500,7 @@ export function ApplicationForm({
             <FormField
               id="biocharAppliedDryTons"
               label="Biochar applied, dry (kg)"
-              error={
-                errors.biocharAppliedDryTons?.message ??
-                manualDryAppliedMassError
-              }
+              error={errors.biocharAppliedDryTons?.message}
               helperText="Moisture is not recorded for this delivery. Enter the dry mass."
               certifyRequired={isApplicationCertifyField("biocharAppliedDryTons")}
               certifyStatus={certStatus("biocharAppliedDryTons")}
@@ -504,10 +511,7 @@ export function ApplicationForm({
                 step="any"
                 placeholder="e.g., 4500"
                 disabled={isSubmitting}
-                error={
-                  !!errors.biocharAppliedDryTons ||
-                  !!manualDryAppliedMassError
-                }
+                error={!!errors.biocharAppliedDryTons}
                 {...register("biocharAppliedDryTons", {
                   setValueAs: numericValue,
                 })}

@@ -38,30 +38,59 @@ import {
 import { sampleCreateHref, sampleDetailHref } from "@/lib/sample-create-intent";
 import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 
-function Section({ children }: { children: React.ReactNode }) {
+function Section({
+  children,
+  action,
+}: {
+  children: React.ReactNode;
+  action: React.ReactNode;
+}) {
   return (
     <section
       data-testid="credit-batch-durability-panel"
       className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] pt-16"
     >
-      <SectionLabel
-        hint={
-          <>
-            Samples from this batch&apos;s production runs are pooled into one
-            credit batch figure with a mean and standard deviation. The
-            registry receives this figure for the 200-year durability claim. Protocol
-            rules (module §8.3.1, §3 Table 2): at least 3 Samples representative
-            of the batch&apos;s full range of physical characteristics, eligible
-            when the pooled mean H/C_org
-            &lt; {DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org &lt;{" "}
-            {DURABILITY_ELIGIBILITY_CEILINGS.oToC}.
-          </>
-        }
-      >
-        Lab Samples
-      </SectionLabel>
+      <div className="flex items-center justify-between gap-12">
+        <SectionLabel
+          hint={
+            <>
+              Samples from this batch&apos;s production runs are pooled into one
+              credit batch figure with a mean and standard deviation. The
+              registry receives this figure for the 200-year durability claim. Protocol
+              rules (module §8.3.1, §3 Table 2): at least 3 Samples representative
+              of the batch&apos;s full range of physical characteristics, eligible
+              when the pooled mean H/C_org
+              &lt; {DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org &lt;{" "}
+              {DURABILITY_ELIGIBILITY_CEILINGS.oToC}.
+            </>
+          }
+        >
+          Lab Samples
+        </SectionLabel>
+        {action}
+      </div>
       {children}
     </section>
+  );
+}
+
+export function SampleCreateAction({
+  facilityId,
+  creditBatchId,
+  hasSamples,
+}: {
+  facilityId: string;
+  creditBatchId: string;
+  hasSamples: boolean;
+}) {
+  return (
+    <Link
+      href={sampleCreateHref(facilityId, creditBatchId)}
+      className={buttonVariants({ variant: "default", size: "small" })}
+    >
+      <PlusIcon size={16} aria-hidden />
+      {hasSamples ? "Record another Sample" : "Record a Sample"}
+    </Link>
   );
 }
 
@@ -227,10 +256,17 @@ export function CreditBatchDurabilityPanel({
 }) {
   const { data: summary, isLoading, error } =
     useBatchDurabilitySummary(creditBatchId);
+  const action = (
+    <SampleCreateAction
+      facilityId={facilityId}
+      creditBatchId={creditBatchId}
+      hasSamples={(summary?.sampleCount ?? 0) > 0}
+    />
+  );
 
   if (isLoading) {
     return (
-      <Section>
+      <Section action={action}>
         <span
           className="body-caption text-[var(--color-text-tertiary)]"
           aria-busy="true"
@@ -243,7 +279,7 @@ export function CreditBatchDurabilityPanel({
 
   if (error || !summary) {
     return (
-      <Section>
+      <Section action={action}>
         <span className="body-caption text-[var(--st-wait)]">
           {error?.message ??
             "This credit batch's durability Samples could not be loaded. Refresh the page and try again."}
@@ -254,28 +290,19 @@ export function CreditBatchDurabilityPanel({
 
   if (summary.sampleCount === 0) {
     return (
-      <Section>
+      <Section action={action}>
         <EmptyState
           padding="md"
           icon={<FlaskIcon size={40} weight="duotone" />}
           title="No lab Samples yet"
           description="Lab Samples recorded for this credit batch appear here. Record at least three Samples that represent the batch's full range of physical characteristics."
-          action={
-            <Link
-              href={sampleCreateHref(facilityId, creditBatchId)}
-              className={buttonVariants({ variant: "default", size: "small" })}
-            >
-              <PlusIcon size={16} aria-hidden />
-              Record a Sample
-            </Link>
-          }
         />
       </Section>
     );
   }
 
   return (
-    <Section>
+    <Section action={action}>
       <DurabilityReadinessSignals summary={summary} />
       <SampleSummaryRows summary={summary} facilityId={facilityId} />
 

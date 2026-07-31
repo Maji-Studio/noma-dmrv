@@ -326,12 +326,16 @@ function FacilityCertifierManage({
   }
 
   const { mapping, isProduction } = data;
+  const canOpenEdit =
+    linkPresentation === "dialog" || data.isConfigured;
 
   const actions = mapping ? (
     <>
-      <Button variant="default" size="small" onClick={() => setEditOpen(true)}>
-        Edit
-      </Button>
+      {canOpenEdit && (
+        <Button variant="default" size="small" onClick={() => setEditOpen(true)}>
+          Edit
+        </Button>
+      )}
       {linkPresentation === "dialog" && (
         <Button
           variant="default"

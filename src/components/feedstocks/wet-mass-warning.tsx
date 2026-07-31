@@ -6,7 +6,17 @@
 
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField, FormTextarea } from "@/components/forms";
-import { formatMassKg } from "@/lib/format-utils";
+
+const MIN_DISPLAYED_OVERAGE_KG = 0.01;
+
+function formatOverageKg(overageKg: number): string {
+  if (overageKg > 0 && overageKg < MIN_DISPLAYED_OVERAGE_KG) {
+    return `<${MIN_DISPLAYED_OVERAGE_KG} kg`;
+  }
+  return `${overageKg.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  })} kg`;
+}
 
 interface WetMassWarningProps {
   allocatedKg: number;
@@ -32,7 +42,7 @@ export function WetMassWarning({
         id="overrideJustification"
         label="Over-allocation justification"
         error={justificationError}
-        warning={`${formatMassKg(overageKg)} over delivery. Add a justification.`}
+        warning={`${formatOverageKg(overageKg)} over delivery. Add a justification.`}
       >
         <FormTextarea
           id="overrideJustification"

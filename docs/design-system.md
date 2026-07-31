@@ -329,6 +329,9 @@ restore for free.
   full-width below `sm`.
 - **`dismissOnClickOutside={false}`** for multi-step workflows where a stray
   backdrop click would discard in-progress work. Close button and ESC stay live.
+- **`dismissible={false}`** only while an irreversible request is active. It
+  disables the close button, Escape, and backdrop dismissal until the request
+  settles. Do not use it to trap operators during ordinary form editing.
 - **Accessibility is enforced, not suggested:** Modal dev-warns at runtime when
   neither `ariaLabelledBy` (preferred — id of a visible heading) nor
   `ariaLabel` is passed.
@@ -398,13 +401,10 @@ the split inline, or format a percentage by hand.**
   cells, option labels). Missing moisture renders an explicit *unresolved*
   state (hatched dashed bar, "Moisture not recorded"), never nothing — dry mass
   drives certification readiness, so its absence has to be visible.
-- **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter and
-  the `.moisture-water-hatch` void for water already present. When an operator
-  records a positive amount of added water, an intentional third segment uses
-  solid `--color-moisture-added-water`; zero or invalid added water preserves
-  the two-segment bar. It does **not** take the production/infrastructure/
-  distribution accent — moisture means the same thing in every area, and that
-  is what lets one component appear across five.
+- **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter,
+  the `.moisture-water-hatch` void for water. It does **not** take the
+  production/infrastructure/distribution accent — moisture means the same thing
+  in every area, and that is what lets one component appear across five.
 - **Split figures are always kg** (`formatSplitMass`), never the auto-tonne
   `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in tonnes both
   round to "1.5 t", claiming no water was removed.

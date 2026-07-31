@@ -23,8 +23,28 @@ describe("WetMassWarning", () => {
       'aria-describedby="overrideJustification-warning"',
     );
     expect(markup).toContain('name="overrideJustification"');
+    expect(markup).toContain("--st-wait");
+    expect(markup).not.toContain("color-signal-orange-strong");
     expect(markup).not.toContain(
       "Allocated wet mass exceeds total delivery",
     );
+  });
+
+  it("does not collapse a small non-zero overage to zero", () => {
+    const markup = renderToStaticMarkup(
+      <WetMassWarning
+        allocatedKg={100.01}
+        deliveredKg={100}
+        justificationRegister={{
+          name: "overrideJustification",
+          onChange: async () => undefined,
+          onBlur: async () => undefined,
+          ref: () => undefined,
+        }}
+      />,
+    );
+
+    expect(markup).toContain("0.01 kg over delivery. Add a justification.");
+    expect(markup).not.toContain("0 kg over delivery");
   });
 });

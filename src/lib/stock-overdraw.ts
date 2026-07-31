@@ -14,19 +14,44 @@ export function formatStockKg(kg: number): string {
   return `${Math.round(kg).toLocaleString()} kg`;
 }
 
+function formatNonNegativeTenthKg(kg: number): string {
+  if (kg !== 0 && kg < 1) {
+    return `${kg.toFixed(1)} kg`;
+  }
+  return `${kg.toLocaleString(undefined, {
+    maximumFractionDigits: 1,
+  })} kg`;
+}
+
+/** Actionable maximum: clamp deficits to zero and never round above stock. */
+export function formatStockLimitKg(kg: number): string {
+  const safeLimitKg = Math.max(0, Math.floor(kg * 10) / 10);
+  return formatNonNegativeTenthKg(safeLimitKg);
+}
+
+/** Actionable minimum: never round below the mass that must be retained. */
+export function formatStockMinimumKg(kg: number): string {
+  const safeMinimumKg = Math.max(
+    0,
+    Math.ceil((kg - STOCK_OVERDRAW_EPSILON_KG) * 10) / 10,
+  );
+  return formatNonNegativeTenthKg(safeMinimumKg);
+}
+
 /** Compact field feedback; detailed reconciliation guidance belongs nearby. */
 export function binStockOverdrawInlineMessage(
   material: StockMaterial,
   availableKg: number,
 ): string {
-  return `Only ${formatStockKg(availableKg)} of ${material} is available. Reduce the mass.`;
+  const userFacingMaterial = material === "product" ? "biochar" : material;
+  return `Only ${formatStockLimitKg(availableKg)} of ${userFacingMaterial} is available. Reduce the mass.`;
 }
 
 /** Compact delivery-form feedback; the server keeps the detailed race message. */
 export function deliveryStockOverdrawInlineMessage(
   availableKg: number,
 ): string {
-  return `Only ${formatStockKg(availableKg)} of product is available. Reduce the delivered mass.`;
+  return `Only ${formatStockLimitKg(availableKg)} of biochar is available. Reduce the delivered mass.`;
 }
 
 export function binStockOverdrawMessage(

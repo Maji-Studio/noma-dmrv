@@ -37,11 +37,14 @@ import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error
 import {
   binStockOverdrawMessage,
   deliveryStockOverdrawInlineMessage,
-  formatStockKg,
+  formatStockLimitKg,
   isStockOverdraw,
   productStockOverdrawMessage,
 } from "@/lib/stock-overdraw";
-import { deliveryOrderBalanceMessage } from "@/lib/delivery-order-balance";
+import {
+  deliveryOrderBalanceMessage,
+  isDeliveryOrderBalanceMessage,
+} from "@/lib/delivery-order-balance";
 
 // ============================================
 // Constants for select options
@@ -304,8 +307,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     (message) =>
       message === productStockOverdrawMessage() ||
       message === binStockOverdrawMessage("product") ||
-      /cannot deliver .*remain undelivered/i.test(message) ||
-      /remains on this order/i.test(message),
+      isDeliveryOrderBalanceMessage(message),
   );
   const deliveredWetMassError =
     errors.deliveredWetMassKg?.message ??
@@ -325,7 +327,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
   const handleFormSubmit = handleSubmit((data) => {
-    if (deliveryOrderBalanceError) return;
     // A distance note only explains an override — never persist one without.
     const normalized =
       data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
@@ -417,7 +418,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             hint: "As-received weight of the delivery, water included.",
             helperText:
               deliveryAvailability?.availableKg != null
-                ? `${formatStockKg(
+                ? `${formatStockLimitKg(
                     deliveryAvailability.availableKg,
                   )} available from this product`
                 : undefined,

@@ -9,6 +9,7 @@ import {
   orders,
 } from "@/db/schema";
 import { createDelivery, updateDelivery } from "@/data-access/deliveries";
+import { updateOrder } from "@/data-access/orders";
 import { getStockAvailability } from "@/data-access/stock-availability";
 import {
   ensureTestOrg,
@@ -210,6 +211,149 @@ describe("delivery order balance", () => {
           .from(deliveries)
           .where(eq(deliveries.orderId, seeded.orderId)),
       ).resolves.toEqual([{ deliveredWetMassKg: 60 }]);
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
+  it("serializes an order shrink against a concurrent delivery allocation", async () => {
+    const seeded = await seedOrder(100);
+
+    try {
+      const results = await Promise.allSettled([
+        updateOrder(ctx, seeded.orderId, { quantityKg: 50 }),
+        createDelivery(ctx, {
+          code: `DL-ORDER-BAL-${seeded.tag}-SHRINK-RACE`,
+          orderId: seeded.orderId,
+          facilityId: seeded.facilityId,
+          deliveryDate: new Date("2026-08-01T00:00:00Z"),
+          status: "upcoming",
+          deliveredWetMassKg: 60,
+        }),
+      ]);
+
+      expect(results.filter((result) => result.status === "fulfilled"))
+        .toHaveLength(1);
+      expect(results.filter((result) => result.status === "rejected"))
+        .toHaveLength(1);
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
+  it("rejects shrinking an order below its existing delivery allocations", async () => {
+    const seeded = await seedOrder(100);
+
+    try {
+      await createDelivery(ctx, {
+        code: `DL-ORDER-BAL-${seeded.tag}-SHRINK`,
+        orderId: seeded.orderId,
+        facilityId: seeded.facilityId,
+        deliveryDate: new Date("2026-08-01T00:00:00Z"),
+        status: "upcoming",
+        deliveredWetMassKg: 60,
+      });
+
+      await expect(
+        updateOrder(ctx, seeded.orderId, { quantityKg: 59 }),
+      ).rejects.toThrow(
+        "Order quantity cannot be less than the 60 kg already allocated to deliveries.",
+      );
+      await expect(
+        updateOrder(ctx, seeded.orderId, { quantityKg: 60 }),
+      ).resolves.toMatchObject({ quantityKg: 60 });
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
+  it("rounds an actionable order minimum up to cover fractional allocations", async () => {
+    const seeded = await seedOrder(100);
+
+    try {
+      await createDelivery(ctx, {
+        code: `DL-ORDER-BAL-${seeded.tag}-FRACTIONAL`,
+        orderId: seeded.orderId,
+        facilityId: seeded.facilityId,
+        deliveryDate: new Date("2026-08-01T00:00:00Z"),
+        status: "upcoming",
+        deliveredWetMassKg: 60.05,
+      });
+
+      await expect(
+        updateOrder(ctx, seeded.orderId, { quantityKg: 60 }),
+      ).rejects.toThrow(
+        "Order quantity cannot be less than the 60.1 kg already allocated to deliveries.",
+      );
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
+  it("allows UI-shaped unchanged balance fields on legacy delivery and order edits", async () => {
+    const seeded = await seedOrder(50);
+
+    try {
+      const [legacyDelivery] = await db
+        .insert(deliveries)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `DL-ORDER-BAL-${seeded.tag}-LEGACY`,
+          orderId: seeded.orderId,
+          facilityId: seeded.facilityId,
+          deliveryDate: new Date("2026-08-01T00:00:00Z"),
+          status: "upcoming",
+          deliveredWetMassKg: 60,
+        })
+        .returning({ id: deliveries.id });
+
+      await expect(
+        updateDelivery(ctx, legacyDelivery.id, {
+          code: `DL-ORDER-BAL-${seeded.tag}-RENAMED`,
+          orderId: seeded.orderId,
+          facilityId: seeded.facilityId,
+          deliveryDate: new Date("2026-08-01T00:00:00Z"),
+          biocharProductId: null,
+          status: "upcoming",
+          deliveredWetMassKg: 60,
+          massDryKg: null,
+          moistureContentPercent: null,
+        }),
+      ).resolves.toMatchObject({
+        code: `DL-ORDER-BAL-${seeded.tag}-RENAMED`,
+        deliveredWetMassKg: 60,
+      });
+
+      await expect(
+        updateOrder(ctx, seeded.orderId, {
+          code: `OR-ORDER-BAL-${seeded.tag}-RENAMED`,
+          facilityId: seeded.facilityId,
+          customerId: seeded.customerId,
+          customerLocationId: null,
+          biocharProductId: seeded.productId,
+          orderDate: new Date("2026-07-31T00:00:00Z"),
+          quantityKg: 50,
+          packaging: "loose",
+          value: null,
+          currency: "TZS",
+        }),
+      ).resolves.toMatchObject({
+        code: `OR-ORDER-BAL-${seeded.tag}-RENAMED`,
+        quantityKg: 50,
+      });
+
+      await expect(
+        updateDelivery(ctx, legacyDelivery.id, {
+          deliveredWetMassKg: 61,
+        }),
+      ).rejects.toThrow(
+        "Only 50 kg remains on this order. Reduce the delivered mass.",
+      );
+      await expect(
+        updateOrder(ctx, seeded.orderId, { quantityKg: 49 }),
+      ).rejects.toThrow(
+        "Order quantity cannot be less than the 60 kg already allocated to deliveries.",
+      );
     } finally {
       await seeded.cleanup();
     }

@@ -87,7 +87,7 @@ export async function loadGhgStatementBreakdown(
         status: "pending",
         value: null,
         message:
-          "Registry roll-up pending. Every exact member Removal must have a submitted GHG Entry before a statement total can be shown.",
+          "Registry totals appear after every linked Removal has a submitted GHG Entry.",
       };
     }
 
@@ -103,8 +103,7 @@ export async function loadGhgStatementBreakdown(
       return {
         status: "unavailable",
         value: null,
-        message:
-          "Registry roll-up unavailable. Retry the read-only registry fetch; no GHG Entry or statement will be submitted.",
+        message: "The registry roll-up could not be loaded. Try again.",
       };
     }
     const presentEntries = fetchedEntries.filter(
@@ -130,7 +129,7 @@ export async function loadGhgStatementBreakdown(
         status: "pending",
         value: null,
         message:
-          "Registry roll-up pending. Statement membership or one of its exact GHG Entry results is not ready; no partial total is shown.",
+          "Registry totals appear after Isometric finishes calculating the linked GHG Entries.",
       };
     }
     return {

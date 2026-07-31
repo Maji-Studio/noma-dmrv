@@ -629,7 +629,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             fields: [
               { label: "Storage bin", value: sideSheetEntity.storageLocationCode ?? sideSheetEntity.storageLocationName },
               { label: "Allocated wet mass (kg)", value: formatMassKg(sideSheetEntity.massWetKg) },
-              { label: "Override justification", value: sideSheetEntity.overrideJustification },
+              { label: "Over-allocation justification", value: sideSheetEntity.overrideJustification },
             ],
           },
           {

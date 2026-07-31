@@ -1,10 +1,12 @@
-import { formatStockKg, isStockOverdraw } from "@/lib/stock-overdraw";
+import { formatStockLimitKg, isStockOverdraw } from "@/lib/stock-overdraw";
 
 export function orderAvailabilityWarning(
   quantityKg: unknown,
   availableKg: number | null | undefined,
+  options: { suppress?: boolean } = {},
 ): string | undefined {
   if (
+    options.suppress ||
     typeof quantityKg !== "number" ||
     !Number.isFinite(quantityKg) ||
     availableKg == null ||
@@ -14,5 +16,5 @@ export function orderAvailabilityWarning(
     return undefined;
   }
 
-  return `Only ${formatStockKg(availableKg)} is currently available. Reduce the quantity or plan replenishment before fulfilling the order.`;
+  return `Only ${formatStockLimitKg(availableKg)} is currently available. Reduce the quantity or plan replenishment before fulfilling the order.`;
 }

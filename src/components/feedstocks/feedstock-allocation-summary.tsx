@@ -1,6 +1,21 @@
 import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import { formatMassKg } from "@/lib/format-utils";
 
+const MIN_DISPLAYED_DIFFERENCE_KG = 0.01;
+
+function formatUnallocatedKg(unallocatedKg: number): string {
+  if (
+    unallocatedKg > 0 &&
+    unallocatedKg < MIN_DISPLAYED_DIFFERENCE_KG
+  ) {
+    return `<${MIN_DISPLAYED_DIFFERENCE_KG} kg`;
+  }
+
+  return `${unallocatedKg.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  })} kg`;
+}
+
 interface FeedstockAllocationSummaryProps {
   allocatedKg: number;
   deliveredKg?: number | null;
@@ -34,7 +49,7 @@ export function FeedstockAllocationSummary({
           role="status"
           aria-live="polite"
         >
-          {formatMassKg(unallocatedKg)} remains unallocated. Allocate it or
+          {formatUnallocatedKg(unallocatedKg)} remains unallocated. Allocate it or
           review the difference before saving.
         </p>
       )}

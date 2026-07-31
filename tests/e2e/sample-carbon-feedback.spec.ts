@@ -6,6 +6,9 @@ test.describe("Sample carbon feedback", () => {
     seededData,
   }) => {
     await page.goto(`/samples?facility=${seededData.facility.id}`);
+    await expect(
+      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+    ).toBeVisible({ timeout: 15000 });
     await page.getByRole("button", { name: "New Sample" }).click();
     await waitForSideSheet(page);
 

@@ -124,14 +124,19 @@ export function FacilityCertifierForm({
   // wrong facility, and the ack must be re-confirmed for the new project.
   const handleProjectChange = (event: ChangeEvent<HTMLSelectElement>) => {
     projectRegistration.onChange(event);
-    if (
-      !event.target.value ||
-      mapping?.externalProjectId !== event.target.value
-    ) {
-      setValue("defaultRemovalTemplateId", "");
-      setValue("externalFacilityId", "");
-      setAcknowledgeSharedProject(false);
-    }
+    const returnsToPersistedProject =
+      mapping?.externalProjectId === event.target.value;
+    setValue(
+      "defaultRemovalTemplateId",
+      returnsToPersistedProject
+        ? mapping.defaultRemovalTemplateId ?? ""
+        : "",
+    );
+    setValue(
+      "externalFacilityId",
+      returnsToPersistedProject ? mapping.externalFacilityId ?? "" : "",
+    );
+    setAcknowledgeSharedProject(false);
   };
 
   const linkedFacilitiesByProject = (() => {
@@ -309,16 +314,17 @@ export function FacilityCertifierForm({
             />
           )}
 
-          <FormActions
-            onCancel={onCancel}
-            isSubmitting={isSubmitting || saveMutation.isPending}
-            errorMessage={errors.root?.serverError?.message}
-            submitDisabled={blockedOnShareAck}
-            submitLabel={mapping ? "Save changes" : "Link project"}
-            sticky={presentation === "dialog"}
-          />
         </>
       )}
+
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting || saveMutation.isPending}
+        errorMessage={errors.root?.serverError?.message}
+        submitDisabled={blockedOnShareAck || !watchedProjectId}
+        submitLabel={mapping ? "Save changes" : "Link project"}
+        sticky={presentation === "dialog"}
+      />
     </form>
   );
 }

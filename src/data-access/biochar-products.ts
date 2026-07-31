@@ -7,6 +7,7 @@ import { and, asc, desc, eq, ilike, isNull, or, SQL, count } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
+import { sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
   biocharProductSourceAllocations,
@@ -35,6 +36,8 @@ const linkedRunBiocharStorageLocations = alias(
 // Types
 // ============================================
 export interface BiocharProductWithRelations extends BiocharProduct {
+  /** Immutable dry mass drawn from the source bin when this product was created. */
+  sourceAllocatedDryMassKg: number | null;
   facility: {
     id: string;
     code: string;
@@ -62,6 +65,25 @@ export interface BiocharProductWithRelations extends BiocharProduct {
     code: string;
     name: string;
   } | null;
+}
+
+function sourceAllocationAggregate(ctx: OrgContext) {
+  return db
+    .select({
+      biocharProductId: biocharProductSourceAllocations.biocharProductId,
+      allocatedDryMassKg: sumNumeric(
+        biocharProductSourceAllocations.allocatedDryMassKg,
+      ).as("allocated_dry_mass_kg"),
+    })
+    .from(biocharProductSourceAllocations)
+    .where(
+      eq(
+        biocharProductSourceAllocations.organizationId,
+        ctx.organizationId,
+      ),
+    )
+    .groupBy(biocharProductSourceAllocations.biocharProductId)
+    .as("biochar_product_source_allocation_aggregate");
 }
 
 export interface PaginatedBiocharProducts {
@@ -95,7 +117,10 @@ import { deleteTransportLegsForEntity } from "./transport-legs";
 import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { validateCompositionIngredientBins } from "./biochar-product-composition";
+import {
+  assertCompositionIngredientDrawsWithinStock,
+  validateCompositionIngredientBins,
+} from "./biochar-product-composition";
 import {
   CODE_CONFLICT_MESSAGES,
   withUniqueCodeGuard,
@@ -121,6 +146,7 @@ export async function getBiocharProducts(
   filters?: Partial<BiocharProductFilterData>
 ): Promise<PaginatedBiocharProducts> {
   requireOrgScope(ctx);
+  const allocationAggregate = sourceAllocationAggregate(ctx);
 
   const {
     search,
@@ -236,6 +262,7 @@ export async function getBiocharProducts(
         productionRuns.biocharStorageLocationId,
       linkedRunBiocharStorageLocationName:
         linkedRunBiocharStorageLocations.name,
+      sourceAllocatedDryMassKg: allocationAggregate.allocatedDryMassKg,
     })
     .from(biocharProducts)
     .leftJoin(facilities, and(eq(biocharProducts.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
@@ -268,6 +295,10 @@ export async function getBiocharProducts(
         ),
       ),
     )
+    .leftJoin(
+      allocationAggregate,
+      eq(allocationAggregate.biocharProductId, biocharProducts.id),
+    )
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -285,6 +316,7 @@ export async function getBiocharProducts(
     biocharRatio: row.biocharRatio,
     sourceBiocharStorageLocationId:
       row.sourceBiocharStorageLocationId,
+    sourceAllocatedDryMassKg: row.sourceAllocatedDryMassKg,
     linkedProductionRunId: row.linkedProductionRunId,
     composition: row.composition,
     massKg: row.massKg,
@@ -353,6 +385,7 @@ export async function getBiocharProductById(
   productId: string
 ): Promise<BiocharProductWithRelations> {
   requireOrgScope(ctx);
+  const allocationAggregate = sourceAllocationAggregate(ctx);
 
   const [row] = await db
     .select({
@@ -392,6 +425,7 @@ export async function getBiocharProductById(
         productionRuns.biocharStorageLocationId,
       linkedRunBiocharStorageLocationName:
         linkedRunBiocharStorageLocations.name,
+      sourceAllocatedDryMassKg: allocationAggregate.allocatedDryMassKg,
     })
     .from(biocharProducts)
     .leftJoin(facilities, and(eq(biocharProducts.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
@@ -424,6 +458,10 @@ export async function getBiocharProductById(
         ),
       ),
     )
+    .leftJoin(
+      allocationAggregate,
+      eq(allocationAggregate.biocharProductId, biocharProducts.id),
+    )
     .where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)));
 
   if (!row) {
@@ -441,6 +479,7 @@ export async function getBiocharProductById(
     biocharRatio: row.biocharRatio,
     sourceBiocharStorageLocationId:
       row.sourceBiocharStorageLocationId,
+    sourceAllocatedDryMassKg: row.sourceAllocatedDryMassKg,
     linkedProductionRunId: row.linkedProductionRunId,
     composition: row.composition,
     massKg: row.massKg,
@@ -762,6 +801,14 @@ export async function updateBiocharProduct(
         transactionFormulationId,
         transactionFacilityId
       );
+      if (data.composition !== undefined) {
+        await assertCompositionIngredientDrawsWithinStock(
+          ctx,
+          tx,
+          transactionComposition,
+          productId,
+        );
+      }
     }
 
     if (

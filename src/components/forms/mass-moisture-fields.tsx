@@ -165,8 +165,6 @@ interface MassMoistureFieldsProps {
   wetMassKg: unknown;
   /** Watched moisture value driving the live split. */
   moisturePercent: unknown;
-  /** Watched water added after the recorded wet mass and moisture measurement. */
-  addedWaterKg?: unknown;
   /** Qualifies both labels and the split's dry-mass label ("Biochar", "Feedstock"). */
   materialLabel?: string;
   /** Overrides the wet figure label without changing the input label. */
@@ -188,7 +186,6 @@ export function MassMoistureFields({
   moisture,
   wetMassKg,
   moisturePercent,
-  addedWaterKg,
   materialLabel,
   wetSplitLabel,
   drySplitLabel,
@@ -206,7 +203,6 @@ export function MassMoistureFields({
         <MoistureSplit
           wetMassKg={parseWatchedNumber(wetMassKg)}
           moisturePercent={parseWatchedNumber(moisturePercent)}
-          addedWaterKg={parseWatchedNumber(addedWaterKg)}
           materialLabel={materialLabel}
           wetLabel={wetSplitLabel}
           dryLabel={drySplitLabel}

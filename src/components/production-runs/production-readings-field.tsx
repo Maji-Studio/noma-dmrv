@@ -29,13 +29,13 @@ export function ProductionReadingsField({
   deferredAttachments,
   disabled = false,
 }: ProductionReadingsFieldProps) {
-  const { data: documents, isLoading } = useDocumentsForEntity(
+  const { data: documents, isSuccess } = useDocumentsForEntity(
     "production_run",
     productionRunId,
   );
   const hasReadingsFile = (documents ?? []).some(isUploadedReadingsDocument);
   const hasLoadedSavedRun =
-    productionRunId === undefined || isLoading ? undefined : true;
+    productionRunId === undefined || !isSuccess ? undefined : true;
 
   return (
     <FormSection

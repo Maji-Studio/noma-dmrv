@@ -27,8 +27,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
   useRemovalCompilation,
-  useSubmitRemoval,
 } from "@/hooks/use-certification";
+import type { useSubmitRemoval } from "@/hooks/use-certification";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import {
   buildRemovalRequirementsChecklist,
@@ -37,6 +37,9 @@ import {
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
+import { SubmissionProgress } from "../submission-progress";
+import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
+import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { DebugDrawer } from "./debug-drawer";
 import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
@@ -50,6 +53,7 @@ interface SubmitStepProps {
   ctx: RemovalCertifyContext;
   facilityId: string;
   onDone: () => void;
+  submitMutation: ReturnType<typeof useSubmitRemoval>;
 }
 
 export function SubmitStep({
@@ -57,12 +61,15 @@ export function SubmitStep({
   ctx,
   facilityId,
   onDone,
+  submitMutation,
 }: SubmitStepProps) {
-  const submitMutation = useSubmitRemoval();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [progressUpdates, setProgressUpdates] = useState<
+    SubmissionProgressUpdate[]
+  >([]);
 
   const externalId = ctx.latestSubmission?.externalId ?? null;
   const rejectedWithExternal =
@@ -89,11 +96,17 @@ export function SubmitStep({
       return;
     }
     setSubmitError(null);
+    setProgressUpdates([]);
     submitMutation.mutate(
       {
-        removalId,
-        confirmProduction,
-        compilationHash: compilationQuery.data?.compilationHash ?? "",
+        input: {
+          removalId,
+          confirmProduction,
+          compilationHash: compilationQuery.data?.compilationHash ?? "",
+        },
+        onProgress: (update) => {
+          setProgressUpdates((current) => [...current, update]);
+        },
       },
       {
         onSuccess: (result) => {
@@ -118,6 +131,20 @@ export function SubmitStep({
     }
     fireSubmit();
   };
+
+  const confirmDialog = (
+    <SubmitConfirmDialog
+      isOpen={confirmOpen}
+      onClose={() => setConfirmOpen(false)}
+      onConfirm={() => {
+        setConfirmOpen(false);
+        fireSubmit(true);
+      }}
+      isPending={submitMutation.isPending}
+      artifact="removal"
+      isProduction={ctx.isProduction}
+    />
+  );
 
   if (submitMutation.isSuccess && submitMutation.data) {
     // "View on Isometric" deep-links to the supplier's private Certify view of
@@ -150,6 +177,7 @@ export function SubmitStep({
             </span>
           </div>
         </div>
+        <SubmissionProgress kind="removal" updates={progressUpdates} />
         <div className="flex items-center justify-end gap-12">
           {viewUrl && (
             <a
@@ -166,6 +194,52 @@ export function SubmitStep({
             Done
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (submitMutation.isPending || progressUpdates.length > 0) {
+    const submissionStalled = isSubmissionStreamStalledError(
+      submitMutation.error,
+    );
+    return (
+      <div className="flex flex-col gap-16">
+        <SubmissionProgress
+          kind="removal"
+          updates={progressUpdates}
+          error={submitError}
+          stalled={submissionStalled}
+        />
+        {submitError && <ServerError message={submitError} />}
+        <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            {submitMutation.isPending
+              ? "noma is submitting the Removal to Isometric."
+              : submissionStalled
+                ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
+                : "Return to the submission review before trying again. If noma reports that this submission is in progress, wait for it to finish."}
+          </span>
+          {!submitMutation.isPending && (
+            <div className="flex items-center gap-12">
+              {submissionStalled ? (
+                <Button variant="primary" onClick={onDone}>
+                  Close
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setProgressUpdates([]);
+                    submitMutation.reset();
+                  }}
+                >
+                  Review submission
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+        {confirmDialog}
       </div>
     );
   }
@@ -221,17 +295,7 @@ export function SubmitStep({
         )}
       </div>
 
-      <SubmitConfirmDialog
-        isOpen={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={() => {
-          setConfirmOpen(false);
-          fireSubmit(true);
-        }}
-        isPending={submitMutation.isPending}
-        artifact="removal"
-        isProduction={ctx.isProduction}
-      />
+      {confirmDialog}
     </div>
   );
 }

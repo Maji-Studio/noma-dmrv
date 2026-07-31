@@ -3,11 +3,33 @@
 import { Controller, type Control, type FieldValues } from "react-hook-form";
 import { FormField, FormInput, EntitySelect } from "@/components/forms";
 import {
+  StorageLocationQuickAddDialog,
+  useQuickAddDialog,
+} from "@/components/forms/entity-select";
+import {
   COMPOSITION_BIN_TYPE,
   INGREDIENT_MASS_DEVIATION_WARN_PERCENT,
   type CompositionRow,
 } from "@/lib/biochar-composition";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
+import { formatStorageLocationType } from "@/schemas/storage-locations";
+
+// The storage-location option subtitle for a feedstock bin starts with
+// "Feedstock bin · " (formatStorageLocationType). Strip it from the selected
+// label so the row doesn't repeat the bin kind it already lives under.
+const FEEDSTOCK_BIN_PREFIX = `${formatStorageLocationType(COMPOSITION_BIN_TYPE)} · `;
+const FEEDSTOCK_BIN_QUICK_ADD_TYPES = [COMPOSITION_BIN_TYPE] as const;
+
+export function formatIngredientBinLabel(entity: {
+  name: string;
+  subtitle?: string;
+}): string {
+  const parts = [entity.name];
+  if (entity.subtitle) {
+    parts.push(entity.subtitle.replace(FEEDSTOCK_BIN_PREFIX, ""));
+  }
+  return parts.join(" · ");
+}
 
 function formatKgShort(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -26,6 +48,8 @@ export function IngredientBinField({
   isSubmitting,
   facilityId,
 }: IngredientBinFieldProps) {
+  const feedstockBinDialog = useQuickAddDialog();
+
   const showDeviation =
     row.deviationPercent != null &&
     Math.abs(row.deviationPercent) >= INGREDIENT_MASS_DEVIATION_WARN_PERCENT;
@@ -37,27 +61,53 @@ export function IngredientBinField({
           name={row.storageLocationFieldName}
           control={control}
           render={({ field, fieldState }) => (
-            <FormField
-              id={row.storageLocationFieldName}
-              label={row.feedstockTypeName}
-              helperText={row.feedstockTypeCategory}
-              error={fieldState.error?.message}
-            >
-              <EntitySelect
-                entityType="storageLocation"
-                value={field.value || ""}
-                onChange={field.onChange}
-                placeholder="Select a feedstock bin..."
-                disabled={isSubmitting}
-                error={!!fieldState.error}
-                filterBy={{
-                  ...(facilityId ? { facilityId } : {}),
-                  type: COMPOSITION_BIN_TYPE,
-                  feedstockTypeId: row.feedstockTypeId,
-                  feedstockTypeUsage: "blend",
-                }}
-              />
-            </FormField>
+            <>
+              <FormField
+                id={row.storageLocationFieldName}
+                label={row.feedstockTypeName}
+                helperText={row.feedstockTypeCategory}
+                error={fieldState.error?.message}
+              >
+                <EntitySelect
+                  entityType="storageLocation"
+                  value={field.value || ""}
+                  onChange={field.onChange}
+                  placeholder="Select a feedstock bin..."
+                  disabled={isSubmitting}
+                  error={!!fieldState.error}
+                  filterBy={{
+                    ...(facilityId ? { facilityId } : {}),
+                    type: COMPOSITION_BIN_TYPE,
+                    feedstockTypeId: row.feedstockTypeId,
+                    feedstockTypeUsage: "blend",
+                  }}
+                  formatSelectedLabel={formatIngredientBinLabel}
+                  allowCreate
+                  emptyHint={{
+                    message: `No ${row.feedstockTypeName} feedstock bins. Create a bin here, then record a feedstock intake to add stock.`,
+                  }}
+                  createLabel={`Create ${row.feedstockTypeName} feedstock bin`}
+                  onCreateNew={facilityId ? feedstockBinDialog.open : undefined}
+                />
+              </FormField>
+
+              {facilityId && (
+                <StorageLocationQuickAddDialog
+                  isOpen={feedstockBinDialog.isOpen}
+                  onClose={feedstockBinDialog.close}
+                  onSuccess={(entity) => {
+                    field.onChange(entity.id);
+                    feedstockBinDialog.close();
+                  }}
+                  defaultBinType={COMPOSITION_BIN_TYPE}
+                  allowedTypes={FEEDSTOCK_BIN_QUICK_ADD_TYPES}
+                  defaultFeedstockTypeId={row.feedstockTypeId}
+                  feedstockTypeUsage="blend"
+                  lockFeedstockType
+                  facilityId={facilityId}
+                />
+              )}
+            </>
           )}
         />
       </div>
