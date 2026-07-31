@@ -4,8 +4,10 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
 import { getStorageLocationById as getStorageLocationOptionById } from "@/data-access/entities/storage-locations";
+import { getFacilities } from "@/data-access/facilities";
 import { facilities, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
+import { biocharProducts } from "@/db/schema/products";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
@@ -131,6 +133,41 @@ describe("storage-location feedstock stock", () => {
       expect(option?.subtitle).toContain("80 kg stored");
       expect(option?.subtitle).toContain("120 kg pending completion");
     } finally {
+      await cleanupFixture(fixture);
+    }
+  });
+
+  it("subtracts composition ingredient draws from facility feedstock stock", async () => {
+    const runId = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const fixture = await createFixture(runId);
+    const [product] = await db
+      .insert(biocharProducts)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: fixture.facilityId,
+        code: `BP-FS-STOCK-${runId}`,
+        massKg: 30,
+        composition: {
+          ingredients: [{
+            formulationIngredientId: crypto.randomUUID(),
+            feedstockTypeId: fixture.feedstockTypeId,
+            storageLocationId: fixture.storageLocationId,
+            massKg: 30,
+          }],
+        },
+      })
+      .returning({ id: biocharProducts.id });
+
+    try {
+      const result = await getFacilities(
+        makeTestOrgContext(TEST_USER_ID),
+        { search: `FAC-FS-STOCK-${runId}` },
+      );
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]?.inventorySummary.feedstockDryKg).toBe(170);
+    } finally {
+      await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
       await cleanupFixture(fixture);
     }
   });
