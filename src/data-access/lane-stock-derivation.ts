@@ -12,7 +12,6 @@ import {
   biocharProducts,
   biocharProductSourceAllocations,
   feedstocks,
-  formulations,
   productionRunFeedstocks,
   productionRuns,
 } from "@/db/schema";
@@ -23,6 +22,7 @@ import {
 } from "./bin-movements";
 import { requireOrgScope } from "./utils";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 
 export interface LaneStockDerivation {
   storageLocationId: string;
@@ -204,7 +204,10 @@ export async function deriveLaneStock(
         .select({
           storageLocationId: productionRuns.biocharStorageLocationId,
           total: numericAggregate(
-            sql<number>`COALESCE(SUM(COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)), 0)`,
+            sql<number>`COALESCE(SUM(${sourceBiocharMassKgSql(
+              biocharProducts.massKg,
+              biocharProducts.composition,
+            )}), 0)`,
           ),
         })
         .from(productionRuns)
@@ -216,13 +219,6 @@ export async function deriveLaneStock(
               productionRuns.id,
             ),
             eq(biocharProducts.organizationId, ctx.organizationId),
-          ),
-        )
-        .leftJoin(
-          formulations,
-          and(
-            eq(biocharProducts.formulationId, formulations.id),
-            eq(formulations.organizationId, ctx.organizationId),
           ),
         )
         .where(and(...legacyAllocationConditions))

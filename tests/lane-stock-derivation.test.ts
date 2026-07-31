@@ -22,7 +22,7 @@ const FEEDSTOCK_INTAKE_KG = 120;
 const FEEDSTOCK_CONSUMED_KG = 50;
 const FEEDSTOCK_MOVEMENT_KG = -97;
 const BIOCHAR_PRODUCED_KG = 120;
-const BIOCHAR_ALLOCATED_KG = 25;
+const BIOCHAR_ALLOCATED_KG = 35;
 const BIOCHAR_MOVEMENT_KG = -3;
 const PRODUCT_MOVEMENT_KG = 7;
 
@@ -291,7 +291,7 @@ describe("shared lane-stock derivation", () => {
       biocharProducedKg: BIOCHAR_PRODUCED_KG,
       biocharAllocatedKg: BIOCHAR_ALLOCATED_KG,
       biocharMovementDeltaKg: BIOCHAR_MOVEMENT_KG,
-      biocharStockKg: 92,
+      biocharStockKg: 82,
     });
     expect(product?.productMovementDeltaKg).toBe(PRODUCT_MOVEMENT_KG);
   });
@@ -321,10 +321,10 @@ describe("shared lane-stock derivation", () => {
     expect(feedstock.feedstockInventory.batchCount).toBe(1);
     expect(feedstock.feedstockInventory.pendingDryMassKg).toBe(900);
     expect(feedstock.feedstockInventory.estimatedWetMassKg).toBeCloseTo(-33.75);
-    expect(biochar.biocharInventory.currentMassKg).toBe(92);
-    expect(biochar.biocharInventory.allocatedToProductsKg).toBe(25);
+    expect(biochar.biocharInventory.currentMassKg).toBe(82);
+    expect(biochar.biocharInventory.allocatedToProductsKg).toBe(35);
     expect(product.productInventory.currentMassKg).toBe(42);
-    expect(product.productInventory.biocharEquivalentKg).toBe(25);
+    expect(product.productInventory.biocharEquivalentKg).toBe(35);
   });
 
   it("reads movement overlays through the supplied transaction", async () => {

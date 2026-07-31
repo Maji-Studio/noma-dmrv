@@ -2,11 +2,14 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
   biocharProducts,
-  formulations,
   productionRuns,
   type BiocharProduct,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import {
+  deriveSourceBiocharMassKg,
+  SOURCE_BIOCHAR_MASS_ERROR,
+} from "@/lib/biochar-composition";
 import { SafeError } from "@/lib/errors";
 import { productStockOverdrawMessage } from "@/lib/stock-overdraw";
 import {
@@ -36,7 +39,6 @@ type LockedBiocharProduct = Pick<
   BiocharProduct,
   | "facilityId"
   | "formulationId"
-  | "biocharRatio"
   | "sourceBiocharStorageLocationId"
   | "linkedProductionRunId"
   | "storageLocationId"
@@ -62,21 +64,6 @@ export interface BiocharProductStockState {
   transactionStorageId: string | null;
   transactionMassKg: number | null;
   transactionComposition: Record<string, unknown> | null;
-  /**
-   * The product's snapshotted biochar ratio for this transaction. `null` when
-   * unknown (formulation being reassigned, or a legacy pre-snapshot row) — the
-   * draw check then falls back to the live formulation ratio, matching the
-   * roll-ups' COALESCE(product snapshot, live formulation ratio, 1).
-   */
-  transactionBiocharRatio: number | null;
-}
-
-/** Wet product mass scaled to the source bin's biochar-equivalent draw. */
-export function biocharEquivalentKg(
-  massKg: number | null,
-  biocharRatio: number | null,
-): number {
-  return (massKg ?? 0) * (biocharRatio ?? 1);
 }
 
 export function biocharProductBinStockChanged(
@@ -151,11 +138,6 @@ function deriveBiocharProductStockState(
       data.composition !== undefined
         ? data.composition
         : (product.composition as Record<string, unknown> | null),
-    transactionBiocharRatio:
-      data.formulationId !== undefined &&
-      data.formulationId !== product.formulationId
-        ? null
-        : product.biocharRatio,
   };
 }
 
@@ -185,7 +167,8 @@ export async function lockBiocharProductUpdateStock(
   const biocharAllocationInputsPresent =
     data.massKg !== undefined ||
     data.formulationId !== undefined ||
-    data.linkedProductionRunId !== undefined;
+    data.linkedProductionRunId !== undefined ||
+    data.composition !== undefined;
   const sourceRunIds = [...new Set(
     [product.linkedProductionRunId, state.transactionLinkedRunId].filter(
       (id): id is string => id != null,
@@ -272,7 +255,8 @@ export async function assertBiocharProductUpdateDraw(
   if (
     (data.massKg === undefined &&
       data.formulationId === undefined &&
-      data.linkedProductionRunId === undefined) ||
+      data.linkedProductionRunId === undefined &&
+      data.composition === undefined) ||
     !state.transactionLinkedRunId ||
     state.transactionMassKg == null
   ) {
@@ -290,26 +274,13 @@ export async function assertBiocharProductUpdateDraw(
     ));
   if (!effectiveRun?.biocharStorageLocationId) return;
 
-  // Snapshot-first: the product's own biochar ratio governs its draw. Fall
-  // back to the live formulation ratio only when the snapshot is unresolved
-  // (formulation reassignment in flight, or a legacy pre-snapshot row) —
-  // mirroring the stock roll-ups' COALESCE chain so overdraw checks and
-  // derived stock can never disagree.
-  let biocharRatio = state.transactionBiocharRatio;
-  if (biocharRatio == null && state.transactionFormulationId) {
-    const [ratioRow] = await tx
-      .select({ biocharRatio: formulations.biocharRatio })
-      .from(formulations)
-      .where(and(
-        eq(formulations.id, state.transactionFormulationId),
-        eq(formulations.organizationId, ctx.organizationId),
-      ));
-    biocharRatio = ratioRow?.biocharRatio ?? null;
-  }
-  const requestedBiocharKg = biocharEquivalentKg(
+  const requestedBiocharKg = deriveSourceBiocharMassKg(
     state.transactionMassKg,
-    biocharRatio,
+    getCompositionIngredientDraws(state.transactionComposition),
   );
+  if (requestedBiocharKg === null || requestedBiocharKg < 0) {
+    throw new SafeError(SOURCE_BIOCHAR_MASS_ERROR);
+  }
   await assertBiocharDrawWithinStock(ctx, tx, {
     biocharStorageLocationId: effectiveRun.biocharStorageLocationId,
     requestedBiocharKg,

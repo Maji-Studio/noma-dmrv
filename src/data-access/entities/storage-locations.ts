@@ -51,6 +51,7 @@ import {
   type LaneStockDerivation,
 } from "../lane-stock-derivation";
 import { estimateRemainingFeedstockWetMassKg } from "../storage-location-enrichment";
+import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
 
 export function formatStorageLocationSubtitle(
   type: string,
@@ -293,7 +294,7 @@ function buildInventoryAggregates(
     totalAllocatedWetKg: numericAggregate(sql<number>`
       COALESCE(
         SUM(
-          COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
+          ${sourceBiocharMassKgSql(biocharProducts.massKg, biocharProducts.composition)}
         ),
         0
       )
@@ -301,8 +302,7 @@ function buildInventoryAggregates(
     totalAllocatedDryKg: numericAggregate(sql<number>`
       COALESCE(
         SUM(
-          COALESCE(${biocharProducts.massKg}, 0)
-          * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
+          ${sourceBiocharMassKgSql(biocharProducts.massKg, biocharProducts.composition)}
           * (
             COALESCE(${productionRuns.biocharDryMassKg}, 0)
             / NULLIF(COALESCE(${productionRuns.biocharOutputKg}, 0), 0)
@@ -405,7 +405,7 @@ function buildInventoryAggregates(
     biocharEquivalentKg: numericAggregate(sql<number>`
       COALESCE(
         SUM(
-          COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
+          ${sourceBiocharMassKgSql(biocharProducts.massKg, biocharProducts.composition)}
         ),
         0
       )

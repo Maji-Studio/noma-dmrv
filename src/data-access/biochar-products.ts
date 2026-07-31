@@ -577,6 +577,9 @@ export async function updateBiocharProduct(
       data.formulationId !== existing.formulationId) ||
     (data.massKg !== undefined &&
       data.massKg !== existing.massKg) ||
+    (data.composition !== undefined &&
+      JSON.stringify(data.composition) !==
+        JSON.stringify(existing.composition)) ||
     (data.linkedProductionRunId !== undefined &&
       data.linkedProductionRunId !==
         existing.linkedProductionRunId);
@@ -585,7 +588,7 @@ export async function updateBiocharProduct(
     changesSourceAllocation
   ) {
     throw new SafeError(
-      "This product's source allocation is fixed. Delete and recreate the product to change its facility, formulation, mass, or source.",
+      "This product's source allocation is fixed. Delete and recreate the product to change its facility, formulation, blend mass, ingredients, or source.",
     );
   }
 
@@ -741,7 +744,6 @@ export async function updateBiocharProduct(
       transactionStorageId,
       transactionMassKg,
       transactionComposition,
-      transactionBiocharRatio,
     } = stockState;
 
     // Re-snapshot the recipe's biochar ratio only when the product is pointed
@@ -854,9 +856,6 @@ export async function updateBiocharProduct(
       transactionStorageId,
       transactionMassKg,
       transactionComposition,
-      transactionBiocharRatio: formulationChanged
-        ? biocharRatioSnapshot ?? null
-        : transactionBiocharRatio,
     });
 
     const [row] = await tx

@@ -2,9 +2,10 @@
  * Bin over-draw hard block (issue #116)
  *
  * Exercises all six guarded write paths through the UI. Feedstock draws use
- * dry mass (wet × (1 − moisture%/100)); product draws use formulation-scaled
- * biochar-equivalent mass; delivery draws use the product batch's own wet-mass
- * pool. Every path proves both the hard rejection and a legitimate save.
+ * dry mass (wet × (1 − moisture%/100)); product draws use blend mass less the
+ * actual recorded ingredient masses; delivery draws use the product batch's
+ * own wet-mass pool. Every path proves both the hard rejection and a legitimate
+ * save.
  */
 import type { Page } from "@playwright/test";
 import {
@@ -556,13 +557,13 @@ test.describe("updateProductionRun feedstock guard", () => {
   });
 });
 
-/** Path 3: createBiocharProduct scales wet mass by formulation ratio 0.7. */
+/** Path 3: createBiocharProduct subtracts the recorded ingredient draw. */
 test.describe("createBiocharProduct biochar-bin guard", () => {
-  test("rejects a formulation-scaled draw exceeding biochar stock", async ({
+  test("rejects a recorded source draw exceeding biochar stock", async ({
     adminPage: page,
     seededData,
   }) => {
-    // A 150 kg product × 0.7 = 105 kg biochar from a 100 kg-output run.
+    // A 150 kg blend less 45 kg ingredient = 105 kg from a 100 kg-output run.
     const productBin = await createProductBin(seededData);
     try {
       await createCompleteRun(page, seededData, {
@@ -591,11 +592,11 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
     }
   });
 
-  test("accepts a formulation-scaled draw within biochar stock", async ({
+  test("accepts a recorded source draw within biochar stock", async ({
     adminPage: page,
     seededData,
   }) => {
-    // A 140 kg product × 0.7 = 98 kg, within the run's 100 kg output.
+    // A 140 kg blend less 42 kg ingredient = 98 kg, within the 100 kg output.
     const productBin = await createProductBin(seededData);
     let productCreated = false;
     try {

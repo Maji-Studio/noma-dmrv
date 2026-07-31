@@ -5,7 +5,6 @@ import {
   biocharProducts,
   biocharProductSourceAllocations,
   binMovements,
-  formulations,
   productionRuns,
   storageLocations,
 } from "@/db/schema";
@@ -14,6 +13,7 @@ import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { SafeError } from "@/lib/errors";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { overdrawError } from "./bin-stock-guards";
+import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 import { requireOrgScope } from "./utils";
 
 const MASS_PRECISION_FACTOR = 1_000;
@@ -382,17 +382,13 @@ export async function buildBiocharProductSourceAllocationPlan(
         .select({
           productionRunId: biocharProducts.linkedProductionRunId,
           allocatedWetMassKg: sumNumeric(
-            sql`COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)`,
+            sourceBiocharMassKgSql(
+              biocharProducts.massKg,
+              biocharProducts.composition,
+            ),
           ),
         })
         .from(biocharProducts)
-        .leftJoin(
-          formulations,
-          and(
-            eq(biocharProducts.formulationId, formulations.id),
-            eq(formulations.organizationId, ctx.organizationId),
-          ),
-        )
         .innerJoin(
           productionRuns,
           and(

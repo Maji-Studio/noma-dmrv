@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   reconcileComposition,
   deriveSuggestedIngredientMassKg,
+  deriveSourceBiocharMassKg,
   deriveMassDeviationPercent,
   fromCompositionJsonb,
   shouldPrefillSuggestedMasses,
@@ -197,6 +198,31 @@ describe("deriveSuggestedIngredientMassKg", () => {
     expect(deriveSuggestedIngredientMassKg(0, 0.2)).toBeNull();
     expect(deriveSuggestedIngredientMassKg(800, 0)).toBeNull();
     expect(deriveSuggestedIngredientMassKg(-1, 0.2)).toBeNull();
+  });
+});
+
+describe("deriveSourceBiocharMassKg", () => {
+  it("subtracts actual recorded ingredient masses from pre-water blend mass", () => {
+    expect(
+      deriveSourceBiocharMassKg(100, [
+        { massKg: 12 },
+        { massKg: 8 },
+      ]),
+    ).toBe(80);
+  });
+
+  it("does not infer mass from formulation volume shares", () => {
+    const ingredient = { massKg: 20, ratio: 0.4 };
+    expect(
+      deriveSourceBiocharMassKg(100, [ingredient]),
+    ).toBe(80);
+  });
+
+  it("returns null without a finite blend mass", () => {
+    expect(deriveSourceBiocharMassKg(null, [{ massKg: 20 }])).toBeNull();
+    expect(
+      deriveSourceBiocharMassKg(Number.NaN, [{ massKg: 20 }]),
+    ).toBeNull();
   });
 });
 

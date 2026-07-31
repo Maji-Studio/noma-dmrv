@@ -74,6 +74,43 @@ export function deriveSuggestedIngredientMassKg(
   return mass * ingredient;
 }
 
+interface IngredientMassLike {
+  massKg?: unknown;
+}
+
+export const SOURCE_BIOCHAR_MASS_ERROR =
+  "Ingredient mass cannot exceed wet mass.";
+
+/** Sum the actual ingredient masses recorded for one product blend. */
+export function sumRecordedIngredientMassKg(
+  ingredients: readonly IngredientMassLike[] | null | undefined,
+): number {
+  return (ingredients ?? []).reduce((total, ingredient) => {
+    const massKg = ingredient.massKg;
+    return total +
+      (typeof massKg === "number" && Number.isFinite(massKg) && massKg > 0
+        ? massKg
+        : 0);
+  }, 0);
+}
+
+/**
+ * Source biochar is the recorded pre-water blend mass less recorded ingredient
+ * masses. Formulation shares are volume guidance and never enter this equation.
+ */
+export function deriveSourceBiocharMassKg(
+  blendMassKg: number | null | undefined,
+  ingredients: readonly IngredientMassLike[] | null | undefined,
+): number | null {
+  if (
+    typeof blendMassKg !== "number" ||
+    !Number.isFinite(blendMassKg)
+  ) {
+    return null;
+  }
+  return blendMassKg - sumRecordedIngredientMassKg(ingredients);
+}
+
 /**
  * Suggestions may become form values only while creating a composition. An
  * existing product keeps saved null masses empty unless the operator explicitly

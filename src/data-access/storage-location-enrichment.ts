@@ -34,6 +34,7 @@ import {
 } from "@/db/schema";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { deriveLaneStock } from "./lane-stock-derivation";
+import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 import { requireOrgScope } from "./utils";
 
 // ============================================
@@ -294,7 +295,10 @@ export async function enrichStorageLocationRows(
             biocharEquivalentKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
-                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
+                  ${sourceBiocharMassKgSql(
+                    biocharProducts.massKg,
+                    biocharProducts.composition,
+                  )}
                 ),
                 0
               )

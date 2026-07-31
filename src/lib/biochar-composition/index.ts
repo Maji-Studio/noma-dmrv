@@ -8,7 +8,10 @@ export {
 export {
   reconcileComposition,
   deriveSuggestedIngredientMassKg,
+  deriveSourceBiocharMassKg,
   deriveMassDeviationPercent,
+  sumRecordedIngredientMassKg,
+  SOURCE_BIOCHAR_MASS_ERROR,
   shouldPrefillSuggestedMasses,
   INGREDIENT_MASS_DEVIATION_WARN_PERCENT,
   fromCompositionJsonb,

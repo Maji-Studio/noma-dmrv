@@ -11,6 +11,10 @@ import {
 } from "@/db/schema";
 import { parseLocalDateString } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
+import {
+  deriveSourceBiocharMassKg,
+  SOURCE_BIOCHAR_MASS_ERROR,
+} from "@/lib/biochar-composition";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import {
@@ -20,7 +24,6 @@ import {
 } from "./biochar-product-composition";
 import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
-import { biocharEquivalentKg } from "./biochar-product-stock-locks";
 import {
   buildBiocharProductSourceAllocationPlan,
   insertBiocharProductSourceAllocations,
@@ -174,6 +177,13 @@ export async function createBiocharProduct(
   const biocharRatio = formulationRatioRow?.biocharRatio ?? null;
   const destinationBinId = data.storageLocationId;
   const ingredientDraws = getCompositionIngredientDraws(data.composition);
+  const sourceBiocharMassKg = deriveSourceBiocharMassKg(
+    massKg,
+    ingredientDraws,
+  );
+  if (sourceBiocharMassKg === null || sourceBiocharMassKg < 0) {
+    throw new SafeError(SOURCE_BIOCHAR_MASS_ERROR);
+  }
 
   return db.transaction(async (tx) => {
     const sourceBinId =
@@ -202,10 +212,7 @@ export async function createBiocharProduct(
           sourceStorageLocationId:
             sourceBiocharStorageLocationId,
           facilityId: data.facilityId,
-          requestedWetMassKg: biocharEquivalentKg(
-            massKg,
-            biocharRatio,
-          ),
+          requestedWetMassKg: sourceBiocharMassKg,
         });
       for (const allocation of sourceAllocationPlan.allocations) {
         await assertCanMutateCertifiedLineage(
@@ -341,10 +348,7 @@ export async function createBiocharProduct(
     if (sourceBinId) {
       await assertBiocharDrawWithinStock(ctx, tx, {
         biocharStorageLocationId: sourceBinId,
-        requestedBiocharKg: biocharEquivalentKg(
-          massKg,
-          biocharRatio,
-        ),
+        requestedBiocharKg: sourceBiocharMassKg,
         binLockAlreadyHeld: true,
       });
     }
