@@ -18,7 +18,6 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
@@ -29,6 +28,7 @@ import {
 } from "@/hooks/use-certification";
 import type { GhgStatementReportView } from "@/fn/certification/ghg-statement-reports";
 import { CheckRow, type CheckStatus } from "./check-row";
+import { DisclosureSummary } from "./disclosure-summary";
 
 type ReportsQuery = ReturnType<typeof useGhgStatementReports>;
 type PrepareMutation = ReturnType<
@@ -347,16 +347,9 @@ export function GhgStatementWorkflow({
 
       {reports.length > 1 && (
         <details className="group">
-          <summary className="flex cursor-pointer items-center gap-6 list-none [&::-webkit-details-marker]:hidden body-caption text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]">
-            <CaretDownIcon
-              size={10}
-              weight="bold"
-              className="transition-transform duration-150 group-open:rotate-180"
-            />
-            <span className="underline underline-offset-2">
-              All report versions ({reports.length})
-            </span>
-          </summary>
+          <DisclosureSummary>
+            All report versions ({reports.length})
+          </DisclosureSummary>
           <ol className="mt-8 flex flex-col border-l border-[var(--color-border-secondary)] pl-12">
             {reports.map((report) => {
               const badge = reportBadge(report.lifecycle);

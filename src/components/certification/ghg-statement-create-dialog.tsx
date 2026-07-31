@@ -62,6 +62,11 @@ import {
 import { EnvBanner } from "./env-banner";
 import { ProductionConfirmation } from "./production-confirmation";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
+import {
+  CERTIFICATION_ACCORDION_ITEM,
+  CERTIFICATION_ACCORDION_LABEL,
+  CERTIFICATION_ACCORDION_TRIGGER,
+} from "./certification-accordion-styles";
 
 interface GhgStatementCreateDialogProps {
   facilityId: string;
@@ -79,10 +84,6 @@ const STEPS: StepFlowStep[] = [
 const DIALOG_TITLE_ID = "ghg-statement-create-title";
 const DIALOG_DESCRIPTION_ID = "ghg-statement-create-description";
 const REGISTRY_STATEMENTS_ITEM = "registry-statements";
-const DIALOG_ACCORDION_ITEM =
-  "rounded-none border-[var(--color-border-secondary)] bg-[var(--color-background-white)]";
-const DIALOG_ACCORDION_TRIGGER =
-  "bg-[var(--color-background-white)] px-16 py-12 hover:bg-[var(--color-surface-light)]";
 
 // Period-derivation + window logic is shared with the server empty-statement
 // guard (`ghg-reporting-window.ts`) so the operator's preview and the registry
@@ -432,7 +433,7 @@ function StepPeriod({
       <FormField
         id="reportingPeriodEndOn"
         label="Reporting period end"
-        helperText="Only the end date is sent. Isometric links submitted Removals completed within the period."
+        hint="Only the end date is sent. Isometric links submitted Removals completed within the period."
         required
         error={error}
       >
@@ -517,12 +518,12 @@ export function RegistryStatementsPanel({
     >
       <Accordion.Item
         value={REGISTRY_STATEMENTS_ITEM}
-        className={DIALOG_ACCORDION_ITEM}
+        className={CERTIFICATION_ACCORDION_ITEM}
       >
         <Accordion.Header>
           <Accordion.Trigger
-            className={DIALOG_ACCORDION_TRIGGER}
-            labelClassName="body-small normal-case tracking-normal text-[var(--color-text-primary)]"
+            className={CERTIFICATION_ACCORDION_TRIGGER}
+            labelClassName={CERTIFICATION_ACCORDION_LABEL}
           >
             <span className="flex w-full items-center justify-between gap-12">
               <span>Already in the registry</span>
@@ -723,12 +724,12 @@ function StepPreview({
         <Accordion.Root className="gap-0">
           <Accordion.Item
             value="other-open-removals"
-            className={DIALOG_ACCORDION_ITEM}
+            className={CERTIFICATION_ACCORDION_ITEM}
           >
             <Accordion.Header>
               <Accordion.Trigger
-                className={DIALOG_ACCORDION_TRIGGER}
-                labelClassName="body-small normal-case tracking-normal text-[var(--color-text-primary)]"
+                className={CERTIFICATION_ACCORDION_TRIGGER}
+                labelClassName={CERTIFICATION_ACCORDION_LABEL}
               >
                 <span className="flex w-full items-center justify-between gap-12">
                   <span>Other open Removals</span>

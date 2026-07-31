@@ -8,9 +8,9 @@
  *
  * Terminal events only (no `pending` rows are written).
  */
-import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
 import type { CertifierSyncEventRow } from "@/data-access/certification";
 import { formatDateTime } from "@/lib/format-utils";
+import { DisclosureSummary } from "./disclosure-summary";
 
 const COMPACT_DEFAULT_LIMIT = 5;
 
@@ -50,14 +50,7 @@ export function SyncEventLog({
   if (compact) {
     return (
       <details className="group">
-        <summary className="flex cursor-pointer items-center gap-6 list-none [&::-webkit-details-marker]:hidden body-caption text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]">
-          <CaretDownIcon
-            size={10}
-            weight="bold"
-            className="transition-transform duration-150 group-open:rotate-180"
-          />
-          <span className="underline underline-offset-2">{triggerLabel}</span>
-        </summary>
+        <DisclosureSummary>{triggerLabel}</DisclosureSummary>
         <div className="mt-8">
           <SyncEventList events={visible} />
         </div>
@@ -67,14 +60,12 @@ export function SyncEventLog({
 
   return (
     <details className="group">
-      <summary className="flex cursor-pointer items-center gap-8 list-none [&::-webkit-details-marker]:hidden body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+      <DisclosureSummary
+        className="gap-8 uppercase tracking-wide"
+        underline={false}
+      >
         {triggerLabel}
-        <CaretDownIcon
-          size={12}
-          weight="bold"
-          className="transition-transform duration-150 group-open:rotate-180"
-        />
-      </summary>
+      </DisclosureSummary>
       <div className="mt-12 overflow-x-auto">
       <table className="w-full min-w-[520px] border-collapse text-left">
         <thead>

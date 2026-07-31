@@ -41,16 +41,15 @@ import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
 import { SubmissionStatusBadge } from "./submission-status-badge";
 import { SyncEventList } from "./sync-event-log";
+import {
+  CERTIFICATION_ACCORDION_ITEM,
+  CERTIFICATION_ACCORDION_LABEL,
+  CERTIFICATION_ACCORDION_TRIGGER,
+} from "./certification-accordion-styles";
 
 const ICON_SIZE = 14;
 const SHORT_ID = 8;
 
-const ACCORDION_ITEM =
-  "rounded-none border-[var(--color-border-secondary)] bg-[var(--color-background-white)]";
-const ACCORDION_TRIGGER =
-  "bg-[var(--color-background-white)] px-16 py-12 hover:bg-[var(--color-surface-light)]";
-const ACCORDION_LABEL =
-  "body-small normal-case tracking-normal text-[var(--color-text-primary)]";
 
 interface GhgStatementDetailSheetProps {
   item: GhgStatementListItem;
@@ -312,11 +311,14 @@ function DetailState({
         </section>
 
         <Accordion.Root className="gap-8" multiple>
-          <Accordion.Item value="linked-removals" className={ACCORDION_ITEM}>
+          <Accordion.Item
+            value="linked-removals"
+            className={CERTIFICATION_ACCORDION_ITEM}
+          >
             <Accordion.Header>
               <Accordion.Trigger
-                className={ACCORDION_TRIGGER}
-                labelClassName={ACCORDION_LABEL}
+                className={CERTIFICATION_ACCORDION_TRIGGER}
+                labelClassName={CERTIFICATION_ACCORDION_LABEL}
               >
                 <span className="flex w-full items-center justify-between gap-12">
                   <span>Linked Removals</span>
@@ -360,12 +362,12 @@ function DetailState({
           {recentSyncEvents.length > 0 && (
             <Accordion.Item
               value="submission-history"
-              className={ACCORDION_ITEM}
+              className={CERTIFICATION_ACCORDION_ITEM}
             >
               <Accordion.Header>
                 <Accordion.Trigger
-                  className={ACCORDION_TRIGGER}
-                  labelClassName={ACCORDION_LABEL}
+                  className={CERTIFICATION_ACCORDION_TRIGGER}
+                  labelClassName={CERTIFICATION_ACCORDION_LABEL}
                 >
                   <span className="flex w-full items-center justify-between gap-12">
                     <span>Submission history</span>
@@ -381,11 +383,14 @@ function DetailState({
             </Accordion.Item>
           )}
 
-          <Accordion.Item value="technical-details" className={ACCORDION_ITEM}>
+          <Accordion.Item
+            value="technical-details"
+            className={CERTIFICATION_ACCORDION_ITEM}
+          >
             <Accordion.Header>
               <Accordion.Trigger
-                className={ACCORDION_TRIGGER}
-                labelClassName={ACCORDION_LABEL}
+                className={CERTIFICATION_ACCORDION_TRIGGER}
+                labelClassName={CERTIFICATION_ACCORDION_LABEL}
               >
                 Technical details
               </Accordion.Trigger>

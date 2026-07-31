@@ -14,6 +14,7 @@ import type { CertifierGhgStatementRow } from "@/data-access/certifier-ghg-state
 import type { GhgStatementReportView } from "@/fn/certification/ghg-statement-reports";
 import type { GhgStatement } from "@/lib/isometric";
 import type { GhgSubmitMode } from "@/lib/isometric/utils/ghg-statement-state";
+import { DisclosureSummary } from "./disclosure-summary";
 
 interface GhgStatementTechnicalDetailsProps {
   statement: CertifierGhgStatementRow;
@@ -40,9 +41,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 function JsonBlock({ label, value }: { label: string; value: unknown }) {
   return (
     <details className="group">
-      <summary className="cursor-pointer list-none body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 [&::-webkit-details-marker]:hidden hover:text-[var(--color-text-secondary)]">
-        {label}
-      </summary>
+      <DisclosureSummary>{label}</DisclosureSummary>
       <pre className="mt-6 overflow-x-auto border border-[var(--color-border-tertiary)] bg-[var(--color-background-light)] p-8 body-caption font-mono text-[var(--color-text-secondary)]">
         {JSON.stringify(value, null, 2)}
       </pre>

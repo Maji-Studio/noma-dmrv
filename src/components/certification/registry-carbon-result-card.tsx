@@ -1,8 +1,8 @@
 "use client";
 
-import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
 import { formatCo2e } from "@/lib/format-utils";
 import type { RegistryCarbonResult } from "@/lib/certification/registry-carbon-result";
+import { DisclosureSummary } from "./disclosure-summary";
 
 function RegistryField({
   label,
@@ -95,16 +95,7 @@ export function RegistryCarbonResultCard({
 
       {variant === "compact" ? (
         <details className="group">
-          <summary className="flex cursor-pointer items-center gap-6 list-none [&::-webkit-details-marker]:hidden body-caption text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]">
-            <CaretDownIcon
-              size={10}
-              weight="bold"
-              className="transition-transform duration-150 group-open:rotate-180"
-            />
-            <span className="underline underline-offset-2">
-              Registry figures
-            </span>
-          </summary>
+          <DisclosureSummary>Registry figures</DisclosureSummary>
           <div className="mt-8 flex flex-col gap-12">{figures}</div>
         </details>
       ) : (
