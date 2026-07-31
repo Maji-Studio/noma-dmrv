@@ -316,11 +316,27 @@ export function makeProductionRunFormSchema(
           });
           break;
         case "feedstock-required":
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["feedstockWetMassKg"],
-            message: `A ${violation.status} run needs a source bin, moisture %, and wet mass to compute consumed feedstock.`,
-          });
+          if (!data.feedstockStorageLocationId) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["feedstockStorageLocationId"],
+              message: "Select a source bin.",
+            });
+          }
+          if (data.feedstockWetMassKg == null) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["feedstockWetMassKg"],
+              message: "Enter feedstock wet mass.",
+            });
+          }
+          if (data.feedstockMoisturePercent == null) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["feedstockMoisturePercent"],
+              message: "Enter feedstock moisture.",
+            });
+          }
           break;
         case "cancellation-reason-required":
           ctx.addIssue({

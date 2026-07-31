@@ -289,6 +289,50 @@ test.describe("Production Run lifecycle (#254)", () => {
     await expect(cancelledBadge).toHaveClass(/--st-off-bg/);
   });
 
+  test("waits for the missing feedstock field before showing its error", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await openRunForm(page, seededData, {
+      startDate: "2025-02-04",
+      startTime: "08:00",
+      endDate: "2025-02-04",
+      endTime: "12:00",
+      status: "complete",
+    });
+
+    const dialog = page.locator('[role="dialog"]');
+    await selectEntity(
+      page,
+      "Source Bin",
+      seededData.feedstockStorageLocation.id,
+      seededData.feedstockStorageLocation.name,
+    );
+    await dialog.locator('input[name="biocharOutputKg"]').fill("10");
+
+    const wetMass = dialog.locator('input[name="feedstockWetMassKg"]');
+    const moisture = dialog.locator(
+      'input[name="feedstockMoisturePercent"]',
+    );
+    await wetMass.fill("5000");
+    await moisture.focus();
+
+    await expect(dialog.locator("#feedstockWetMassKg-error")).toHaveCount(0);
+    await expect(
+      dialog.locator("#feedstockMoisturePercent-error"),
+    ).toHaveCount(0);
+
+    await dialog.locator('input[name="feedingRateKgHr"]').focus();
+    await expect(
+      dialog.getByText("Enter feedstock moisture."),
+    ).toBeVisible();
+
+    await moisture.fill("15");
+    await expect(
+      dialog.getByText("Enter feedstock moisture."),
+    ).toBeHidden();
+  });
+
   test("renders a failed run with the canonical error treatment", async ({
     adminPage: page,
     seededData,
