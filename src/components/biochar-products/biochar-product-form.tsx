@@ -14,7 +14,7 @@ import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/d
 import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { formatMassKg } from "@/lib/format-utils";
 import {
-  formatWetDryMass,
+  splitWetMass,
   splitWetMassAfterAddedWater,
 } from "@/lib/mass-moisture";
 import {
@@ -60,123 +60,153 @@ const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: t
 // ============================================
 
 /**
- * The −/+ pair is one readout, so both halves come from the status ramp rather
- * than mixing a ramp token with an area accent: `--st-wait` for the planned
- * draw from the source bin (upcoming, not an error — `--st-bad` would read as
- * a failure) and `--st-ok` for the resulting stock in the destination bin.
+ * Keep the preview dry-mass first and intentionally terse. The source summary
+ * reads as one stock equation: available dry biochar, planned subtraction, and
+ * the remaining stock. Wet mass stays in the editable fields below.
  */
-function TransferFlowPreview({
+export function TransferFlowPreview({
   sourceBinName,
-  sourceAvailability,
+  sourceAvailableDryMassKg,
   sourceWetMassKg,
-  sourceDryMassKg,
-  destinationWetMassKg,
+  sourceMoisturePercent,
   destinationDryMassKg,
   destinationBinLabel,
 }: {
   sourceBinName: string | null;
-  sourceAvailability: string | null;
+  sourceAvailableDryMassKg: number | null;
   sourceWetMassKg: number | null;
-  sourceDryMassKg: number | null;
-  destinationWetMassKg: number | null;
+  sourceMoisturePercent: number | null;
   destinationDryMassKg: number | null;
   destinationBinLabel: string | null;
 }) {
+  const sourceDryMassKg = splitWetMass(
+    sourceWetMassKg,
+    sourceMoisturePercent,
+  )?.dryKg ?? null;
   const hasSource = !!sourceBinName;
-  const hasMass = sourceWetMassKg !== null && sourceWetMassKg > 0;
+  const hasDryTransfer = sourceDryMassKg !== null && sourceDryMassKg > 0;
   const hasDestination = !!destinationBinLabel;
+  const remainingSourceDryMassKg =
+    sourceAvailableDryMassKg !== null && sourceDryMassKg !== null
+      ? sourceAvailableDryMassKg - sourceDryMassKg
+      : null;
 
-  if (!hasSource && !hasMass && !hasDestination) return null;
+  if (!hasSource && !hasDryTransfer && !hasDestination) return null;
 
   return (
-    <div className="flex items-stretch gap-0 text-center">
+    <div className="grid grid-cols-1 items-stretch gap-6 text-left sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-8">
       {/* Source bin */}
       <div
-        className={`flex-1 border px-12 py-10 flex flex-col justify-center transition-colors ${
+        role="group"
+        aria-label="Source biochar"
+        className={`border px-12 py-10 flex flex-col justify-center transition-colors ${
           hasSource
             ? "border-[var(--color-border-primary)] bg-[var(--color-background-medium)]"
             : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
         }`}
       >
-        <span className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-[0.06em]">
-          Source
-        </span>
         {hasSource ? (
           <>
-            <span className="body-small font-medium text-[var(--color-text-primary)] mt-2">
-              {sourceBinName}
-            </span>
-            {sourceAvailability && (
-              <span className="body-caption text-[var(--color-text-secondary)] mt-1">
-                {sourceAvailability}
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              Source ·{" "}
+              <span className="text-[var(--color-text-secondary)]">
+                {sourceBinName}
               </span>
-            )}
-            {hasMass && (
-              <span className="body-caption font-medium text-[var(--st-wait)] mt-1">
-                &minus;{" "}
-                {formatWetDryMass({
-                  wetKg: sourceWetMassKg,
-                  dryKg: sourceDryMassKg,
-                })}
+            </p>
+            <p className="body-small text-[var(--color-text-primary)] mt-6">
+              Dry biochar:{" "}
+              <span className="font-medium">
+                {formatMassKg(sourceAvailableDryMassKg)}
               </span>
+              {hasDryTransfer && (
+                <span className="font-medium text-[var(--st-wait)]">
+                  {" "}(&minus;{formatMassKg(sourceDryMassKg)})
+                </span>
+              )}
+            </p>
+            {remainingSourceDryMassKg !== null ? (
+              <p className="body-small text-[var(--color-text-secondary)] mt-2">
+                Remaining:{" "}
+                <span className="font-medium">
+                  {formatMassKg(remainingSourceDryMassKg)}
+                </span>
+              </p>
+            ) : (
+              <p className="body-small text-[var(--color-text-tertiary)] mt-2">
+                Add wet mass and moisture to calculate the transfer.
+              </p>
             )}
           </>
         ) : (
-          <span className="body-small text-[var(--color-text-tertiary)] mt-2">
-            Select a biochar bin
-          </span>
+          <>
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              Source
+            </span>
+            <span className="body-small text-[var(--color-text-tertiary)] mt-2">
+              Select a biochar bin
+            </span>
+          </>
         )}
       </div>
 
-      {/* Arrow + mass */}
-      <div className="flex flex-col items-center justify-center px-8 min-w-[80px]">
-        <svg width="48" height="16" viewBox="0 0 48 16" fill="none" className="text-[var(--color-text-tertiary)]">
-          <path d="M0 8H40M40 8L34 3M40 8L34 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Direction only: the mass is already stated in the source equation. */}
+      <div
+        aria-hidden="true"
+        className="flex items-center justify-center py-2 sm:px-4 sm:py-0"
+      >
+        <svg
+          width="40"
+          height="16"
+          viewBox="0 0 48 16"
+          fill="none"
+          className="rotate-90 text-[var(--color-text-tertiary)] sm:rotate-0"
+        >
+          <path
+            d="M0 8H40M40 8L34 3M40 8L34 13"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
-        {hasMass ? (
-          <span className="body-caption font-medium text-[var(--color-text-primary)] mt-2">
-            {formatWetDryMass({
-              wetKg: sourceWetMassKg,
-              dryKg: sourceDryMassKg,
-            })}
-          </span>
-        ) : (
-          <span className="body-caption text-[var(--color-text-tertiary)] mt-2">
-            Not recorded
-          </span>
-        )}
       </div>
 
       {/* Destination bin */}
       <div
-        className={`flex-1 border px-12 py-10 flex flex-col justify-center transition-colors ${
+        role="group"
+        aria-label="Destination bin"
+        className={`border px-12 py-10 flex flex-col justify-center transition-colors ${
           hasDestination
             ? "border-[var(--color-border-primary)] bg-[var(--color-background-medium)]"
             : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
         }`}
       >
-        <span className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-[0.06em]">
-          Destination
-        </span>
         {hasDestination ? (
           <>
-            <span className="body-small font-medium text-[var(--color-text-primary)] mt-2">
-              {destinationBinLabel}
-            </span>
-            {destinationWetMassKg !== null && destinationWetMassKg > 0 && (
-              <span className="body-caption font-medium text-[var(--st-ok)] mt-1">
-                +{" "}
-                {formatWetDryMass({
-                  wetKg: destinationWetMassKg,
-                  dryKg: destinationDryMassKg,
-                })}
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              Destination ·{" "}
+              <span className="text-[var(--color-text-secondary)]">
+                {destinationBinLabel}
+              </span>
+            </p>
+            {destinationDryMassKg !== null && destinationDryMassKg > 0 && (
+              <span className="body-small text-[var(--color-text-secondary)] mt-6">
+                Dry product:{" "}
+                <span className="font-medium text-[var(--st-ok)]">
+                  +{formatMassKg(destinationDryMassKg)}
+                </span>
               </span>
             )}
           </>
         ) : (
-          <span className="body-small text-[var(--color-text-tertiary)] mt-2">
-            Select a bin
-          </span>
+          <>
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              Destination
+            </span>
+            <span className="body-small text-[var(--color-text-tertiary)] mt-2">
+              Select a bin
+            </span>
+          </>
         )}
       </div>
     </div>
@@ -410,10 +440,11 @@ export function BiocharProductForm({
           </SectionLabel>
           <TransferFlowPreview
             sourceBinName={selectedSourceBiocharBin?.name ?? null}
-            sourceAvailability={selectedSourceBiocharBin?.subtitle ?? null}
+            sourceAvailableDryMassKg={
+              selectedSourceBiocharBin?.remainingMass?.dryKg ?? null
+            }
             sourceWetMassKg={requestedBiocharKg}
-            sourceDryMassKg={null}
-            destinationWetMassKg={effectiveWetMassKg}
+            sourceMoisturePercent={moistureNum}
             destinationDryMassKg={finalMassSplit?.dryKg ?? null}
             destinationBinLabel={
               selectedStorageLocation?.name
