@@ -34,6 +34,7 @@ import {
   type WorkflowStepModel,
 } from "./ghg-statement-workflow";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
+import { GhgStatementTechnicalDetails } from "./ghg-statement-technical-details";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -189,9 +190,12 @@ function DetailState({
 
   const { statementSubmission, linkedRemovals, remote, recentSyncEvents } =
     query.data;
+  const locked = statementSubmission
+    ? isLockedInFlight(statementSubmission)
+    : false;
   const derived = deriveSubmissionStatus(
     statementSubmission,
-    statementSubmission ? isLockedInFlight(statementSubmission) : false,
+    locked,
     "ghgStatement",
   );
   const mode = remote ? chooseGhgSubmitMode(remote) : "submit";
@@ -352,6 +356,27 @@ function DetailState({
               </Accordion.Panel>
             </Accordion.Item>
           )}
+
+          <Accordion.Item value="technical-details" className={ACCORDION_ITEM}>
+            <Accordion.Header>
+              <Accordion.Trigger
+                className={ACCORDION_TRIGGER}
+                labelClassName={ACCORDION_LABEL}
+              >
+                Technical details
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Panel className="[&>div]:p-16">
+              <GhgStatementTechnicalDetails
+                statement={statement}
+                statementSubmission={statementSubmission}
+                remote={remote}
+                isLockedInFlight={locked}
+                mode={mode}
+                latestReport={reportsQuery.data?.[0] ?? null}
+              />
+            </Accordion.Panel>
+          </Accordion.Item>
         </Accordion.Root>
       </SlideOverPanel.Body>
 
