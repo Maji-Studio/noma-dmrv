@@ -33,6 +33,7 @@ import {
   shouldSetUsageToPyrolysisForIsometricSelection,
   shouldShowCertifiedFeedstockWarning,
   shouldShowIsometricFeedstockSection,
+  visibleFeedstockTypeSection,
 } from "./feedstock-type-form-logic";
 
 // General = the local record (the only editable surface). Isometric =
@@ -101,13 +102,18 @@ export function FeedstockTypeForm({
   // Fetch the registry browser lazily on first open; React Query keeps the
   // catalogue warm if the operator switches sections.
   const [hasOpenedIsometric, setHasOpenedIsometric] = useState(false);
-  const sections = shouldShowIsometricFeedstockSection(
+  const showIsometricSection = shouldShowIsometricFeedstockSection(
     hasIsometricCertifier,
     lockUsage,
     defaultUsage,
-  )
+  );
+  const sections = showIsometricSection
     ? SECTIONS
     : SECTIONS.filter((section) => section.key === "general");
+  const visibleActiveSection = visibleFeedstockTypeSection(
+    activeSection,
+    showIsometricSection,
+  );
   // With only the General source there is no choice to present, so the source
   // selector and the registry-certification warning (which never applies to
   // internal-only blend materials) are both redundant.
@@ -238,7 +244,7 @@ export function FeedstockTypeForm({
         aria-label="Feedstock type source"
       >
         {sections.map(({ key, label, description, icon: Icon }, index) => {
-          const isActive = key === activeSection;
+          const isActive = key === visibleActiveSection;
           return (
             <button
               key={key}
@@ -292,9 +298,9 @@ export function FeedstockTypeForm({
           aria-labelledby={
             showSourceSelector ? getSelectorId("general") : undefined
           }
-          className={cn(activeSection !== "general" && "hidden")}
+          className={cn(visibleActiveSection !== "general" && "hidden")}
         >
-          {activeSection === "general" && (
+          {visibleActiveSection === "general" && (
             <div className="space-y-20">
               {hint && (
                 <p className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">
@@ -407,9 +413,9 @@ export function FeedstockTypeForm({
           aria-labelledby={
             showSourceSelector ? getSelectorId("isometric") : undefined
           }
-          className={cn(activeSection !== "isometric" && "hidden")}
+          className={cn(visibleActiveSection !== "isometric" && "hidden")}
         >
-          {activeSection === "isometric" && (
+          {visibleActiveSection === "isometric" && (
             <div className="space-y-20">
               {/* Only fetch once the section has first been opened. */}
               {hasOpenedIsometric && (

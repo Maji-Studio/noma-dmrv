@@ -4,6 +4,8 @@ import {
 } from "@/schemas/feedstock-types";
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 
+export type FeedstockTypeSection = "general" | "isometric";
+
 export function initialFeedstockTypeUsage(
   persistedUsage: string | undefined,
   defaultUsage: FeedstockTypeUsage | undefined,
@@ -26,6 +28,15 @@ export function shouldShowIsometricFeedstockSection(
   return (
     hasIsometricCertifier && !(lockUsage && defaultUsage === "blend")
   );
+}
+
+export function visibleFeedstockTypeSection(
+  activeSection: FeedstockTypeSection,
+  showIsometricSection: boolean,
+): FeedstockTypeSection {
+  return activeSection === "isometric" && !showIsometricSection
+    ? "general"
+    : activeSection;
 }
 
 export function feedstockTypeUsageOptionsFor(

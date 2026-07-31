@@ -6,6 +6,7 @@ import {
   shouldSetUsageToPyrolysisForIsometricSelection,
   shouldShowCertifiedFeedstockWarning,
   shouldShowIsometricFeedstockSection,
+  visibleFeedstockTypeSection,
 } from "./feedstock-type-form-logic";
 
 describe("initialFeedstockTypeUsage", () => {
@@ -51,6 +52,13 @@ describe("shouldShowIsometricFeedstockSection", () => {
     expect(shouldShowIsometricFeedstockSection(true, true, "pyrolysis")).toBe(
       true,
     );
+  });
+});
+
+describe("visibleFeedstockTypeSection", () => {
+  it("falls back to General when the Isometric gate closes", () => {
+    expect(visibleFeedstockTypeSection("isometric", true)).toBe("isometric");
+    expect(visibleFeedstockTypeSection("isometric", false)).toBe("general");
   });
 });
 
