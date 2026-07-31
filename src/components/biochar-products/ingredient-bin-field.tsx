@@ -8,12 +8,6 @@ import {
   type CompositionRow,
 } from "@/lib/biochar-composition";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
-import { formatStorageLocationType } from "@/schemas/storage-locations";
-
-// The storage-location option subtitle for a feedstock bin starts with
-// "Feedstock bin · " (formatStorageLocationType). Strip it from the selected
-// label so the row doesn't repeat the bin kind it already lives under.
-const FEEDSTOCK_BIN_PREFIX = `${formatStorageLocationType(COMPOSITION_BIN_TYPE)} · `;
 
 function formatKgShort(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -32,12 +26,6 @@ export function IngredientBinField({
   isSubmitting,
   facilityId,
 }: IngredientBinFieldProps) {
-  const formatLabel = (entity: { name: string; subtitle?: string }) => {
-    const parts = [entity.name];
-    if (entity.subtitle) parts.push(entity.subtitle.replace(FEEDSTOCK_BIN_PREFIX, ""));
-    return parts.join(" · ");
-  };
-
   const showDeviation =
     row.deviationPercent != null &&
     Math.abs(row.deviationPercent) >= INGREDIENT_MASS_DEVIATION_WARN_PERCENT;
@@ -68,7 +56,6 @@ export function IngredientBinField({
                   feedstockTypeId: row.feedstockTypeId,
                   feedstockTypeUsage: "blend",
                 }}
-                formatSelectedLabel={formatLabel}
               />
             </FormField>
           )}

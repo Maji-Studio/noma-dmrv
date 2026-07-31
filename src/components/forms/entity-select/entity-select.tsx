@@ -9,6 +9,7 @@ import {
   useRef,
   useEffect,
   useCallback,
+  useId,
   useMemo,
   type KeyboardEvent,
 } from "react";
@@ -23,6 +24,7 @@ import { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
 import { FormulationQuickAddDialog } from "./formulation-quick-add-dialog";
 import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
+import { formatRemainingMass } from "./remaining-mass";
 
 // Icons
 function ChevronDown({ className }: { className?: string }) {
@@ -177,6 +179,8 @@ export function EntitySelect({
   hideSearch = false,
   formatSelectedLabel,
   emptyHint,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }: EntitySelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -191,6 +195,9 @@ export function EntitySelect({
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const entitySelectId = useId();
+  const listboxId = `${entitySelectId}-listbox`;
+  const remainingMassId = `${entitySelectId}-remaining-mass`;
 
   // Debounce search for better performance
   const debouncedSearch = useDebounce(searchQuery, 200);
@@ -228,6 +235,13 @@ export function EntitySelect({
   const displayText = selectedOption
     ? (formatSelectedLabel ? formatSelectedLabel(selectedOption) : selectedOption.name)
     : "";
+  const remainingMass = selectedOption?.remainingMass;
+  const triggerDescribedBy = [
+    ariaDescribedBy,
+    remainingMass ? remainingMassId : undefined,
+  ]
+    .filter(Boolean)
+    .join(" ") || undefined;
   // Only while the by-ID fetch is unresolved — once it settles without a
   // match (deleted or inaccessible entity) the ordinary placeholder returns.
   const isSelectionLoading = Boolean(
@@ -418,9 +432,13 @@ export function EntitySelect({
           onClick={handleToggle}
           onKeyDown={handleKeyDown}
           disabled={disabled}
+          role="combobox"
           aria-haspopup="listbox"
           aria-expanded={isOpen}
+          aria-controls={listboxId}
           aria-label={placeholder || defaultPlaceholder}
+          aria-describedby={triggerDescribedBy}
+          aria-invalid={ariaInvalid}
           data-testid="entity-select-trigger"
           className={cn(
             "flex h-40 w-full items-center justify-between gap-2 border bg-[var(--color-background-white)] px-12 text-[var(--text-s)] transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]",
@@ -468,6 +486,15 @@ export function EntitySelect({
         )}
       </div>
 
+      {remainingMass && (
+        <p
+          id={remainingMassId}
+          className="body-caption text-[var(--color-text-tertiary)] mt-4"
+        >
+          {formatRemainingMass(remainingMass)}
+        </p>
+      )}
+
       {/* Dropdown */}
       {isOpen && (
         <div
@@ -496,6 +523,7 @@ export function EntitySelect({
 
           {/* Options list */}
           <ul
+            id={listboxId}
             ref={listboxRef}
             role="listbox"
             aria-label={`${ENTITY_TYPE_LABELS[entityType] || entityType} options`}

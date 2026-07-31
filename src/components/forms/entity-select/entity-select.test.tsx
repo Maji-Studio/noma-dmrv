@@ -7,9 +7,16 @@ const entityState = vi.hoisted(() => ({
     code: string;
     name: string;
     subtitle?: string;
+    remainingMass?: { wetKg: number | null; dryKg?: number | null };
   }>,
   selected: undefined as
-    | { id: string; code: string; name: string; subtitle?: string }
+    | {
+        id: string;
+        code: string;
+        name: string;
+        subtitle?: string;
+        remainingMass?: { wetKg: number | null; dryKg?: number | null };
+      }
     | undefined,
   selectedPending: true,
 }));
@@ -95,6 +102,48 @@ describe("EntitySelect selected-value display", () => {
 
     expect(html).toContain("Select reactor");
     expect(html).not.toContain("Loading selection…");
+  });
+
+  it("shows selected remaining mass and merges its accessible description", () => {
+    entityState.selected = {
+      id: "reactor-1",
+      code: "BIN-01",
+      name: "North product bin",
+      remainingMass: { wetKg: 3_000, dryKg: 2_900 },
+    };
+    entityState.selectedPending = false;
+
+    const html = renderToStaticMarkup(
+      <EntitySelect
+        entityType="storageLocation"
+        value="reactor-1"
+        onChange={() => undefined}
+        aria-describedby="field-helper"
+        aria-invalid
+      />,
+    );
+
+    expect(html).toContain(
+      "Remaining wet mass: 3,000kg | dry mass: 2,900kg",
+    );
+    expect(html).toContain('aria-describedby="field-helper ');
+    expect(html).toContain('aria-invalid="true"');
+  });
+
+  it("does not render a selected helper for generic subtitles or no selection", () => {
+    entityState.selected = {
+      id: "reactor-1",
+      code: "R-1",
+      name: "North Kiln",
+      subtitle: "Reactor description",
+    };
+    entityState.selectedPending = false;
+
+    expect(render("reactor-1")).not.toContain("Reactor description");
+    expect(render("reactor-1")).not.toContain("Remaining wet mass");
+
+    entityState.selected = undefined;
+    expect(render()).not.toContain("Remaining wet mass");
   });
 });
 

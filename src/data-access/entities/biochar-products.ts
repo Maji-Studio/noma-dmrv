@@ -9,7 +9,7 @@
 
 import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { numericAggregate, sumNumeric } from "@/db/aggregate";
+import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
   deliveries,
@@ -34,16 +34,15 @@ function formatStockSubtitle(
   moisturePercent: number | null,
   deliveredWetKg: number,
   deliveredDryKg: number,
+  unresolvedDeliveredDryCount: number,
 ): string {
-  const remainingWetKg = Math.max(
-    0,
-    (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg,
-  );
+  const remainingWetKg =
+    (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg;
   const productDryKg = splitWetMass(massKg, moisturePercent)?.dryKg;
   const remainingDryKg =
-    productDryKg == null
+    productDryKg == null || unresolvedDeliveredDryCount > 0
       ? null
-      : Math.max(0, productDryKg - deliveredDryKg);
+      : productDryKg - deliveredDryKg;
   const productLabel = formulationName ?? PURE_BIOCHAR_LABEL;
   return `${productLabel} · ${formatWetDryMass({
     wetKg: remainingWetKg,
@@ -71,6 +70,12 @@ function buildDeliveredMassAggregate(ctx: OrgContext) {
     totalDeliveredDryKg: sumNumeric(deliveries.massDryKg).as(
       "total_delivered_dry_kg",
     ),
+    unresolvedDeliveredDryCount: countRows(
+      and(
+        sql`${deliveries.deliveredWetMassKg} > 0`,
+        isNull(deliveries.massDryKg),
+      ),
+    ).as("unresolved_delivered_dry_count"),
   })
   .from(deliveries)
   .innerJoin(
@@ -108,6 +113,9 @@ function buildSelection(
     totalDeliveredDryKg: numericAggregate(
       sql<number>`COALESCE(${deliveredMassAggregate.totalDeliveredDryKg}, 0)`,
     ),
+    unresolvedDeliveredDryCount: numericAggregate(
+      sql<number>`COALESCE(${deliveredMassAggregate.unresolvedDeliveredDryCount}, 0)`,
+    ),
   };
 }
 
@@ -122,7 +130,16 @@ export function toBiocharProductEntityOption(r: {
   moisturePercent: number | null;
   totalDeliveredKg: number;
   totalDeliveredDryKg: number;
+  unresolvedDeliveredDryCount: number;
 }): EntityOption {
+  const remainingWetKg =
+    (r.massKg ?? 0) + (r.waterAddedKg ?? 0) - r.totalDeliveredKg;
+  const productDryKg = splitWetMass(r.massKg, r.moisturePercent)?.dryKg;
+  const remainingDryKg =
+    productDryKg == null || r.unresolvedDeliveredDryCount > 0
+      ? null
+      : productDryKg - r.totalDeliveredDryKg;
+
   return {
     id: r.id,
     code: r.code ?? r.productCode,
@@ -134,6 +151,10 @@ export function toBiocharProductEntityOption(r: {
         r.waterAddedKg,
       ),
     },
+    remainingMass: {
+      wetKg: remainingWetKg,
+      dryKg: remainingDryKg,
+    },
     subtitle: formatStockSubtitle(
       r.formulationName,
       r.massKg,
@@ -141,6 +162,7 @@ export function toBiocharProductEntityOption(r: {
       r.moisturePercent,
       r.totalDeliveredKg,
       r.totalDeliveredDryKg,
+      r.unresolvedDeliveredDryCount,
     ),
   };
 }

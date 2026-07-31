@@ -22,6 +22,10 @@ describe("toOrderEntityOption", () => {
       id: "order-1",
       code: "OR-26-001",
       name: "North Farm · Finished product north · May 17, 2026",
+      remainingMass: {
+        wetKg: 900,
+        dryKg: 765,
+      },
       subtitle:
         "Wet biochar product: 900kg | Dry biochar: 765kg remaining",
     });
@@ -49,23 +53,24 @@ describe("toOrderEntityOption", () => {
   });
 
   it("keeps remaining dry mass unknown when a delivery has no dry mass", () => {
-    expect(
-      toOrderEntityOption({
-        id: "order-1",
-        code: "OR-26-001",
-        orderDate: new Date("2026-05-17T00:00:00.000Z"),
-        quantityKg: 100,
-        customerName: "North Farm",
-        productBinName: "Finished product north",
-        productMassKg: 100,
-        productWaterAddedKg: 0,
-        productMoisturePercent: 10,
-        totalDeliveredKg: 10,
-        totalDeliveredDryKg: 0,
-        unresolvedDeliveredDryCount: 1,
-      }).subtitle,
-    ).toBe(
+    const option = toOrderEntityOption({
+      id: "order-1",
+      code: "OR-26-001",
+      orderDate: new Date("2026-05-17T00:00:00.000Z"),
+      quantityKg: 100,
+      customerName: "North Farm",
+      productBinName: "Finished product north",
+      productMassKg: 100,
+      productWaterAddedKg: 0,
+      productMoisturePercent: 10,
+      totalDeliveredKg: 10,
+      totalDeliveredDryKg: 0,
+      unresolvedDeliveredDryCount: 1,
+    });
+
+    expect(option.subtitle).toBe(
       "Wet biochar product: 90kg | Dry biochar: Not recorded remaining",
     );
+    expect(option.remainingMass).toEqual({ wetKg: 90, dryKg: null });
   });
 });
