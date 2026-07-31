@@ -7,10 +7,14 @@ describe("transport leg header CERT status", () => {
       deriveTransportLegCertStatuses(
         [{ distanceKm: 25, distanceSource: "manual", loadMassKg: 100 }],
         false,
+        "feedstock",
       ),
     ).toEqual({
       distance: "neutral",
-      provenance: "neutral",
+      provenance: {
+        label: "Transport distance provenance",
+        status: "neutral",
+      },
       load: "neutral",
     });
   });
@@ -20,10 +24,14 @@ describe("transport leg header CERT status", () => {
       deriveTransportLegCertStatuses(
         [{ distanceKm: 25, distanceSource: "manual", loadMassKg: 100 }],
         true,
+        "feedstock",
       ),
     ).toEqual({
       distance: "satisfied",
-      provenance: "satisfied",
+      provenance: {
+        label: "Transport distance provenance",
+        status: "satisfied",
+      },
       load: "satisfied",
     });
   });
@@ -39,11 +47,32 @@ describe("transport leg header CERT status", () => {
           },
         ],
         true,
+        "feedstock",
       ),
     ).toEqual({
       distance: "satisfied",
-      provenance: "satisfied",
+      provenance: {
+        label: "Transport distance provenance",
+        status: "satisfied",
+      },
       load: "satisfied",
     });
   });
+
+  it.each(["sample", "biochar"] as const)(
+    "does not show stale provenance certification for %s legs",
+    (entityType) => {
+      expect(
+        deriveTransportLegCertStatuses(
+          [{ distanceKm: 25, distanceSource: "manual", loadMassKg: 100 }],
+          true,
+          entityType,
+        ),
+      ).toEqual({
+        distance: "satisfied",
+        provenance: undefined,
+        load: "satisfied",
+      });
+    },
+  );
 });

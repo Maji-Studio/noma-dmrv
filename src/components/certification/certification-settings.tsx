@@ -53,6 +53,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { EmissionEstimatesForm } from "@/components/admin/emission-estimates-form";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { SETTINGS_CONSOLE_MAX_WIDTH_CLASS } from "@/components/settings/settings-console";
 import { PageHeader } from "@/components/ui";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useIsAdmin } from "@/hooks/use-is-admin";
@@ -72,9 +73,6 @@ import { CertifierSettingsPanel } from "./certifier-settings-panel";
 import { EnvBanner } from "./env-banner";
 import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-settings";
 import { SettingsRail, type SettingsSectionMeta } from "@/components/ui";
-
-/** A rail plus a form pane stops being readable past roughly this width. */
-const CONSOLE_MAX_WIDTH = "max-w-[1160px]";
 
 const SECTION_CERTIFIER = CERTIFICATION_SETTINGS_CERTIFIER_SECTION;
 const SECTION_SOURCES = CERTIFICATION_SETTINGS_SOURCES_SECTION;
@@ -287,7 +285,9 @@ export function CertificationSettings() {
 
   return (
     <div className="container-max page-shell">
-      <div className={`${CONSOLE_MAX_WIDTH} flex flex-col gap-16`}>
+      <div
+        className={`${SETTINGS_CONSOLE_MAX_WIDTH_CLASS} flex flex-col gap-16`}
+      >
         <PageHeader area="certification" title="Settings" subtitle={subtitle} />
         {/* Which Isometric environment a write lands in is a property of the
             whole integration, not of one category, so it stays above the rail
@@ -299,7 +299,7 @@ export function CertificationSettings() {
       </div>
 
       <div
-        className={`${CONSOLE_MAX_WIDTH} grid gap-24 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start`}
+        className={`${SETTINGS_CONSOLE_MAX_WIDTH_CLASS} grid gap-24 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start`}
       >
         <SettingsRail
           sections={sections}
