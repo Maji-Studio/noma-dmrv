@@ -219,9 +219,10 @@ export interface WetDryMassFormatInput {
   unitSpacing?: "spaced" | "compact";
 }
 
-function formatRecordedMass(
+/** Format one member of a wet/dry pair, preserving an explicit missing state. */
+export function formatRecordedMass(
   kg: number | null | undefined,
-  unitSpacing: "spaced" | "compact",
+  unitSpacing: "spaced" | "compact" = "spaced",
 ): string {
   if (kg == null || !Number.isFinite(kg) || kg < 0) {
     return "Not recorded";

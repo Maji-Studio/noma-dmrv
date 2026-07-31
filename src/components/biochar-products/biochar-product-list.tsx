@@ -31,6 +31,7 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
+import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -53,7 +54,6 @@ import {
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
-  formatWetDryMass,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
   splitWetMassAfterAddedWater,
@@ -106,12 +106,12 @@ function createColumns(
           row.original.waterAddedKg,
         );
         return (
-          <span className="font-mono">
-            {formatWetDryMass({
-              wetKg: split?.wetKg ?? row.original.massKg,
-              dryKg: split?.dryKg,
-            })}
-          </span>
+          <MassPair
+            wetKg={split?.wetKg ?? row.original.massKg}
+            dryKg={split?.dryKg}
+            layout="stacked"
+            variant="compact"
+          />
         );
       },
     },
@@ -158,6 +158,48 @@ type SideSheetState =
   | { mode: "create"; entity: null }
   | { mode: "view"; entity: BiocharProductWithRelations }
   | { mode: "edit"; entity: BiocharProductWithRelations };
+
+interface BiocharProductPageMassSummaryProps {
+  products: BiocharProductWithRelations[];
+  isLoading?: boolean;
+}
+
+export function BiocharProductPageMassSummary({
+  products,
+  isLoading = false,
+}: BiocharProductPageMassSummaryProps) {
+  const pageMass = products.reduce(
+    (total, product) => {
+      const split = splitWetMassAfterAddedWater(
+        product.massKg,
+        product.moistureContentPercent,
+        product.waterAddedKg,
+      );
+      return {
+        wetKg: total.wetKg + (split?.wetKg ?? product.massKg ?? 0),
+        dryKg: total.dryKg + (split?.dryKg ?? 0),
+        hasMissingDry: total.hasMissingDry || split == null,
+      };
+    },
+    { wetKg: 0, dryKg: 0, hasMissingDry: false },
+  );
+
+  return (
+    <StatCard
+      title="Mass on This Page"
+      value={
+        <MassPair
+          wetKg={pageMass.wetKg}
+          dryKg={pageMass.hasMissingDry ? null : pageMass.dryKg}
+        />
+      }
+      valueLayout="breakdown"
+      icon={<ScalesIcon size={24} weight="bold" />}
+      description="Combined product mass on the current page"
+      isLoading={isLoading}
+    />
+  );
+}
 
 // ============================================
 // Component
@@ -258,21 +300,6 @@ export function BiocharProductList() {
     isLoading,
     setCurrentPage,
   });
-  const pageMass = products.reduce(
-    (total, product) => {
-      const split = splitWetMassAfterAddedWater(
-        product.massKg,
-        product.moistureContentPercent,
-        product.waterAddedKg,
-      );
-      return {
-        wetKg: total.wetKg + (split?.wetKg ?? product.massKg ?? 0),
-        dryKg: total.dryKg + (split?.dryKg ?? 0),
-        hasMissingDry: total.hasMissingDry || split == null,
-      };
-    },
-    { wetKg: 0, dryKg: 0, hasMissingDry: false },
-  );
   const hasActiveFilters =
     searchInput.trim().length > 0 || Boolean(creditBatchFilter);
 
@@ -422,14 +449,8 @@ export function BiocharProductList() {
           description="Finished product batches"
           isLoading={isLoading}
         />
-        <StatCard
-          title="Mass on This Page"
-          value={formatWetDryMass({
-            wetKg: pageMass.wetKg,
-            dryKg: pageMass.hasMissingDry ? null : pageMass.dryKg,
-          })}
-          icon={<ScalesIcon size={24} weight="bold" />}
-          description="Combined product mass on this page"
+        <BiocharProductPageMassSummary
+          products={products}
           isLoading={isLoading}
         />
       </div>

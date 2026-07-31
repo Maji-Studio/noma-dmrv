@@ -10,8 +10,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import {
   TruckIcon,
   CalendarIcon,
-  PackageIcon,
-  DropIcon,
+  ScalesIcon,
   PlusIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -22,6 +21,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
+import { MassPair } from "@/components/ui/mass-pair";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { DeliveryForm } from "./delivery-form";
@@ -486,26 +486,23 @@ export function DeliveryList() {
       />
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title="Total Deliveries"
           value={statsData?.totalDeliveries ?? 0}
           icon={<TruckIcon size={24} weight="bold" />}
-          description="All deliveries"
           isLoading={statsLoading}
         />
         <StatCard
-          title="Wet Mass Delivered"
-          value={formatMassKg(statsData?.totalDeliveredWetMassKg ?? 0)}
-          icon={<PackageIcon size={24} weight="bold" />}
-          description="Total wet mass"
-          isLoading={statsLoading}
-        />
-        <StatCard
-          title="Dry Mass"
-          value={formatMassKg(statsData?.totalMassDryKg ?? 0)}
-          icon={<DropIcon size={24} weight="bold" />}
-          description="Total dry mass"
+          title="Delivered Mass"
+          value={
+            <MassPair
+              wetKg={statsData?.totalDeliveredWetMassKg ?? 0}
+              dryKg={statsData?.totalMassDryKg ?? 0}
+            />
+          }
+          valueLayout="breakdown"
+          icon={<ScalesIcon size={24} weight="bold" />}
           isLoading={statsLoading}
         />
         <StatCard
