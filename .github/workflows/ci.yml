@@ -85,6 +85,11 @@ jobs:
       - name: Spacing-scale check
         run: pnpm check:spacing-scale
 
+      # docs/ux-writing.md bans en and em dashes in user-facing copy; this
+      # parses string literals and JSX text (never comments) to enforce it.
+      - name: UX-copy dash check
+        run: pnpm check:ux-copy
+
       - name: Apply schema
         run: pnpm drizzle-kit push --force
 
