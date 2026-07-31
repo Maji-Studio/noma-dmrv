@@ -25,4 +25,46 @@ describe("ProcessFlowPreview", () => {
     expect(text).not.toContain("100 kg wet");
     expect(text).not.toContain("50 kg wet");
   });
+
+  it("uses wet mass on both sides when output dry mass is unresolved", () => {
+    const html = renderToStaticMarkup(
+      <ProcessFlowPreview
+        sourceBinName="Feedstock July"
+        feedstockKg={100}
+        feedstockDryKg={90}
+        reactorName="Reactor 1"
+        biocharKg={50}
+        biocharDryKg={null}
+        destinationBinName="Biochar July"
+      />,
+    );
+    const text = html.replace(/<[^>]+>/g, "");
+
+    expect(text).toContain("Wet feedstock: 100 kg");
+    expect(text).toContain("Wet biochar: 50 kg");
+    expect(text).toContain("Wet yield: 50.0%");
+    expect(text).toContain("Biochar dry mass not recorded.");
+    expect(text).not.toContain("Dry feedstock: 90 kg");
+  });
+
+  it("uses wet mass on both sides when input dry mass is unresolved", () => {
+    const html = renderToStaticMarkup(
+      <ProcessFlowPreview
+        sourceBinName="Feedstock July"
+        feedstockKg={100}
+        feedstockDryKg={null}
+        reactorName="Reactor 1"
+        biocharKg={50}
+        biocharDryKg={45}
+        destinationBinName="Biochar July"
+      />,
+    );
+    const text = html.replace(/<[^>]+>/g, "");
+
+    expect(text).toContain("Wet feedstock: 100 kg");
+    expect(text).toContain("Wet biochar: 50 kg");
+    expect(text).toContain("Wet yield: 50.0%");
+    expect(text).toContain("Feedstock dry mass not recorded.");
+    expect(text).not.toContain("Dry biochar: 45 kg");
+  });
 });

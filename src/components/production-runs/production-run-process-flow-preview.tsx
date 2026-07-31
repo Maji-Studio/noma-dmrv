@@ -37,12 +37,12 @@ export function ProcessFlowPreview({
           : null
       : null;
 
-  const feedstockMassKg = feedstockDryKg ?? feedstockKg;
-  const feedstockMassLabel =
-    feedstockDryKg !== null ? "Dry feedstock" : "Wet feedstock";
-  const biocharMassKg = biocharDryKg ?? biocharKg;
-  const biocharMassLabel =
-    biocharDryKg !== null ? "Dry biochar" : "Wet biochar";
+  // Pick one basis for the whole equation. If either dry value is unresolved,
+  // show both sides on their authoritative wet basis and name the dry gap.
+  const feedstockMassKg = useDry ? feedstockDryKg : feedstockKg;
+  const feedstockMassLabel = useDry ? "Dry feedstock" : "Wet feedstock";
+  const biocharMassKg = useDry ? biocharDryKg : biocharKg;
+  const biocharMassLabel = useDry ? "Dry biochar" : "Wet biochar";
 
   return (
     <div className="grid grid-cols-1 items-stretch gap-6 text-left sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-8">
@@ -69,6 +69,11 @@ export function ProcessFlowPreview({
                 <span className="font-medium">
                   {formatMassKg(feedstockMassKg)}
                 </span>
+              </p>
+            )}
+            {!useDry && hasFeedstock && feedstockDryKg === null && (
+              <p className="body-caption text-[var(--color-text-tertiary)] mt-2">
+                Feedstock dry mass not recorded.
               </p>
             )}
           </>
@@ -140,6 +145,11 @@ export function ProcessFlowPreview({
                 <span className="font-medium">
                   {formatMassKg(biocharMassKg)}
                 </span>
+              </p>
+            )}
+            {!useDry && hasBiochar && biocharDryKg === null && (
+              <p className="body-caption text-[var(--color-text-tertiary)] mt-2">
+                Biochar dry mass not recorded.
               </p>
             )}
           </>
