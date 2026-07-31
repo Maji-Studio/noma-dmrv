@@ -852,7 +852,7 @@ export async function refreshGhgStatementStatus(
           },
           tx,
         );
-        return redactReportSecrets(remote) as GhgStatement;
+        return redactReportSecrets(remote);
       },
     );
   });
@@ -919,7 +919,7 @@ export async function loadGhgStatementState(
       // The verifier URL can carry the bearer token for the generated report.
       // Keep that plaintext capability on the server even though the rest of
       // the registry statement is useful in the technical-details pane.
-      remote: redactReportSecrets(remote) as GhgStatement | null,
+      remote: redactReportSecrets(remote),
       recentSyncEvents,
       isLockedInFlight: statementSubmission
         ? computeIsLockedInFlight(statementSubmission)

@@ -27,18 +27,14 @@ import {
   useGhgStatementReports,
 } from "@/hooks/use-certification";
 import type { GhgStatementReportView } from "@/fn/certification/ghg-statement-reports";
-import { CheckRow, type CheckStatus } from "./check-row";
+import { CheckRow } from "./check-row";
 import { DisclosureSummary } from "./disclosure-summary";
+import type { WorkflowStepModel } from "./ghg-statement-workflow-state";
 
 type ReportsQuery = ReturnType<typeof useGhgStatementReports>;
 type PrepareMutation = ReturnType<
   typeof usePrepareGhgStatementReport
 >["mutate"];
-
-export interface WorkflowStepModel {
-  status: CheckStatus;
-  detail?: string;
-}
 
 interface GhgStatementWorkflowProps {
   ghgStatementId: string;
@@ -214,12 +210,6 @@ export function GhgStatementWorkflow({
       </p>
     );
   }
-  if (reportsQuery.error) {
-    return (
-      <ServerError message="Reports could not be loaded. Refresh the page and try again." />
-    );
-  }
-
   const approveLatest = async () => {
     if (!latest) return;
     setError(null);
@@ -240,7 +230,12 @@ export function GhgStatementWorkflow({
 
   const generatedStep: WorkflowStepModel = !created
     ? { status: "skipped" }
-    : generated
+    : reportsQuery.error
+      ? {
+          status: "warning",
+          detail: "Reports could not be loaded. Refresh the page and try again.",
+        }
+      : generated
       ? { status: "met", detail: `Version ${latest?.version} generated from Isometric data.` }
       : canGenerate
         ? {
@@ -256,7 +251,12 @@ export function GhgStatementWorkflow({
               "A live GHG Statement with entries is required.",
           };
 
-  const approvedStep: WorkflowStepModel = !generated
+  const approvedStep: WorkflowStepModel = reportsQuery.error
+    ? {
+        status: "skipped",
+        detail: "Load the reports before reviewing or approving one.",
+      }
+    : !generated
     ? { status: "skipped", detail: created ? "Review the report, then approve it." : undefined }
     : latestPrepared
       ? { status: "active", detail: `Review version ${latest?.version}, then approve it.` }
@@ -283,7 +283,7 @@ export function GhgStatementWorkflow({
           label="Report generated"
           detail={generatedStep.detail}
         >
-          {created && canGenerate && canManageReports && (
+          {created && !reportsQuery.error && canGenerate && canManageReports && (
             <Button
               size="small"
               variant={generated ? "default" : "primary"}

@@ -31,6 +31,14 @@ function reportsQuery(data: unknown[]) {
   } as never;
 }
 
+function failedReportsQuery() {
+  return {
+    isLoading: false,
+    error: new Error("unavailable"),
+    data: undefined,
+  } as never;
+}
+
 describe("GhgStatementWorkflow", () => {
   beforeAll(() => {
     (
@@ -132,6 +140,27 @@ describe("GhgStatementWorkflow", () => {
 
     expect(html).toContain("In verification. No action is needed.");
     expect(html).toContain("Version 1 approved.");
+  });
+
+  it("keeps all four steps visible when reports cannot be loaded", () => {
+    const html = renderToStaticMarkup(
+      <GhgStatementWorkflow
+        ghgStatementId="11111111-1111-4111-8111-111111111111"
+        created
+        canManageReports
+        verifierStep={{ status: "skipped" }}
+        reportsQuery={failedReportsQuery()}
+      />,
+    );
+
+    expect(html).toContain("Created in registry");
+    expect(html).toContain("Report generated");
+    expect(html).toContain("Report approved");
+    expect(html).toContain("Submitted to verifier");
+    expect(html).toContain(
+      "Reports could not be loaded. Refresh the page and try again.",
+    );
+    expect(html).not.toContain("Generate report");
   });
 
   it("renders the inline submit action on the verifier step when submittable", () => {

@@ -24,8 +24,6 @@ import {
 } from "@/hooks/use-certification";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
-import type { GhgStatement } from "@/lib/isometric";
-import { chooseGhgSubmitMode } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
@@ -33,8 +31,8 @@ import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import {
   findApprovedGhgStatementReport,
   GhgStatementWorkflow,
-  type WorkflowStepModel,
 } from "./ghg-statement-workflow";
+import { deriveGhgStatementWorkflowState } from "./ghg-statement-workflow-state";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { GhgStatementTechnicalDetails } from "./ghg-statement-technical-details";
 import { RegistryRecordLink } from "./registry-record-link";
@@ -66,60 +64,6 @@ function statementPeriod(item: GhgStatementListItem): string {
   return reportingPeriodStartOn
     ? formatDateRange(reportingPeriodStartOn, reportingPeriodEndOn)
     : `Ends ${formatDate(reportingPeriodEndOn)}`;
-}
-
-/**
- * The verifier step of the workflow, derived from the live registry statement.
- * The former dangling "blocked" note now lives here, next to the step it
- * explains.
- */
-function deriveVerifierStep(
-  remote: GhgStatement | null,
-  remoteUnavailable: boolean,
-  hasMembership: boolean,
-  hasApprovedReport: boolean,
-): WorkflowStepModel {
-  if (!remote) {
-    return remoteUnavailable
-      ? {
-          status: "warning",
-          detail:
-            "Live Isometric statement data is unavailable. Refresh and try again.",
-        }
-      : { status: "skipped" };
-  }
-  switch (remote.status) {
-    case "AWAITING_VERIFICATION":
-      return { status: "met", detail: "In verification. No action is needed." };
-    case "VERIFIED":
-      return chooseGhgSubmitMode(remote) === "resubmit"
-        ? {
-            status: "warning",
-            detail:
-              "Verified with pending changes. Resubmit to update the verifier.",
-          }
-        : { status: "met", detail: "Verified." };
-    case "CREDITS_ISSUED":
-      return { status: "met", detail: "Credits issued." };
-    case "FAILED_VERIFICATION":
-      return {
-        status: "warning",
-        detail: "Verification failed. Update the Removals, then resubmit.",
-      };
-    default:
-      if (!hasMembership) {
-        return {
-          status: "warning",
-          detail: "No GHG Entries are available to submit.",
-        };
-      }
-      return hasApprovedReport
-        ? {
-            status: "active",
-            detail: "Submit the approved report to the verifier.",
-          }
-        : { status: "skipped" };
-  }
 }
 
 export function GhgStatementDetailSheet({
@@ -209,41 +153,28 @@ function DetailState({
     locked,
     "ghgStatement",
   );
-  const mode = remote ? chooseGhgSubmitMode(remote) : "submit";
   const created = Boolean(statementSubmission?.externalId);
-  const hasMembership = remote
-    ? remote.ghg_entry_ids.length > 0
-    : linkedRemovals.length > 0;
-  const rollupReady =
-    breakdownQuery.data?.status === "available" &&
-    remote?.pending_total_co2e_removed_kg != null &&
-    Number.isFinite(remote.pending_total_co2e_removed_kg);
-  const canGenerate = Boolean(remote?.ghg_entry_ids.length) && rollupReady;
-  const remoteUnavailable = created && remote === null;
-  const generationUnavailableReason = canGenerate
-    ? null
-    : remoteUnavailable
-      ? "Live Isometric statement data is unavailable. Refresh and try again."
-      : remote?.ghg_entry_ids.length
-        ? "Wait for Isometric to finish calculating the registry totals."
-        : "Submit a Removal in this reporting period before generating a report.";
   const approvedReport = findApprovedGhgStatementReport(
     reportsQuery.data ?? [],
   );
-  const reportManagementUnavailableReason = !canManageReports
-    ? "An Owner or Admin generates and approves reports."
-    : generationUnavailableReason;
-  const verifierStep = deriveVerifierStep(
+  const workflowState = deriveGhgStatementWorkflowState({
+    created,
+    canManageReports,
     remote,
-    remoteUnavailable,
-    hasMembership,
-    Boolean(approvedReport),
-  );
-  const canSubmit =
-    canManageReports &&
-    created &&
-    (mode === "submit" || mode === "resubmit") &&
-    hasMembership;
+    linkedRemovalCount: linkedRemovals.length,
+    hasApprovedReport: !reportsQuery.error && Boolean(approvedReport),
+    rollup: breakdownQuery.isLoading
+      ? { status: "loading" }
+      : breakdownQuery.error
+        ? { status: "error" }
+        : breakdownQuery.data
+          ? {
+              status: breakdownQuery.data.status,
+              message: breakdownQuery.data.message,
+            }
+          : { status: "loading" },
+  });
+  const { mode } = workflowState;
   const isResubmit = mode === "resubmit";
 
   const handleRefresh = () => {
@@ -301,11 +232,17 @@ function DetailState({
                 />
               ) : undefined
             }
-            canGenerate={canManageReports && canGenerate}
-            autoGenerationReady={remote?.status === "DRAFT" && rollupReady}
-            generationUnavailableReason={reportManagementUnavailableReason}
-            verifierStep={verifierStep}
-            onSubmit={canSubmit ? () => setSubmitOpen(true) : undefined}
+            canGenerate={workflowState.canGenerate}
+            autoGenerationReady={
+              remote?.status === "DRAFT" && workflowState.rollupReady
+            }
+            generationUnavailableReason={
+              workflowState.generationUnavailableReason
+            }
+            verifierStep={workflowState.verifierStep}
+            onSubmit={
+              workflowState.canSubmit ? () => setSubmitOpen(true) : undefined
+            }
             submitLabel={isResubmit ? "Resubmit" : "Submit"}
           />
         </section>
