@@ -19,17 +19,24 @@ const entityState = vi.hoisted(() => ({
       }
     | undefined,
   selectedPending: true,
+  listDataUpdatedAt: 0,
+  selectedDataUpdatedAt: 0,
+  selectedError: null as Error | null,
 }));
 
 vi.mock("@/hooks/use-entities", () => ({
   useEntityOptions: () => ({
     data: entityState.options,
+    dataUpdatedAt: entityState.listDataUpdatedAt,
     isLoading: false,
     error: null,
   }),
   useEntityById: () => ({
     data: entityState.selected,
+    dataUpdatedAt: entityState.selectedDataUpdatedAt,
     isPending: entityState.selectedPending,
+    isError: entityState.selectedError !== null,
+    error: entityState.selectedError,
   }),
 }));
 
@@ -59,6 +66,9 @@ beforeEach(() => {
   entityState.options = [];
   entityState.selected = undefined;
   entityState.selectedPending = true;
+  entityState.listDataUpdatedAt = 0;
+  entityState.selectedDataUpdatedAt = 0;
+  entityState.selectedError = null;
 });
 
 function render(value?: string): string {
@@ -134,23 +144,82 @@ describe("EntitySelect selected-value display", () => {
     expect(html).toContain('aria-invalid="true"');
   });
 
-  it("keeps fresh remaining mass when cached selected details are incomplete", () => {
+  it("uses list stock when its successful query is fresher while keeping the detail label", () => {
     entityState.options = [
       {
         id: "reactor-1",
         code: "BIN-01",
-        name: "North product bin",
+        name: "List label",
         remainingMass: { wetKg: 3_000, dryKg: 2_900 },
       },
     ];
     entityState.selected = {
       id: "reactor-1",
       code: "BIN-01",
-      name: "North product bin",
+      name: "Detail label",
+      remainingMass: { wetKg: 2_000, dryKg: 1_900 },
     };
+    entityState.listDataUpdatedAt = 200;
+    entityState.selectedDataUpdatedAt = 100;
+    entityState.selectedPending = false;
+
+    const html = render("reactor-1");
+    expect(html).toContain("Detail label");
+    expect(html).not.toContain("List label");
+    expect(html).toContain(
+      "Remaining wet mass: 3,000kg | dry mass: 2,900kg",
+    );
+  });
+
+  it("uses detail stock when its successful query is fresher", () => {
+    entityState.options = [
+      {
+        id: "reactor-1",
+        code: "BIN-01",
+        name: "List label",
+        remainingMass: { wetKg: 3_000, dryKg: 2_900 },
+      },
+    ];
+    entityState.selected = {
+      id: "reactor-1",
+      code: "BIN-01",
+      name: "Detail label",
+      remainingMass: { wetKg: 2_000, dryKg: 1_900 },
+    };
+    entityState.listDataUpdatedAt = 100;
+    entityState.selectedDataUpdatedAt = 200;
     entityState.selectedPending = false;
 
     expect(render("reactor-1")).toContain(
+      "Remaining wet mass: 2,000kg | dry mass: 1,900kg",
+    );
+  });
+
+  it("uses fresher list stock when a detail refresh fails with retained data", () => {
+    entityState.options = [
+      {
+        id: "reactor-1",
+        code: "BIN-01",
+        name: "List label",
+        remainingMass: { wetKg: 3_000, dryKg: 2_900 },
+      },
+    ];
+    entityState.selected = {
+      id: "reactor-1",
+      code: "BIN-01",
+      name: "Retained detail label",
+      remainingMass: { wetKg: 2_000, dryKg: 1_900 },
+    };
+    entityState.listDataUpdatedAt = 200;
+    // React Query retains the previous successful data and its timestamp when
+    // a background refetch fails.
+    entityState.selectedDataUpdatedAt = 100;
+    entityState.selectedError = new Error("detail refresh failed");
+    entityState.selectedPending = false;
+
+    const html = render("reactor-1");
+    expect(html).toContain("Retained detail label");
+    expect(html).toContain(
       "Remaining wet mass: 3,000kg | dry mass: 2,900kg",
     );
   });
