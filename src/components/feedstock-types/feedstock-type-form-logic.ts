@@ -19,10 +19,13 @@ export function initialFeedstockTypeUsage(
 }
 
 export function shouldShowIsometricFeedstockSection(
+  hasIsometricCertifier: boolean,
   lockUsage: boolean,
   defaultUsage: FeedstockTypeUsage | undefined,
 ): boolean {
-  return !(lockUsage && defaultUsage === "blend");
+  return (
+    hasIsometricCertifier && !(lockUsage && defaultUsage === "blend")
+  );
 }
 
 export function feedstockTypeUsageOptionsFor(
@@ -50,11 +53,13 @@ export function shouldClearCategoryForIsometricSelection(
 }
 
 export function shouldShowCertifiedFeedstockWarning(
+  hasIsometricCertifier: boolean,
   isEditMode: boolean,
   usage: FeedstockTypeUsage | undefined,
   hasSelectedIsometricFeedstock: boolean,
 ): boolean {
   return (
+    hasIsometricCertifier &&
     !isEditMode &&
     usage === "pyrolysis" &&
     !hasSelectedIsometricFeedstock

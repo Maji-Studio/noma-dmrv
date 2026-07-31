@@ -22,6 +22,8 @@ import {
   type FeedstockTypeFormData,
 } from "@/schemas/feedstock-types";
 import type { FeedstockType } from "@/db/schema/feedstock";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
 import type { IsometricFeedstockType } from "@/lib/isometric";
 import {
@@ -86,13 +88,24 @@ export function FeedstockTypeForm({
   hint,
 }: FeedstockTypeFormProps) {
   const isEditMode = !!feedstockType;
+  const { facilityId } = useFacilityContext();
+  const certifierSummary = useFacilityCertifierSummary(
+    facilityId ?? "",
+    !!facilityId,
+  );
+  const hasIsometricCertifier =
+    certifierSummary.data?.mapping?.provider === "isometric";
   const [activeSection, setActiveSection] = useState<SectionKey>("general");
   const [selectedIsometricFeedstock, setSelectedIsometricFeedstock] =
     useState<IsometricFeedstockType | null>(null);
   // Fetch the registry browser lazily on first open; React Query keeps the
   // catalogue warm if the operator switches sections.
   const [hasOpenedIsometric, setHasOpenedIsometric] = useState(false);
-  const sections = shouldShowIsometricFeedstockSection(lockUsage, defaultUsage)
+  const sections = shouldShowIsometricFeedstockSection(
+    hasIsometricCertifier,
+    lockUsage,
+    defaultUsage,
+  )
     ? SECTIONS
     : SECTIONS.filter((section) => section.key === "general");
   // With only the General source there is no choice to present, so the source
@@ -152,6 +165,7 @@ export function FeedstockTypeForm({
     selectedName.trim() !== selectedIsometricFeedstock.name.trim();
   const showCertifiedFeedstockWarning =
     shouldShowCertifiedFeedstockWarning(
+      hasIsometricCertifier,
       isEditMode,
       selectedUsage,
       !!selectedIsometricFeedstock,
@@ -313,18 +327,6 @@ export function FeedstockTypeForm({
                       })}
                     />
                   </FormField>
-                  {showCertifiedFeedstockWarning && (
-                    <div className="flex gap-10 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-12 py-10">
-                      <WarningCircleIcon
-                        aria-hidden
-                        className="mt-1 size-18 shrink-0 text-[var(--st-wait)]"
-                        weight="bold"
-                      />
-                      <p className="body-small text-[var(--color-text-primary)]">
-                        {CERTIFIED_FEEDSTOCK_WARNING}
-                      </p>
-                    </div>
-                  )}
                   {lockUsage && (
                     <p className="body-caption text-[var(--color-text-tertiary)] mt-6">
                       Fixed by the parent workflow so this type cannot be
@@ -344,6 +346,19 @@ export function FeedstockTypeForm({
                     {...register("name")}
                   />
                 </FormField>
+
+                {showCertifiedFeedstockWarning && (
+                  <div className="flex gap-10 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-12 py-10 md:col-span-2">
+                    <WarningCircleIcon
+                      aria-hidden
+                      className="mt-1 size-18 shrink-0 text-[var(--st-wait)]"
+                      weight="bold"
+                    />
+                    <p className="body-small text-[var(--color-text-primary)]">
+                      {CERTIFIED_FEEDSTOCK_WARNING}
+                    </p>
+                  </div>
+                )}
 
                 <FormField
                   id="category"
