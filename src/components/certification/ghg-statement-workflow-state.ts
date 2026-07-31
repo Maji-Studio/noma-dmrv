@@ -71,8 +71,8 @@ export function deriveVerifierStep(
             detail: "Submit the approved report to the verifier.",
           }
         : {
-            status: "skipped",
-            detail: "Approve a report before submitting it to the verifier.",
+            status: "active",
+            detail: "Provide an external report URL to submit to the verifier.",
           };
   }
 }
@@ -134,8 +134,7 @@ export function deriveGhgStatementWorkflowState({
       created &&
       remote !== null &&
       (mode === "submit" || mode === "resubmit") &&
-      hasMembership &&
-      hasApprovedReport,
+      hasMembership,
     generationUnavailableReason: canManageReports
       ? generationUnavailableReason
       : "An Owner or Admin generates and approves reports.",

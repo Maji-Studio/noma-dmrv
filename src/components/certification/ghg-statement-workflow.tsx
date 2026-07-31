@@ -156,6 +156,8 @@ export function GhgStatementWorkflow({
   const reports = reportsQuery.data ?? [];
   const latest: GhgStatementReportView | undefined = reports[0];
   const generated = reports.length > 0;
+  const reportsUnavailable = Boolean(reportsQuery.error) && !generated;
+  const reportsRefreshFailed = Boolean(reportsQuery.error) && generated;
   const approvedReport = findApprovedGhgStatementReport(reports);
   const latestPrepared = latest?.lifecycle === "prepared";
 
@@ -230,7 +232,7 @@ export function GhgStatementWorkflow({
 
   const generatedStep: WorkflowStepModel = !created
     ? { status: "skipped" }
-    : reportsQuery.error
+    : reportsUnavailable
       ? {
           status: "warning",
           detail: "Reports could not be loaded. Refresh the page and try again.",
@@ -251,7 +253,7 @@ export function GhgStatementWorkflow({
               "A live GHG Statement with entries is required.",
           };
 
-  const approvedStep: WorkflowStepModel = reportsQuery.error
+  const approvedStep: WorkflowStepModel = reportsUnavailable
     ? {
         status: "skipped",
         detail: "Load the reports before reviewing or approving one.",
@@ -283,7 +285,7 @@ export function GhgStatementWorkflow({
           label="Report generated"
           detail={generatedStep.detail}
         >
-          {created && !reportsQuery.error && canGenerate && canManageReports && (
+          {created && !reportsUnavailable && canGenerate && canManageReports && (
             <Button
               size="small"
               variant={generated ? "default" : "primary"}
@@ -342,6 +344,27 @@ export function GhgStatementWorkflow({
           )}
         </CheckRow>
       </ol>
+
+      {reportsQuery.error && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-8 border border-[var(--color-border-secondary)] p-12"
+          role="status"
+        >
+          <span className="body-caption text-[var(--color-text-secondary)]">
+            {reportsRefreshFailed
+              ? "Reports could not be refreshed. Showing the last loaded versions."
+              : "Reports could not be loaded."}
+          </span>
+          <Button
+            size="small"
+            variant="default"
+            busy={reportsQuery.isFetching}
+            onClick={() => void reportsQuery.refetch()}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
 
       {error && <ServerError message={error} />}
 

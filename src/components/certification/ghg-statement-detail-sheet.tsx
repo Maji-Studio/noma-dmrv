@@ -162,7 +162,7 @@ function DetailState({
     canManageReports,
     remote,
     linkedRemovalCount: linkedRemovals.length,
-    hasApprovedReport: !reportsQuery.error && Boolean(approvedReport),
+    hasApprovedReport: Boolean(approvedReport),
     rollup: breakdownQuery.isLoading
       ? { status: "loading" }
       : breakdownQuery.error

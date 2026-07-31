@@ -34,8 +34,8 @@ const availableRollup = {
 describe("GHG Statement workflow state", () => {
   it("derives verifier status from membership, approval, and registry status", () => {
     expect(deriveVerifierStep(statement(), false, true, false)).toEqual({
-      status: "skipped",
-      detail: "Approve a report before submitting it to the verifier.",
+      status: "active",
+      detail: "Provide an external report URL to submit to the verifier.",
     });
     expect(deriveVerifierStep(statement(), false, true, true)).toEqual({
       status: "active",
@@ -110,7 +110,7 @@ describe("GHG Statement workflow state", () => {
     );
   });
 
-  it("offers Submit only for a live statement with an approved report", () => {
+  it("offers Submit for a live statement with a generated or external report", () => {
     const input = {
       created: true,
       canManageReports: true,
@@ -124,7 +124,7 @@ describe("GHG Statement workflow state", () => {
         ...input,
         hasApprovedReport: false,
       }).canSubmit,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       deriveGhgStatementWorkflowState({
         ...input,

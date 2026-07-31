@@ -39,6 +39,16 @@ function failedReportsQuery() {
   } as never;
 }
 
+function failedReportsRefresh(data: unknown[]) {
+  return {
+    isLoading: false,
+    isFetching: false,
+    error: new Error("unavailable"),
+    data,
+    refetch: vi.fn(),
+  } as never;
+}
+
 describe("GhgStatementWorkflow", () => {
   beforeAll(() => {
     (
@@ -160,7 +170,45 @@ describe("GhgStatementWorkflow", () => {
     expect(html).toContain(
       "Reports could not be loaded. Refresh the page and try again.",
     );
+    expect(html).toContain("Retry");
     expect(html).not.toContain("Generate report");
+  });
+
+  it("keeps retained report actions after a background refresh fails", () => {
+    const html = renderToStaticMarkup(
+      <GhgStatementWorkflow
+        ghgStatementId="11111111-1111-4111-8111-111111111111"
+        created
+        canManageReports
+        canGenerate
+        verifierStep={{ status: "active" }}
+        onSubmit={() => undefined}
+        reportsQuery={failedReportsRefresh([
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            version: 2,
+            lifecycle: "prepared",
+            reviewUrl: "/api/documents/report",
+          },
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            version: 1,
+            lifecycle: "approved",
+            reviewUrl: "/api/documents/report-1",
+          },
+        ])}
+      />,
+    );
+
+    expect(html).toContain("Generate new version");
+    expect(html).toContain("Review");
+    expect(html).toContain("Approve");
+    expect(html).toContain(">Submit<");
+    expect(html).toContain(
+      "Reports could not be refreshed. Showing the last loaded versions.",
+    );
+    expect(html).toContain("Retry");
+    expect(html).not.toContain("Load the reports before reviewing");
   });
 
   it("renders the inline submit action on the verifier step when submittable", () => {
