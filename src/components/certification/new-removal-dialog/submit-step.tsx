@@ -37,6 +37,11 @@ import {
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
+import {
+  canRetrySubmissionProgress,
+  SubmissionProgress,
+} from "../submission-progress";
+import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { DebugDrawer } from "./debug-drawer";
 import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
@@ -50,6 +55,7 @@ interface SubmitStepProps {
   ctx: RemovalCertifyContext;
   facilityId: string;
   onDone: () => void;
+  onSubmissionPendingChange: (pending: boolean) => void;
 }
 
 export function SubmitStep({
@@ -57,12 +63,16 @@ export function SubmitStep({
   ctx,
   facilityId,
   onDone,
+  onSubmissionPendingChange,
 }: SubmitStepProps) {
   const submitMutation = useSubmitRemoval();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [progressUpdates, setProgressUpdates] = useState<
+    SubmissionProgressUpdate[]
+  >([]);
 
   const externalId = ctx.latestSubmission?.externalId ?? null;
   const rejectedWithExternal =
@@ -89,18 +99,27 @@ export function SubmitStep({
       return;
     }
     setSubmitError(null);
+    setProgressUpdates([]);
+    onSubmissionPendingChange(true);
     submitMutation.mutate(
       {
-        removalId,
-        confirmProduction,
-        compilationHash: compilationQuery.data?.compilationHash ?? "",
+        input: {
+          removalId,
+          confirmProduction,
+          compilationHash: compilationQuery.data?.compilationHash ?? "",
+        },
+        onProgress: (update) => {
+          setProgressUpdates((current) => [...current, update]);
+        },
       },
       {
         onSuccess: (result) => {
+          onSubmissionPendingChange(false);
           setSubmitError(null);
           toast.success(`Removal ${result.externalId} submitted.`);
         },
         onError: (err) => {
+          onSubmissionPendingChange(false);
           setSubmitError(
             err instanceof Error
               ? err.message
@@ -118,6 +137,20 @@ export function SubmitStep({
     }
     fireSubmit();
   };
+
+  const confirmDialog = (
+    <SubmitConfirmDialog
+      isOpen={confirmOpen}
+      onClose={() => setConfirmOpen(false)}
+      onConfirm={() => {
+        setConfirmOpen(false);
+        fireSubmit(true);
+      }}
+      isPending={submitMutation.isPending}
+      artifact="removal"
+      isProduction={ctx.isProduction}
+    />
+  );
 
   if (submitMutation.isSuccess && submitMutation.data) {
     // "View on Isometric" deep-links to the supplier's private Certify view of
@@ -150,6 +183,7 @@ export function SubmitStep({
             </span>
           </div>
         </div>
+        <SubmissionProgress kind="removal" updates={progressUpdates} />
         <div className="flex items-center justify-end gap-12">
           {viewUrl && (
             <a
@@ -166,6 +200,59 @@ export function SubmitStep({
             Done
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (submitMutation.isPending || progressUpdates.length > 0) {
+    const canRetry = canRetrySubmissionProgress("removal", progressUpdates);
+    return (
+      <div className="flex flex-col gap-16">
+        <SubmissionProgress
+          kind="removal"
+          updates={progressUpdates}
+          error={submitError}
+        />
+        {submitError && <ServerError message={submitError} />}
+        <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            {submitMutation.isPending
+              ? "noma is submitting the Removal to Isometric."
+              : canRetry
+                ? "Completed registry operations are preserved for a safe retry."
+                : "Review the submission details and resolve the error before submitting again."}
+          </span>
+          {!submitMutation.isPending && (
+            <div className="flex items-center gap-12">
+              {canRetry && (
+                <Button
+                  onClick={() => {
+                    setProgressUpdates([]);
+                    submitMutation.reset();
+                  }}
+                >
+                  Review submission
+                </Button>
+              )}
+              {canRetry ? (
+                <Button variant="primary" onClick={handleSubmit}>
+                  Try again
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setProgressUpdates([]);
+                    submitMutation.reset();
+                  }}
+                >
+                  Review submission
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+        {confirmDialog}
       </div>
     );
   }
@@ -221,17 +308,7 @@ export function SubmitStep({
         )}
       </div>
 
-      <SubmitConfirmDialog
-        isOpen={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={() => {
-          setConfirmOpen(false);
-          fireSubmit(true);
-        }}
-        isPending={submitMutation.isPending}
-        artifact="removal"
-        isProduction={ctx.isProduction}
-      />
+      {confirmDialog}
     </div>
   );
 }

@@ -58,21 +58,28 @@ export function NewRemovalDialog({
   onClose,
   resumeRemovalId = null,
 }: NewRemovalDialogProps) {
+  const [submissionPending, setSubmissionPending] = useState(false);
+  const closeIfIdle = () => {
+    if (!submissionPending) onClose();
+  };
+
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={closeIfIdle}
       width="xl"
       contentClassName="p-20"
       ariaLabelledBy="new-removal-title"
       // Multi-step wizard: a stray backdrop click must not discard a
       // half-built removal. Close button + ESC still dismiss.
       dismissOnClickOutside={false}
+      dismissible={!submissionPending}
     >
       <WizardBody
         facilityId={facilityId}
-        onClose={onClose}
+        onClose={closeIfIdle}
         resumeRemovalId={resumeRemovalId}
+        onSubmissionPendingChange={setSubmissionPending}
       />
     </Modal>
   );
@@ -82,10 +89,12 @@ function WizardBody({
   facilityId,
   onClose,
   resumeRemovalId,
+  onSubmissionPendingChange,
 }: {
   facilityId: string;
   onClose: () => void;
   resumeRemovalId: string | null;
+  onSubmissionPendingChange: (pending: boolean) => void;
 }) {
   const [step, setStep] = useState<StepKey>(
     resumeRemovalId ? "submit" : "select",
@@ -201,6 +210,7 @@ function WizardBody({
               ctx={ctxQuery.data}
               facilityId={facilityId}
               onDone={onClose}
+              onSubmissionPendingChange={onSubmissionPendingChange}
             />
           ))}
       </StepFlow>

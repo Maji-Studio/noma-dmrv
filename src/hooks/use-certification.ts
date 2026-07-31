@@ -45,10 +45,12 @@ import {
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
   saveRegistrySourceVisibility,
-  submitGhgStatementToVerifier,
-  submitRemovalAction,
   type CreditBatchHealthSummary,
 } from "@/fn/certification";
+import type { RemovalSubmissionResult } from "@/fn/certification/submit-removal";
+import type { SubmitGhgStatementResult } from "@/fn/certification/submit-ghg-statement";
+import { streamCertificationSubmission } from "@/lib/certification/submission-progress-client";
+import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import type {
   CreateGhgStatementInput,
@@ -597,11 +599,14 @@ export function useSelectableBatches(facilityId: string, enabled = true) {
 export function useSubmitRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: SubmitRemovalInput) => {
-      const result = await submitRemovalAction(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: (vars: {
+      input: SubmitRemovalInput;
+      onProgress: (update: SubmissionProgressUpdate) => void;
+    }) =>
+      streamCertificationSubmission<RemovalSubmissionResult>(
+        { kind: "removal", input: vars.input },
+        vars.onProgress,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
@@ -821,13 +826,16 @@ export function useSubmitGhgStatementToVerifier() {
     mutationFn: async (vars: {
       ghgStatementId: string;
       input: SubmitGhgStatementDialogInput;
+      onProgress: (update: SubmissionProgressUpdate) => void;
     }) => {
-      const result = await submitGhgStatementToVerifier(
-        vars.ghgStatementId,
-        vars.input,
+      return streamCertificationSubmission<SubmitGhgStatementResult>(
+        {
+          kind: "ghg_statement",
+          ghgStatementId: vars.ghgStatementId,
+          input: vars.input,
+        },
+        vars.onProgress,
       );
-      if (!result.success) throw new Error(result.error);
-      return result.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
