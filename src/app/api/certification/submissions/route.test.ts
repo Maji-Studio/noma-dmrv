@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
+import { SUBMISSION_STREAM_PING_INTERVAL_MS } from "@/lib/certification/submission-progress";
 
 const mocks = vi.hoisted(() => ({
   requireOrgContext: vi.fn(),
@@ -92,6 +93,105 @@ describe("certification submission progress route", () => {
     );
     expect(response.headers.get("x-accel-buffering")).toBe("no");
     expect(mocks.requireOrgRole).toHaveBeenCalledWith(ORG_CONTEXT, "admin");
+  });
+
+  it("sends transport pings while submission work is quiet", async () => {
+    vi.useFakeTimers();
+    let resolveSubmission!: (value: {
+      removalId: string;
+      externalId: string;
+      version: number;
+    }) => void;
+    mocks.submitRemoval.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSubmission = resolve;
+      }),
+    );
+
+    try {
+      const response = await POST(
+        new Request("http://localhost/api/certification/submissions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "removal",
+            input: {
+              removalId: "11111111-1111-4111-8111-111111111111",
+              compilationHash: "a".repeat(64),
+            },
+          }),
+        }),
+      );
+      const reader = response.body?.getReader();
+      expect(reader).toBeDefined();
+
+      const ping = reader!.read();
+      await vi.advanceTimersByTimeAsync(SUBMISSION_STREAM_PING_INTERVAL_MS);
+      await expect(ping).resolves.toMatchObject({
+        done: false,
+        value: expect.any(Uint8Array),
+      });
+      const pingChunk = await ping;
+      expect(new TextDecoder().decode(pingChunk.value)).toBe(
+        '{"type":"ping"}\n',
+      );
+
+      resolveSubmission({
+        removalId: "11111111-1111-4111-8111-111111111111",
+        externalId: "rm-1",
+        version: 1,
+      });
+      const resultChunk = await reader!.read();
+      expect(JSON.parse(new TextDecoder().decode(resultChunk.value))).toEqual({
+        type: "result",
+        result: {
+          removalId: "11111111-1111-4111-8111-111111111111",
+          externalId: "rm-1",
+          version: 1,
+        },
+      });
+      await expect(reader!.read()).resolves.toEqual({
+        done: true,
+        value: undefined,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    {
+      name: "a safe core error",
+      error: new SafeError("The verifier rejected this submission."),
+      expected: "The verifier rejected this submission.",
+    },
+    {
+      name: "an unexpected core error",
+      error: new Error("database connection included private details"),
+      expected: "The submission could not be completed. Try again.",
+    },
+  ])("streams $name and closes the response", async ({ error, expected }) => {
+    mocks.submitRemoval.mockRejectedValue(error);
+
+    const response = await POST(
+      new Request("http://localhost/api/certification/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "removal",
+          input: {
+            removalId: "11111111-1111-4111-8111-111111111111",
+            compilationHash: "a".repeat(64),
+          },
+        }),
+      }),
+    );
+
+    const text = await response.text();
+    expect(text).toBe(`${JSON.stringify({ type: "error", error: expected })}\n`);
+    expect(mocks.logActionError).toHaveBeenCalledWith(error, {
+      message: "submission progress stream failed",
+    });
   });
 
   it("returns 400 before opening a stream for an invalid request", async () => {

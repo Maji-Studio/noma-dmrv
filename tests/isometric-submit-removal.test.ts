@@ -189,8 +189,13 @@ describe("submitRemoval — happy path", () => {
     vi.mocked(isometric.createGhgEntry).mockImplementation(
       createGhgEntryFake as never,
     );
+    const progress = vi.fn();
 
-    const result = await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
+    const result = await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+      onProgress: progress,
+    });
 
     expect(protocolPreflight.checkProtocolVersionAtSubmit).toHaveBeenCalledTimes(1);
     const protocolCheckOrder = vi.mocked(
@@ -226,6 +231,18 @@ describe("submitRemoval — happy path", () => {
     // One datapoint POST (the only monitored input) + one removal POST.
     expect(createDatapointFake).toHaveBeenCalledTimes(1);
     expect(createGhgEntryFake).toHaveBeenCalledTimes(1);
+    expect(progress).toHaveBeenCalledWith({
+      step: "removal.sending_inputs",
+      state: "active",
+      completed: 0,
+      total: 1,
+    });
+    expect(progress).toHaveBeenCalledWith({
+      step: "removal.sending_inputs",
+      state: "complete",
+      completed: 1,
+      total: 1,
+    });
     expect(
       sourceVerification.verifyRemovalSourceBindings,
     ).toHaveBeenCalledWith(

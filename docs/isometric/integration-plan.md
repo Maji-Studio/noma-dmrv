@@ -21,10 +21,14 @@ Interactive Removal and GHG Statement submission uses
 orchestration layer. The route completes organization authentication, Admin
 authorization, request validation, and per-user rate limiting before opening a
 stream. The stream reports real orchestration checkpoints; it is not a
-background-job boundary, and disconnecting does not cancel registry
-reconciliation or audit persistence. The non-streaming server-action wrappers
-remain compatibility/fallback entry points over the same cores, with guards and
-rate-limit keys kept in sync with the route.
+background-job boundary. A 15-second transport ping keeps a healthy, quiet
+submission distinguishable from a stalled connection; clients ignore pings and
+time out after 60 seconds without stream data. Disconnecting does not
+deliberately cancel the core, but a serverless runtime may stop it after the
+response is gone. Refresh or retry is safe because the submission ledger
+reconciles incomplete local state idempotently. The non-streaming server-action
+wrappers remain compatibility/fallback entry points over the same cores, with
+guards and rate-limit keys kept in sync with the route.
 
 ## Credentials and authorization
 

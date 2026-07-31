@@ -25,7 +25,7 @@ describe("streamCertificationSubmission", () => {
         );
         controller.enqueue(
           encoder.encode(
-            '"state":"complete"}}\n{"type":"result","result":{"externalId":"rm-1","version":2}}\n',
+            '"state":"complete"}}\n{"type":"ping"}\n{"type":"result","result":{"removalId":"11111111-1111-4111-8111-111111111111","externalId":"rm-1","version":2}}\n',
           ),
         );
         controller.close();
@@ -36,6 +36,7 @@ describe("streamCertificationSubmission", () => {
     const updates: string[] = [];
 
     const result = await streamCertificationSubmission<{
+      removalId: string;
       externalId: string;
       version: number;
     }>({ kind: "removal", input: REMOVAL_INPUT }, (update) => {
@@ -43,7 +44,11 @@ describe("streamCertificationSubmission", () => {
     });
 
     expect(updates).toEqual(["removal.checking_data:complete"]);
-    expect(result).toEqual({ externalId: "rm-1", version: 2 });
+    expect(result).toEqual({
+      removalId: REMOVAL_INPUT.removalId,
+      externalId: "rm-1",
+      version: 2,
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/certification/submissions",
       expect.objectContaining({
@@ -51,6 +56,37 @@ describe("streamCertificationSubmission", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it("returns a valid GHG Statement result", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            '{"type":"result","result":{"externalId":"ghg-1","remoteStatus":"AWAITING_VERIFICATION"}}\n',
+          ),
+        );
+        controller.close();
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body)));
+
+    await expect(
+      streamCertificationSubmission(
+        {
+          kind: "ghg_statement",
+          ghgStatementId: "22222222-2222-4222-8222-222222222222",
+          input: {
+            reportId: "33333333-3333-4333-8333-333333333333",
+            confirmProduction: true,
+          },
+        },
+        () => undefined,
+      ),
+    ).resolves.toEqual({
+      externalId: "ghg-1",
+      remoteStatus: "AWAITING_VERIFICATION",
+    });
   });
 
   it("surfaces a safe streamed error", async () => {
@@ -72,6 +108,113 @@ describe("streamCertificationSubmission", () => {
         () => undefined,
       ),
     ).rejects.toThrow("The verifier rejected the statement.");
+  });
+
+  it("surfaces a safe admission error from the route", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json(
+          { error: "Too many attempts. Try again in 17s." },
+          { status: 429 },
+        ),
+      ),
+    );
+
+    await expect(
+      streamCertificationSubmission(
+        { kind: "removal", input: REMOVAL_INPUT },
+        () => undefined,
+      ),
+    ).rejects.toThrow("Too many attempts. Try again in 17s.");
+  });
+
+  it("uses a generic admission error for an unreadable response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("upstream details", {
+          status: 500,
+          headers: { "Content-Type": "text/plain" },
+        }),
+      ),
+    );
+
+    await expect(
+      streamCertificationSubmission(
+        { kind: "removal", input: REMOVAL_INPUT },
+        () => undefined,
+      ),
+    ).rejects.toThrow("The submission could not be started. Try again.");
+  });
+
+  it.each([
+    ["malformed NDJSON", "not-json\n"],
+    ["a trailing NDJSON fragment", '{"type":"result","result":'],
+    ["a null event", "null\n"],
+    ["an array event", "[]\n"],
+    ["an unknown event type", '{"type":"unknown"}\n'],
+    ["a progress event without an update", '{"type":"progress"}\n'],
+    [
+      "a progress event with an invalid nested update",
+      '{"type":"progress","update":{"step":"unknown","state":"complete"}}\n',
+    ],
+    ["an error event without a message", '{"type":"error","error":""}\n'],
+    ["a result event without a result", '{"type":"result"}\n'],
+    ["a null Removal result", '{"type":"result","result":null}\n'],
+    ["a primitive Removal result", '{"type":"result","result":42}\n'],
+    ["an array Removal result", '{"type":"result","result":[]}\n'],
+    [
+      "a Removal result with missing fields",
+      '{"type":"result","result":{"externalId":"rm-1"}}\n',
+    ],
+  ])("turns %s into a recoverable operator message", async (_name, chunk) => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(chunk));
+        controller.close();
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body)));
+
+    await expect(
+      streamCertificationSubmission(
+        { kind: "removal", input: REMOVAL_INPUT },
+        () => undefined,
+      ),
+    ).rejects.toThrow(
+      "The progress connection returned an unreadable response. Close this dialog and refresh the page before trying again.",
+    );
+  });
+
+  it("rejects an invalid GHG Statement result", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            '{"type":"result","result":{"externalId":"ghg-1","remoteStatus":"UNKNOWN"}}\n',
+          ),
+        );
+        controller.close();
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body)));
+
+    await expect(
+      streamCertificationSubmission(
+        {
+          kind: "ghg_statement",
+          ghgStatementId: "22222222-2222-4222-8222-222222222222",
+          input: {
+            reportId: "33333333-3333-4333-8333-333333333333",
+            confirmProduction: true,
+          },
+        },
+        () => undefined,
+      ),
+    ).rejects.toThrow(
+      "The progress connection returned an unreadable response. Close this dialog and refresh the page before trying again.",
+    );
   });
 
   it("unlocks a stalled submission and warns that registry work may continue", async () => {

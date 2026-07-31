@@ -207,9 +207,13 @@ Removal and GHG Statement writes add one transport seam between hooks and the
 orchestrator: `POST /api/certification/submissions` validates the organization
 context, Admin role, complete request body, and per-user submit limit before it
 opens an NDJSON response. Once admitted, it calls the same `fn/certification/`
-cores and streams orchestration checkpoints plus the final result. A client
-disconnect stops response writes but does not cancel registry reconciliation or
-audit persistence.
+cores and streams orchestration checkpoints plus the final result. The route
+sends a transport-only ping every 15 seconds; clients ignore pings and treat 60
+seconds without any stream data as a stalled connection. A client disconnect
+stops response writes and the route does not deliberately cancel the core, but
+this is not a detached background-job guarantee: the serverless runtime may end
+execution after the response is gone. Refreshing or retrying relies on the
+submission ledger's idempotent reconciliation.
 
 `submitRemovalAction` and `submitGhgStatementToVerifier` remain as
 non-streaming compatibility/fallback wrappers for direct server consumers and

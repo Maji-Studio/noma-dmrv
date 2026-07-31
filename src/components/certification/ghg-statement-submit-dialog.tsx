@@ -179,6 +179,7 @@ export function GhgStatementSubmitDialog({
                 kind="ghg_statement"
                 updates={progressUpdates}
                 error={serverError}
+                stalled={submissionStalled}
               />
               {serverError && <ServerError message={serverError} />}
               <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">

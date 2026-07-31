@@ -32,12 +32,7 @@ const STATE_LABELS: Record<DisplayState, string> = {
   upcoming: "Waiting",
 };
 
-const RETRYABLE_STEPS = new Set<SubmissionProgressStep>([
-  "removal.sending_inputs",
-  "removal.sending_durability",
-  "removal.creating",
-  "removal.verifying_evidence",
-  "removal.complete",
+const GHG_RETRYABLE_STEPS = new Set<SubmissionProgressStep>([
   "ghg_statement.sending",
   "ghg_statement.complete",
 ]);
@@ -129,9 +124,14 @@ export function canRetrySubmissionProgress(
   kind: ProgressKind,
   updates: SubmissionProgressUpdate[],
 ): boolean {
+  // Removal claims and locks its draft while evidence preparation is active,
+  // before the first registry-send update. Progress alone therefore cannot
+  // prove that an immediate retry is safe; the operator must return to review
+  // and let refreshed submission state decide when another attempt may start.
+  if (kind === "removal") return false;
   const steps = stepSequence(kind);
   const failed = failedStep(steps, latestUpdates(updates));
-  return failed !== null && RETRYABLE_STEPS.has(failed);
+  return failed !== null && GHG_RETRYABLE_STEPS.has(failed);
 }
 
 function displayState(
@@ -197,14 +197,16 @@ export function SubmissionProgress({
   kind,
   updates,
   error = null,
+  stalled = false,
 }: {
   kind: ProgressKind;
   updates: SubmissionProgressUpdate[];
   error?: string | null;
+  stalled?: boolean;
 }) {
   const steps = stepSequence(kind);
   const latest = latestUpdates(updates);
-  const failed = error ? failedStep(steps, latest) : null;
+  const failed = error && !stalled ? failedStep(steps, latest) : null;
   const active = steps.find((step) => latest.get(step)?.state === "active");
   const terminal = steps[steps.length - 1];
   const liveStep =
@@ -212,7 +214,11 @@ export function SubmissionProgress({
     active ??
     (latest.get(terminal)?.state === "complete" ? terminal : steps[0]);
   const liveCopy = STEP_COPY[liveStep].title;
-  const statusCopy = error
+  const statusCopy = stalled
+    ? active
+      ? `Progress updates stopped during ${liveCopy.toLowerCase()}.`
+      : "Progress updates stopped."
+    : error
     ? failed
       ? `${liveCopy} failed.`
       : "Submission failed before progress started."

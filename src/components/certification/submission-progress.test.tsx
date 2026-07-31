@@ -64,6 +64,47 @@ describe("SubmissionProgress", () => {
     expect(html).not.toContain("text-[var(--st-bad)]");
   });
 
+  it("keeps the active step in progress when progress updates stall", () => {
+    const removalHtml = renderToStaticMarkup(
+      <SubmissionProgress
+        kind="removal"
+        updates={[
+          { step: "removal.checking_data", state: "complete" },
+          { step: "removal.preparing_evidence", state: "active" },
+        ]}
+        error="The progress connection stopped responding."
+        stalled
+      />,
+    );
+    const ghgHtml = renderToStaticMarkup(
+      <SubmissionProgress
+        kind="ghg_statement"
+        updates={[
+          { step: "ghg_statement.checking", state: "complete" },
+          { step: "ghg_statement.preparing_report", state: "complete" },
+          { step: "ghg_statement.sending", state: "active" },
+        ]}
+        error="The progress connection stopped responding."
+        stalled
+      />,
+    );
+
+    expect(removalHtml).toContain(
+      "Progress updates stopped during preparing supporting evidence.",
+    );
+    expect(removalHtml).toContain("In progress. ");
+    expect(removalHtml).not.toContain(
+      "Preparing supporting evidence failed.",
+    );
+    expect(removalHtml).not.toContain("text-[var(--st-bad)]");
+    expect(ghgHtml).toContain(
+      "Progress updates stopped during sending to the verifier.",
+    );
+    expect(ghgHtml).toContain("In progress. ");
+    expect(ghgHtml).not.toContain("Sending to the verifier failed.");
+    expect(ghgHtml).not.toContain("text-[var(--st-bad)]");
+  });
+
   it("labels conditional steps that are not required", () => {
     const html = renderToStaticMarkup(
       <SubmissionProgress
@@ -144,6 +185,21 @@ describe("SubmissionProgress", () => {
         { step: "ghg_statement.preparing_report", state: "complete" },
         { step: "ghg_statement.sending", state: "complete" },
         { step: "ghg_statement.confirming", state: "active" },
+      ]),
+    ).toBe(false);
+  });
+
+  it("never offers a direct Removal retry after draft claim may have started", () => {
+    expect(
+      canRetrySubmissionProgress("removal", [
+        { step: "removal.checking_data", state: "complete" },
+        { step: "removal.preparing_evidence", state: "complete" },
+        {
+          step: "removal.sending_inputs",
+          state: "active",
+          completed: 0,
+          total: 1,
+        },
       ]),
     ).toBe(false);
   });

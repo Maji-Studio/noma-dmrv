@@ -2,6 +2,7 @@ import { z } from "zod";
 import { requireOrgContext, requireOrgRole } from "@/lib/auth/server";
 import { SafeError, toActionError } from "@/lib/errors";
 import { checkRateLimit } from "@/lib/rate-limit/in-memory";
+import { SUBMISSION_STREAM_PING_INTERVAL_MS } from "@/lib/certification/submission-progress";
 import {
   submitGhgStatementDialogSchema,
   submitRemovalSchema,
@@ -87,6 +88,14 @@ export async function POST(request: Request): Promise<Response> {
 
   const encoder = new TextEncoder();
   let streamOpen = true;
+  let pingInterval: ReturnType<typeof setInterval> | undefined;
+
+  const stopPings = () => {
+    if (pingInterval !== undefined) {
+      clearInterval(pingInterval);
+      pingInterval = undefined;
+    }
+  };
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -95,14 +104,20 @@ export async function POST(request: Request): Promise<Response> {
         try {
           controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
         } catch {
-          // The browser disconnected. The submit core must keep running so a
-          // confirmed registry write can still be journaled and reconciled.
+          // Do not deliberately cancel the core when the response disconnects.
+          // The route is not a detached job, so a later retry must reconcile
+          // any registry work whose local completion was not persisted.
           streamOpen = false;
+          stopPings();
         }
       };
       const onProgress = (update: SubmissionProgressUpdate) => {
         send({ type: "progress", update });
       };
+
+      pingInterval = setInterval(() => {
+        send({ type: "ping" });
+      }, SUBMISSION_STREAM_PING_INTERVAL_MS);
 
       void (async () => {
         try {
@@ -135,6 +150,7 @@ export async function POST(request: Request): Promise<Response> {
           });
           send({ type: "error", error: message });
         } finally {
+          stopPings();
           if (streamOpen) {
             controller.close();
             streamOpen = false;
@@ -143,9 +159,10 @@ export async function POST(request: Request): Promise<Response> {
       })();
     },
     cancel() {
-      // Do not cancel the submit core. Its idempotency and audit work must run
-      // to completion even if the operator loses the response connection.
+      // Do not deliberately cancel the core. A disconnect does not guarantee
+      // that serverless execution will continue after the response is gone.
       streamOpen = false;
+      stopPings();
     },
   });
 

@@ -37,10 +37,7 @@ import {
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
-import {
-  canRetrySubmissionProgress,
-  SubmissionProgress,
-} from "../submission-progress";
+import { SubmissionProgress } from "../submission-progress";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { DebugDrawer } from "./debug-drawer";
@@ -205,15 +202,13 @@ export function SubmitStep({
     const submissionStalled = isSubmissionStreamStalledError(
       submitMutation.error,
     );
-    const canRetry =
-      !submissionStalled &&
-      canRetrySubmissionProgress("removal", progressUpdates);
     return (
       <div className="flex flex-col gap-16">
         <SubmissionProgress
           kind="removal"
           updates={progressUpdates}
           error={submitError}
+          stalled={submissionStalled}
         />
         {submitError && <ServerError message={submitError} />}
         <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
@@ -222,9 +217,7 @@ export function SubmitStep({
               ? "noma is submitting the Removal to Isometric."
               : submissionStalled
                 ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
-                : canRetry
-                  ? "Completed registry operations are preserved for a safe retry."
-                  : "Review the submission details and resolve the error before submitting again."}
+                : "Return to the submission review before trying again. If noma reports that this submission is in progress, wait for it to finish."}
           </span>
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
@@ -232,20 +225,6 @@ export function SubmitStep({
                 <Button variant="primary" onClick={onDone}>
                   Close
                 </Button>
-              ) : canRetry ? (
-                <>
-                  <Button
-                    onClick={() => {
-                      setProgressUpdates([]);
-                      submitMutation.reset();
-                    }}
-                  >
-                    Review submission
-                  </Button>
-                  <Button variant="primary" onClick={handleSubmit}>
-                    Try again
-                  </Button>
-                </>
               ) : (
                 <Button
                   variant="primary"
