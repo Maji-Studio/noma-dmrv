@@ -16,6 +16,20 @@ Provider-neutral persistence is in `src/db/schema/certification.ts`. Pure
 Isometric HTTP/types/transformers are in `src/lib/isometric/`. Authenticated
 orchestration is in `src/fn/certification/`.
 
+Interactive Removal and GHG Statement submission uses
+`POST /api/certification/submissions` as a thin NDJSON transport over that
+orchestration layer. The route completes organization authentication, Admin
+authorization, request validation, and per-user rate limiting before opening a
+stream. The stream reports real orchestration checkpoints; it is not a
+background-job boundary. A 15-second transport ping keeps a healthy, quiet
+submission distinguishable from a stalled connection; clients ignore pings and
+time out after 60 seconds without stream data. Disconnecting does not
+deliberately cancel the core, but a serverless runtime may stop it after the
+response is gone. Refresh or retry is safe because the submission ledger
+reconciles incomplete local state idempotently. The non-streaming server-action
+wrappers remain compatibility/fallback entry points over the same cores, with
+guards and rate-limit keys kept in sync with the route.
+
 ## Credentials and authorization
 
 Application credentials are not environment-only:

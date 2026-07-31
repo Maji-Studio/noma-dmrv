@@ -118,10 +118,12 @@ export async function deriveFeedstockAvailableKg(
   tx: DbReader,
   storageLocationId: string,
   excludeRunId?: string,
+  excludeProductId?: string,
 ): Promise<number> {
   const [stock] = await deriveLaneStock(ctx, tx, {
     storageLocationIds: [storageLocationId],
     excludeRunId,
+    excludeProductId,
   });
   return stock?.feedstockStockDryKg ?? 0;
 }
@@ -220,6 +222,7 @@ export async function assertFeedstockDrawWithinStock(
     storageLocationId: string;
     requestedDryKg: number;
     excludeRunId?: string;
+    excludeProductId?: string;
     binLockAlreadyHeld?: boolean;
   },
 ): Promise<void> {
@@ -232,6 +235,7 @@ export async function assertFeedstockDrawWithinStock(
     tx,
     params.storageLocationId,
     params.excludeRunId,
+    params.excludeProductId,
   );
   if (isOverdraw(params.requestedDryKg, available)) {
     throw overdrawError("feedstock");

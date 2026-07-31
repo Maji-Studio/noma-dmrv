@@ -19,6 +19,7 @@ import {
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
+import { isProductionReadingsCsvFormat } from "@/schemas/documents";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 
 interface ProductionReadingsDocumentsProps {
@@ -37,10 +38,16 @@ const READINGS_MAX_MB = 25;
 export function isUploadedReadingsDocument(document: {
   documentType: string;
   uploadStatus: string;
+  fileName: string;
+  mimeType: string | null;
 }): boolean {
   return (
     document.documentType === READINGS_DOC_TYPE &&
-    document.uploadStatus === "uploaded"
+    document.uploadStatus === "uploaded" &&
+    isProductionReadingsCsvFormat({
+      fileName: document.fileName,
+      contentType: document.mimeType,
+    })
   );
 }
 
