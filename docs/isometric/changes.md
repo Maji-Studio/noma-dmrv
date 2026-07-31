@@ -4,27 +4,13 @@ Certification-readiness, transport-evidence, supporting-source, and sampling
 correction notes are archived in
 [`docs/archive/2026-07-28-certification-readiness-and-sampling-corrections.md`](../archive/2026-07-28-certification-readiness-and-sampling-corrections.md).
 
-## 2026-07-31 (application mass record taxonomy removed)
-
-The Application form no longer asks operators to classify retained mass records
-as Weighbridge, Inventory, or Affidavit. That taxonomy comes from Biochar
-Storage in Soil Environments v1.2 and does not apply to the project's current
-Biochar Protocol v1.1 and Agricultural Soils v1.1 combination.
-
-The mass-record upload remains available because Biochar Protocol v1.1 still
-requires delivery weigh-scale tickets or equivalent application-mass records to
-be retained for verification for at least five years. Existing classification
-metadata remains readable for compatibility and existing registry Source
-bindings, but new uploads do not require or create it.
-
-## 2026-07-31 (production-run readings evidence readiness)
-
-Noma now requires at least one successfully uploaded, unchanged readings CSV
-for each completed production run before entity, Removal, and preflight
-readiness are complete. Presence means only that the file was supplied: Noma
-does not inspect it, import readings rows, or convert it to Certify structured
-telemetry. One CSV per run is Noma's conservative control, not a requirement
-stated verbatim by Isometric Biochar Protocol v1.1.
+Application mass records remain uploadable, but new uploads do not use the
+inapplicable Soil Environments v1.2 classification taxonomy. Completed
+production runs require one successfully uploaded, unchanged readings CSV for
+certification readiness. This file-presence check is a conservative Noma
+control and does not claim that structured telemetry was submitted to Certify.
+Dated implementation context is archived in
+[`docs/archive/isometric-changes-archive-2026-07-31-operational-feedback.md`](../archive/isometric-changes-archive-2026-07-31-operational-feedback.md).
 
 Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
