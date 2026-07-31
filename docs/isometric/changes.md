@@ -4,6 +4,19 @@ Certification-readiness, transport-evidence, supporting-source, and sampling
 correction notes are archived in
 [`docs/archive/2026-07-28-certification-readiness-and-sampling-corrections.md`](../archive/2026-07-28-certification-readiness-and-sampling-corrections.md).
 
+## 2026-07-31 (application mass record taxonomy removed)
+
+The Application form no longer asks operators to classify retained mass records
+as Weighbridge, Inventory, or Affidavit. That taxonomy comes from Biochar
+Storage in Soil Environments v1.2 and does not apply to the project's current
+Biochar Protocol v1.1 and Agricultural Soils v1.1 combination.
+
+The mass-record upload remains available because Biochar Protocol v1.1 still
+requires delivery weigh-scale tickets or equivalent application-mass records to
+be retained for verification for at least five years. Existing classification
+metadata remains readable for compatibility and existing registry Source
+bindings, but new uploads do not require or create it.
+
 ## 2026-07-31 (production-run readings evidence readiness)
 
 Noma now requires at least one successfully uploaded, unchanged readings CSV
