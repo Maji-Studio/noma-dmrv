@@ -226,6 +226,7 @@ export interface SubmitDurabilityMeasurementSamplesArgs {
   submissions: DurabilityMeasurementSampleSubmission[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
   log: Logger;
+  onProgress?: (completed: number, total: number) => void;
 }
 
 export interface SubmitDurabilityMeasurementSamplesResult {
@@ -451,6 +452,7 @@ export async function submitDurabilityMeasurementSamples(
       creditBatchId: creditBatchIdForSubmission(submission),
     });
     submitted += 1;
+    args.onProgress?.(submitted, args.submissions.length);
   }
   await patchMeasurementSampleSourceBindings({
     client,
