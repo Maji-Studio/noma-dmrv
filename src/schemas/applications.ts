@@ -3,10 +3,17 @@ import {
   gpsPairSuperRefine,
   latitudeSchema,
   longitudeSchema,
+  MASS_INPUT_MAX_KG,
   MASS_INPUT_MAX_TONNES,
+  MASS_MAX_KG_MESSAGE,
   MASS_MAX_TONNES_MESSAGE,
 } from "./helpers";
 import { gisBoundarySchema } from "./gis-boundary";
+import {
+  DRY_MASS_EXCEEDS_WET_MESSAGE,
+  exceedsMassWithTolerance,
+} from "@/lib/calculations/mass-dry";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
 // ============================================
 // Constants and Enums
@@ -60,11 +67,11 @@ const applicationFormBaseSchema = z.object({
   biocharAppliedTons: z
     .number({ error: "Biochar applied (kg) is required" })
     .min(0, "Must be a positive number")
-    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE),
+    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE),
   biocharAppliedDryTons: z
     .number()
     .min(0, "Must be a positive number")
-    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE)
+    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
     .optional()
     .nullable(),
 
@@ -107,8 +114,56 @@ const applicationFormBaseSchema = z.object({
 
 });
 
-export const applicationFormSchema =
-  applicationFormBaseSchema.superRefine(gpsPairSuperRefine);
+type ApplicationMassFields = {
+  biocharAppliedTons?: number;
+  biocharAppliedDryTons?: number | null;
+};
+
+function addDryMassIssue(
+  data: ApplicationMassFields,
+  ctx: z.RefinementCtx,
+  unit: "kg" | "tonnes",
+): void {
+  if (
+    data.biocharAppliedTons == null ||
+    data.biocharAppliedDryTons == null
+  ) {
+    return;
+  }
+  const wetKg = unit === "tonnes"
+    ? tonnesToKg(data.biocharAppliedTons)
+    : data.biocharAppliedTons;
+  const dryKg = unit === "tonnes"
+    ? tonnesToKg(data.biocharAppliedDryTons)
+    : data.biocharAppliedDryTons;
+  if (!exceedsMassWithTolerance(dryKg, wetKg)) return;
+
+  ctx.addIssue({
+    code: "custom",
+    path: ["biocharAppliedDryTons"],
+    message: DRY_MASS_EXCEEDS_WET_MESSAGE,
+  });
+}
+
+export const applicationFormSchema = applicationFormBaseSchema.superRefine(
+  (data, ctx) => {
+    gpsPairSuperRefine(data, ctx);
+    addDryMassIssue(data, ctx, "kg");
+  },
+);
+
+const applicationCreateBaseSchema = applicationFormBaseSchema.extend({
+  biocharAppliedTons: z
+    .number({ error: "Biochar applied mass is required" })
+    .min(0, "Must be a positive number")
+    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE),
+  biocharAppliedDryTons: z
+    .number()
+    .min(0, "Must be a positive number")
+    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE)
+    .optional()
+    .nullable(),
+});
 
 // ============================================
 // Server Action Schemas
@@ -117,7 +172,12 @@ export const applicationFormSchema =
 /**
  * Schema for creating an application (server action)
  */
-export const createApplicationSchema = applicationFormSchema;
+export const createApplicationSchema = applicationCreateBaseSchema.superRefine(
+  (data, ctx) => {
+    gpsPairSuperRefine(data, ctx);
+    addDryMassIssue(data, ctx, "tonnes");
+  },
+);
 
 /**
  * Schema for updating an application (server action)
@@ -144,7 +204,10 @@ export const updateApplicationSchema = z.object({
   gisBoundary: gisBoundarySchema.optional().nullable(),
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
-}).superRefine(gpsPairSuperRefine);
+}).superRefine((data, ctx) => {
+  gpsPairSuperRefine(data, ctx);
+  addDryMassIssue(data, ctx, "tonnes");
+});
 
 /**
  * Schema for deleting an application

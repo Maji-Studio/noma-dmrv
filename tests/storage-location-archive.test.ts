@@ -209,6 +209,19 @@ describe("storage location archive", () => {
     }
   });
 
+  it("preserves the sign of a sub-kilogram archive deficit", async () => {
+    const fixture = await createStorageArchiveFixture({ endingBalanceKg: -0.4 });
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+
+    try {
+      await expect(
+        archiveStorageLocation(ctx, fixture.storageLocationId),
+      ).rejects.toThrow(/-0\.4 kg on hand/);
+    } finally {
+      await cleanupStorageArchiveFixture(fixture);
+    }
+  });
+
   it("rejects reconciliation writes after a bin is archived", async () => {
     const fixture = await createStorageArchiveFixture();
     const ctx = makeTestOrgContext(TEST_USER_ID);

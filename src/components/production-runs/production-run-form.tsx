@@ -39,6 +39,10 @@ import {
 } from "@/schemas/production-runs";
 import { ProcessFlowPreview } from "./production-run-process-flow-preview";
 import {
+  feedstockDryStockOverdrawMessage,
+  productionRunMassBalanceFeedback,
+} from "./production-run-mass-balance";
+import {
   allowedProductionRunStatusesFrom,
   shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
@@ -222,10 +226,14 @@ export function ProductionRunForm({
   );
   const feedstockStockError =
     previewDryMass !== null &&
+    typeof watchMoisture === "number" &&
     feedstockAvailability &&
     feedstockAvailability.availableKg !== null &&
     isStockOverdraw(previewDryMass, feedstockAvailability.availableKg)
-      ? binStockOverdrawMessage("feedstock")
+      ? feedstockDryStockOverdrawMessage(
+          feedstockAvailability.availableKg,
+          watchMoisture,
+        )
       : undefined;
   const feedstockFieldFingerprint = [
     watchedSourceBinId,
@@ -250,6 +258,14 @@ export function ProductionRunForm({
     watchedBiocharMoisture <= 100
       ? deriveMassDryKg(watchedBiocharKg, watchedBiocharMoisture)
       : null;
+  const massBalanceFeedback = productionRunMassBalanceFeedback({
+    feedstockWetMassKg: watchWetMass,
+    feedstockMoisturePercent: watchMoisture,
+    biocharOutputKg: watchedBiocharKg,
+    biocharMoisturePercent: watchedBiocharMoisture,
+  });
+  const biocharOutputError =
+    errors.biocharOutputKg?.message ?? massBalanceFeedback.dryError;
 
   // Track previous facility to detect real changes
   const prevFacilityRef = useRef(watchedFacilityId);
@@ -628,7 +644,8 @@ export function ProductionRunForm({
           moisturePercent={watchedBiocharMoisture}
           wet={{
             id: "biocharOutputKg",
-            error: errors.biocharOutputKg?.message,
+            error: biocharOutputError,
+            warning: massBalanceFeedback.wetWarning,
             disabled: isSubmitting,
             placeholder: "e.g. 150",
             certifyRequired: isProductionRunCertifyField("biocharOutputKg"),

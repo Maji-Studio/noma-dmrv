@@ -80,7 +80,7 @@ async function createOrderViaUi(
 }
 
 async function createDeliveryViaUi(page: Page, seededData: SeededChainData) {
-  await createOrderViaUi(page, seededData, "50");
+  await createOrderViaUi(page, seededData, "100");
 
   const deliveriesUrl = `${DELIVERIES_URL}?facility=${seededData.facility.id}`;
   await page.goto(deliveriesUrl);

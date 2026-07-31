@@ -58,7 +58,7 @@ async function createApplicationForLineage(
     seededData.biocharProduct.code,
   );
   await page.selectOption('select[name="packaging"]', "loose");
-  await page.fill('input[name="quantityKg"]', "100");
+  await page.fill('input[name="quantityKg"]', "10000");
   await page.locator('[role="dialog"]').locator('button:has-text("Create Order")').click();
   await waitForSideSheetClose(page);
 

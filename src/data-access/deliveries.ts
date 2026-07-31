@@ -93,10 +93,15 @@ import {
   lockDeliveryUpdateStock,
 } from "./delivery-stock-locks";
 import {
+  assertDeliveryWithinOrderBalance,
+  lockDeliveryOrderAndAssertBalance,
+} from "./delivery-order-balance";
+import {
   lockBiocharTransportRouteTopology,
   syncBiocharProductTransportLegs,
 } from "./transport-legs";
 import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
+import { isStockOverdraw } from "@/lib/stock-overdraw";
 
 // ============================================
 // Read Operations
@@ -591,6 +596,13 @@ export async function createDelivery(
       });
     }
 
+    // Upcoming rows allocate order quantity too. Lock the order after the
+    // physical-stock tier, then derive the remaining balance transactionally.
+    await lockDeliveryOrderAndAssertBalance(ctx, tx, {
+      orderId: data.orderId,
+      requestedWetKg: data.deliveredWetMassKg,
+    });
+
     const [row] = await tx
       .insert(deliveries)
       .values({
@@ -781,7 +793,11 @@ export async function updateDelivery(
       lockedEffectiveOrderId,
     ])];
     const lockedOrders = await tx
-      .select({ id: orders.id, biocharProductId: orders.biocharProductId })
+      .select({
+        id: orders.id,
+        biocharProductId: orders.biocharProductId,
+        quantityKg: orders.quantityKg,
+      })
       .from(orders)
       .where(and(
         inArray(orders.id, lockedOrderIds),
@@ -797,6 +813,28 @@ export async function updateDelivery(
     );
     if (!lockedEffectiveOrder) {
       throw new SafeError("Order not found");
+    }
+    const lockedEffectiveWetMass =
+      data.deliveredWetMassKg !== undefined
+        ? data.deliveredWetMassKg
+        : lockedDelivery.deliveredWetMassKg;
+    const orderChanged = lockedEffectiveOrderId !== lockedDelivery.orderId;
+    const wetMassIncreased =
+      lockedEffectiveWetMass != null &&
+      isStockOverdraw(
+        lockedEffectiveWetMass,
+        lockedDelivery.deliveredWetMassKg ?? 0,
+      );
+    if (
+      orderChanged ||
+      wetMassIncreased
+    ) {
+      await assertDeliveryWithinOrderBalance(ctx, tx, {
+        orderId: lockedEffectiveOrderId,
+        orderQuantityKg: lockedEffectiveOrder.quantityKg,
+        requestedWetKg: lockedEffectiveWetMass,
+        excludeDeliveryId: deliveryId,
+      });
     }
     const lockedExistingBiocharProductId =
       lockedDelivery.biocharProductId ??

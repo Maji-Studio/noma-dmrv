@@ -42,7 +42,9 @@ import { useQuickAddDialog } from "@/components/forms/entity-select";
 import { BinAllocationRow } from "./bin-allocation-row";
 import { FeedstockEvidenceSection } from "./feedstock-trailing-sections";
 import { WetMassWarning } from "./wet-mass-warning";
+import { FeedstockAllocationSummary } from "./feedstock-allocation-summary";
 import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
+import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
@@ -326,12 +328,21 @@ export function FeedstockForm({
 
   // Sum of allocated wet mass
   const allocatedTotalWetKg = (watchAllocations ?? []).reduce((sum, a) => {
-    const val = typeof a.allocatedWetMassKg === "number" ? a.allocatedWetMassKg : 0;
+    const val =
+      typeof a.allocatedWetMassKg === "number" &&
+      Number.isFinite(a.allocatedWetMassKg)
+        ? a.allocatedWetMassKg
+        : 0;
     return sum + val;
   }, 0);
+  const deliveredWetMassKg =
+    typeof watchWetMass === "number" && Number.isFinite(watchWetMass)
+      ? watchWetMass
+      : null;
 
   const showOverageWarning =
-    typeof watchWetMass === "number" && allocatedTotalWetKg > watchWetMass;
+    deliveredWetMassKg != null &&
+    exceedsMassWithTolerance(allocatedTotalWetKg, deliveredWetMassKg);
 
   const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";
 
@@ -688,24 +699,17 @@ export function FeedstockForm({
 
             {/* Allocation summary */}
             {fields.length > 1 && (
-              <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-16 py-12">
-                <span className="body-small text-[var(--color-text-tertiary)]">Total Allocated</span>
-                <span className="body-medium font-medium text-[var(--color-text-primary)]">
-                  {allocatedTotalWetKg.toFixed(2)} kg
-                </span>
-                {typeof watchWetMass === "number" && (
-                  <span className="body-small text-[var(--color-text-tertiary)]">
-                    of {watchWetMass.toFixed(2)} kg delivered
-                  </span>
-                )}
-              </div>
+              <FeedstockAllocationSummary
+                allocatedKg={allocatedTotalWetKg}
+                deliveredKg={deliveredWetMassKg}
+              />
             )}
 
             {/* Overage warning */}
-            {showOverageWarning && (
+            {showOverageWarning && deliveredWetMassKg != null && (
               <WetMassWarning
                 allocatedKg={allocatedTotalWetKg}
-                deliveredKg={watchWetMass as number}
+                deliveredKg={deliveredWetMassKg}
                 justificationRegister={register("overrideJustification")}
                 justificationError={errors.overrideJustification?.message}
                 disabled={isSubmitting}

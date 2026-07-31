@@ -95,6 +95,8 @@ import {
   lockBiocharTransportRouteTopology,
   syncBiocharProductTransportLegs,
 } from "./transport-legs";
+import { assertOrderQuantityCoversAllocations } from "./delivery-order-balance";
+import { isStockOverdraw } from "@/lib/stock-overdraw";
 
 // ============================================
 // Read Operations
@@ -661,6 +663,16 @@ export async function updateOrder(
 
     if (!locked) {
       throw new SafeError("Order not found");
+    }
+
+    if (
+      data.quantityKg !== undefined &&
+      isStockOverdraw(locked.quantityKg, data.quantityKg)
+    ) {
+      await assertOrderQuantityCoversAllocations(ctx, tx, {
+        orderId,
+        orderQuantityKg: data.quantityKg,
+      });
     }
 
     if (

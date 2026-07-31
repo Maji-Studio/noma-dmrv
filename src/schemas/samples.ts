@@ -26,6 +26,10 @@ const PH_MIN = 0;
 const PH_MAX = 14;
 const PH_RANGE_MESSAGE = `Must be between ${PH_MIN} and ${PH_MAX}`;
 export const CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS = 0.5;
+export const ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE =
+  `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
+export const COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE =
+  `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
 
 const percentNumber = z
   .number()
@@ -72,39 +76,69 @@ const optionalFraction = optionalNumber.refine(
   { message: "Must be between 0 and 1" },
 ).optional();
 
-function carbonReconciliationSuperRefine(
-  value: {
-    totalCarbonPercent?: number | null;
-    organicCarbonPercent?: number | null;
-    inorganicCarbonPercent?: number | null;
-  },
-  ctx: z.RefinementCtx,
-): void {
+interface SampleCarbonValues {
+  totalCarbonPercent?: number | null;
+  organicCarbonPercent?: number | null;
+  inorganicCarbonPercent?: number | null;
+}
+
+export interface SampleCarbonReconciliationErrors {
+  organicCarbonPercent?: string;
+  inorganicCarbonPercent?: string;
+}
+
+function isCompleteNumber(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/** One reconciliation rule shared by live form feedback and Zod validation. */
+export function getSampleCarbonReconciliationErrors(
+  value: SampleCarbonValues,
+): SampleCarbonReconciliationErrors {
+  const errors: SampleCarbonReconciliationErrors = {};
+
   if (
-    value.totalCarbonPercent != null &&
-    value.organicCarbonPercent != null &&
+    isCompleteNumber(value.totalCarbonPercent) &&
+    isCompleteNumber(value.organicCarbonPercent) &&
     value.organicCarbonPercent - value.totalCarbonPercent >
       CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
   ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["organicCarbonPercent"],
-      message: `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`,
-    });
+    errors.organicCarbonPercent = ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE;
   }
 
   if (
-    value.totalCarbonPercent != null &&
-    value.organicCarbonPercent != null &&
-    value.inorganicCarbonPercent != null &&
+    isCompleteNumber(value.totalCarbonPercent) &&
+    isCompleteNumber(value.organicCarbonPercent) &&
+    isCompleteNumber(value.inorganicCarbonPercent) &&
     value.organicCarbonPercent + value.inorganicCarbonPercent -
       value.totalCarbonPercent >
       CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
   ) {
+    errors.inorganicCarbonPercent = COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE;
+  }
+
+  return errors;
+}
+
+function carbonReconciliationSuperRefine(
+  value: SampleCarbonValues,
+  ctx: z.RefinementCtx,
+): void {
+  const errors = getSampleCarbonReconciliationErrors(value);
+
+  if (errors.organicCarbonPercent) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["organicCarbonPercent"],
+      message: errors.organicCarbonPercent,
+    });
+  }
+
+  if (errors.inorganicCarbonPercent) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["inorganicCarbonPercent"],
-      message: `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`,
+      message: errors.inorganicCarbonPercent,
     });
   }
 }

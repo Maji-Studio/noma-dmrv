@@ -50,6 +50,7 @@ interface MassMoistureInputProps {
   label?: string;
   registration: UseFormRegisterReturn;
   error?: string;
+  warning?: string;
   required?: boolean;
   disabled?: boolean;
   placeholder?: string;
@@ -76,6 +77,7 @@ export function MoistureField({
   label,
   registration,
   error,
+  warning,
   required,
   disabled,
   placeholder = "e.g. 20",
@@ -91,6 +93,7 @@ export function MoistureField({
       id={id}
       label={label ?? qualifyMassLabel(MOISTURE_FIELD_LABEL, materialLabel)}
       error={error}
+      warning={warning}
       helperText={helperText}
       hint={hint}
       required={required}
@@ -118,6 +121,7 @@ export function WetMassField({
   label,
   registration,
   error,
+  warning,
   required,
   disabled,
   placeholder = "e.g. 1000",
@@ -133,6 +137,7 @@ export function WetMassField({
       id={id}
       label={label ?? qualifyMassLabel(WET_MASS_FIELD_LABEL, materialLabel)}
       error={error}
+      warning={warning}
       helperText={helperText}
       hint={hint}
       required={required}

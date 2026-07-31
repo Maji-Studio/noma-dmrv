@@ -34,7 +34,11 @@ import {
   biocharProducts,
   formulations,
 } from "@/db/schema/products";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import {
+  deriveMassDryKg,
+  DRY_MASS_EXCEEDS_WET_MESSAGE,
+  exceedsMassWithTolerance,
+} from "@/lib/calculations/mass-dry";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
 import type {
@@ -277,6 +281,14 @@ async function resolveApplicationDryMassTons(
   txOrDb: DbTransaction | typeof db = db,
 ): Promise<number> {
   if (input.biocharAppliedDryTons != null) {
+    if (
+      exceedsMassWithTolerance(
+        tonnesToKg(input.biocharAppliedDryTons),
+        tonnesToKg(input.biocharAppliedTons),
+      )
+    ) {
+      throw new SafeError(DRY_MASS_EXCEEDS_WET_MESSAGE);
+    }
     return input.biocharAppliedDryTons;
   }
 
