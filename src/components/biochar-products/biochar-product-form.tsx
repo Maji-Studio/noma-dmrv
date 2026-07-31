@@ -14,9 +14,9 @@ import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/d
 import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import {
   formatMoisturePercent,
-  splitWetMass,
   splitWetMassAfterAddedWater,
 } from "@/lib/mass-moisture";
+import { formatMassKg } from "@/lib/format-utils";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -66,32 +66,50 @@ const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: t
  */
 export function TransferFlowPreview({
   sourceBinName,
+  sourceAvailableWetMassKg,
   sourceAvailableDryMassKg,
   sourceWetMassKg,
-  sourceMoisturePercent,
   destinationDryMassKg,
   destinationBinLabel,
+  isEditMode = false,
 }: {
   sourceBinName: string | null;
+  sourceAvailableWetMassKg: number | null;
   sourceAvailableDryMassKg: number | null;
   sourceWetMassKg: number | null;
-  sourceMoisturePercent: number | null;
   destinationDryMassKg: number | null;
   destinationBinLabel: string | null;
+  isEditMode?: boolean;
 }) {
-  const sourceDryMassKg = splitWetMass(
-    sourceWetMassKg,
-    sourceMoisturePercent,
-  )?.dryKg ?? null;
   const hasSource = !!sourceBinName;
+  const hasWetTransfer = sourceWetMassKg !== null && sourceWetMassKg > 0;
+  // Persistence allocates the wet draw proportionally across the source bin's
+  // remaining production-run lots. The aggregate wet:dry ratio therefore gives
+  // the same preview basis without applying the destination product moisture.
+  const sourceDryMassKg =
+    hasWetTransfer &&
+    sourceAvailableWetMassKg !== null &&
+    sourceAvailableWetMassKg > 0 &&
+    sourceAvailableDryMassKg !== null
+      ? sourceWetMassKg *
+        (sourceAvailableDryMassKg / sourceAvailableWetMassKg)
+      : null;
   const hasDryTransfer = sourceDryMassKg !== null && sourceDryMassKg > 0;
   const hasDestination = !!destinationBinLabel;
+  // Entity options report today's post-allocation remainder. On edit, add the
+  // product's fixed draw back before showing the same before/draw/after equation.
+  const sourceDryMassBeforeTransferKg =
+    isEditMode &&
+    sourceAvailableDryMassKg !== null &&
+    sourceDryMassKg !== null
+      ? sourceAvailableDryMassKg + sourceDryMassKg
+      : sourceAvailableDryMassKg;
   const remainingSourceDryMassKg =
-    sourceAvailableDryMassKg !== null && sourceDryMassKg !== null
-      ? sourceAvailableDryMassKg - sourceDryMassKg
+    sourceDryMassBeforeTransferKg !== null && sourceDryMassKg !== null
+      ? sourceDryMassBeforeTransferKg - sourceDryMassKg
       : null;
 
-  if (!hasSource && !hasDryTransfer && !hasDestination) return null;
+  if (!hasSource && !hasWetTransfer && !hasDestination) return null;
 
   return (
     <div className="grid grid-cols-1 items-stretch gap-6 text-left sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-8">
@@ -116,7 +134,7 @@ export function TransferFlowPreview({
             <p className="body-small text-[var(--color-text-primary)] mt-6">
               Dry biochar:{" "}
               <span className="font-medium">
-                {formatMassKg(sourceAvailableDryMassKg)}
+                {formatMassKg(sourceDryMassBeforeTransferKg)}
               </span>
               {hasDryTransfer && (
                 <span className="font-medium text-[var(--st-wait)]">
@@ -133,7 +151,12 @@ export function TransferFlowPreview({
               </p>
             ) : (
               <p className="body-small text-[var(--color-text-tertiary)] mt-2">
-                Add wet mass and moisture to calculate the transfer.
+                {!hasWetTransfer
+                  ? "Add wet mass to calculate the transfer."
+                  : sourceAvailableDryMassKg === null ||
+                      sourceAvailableWetMassKg === null
+                    ? "Source dry stock is not available. Reconcile the storage bin."
+                    : "Source dry transfer cannot be calculated."}
               </p>
             )}
           </>
@@ -195,6 +218,11 @@ export function TransferFlowPreview({
                 <span className="font-medium text-[var(--st-ok)]">
                   +{formatMassKg(destinationDryMassKg)}
                 </span>
+              </span>
+            )}
+            {hasWetTransfer && destinationDryMassKg === null && (
+              <span className="body-small text-[var(--color-text-tertiary)] mt-6">
+                Record moisture to calculate the dry product.
               </span>
             )}
           </>
@@ -440,11 +468,13 @@ export function BiocharProductForm({
           </SectionLabel>
           <TransferFlowPreview
             sourceBinName={selectedSourceBiocharBin?.name ?? null}
+            sourceAvailableWetMassKg={
+              selectedSourceBiocharBin?.remainingMass?.wetKg ?? null
+            }
             sourceAvailableDryMassKg={
               selectedSourceBiocharBin?.remainingMass?.dryKg ?? null
             }
             sourceWetMassKg={requestedBiocharKg}
-            sourceMoisturePercent={moistureNum}
             destinationDryMassKg={finalMassSplit?.dryKg ?? null}
             destinationBinLabel={
               selectedStorageLocation?.name
@@ -453,6 +483,7 @@ export function BiocharProductForm({
                   : null)
                 ?? null
             }
+            isEditMode={isEditMode}
           />
         </div>
       )}
