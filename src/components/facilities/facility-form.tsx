@@ -58,6 +58,7 @@ interface FacilityFormProps {
   isSubmitting?: boolean;
   errorMessage?: string;
   submitLabel?: string;
+  cancelLabel?: string;
 }
 
 export function FacilityForm({
@@ -67,6 +68,7 @@ export function FacilityForm({
   isSubmitting = false,
   errorMessage,
   submitLabel,
+  cancelLabel,
 }: FacilityFormProps) {
   const isEditMode = !!facility;
   // Organization operating defaults seed create mode only; an existing record
@@ -284,6 +286,7 @@ export function FacilityForm({
         errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        cancelLabel={cancelLabel}
       />
     </form>
   );

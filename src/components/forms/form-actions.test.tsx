@@ -26,4 +26,25 @@ describe("FormActions", () => {
 
     expect(markup).not.toContain('role="alert"');
   });
+
+  it("uses a context-specific secondary action label", () => {
+    const markup = renderToStaticMarkup(
+      <FormActions
+        submitLabel="Add facility"
+        cancelLabel="Skip setup"
+        onCancel={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain("Skip setup");
+    expect(markup).not.toContain("Cancel");
+  });
+
+  it("keeps Cancel as the default secondary action label", () => {
+    const markup = renderToStaticMarkup(
+      <FormActions submitLabel="Save record" onCancel={() => undefined} />,
+    );
+
+    expect(markup).toContain("Cancel");
+  });
 });

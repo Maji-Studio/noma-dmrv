@@ -18,6 +18,8 @@ interface FormActionsProps {
   submitLabel?: string;
   submittingLabel?: string;
   defaultSubmitLabel?: string;
+  /** Context-specific label for the secondary action. */
+  cancelLabel?: string;
   /** Block submit while a precondition is unmet (e.g. an unchecked ack). */
   submitDisabled?: boolean;
   /**
@@ -42,6 +44,7 @@ export function FormActions({
   submitLabel,
   submittingLabel = "Saving...",
   defaultSubmitLabel = "Save",
+  cancelLabel = "Cancel",
   submitDisabled = false,
   formId,
   sticky = true,
@@ -74,7 +77,7 @@ export function FormActions({
         </Button>
         {onCancel && (
           <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
+            {cancelLabel}
           </Button>
         )}
       </div>

@@ -57,6 +57,8 @@ interface ReactorFormProps {
   errorMessage?: string;
   /** Custom label for the submit button */
   submitLabel?: string;
+  /** Custom label for the secondary action */
+  cancelLabel?: string;
 }
 
 export function ReactorForm({
@@ -66,6 +68,7 @@ export function ReactorForm({
   isSubmitting = false,
   errorMessage,
   submitLabel,
+  cancelLabel,
 }: ReactorFormProps) {
   const isEditMode = !!reactor;
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -179,6 +182,7 @@ export function ReactorForm({
         errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        cancelLabel={cancelLabel}
       />
     </form>
   );
