@@ -28,7 +28,6 @@ import {
 } from "@/lib/mass-moisture";
 
 function formatStockSubtitle(
-  formulationName: string | null,
   massKg: number | null,
   waterAddedKg: number | null,
   moisturePercent: number | null,
@@ -43,8 +42,7 @@ function formatStockSubtitle(
     productDryKg == null || unresolvedDeliveredDryCount > 0
       ? null
       : productDryKg - deliveredDryKg;
-  const productLabel = formulationName ?? PURE_BIOCHAR_LABEL;
-  return `${productLabel} · ${formatWetDryMass({
+  return `${formatWetDryMass({
     wetKg: remainingWetKg,
     dryKg: remainingDryKg,
     wetLabel: "Wet biochar product",
@@ -132,6 +130,7 @@ export function toBiocharProductEntityOption(r: {
   totalDeliveredDryKg: number;
   unresolvedDeliveredDryCount: number;
 }): EntityOption {
+  const productLabel = r.formulationName ?? PURE_BIOCHAR_LABEL;
   const remainingWetKg =
     (r.massKg ?? 0) + (r.waterAddedKg ?? 0) - r.totalDeliveredKg;
   const productDryKg = splitWetMass(r.massKg, r.moisturePercent)?.dryKg;
@@ -143,7 +142,7 @@ export function toBiocharProductEntityOption(r: {
   return {
     id: r.id,
     code: r.code ?? r.productCode,
-    name: r.name ?? r.formulationName ?? PURE_BIOCHAR_LABEL,
+    name: r.name ? `${r.name} • ${productLabel}` : productLabel,
     mass: {
       moisturePercent: deriveEffectiveMoisturePercent(
         r.massKg,
@@ -156,7 +155,6 @@ export function toBiocharProductEntityOption(r: {
       dryKg: remainingDryKg,
     },
     subtitle: formatStockSubtitle(
-      r.formulationName,
       r.massKg,
       r.waterAddedKg,
       r.moisturePercent,

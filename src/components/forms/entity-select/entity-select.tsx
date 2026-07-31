@@ -228,14 +228,17 @@ export function EntitySelect({
   const { data: selectedEntity, isPending: isSelectedEntityPending } =
     useEntityById(entityType, value);
 
+  const listedOption = options.find((option) => option.id === value);
   const selectedOption =
-    selectedEntity?.id === value
-      ? selectedEntity
-      : options.find((option) => option.id === value);
+    selectedEntity?.id === value ? selectedEntity : listedOption;
   const displayText = selectedOption
     ? (formatSelectedLabel ? formatSelectedLabel(selectedOption) : selectedOption.name)
     : "";
-  const remainingMass = selectedOption?.remainingMass;
+  // A selected-value query may still hold a pre-feature cache entry. Keep
+  // live inventory metadata from the freshly loaded option list until that
+  // detail query refreshes.
+  const remainingMass =
+    selectedOption?.remainingMass ?? listedOption?.remainingMass;
   const triggerDescribedBy = [
     ariaDescribedBy,
     remainingMass ? remainingMassId : undefined,

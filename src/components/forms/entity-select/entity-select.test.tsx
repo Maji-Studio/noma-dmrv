@@ -130,6 +130,27 @@ describe("EntitySelect selected-value display", () => {
     expect(html).toContain('aria-invalid="true"');
   });
 
+  it("keeps fresh remaining mass when cached selected details are incomplete", () => {
+    entityState.options = [
+      {
+        id: "reactor-1",
+        code: "BIN-01",
+        name: "North product bin",
+        remainingMass: { wetKg: 3_000, dryKg: 2_900 },
+      },
+    ];
+    entityState.selected = {
+      id: "reactor-1",
+      code: "BIN-01",
+      name: "North product bin",
+    };
+    entityState.selectedPending = false;
+
+    expect(render("reactor-1")).toContain(
+      "Remaining wet mass: 3,000kg | dry mass: 2,900kg",
+    );
+  });
+
   it("does not render a selected helper for generic subtitles or no selection", () => {
     entityState.selected = {
       id: "reactor-1",
