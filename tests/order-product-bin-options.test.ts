@@ -156,6 +156,11 @@ describe("order product-bin options", () => {
   });
 
   it("excludes a product whose bin is archived from new selections", async () => {
+    await db
+      .update(storageLocations)
+      .set({ archivedAt: new Date() })
+      .where(eq(storageLocations.id, productBinId));
+
     const options = await getBiocharProducts(ctx, {
       facilityId,
       limit: 10,
