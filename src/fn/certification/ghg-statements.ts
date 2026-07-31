@@ -35,6 +35,7 @@ import {
 } from "@/data-access/certifier-removals";
 import { withFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { requireOrgFacility } from "@/data-access/utils";
+import { redactReportSecrets } from "@/lib/certification/report-url";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
