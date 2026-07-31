@@ -383,29 +383,31 @@ function DetailState({
             </Accordion.Item>
           )}
 
-          <Accordion.Item
-            value="technical-details"
-            className={CERTIFICATION_ACCORDION_ITEM}
-          >
-            <Accordion.Header>
-              <Accordion.Trigger
-                className={CERTIFICATION_ACCORDION_TRIGGER}
-                labelClassName={CERTIFICATION_ACCORDION_LABEL}
-              >
-                Technical details
-              </Accordion.Trigger>
-            </Accordion.Header>
-            <Accordion.Panel className="[&>div]:p-16">
-              <GhgStatementTechnicalDetails
-                statement={statement}
-                statementSubmission={statementSubmission}
-                remote={remote}
-                isLockedInFlight={locked}
-                mode={mode}
-                latestReport={reportsQuery.data?.[0] ?? null}
-              />
-            </Accordion.Panel>
-          </Accordion.Item>
+          {canManageReports && (
+            <Accordion.Item
+              value="technical-details"
+              className={CERTIFICATION_ACCORDION_ITEM}
+            >
+              <Accordion.Header>
+                <Accordion.Trigger
+                  className={CERTIFICATION_ACCORDION_TRIGGER}
+                  labelClassName={CERTIFICATION_ACCORDION_LABEL}
+                >
+                  Technical details
+                </Accordion.Trigger>
+              </Accordion.Header>
+              <Accordion.Panel className="[&>div]:p-16">
+                <GhgStatementTechnicalDetails
+                  statement={statement}
+                  statementSubmission={statementSubmission}
+                  remote={remote}
+                  isLockedInFlight={locked}
+                  mode={mode}
+                  latestReport={reportsQuery.data?.[0] ?? null}
+                />
+              </Accordion.Panel>
+            </Accordion.Item>
+          )}
         </Accordion.Root>
       </SlideOverPanel.Body>
 
