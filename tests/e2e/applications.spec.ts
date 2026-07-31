@@ -137,6 +137,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     // The order picker is a FormEntitySelect (custom dropdown) — pick the first option
     await selectFirstEntity(page, "Order");
     await page.fill('input[name="deliveredWetMassKg"]', "10000");
+    await page.fill('input[name="moistureContentPercent"]', "10");
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
     await waitForSideSheetClose(page);
@@ -162,7 +163,9 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     // Fill required and optional fields
     await page.fill('input[name="biocharAppliedTons"]', "5000");
-    await page.fill('input[name="biocharAppliedDryTons"]', "4500");
+    await expect(
+      page.locator('input[name="biocharAppliedDryTons"]'),
+    ).toHaveCount(0);
     await page.fill('input[name="fieldSizeHa"]', "2");
     await page.fill('input[name="fieldIdentifier"]', "E2E-Field-01");
     await page.fill('input[name="cropType"]', "maize");
@@ -183,6 +186,25 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await expect(
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
+
+    // Regression: the saved 4,500 kg derived dry mass is not retained as a
+    // hidden manual form value. Reducing wet mass must submit with a freshly
+    // derived dry mass rather than fail dry <= wet validation invisibly.
+    const firstApplicationRow = page.locator("tbody tr").first();
+    await firstApplicationRow
+      .getByRole("button", { name: /Actions for/ })
+      .click();
+    await page.getByRole("menuitem", { name: "Edit" }).click();
+    await waitForSideSheet(page);
+    await expect(
+      page.locator('input[name="biocharAppliedDryTons"]'),
+    ).toHaveCount(0);
+    await page.fill('input[name="biocharAppliedTons"]', "4000");
+    await page
+      .locator('[role="dialog"]')
+      .getByRole("button", { name: "Update Application" })
+      .click();
+    await waitForSideSheetClose(page);
 
   });
 

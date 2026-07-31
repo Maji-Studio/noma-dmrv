@@ -4,6 +4,12 @@ import {
   createApplicationSchema,
   updateApplicationSchema,
 } from "@/schemas/applications";
+import {
+  MASS_INPUT_MAX_KG,
+  MASS_INPUT_MAX_TONNES,
+  MASS_MAX_KG_MESSAGE,
+  MASS_MAX_TONNES_MESSAGE,
+} from "@/schemas/helpers";
 
 describe("application schemas", () => {
   it("rejects a create payload with only one GPS coordinate", () => {
@@ -132,5 +138,59 @@ describe("application schemas", () => {
       ...updateBase,
       biocharAppliedDryTons: 1.000002,
     }).success).toBe(false);
+  });
+
+  it("uses kilogram bounds and copy for client form mass fields", () => {
+    const base = {
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    };
+
+    expect(applicationFormSchema.safeParse({
+      ...base,
+      biocharAppliedTons: MASS_INPUT_MAX_KG,
+    }).success).toBe(true);
+    const result = applicationFormSchema.safeParse({
+      ...base,
+      biocharAppliedTons: MASS_INPUT_MAX_KG + 1,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["biocharAppliedTons"],
+            message: MASS_MAX_KG_MESSAGE,
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("retains tonne bounds for the create action payload", () => {
+    const base = {
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    };
+
+    expect(createApplicationSchema.safeParse({
+      ...base,
+      biocharAppliedTons: MASS_INPUT_MAX_TONNES,
+    }).success).toBe(true);
+    const result = createApplicationSchema.safeParse({
+      ...base,
+      biocharAppliedTons: MASS_INPUT_MAX_TONNES + 1,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["biocharAppliedTons"],
+            message: MASS_MAX_TONNES_MESSAGE,
+          }),
+        ]),
+      );
+    }
   });
 });
