@@ -5,6 +5,7 @@ import {
   compactBatchHealthDetail,
   fallbackBatchHealthFixTarget,
   NEXT_ACTION_DETAIL_MAX_CHARS,
+  resolveBatchHealthFixTarget,
 } from "@/lib/certification/batch-health-links";
 
 describe("compactBatchHealthDetail", () => {
@@ -73,6 +74,21 @@ describe("fallbackBatchHealthFixTarget", () => {
 
   it("routes entityReadiness check failures to sourceData", () => {
     expect(fallbackBatchHealthFixTarget("entityReadiness")).toBe("sourceData");
+  });
+});
+
+describe("resolveBatchHealthFixTarget", () => {
+  it("uses the shared fallback when the check has no explicit target", () => {
+    expect(resolveBatchHealthFixTarget({ key: "carbon" })).toBe("labSamples");
+  });
+
+  it("preserves an explicit target", () => {
+    expect(
+      resolveBatchHealthFixTarget({
+        key: "production",
+        fixTarget: "applications",
+      }),
+    ).toBe("applications");
   });
 });
 

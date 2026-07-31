@@ -90,6 +90,7 @@ describe("SubmissionSummary", () => {
 
     expect(html).toContain("You are sending");
     expect(html.split("8.5 t")).toHaveLength(2);
+    expect(html).toContain("Biochar, dry mass");
     expect(html).toContain(
       "Isometric calculates stored and net CO₂e after submission.",
     );
@@ -103,9 +104,19 @@ describe("SubmissionSummary", () => {
     const html = render();
 
     expect(html).toContain("Ready to submit");
-    expect(html).toContain("2 checks passed. Nothing left to fix.");
+    expect(html).toContain("2 checks passed.");
+    expect(html).not.toContain("Nothing left to fix.");
     expect(html).not.toContain("What to fix");
     expect(html).not.toContain("Removal template resolved");
+  });
+
+  it("does not render an empty verdict detail when no checks were evaluated", () => {
+    const html = render({ checks: [] });
+
+    expect(html).toContain("Ready to submit");
+    expect(html).not.toContain(
+      '<span class="body-small text-[var(--color-text-secondary)]"></span>',
+    );
   });
 
   it("opens the checks list on the items that need attention", () => {

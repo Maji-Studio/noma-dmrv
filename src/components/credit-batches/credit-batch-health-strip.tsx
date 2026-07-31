@@ -4,8 +4,9 @@
  * wizard's gate (the two can never disagree).
  *
  * The checklist only DETAILS the checks that still need work: each open check
- * is an action row stating the requirement and missing items, with a single
- * button that lands where the gap is actually resolved.
+ * states the requirement and missing items. Most rows include a button that
+ * lands where the gap is resolved; lab-sample actions live in the Lab Samples
+ * panel immediately below instead of being duplicated here.
  * A `skipped` transport check is a facility-setup concern and never counts as
  * a batch issue.
  *
@@ -33,6 +34,7 @@ import { formatWetDryMass } from "@/lib/mass-moisture";
 import {
   batchHealthFixLinkFor,
   compactBatchHealthDetail,
+  resolveBatchHealthFixTarget,
 } from "@/lib/certification/batch-health-links";
 import { cn } from "@/lib/utils";
 
@@ -125,9 +127,8 @@ function AffectedRecordChips({
 }
 
 /**
- * One open (unmet) check: problem headline, the missing items inline, and the
- * single action that resolves it. Replaces both the old check chip and the
- * duplicated "Clear this gate" panel — every open check is self-contained.
+ * One open (unmet) check: problem headline, the missing items inline, and an
+ * action when it is not already provided by the following detail panel.
  */
 function OpenCheckRow({
   check,
@@ -145,6 +146,8 @@ function OpenCheckRow({
   feedstockName?: string | null;
 }) {
   const fix = batchHealthFixLinkFor(check, facilityId, creditBatchId);
+  const fixTarget = resolveBatchHealthFixTarget(check);
+  const actionOwnedByLabSamplesPanel = fixTarget === "labSamples";
   const isCrossPage = fix.href.startsWith("/");
 
   return (
@@ -176,20 +179,22 @@ function OpenCheckRow({
           feedstockName={feedstockName}
         />
       </div>
-      <Link
-        href={fix.href}
-        className={cn(
-          buttonVariants({ variant: "default", size: "small" }),
-          "shrink-0 self-start",
-        )}
-      >
-        {fix.label}
-        {isCrossPage ? (
-          <ArrowSquareOutIcon size={14} aria-hidden />
-        ) : (
-          <ArrowRightIcon size={14} aria-hidden />
-        )}
-      </Link>
+      {!actionOwnedByLabSamplesPanel && (
+        <Link
+          href={fix.href}
+          className={cn(
+            buttonVariants({ variant: "default", size: "small" }),
+            "shrink-0 self-start",
+          )}
+        >
+          {fix.label}
+          {isCrossPage ? (
+            <ArrowSquareOutIcon size={14} aria-hidden />
+          ) : (
+            <ArrowRightIcon size={14} aria-hidden />
+          )}
+        </Link>
+      )}
     </li>
   );
 }

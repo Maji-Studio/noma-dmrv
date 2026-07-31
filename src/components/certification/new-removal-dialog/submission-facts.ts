@@ -180,9 +180,7 @@ export function buildSubmissionFacts({
   // Counts what passed, not what was evaluated: `actionChecks` also holds
   // checks a skipped upstream left unevaluable, which never "passed".
   let detail =
-    checksPassed > 0
-      ? `${countLabel(checksPassed, "check")} passed. Nothing left to fix.`
-      : "Nothing left to fix.";
+    checksPassed > 0 ? `${countLabel(checksPassed, "check")} passed.` : "";
 
   // Checks outrank compiler blockers in the verdict line: they name the record
   // and link to the fix, where a blocker string is the same fault in compiler

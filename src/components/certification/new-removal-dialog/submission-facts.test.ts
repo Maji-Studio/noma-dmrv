@@ -265,7 +265,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
     ).toMatchObject({
       state: "ready",
       headline: "Ready to submit",
-      detail: "2 checks passed. Nothing left to fix.",
+      detail: "2 checks passed.",
       checksPassed: 2,
       checksTotal: 2,
       checksAttention: 0,
@@ -284,7 +284,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
     ).toMatchObject({
       state: "ready",
       headline: "Ready to submit",
-      detail: "2 checks passed. Nothing left to fix.",
+      detail: "2 checks passed.",
       checksPassed: 2,
       checksTotal: 3,
       checksAttention: 0,
