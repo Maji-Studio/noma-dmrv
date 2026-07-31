@@ -191,6 +191,10 @@ The visual contract (SectionLabel + `space-y-16` fields + `pt-16` hairline divid
 
 The only CTA row — left-aligned, primary action first, sticky by default, nothing renders after it.
 
+- Never stack a parent dialog or step-flow footer beneath `FormActions`. The
+  embedded form owns the one action row. Give its secondary action the
+  context-specific label (for example, `cancelLabel="Skip setup"`) and omit the
+  parent footer for that step.
 - Submission-level server/action/root errors go through `errorMessage`; `FormActions` renders the shared `ServerError` immediately above the buttons inside the same sticky footer. Do not render the same error in a parent sheet or earlier in the form.
 - Nested inline forms (child-entity editors, transport legs) pass `sticky={false}`.
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
