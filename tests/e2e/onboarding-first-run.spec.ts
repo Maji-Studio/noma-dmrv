@@ -81,8 +81,8 @@ test.describe("First-run onboarding", () => {
       await expect(wizard).toBeVisible();
       await expect(wizard.getByText("Welcome")).toBeVisible();
 
-      // 2. Facility step — the real facility form. With a single available
-      // tier the durability field renders as read-only 1000-year info (#348).
+      // 2. Facility step — the real facility form shows the active tier and
+      // the locked future pathway.
       await wizard.getByRole("button", { name: "Get started" }).click();
       await expect(wizard.getByLabel(/facility name/i)).toBeVisible();
       await expect(
@@ -91,10 +91,16 @@ test.describe("First-run onboarding", () => {
       await expect(
         wizard.getByRole("button", { name: "Cancel", exact: true }),
       ).toHaveCount(0);
-      await expect(wizard.getByTestId("durability-tier-info")).toBeVisible();
+      const tierGroup = wizard.getByRole("radiogroup", {
+        name: "Durability tier",
+      });
+      await expect(tierGroup).toBeVisible();
       await expect(
-        wizard.getByText("1000-year durability"),
-      ).toBeVisible();
+        tierGroup.getByRole("radio", { name: /1000-year/i }),
+      ).toHaveAttribute("aria-checked", "true");
+      await expect(
+        tierGroup.getByRole("radio", { name: /200-year/i }),
+      ).toHaveAttribute("aria-disabled", "true");
       await wizard.getByLabel(/facility name/i).fill("CU Test Facility");
       await wizard.getByLabel(/country/i).fill("Tanzania");
       await wizard.getByLabel(/timezone/i).fill("Nairobi");

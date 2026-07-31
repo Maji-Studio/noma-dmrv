@@ -287,11 +287,11 @@ test.describe("Facilities Duplicate Code Handling", () => {
 });
 
 // ============================================
-// Durability Tier — read-only info, not a false choice (#348)
+// Durability tier catalogue
 // ============================================
 
 test.describe("Facility durability tier", () => {
-  test("renders as read-only info, not a radio with a locked option", async ({
+  test("shows the active tier and the locked future pathway", async ({
     adminPage: page,
   }) => {
     await page.goto("/facilities");
@@ -305,14 +305,16 @@ test.describe("Facility durability tier", () => {
       .filter({ has: page.getByRole("button", { name: /Create Facility/i }) });
     await expect(dialog).toBeVisible();
 
-    // The single unlocked tier shows as a plain info block…
-    const tierInfo = dialog.getByTestId("durability-tier-info");
-    await expect(tierInfo).toBeVisible();
-    await expect(tierInfo).toContainText(/1000-year durability/i);
-
-    // …not a selectable radio group, and with no locked "Available later"
-    // option that reads as a choice the operator is failing to make.
-    await expect(dialog.getByRole("radiogroup")).toHaveCount(0);
-    await expect(dialog.getByText(/Available later/i)).toHaveCount(0);
+    const tierGroup = dialog.getByRole("radiogroup", {
+      name: "Durability tier",
+    });
+    await expect(tierGroup).toBeVisible();
+    await expect(
+      tierGroup.getByRole("radio", { name: /1000-year/i }),
+    ).toHaveAttribute("aria-checked", "true");
+    await expect(
+      tierGroup.getByRole("radio", { name: /200-year/i }),
+    ).toHaveAttribute("aria-disabled", "true");
+    await expect(tierGroup.getByText("Available later")).toBeVisible();
   });
 });
