@@ -34,7 +34,7 @@ import { formatWetDryMass } from "@/lib/mass-moisture";
 import {
   batchHealthFixLinkFor,
   compactBatchHealthDetail,
-  fallbackBatchHealthFixTarget,
+  resolveBatchHealthFixTarget,
 } from "@/lib/certification/batch-health-links";
 import { cn } from "@/lib/utils";
 
@@ -146,8 +146,7 @@ function OpenCheckRow({
   feedstockName?: string | null;
 }) {
   const fix = batchHealthFixLinkFor(check, facilityId, creditBatchId);
-  const fixTarget =
-    check.fixTarget ?? fallbackBatchHealthFixTarget(check.key);
+  const fixTarget = resolveBatchHealthFixTarget(check);
   const actionOwnedByLabSamplesPanel = fixTarget === "labSamples";
   const isCrossPage = fix.href.startsWith("/");
 
