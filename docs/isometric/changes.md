@@ -4,6 +4,15 @@ Certification-readiness, transport-evidence, supporting-source, and sampling
 correction notes are archived in
 [`docs/archive/2026-07-28-certification-readiness-and-sampling-corrections.md`](../archive/2026-07-28-certification-readiness-and-sampling-corrections.md).
 
+## 2026-07-31 (production-run readings evidence readiness)
+
+Noma now requires at least one successfully uploaded, unchanged readings CSV
+for each completed production run before entity, Removal, and preflight
+readiness are complete. Presence means only that the file was supplied: Noma
+does not inspect it, import readings rows, or convert it to Certify structured
+telemetry. One CSV per run is Noma's conservative control, not a requirement
+stated verbatim by Isometric Biochar Protocol v1.1.
+
 Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).

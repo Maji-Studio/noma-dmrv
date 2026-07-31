@@ -104,4 +104,23 @@ describe("ProductionReadingsDocuments", () => {
     expect(html).toContain('data-document-type="sensor_data"');
     expect(html).toContain('data-has-upload-callback="true"');
   });
+
+  it("does not present pending or failed upload rows as supplied files", () => {
+    documentsForEntity.mockReturnValue({
+      data: [
+        { ...readingsDocument(), uploadStatus: "pending" },
+        { ...readingsDocument(), id: "doc-failed", uploadStatus: "failed" },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    const html = renderToStaticMarkup(
+      <ProductionReadingsDocuments productionRunId="run-1" />,
+    );
+
+    expect(html).toContain("0 files");
+    expect(html).toContain("No readings files uploaded yet.");
+    expect(html).not.toContain("reactor-original.csv");
+  });
 });

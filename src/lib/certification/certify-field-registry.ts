@@ -131,6 +131,18 @@ export const CERTIFY_FIELD_REGISTRY: Record<
 > = {
   productionRun: [
     {
+      key: "hasReadingsFile",
+      label: "Readings CSV file",
+      kind: "derived",
+      formFields: ["readingsCsv"],
+      satisfaction: {
+        mode: "equals",
+        field: "hasReadingsFile",
+        value: true,
+        label: "Readings CSV file supplied",
+      },
+    },
+    {
       key: "feedstockWetMassKg",
       label: "Feedstock wet mass",
       kind: "entered",

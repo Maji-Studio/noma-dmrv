@@ -40,6 +40,7 @@ function productionRun(
     id,
     code,
     status: "complete",
+    hasReadingsFile: true,
     feedstockWetMassKg: 5_000,
     feedstockMoisturePercent: 25,
     biocharOutputKg: 1_500,
@@ -80,6 +81,36 @@ describe("buildEntityReadinessResult", () => {
     );
     expect(result.gaps.join(" ")).toContain("PR-AFFECTED");
     expect(result.gaps.join(" ")).not.toContain("run-affected");
+  });
+
+  it("blocks Removal preflight when a completed run lacks readings evidence", () => {
+    const run = {
+      ...productionRun("run-missing-csv", "PR-NO-CSV", 50),
+      hasReadingsFile: false,
+    };
+
+    const result = buildEntityReadinessResult(
+      [run],
+      [],
+      { feedstock: [], biochar: [], sample: [] },
+      [],
+    );
+
+    expect(result.gaps).toEqual([
+      "Production run PR-NO-CSV: Readings CSV file",
+    ]);
+    expect(result.issues).toMatchObject([
+      {
+        key: "production-runs",
+        affectedRecords: [
+          {
+            id: "run-missing-csv",
+            code: "PR-NO-CSV",
+            missing: ["Readings CSV file"],
+          },
+        ],
+      },
+    ]);
   });
 
   it("does not block a required transport category without evidence", () => {

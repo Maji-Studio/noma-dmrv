@@ -29,10 +29,20 @@ interface ProductionReadingsDocumentsProps {
   disabled?: boolean;
 }
 
-const READINGS_DOC_TYPE: DocumentType = "sensor_data";
-const ENTITY_TYPE: DocumentEntityType = "production_run";
+const READINGS_DOC_TYPE = "sensor_data" satisfies DocumentType;
+const ENTITY_TYPE = "production_run" satisfies DocumentEntityType;
 const READINGS_ACCEPT = ".csv";
 const READINGS_MAX_MB = 25;
+
+export function isUploadedReadingsDocument(document: {
+  documentType: string;
+  uploadStatus: string;
+}): boolean {
+  return (
+    document.documentType === READINGS_DOC_TYPE &&
+    document.uploadStatus === "uploaded"
+  );
+}
 
 /**
  * Readings-file upload + file list for a production run. CSVs are persisted
@@ -54,7 +64,12 @@ export function ProductionReadingsDocuments({
   const invalidateKey = productionRunId
     ? documentKeys.forEntity(ENTITY_TYPE, productionRunId)
     : undefined;
-  const deleteMutation = useDeleteDocument(invalidateKey);
+  const deleteMutation = useDeleteDocument(
+    invalidateKey,
+    productionRunId
+      ? { entityType: ENTITY_TYPE, entityId: productionRunId }
+      : undefined,
+  );
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -83,11 +98,7 @@ export function ProductionReadingsDocuments({
     }
   };
 
-  const uploadedDocs = (docs ?? []).filter(
-    (d) =>
-      d.documentType === READINGS_DOC_TYPE &&
-      (d.uploadStatus === "uploaded" || d.fileUrl),
-  );
+  const uploadedDocs = (docs ?? []).filter(isUploadedReadingsDocument);
 
   if (!productionRunId) {
     return (

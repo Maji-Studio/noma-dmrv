@@ -22,6 +22,7 @@ describe("deriveEntityCertifyReadiness", () => {
   it("marks a complete production run ready", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
+      hasReadingsFile: true,
       feedstockWetMassKg: 5000,
       feedstockMoisturePercent: 25,
       biocharOutputKg: 1500,
@@ -35,9 +36,10 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("does not require readingsCount for a complete production run", () => {
+  it("uses the uploaded readings-file fact instead of legacy telemetry rows", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
+      hasReadingsFile: true,
       feedstockWetMassKg: 5000,
       feedstockMoisturePercent: 25,
       biocharOutputKg: 1500,
@@ -54,9 +56,38 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
+  it.each([false, undefined])(
+    "requires saved uploaded readings evidence when hasReadingsFile is %s",
+    (hasReadingsFile) => {
+      const readiness = deriveEntityCertifyReadiness("productionRun", {
+        status: "complete",
+        hasReadingsFile,
+        feedstockWetMassKg: 5000,
+        feedstockMoisturePercent: 25,
+        biocharOutputKg: 1500,
+        biocharMoisturePercent: 10,
+        dieselOperationLiters: 0,
+        dieselGensetLiters: 12,
+        preprocessingFuelLiters: 3,
+        electricityKwh: 50,
+      });
+
+      expect(readiness.state).toBe("incomplete");
+      expect(readiness.gaps).toMatchObject([
+        {
+          kind: "field",
+          key: "hasReadingsFile",
+          label: "Readings CSV file",
+          fields: ["hasReadingsFile"],
+        },
+      ]);
+    },
+  );
+
   it("reports missing entered fields", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
+      hasReadingsFile: true,
       feedstockWetMassKg: 5000,
       feedstockMoisturePercent: 25,
       biocharOutputKg: 1500,
@@ -80,6 +111,7 @@ describe("deriveEntityCertifyReadiness", () => {
   it("treats zero as present", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
+      hasReadingsFile: true,
       feedstockWetMassKg: 5000,
       feedstockMoisturePercent: 0,
       biocharOutputKg: 1500,
@@ -96,6 +128,7 @@ describe("deriveEntityCertifyReadiness", () => {
   it("requires terminal lifecycle state where configured", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "running",
+      hasReadingsFile: true,
       feedstockWetMassKg: 5000,
       feedstockMoisturePercent: 25,
       biocharOutputKg: 1500,
@@ -391,6 +424,11 @@ describe("isCertifyFormField", () => {
     expect(isCertifyFormField("delivery", "deliveredWetMassKg")).toBe(true);
     expect(isCertifyFormField("application", "soilTemperatureC")).toBe(true);
     expect(isCertifyFormField("customerLocation", "distanceFromFacilityKm")).toBe(true);
+  });
+
+  it("badges the readings upload through its form field name", () => {
+    expect(isCertifyFormField("productionRun", "readingsCsv")).toBe(true);
+    expect(isCertifyEntityField("productionRun", "hasReadingsFile")).toBe(true);
   });
 
   it("badges via formFields when the form name differs from the column", () => {
