@@ -290,7 +290,7 @@ describe("delivery order balance", () => {
     }
   });
 
-  it("allows unrelated edits to a legacy delivery that already exceeds its order", async () => {
+  it("allows UI-shaped unchanged balance fields on legacy delivery and order edits", async () => {
     const seeded = await seedOrder(50);
 
     try {
@@ -310,11 +310,50 @@ describe("delivery order balance", () => {
       await expect(
         updateDelivery(ctx, legacyDelivery.id, {
           code: `DL-ORDER-BAL-${seeded.tag}-RENAMED`,
+          orderId: seeded.orderId,
+          facilityId: seeded.facilityId,
+          deliveryDate: new Date("2026-08-01T00:00:00Z"),
+          biocharProductId: null,
+          status: "upcoming",
+          deliveredWetMassKg: 60,
+          massDryKg: null,
+          moistureContentPercent: null,
         }),
       ).resolves.toMatchObject({
         code: `DL-ORDER-BAL-${seeded.tag}-RENAMED`,
         deliveredWetMassKg: 60,
       });
+
+      await expect(
+        updateOrder(ctx, seeded.orderId, {
+          code: `OR-ORDER-BAL-${seeded.tag}-RENAMED`,
+          facilityId: seeded.facilityId,
+          customerId: seeded.customerId,
+          customerLocationId: null,
+          biocharProductId: seeded.productId,
+          orderDate: new Date("2026-07-31T00:00:00Z"),
+          quantityKg: 50,
+          packaging: "loose",
+          value: null,
+          currency: "TZS",
+        }),
+      ).resolves.toMatchObject({
+        code: `OR-ORDER-BAL-${seeded.tag}-RENAMED`,
+        quantityKg: 50,
+      });
+
+      await expect(
+        updateDelivery(ctx, legacyDelivery.id, {
+          deliveredWetMassKg: 61,
+        }),
+      ).rejects.toThrow(
+        "Only 50 kg remains on this order. Reduce the delivered mass.",
+      );
+      await expect(
+        updateOrder(ctx, seeded.orderId, { quantityKg: 49 }),
+      ).rejects.toThrow(
+        "Order quantity cannot be less than the 60 kg already allocated to deliveries.",
+      );
     } finally {
       await seeded.cleanup();
     }

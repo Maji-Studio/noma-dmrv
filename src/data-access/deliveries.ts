@@ -101,6 +101,7 @@ import {
   syncBiocharProductTransportLegs,
 } from "./transport-legs";
 import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
+import { isStockOverdraw } from "@/lib/stock-overdraw";
 
 // ============================================
 // Read Operations
@@ -817,9 +818,16 @@ export async function updateDelivery(
       data.deliveredWetMassKg !== undefined
         ? data.deliveredWetMassKg
         : lockedDelivery.deliveredWetMassKg;
+    const orderChanged = lockedEffectiveOrderId !== lockedDelivery.orderId;
+    const wetMassIncreased =
+      lockedEffectiveWetMass != null &&
+      isStockOverdraw(
+        lockedEffectiveWetMass,
+        lockedDelivery.deliveredWetMassKg ?? 0,
+      );
     if (
-      data.orderId !== undefined ||
-      data.deliveredWetMassKg !== undefined
+      orderChanged ||
+      wetMassIncreased
     ) {
       await assertDeliveryWithinOrderBalance(ctx, tx, {
         orderId: lockedEffectiveOrderId,

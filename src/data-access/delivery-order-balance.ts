@@ -51,29 +51,23 @@ export async function assertOrderQuantityCoversAllocations(
   }
 }
 
-export async function getDeliveryOrderAvailableKg(
+export async function deriveDeliveryOrderAvailableKg(
   ctx: OrgContext,
-  orderId: string,
-  excludeDeliveryId?: string,
-): Promise<number | null> {
+  dbOrTx: QueryExecutor,
+  params: {
+    orderId: string;
+    orderQuantityKg: number;
+    excludeDeliveryId?: string;
+  },
+): Promise<number> {
   requireOrgScope(ctx);
-  const [order] = await db
-    .select({ quantityKg: orders.quantityKg })
-    .from(orders)
-    .where(and(
-      eq(orders.id, orderId),
-      eq(orders.organizationId, ctx.organizationId),
-    ))
-    .limit(1);
-  if (!order) return null;
-
   const allocatedWetKg = await deriveAllocatedWetKg(
     ctx,
-    db,
-    orderId,
-    excludeDeliveryId,
+    dbOrTx,
+    params.orderId,
+    params.excludeDeliveryId,
   );
-  return Math.max(0, Number(order.quantityKg) - allocatedWetKg);
+  return Math.max(0, Number(params.orderQuantityKg) - allocatedWetKg);
 }
 
 export async function assertDeliveryWithinOrderBalance(

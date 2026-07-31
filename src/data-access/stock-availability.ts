@@ -10,7 +10,7 @@ import {
   deriveProductAvailableKg,
 } from "./bin-stock-guards";
 import { requireOrgScope } from "./utils";
-import { getDeliveryOrderAvailableKg } from "./delivery-order-balance";
+import { deriveDeliveryOrderAvailableKg } from "./delivery-order-balance";
 
 export interface StockAvailability {
   availableKg: number | null;
@@ -52,13 +52,11 @@ async function getDeliveryAvailability(
   ctx: OrgContext,
   request: Extract<StockAvailabilityRequest, { kind: "delivery" }>,
 ): Promise<StockAvailability> {
-  const orderAvailableKg = await getDeliveryOrderAvailableKg(
-    ctx,
-    request.orderId,
-    request.deliveryId,
-  );
   const [order] = await db
-    .select({ biocharProductId: orders.biocharProductId })
+    .select({
+      biocharProductId: orders.biocharProductId,
+      quantityKg: orders.quantityKg,
+    })
     .from(orders)
     .where(
       and(
@@ -67,6 +65,13 @@ async function getDeliveryAvailability(
       ),
     )
     .limit(1);
+  const orderAvailableKg = order
+    ? await deriveDeliveryOrderAvailableKg(ctx, db, {
+        orderId: request.orderId,
+        orderQuantityKg: order.quantityKg,
+        excludeDeliveryId: request.deliveryId,
+      })
+    : null;
   const productId = request.biocharProductId ?? order?.biocharProductId;
   if (!productId) {
     return { availableKg: null, orderAvailableKg };
