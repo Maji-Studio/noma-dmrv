@@ -79,7 +79,10 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Fill in required fields
     await page.fill('input[name="name"]', facilityName);
     await page.fill('input[name="country"]', facilityCountry);
-    await page.selectOption('select[name="timezone"]', "Africa/Nairobi");
+    await facilityDialog.getByRole("combobox", { name: "Timezone" }).fill("Nairobi");
+    await page
+      .getByRole("option", { name: "Africa/Nairobi (UTC+3)" })
+      .click();
 
     // Submit the form
     await page.getByRole("button", { name: /Create Facility/i }).click();

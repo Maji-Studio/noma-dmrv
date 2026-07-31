@@ -91,9 +91,10 @@ test.describe("First-run onboarding", () => {
       ).toBeVisible();
       await wizard.getByLabel(/facility name/i).fill("CU Test Facility");
       await wizard.getByLabel(/country/i).fill("Tanzania");
-      await wizard
-        .getByLabel(/timezone/i)
-        .selectOption({ index: 1 });
+      await wizard.getByLabel(/timezone/i).fill("Nairobi");
+      await page
+        .getByRole("option", { name: "Africa/Nairobi (UTC+3)" })
+        .click();
       await wizard.getByRole("button", { name: "Add facility" }).click();
 
       // 3. Reactor step.

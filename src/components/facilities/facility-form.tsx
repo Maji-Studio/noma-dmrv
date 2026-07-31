@@ -1,7 +1,5 @@
 "use client";
 
-import { formatTimezoneLabel } from "@/lib/date-utils";
-
 import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,7 +10,6 @@ import {
   PositionPicker,
   ResolvedErrorRevalidator,
 } from "@/components/forms";
-import { FormSelect } from "@/components/forms/form-select";
 import {
   facilityFormSchema,
   timezones,
@@ -29,12 +26,10 @@ import {
   FacilityIsometricConnector,
 } from "@/components/certification";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
+import { TimezoneCombobox } from "./timezone-combobox";
 
 // 1000-year is the go-forward tier (ADR 0021); new facilities default to it.
 const DEFAULT_DURABILITY_OPTION: DurabilityOption = "1000_year";
-
-const timezoneOptions: readonly { value: string; label: string }[] =
-  timezones.map((tz) => ({ value: tz, label: formatTimezoneLabel(tz) }));
 
 /**
  * A zone the picker actually offers, or `undefined`. Both the facility column
@@ -110,7 +105,9 @@ export function FacilityForm({
 
   const gpsLatitude = watch("gpsLatitude");
   const gpsLongitude = watch("gpsLongitude");
+  const timezone = watch("timezone") as Timezone | undefined;
   const durabilityOption = watch("durabilityOption") ?? DEFAULT_DURABILITY_OPTION;
+  const timezoneField = register("timezone");
 
   // Re-entrancy latch against a rapid double-submit (QA: a double-click on
   // Create Facility created two facilities). The parent's `isSubmitting`
@@ -167,13 +164,24 @@ export function FacilityForm({
           error={errors.timezone?.message}
           required
         >
-          <FormSelect
+          <TimezoneCombobox
             id="timezone"
-            placeholder="Select timezone..."
+            name={timezoneField.name}
+            inputRef={timezoneField.ref}
+            value={timezone}
+            onChange={(value) =>
+              setValue("timezone", value, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
+            onBlur={() =>
+              setValue("timezone", timezone, {
+                shouldTouch: true,
+              })
+            }
             disabled={isSubmitting}
             error={!!errors.timezone}
-            options={timezoneOptions}
-            {...register("timezone")}
           />
         </FormField>
       </div>
