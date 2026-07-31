@@ -17,7 +17,7 @@
  * The supplier create sheet drives the picker through its per-location editor
  * (suppliers carry many source locations, mirroring customers — there is no
  * single supplier-level position). Open "New Supplier" → "Add Location" to
- * reveal the inline PositionPicker (idPrefix `pending-loc-gps`) and the
+ * open the centered PositionPicker dialog (idPrefix `pending-loc-gps`) and the
  * DistanceCalcField (`pending-loc-distance`).
  *
  * Seeded endpoints (fixtures/seed-chain-data.ts):
@@ -54,31 +54,32 @@ async function blockExternalMapHosts(page: Page) {
 }
 
 /**
- * Open the supplier create sheet and reveal the inline location editor that
- * hosts the PositionPicker + DistanceCalcField.
+ * Open the supplier create sheet, then its nested location dialog.
  */
 async function openNewSupplierLocationEditor(page: Page, facilityId: string) {
   await page.goto(`/suppliers?facility=${facilityId}`);
   await page.getByRole("button", { name: "New Supplier" }).click();
 
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
+  const supplierSheet = page.getByRole("dialog", { name: "Create Supplier" });
+  await expect(supplierSheet).toBeVisible();
+  await supplierSheet.getByRole("button", { name: "Add Location" }).click();
 
-  // Only the section toggle exists yet; clicking it mounts the inline editor.
-  await dialog.getByRole("button", { name: "Add Location" }).click();
-
-  return dialog;
+  const locationDialog = page.getByRole("dialog", { name: "Add Location" });
+  await expect(locationDialog).toBeVisible();
+  return locationDialog;
 }
 
 async function openNewCustomerLocationEditor(page: Page, facilityId: string) {
   await page.goto(`/customers?facility=${facilityId}`);
   await page.getByRole("button", { name: "New Customer" }).click();
 
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Add Location" }).click();
+  const customerSheet = page.getByRole("dialog");
+  await expect(customerSheet).toBeVisible();
+  await customerSheet.getByRole("button", { name: "Add Location" }).click();
 
-  return dialog;
+  const locationDialog = page.getByRole("dialog", { name: "Add Location" });
+  await expect(locationDialog).toBeVisible();
+  return locationDialog;
 }
 
 test.describe("PositionPicker + CALC (stub geo provider)", () => {
@@ -295,5 +296,83 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     ).toContainText("Manual");
     await expect(dialog.getByLabel("Set as default destination")).toBeVisible();
     await expect(page.getByText("Application error")).toBeHidden();
+  });
+
+  test("customer create sheet adds a pending location through a dialog", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    const dialog = await openNewCustomerLocationEditor(
+      page,
+      seededData.facility.id
+    );
+
+    await dialog.getByLabel("Location name").fill("E2E Customer Site");
+    await dialog.getByLabel("Country").fill("Tanzania");
+    await dialog
+      .getByLabel("Address / description")
+      .fill("E2E application site");
+    await dialog.getByLabel("GPS latitude").fill(String(DAR.lat));
+    await dialog.getByLabel("GPS longitude").fill(String(DAR.lng));
+    await dialog.getByRole("button", { name: "Add Location" }).click();
+
+    await expect(dialog).not.toBeVisible();
+    const customerSheet = page.getByRole("dialog", { name: "Create Customer" });
+    await expect(customerSheet).toBeVisible();
+    await expect(customerSheet.getByText("E2E Customer Site")).toBeVisible();
+  });
+
+  test("supplier create sheet adds a pending location through a dialog", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    const dialog = await openNewSupplierLocationEditor(
+      page,
+      seededData.facility.id
+    );
+
+    await dialog.getByLabel("Location name").fill("E2E Supplier Site");
+    await dialog.getByLabel("Country").fill("Tanzania");
+    await dialog
+      .getByLabel("Address / description")
+      .fill("E2E feedstock source");
+    await dialog.getByLabel("GPS latitude").fill(String(DAR.lat));
+    await dialog.getByLabel("GPS longitude").fill(String(DAR.lng));
+    await dialog.getByRole("button", { name: "Add Location" }).click();
+
+    await expect(dialog).not.toBeVisible();
+    const supplierSheet = page.getByRole("dialog", {
+      name: "Create Supplier",
+    });
+    await expect(supplierSheet).toBeVisible();
+    await expect(supplierSheet.getByText("E2E Supplier Site")).toBeVisible();
+  });
+
+  test("party detail pages open location dialogs", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/customers/${seededData.customer.id}`);
+    await page.getByRole("button", { name: "Add Location" }).click();
+
+    const customerAddDialog = page.getByRole("dialog", {
+      name: "Add Location",
+    });
+    await expect(customerAddDialog).toBeVisible();
+    await customerAddDialog.getByRole("button", { name: "Close" }).click();
+    await expect(customerAddDialog).not.toBeVisible();
+
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    const customerEditDialog = page.getByRole("dialog", {
+      name: "Edit Location",
+    });
+    await expect(customerEditDialog).toBeVisible();
+    await customerEditDialog.getByRole("button", { name: "Close" }).click();
+
+    await page.goto(`/suppliers/${seededData.supplier.id}`);
+    await page.getByRole("button", { name: "Add Location" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "Add Location" }),
+    ).toBeVisible();
   });
 });

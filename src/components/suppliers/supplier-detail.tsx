@@ -1,7 +1,7 @@
 /**
  * SupplierDetail component
  * Supplier detail view with nested locations management
- * Includes inline create/edit forms for locations and delete confirmation
+ * Includes create/edit dialogs for locations and delete confirmation
  */
 "use client";
 
@@ -11,16 +11,13 @@ import type { SupplierLocation } from "@/db/schema";
 import {
   useSupplier,
   useSupplierLocationsBySupplier,
-  useCreateSupplierLocation,
-  useUpdateSupplierLocation,
   useDeleteSupplierLocation,
 } from "@/hooks/use-suppliers";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { SupplierLocationForm } from "./supplier-location-form";
-import type { SupplierLocationFormData } from "@/schemas/suppliers";
+import { SupplierLocationDialog } from "./supplier-location-dialog";
 import { resolveSupplierLocationDisplay } from "@/lib/supplier-location-display";
 
 interface SupplierDetailProps {
@@ -28,50 +25,14 @@ interface SupplierDetailProps {
 }
 
 export function SupplierDetail({ supplierId }: SupplierDetailProps) {
-  const [isAddingLocation, setIsAddingLocation] = useState(false);
-  const [editingLocation, setEditingLocation] = useState<SupplierLocation | null>(null);
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  const [editingLocation, setEditingLocation] = useState<SupplierLocation>();
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: supplier, isLoading: supplierLoading, error: supplierError } = useSupplier(supplierId);
   const { data: locations = [], isLoading: locationsLoading } = useSupplierLocationsBySupplier(supplierId);
-  const createLocation = useCreateSupplierLocation();
-  const updateLocation = useUpdateSupplierLocation(supplierId);
   const deleteLocation = useDeleteSupplierLocation(supplierId);
-
-  const handleCreateLocation = async (data: SupplierLocationFormData) => {
-    setCreateError(null);
-    try {
-      await createLocation.mutateAsync({
-        supplierId,
-        ...data,
-      });
-      setIsAddingLocation(false);
-    } catch (error) {
-      setCreateError(
-        error instanceof Error ? error.message : "Location was not created. Check the form."
-      );
-    }
-  };
-
-  const handleUpdateLocation = async (data: SupplierLocationFormData) => {
-    if (!editingLocation) return;
-
-    setUpdateError(null);
-    try {
-      await updateLocation.mutateAsync({
-        locationId: editingLocation.id,
-        ...data,
-      });
-      setEditingLocation(null);
-    } catch (error) {
-      setUpdateError(
-        error instanceof Error ? error.message : "Location was not saved. Try again."
-      );
-    }
-  };
 
   const handleDeleteConfirm = async () => {
     if (!deletingLocationId) return;
@@ -168,51 +129,19 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
           <h2 className="title-heading-3">
             Locations ({locations.length})
           </h2>
-          {!isAddingLocation && !editingLocation && (
+          {!isLocationDialogOpen && (
             <Button
               size="large"
               variant="primary"
-              onClick={() => setIsAddingLocation(true)}
+              onClick={() => {
+                setEditingLocation(undefined);
+                setIsLocationDialogOpen(true);
+              }}
             >
               Add Location
             </Button>
           )}
         </div>
-
-        {/* Add Location Form */}
-        {isAddingLocation && (
-          <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
-            <h3 className="title-heading-4 mb-24">Add New Location</h3>
-            <SupplierLocationForm
-              onSubmit={handleCreateLocation}
-              onCancel={() => {
-                setIsAddingLocation(false);
-                setCreateError(null);
-              }}
-              isSubmitting={createLocation.isPending}
-              errorMessage={createError ?? undefined}
-              submitLabel="Add Location"
-            />
-          </div>
-        )}
-
-        {/* Edit Location Form */}
-        {editingLocation && (
-          <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
-            <h3 className="title-heading-4 mb-24">Edit Location</h3>
-            <SupplierLocationForm
-              location={editingLocation}
-              onSubmit={handleUpdateLocation}
-              onCancel={() => {
-                setEditingLocation(null);
-                setUpdateError(null);
-              }}
-              isSubmitting={updateLocation.isPending}
-              errorMessage={updateError ?? undefined}
-              submitLabel="Save Changes"
-            />
-          </div>
-        )}
 
         {/* Locations List */}
         {locations.length === 0 ? (
@@ -300,7 +229,10 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                         <Button
                           variant="default"
                           size="small"
-                          onClick={() => setEditingLocation(location)}
+                          onClick={() => {
+                            setEditingLocation(location);
+                            setIsLocationDialogOpen(true);
+                          }}
                         >
                           Edit
                         </Button>
@@ -322,6 +254,13 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
       </div>
 
       {deleteError && <ServerError message={deleteError} />}
+
+      <SupplierLocationDialog
+        isOpen={isLocationDialogOpen}
+        onClose={() => setIsLocationDialogOpen(false)}
+        supplierId={supplierId}
+        location={editingLocation}
+      />
 
       <DeleteConfirmDialog
         isOpen={!!deletingLocationId}

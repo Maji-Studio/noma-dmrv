@@ -6,6 +6,7 @@ import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { useToast } from "@/components/ui/toast";
 import { ServerError } from "@/components/forms";
+import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { formatMass } from "@/lib/format-utils";
@@ -48,6 +49,11 @@ interface TransportLegsEditorProps {
 }
 
 type EditableTransportLeg = TransportLeg | TransportLegFormData;
+type TransportLegDialogState = {
+  open: boolean;
+  leg?: EditableTransportLeg;
+  deferredIndex?: number;
+};
 
 function isSavedTransportLeg(
   leg: EditableTransportLeg,
@@ -71,8 +77,8 @@ function formatMethod(method: string): string {
 /**
  * Transport-leg management for the entity side sheet. Matches the production-run
  * child-entity pattern: a `border-t` section with an uppercase header + add
- * button, a compact table, and an inline (non-modal) add/edit form. Pass
- * `readOnly` for the view-mode summary.
+ * button, a compact table, and a centered add/edit dialog. Pass `readOnly` for
+ * the view-mode summary.
  */
 export function TransportLegsEditor({
   entityType,
@@ -97,14 +103,7 @@ export function TransportLegsEditor({
   const deleteMutation = useDeleteTransportLeg(entityType, entityId);
   const toast = useToast();
 
-  const [inlineForm, setInlineForm] = useState<
-    | { open: false }
-    | {
-        open: true;
-        leg?: EditableTransportLeg;
-        deferredIndex?: number;
-      }
-  >({ open: false });
+  const [dialog, setDialog] = useState<TransportLegDialogState>({ open: false });
   const [deleteTarget, setDeleteTarget] = useState<
     { savedId: string } | { deferredIndex: number } | null
   >(null);
@@ -113,13 +112,17 @@ export function TransportLegsEditor({
 
   const openCreate = () => {
     setFormError(null);
-    setInlineForm({ open: true });
+    setDialog({ open: true });
   };
   const openEdit = (leg: EditableTransportLeg, deferredIndex?: number) => {
     setFormError(null);
-    setInlineForm({ open: true, leg, deferredIndex });
+    setDialog({ open: true, leg, deferredIndex });
   };
-  const closeForm = () => setInlineForm({ open: false });
+  const closeDialog = () => {
+    // Preserve the selected leg while Base UI plays the close animation so the
+    // dialog title and form do not switch from Edit to Add mid-transition.
+    setDialog((current) => ({ ...current, open: false }));
+  };
 
   const handleSubmit = async (data: TransportLegFormData) => {
     if (disabled) return;
@@ -127,29 +130,28 @@ export function TransportLegsEditor({
 
     if (deferred) {
       const nextLegs =
-        inlineForm.open && inlineForm.deferredIndex !== undefined
+        dialog.deferredIndex !== undefined
           ? deferredLegs.map((leg, index) =>
-              index === inlineForm.deferredIndex ? data : leg,
+              index === dialog.deferredIndex ? data : leg,
             )
           : [...deferredLegs, data];
       onDeferredChange?.(nextLegs);
-      closeForm();
+      closeDialog();
       return;
     }
 
     try {
       if (
-        inlineForm.open &&
-        inlineForm.leg &&
-        isSavedTransportLeg(inlineForm.leg)
+        dialog.leg &&
+        isSavedTransportLeg(dialog.leg)
       ) {
-        await updateMutation.mutateAsync({ id: inlineForm.leg.id, ...data });
+        await updateMutation.mutateAsync({ id: dialog.leg.id, ...data });
         toast.success("Transport leg updated");
       } else {
         await createMutation.mutateAsync({ ...data, entityType, entityId });
         toast.success("Transport leg added");
       }
-      closeForm();
+      closeDialog();
     } catch (err) {
       setFormError(
         err instanceof Error ? err.message : "Transport leg was not saved. Try again.",
@@ -181,7 +183,7 @@ export function TransportLegsEditor({
   };
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
-  const showAddButton = !readOnly && !inlineForm.open;
+  const showAddButton = !readOnly;
   const displayedLegs: EditableTransportLeg[] = deferred
     ? deferredLegs
     : (legs ?? []);
@@ -204,7 +206,7 @@ export function TransportLegsEditor({
             variant="default"
             size="small"
             onClick={openCreate}
-            disabled={disabled}
+            disabled={dialog.open || disabled}
           >
             <PlusIcon size={16} weight="bold" />
             Add leg
@@ -223,7 +225,7 @@ export function TransportLegsEditor({
       {/* Table */}
       {!deferred && isLoading ? (
         <TableSkeleton columns={readOnly ? 6 : 7} rows={2} />
-      ) : !hasLegs && !inlineForm.open ? (
+      ) : !hasLegs ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
           {emptyMessage ??
             (readOnly
@@ -306,7 +308,7 @@ export function TransportLegsEditor({
                             openEdit(leg, deferred ? index : undefined)
                           }
                           aria-label="Edit transport leg"
-                          disabled={inlineForm.open || disabled}
+                          disabled={dialog.open || disabled}
                         >
                           <PencilIcon size={16} />
                         </Button>
@@ -322,7 +324,7 @@ export function TransportLegsEditor({
                             )
                           }
                           aria-label="Delete transport leg"
-                          disabled={inlineForm.open || disabled}
+                          disabled={dialog.open || disabled}
                         >
                           <TrashIcon size={16} />
                         </Button>
@@ -336,28 +338,29 @@ export function TransportLegsEditor({
         </div>
       ) : null}
 
-      {/* Inline Add/Edit Form */}
-      {!readOnly && inlineForm.open && (
-        <div className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)] p-24">
-          <h4 className="title-heading-4 mb-16">
-            {inlineForm.leg ? "Edit transport leg" : "Add transport leg"}
-          </h4>
+      {!readOnly && (
+        <QuickAddDialogShell
+          isOpen={dialog.open}
+          onClose={closeDialog}
+          title={dialog.leg ? "Edit transport leg" : "Add transport leg"}
+          width="xl"
+          testId="transport-leg-dialog"
+        >
           <TransportLegForm
             key={
-              inlineForm.leg && isSavedTransportLeg(inlineForm.leg)
-                ? inlineForm.leg.id
-                : inlineForm.deferredIndex !== undefined
-                  ? `deferred-${inlineForm.deferredIndex}`
+              dialog.leg && isSavedTransportLeg(dialog.leg)
+                ? dialog.leg.id
+                : dialog.deferredIndex !== undefined
+                  ? `deferred-${dialog.deferredIndex}`
                   : "create"
             }
-            leg={inlineForm.leg}
+            leg={dialog.leg}
             onSubmit={handleSubmit}
-            onCancel={closeForm}
+            onCancel={closeDialog}
             isSubmitting={isSubmitting || disabled}
             errorMessage={formError ?? undefined}
-            embedded={deferred}
           />
-        </div>
+        </QuickAddDialogShell>
       )}
 
       {/* Delete Confirmation */}
