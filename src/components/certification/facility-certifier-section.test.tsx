@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { FacilityCertifierMapping } from "@/fn/certification/facility-mapping";
+import { useFacilityCertifierMapping } from "@/hooks/use-certification";
 import { FacilityCertifierForm } from "./facility-certifier-dialog";
 import { FacilityCertifierSection } from "./facility-certifier-section";
 
@@ -9,7 +10,7 @@ vi.mock("@/components/ui/toast", () => ({
 }));
 
 vi.mock("@/hooks/use-certification", () => ({
-  useFacilityCertifierMapping: () => ({
+  useFacilityCertifierMapping: vi.fn(() => ({
     data: {
       mapping: null,
       availableProjects: [
@@ -25,7 +26,7 @@ vi.mock("@/hooks/use-certification", () => ({
     },
     isLoading: false,
     error: null,
-  }),
+  })),
   useFacilityCertifierSummary: vi.fn(),
   useDeleteFacilityCertifierMapping: () => ({
     mutateAsync: vi.fn(),
@@ -94,5 +95,37 @@ describe("FacilityCertifierSection", () => {
     expect(markup).toContain("Default Removal template");
     expect(markup).toContain("Isometric facility ID");
     expect(markup).toContain("Save changes");
+  });
+
+  it("hides inline Edit when registry keys are not configured", () => {
+    vi.mocked(useFacilityCertifierMapping).mockReturnValueOnce({
+      data: {
+        mapping: {
+          externalProjectId: "prj_test",
+          protocolSlug: "biochar",
+          defaultRemovalTemplateId: null,
+          externalFacilityId: null,
+        },
+        availableProjects: [],
+        availableTemplates: [],
+        linkHints: [],
+        isProduction: false,
+        isConfigured: false,
+      },
+      isLoading: false,
+      error: null,
+    } as never);
+
+    const markup = renderToStaticMarkup(
+      <FacilityCertifierSection
+        facilityId="facility-1"
+        canManage
+        embedded
+        linkPresentation="inline"
+      />,
+    );
+
+    expect(markup).not.toContain(">Edit<");
+    expect(markup).toContain("prj_test");
   });
 });
