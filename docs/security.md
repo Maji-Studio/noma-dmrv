@@ -138,13 +138,15 @@ Both `ADMIN_PASSWORD` and `ISOMETRIC_DEMO_PROJECT_ID` **are** pulled locally via
 `.env.local.tpl`; they are absent from the deployment-facing `.env.tpl` only and
 must be set directly on the staging/production items.
 
-### CI carve-out on the production fail-closed gates
+### Hermetic-CI exception on the production fail-closed gates
 
-All three production gates — `GEO_PROVIDER=stub`, non-`s3-compatible` storage,
-and missing `CREDENTIALS_ENCRYPTION_KEY` — are **skipped when `CI` is truthy**,
-because hermetic e2e builds a production bundle on purpose. CI local-fs storage
-is additionally only allowed against a localhost `NEXT_PUBLIC_APP_URL`. Real
-deployments never run with `CI` set, so the safeguards hold where they matter.
+The production gates — `GEO_PROVIDER=stub`, unset `ISOMETRIC_ENVIRONMENT`,
+missing `CREDENTIALS_ENCRYPTION_KEY`, and non-`s3-compatible` storage — are
+skipped only for a **hermetic CI build**: `CI` truthy AND a localhost
+`NEXT_PUBLIC_APP_URL` (ci.yml and e2e.yml compile production bundles against
+localhost with placeholder config on purpose). Any build or runtime that
+targets a real domain keeps every gate armed, even when the platform sets `CI`
+during the build.
 
 ### The three environment items intentionally differ
 

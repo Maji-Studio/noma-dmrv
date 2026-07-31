@@ -341,6 +341,19 @@ describe("submitRemoval — happy path", () => {
     });
     expect(attemptSummaryEvents()).toHaveLength(1);
     expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
+
+    // A retry with the audit store still down must not duplicate the
+    // registry write.
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).resolves.toMatchObject({ externalId: "rmv_1" });
+    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
   });
 
   it("records possible for a lost GHG Entry response and confirmed when reconciliation finds it", async () => {

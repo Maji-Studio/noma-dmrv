@@ -38,6 +38,15 @@ describe("check-ux-copy dash scanner", () => {
     expect(violations).toEqual([]);
   });
 
+  it("flags an entity-encoded dash in JSX text", () => {
+    const violations = findDashViolations(
+      "export function Note() {\n  return <p>Standard &mdash; specimen</p>;\n}\n",
+      "sample.tsx",
+    );
+
+    expect(violations).toMatchObject([{ line: 2, character: "dash entity" }]);
+  });
+
   it("allows a lone dash used as an empty-value placeholder glyph", () => {
     const violations = findDashViolations(
       'const emptyCell = "—";\nconst padded = " — ";\n',

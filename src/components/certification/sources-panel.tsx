@@ -220,7 +220,10 @@ function CandidateRow({
               <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
               Ready
             </span>
-            <span className="body-caption max-w-[180px] truncate font-mono text-[var(--color-text-tertiary)]">
+            <span
+              className="body-caption max-w-[180px] truncate font-mono text-[var(--color-text-tertiary)]"
+              title={`Isometric document ${mirror.externalDocumentId}`}
+            >
               {mirror.externalDocumentId}
             </span>
           </div>

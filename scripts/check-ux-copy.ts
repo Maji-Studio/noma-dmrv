@@ -27,6 +27,8 @@ const TEST_FILE = /\.test\.tsx?$/;
 const EXCLUDED_DIRS = [join("src", "lib", "isometric", "generated")];
 
 const BANNED = /[–—]/;
+/** JSX renders HTML entities, so an entity-encoded dash is still a dash. */
+const BANNED_JSX_ENTITY = /&(?:mdash|ndash|#8211|#8212|#x201[34]);/i;
 const BANNED_NAMES: Record<string, string> = {
   "–": "en dash",
   "—": "em dash",
@@ -92,19 +94,24 @@ export function findDashViolations(
       // A string that IS a lone dash is an empty-value placeholder glyph
       // (PDF and table cells render "—" for missing data), not prose — the
       // ban targets dashes used as sentence punctuation.
-      const match =
-        BANNED.exec(node.text.trim()) && node.text.trim().length > 1
-          ? BANNED.exec(node.text)
-          : null;
+      const trimmed = node.text.trim();
+      const literalMatch =
+        trimmed.length > 1 ? BANNED.exec(node.text) : null;
+      const entityMatch = ts.isJsxText(node)
+        ? BANNED_JSX_ENTITY.exec(node.text)
+        : null;
+      const match = literalMatch ?? entityMatch;
       if (match) {
         const { line } = sourceFile.getLineAndCharacterOfPosition(
           node.getStart(sourceFile),
         );
         const flat = node.text.replace(/\s+/g, " ").trim();
-        const at = flat.search(BANNED);
+        const at = flat.search(literalMatch ? BANNED : BANNED_JSX_ENTITY);
         violations.push({
           line: line + 1,
-          character: BANNED_NAMES[match[0]] ?? "dash",
+          character: literalMatch
+            ? (BANNED_NAMES[match[0]] ?? "dash")
+            : "dash entity",
           excerpt:
             flat.length > 60
               ? `${flat.slice(Math.max(0, at - 25), at + 30)}…`
