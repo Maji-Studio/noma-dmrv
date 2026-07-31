@@ -336,13 +336,10 @@ export async function patchMeasurementSampleSourceBindings(args: {
 function creditBatchIdForSubmission(
   submission: DurabilityMeasurementSampleSubmission,
 ): string | null {
-  for (const prefix of ["pb:", "pb-unsampled:"]) {
-    if (submission.operationKey.startsWith(prefix)) {
-      const creditBatchId = submission.operationKey.slice(prefix.length);
-      return creditBatchId.length > 0 ? creditBatchId : null;
-    }
-  }
-  return null;
+  const prefix = "pb:";
+  if (!submission.operationKey.startsWith(prefix)) return null;
+  const creditBatchId = submission.operationKey.slice(prefix.length);
+  return creditBatchId.length > 0 ? creditBatchId : null;
 }
 
 /**

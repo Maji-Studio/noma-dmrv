@@ -1,6 +1,5 @@
 import type { OrgContext } from "@/lib/auth/server";
 import {
-  appendSyncEvent,
   markSubmissionSubmitted,
   retireStaleSubmissionDraft,
   stampProductionEmissionsClaim,
@@ -179,7 +178,9 @@ export async function submitRemoval(
     throw error;
   } finally {
     const safeError = safeAttemptError(attemptError);
-    await appendSyncEvent(args.orgCtx, {
+    // Best-effort: a failed audit insert must not mask the submission's own
+    // error or turn a successful return into a throw.
+    await appendSyncEventBestEffort(args.orgCtx, {
       provider: ISOMETRIC_PROVIDER,
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: args.removalId,

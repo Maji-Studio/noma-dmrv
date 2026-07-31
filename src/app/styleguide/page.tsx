@@ -451,7 +451,7 @@ export default function StyleguidePage() {
             <div className="flex flex-col gap-12">
               <div className="flex flex-col gap-4">
                 <span className="body-medium" style={{ fontFamily: "var(--font-standard)" }}>
-                  GT-Flexa (Standard) &mdash; The quick brown fox jumps over the lazy dog
+                  GT-Flexa (Standard): The quick brown fox jumps over the lazy dog
                 </span>
                 <span className="body-caption" style={{ color: "var(--color-text-tertiary)" }}>
                   --font-standard
@@ -459,7 +459,7 @@ export default function StyleguidePage() {
               </div>
               <div className="flex flex-col gap-4">
                 <span className="body-medium" style={{ fontFamily: "var(--font-mono)" }}>
-                  GT-Flexa-Mono &mdash; The quick brown fox jumps over the lazy dog
+                  GT-Flexa-Mono: The quick brown fox jumps over the lazy dog
                 </span>
                 <span className="body-caption" style={{ color: "var(--color-text-tertiary)" }}>
                   --font-mono

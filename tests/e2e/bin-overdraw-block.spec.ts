@@ -16,6 +16,9 @@ import {
   type TestStorageLocation,
 } from "./fixtures";
 import {
+  ACTION_LABEL_PREFIX,
+  getCreatedActionCode,
+  getListedActionCodes,
   selectEntity,
   selectEntityByText,
   waitForSideSheet,
@@ -40,49 +43,6 @@ const biocharOverdrawText =
   /^Only .+ of biochar is available\. Reduce the mass\.$/;
 const deliveryOverdrawText =
   /^Only .+ of biochar is available\. Reduce the delivered mass\.$/;
-const ACTION_LABEL_PREFIX = "Actions for ";
-
-async function getListedActionCodes(page: Page): Promise<Set<string>> {
-  const table = page.getByRole("table", { name: "Production runs" });
-  const emptyState = page.getByText(/No production runs (?:yet|found)/, {
-    exact: true,
-  });
-  await expect
-    .poll(async () => {
-      if (await table.count()) return table.getAttribute("aria-busy");
-      return (await emptyState.count()) ? "false" : "pending";
-    })
-    .toBe("false");
-  const labels = await page
-    .locator(`tbody button[aria-label^="${ACTION_LABEL_PREFIX}"]`)
-    .evaluateAll(
-      (buttons, prefixLength) =>
-        buttons
-          .map((button) => button.getAttribute("aria-label"))
-          .filter((label): label is string => label !== null)
-          .map((label) => label.slice(prefixLength)),
-      ACTION_LABEL_PREFIX.length,
-    );
-  return new Set(labels);
-}
-
-async function getCreatedActionCode(
-  page: Page,
-  existingCodes: Set<string>,
-): Promise<string> {
-  let createdCodes: string[] = [];
-  await expect
-    .poll(async () => {
-      createdCodes = [...(await getListedActionCodes(page))].filter(
-        (code) => !existingCodes.has(code),
-      );
-      return createdCodes.length;
-    })
-    .toBe(1);
-  const createdCode = createdCodes[0];
-  if (!createdCode) throw new Error("Created action code was not rendered");
-  return createdCode;
-}
 
 /** Open the existing draft run form against the seeded 100 kg-dry source bin. */
 async function openRunFormWithSource(
