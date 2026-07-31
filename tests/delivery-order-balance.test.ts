@@ -216,6 +216,31 @@ describe("delivery order balance", () => {
     }
   });
 
+  it("serializes an order shrink against a concurrent delivery allocation", async () => {
+    const seeded = await seedOrder(100);
+
+    try {
+      const results = await Promise.allSettled([
+        updateOrder(ctx, seeded.orderId, { quantityKg: 50 }),
+        createDelivery(ctx, {
+          code: `DL-ORDER-BAL-${seeded.tag}-SHRINK-RACE`,
+          orderId: seeded.orderId,
+          facilityId: seeded.facilityId,
+          deliveryDate: new Date("2026-08-01T00:00:00Z"),
+          status: "upcoming",
+          deliveredWetMassKg: 60,
+        }),
+      ]);
+
+      expect(results.filter((result) => result.status === "fulfilled"))
+        .toHaveLength(1);
+      expect(results.filter((result) => result.status === "rejected"))
+        .toHaveLength(1);
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
   it("rejects shrinking an order below its existing delivery allocations", async () => {
     const seeded = await seedOrder(100);
 

@@ -129,12 +129,11 @@ export function OrderForm({
   // Product availability already excludes fulfilled mass. Until edit-mode
   // orders expose their delivered allocation, comparing the full quantity
   // would produce a false warning for otherwise valid existing orders.
-  const availabilityWarning = isEditMode
-    ? undefined
-    : orderAvailabilityWarning(
-        watchedQuantityKg,
-        selectedBiocharProduct?.remainingMass?.wetKg,
-      );
+  const availabilityWarning = orderAvailabilityWarning(
+    watchedQuantityKg,
+    selectedBiocharProduct?.remainingMass?.wetKg,
+    { suppress: isEditMode },
+  );
 
   // Fetch related data for dropdowns
   const { data: customersData } = useCustomers({ pageSize: 100 });

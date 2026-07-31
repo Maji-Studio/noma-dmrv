@@ -41,7 +41,10 @@ import {
   isStockOverdraw,
   productStockOverdrawMessage,
 } from "@/lib/stock-overdraw";
-import { deliveryOrderBalanceMessage } from "@/lib/delivery-order-balance";
+import {
+  deliveryOrderBalanceMessage,
+  isDeliveryOrderBalanceMessage,
+} from "@/lib/delivery-order-balance";
 
 // ============================================
 // Constants for select options
@@ -304,9 +307,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     (message) =>
       message === productStockOverdrawMessage() ||
       message === binStockOverdrawMessage("product") ||
-      /^Only .+ remains on this order\. Reduce the delivered mass\.$/.test(
-        message,
-      ),
+      isDeliveryOrderBalanceMessage(message),
   );
   const deliveredWetMassError =
     errors.deliveredWetMassKg?.message ??
