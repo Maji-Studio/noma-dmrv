@@ -69,6 +69,10 @@ const TABULAR_MIMES = [
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ];
+export const PRODUCTION_READINGS_CSV_MIMES = [
+  "text/csv",
+  "application/vnd.ms-excel",
+] as const;
 const GEOJSON_MIMES = [
   "application/geo+json",
   "application/json",
@@ -113,6 +117,17 @@ export function isAllowedMime(
   // Strip parameters (e.g. "application/pdf; charset=binary") before matching.
   const normalized = contentType.split(";")[0].trim().toLowerCase();
   return UPLOAD_RULES[documentType].mimeTypes.includes(normalized);
+}
+
+export function isProductionReadingsCsvFormat(input: {
+  fileName: string;
+  contentType: string | null;
+}): boolean {
+  const normalized = input.contentType?.split(";")[0].trim().toLowerCase();
+  return (
+    input.fileName.toLowerCase().endsWith(".csv") &&
+    PRODUCTION_READINGS_CSV_MIMES.some((mime) => mime === normalized)
+  );
 }
 
 export function maxBytesFor(documentType: DocumentType): number {

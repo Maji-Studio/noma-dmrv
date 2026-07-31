@@ -19,7 +19,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
-import { numericAggregate, sumNumeric } from "@/db/aggregate";
+import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   storageLocations,
   feedstocks,
@@ -29,7 +29,9 @@ import {
   biocharProducts,
   biocharProductSourceAllocations,
   binMovements,
+  deliveries,
   formulations,
+  orders,
 } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
@@ -44,6 +46,11 @@ import {
   CANCELLED_PRODUCTION_RUN_STATUS,
   COMPLETED_PRODUCTION_RUN_STATUS,
 } from "@/lib/production-runs/lifecycle";
+import {
+  deriveLaneStock,
+  type LaneStockDerivation,
+} from "../lane-stock-derivation";
+import { estimateRemainingFeedstockWetMassKg } from "../storage-location-enrichment";
 
 export function formatStorageLocationSubtitle(
   type: string,
@@ -63,15 +70,16 @@ export function formatStorageLocationSubtitle(
   unresolvedProductDryCount: number,
   biocharEquivalentKg: number,
   formulationName: string | null,
+  remainingMass?: EntityOption["remainingMass"],
 ): string {
   switch (type) {
     case "feedstock_bin": {
       const typeLabel = formatStorageLocationType(type);
-      const onHandKg = Math.max(0, totalStoredKg - totalConsumedKg);
+      const onHandKg =
+        remainingMass?.dryKg ?? Math.max(0, totalStoredKg - totalConsumedKg);
       if (!feedstockTypeName && onHandKg === 0) {
         return `${typeLabel} · Empty · Feedstock type locks on first intake`;
       }
-
       const parts: string[] = [typeLabel];
       if (feedstockTypeName) {
         parts.push(
@@ -88,14 +96,16 @@ export function formatStorageLocationSubtitle(
     }
     case "biochar_bin": {
       const typeLabel = formatStorageLocationType(type);
-      const availableWetKg = Math.max(
-        0,
-        totalProducedWetKg -
-          totalAllocatedWetKg -
-          documentedLossWetKg,
-      );
+      const availableWetKg =
+        remainingMass?.wetKg ??
+        Math.max(
+          0,
+          totalProducedWetKg - totalAllocatedWetKg - documentedLossWetKg,
+        );
       const availableDryKg =
-        unresolvedProducedDryCount > 0 || documentedLossWetKg > 0
+        remainingMass && "dryKg" in remainingMass
+          ? remainingMass.dryKg
+          : unresolvedProducedDryCount > 0 || documentedLossWetKg > 0
           ? null
           : Math.max(0, totalProducedDryKg - totalAllocatedDryKg);
       if (availableWetKg === 0) {
@@ -114,17 +124,21 @@ export function formatStorageLocationSubtitle(
       const typeLabel = formatStorageLocationType(type);
       // A product bin is bound to one formulation (or pure biochar when unset).
       const blendLabel = formulationName ?? PURE_BIOCHAR_LABEL;
-      if (totalProductKg === 0) {
+      const availableWetKg = remainingMass?.wetKg ?? totalProductKg;
+      if (availableWetKg === 0) {
         return `${typeLabel} · ${blendLabel} · Empty`;
       }
-
       const productDryKg =
-        unresolvedProductDryCount > 0 ? null : totalProductDryKg;
+        remainingMass && "dryKg" in remainingMass
+          ? remainingMass.dryKg
+          : unresolvedProductDryCount > 0
+            ? null
+            : totalProductDryKg;
       const parts = [
         typeLabel,
         blendLabel,
         `${formatWetDryMass({
-          wetKg: totalProductKg,
+          wetKg: availableWetKg,
           dryKg: productDryKg,
           wetLabel: "Wet biochar product",
           dryLabel: "Dry biochar",
@@ -147,7 +161,6 @@ export function formatStorageLocationSubtitle(
 function formatFeedstockTypeUsage(usage: string): string {
   return usage === "pyrolysis" ? "Pyrolysis" : "Blend";
 }
-
 const heldFeedstockTypes = alias(feedstockTypes, "held_feedstock_types");
 
 type StorageLocationReadExecutor = Pick<typeof db, "select">;
@@ -164,6 +177,10 @@ function buildInventoryAggregates(
       feedstocks.massDryKg,
       sql`${feedstocks.status} = 'complete'`,
     ).as("total_stored_kg"),
+    totalStoredWetKg: sumNumeric(
+      feedstocks.massWetKg,
+      sql`${feedstocks.status} = 'complete'`,
+    ).as("total_stored_wet_kg"),
     pendingStoredKg: sumNumeric(
       feedstocks.massDryKg,
       sql`${feedstocks.status} = 'missing_data'`,
@@ -406,6 +423,46 @@ function buildInventoryAggregates(
   .groupBy(biocharProducts.storageLocationId)
   .as("product_inventory_agg");
 
+  const productDeliveredAggregate = executor
+  .select({
+    storageLocationId: biocharProducts.storageLocationId,
+    totalDeliveredWetKg: sumNumeric(deliveries.deliveredWetMassKg).as(
+      "total_delivered_wet_kg",
+    ),
+    totalDeliveredDryKg: sumNumeric(deliveries.massDryKg).as(
+      "total_delivered_dry_kg",
+    ),
+    unresolvedDeliveredDryCount: countRows(
+      and(
+        sql`${deliveries.deliveredWetMassKg} > 0`,
+        isNull(deliveries.massDryKg),
+      ),
+    ).as("unresolved_delivered_dry_count"),
+  })
+  .from(deliveries)
+  .innerJoin(
+    orders,
+    and(
+      eq(deliveries.orderId, orders.id),
+      eq(orders.organizationId, ctx.organizationId),
+    ),
+  )
+  .innerJoin(
+    biocharProducts,
+    and(
+      sql`${biocharProducts.id} = COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+      eq(biocharProducts.organizationId, ctx.organizationId),
+    ),
+  )
+  .where(
+    and(
+      eq(deliveries.status, "delivered"),
+      eq(deliveries.organizationId, ctx.organizationId),
+    ),
+  )
+  .groupBy(biocharProducts.storageLocationId)
+  .as("product_delivered_agg");
+
   return {
     feedstockInventoryAggregate,
     productionRunConsumptionAggregate,
@@ -415,6 +472,114 @@ function buildInventoryAggregates(
     sourceBiocharAllocationAggregate,
     biocharLossAggregate,
     productInventoryAggregate,
+    productDeliveredAggregate,
+  };
+}
+
+interface StorageLocationOptionRow {
+  id: string;
+  code: string;
+  name: string;
+  type: StorageLocationType;
+  heldFeedstockTypeName: string | null;
+  heldFeedstockTypeUsage: string | null;
+  feedstockTypeName: string | null;
+  formulationName: string | null;
+  totalStoredKg: number;
+  totalStoredWetKg: number;
+  pendingStoredKg: number;
+  totalConsumedKg: number;
+  totalProducedWetKg: number;
+  totalProducedDryKg: number;
+  unresolvedProducedDryCount: number;
+  totalAllocatedWetKg: number;
+  totalAllocatedDryKg: number;
+  documentedLossWetKg: number;
+  totalProductKg: number;
+  totalProductDryKg: number;
+  unresolvedProductDryCount: number;
+  totalDeliveredWetKg: number;
+  totalDeliveredDryKg: number;
+  unresolvedDeliveredDryCount: number;
+  biocharEquivalentKg: number;
+}
+
+export function toStorageLocationEntityOption(
+  row: StorageLocationOptionRow,
+  stock?: LaneStockDerivation,
+): EntityOption {
+  let remainingMass: EntityOption["remainingMass"];
+
+  if (row.type === "feedstock_bin") {
+    const remainingDryKg =
+      stock?.feedstockStockDryKg ?? row.totalStoredKg - row.totalConsumedKg;
+    remainingMass = {
+      wetKg: estimateRemainingFeedstockWetMassKg({
+        intakeDryKg: stock?.feedstockIntakeDryKg ?? row.totalStoredKg,
+        intakeWetKg: row.totalStoredWetKg,
+        remainingDryKg,
+      }),
+      dryKg: remainingDryKg,
+    };
+  } else if (row.type === "biochar_bin") {
+    const movementDeltaKg = stock?.biocharMovementDeltaKg ?? 0;
+    const dryBasisDiffersFromLane = Boolean(
+      stock &&
+      (stock.biocharProducedKg !== row.totalProducedWetKg ||
+        stock.biocharAllocatedKg !== row.totalAllocatedWetKg),
+    );
+    remainingMass = {
+      wetKg:
+        stock?.biocharStockKg ??
+        row.totalProducedWetKg -
+          row.totalAllocatedWetKg -
+          row.documentedLossWetKg,
+      dryKg:
+        row.unresolvedProducedDryCount > 0 ||
+        movementDeltaKg !== 0 ||
+        dryBasisDiffersFromLane
+          ? null
+          : row.totalProducedDryKg - row.totalAllocatedDryKg,
+    };
+  } else {
+    const movementDeltaKg = stock?.productMovementDeltaKg ?? 0;
+    remainingMass = {
+      wetKg:
+        row.totalProductKg - row.totalDeliveredWetKg + movementDeltaKg,
+      dryKg:
+        row.unresolvedProductDryCount > 0 ||
+        row.unresolvedDeliveredDryCount > 0 ||
+        movementDeltaKg !== 0
+          ? null
+          : row.totalProductDryKg - row.totalDeliveredDryKg,
+    };
+  }
+
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    remainingMass,
+    subtitle: formatStorageLocationSubtitle(
+      row.type,
+      row.heldFeedstockTypeName ?? row.feedstockTypeName,
+      row.heldFeedstockTypeUsage,
+      row.totalStoredKg,
+      row.pendingStoredKg,
+      row.totalConsumedKg,
+      row.totalProducedWetKg,
+      row.totalProducedDryKg,
+      row.unresolvedProducedDryCount,
+      row.totalAllocatedWetKg,
+      row.totalAllocatedDryKg,
+      row.documentedLossWetKg,
+      row.totalProductKg,
+      row.totalProductDryKg,
+      row.unresolvedProductDryCount,
+      row.biocharEquivalentKg,
+      row.formulationName,
+      remainingMass,
+    ),
   };
 }
 
@@ -443,6 +608,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
     sourceBiocharAllocationAggregate,
     biocharLossAggregate,
     productInventoryAggregate,
+    productDeliveredAggregate,
   } = buildInventoryAggregates(ctx);
 
   const conditions: SQL[] = [
@@ -534,6 +700,9 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       totalStoredKg: numericAggregate(
         sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
       ),
+      totalStoredWetKg: numericAggregate(
+        sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredWetKg}, 0)`,
+      ),
       pendingStoredKg: numericAggregate(
         sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
       ),
@@ -575,6 +744,15 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       ),
       unresolvedProductDryCount: numericAggregate(
         sql<number>`COALESCE(${productInventoryAggregate.unresolvedProductDryCount}, 0)`,
+      ),
+      totalDeliveredWetKg: numericAggregate(
+        sql<number>`COALESCE(${productDeliveredAggregate.totalDeliveredWetKg}, 0)`,
+      ),
+      totalDeliveredDryKg: numericAggregate(
+        sql<number>`COALESCE(${productDeliveredAggregate.totalDeliveredDryKg}, 0)`,
+      ),
+      unresolvedDeliveredDryCount: numericAggregate(
+        sql<number>`COALESCE(${productDeliveredAggregate.unresolvedDeliveredDryCount}, 0)`,
       ),
       biocharEquivalentKg: numericAggregate(
         sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
@@ -636,33 +814,23 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       productInventoryAggregate,
       eq(storageLocations.id, productInventoryAggregate.storageLocationId)
     )
+    .leftJoin(
+      productDeliveredAggregate,
+      eq(storageLocations.id, productDeliveredAggregate.storageLocationId),
+    )
     .where(whereClause)
     .limit(limit);
 
-  return results.map((r) => ({
-    id: r.id,
-    code: r.code,
-    name: r.name,
-    subtitle: formatStorageLocationSubtitle(
-      r.type,
-      r.heldFeedstockTypeName ?? r.feedstockTypeName,
-      r.heldFeedstockTypeUsage,
-      r.totalStoredKg,
-      r.pendingStoredKg,
-      r.totalConsumedKg,
-      r.totalProducedWetKg,
-      r.totalProducedDryKg,
-      r.unresolvedProducedDryCount,
-      r.totalAllocatedWetKg,
-      r.totalAllocatedDryKg,
-      r.documentedLossWetKg,
-      r.totalProductKg,
-      r.totalProductDryKg,
-      r.unresolvedProductDryCount,
-      r.biocharEquivalentKg,
-      r.formulationName
-    ),
-  }));
+  const laneStocks = await deriveLaneStock(ctx, db, {
+    storageLocationIds: results.map((result) => result.id),
+  });
+  const laneStockById = new Map(
+    laneStocks.map((stock) => [stock.storageLocationId, stock]),
+  );
+
+  return results.map((result) =>
+    toStorageLocationEntityOption(result, laneStockById.get(result.id)),
+  );
 }
 
 export async function getStorageLocationById(
@@ -681,6 +849,7 @@ export async function getStorageLocationById(
     sourceBiocharAllocationAggregate,
     biocharLossAggregate,
     productInventoryAggregate,
+    productDeliveredAggregate,
   } = buildInventoryAggregates(ctx, executor);
 
   const [result] = await executor
@@ -695,6 +864,9 @@ export async function getStorageLocationById(
       formulationName: formulations.name,
       totalStoredKg: numericAggregate(
         sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
+      ),
+      totalStoredWetKg: numericAggregate(
+        sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredWetKg}, 0)`,
       ),
       pendingStoredKg: numericAggregate(
         sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
@@ -737,6 +909,15 @@ export async function getStorageLocationById(
       ),
       unresolvedProductDryCount: numericAggregate(
         sql<number>`COALESCE(${productInventoryAggregate.unresolvedProductDryCount}, 0)`,
+      ),
+      totalDeliveredWetKg: numericAggregate(
+        sql<number>`COALESCE(${productDeliveredAggregate.totalDeliveredWetKg}, 0)`,
+      ),
+      totalDeliveredDryKg: numericAggregate(
+        sql<number>`COALESCE(${productDeliveredAggregate.totalDeliveredDryKg}, 0)`,
+      ),
+      unresolvedDeliveredDryCount: numericAggregate(
+        sql<number>`COALESCE(${productDeliveredAggregate.unresolvedDeliveredDryCount}, 0)`,
       ),
       biocharEquivalentKg: numericAggregate(
         sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
@@ -798,6 +979,10 @@ export async function getStorageLocationById(
       productInventoryAggregate,
       eq(storageLocations.id, productInventoryAggregate.storageLocationId)
     )
+    .leftJoin(
+      productDeliveredAggregate,
+      eq(storageLocations.id, productDeliveredAggregate.storageLocationId),
+    )
     .where(
       and(
         eq(storageLocations.id, id),
@@ -808,28 +993,8 @@ export async function getStorageLocationById(
 
   if (!result) return null;
 
-  return {
-    id: result.id,
-    code: result.code,
-    name: result.name,
-    subtitle: formatStorageLocationSubtitle(
-      result.type,
-      result.heldFeedstockTypeName ?? result.feedstockTypeName,
-      result.heldFeedstockTypeUsage,
-      result.totalStoredKg,
-      result.pendingStoredKg,
-      result.totalConsumedKg,
-      result.totalProducedWetKg,
-      result.totalProducedDryKg,
-      result.unresolvedProducedDryCount,
-      result.totalAllocatedWetKg,
-      result.totalAllocatedDryKg,
-      result.documentedLossWetKg,
-      result.totalProductKg,
-      result.totalProductDryKg,
-      result.unresolvedProductDryCount,
-      result.biocharEquivalentKg,
-      result.formulationName
-    ),
-  };
+  const [stock] = await deriveLaneStock(ctx, executor, {
+    storageLocationIds: [result.id],
+  });
+  return toStorageLocationEntityOption(result, stock);
 }

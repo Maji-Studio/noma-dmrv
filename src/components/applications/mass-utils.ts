@@ -2,6 +2,7 @@ import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
+import { formatRemainingMass } from "@/components/forms/entity-select/remaining-mass";
 import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
 
@@ -27,6 +28,8 @@ export interface ApplicationDeliveryOption {
   destinationGpsLongitude: number | null;
   /** Total kg already applied from this delivery across all applications */
   alreadyAppliedWetKg: number;
+  /** Total dry kg already applied from this delivery across all applications */
+  alreadyAppliedDryKg: number;
 }
 
 export interface ApplicationPositionDefault {
@@ -178,14 +181,25 @@ export function formatApplicationDeliveryOptionLabel(delivery: ApplicationDelive
 }
 
 export function formatApplicationDeliveryHelperText(delivery: ApplicationDeliveryOption): string {
-  return [
-    delivery.productBinName,
-    delivery.formulationName,
-    formatDeliveryDate(delivery.deliveryDate),
-    getApplicationDeliveryMassLabel(delivery),
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const remainingWetKg =
+    delivery.deliveredWetMassKg == null
+      ? null
+      : Math.max(0, delivery.deliveredWetMassKg - delivery.alreadyAppliedWetKg);
+  const deliveredDryKg =
+    delivery.massDryKg ??
+    calculateDryMass(
+      delivery.deliveredWetMassKg,
+      delivery.moistureContentPercent,
+    );
+  const remainingDryKg =
+    deliveredDryKg == null
+      ? null
+      : Math.max(0, deliveredDryKg - delivery.alreadyAppliedDryKg);
+
+  return formatRemainingMass({
+    wetKg: remainingWetKg,
+    dryKg: remainingDryKg,
+  });
 }
 
 export function formatApplicationKgFromTons(value: number | null | undefined): string {

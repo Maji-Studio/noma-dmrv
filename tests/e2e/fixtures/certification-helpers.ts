@@ -685,6 +685,8 @@ const TRANSPORT_LEG_LOAD_MASS_KG = 100;
 const TRANSPORT_LEG_EMISSION_FACTOR = 0.1;
 const READY_TRANSPORT_EVIDENCE_URL =
   "https://example.invalid/e2e-transport-evidence.pdf";
+const READY_PRODUCTION_READINGS_URL =
+  "https://example.invalid/e2e-production-readings.csv";
 const READY_APPLICATION_EVIDENCE_URL = "https://example.com/e2e-geotagged-application.jpg";
 const READY_APPLICATION_EVIDENCE_ROLES = [
   "stockpile",
@@ -713,6 +715,7 @@ export async function seedUngroupedReadyBatchWithChain(
   const { db, pool } = createDbConnection();
   const id = {
     productionRun: crypto.randomUUID(),
+    productionReadingsDocument: crypto.randomUUID(),
     productionRunFeedstock: crypto.randomUUID(),
     samples: Array.from({ length: READY_SAMPLE_REPLICATE_COUNT }, () =>
       crypto.randomUUID(),
@@ -858,6 +861,17 @@ export async function seedUngroupedReadyBatchWithChain(
         electricityKwh: READY_ELECTRICITY_KWH,
         biocharStorageLocationId: refs.biocharStorageLocationId,
         feedstockStorageLocationId: refs.feedstockStorageLocationId,
+      });
+      await tx.insert(schema.documents).values({
+        organizationId: DEC_ORG_ID,
+        id: id.productionReadingsDocument,
+        entityType: "production_run",
+        entityId: id.productionRun,
+        documentType: "sensor_data",
+        fileUrl: READY_PRODUCTION_READINGS_URL,
+        fileName: `e2e-production-readings-${testRunId}.csv`,
+        mimeType: "text/csv",
+        uploadStatus: "uploaded",
       });
       await tx.insert(schema.productionRunFeedstocks).values({
         organizationId: DEC_ORG_ID,
@@ -1111,6 +1125,9 @@ export async function seedUngroupedReadyBatchWithChain(
             .where(
               eq(schema.productionRunFeedstocks.id, id.productionRunFeedstock),
             );
+          await tx
+            .delete(schema.documents)
+            .where(eq(schema.documents.id, id.productionReadingsDocument));
           await tx
             .delete(schema.productionRuns)
             .where(eq(schema.productionRuns.id, id.productionRun));

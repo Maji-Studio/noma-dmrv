@@ -30,7 +30,11 @@ export function WizardRegistryStep({
           : "Isometric is your registry. The Maji platform team helps set up the connection. Once it is live, this facility's project link appears here. You can skip this step and continue."}
       </p>
 
-      <CertifierSettingsPanel facilityId={facilityId} canManage={canManage} />
+      <CertifierSettingsPanel
+        facilityId={facilityId}
+        canManage={canManage}
+        projectLinkPresentation="inline"
+      />
     </div>
   );
 }

@@ -63,6 +63,7 @@ function readingsDocument(): DocumentRow {
     fileUrl: `/files/${DOCUMENT_ID}`,
     documentType: "sensor_data",
     uploadStatus: "uploaded",
+    mimeType: "text/csv",
     metadata: {
       readingsImport: {
         status: "failed",
@@ -103,5 +104,46 @@ describe("ProductionReadingsDocuments", () => {
     expect(html).toContain('data-accept=".csv"');
     expect(html).toContain('data-document-type="sensor_data"');
     expect(html).toContain('data-has-upload-callback="true"');
+  });
+
+  it("does not present pending or failed upload rows as supplied files", () => {
+    documentsForEntity.mockReturnValue({
+      data: [
+        { ...readingsDocument(), uploadStatus: "pending" },
+        { ...readingsDocument(), id: "doc-failed", uploadStatus: "failed" },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    const html = renderToStaticMarkup(
+      <ProductionReadingsDocuments productionRunId="run-1" />,
+    );
+
+    expect(html).toContain("0 files");
+    expect(html).toContain("No readings files uploaded yet.");
+    expect(html).not.toContain("reactor-original.csv");
+  });
+
+  it("does not present an uploaded non-CSV sensor-data document as readings evidence", () => {
+    documentsForEntity.mockReturnValue({
+      data: [
+        {
+          ...readingsDocument(),
+          fileName: "reactor-original.xlsx",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    const html = renderToStaticMarkup(
+      <ProductionReadingsDocuments productionRunId="run-1" />,
+    );
+
+    expect(html).toContain("0 files");
+    expect(html).not.toContain("reactor-original.xlsx");
   });
 });

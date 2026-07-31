@@ -9,6 +9,11 @@ import type {
   EntityType,
   UseEntityOptionsParams,
 } from "@/components/forms/entity-select/types";
+import {
+  ENTITY_DETAIL_STALE_TIME_MS,
+  ENTITY_LIST_STALE_TIME_MS,
+  entityKeys,
+} from "./entity-query-keys";
 
 /**
  * Hook to search and load entity options
@@ -18,7 +23,7 @@ export function useEntityOptions(params: UseEntityOptionsParams) {
   const { entityType, search, filterBy, enabled = true } = params;
 
   return useQuery({
-    queryKey: ["entities", entityType, search, filterBy],
+    queryKey: entityKeys.list(entityType, search, filterBy),
     queryFn: async () => {
       const result = await searchEntitiesFn({
         entityType,
@@ -30,7 +35,7 @@ export function useEntityOptions(params: UseEntityOptionsParams) {
       }
       return result.data;
     },
-    staleTime: 30000, // 30 seconds
+    staleTime: ENTITY_LIST_STALE_TIME_MS,
     enabled,
   });
 }
@@ -44,7 +49,7 @@ export function useEntityById(
   id: string | undefined
 ) {
   return useQuery({
-    queryKey: ["entity", entityType, id],
+    queryKey: entityKeys.detail(entityType, id),
     queryFn: async () => {
       if (!id) return null;
       const result = await getEntityByIdFn(entityType, id);
@@ -53,7 +58,7 @@ export function useEntityById(
       }
       return result.data;
     },
-    staleTime: 60000, // 1 minute (single entity changes less often)
+    staleTime: ENTITY_DETAIL_STALE_TIME_MS,
     enabled: !!id,
   });
 }

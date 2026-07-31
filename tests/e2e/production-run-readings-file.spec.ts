@@ -90,7 +90,9 @@ test.describe("production run readings file", () => {
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
     await expect(page.getByText(run.code).first()).toBeVisible();
     const runRow = page.locator("tr", { hasText: run.code });
-    await expect(runRow.getByLabel("Ready for certification")).toBeVisible();
+    await expect(
+      runRow.getByLabel(/Incomplete for certification with 1 gap/),
+    ).toBeVisible();
 
     await runRow.locator("td").first().click();
     await waitForSideSheet(page);
@@ -122,6 +124,7 @@ test.describe("production run readings file", () => {
       0,
     );
     await expect(dialog.getByText(/Imported \d+ reading/)).toHaveCount(0);
+    await expect(runRow.getByLabel("Ready for certification")).toBeVisible();
 
     const stored = await loadStoredEvidence(run.id);
     expect(stored.documents).toMatchObject([

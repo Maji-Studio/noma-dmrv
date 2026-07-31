@@ -22,9 +22,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
-import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
+import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, FormActions, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, StockReconciliationLink, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
-import { ProductionReadingsDocuments } from "./production-readings-documents";
+import { ProductionReadingsField } from "./production-readings-field";
 import { FormSelect } from "@/components/forms/form-select";
 import {
   EntitySelect,
@@ -908,21 +908,11 @@ export function ProductionRunForm({
 
       </FormSection>
 
-      {/* ── Readings file ── */}
-      <FormSection title="Readings file" icon={<FileCsvIcon size={14} weight="bold" />}>
-
-        <FormField
-          id="readingsCsv"
-          label="Readings CSV file"
-          helperText="noma stores the original CSV unchanged and does not inspect its contents."
-        >
-          <ProductionReadingsDocuments
-            productionRunId={productionRun?.id}
-            deferredAttachments={deferredAttachments}
-            disabled={isSubmitting}
-          />
-        </FormField>
-      </FormSection>
+      <ProductionReadingsField
+        productionRunId={productionRun?.id}
+        deferredAttachments={deferredAttachments}
+        disabled={isSubmitting}
+      />
       </FormSpine>
 
       {/* Process Flow — a derived recap of the run, not a data-entry step, so

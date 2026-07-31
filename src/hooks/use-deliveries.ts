@@ -29,6 +29,7 @@ import {
 import type { MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { certificationKeys } from "./use-certification";
+import { invalidateStockEntityQueries } from "./entity-query-keys";
 
 // ============================================
 // Query Keys
@@ -217,6 +218,7 @@ export function useCreateDelivery(
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      invalidateStockEntityQueries(queryClient, "delivery");
       // Pre-populate the detail cache with the new delivery
       queryClient.setQueryData(deliveryKeys.detail(data.id), data);
 
@@ -319,6 +321,7 @@ export function useUpdateDelivery(
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      invalidateStockEntityQueries(queryClient, "delivery");
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -412,6 +415,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Deleting a delivery shrinks the derived biochar leg's evidence set.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      invalidateStockEntityQueries(queryClient, "delivery");
 
       await callbacks?.onSuccess?.(undefined, deliveryId);
     },

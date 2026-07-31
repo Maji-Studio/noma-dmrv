@@ -4,7 +4,15 @@ Certification-readiness, transport-evidence, supporting-source, and sampling
 correction notes are archived in
 [`docs/archive/2026-07-28-certification-readiness-and-sampling-corrections.md`](../archive/2026-07-28-certification-readiness-and-sampling-corrections.md).
 
-## 2026-07-31 (live submission progress)
+Application mass records remain uploadable, but new uploads do not use the
+inapplicable Soil Environments v1.2 classification taxonomy. Completed
+production runs require one successfully uploaded, unchanged readings CSV for
+certification readiness. This file-presence check is a conservative Noma
+control and does not claim that structured telemetry was submitted to Certify.
+Dated implementation context is archived in
+[`docs/archive/isometric-changes-archive-2026-07-31-operational-feedback.md`](../archive/isometric-changes-archive-2026-07-31-operational-feedback.md).
+
+## Live submission progress
 
 Removal and GHG Statement submission dialogs now show progress from noma's
 actual orchestration checkpoints. Completed registry calls receive checkmarks,

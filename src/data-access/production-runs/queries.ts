@@ -17,6 +17,7 @@ import {
   sql,
   SQL,
   count,
+  getTableColumns,
   sum,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -52,6 +53,7 @@ import {
   CANCELLED_PRODUCTION_RUN_STATUS,
   COMPLETED_PRODUCTION_RUN_STATUS,
 } from "@/lib/production-runs/lifecycle";
+import { hasUploadedProductionReadingsFile } from "./readings-evidence";
 
 /**
  * Get all production runs with pagination and filtering
@@ -177,6 +179,10 @@ export async function getProductionRuns(
       feedstockWetMassKg: productionRuns.feedstockWetMassKg,
       feedstockMoisturePercent: productionRuns.feedstockMoisturePercent,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
+      hasReadingsFile: hasUploadedProductionReadingsFile(
+        ctx,
+        productionRuns.id,
+      ),
       createdAt: productionRuns.createdAt,
       updatedAt: productionRuns.updatedAt,
       facilityCode: facilities.code,
@@ -305,6 +311,10 @@ export async function getProductionRunById(
       feedstockWetMassKg: productionRuns.feedstockWetMassKg,
       feedstockMoisturePercent: productionRuns.feedstockMoisturePercent,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
+      hasReadingsFile: hasUploadedProductionReadingsFile(
+        ctx,
+        productionRuns.id,
+      ),
       createdAt: productionRuns.createdAt,
       updatedAt: productionRuns.updatedAt,
       facilityCode: facilities.code,
@@ -527,7 +537,13 @@ export async function getProductionRunsWithSamples(
   if (runIds.length === 0) return [];
 
   const runs = await db
-    .select()
+    .select({
+      ...getTableColumns(productionRuns),
+      hasReadingsFile: hasUploadedProductionReadingsFile(
+        ctx,
+        productionRuns.id,
+      ),
+    })
     .from(productionRuns)
     .where(and(inArray(productionRuns.id, runIds), eq(productionRuns.organizationId, ctx.organizationId)));
   if (runs.length === 0) return [];

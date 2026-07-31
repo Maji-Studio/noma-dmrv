@@ -81,25 +81,44 @@ test.describe("First-run onboarding", () => {
       await expect(wizard).toBeVisible();
       await expect(wizard.getByText("Welcome")).toBeVisible();
 
-      // 2. Facility step — the real facility form. With a single available
-      // tier the durability field renders as read-only 1000-year info (#348).
+      // 2. Facility step — the real facility form shows the active tier and
+      // the locked future pathway.
       await wizard.getByRole("button", { name: "Get started" }).click();
       await expect(wizard.getByLabel(/facility name/i)).toBeVisible();
-      await expect(wizard.getByTestId("durability-tier-info")).toBeVisible();
       await expect(
-        wizard.getByText("1000-year durability"),
-      ).toBeVisible();
+        wizard.getByRole("button", { name: "Skip setup", exact: true }),
+      ).toHaveCount(1);
+      await expect(
+        wizard.getByRole("button", { name: "Cancel", exact: true }),
+      ).toHaveCount(0);
+      const tierGroup = wizard.getByRole("radiogroup", {
+        name: "Durability tier",
+      });
+      await expect(tierGroup).toBeVisible();
+      await expect(
+        tierGroup.getByRole("radio", { name: /1000-year/i }),
+      ).toHaveAttribute("aria-checked", "true");
+      await expect(
+        tierGroup.getByRole("radio", { name: /200-year/i }),
+      ).toHaveAttribute("aria-disabled", "true");
       await wizard.getByLabel(/facility name/i).fill("CU Test Facility");
       await wizard.getByLabel(/country/i).fill("Tanzania");
-      await wizard
-        .getByLabel(/timezone/i)
-        .selectOption({ index: 1 });
+      await wizard.getByLabel(/timezone/i).fill("Nairobi");
+      await page
+        .getByRole("option", { name: "Africa/Nairobi (UTC+3)" })
+        .click();
       await wizard.getByRole("button", { name: "Add facility" }).click();
 
       // 3. Reactor step.
       await expect(
         wizard.getByRole("button", { name: "Register reactor" }),
       ).toBeVisible();
+      await expect(
+        wizard.getByRole("button", { name: "Skip setup", exact: true }),
+      ).toHaveCount(1);
+      await expect(
+        wizard.getByRole("button", { name: "Cancel", exact: true }),
+      ).toHaveCount(0);
       await wizard.getByLabel(/identifier/i).fill("CU-R1");
       await wizard.getByLabel(/reactor type/i).selectOption({ index: 1 });
       await wizard

@@ -216,6 +216,18 @@ allow authorized users to delete it, and open it in a new tab through
 `/api/documents/{id}` so the existing organization authorization and signed
 download flow remain in force.
 
+For Noma certification readiness, every completed production run must have at
+least one saved `sensor_data` document whose upload status is `uploaded`.
+Pending and failed upload rows do not satisfy the control. The control means
+only that the required file was supplied: Noma does not validate the file's
+contents. Failed and cancelled runs retain their lifecycle-only readiness
+result.
+
+One CSV per completed run is Noma's conservative evidence-completeness control,
+not a requirement stated verbatim by Isometric Biochar Protocol v1.1. The
+project's approved monitoring method, PDD, or verifier instructions may define
+a different evidence grain or require a separate Certify delivery route.
+
 Legacy telemetry import and registry submission modules remain in the codebase
 for historical experiments. They are not called by the operator readings-file
 upload.

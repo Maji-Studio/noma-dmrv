@@ -26,6 +26,7 @@ import {
 } from "@/fn/biochar-products";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { invalidateStockEntityQueries } from "./entity-query-keys";
 
 // ============================================
 // Query Keys
@@ -154,6 +155,7 @@ export function useCreateBiocharProduct(
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
+      invalidateStockEntityQueries(queryClient, "biocharProduct");
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -253,6 +255,7 @@ export function useUpdateBiocharProduct(
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
+      invalidateStockEntityQueries(queryClient, "biocharProduct");
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -353,6 +356,7 @@ export function useDeleteBiocharProduct(
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
+      invalidateStockEntityQueries(queryClient, "biocharProduct");
 
       await callbacks?.onSuccess?.(undefined, productId);
     },

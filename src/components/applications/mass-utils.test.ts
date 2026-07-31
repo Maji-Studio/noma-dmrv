@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 import {
+  formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
   getApplicationDeliveryMassLabel,
 } from "./mass-utils";
@@ -25,6 +26,7 @@ function delivery(
     destinationGpsLatitude: null,
     destinationGpsLongitude: null,
     alreadyAppliedWetKg: 0,
+    alreadyAppliedDryKg: 0,
     ...overrides,
   };
 }
@@ -55,5 +57,16 @@ describe("application delivery option mass", () => {
     );
     expect(label).not.toContain("DL-26-004");
     expect(label).not.toContain("OR-26-003");
+  });
+
+  it("shows the delivery's remaining unapplied wet and dry mass below the field", () => {
+    const option = delivery({
+      alreadyAppliedWetKg: 50,
+      alreadyAppliedDryKg: 45,
+    });
+
+    expect(formatApplicationDeliveryHelperText(option)).toBe(
+      "Remaining wet mass: 800kg | dry mass: 775kg",
+    );
   });
 });

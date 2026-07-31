@@ -23,6 +23,7 @@ import {
 } from "@/fn/orders";
 
 import type { MutationCallbacks } from "./types";
+import { invalidateStockEntityQueries } from "./entity-query-keys";
 
 // ============================================
 // Query Keys
@@ -173,6 +174,7 @@ export function useCreateOrder(
     onSuccess: async (data, variables) => {
       // Invalidate all order lists
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      invalidateStockEntityQueries(queryClient, "order");
       // Pre-populate the detail cache with the new order
       queryClient.setQueryData(orderKeys.detail(data.id), data);
 
@@ -267,6 +269,7 @@ export function useUpdateOrder(
         queryKey: orderKeys.detailWithRelations(data.id),
       });
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      invalidateStockEntityQueries(queryClient, "order");
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -356,6 +359,7 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, string>) {
       });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      invalidateStockEntityQueries(queryClient, "order");
 
       await callbacks?.onSuccess?.(undefined, orderId);
     },

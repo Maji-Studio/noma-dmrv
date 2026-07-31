@@ -10,10 +10,6 @@ vi.mock("@/hooks/use-documents", () => ({
   documentKeys: { forEntity: (type: string, id: string) => [type, id] },
   useDeleteDocument: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useDocumentsForEntity: (...args: unknown[]) => documentsForEntity(...args),
-  useUpdateApplicationEvidenceMetadata: () => ({
-    isPending: false,
-    mutateAsync: vi.fn(),
-  }),
 }));
 vi.mock("@/hooks/use-applications", () => ({
   applicationKeys: { lists: () => ["applications", "list"] },
@@ -23,9 +19,6 @@ vi.mock("@/components/ui/toast", () => ({
 }));
 vi.mock("@/components/forms", () => ({
   FormFileUpload: () => <div data-testid="file-upload" />,
-  FormSelect: ({ value }: { value?: string }) => (
-    <select data-testid="doc-type-select" defaultValue={value} />
-  ),
   ServerError: ({ message }: { message: string }) => <p>{message}</p>,
 }));
 vi.mock("@/components/forms/failed-deferred-attachments", () => ({
@@ -43,27 +36,20 @@ vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
 }));
 
-import {
-  ApplicationEvidencePanel,
-  savedLogbookEvidenceType,
-} from "./application-evidence-panel";
+import { ApplicationEvidencePanel } from "./application-evidence-panel";
 
 const APPLICATION_ID = "11111111-1111-4111-8111-111111111111";
 
-function boundaryDoc(
-  logbookEvidenceType: string | null,
-  id = "doc-1",
-  createdAt = new Date("2026-07-01T00:00:00.000Z"),
-): DocumentRow {
+function boundaryDoc(logbookEvidenceType: string | null): DocumentRow {
   return {
-    id,
+    id: "doc-1",
     fileName: "logbook.pdf",
     fileSizeBytes: 1024,
-    fileUrl: `/files/${id}`,
+    fileUrl: "/files/doc-1",
     documentType: "pdf",
     uploadStatus: "uploaded",
     capturedAt: null,
-    createdAt,
+    createdAt: new Date("2026-07-01T00:00:00.000Z"),
     metadata: logbookEvidenceType ? { logbookEvidenceType } : {},
   } as unknown as DocumentRow;
 }
@@ -85,51 +71,7 @@ function renderPanel(docs: DocumentRow[]): string {
   );
 }
 
-/** The radio input markup for one evidence type, checked or not. */
-function radioFor(html: string, type: string): string | undefined {
-  return html.match(new RegExp(`<input[^>]*value="${type}"[^>]*>`))?.[0];
-}
-
-describe("savedLogbookEvidenceType", () => {
-  it("returns null when no boundary document carries a classification", () => {
-    expect(savedLogbookEvidenceType([])).toBeNull();
-    expect(savedLogbookEvidenceType([boundaryDoc(null)])).toBeNull();
-  });
-
-  it("ignores unrecognised metadata values", () => {
-    expect(savedLogbookEvidenceType([boundaryDoc("not-a-type")])).toBeNull();
-  });
-
-  it("returns the most recently saved classification, whatever the row order", () => {
-    const older = new Date("2026-07-01T00:00:00.000Z");
-    const newer = new Date("2026-07-09T00:00:00.000Z");
-
-    expect(
-      savedLogbookEvidenceType([
-        boundaryDoc(null, "a", newer),
-        boundaryDoc("affidavit", "b", older),
-        boundaryDoc("inventory", "c", newer),
-      ]),
-    ).toBe("inventory");
-    expect(
-      savedLogbookEvidenceType([
-        boundaryDoc("inventory", "c", newer),
-        boundaryDoc("affidavit", "b", older),
-      ]),
-    ).toBe("inventory");
-  });
-
-  it("falls back to the first classification when timestamps cannot order the rows", () => {
-    expect(
-      savedLogbookEvidenceType([
-        boundaryDoc("affidavit", "b", new Date(Number.NaN)),
-        boundaryDoc("inventory", "c", new Date(Number.NaN)),
-      ]),
-    ).toBe("affidavit");
-  });
-});
-
-describe("ApplicationEvidencePanel boundary evidence type", () => {
+describe("ApplicationEvidencePanel", () => {
   it("keeps visual evidence visible but locked", () => {
     const html = renderPanel([]);
 
@@ -140,26 +82,13 @@ describe("ApplicationEvidencePanel boundary evidence type", () => {
     );
   });
 
-  it("initialises the upload-type radio from the saved evidence", () => {
+  it("keeps mass records without showing the obsolete type taxonomy", () => {
     const html = renderPanel([boundaryDoc("affidavit")]);
 
-    expect(radioFor(html, "affidavit")).toContain("checked");
-    expect(radioFor(html, "weighbridge")).not.toContain("checked");
-  });
-
-  it("falls back to weighbridge when nothing is classified yet", () => {
-    const html = renderPanel([]);
-
-    expect(radioFor(html, "weighbridge")).toContain("checked");
-    expect(radioFor(html, "affidavit")).not.toContain("checked");
-  });
-
-  it("labels the radio group as applying to the next upload only", () => {
-    const html = renderPanel([boundaryDoc("affidavit")]);
-
-    expect(html).toContain("Record type for the next upload");
-    expect(html).toContain(
-      'aria-label="Mass record type for the next upload"',
-    );
+    expect(html).toContain("Application mass records");
+    expect(html).toContain("logbook.pdf");
+    expect(html).not.toContain("Record type for the next upload");
+    expect(html).not.toContain("Affidavit");
+    expect(html).not.toContain("Classify logbook");
   });
 });

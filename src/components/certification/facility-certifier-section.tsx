@@ -25,6 +25,7 @@ import { formatDate } from "@/lib/format-utils";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import {
   FacilityCertifierDialog,
+  FacilityCertifierForm,
   UnlinkConfirmDialog,
 } from "./facility-certifier-dialog";
 import { Field, Section } from "./panel-layout";
@@ -46,15 +47,25 @@ interface FacilityCertifierSectionProps {
    * the content rather than in the header the host owns.
    */
   embedded?: boolean;
+  /**
+   * Show project linking directly in the host instead of opening a dialog.
+   * Use inside an existing modal, such as the onboarding wizard.
+   */
+  linkPresentation?: "dialog" | "inline";
 }
 
 export function FacilityCertifierSection({
   facilityId,
   canManage,
   embedded = false,
+  linkPresentation = "dialog",
 }: FacilityCertifierSectionProps) {
   return canManage ? (
-    <FacilityCertifierManage facilityId={facilityId} embedded={embedded} />
+    <FacilityCertifierManage
+      facilityId={facilityId}
+      embedded={embedded}
+      linkPresentation={linkPresentation}
+    />
   ) : (
     <FacilityCertifierReadOnly facilityId={facilityId} embedded={embedded} />
   );
@@ -252,9 +263,11 @@ function FacilityCertifierReadOnly({
 function FacilityCertifierManage({
   facilityId,
   embedded,
+  linkPresentation,
 }: {
   facilityId: string;
   embedded: boolean;
+  linkPresentation: "dialog" | "inline";
 }) {
   const { data, isLoading, error } = useFacilityCertifierMapping(facilityId);
   const [editOpen, setEditOpen] = useState(false);
@@ -313,25 +326,36 @@ function FacilityCertifierManage({
   }
 
   const { mapping, isProduction } = data;
+  const canOpenEdit =
+    linkPresentation === "dialog" || data.isConfigured;
 
   const actions = mapping ? (
     <>
-      <Button variant="default" size="small" onClick={() => setEditOpen(true)}>
-        Edit
-      </Button>
-      <Button
-        variant="default"
-        size="small"
-        onClick={() => setUnlinkOpen(true)}
-      >
-        Unlink
-      </Button>
+      {canOpenEdit && (
+        <Button variant="default" size="small" onClick={() => setEditOpen(true)}>
+          Edit
+        </Button>
+      )}
+      {linkPresentation === "dialog" && (
+        <Button
+          variant="default"
+          size="small"
+          onClick={() => setUnlinkOpen(true)}
+        >
+          Unlink
+        </Button>
+      )}
     </>
-  ) : (
+  ) : linkPresentation === "dialog" ? (
     <Button variant="primary" size="small" onClick={() => setEditOpen(true)}>
       Link Isometric project
     </Button>
-  );
+  ) : null;
+
+  const showInlineForm =
+    linkPresentation === "inline" &&
+    data.isConfigured &&
+    (!mapping || editOpen);
 
   return (
     <>
@@ -346,24 +370,38 @@ function FacilityCertifierManage({
           }
         />
 
-        {mapping ? (
+        {showInlineForm ? (
+          <FacilityCertifierForm
+            facilityId={facilityId}
+            loaderData={data}
+            onSaved={() => setEditOpen(false)}
+            onCancel={mapping ? () => setEditOpen(false) : undefined}
+            presentation="inline"
+          />
+        ) : mapping ? (
           <CertifierMappingFields
             mapping={mapping}
             isProduction={isProduction}
             projectName={projectName}
             templateName={templateName}
           />
-        ) : (
+        ) : data.isConfigured ? (
           <p className="body-small text-[var(--color-text-secondary)]">
             This facility has no Isometric project link yet. Submissions from
             this facility will be blocked until you link one.
           </p>
+        ) : (
+          <p className="body-small text-[var(--color-text-secondary)]">
+            Save valid Isometric keys above to load projects.
+          </p>
         )}
 
-        {embedded && <CertifierActions>{actions}</CertifierActions>}
+        {!showInlineForm && embedded && actions && (
+          <CertifierActions>{actions}</CertifierActions>
+        )}
       </Shell>
 
-      {editOpen && (
+      {linkPresentation === "dialog" && editOpen && (
         <FacilityCertifierDialog
           isOpen={editOpen}
           onClose={() => setEditOpen(false)}

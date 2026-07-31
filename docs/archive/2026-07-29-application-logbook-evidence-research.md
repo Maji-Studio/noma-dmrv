@@ -1,6 +1,6 @@
 # Application logbook evidence: Isometric requirement check
 
-Date: 2026-07-29
+Date: 2026-07-29; re-verified 2026-07-31
 
 > Non-authoritative interpretation of the linked Isometric sources. Confirm the
 > Certify project's current protocol version before changing certification rules.
@@ -22,6 +22,50 @@ Protocol v1.1 separately requires delivery weigh-scale tickets, or equivalent
 records, to be retained for verification for at least five years. Retention for
 verification is different from requiring a typed document on every Noma
 Application before submission.
+
+## 2026-07-31 re-verification of the upload-type control
+
+The selector labelled **Record type for the next upload**, with the choices
+**Weighbridge**, **Inventory**, and **Affidavit**, is not required by the
+project's pinned Isometric rules or by the Certify API schema:
+
+- Biochar Protocol v1.1, requirement sections **8.3.1.1** and **8.3.1.2**, asks
+  for the applied mass to be measured from arrival/departure truck weights and
+  requires weigh-scale tickets or equivalent records to be retained for five
+  years. It permits a signed receipt, bill of lading, and/or delivery photo when
+  truck scales are unavailable and agreed with Isometric before verification.
+  It does not define a Weighbridge/Inventory/Affidavit enum.
+  [Biochar Production and Storage v1.1, §§8.3.1.1–8.3.1.2](https://registry.isometric.com/protocol/biochar/1.1#measurement-of-mass-of-biochar-applied)
+- Agricultural Soils v1.1 requirement section **4.2** asks for project
+  boundaries and permits geotagged dated photos or video as an alternative way
+  to evidence spreading. The module contains no `weighbridge`, `logbook`, or
+  `affidavit` classification.
+  [Biochar Storage in Agricultural Soils v1.1, §4.2](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1#proof-of-biochar-spreading)
+- The exact three alternatives occur in the later Soil Environments v1.2
+  requirement **G-Z1CS-0**, section **8.5.2**. They describe acceptable records
+  in the boundary-mapping evidence branch; they are not a registry field or
+  document-type enum, and that module is not bound by Biochar Protocol v1.1.
+  [Biochar Storage in Soil Environments v1.2, §8.5.2 (`G-Z1CS-0`)](https://registry.isometric.com/module/biochar-storage-soil-environments/1.2#project-boundary-mapping-with-application-records)
+- The first-party `POST /biochar_applications` request requires application
+  date, average application rate, project, storage site, production batch,
+  arrival/departure truck masses, and supplier reference. `source_ids` is
+  optional (the examples use `[]`, and the generated request schema assigns an
+  empty-array default), and the request contains no evidence-type or record-type
+  field.
+  [Certify API: POST biochar application](https://docs.isometric.com/api-reference/certify/post-biochar-application)
+- The first-party `POST /sources` request likewise has no weighbridge,
+  inventory, or affidavit category. Its Source `type` distinguishes only
+  `DOCUMENT` from `WEBSITE`.
+  [Certify API: POST Source](https://docs.isometric.com/api-reference/certify/post-source);
+  [Certify API: GET Source](https://docs.isometric.com/api-reference/certify/get-source)
+
+**Product conclusion:** remove the three-way upload-type selector and any
+per-file requirement to classify an application mass record with that taxonomy.
+Keep a neutral way to retain or attach mass evidence somewhere in the product,
+because v1.1 still requires the underlying records for verification. The whole
+dedicated Application-mass upload section can be removed only if the same
+records can be retained in a general document/evidence surface; removing the
+taxonomy does not make the underlying records dispensable.
 
 ## Why
 
@@ -87,16 +131,18 @@ three-stage/GIS-plus-logbook branches.
 
 Do not make applied-mass evidence optional. Keep a separate product-mass
 evidence requirement at the Removal/storage-batch datapoint, sourced from the
-v1.1 delivery weigh tickets or an approved equivalent. Keep document
-upload/classification available for those retained records, and keep or add
-checks for the required application data, especially arrival and departure
-truck masses and application rate.
+v1.1 delivery weigh tickets or an approved equivalent. Keep a neutral document
+upload path available for those retained records, and keep or add checks for
+the required application data, especially arrival and departure truck masses
+and application rate. The Noma-only three-way classification is unnecessary.
 
 ## Verification caveat
 
-The Isometric MCP `how_to` tool was not callable in this session. The conclusion
-was therefore checked directly against the official Registry pages, official
-versioning documentation, the official Certify API documentation, and the
-repository's generated first-party OpenAPI snapshot. Before shipping the rule
-change, re-confirm in the Certify UI that project `prj_1K9YJ33RKSBX9FFF` still
-has current protocol version **1.1**.
+The Isometric MCP `how_to` tool was not callable in either the original or the
+2026-07-31 re-verification session: no Isometric MCP tool was exposed in the
+session, and `codex mcp list` showed no registered Isometric server. The
+conclusion was therefore checked directly against the official Registry pages,
+official versioning documentation, the official Certify API documentation, and
+the repository's generated first-party OpenAPI snapshot. Before shipping the
+rule change, re-confirm in the Certify UI that project
+`prj_1K9YJ33RKSBX9FFF` still has current protocol version **1.1**.

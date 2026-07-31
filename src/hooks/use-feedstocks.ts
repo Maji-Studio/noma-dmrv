@@ -28,6 +28,7 @@ import type { MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { certificationKeys } from "./use-certification";
 import { invalidateOnboardingProgress } from "./use-onboarding";
+import { invalidateStockEntityQueries } from "./entity-query-keys";
 
 // ============================================
 // Query Keys
@@ -140,6 +141,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
@@ -168,6 +170,7 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
@@ -193,6 +196,7 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, string>) 
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.

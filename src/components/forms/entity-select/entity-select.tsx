@@ -9,6 +9,7 @@ import {
   useRef,
   useEffect,
   useCallback,
+  useId,
   useMemo,
   type KeyboardEvent,
 } from "react";
@@ -23,6 +24,7 @@ import { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
 import { FormulationQuickAddDialog } from "./formulation-quick-add-dialog";
 import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
+import { formatRemainingMass } from "./remaining-mass";
 
 // Icons
 function ChevronDown({ className }: { className?: string }) {
@@ -175,6 +177,30 @@ export function shouldRenderCreateAction({
   );
 }
 
+function selectFreshRemainingMass({
+  listedOption,
+  listDataUpdatedAt,
+  selectedEntity,
+  detailDataUpdatedAt,
+  value,
+}: {
+  listedOption: EntityOption | undefined;
+  listDataUpdatedAt: number;
+  selectedEntity: EntityOption | null | undefined;
+  detailDataUpdatedAt: number;
+  value: string | undefined;
+}) {
+  const listMass = listedOption?.remainingMass;
+  const detailMass =
+    selectedEntity && selectedEntity.id === value
+      ? selectedEntity.remainingMass
+      : undefined;
+
+  if (!detailMass) return listMass;
+  if (!listMass) return detailMass;
+  return listDataUpdatedAt > detailDataUpdatedAt ? listMass : detailMass;
+}
+
 function getFeedstockTypeDefaultUsage(filterBy?: Record<string, string>) {
   const usage = filterBy?.usage ?? filterBy?.feedstockTypeUsage;
   return usage === "pyrolysis" || usage === "blend" ? usage : undefined;
@@ -198,6 +224,8 @@ export function EntitySelect({
   hideSearch = false,
   formatSelectedLabel,
   emptyHint,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }: EntitySelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -212,6 +240,9 @@ export function EntitySelect({
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const entitySelectId = useId();
+  const listboxId = `${entitySelectId}-listbox`;
+  const remainingMassId = `${entitySelectId}-remaining-mass`;
 
   // Debounce search for better performance
   const debouncedSearch = useDebounce(searchQuery, 200);
@@ -220,6 +251,7 @@ export function EntitySelect({
   // Also fetch eagerly when autoSelectSingle is enabled (to detect single-option case)
   const {
     data: fetchedOptions = [],
+    dataUpdatedAt: listDataUpdatedAt,
     isLoading,
     error: fetchError,
   } = useEntityOptions({
@@ -239,16 +271,34 @@ export function EntitySelect({
       : fetchedOptions;
 
   // Fetch selected entity details
-  const { data: selectedEntity, isPending: isSelectedEntityPending } =
-    useEntityById(entityType, value);
+  const {
+    data: selectedEntity,
+    dataUpdatedAt: detailDataUpdatedAt,
+    isPending: isSelectedEntityPending,
+  } = useEntityById(entityType, value);
 
+  const listedOption = options.find((option) => option.id === value);
   const selectedOption =
-    selectedEntity?.id === value
-      ? selectedEntity
-      : options.find((option) => option.id === value);
+    selectedEntity?.id === value ? selectedEntity : listedOption;
   const displayText = selectedOption
     ? (formatSelectedLabel ? formatSelectedLabel(selectedOption) : selectedOption.name)
     : "";
+  // Identity remains detail-first, but stock is derived data: use whichever
+  // query most recently succeeded. dataUpdatedAt intentionally survives a
+  // failed refetch, so retained detail data cannot mask a fresher list result.
+  const remainingMass = selectFreshRemainingMass({
+    listedOption,
+    listDataUpdatedAt,
+    selectedEntity,
+    detailDataUpdatedAt,
+    value,
+  });
+  const triggerDescribedBy = [
+    ariaDescribedBy,
+    remainingMass ? remainingMassId : undefined,
+  ]
+    .filter(Boolean)
+    .join(" ") || undefined;
   // Only while the by-ID fetch is unresolved — once it settles without a
   // match (deleted or inaccessible entity) the ordinary placeholder returns.
   const isSelectionLoading = Boolean(
@@ -292,10 +342,12 @@ export function EntitySelect({
   });
 
   // Clamp highlighted index when options change
-  const clampedHighlightedIndex = useMemo(() => {
-    const maxIndex = options.length + (shouldShowCreateAction ? 1 : 0) - 1;
-    return Math.min(Math.max(0, highlightedIndex), Math.max(0, maxIndex));
-  }, [highlightedIndex, options.length, shouldShowCreateAction]);
+  const maxHighlightedIndex =
+    options.length + (shouldShowCreateAction ? 1 : 0) - 1;
+  const clampedHighlightedIndex = Math.min(
+    Math.max(0, highlightedIndex),
+    Math.max(0, maxHighlightedIndex),
+  );
   const showSearch =
     !hideSearch &&
     (alwaysShowSearch ||
@@ -372,58 +424,57 @@ export function EntitySelect({
     searchQuery.length === 0 &&
     !!emptyHint?.href;
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement | HTMLButtonElement>) => {
-      const optionCount = options.length + (shouldShowCreateAction ? 1 : 0);
+  const handleKeyDown = (
+    e: KeyboardEvent<HTMLInputElement | HTMLButtonElement>,
+  ) => {
+    const optionCount = options.length + (shouldShowCreateAction ? 1 : 0);
 
-      switch (e.key) {
-        case "ArrowDown":
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setHighlightedIndex((prev) => Math.min(prev + 1, optionCount - 1));
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (
+          clampedHighlightedIndex === options.length &&
+          shouldShowCreateAction &&
+          resolvedCreateAction
+        ) {
+          // Create new option selected
+          resolvedCreateAction();
+          setIsOpen(false);
+          setSearchQuery("");
+        } else if (options[clampedHighlightedIndex]) {
+          handleSelect(options[clampedHighlightedIndex]);
+        }
+        break;
+      case "Escape":
+        if (isOpen) {
           e.preventDefault();
-          setHighlightedIndex((prev) => Math.min(prev + 1, optionCount - 1));
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setHighlightedIndex((prev) => Math.max(prev - 1, 0));
-          break;
-        case "Enter":
-          e.preventDefault();
-          if (
-            clampedHighlightedIndex === options.length &&
-            shouldShowCreateAction &&
-            resolvedCreateAction
-          ) {
-            // Create new option selected
-            resolvedCreateAction();
-            setIsOpen(false);
-            setSearchQuery("");
-          } else if (options[clampedHighlightedIndex]) {
-            handleSelect(options[clampedHighlightedIndex]);
-          }
-          break;
-        case "Escape":
-          if (isOpen) {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsOpen(false);
-            setSearchQuery("");
-            // Escape may fire from the search input, which unmounts on
-            // close — return focus to the trigger so keyboard users are
-            // not dropped onto the document body.
-            triggerRef.current?.focus();
-          }
-          break;
-        case "Tab":
-          // Let Tab move focus to the empty-state recovery link instead of
-          // closing (unmounting) the dropdown out from under it.
-          if (!showEmptyStateRecoveryLink) {
-            setIsOpen(false);
-            setSearchQuery("");
-          }
-          break;
-      }
-    },
-    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction, isOpen, showEmptyStateRecoveryLink]
-  );
+          e.stopPropagation();
+          setIsOpen(false);
+          setSearchQuery("");
+          // Escape may fire from the search input, which unmounts on
+          // close — return focus to the trigger so keyboard users are
+          // not dropped onto the document body.
+          triggerRef.current?.focus();
+        }
+        break;
+      case "Tab":
+        // Let Tab move focus to the empty-state recovery link instead of
+        // closing (unmounting) the dropdown out from under it.
+        if (!showEmptyStateRecoveryLink) {
+          setIsOpen(false);
+          setSearchQuery("");
+        }
+        break;
+    }
+  };
 
   const handleToggle = useCallback(() => {
     if (!disabled) {
@@ -444,9 +495,13 @@ export function EntitySelect({
           onClick={handleToggle}
           onKeyDown={handleKeyDown}
           disabled={disabled}
+          role="combobox"
           aria-haspopup="listbox"
           aria-expanded={isOpen}
+          aria-controls={listboxId}
           aria-label={placeholder || defaultPlaceholder}
+          aria-describedby={triggerDescribedBy}
+          aria-invalid={ariaInvalid}
           data-testid="entity-select-trigger"
           className={cn(
             "flex h-40 w-full items-center justify-between gap-2 border bg-[var(--color-background-white)] px-12 text-[var(--text-s)] transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]",
@@ -494,6 +549,15 @@ export function EntitySelect({
         )}
       </div>
 
+      {remainingMass && (
+        <p
+          id={remainingMassId}
+          className="body-caption text-[var(--color-text-tertiary)] mt-4"
+        >
+          {formatRemainingMass(remainingMass)}
+        </p>
+      )}
+
       {/* Dropdown */}
       {isOpen && (
         <div
@@ -522,6 +586,7 @@ export function EntitySelect({
 
           {/* Options list */}
           <ul
+            id={listboxId}
             ref={listboxRef}
             role="listbox"
             aria-label={`${ENTITY_TYPE_LABELS[entityType] || entityType} options`}

@@ -191,6 +191,17 @@ describe("application mutations", () => {
 
       expect(application.biocharAppliedTons).toBe(2);
       expect(application.biocharAppliedDryTons).toBeCloseTo(1.6);
+
+      const options = await getApplicationDeliveryOptions(
+        makeTestOrgContext(TEST_USER_ID),
+        fixture.facilityId,
+      );
+      expect(
+        options.find((option) => option.id === fixture.deliveryIds[0]),
+      ).toMatchObject({
+        alreadyAppliedWetKg: 2_000,
+        alreadyAppliedDryKg: 1_600,
+      });
     } finally {
       await cleanupMutationFixture(fixture);
     }
