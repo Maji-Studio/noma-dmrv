@@ -20,6 +20,17 @@ import { formatStorageLocationType } from "@/schemas/storage-locations";
 const FEEDSTOCK_BIN_PREFIX = `${formatStorageLocationType(COMPOSITION_BIN_TYPE)} · `;
 const FEEDSTOCK_BIN_QUICK_ADD_TYPES = [COMPOSITION_BIN_TYPE] as const;
 
+export function formatIngredientBinLabel(entity: {
+  name: string;
+  subtitle?: string;
+}): string {
+  const parts = [entity.name];
+  if (entity.subtitle) {
+    parts.push(entity.subtitle.replace(FEEDSTOCK_BIN_PREFIX, ""));
+  }
+  return parts.join(" · ");
+}
+
 function formatKgShort(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
@@ -38,12 +49,6 @@ export function IngredientBinField({
   facilityId,
 }: IngredientBinFieldProps) {
   const feedstockBinDialog = useQuickAddDialog();
-
-  const formatLabel = (entity: { name: string; subtitle?: string }) => {
-    const parts = [entity.name];
-    if (entity.subtitle) parts.push(entity.subtitle.replace(FEEDSTOCK_BIN_PREFIX, ""));
-    return parts.join(" · ");
-  };
 
   const showDeviation =
     row.deviationPercent != null &&
@@ -76,7 +81,7 @@ export function IngredientBinField({
                     feedstockTypeId: row.feedstockTypeId,
                     feedstockTypeUsage: "blend",
                   }}
-                  formatSelectedLabel={formatLabel}
+                  formatSelectedLabel={formatIngredientBinLabel}
                   allowCreate
                   emptyHint={{
                     message: `No ${row.feedstockTypeName} feedstock bins. Create a bin here, then record a feedstock intake to add stock.`,

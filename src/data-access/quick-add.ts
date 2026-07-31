@@ -21,6 +21,7 @@ import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardStorageLocationName } from "./unique-name-guards";
 import { isPgUniqueViolation } from "@/db/errors";
+import { getStorageLocationById } from "./entities/storage-locations";
 
 const VEHICLE_NAME_CONSTRAINT = "vehicles_organization_id_name_unique";
 const FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT =
@@ -289,10 +290,10 @@ export async function createStorageLocation(
       .returning(),
   );
 
-  return {
+  const enriched = await getStorageLocationById(ctx, location.id);
+  return enriched ?? {
     id: location.id,
     code: location.code,
     name: location.name,
-    subtitle: location.type.replace(/_/g, " "),
   };
 }
