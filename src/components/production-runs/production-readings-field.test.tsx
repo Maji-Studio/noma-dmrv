@@ -66,7 +66,7 @@ describe("ProductionReadingsField certification status", () => {
   });
 
   it("shows a neutral CERT chip in create mode and while saved files load", () => {
-    documentsForEntity.mockReturnValue({ data: undefined, isLoading: true });
+    documentsForEntity.mockReturnValue({ data: undefined, isSuccess: false });
 
     expect(renderField()).toContain('data-cert-status="neutral"');
     expect(renderField("run-1")).toContain('data-cert-status="neutral"');
@@ -88,7 +88,7 @@ describe("ProductionReadingsField certification status", () => {
           mimeType: "text/csv",
         },
       ],
-      isLoading: false,
+      isSuccess: true,
     });
 
     const html = renderField("run-1");
@@ -107,11 +107,21 @@ describe("ProductionReadingsField certification status", () => {
           mimeType: "text/csv",
         },
       ],
-      isLoading: false,
+      isSuccess: true,
     });
 
     expect(renderField("run-1")).toContain(
       'data-cert-status="satisfied"',
     );
+  });
+
+  it("keeps the CERT chip neutral when the saved-document query fails", () => {
+    documentsForEntity.mockReturnValue({
+      data: undefined,
+      isSuccess: false,
+      error: new Error("query failed"),
+    });
+
+    expect(renderField("run-1")).toContain('data-cert-status="neutral"');
   });
 });
