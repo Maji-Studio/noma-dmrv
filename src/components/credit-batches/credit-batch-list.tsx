@@ -274,14 +274,14 @@ export function CreditBatchList({
       } else {
         setCreateError(
           result.error ||
-            "The credit batch was not created. Check the form and try again.",
+            "Credit batch was not created. Check the form.",
         );
       }
     } catch (err) {
       const message =
         err instanceof Error
           ? err.message
-          : "The credit batch was not created. Check the form and try again.";
+          : "Credit batch was not created. Check the form.";
       console.error("Credit batch create error:", err);
       setCreateError(message);
     }
@@ -302,14 +302,14 @@ export function CreditBatchList({
         toast.success("Credit batch updated.");
       } else {
         setUpdateError(
-          result.error || "The credit batch was not saved. Try again.",
+          result.error || "Credit batch was not saved. Try again.",
         );
       }
     } catch (err) {
       const message =
         err instanceof Error
           ? err.message
-          : "The credit batch was not saved. Try again.";
+          : "Credit batch was not saved. Try again.";
       console.error("Credit batch update error:", err);
       setUpdateError(message);
     }
@@ -328,10 +328,10 @@ export function CreditBatchList({
         }
         toast.success("Credit batch deleted.");
       } else {
-        toast.error(result.error || "The credit batch was not deleted. Try again.");
+        toast.error(result.error || "Credit batch was not deleted. Try again.");
       }
     } catch {
-      toast.error("The credit batch was not deleted. Try again.");
+      toast.error("Credit batch was not deleted. Try again.");
     }
     setDeletingBatchId(null);
   };

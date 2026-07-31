@@ -362,7 +362,7 @@ export function ApplicationEvidencePanel({
       setErrorMessage(
         deleteError instanceof Error
           ? deleteError.message
-          : "The evidence was not deleted. Try again.",
+          : "Evidence was not deleted. Try again.",
       );
     }
   };
@@ -384,7 +384,7 @@ export function ApplicationEvidencePanel({
       setErrorMessage(
         classifyError instanceof Error
           ? classifyError.message
-          : "The evidence type was not saved. Try again.",
+          : "Evidence type was not saved. Try again.",
       );
     } finally {
       setClassifyingDocumentId(null);

@@ -26,6 +26,7 @@ import {
   updateCreditBatchSchema,
   deleteCreditBatchSchema,
 } from "@/schemas/credit-batches";
+import { formatZodActionError } from "./action-errors";
 
 const MAX_BATCH_PREVIEWS = 50;
 
@@ -173,8 +174,7 @@ export async function createCreditBatchFn(
   } catch (error) {
     logCreditBatchError("Failed to create credit batch", error);
     if (error instanceof z.ZodError) {
-      const msg = error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ");
-      return { success: false, error: msg };
+      return { success: false, error: formatZodActionError(error) };
     }
     return {
       success: false,
@@ -223,7 +223,7 @@ export async function updateCreditBatchFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.issues.map((e) => e.message).join(", "),
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -257,7 +257,7 @@ export async function deleteCreditBatchFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.issues.map((e) => e.message).join(", "),
+        error: formatZodActionError(error),
       };
     }
     return {

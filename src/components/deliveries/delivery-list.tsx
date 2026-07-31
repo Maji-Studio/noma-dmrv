@@ -306,7 +306,7 @@ export function DeliveryList() {
     setError: setFormError,
     setUpdateError: setFormError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "The delivery was not created. Check the form and try again.",
+      error instanceof Error ? error.message : "Delivery was not created. Check the form.",
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this delivery.",
     openEditOnFailure: (delivery) =>
@@ -397,7 +397,7 @@ export function DeliveryList() {
       closeSideSheet();
       toast.success("Delivery updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The delivery was not saved. Try again.");
+      setFormError(error instanceof Error ? error.message : "Delivery was not saved. Try again.");
     }
   };
 
@@ -413,7 +413,7 @@ export function DeliveryList() {
       setDeletingDeliveryId(null);
       toast.success("Delivery deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "The delivery was not deleted. Try again.");
+      setDeleteError(error instanceof Error ? error.message : "Delivery was not deleted. Try again.");
     }
   };
 

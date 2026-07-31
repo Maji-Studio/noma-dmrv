@@ -54,7 +54,7 @@ export function SampleDocumentsPanel({
       toast.success(`Document is now ${next}`);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "The visibility was not saved. Try again.",
+        err instanceof Error ? err.message : "Visibility was not saved. Try again.",
       );
     }
   };
@@ -68,7 +68,7 @@ export function SampleDocumentsPanel({
       setDeletingId(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "The document was not deleted. Try again.",
+        err instanceof Error ? err.message : "Document was not deleted. Try again.",
       );
     }
   };

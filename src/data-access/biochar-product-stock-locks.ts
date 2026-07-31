@@ -8,11 +8,11 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { productStockOverdrawMessage } from "@/lib/stock-overdraw";
 import {
   assertBiocharDrawWithinStock,
   deriveBiocharProductDeliveredKg,
   deriveProductAvailableKg,
-  formatKg,
   isOverdraw,
   overdrawError,
 } from "./bin-stock-guards";
@@ -20,6 +20,7 @@ import {
   assertStockLockSnapshot,
   lockBinStocks,
 } from "./lock-bin-stocks";
+import { getCompositionIngredientDraws } from "./biochar-product-composition";
 
 interface BiocharProductStockUpdate {
   facilityId?: string;
@@ -169,6 +170,14 @@ export async function lockBiocharProductUpdateStock(
   data: BiocharProductStockUpdate,
 ): Promise<BiocharProductUpdateLockPreparation> {
   const state = deriveBiocharProductStockState(product, data);
+  const existingIngredientDraws = data.composition !== undefined
+    ? getCompositionIngredientDraws(
+        product.composition as Record<string, unknown> | null,
+      )
+    : [];
+  const transactionIngredientDraws = data.composition !== undefined
+    ? getCompositionIngredientDraws(state.transactionComposition)
+    : [];
   const productBinStockChanged =
     biocharProductBinStockChanged(product, data);
   // Mirror the defined-ness condition in assertBiocharProductUpdateDraw. Any
@@ -201,6 +210,8 @@ export async function lockBiocharProductUpdateStock(
       ? [product.storageLocationId, state.transactionStorageId]
       : []),
     ...sourceBins.map((row) => row.storageLocationId),
+    ...existingIngredientDraws.map((draw) => draw.storageLocationId),
+    ...transactionIngredientDraws.map((draw) => draw.storageLocationId),
   ]);
   return { product, sourceRuns: sourceBins };
 }
@@ -215,7 +226,10 @@ export async function lockBiocharProductUpdateRows(
 ): Promise<BiocharProductStockState> {
   assertStockLockSnapshot(
     locked.storageLocationId === preparation.product.storageLocationId &&
-      locked.linkedProductionRunId === preparation.product.linkedProductionRunId,
+      locked.linkedProductionRunId === preparation.product.linkedProductionRunId &&
+      (data.composition === undefined ||
+        JSON.stringify(locked.composition) ===
+          JSON.stringify(preparation.product.composition)),
   );
 
   const sourceRunIds = preparation.sourceRuns.map((run) => run.id);
@@ -334,11 +348,7 @@ export async function assertBiocharProductMassReductionWithinStock(
     productId,
   );
   if (isOverdraw(deliveredKg, transactionTotalMassKg)) {
-    throw new SafeError(
-      `Cannot reduce product ${locked.code} to ${formatKg(
-        transactionTotalMassKg,
-      )}: ${formatKg(deliveredKg)} has already been delivered. Correct the deliveries before lowering the product mass.`,
-    );
+    throw new SafeError(productStockOverdrawMessage());
   }
 
   if (!locked.storageLocationId) return;
@@ -351,7 +361,7 @@ export async function assertBiocharProductMassReductionWithinStock(
   const reductionKg =
     previousTotalMassKg - transactionTotalMassKg;
   if (isOverdraw(reductionKg, availableKg)) {
-    throw overdrawError("product", availableKg, reductionKg);
+    throw overdrawError("product");
   }
 }
 
@@ -385,13 +395,17 @@ export async function lockDeleteBiocharProductStock(
         ))
     : [];
 
-  if ((snapshot.massKg ?? 0) > 0) {
-    await lockBinStocks(ctx, tx, [
+  const ingredientDraws = getCompositionIngredientDraws(
+    snapshot.composition as Record<string, unknown> | null,
+  );
+  await lockBinStocks(ctx, tx, [
+    ...ingredientDraws.map((draw) => draw.storageLocationId),
+    ...((snapshot.massKg ?? 0) > 0 ? [
       snapshot.storageLocationId,
       snapshot.sourceBiocharStorageLocationId,
       sourceRunSnapshot?.storageLocationId,
-    ]);
-  }
+    ] : []),
+  ]);
 
   const [locked] = await tx
     .select()
@@ -410,7 +424,8 @@ export async function lockDeleteBiocharProductStock(
       locked.storageLocationId === snapshot.storageLocationId &&
       locked.sourceBiocharStorageLocationId ===
         snapshot.sourceBiocharStorageLocationId &&
-      locked.linkedProductionRunId === snapshot.linkedProductionRunId,
+      locked.linkedProductionRunId === snapshot.linkedProductionRunId &&
+      JSON.stringify(locked.composition) === JSON.stringify(snapshot.composition),
   );
 
   const [lockedSourceRun] = locked.linkedProductionRunId

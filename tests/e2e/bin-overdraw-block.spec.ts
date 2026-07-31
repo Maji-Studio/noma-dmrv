@@ -34,9 +34,9 @@ const DELIVERY_DATE = "2027-06-16";
 
 const BIOCHAR_BIN_STOCK_KG = "100";
 const ORDER_QUANTITY_KG = "200000";
-const feedstockOverdrawText = /not enough feedstock in this bin/i;
-const deliveryOverdrawText =
-  /cannot deliver .* only .* remain undelivered/i;
+const feedstockOverdrawText = /^Not enough feedstock in this bin$/;
+const biocharOverdrawText = /^Not enough biochar in this bin$/;
+const deliveryOverdrawText = /^Not enough biochar in this product$/;
 const ACTION_LABEL_PREFIX = "Actions for ";
 
 async function getListedActionCodes(page: Page): Promise<Set<string>> {
@@ -485,7 +485,7 @@ test.describe("createProductionRun feedstock guard", () => {
     await expect(
       page.locator('input[name="feedstockWetMassKg"]'),
     ).toHaveAttribute("aria-describedby", /feedstockWetMassKg-error/);
-    await expect(error).toContainText(/available/i);
+    await expect(error).toHaveText(feedstockOverdrawText);
 
     // Correcting the draw must clear the inline error without a submit.
     await page.fill('input[name="feedstockWetMassKg"]', "50");
@@ -536,7 +536,7 @@ test.describe("updateProductionRun feedstock guard", () => {
     await expect(error).toBeVisible({
       timeout: 10000,
     });
-    await expect(error).toContainText(/available/i);
+    await expect(error).toHaveText(feedstockOverdrawText);
   });
 
   test("accepts an increased draw when the run's old draw is excluded", async ({
@@ -578,7 +578,7 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
 
       const error = page.locator("#massKg-error");
       await expect(error).toBeVisible({ timeout: 10000 });
-      await expect(error).toContainText(/available/i);
+      await expect(error).toHaveText(biocharOverdrawText);
 
       await page.fill('input[name="massKg"]', "140");
       await expect(error).toBeHidden();

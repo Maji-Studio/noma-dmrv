@@ -300,7 +300,7 @@ describe("application mutations", () => {
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 6,
         }),
-      ).rejects.toThrow("Cannot apply");
+      ).rejects.toThrow("Not enough biochar in this delivery");
 
       const [application] = await db
         .select({ id: applications.id })
@@ -513,7 +513,7 @@ describe("application mutations", () => {
         updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
           biocharAppliedTons: 6,
         }),
-      ).rejects.toThrow("Cannot apply");
+      ).rejects.toThrow("Not enough biochar in this delivery");
 
       const [persisted] = await db
         .select({

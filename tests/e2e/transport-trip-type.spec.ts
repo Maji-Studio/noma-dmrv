@@ -167,18 +167,25 @@ test.describe("Transport trip type (#316)", () => {
   }) => {
     void cleanupTestData;
 
-    // Supplier create sheet → pending source-location sub-form.
+    // Supplier create sheet → pending source-location dialog.
     await page.goto("/suppliers");
     await page.click('button:has-text("New Supplier")');
     await waitForSideSheet(page);
-    const dialog = page.locator('[role="dialog"]');
-    await dialog.locator('button:has-text("Add Location")').click();
+    const supplierSheet = page.getByRole("dialog", {
+      name: "Create Supplier",
+    });
+    await supplierSheet.getByRole("button", { name: "Add Location" }).click();
+    const supplierLocationDialog = page.getByRole("dialog", {
+      name: "Add Location",
+    });
     await expect(
-      dialog.getByText("One-way distance to facility (per leg, km)")
+      supplierLocationDialog.getByText(
+        "One-way distance to facility (per leg, km)",
+      )
     ).toBeVisible();
     await page.keyboard.press("Escape");
 
-    // Customer detail → Add Location form.
+    // Customer detail → Add Location dialog.
     await page.goto(`/customers/${seededData.customer.id}`);
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "Add Location" }).click();

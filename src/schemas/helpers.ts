@@ -197,8 +197,8 @@ export const optionalStoredPercent = optionalPercent.pipe(
  */
 export const optionalStoredPercentValue = storedPercentSchema()
   .finite()
-  .min(0)
-  .max(100)
+  .min(0, "Moisture content must be 0% or more")
+  .max(100, "Moisture content must be 100% or less")
   .optional()
   .nullable();
 

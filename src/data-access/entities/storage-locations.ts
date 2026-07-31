@@ -150,8 +150,13 @@ function formatFeedstockTypeUsage(usage: string): string {
 
 const heldFeedstockTypes = alias(feedstockTypes, "held_feedstock_types");
 
-function buildInventoryAggregates(ctx: OrgContext) {
-  const feedstockInventoryAggregate = db
+type StorageLocationReadExecutor = Pick<typeof db, "select">;
+
+function buildInventoryAggregates(
+  ctx: OrgContext,
+  executor: StorageLocationReadExecutor = db,
+) {
+  const feedstockInventoryAggregate = executor
   .select({
     storageLocationId: feedstocks.storageLocationId,
     feedstockTypeName: sql<string | null>`string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})`.as("feedstock_type_name"),
@@ -176,7 +181,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
   .groupBy(feedstocks.storageLocationId)
   .as("feedstock_inventory_agg");
 
-  const productionRunConsumptionAggregate = db
+  const productionRunConsumptionAggregate = executor
   .select({
     storageLocationId: productionRuns.feedstockStorageLocationId,
     totalConsumedKg: sumNumeric(productionRunFeedstocks.massUsedKg).as(
@@ -198,7 +203,41 @@ function buildInventoryAggregates(ctx: OrgContext) {
   .groupBy(productionRuns.feedstockStorageLocationId)
   .as("production_run_consumption_agg");
 
-  const biocharOutputAggregate = db
+  const ingredientConsumptionAggregate = executor
+  .select({
+    storageLocationId: sql<string>`ingredient.value ->> 'storageLocationId'`.as(
+      "ingredient_storage_location_id",
+    ),
+    totalConsumedKg: numericAggregate(sql<number>`
+      COALESCE(
+        SUM(
+          CASE
+            WHEN jsonb_typeof(ingredient.value -> 'massKg') = 'number'
+              AND (ingredient.value ->> 'massKg')::numeric > 0
+            THEN (ingredient.value ->> 'massKg')::numeric
+            ELSE 0
+          END
+        ),
+        0
+      )
+    `).as("ingredient_consumed_kg"),
+  })
+  .from(biocharProducts)
+  .innerJoin(
+    sql`LATERAL jsonb_array_elements(
+      CASE
+        WHEN jsonb_typeof(${biocharProducts.composition} -> 'ingredients') = 'array'
+        THEN ${biocharProducts.composition} -> 'ingredients'
+        ELSE '[]'::jsonb
+      END
+    ) AS ingredient(value)`,
+    sql`true`,
+  )
+  .where(eq(biocharProducts.organizationId, ctx.organizationId))
+  .groupBy(sql`ingredient.value ->> 'storageLocationId'`)
+  .as("ingredient_consumption_agg");
+
+  const biocharOutputAggregate = executor
   .select({
     storageLocationId: productionRuns.biocharStorageLocationId,
     totalProducedWetKg: sumNumeric(productionRuns.biocharOutputKg).as(
@@ -231,7 +270,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
   .groupBy(productionRuns.biocharStorageLocationId)
   .as("biochar_output_agg");
 
-  const legacyBiocharAllocationAggregate = db
+  const legacyBiocharAllocationAggregate = executor
   .select({
     storageLocationId: productionRuns.biocharStorageLocationId,
     totalAllocatedWetKg: numericAggregate(sql<number>`
@@ -279,7 +318,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
   .groupBy(productionRuns.biocharStorageLocationId)
   .as("legacy_biochar_allocation_agg");
 
-  const sourceBiocharAllocationAggregate = db
+  const sourceBiocharAllocationAggregate = executor
   .select({
     storageLocationId:
       biocharProductSourceAllocations.sourceStorageLocationId,
@@ -302,7 +341,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
   )
   .as("source_biochar_allocation_agg");
 
-  const biocharLossAggregate = db
+  const biocharLossAggregate = executor
   .select({
     storageLocationId: binMovements.storageLocationId,
     documentedLossWetKg: numericAggregate(sql<number>`
@@ -323,7 +362,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
   .groupBy(binMovements.storageLocationId)
   .as("biochar_loss_agg");
 
-  const productInventoryAggregate = db
+  const productInventoryAggregate = executor
   .select({
     storageLocationId: biocharProducts.storageLocationId,
     totalProductKg: sumNumeric(
@@ -370,6 +409,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
   return {
     feedstockInventoryAggregate,
     productionRunConsumptionAggregate,
+    ingredientConsumptionAggregate,
     biocharOutputAggregate,
     legacyBiocharAllocationAggregate,
     sourceBiocharAllocationAggregate,
@@ -397,6 +437,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
   const {
     feedstockInventoryAggregate,
     productionRunConsumptionAggregate,
+    ingredientConsumptionAggregate,
     biocharOutputAggregate,
     legacyBiocharAllocationAggregate,
     sourceBiocharAllocationAggregate,
@@ -497,7 +538,10 @@ export async function getStorageLocations(ctx: OrgContext, params: {
         sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
       ),
       totalConsumedKg: numericAggregate(
-        sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
+        sql<number>`
+          COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)
+          + COALESCE(${ingredientConsumptionAggregate.totalConsumedKg}, 0)
+        `,
       ),
       totalProducedWetKg: numericAggregate(
         sql<number>`COALESCE(${biocharOutputAggregate.totalProducedWetKg}, 0)`,
@@ -558,6 +602,10 @@ export async function getStorageLocations(ctx: OrgContext, params: {
     .leftJoin(
       productionRunConsumptionAggregate,
       eq(storageLocations.id, productionRunConsumptionAggregate.storageLocationId)
+    )
+    .leftJoin(
+      ingredientConsumptionAggregate,
+      sql`${storageLocations.id}::text = ${ingredientConsumptionAggregate.storageLocationId}`,
     )
     .leftJoin(
       biocharOutputAggregate,
@@ -619,21 +667,23 @@ export async function getStorageLocations(ctx: OrgContext, params: {
 
 export async function getStorageLocationById(
   ctx: OrgContext,
-  id: string
+  id: string,
+  executor: StorageLocationReadExecutor = db,
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
 
   const {
     feedstockInventoryAggregate,
     productionRunConsumptionAggregate,
+    ingredientConsumptionAggregate,
     biocharOutputAggregate,
     legacyBiocharAllocationAggregate,
     sourceBiocharAllocationAggregate,
     biocharLossAggregate,
     productInventoryAggregate,
-  } = buildInventoryAggregates(ctx);
+  } = buildInventoryAggregates(ctx, executor);
 
-  const [result] = await db
+  const [result] = await executor
     .select({
       id: storageLocations.id,
       code: storageLocations.code,
@@ -650,7 +700,10 @@ export async function getStorageLocationById(
         sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
       ),
       totalConsumedKg: numericAggregate(
-        sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
+        sql<number>`
+          COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)
+          + COALESCE(${ingredientConsumptionAggregate.totalConsumedKg}, 0)
+        `,
       ),
       totalProducedWetKg: numericAggregate(
         sql<number>`COALESCE(${biocharOutputAggregate.totalProducedWetKg}, 0)`,
@@ -711,6 +764,10 @@ export async function getStorageLocationById(
     .leftJoin(
       productionRunConsumptionAggregate,
       eq(storageLocations.id, productionRunConsumptionAggregate.storageLocationId)
+    )
+    .leftJoin(
+      ingredientConsumptionAggregate,
+      sql`${storageLocations.id}::text = ${ingredientConsumptionAggregate.storageLocationId}`,
     )
     .leftJoin(
       biocharOutputAggregate,

@@ -26,6 +26,14 @@ const validProductionRunInput = {
   biocharMoisturePercent: 5,
 };
 
+const completeProductionRunInput = {
+  ...validProductionRunInput,
+  status: "complete" as const,
+  endDate: "2026-07-15",
+  endTime: "12:00",
+  biocharOutputKg: 10,
+};
+
 describe("productionRunFormSchema mass balance", () => {
   it("rejects dry biochar output above dry feedstock input", () => {
     const result = productionRunFormSchema.safeParse(validProductionRunInput);
@@ -69,6 +77,51 @@ describe("productionRunFormSchema mass balance", () => {
           expect.objectContaining({ path: ["feedstockWetMassKg"] }),
           expect.objectContaining({ path: ["feedstockMoisturePercent"] }),
         ]),
+      );
+    }
+  });
+});
+
+describe("productionRunFormSchema terminal feedstock requirements", () => {
+  it.each([
+    {
+      label: "source bin",
+      overrides: { feedstockStorageLocationId: null },
+      path: ["feedstockStorageLocationId"],
+      message: "Select a source bin.",
+    },
+    {
+      label: "wet mass",
+      overrides: { feedstockWetMassKg: null },
+      path: ["feedstockWetMassKg"],
+      message: "Enter feedstock wet mass.",
+    },
+    {
+      label: "moisture",
+      overrides: { feedstockMoisturePercent: null },
+      path: ["feedstockMoisturePercent"],
+      message: "Enter feedstock moisture.",
+    },
+  ])("points a missing $label requirement at its own field", ({
+    overrides,
+    path,
+    message,
+  }) => {
+    const result = productionRunFormSchema.safeParse({
+      ...completeProductionRunInput,
+      ...overrides,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({ path, message }),
+      );
+      expect(result.error.issues).not.toContainEqual(
+        expect.objectContaining({
+          message:
+            "A complete run needs a source bin, moisture %, and wet mass to compute consumed feedstock.",
+        }),
       );
     }
   });

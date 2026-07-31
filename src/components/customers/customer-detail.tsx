@@ -1,104 +1,36 @@
 /**
  * CustomerDetail component
  * Customer detail view with nested locations management
- * Includes inline create/edit forms for locations and delete confirmation
+ * Includes create/edit dialogs for locations and delete confirmation
  */
 "use client";
 
 import Link from "next/link";
 import { useState } from "react";
-import type { CustomerLocation } from "@/db/schema";
 import {
   useCustomerWithRelations,
-  useCreateCustomerLocation,
-  useUpdateCustomerLocation,
   useDeleteCustomerLocation,
 } from "@/hooks/use-customers";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { CustomerLocationForm } from "./customer-location-form";
-import type { CustomerLocationFormData } from "@/schemas/customers";
+import { CustomerLocationDialog } from "./customer-location-dialog";
+import type { EditableCustomerLocation } from "./customer-location-form";
 
 interface CustomerDetailProps {
   customerId: string;
 }
 
 export function CustomerDetail({ customerId }: CustomerDetailProps) {
-  const [isAddingLocation, setIsAddingLocation] = useState(false);
-  const [editingLocation, setEditingLocation] = useState<{
-    id: string;
-    name: string | null;
-    country: string;
-    stateRegion: string | null;
-    city: string | null;
-    gpsLatitude: number | null;
-    gpsLongitude: number | null;
-    address: string | null;
-    defaultSoilTemperatureC: number | null;
-    distanceFromFacilityKm: number | null;
-    isDefault: boolean;
-  } | null>(null);
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  const [editingLocation, setEditingLocation] =
+    useState<EditableCustomerLocation>();
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: customer, isLoading, error } = useCustomerWithRelations(customerId);
-  const createLocation = useCreateCustomerLocation();
-  const updateLocation = useUpdateCustomerLocation();
   const deleteLocation = useDeleteCustomerLocation(customerId);
-
-  const handleCreateLocation = async (data: CustomerLocationFormData) => {
-    setCreateError(null);
-    try {
-      await createLocation.mutateAsync({
-        customerId,
-        name: data.name,
-        country: data.country,
-        stateRegion: data.stateRegion || null,
-        city: data.city || null,
-        gpsLatitude: data.gpsLatitude,
-        gpsLongitude: data.gpsLongitude,
-        address: data.address || "",
-        defaultSoilTemperatureC: data.defaultSoilTemperatureC,
-        distanceFromFacilityKm: data.distanceFromFacilityKm,
-        isDefault: data.isDefault,
-      });
-      setIsAddingLocation(false);
-    } catch (error) {
-      setCreateError(
-        error instanceof Error ? error.message : "The location was not created. Check the form and try again."
-      );
-    }
-  };
-
-  const handleUpdateLocation = async (data: CustomerLocationFormData) => {
-    if (!editingLocation) return;
-
-    setUpdateError(null);
-    try {
-      await updateLocation.mutateAsync({
-        locationId: editingLocation.id,
-        name: data.name,
-        country: data.country,
-        stateRegion: data.stateRegion || null,
-        city: data.city || null,
-        gpsLatitude: data.gpsLatitude,
-        gpsLongitude: data.gpsLongitude,
-        address: data.address,
-        defaultSoilTemperatureC: data.defaultSoilTemperatureC,
-        distanceFromFacilityKm: data.distanceFromFacilityKm,
-        isDefault: data.isDefault,
-      });
-      setEditingLocation(null);
-    } catch (error) {
-      setUpdateError(
-        error instanceof Error ? error.message : "The location was not saved. Try again."
-      );
-    }
-  };
 
   const handleDeleteConfirm = async () => {
     if (!deletingLocationId) return;
@@ -108,7 +40,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       setDeletingLocationId(null);
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : "The location was not deleted. Try again."
+        error instanceof Error ? error.message : "Location was not deleted. Try again."
       );
     }
   };
@@ -190,51 +122,19 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
           <h2 className="title-heading-3">
             Locations ({customer.locations.length})
           </h2>
-          {!isAddingLocation && !editingLocation && (
+          {!isLocationDialogOpen && (
             <Button
               size="large"
               variant="primary"
-              onClick={() => setIsAddingLocation(true)}
+              onClick={() => {
+                setEditingLocation(undefined);
+                setIsLocationDialogOpen(true);
+              }}
             >
               Add Location
             </Button>
           )}
         </div>
-
-        {/* Add Location Form */}
-        {isAddingLocation && (
-          <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
-            <h3 className="title-heading-4 mb-24">Add New Location</h3>
-            <CustomerLocationForm
-              onSubmit={handleCreateLocation}
-              onCancel={() => {
-                setIsAddingLocation(false);
-                setCreateError(null);
-              }}
-              isSubmitting={createLocation.isPending}
-              errorMessage={createError ?? undefined}
-              submitLabel="Add Location"
-            />
-          </div>
-        )}
-
-        {/* Edit Location Form */}
-        {editingLocation && (
-          <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
-            <h3 className="title-heading-4 mb-24">Edit Location</h3>
-            <CustomerLocationForm
-              location={editingLocation as CustomerLocation}
-              onSubmit={handleUpdateLocation}
-              onCancel={() => {
-                setEditingLocation(null);
-                setUpdateError(null);
-              }}
-              isSubmitting={updateLocation.isPending}
-              errorMessage={updateError ?? undefined}
-              submitLabel="Save Changes"
-            />
-          </div>
-        )}
 
         {/* Locations List */}
         {customer.locations.length === 0 ? (
@@ -326,7 +226,10 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                         <Button
                           variant="default"
                           size="small"
-                          onClick={() => setEditingLocation(location)}
+                          onClick={() => {
+                            setEditingLocation(location);
+                            setIsLocationDialogOpen(true);
+                          }}
                         >
                           Edit
                         </Button>
@@ -348,6 +251,13 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       </div>
 
       {deleteError && <ServerError message={deleteError} />}
+
+      <CustomerLocationDialog
+        isOpen={isLocationDialogOpen}
+        onClose={() => setIsLocationDialogOpen(false)}
+        customerId={customerId}
+        location={editingLocation}
+      />
 
       <DeleteConfirmDialog
         isOpen={!!deletingLocationId}
