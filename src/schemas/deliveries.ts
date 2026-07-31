@@ -47,8 +47,11 @@ export function resolveDeliveryDistanceSource(
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
-const optionalWetMassKg = optionalMassKgSchema("Wet mass must be >= 0");
-const optionalDryMassKg = optionalMassKgSchema("Dry mass must be >= 0");
+const WET_MASS_RANGE_MESSAGE = "Wet mass must be 0 or more";
+const DRY_MASS_RANGE_MESSAGE = "Dry mass must be 0 or more";
+const DISTANCE_RANGE_MESSAGE = "Distance must be 0 or more";
+const optionalWetMassKg = optionalMassKgSchema(WET_MASS_RANGE_MESSAGE);
+const optionalDryMassKg = optionalMassKgSchema(DRY_MASS_RANGE_MESSAGE);
 const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
 
 function validateDistanceOverride(
@@ -59,7 +62,7 @@ function validateDistanceOverride(
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["distanceKmOverride"],
-      message: "Distance must be >= 0",
+      message: DISTANCE_RANGE_MESSAGE,
     });
   }
 }
@@ -102,7 +105,7 @@ export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["massDryKg"],
-      message: "Dry mass must be >= 0",
+      message: DRY_MASS_RANGE_MESSAGE,
     });
   }
 
@@ -116,23 +119,6 @@ export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx
       path: ["massDryKg"],
       message: "Dry mass must be less than or equal to wet mass",
     });
-  }
-
-  if (value.moistureContentPercent != null) {
-    if (value.moistureContentPercent < 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["moistureContentPercent"],
-        message: "Moisture content must be >= 0%",
-      });
-    }
-    if (value.moistureContentPercent > 100) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["moistureContentPercent"],
-        message: "Moisture content must be <= 100%",
-      });
-    }
   }
 
   validateDistanceOverride(value, ctx);
@@ -171,7 +157,7 @@ export const createDeliverySchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["massDryKg"],
-      message: "Dry mass must be >= 0",
+      message: DRY_MASS_RANGE_MESSAGE,
     });
   }
 
@@ -221,7 +207,7 @@ export const updateDeliverySchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["massDryKg"],
-      message: "Dry mass must be >= 0",
+      message: DRY_MASS_RANGE_MESSAGE,
     });
   }
 

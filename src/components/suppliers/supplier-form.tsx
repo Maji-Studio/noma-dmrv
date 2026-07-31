@@ -4,7 +4,8 @@
  * Used in both create and edit views for suppliers.
  *
  * Locations mirror the customer flow: in create mode the user builds a list of
- * pending source locations inline (persisted after the supplier is created); in
+ * pending source locations in a nested dialog (persisted after the supplier is
+ * created); in
  * edit mode locations are managed live via React Query. Each location captures
  * its own coordinates through the map PositionPicker — the supplier record no
  * longer carries a single GPS position.
@@ -21,31 +22,28 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
-  DistanceCalcField,
   FormActions,
   FormField,
   FormInput,
   FormSection,
   FormTextarea,
-  PositionPicker,
 } from "@/components/forms";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import {
   useSupplierLocationsBySupplier,
   useDeleteSupplierLocation,
 } from "@/hooks/use-suppliers";
 import {
   supplierFormSchema,
-  supplierLocationFormSchema,
   type SupplierFormData,
+  type SupplierLocationFormData,
 } from "@/schemas/suppliers";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { Supplier, SupplierLocation } from "@/db/schema/parties";
-import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
-import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { SupplierLocationDialog } from "./supplier-location-dialog";
+import { SupplierLocationForm } from "./supplier-location-form";
 
 // ============================================
 // Types
@@ -64,6 +62,23 @@ export interface PendingSupplierLocation {
   distanceSource: DistanceSourceValue | null;
   // Marks this as the supplier's default source location.
   isDefault: boolean;
+}
+
+function normalizePendingSupplierLocation(
+  location: SupplierLocationFormData,
+): PendingSupplierLocation {
+  return {
+    name: location.name ?? "",
+    country: location.country,
+    stateRegion: location.stateRegion ?? "",
+    city: location.city ?? "",
+    address: location.address ?? "",
+    gpsLatitude: location.gpsLatitude,
+    gpsLongitude: location.gpsLongitude,
+    distanceFromFacilityKm: location.distanceFromFacilityKm ?? null,
+    distanceSource: location.distanceSource ?? null,
+    isDefault: location.isDefault,
+  };
 }
 
 function formatPendingLocationSummary({
@@ -330,7 +345,7 @@ function CreateModeLocationsSection({
   onRemove: (index: number) => void;
   error: string | null;
 }) {
-  const [showForm, setShowForm] = useState(false);
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
 
   return (
     <FormSection
@@ -343,7 +358,7 @@ function CreateModeLocationsSection({
         <Button
           variant="noOutline"
           size="small"
-          onClick={() => setShowForm(true)}
+          onClick={() => setIsLocationDialogOpen(true)}
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
@@ -357,7 +372,7 @@ function CreateModeLocationsSection({
         </p>
       )}
 
-      {locations.length === 0 && !showForm ? (
+      {locations.length === 0 ? (
         <p className="body-small text-[var(--color-text-tertiary)]">
           No locations yet. Add at least one source location for this supplier.
         </p>
@@ -402,241 +417,23 @@ function CreateModeLocationsSection({
         </div>
       )}
 
-      {showForm && (
-        <InlineLocationForm
-          onAdd={(loc) => {
-            onAdd(loc);
-            setShowForm(false);
+      <QuickAddDialogShell
+        isOpen={isLocationDialogOpen}
+        onClose={() => setIsLocationDialogOpen(false)}
+        title="Add Location"
+        width="lg"
+        testId="supplier-location-quick-add-dialog"
+      >
+        <SupplierLocationForm
+          idPrefix="pending-loc"
+          onSubmit={(location) => {
+            onAdd(normalizePendingSupplierLocation(location));
+            setIsLocationDialogOpen(false);
           }}
-          onCancel={() => setShowForm(false)}
+          onCancel={() => setIsLocationDialogOpen(false)}
         />
-      )}
+      </QuickAddDialogShell>
     </FormSection>
-  );
-}
-
-// ============================================
-// Inline Location Form (for create mode)
-// ============================================
-
-const INPUT_CLASS =
-  "flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
-
-function InlineLocationForm({
-  onAdd,
-  onCancel,
-}: {
-  onAdd: (loc: PendingSupplierLocation) => void;
-  onCancel: () => void;
-}) {
-  const { selectedFacility } = useFacilityContext();
-  // Organization operating defaults seed create mode only; an existing record
-  // always wins. Server-seeded in the `(app)` layout, so this is synchronous.
-  const { defaults: orgDefaults } = useOrganizationDefaultValues();
-  const [formData, setFormData] = useState({
-    name: "",
-    country: orgDefaults.defaultCountry ?? "",
-    stateRegion: "",
-    city: "",
-    address: "",
-    gpsLatitude: null as number | null,
-    gpsLongitude: null as number | null,
-    distanceFromFacilityKm: null as number | null,
-    distanceSource: null as DistanceSourceValue | null,
-    isDefault: false,
-  });
-  const [formError, setFormError] = useState<string | null>(null);
-
-  // CALC endpoints: this source location → the globally selected facility.
-  const locationPoint =
-    formData.gpsLatitude != null && formData.gpsLongitude != null
-      ? { lat: formData.gpsLatitude, lng: formData.gpsLongitude }
-      : null;
-  const facilityPoint =
-    selectedFacility?.gpsLatitude != null && selectedFacility?.gpsLongitude != null
-      ? { lat: selectedFacility.gpsLatitude, lng: selectedFacility.gpsLongitude }
-      : null;
-
-  const handleAdd = () => {
-    setFormError(null);
-
-    const parsed = supplierLocationFormSchema.safeParse({
-      name: formData.name.trim(),
-      country: formData.country.trim(),
-      stateRegion: formData.stateRegion.trim(),
-      city: formData.city.trim(),
-      address: formData.address.trim(),
-      gpsLatitude: formData.gpsLatitude,
-      gpsLongitude: formData.gpsLongitude,
-      distanceFromFacilityKm: formData.distanceFromFacilityKm,
-      distanceSource: formData.distanceSource,
-      isDefault: formData.isDefault,
-    });
-    if (!parsed.success) {
-      setFormError(parsed.error.issues[0]?.message ?? "Invalid location");
-      return;
-    }
-
-    onAdd({
-      name: parsed.data.name ?? "",
-      country: parsed.data.country,
-      stateRegion: parsed.data.stateRegion ?? "",
-      city: parsed.data.city ?? "",
-      address: parsed.data.address ?? "",
-      gpsLatitude: parsed.data.gpsLatitude,
-      gpsLongitude: parsed.data.gpsLongitude,
-      distanceFromFacilityKm: parsed.data.distanceFromFacilityKm ?? null,
-      distanceSource: parsed.data.distanceSource ?? null,
-      isDefault: parsed.data.isDefault,
-    });
-  };
-
-  return (
-    <div
-      className="p-16 border border-[var(--color-border-primary)] bg-[var(--color-surface-light)] flex flex-col gap-16"
-      onKeyDown={(e) => {
-        if (
-          e.key === "Enter" &&
-          e.target instanceof HTMLInputElement &&
-          ["text", "number", "search", "email", "tel", "url"].includes(e.target.type)
-        ) {
-          e.preventDefault();
-        }
-      }}
-    >
-      {formError && (
-        <p className="text-[var(--text-s)] text-[var(--color-signal-red)]" role="alert">
-          {formError}
-        </p>
-      )}
-
-      <div className="flex flex-col gap-6">
-        <label htmlFor="pending-loc-name" className="body-small font-medium text-[var(--color-text-secondary)]">
-          Name
-        </label>
-        <input
-          id="pending-loc-name"
-          type="text"
-          value={formData.name}
-          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-          placeholder="e.g., Main Estate"
-          className={INPUT_CLASS}
-          autoFocus
-        />
-      </div>
-
-      <div className="flex flex-col gap-6">
-        <label htmlFor="pending-loc-country" className="body-small font-medium text-[var(--color-text-secondary)]">
-          Country <span className="text-[var(--color-signal-red)]">*</span>
-        </label>
-        <input
-          id="pending-loc-country"
-          type="text"
-          value={formData.country}
-          onChange={(e) => setFormData((prev) => ({ ...prev, country: e.target.value }))}
-          placeholder="e.g., Tanzania"
-          className={INPUT_CLASS}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-        <div className="flex flex-col gap-6">
-          <label htmlFor="pending-loc-state" className="body-small font-medium text-[var(--color-text-secondary)]">
-            State / Region
-          </label>
-          <input
-            id="pending-loc-state"
-            type="text"
-            value={formData.stateRegion}
-            onChange={(e) => setFormData((prev) => ({ ...prev, stateRegion: e.target.value }))}
-            placeholder="e.g., Kilimanjaro"
-            className={INPUT_CLASS}
-          />
-        </div>
-        <div className="flex flex-col gap-6">
-          <label htmlFor="pending-loc-city" className="body-small font-medium text-[var(--color-text-secondary)]">
-            City
-          </label>
-          <input
-            id="pending-loc-city"
-            type="text"
-            value={formData.city}
-            onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
-            placeholder="e.g., Moshi"
-            className={INPUT_CLASS}
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-6">
-        <label htmlFor="pending-loc-address" className="body-small font-medium text-[var(--color-text-secondary)]">
-          Address / Description
-        </label>
-        <input
-          id="pending-loc-address"
-          type="text"
-          value={formData.address}
-          onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
-          placeholder="e.g., Moshi Rural District, Kilimanjaro Region"
-          className={INPUT_CLASS}
-        />
-      </div>
-
-      <PositionPicker
-        idPrefix="pending-loc-gps"
-        label="Source location position"
-        accent="orange"
-        required
-        latitude={formData.gpsLatitude}
-        longitude={formData.gpsLongitude}
-        onPositionChange={({ lat, lng }) =>
-          setFormData((prev) => ({ ...prev, gpsLatitude: lat, gpsLongitude: lng }))
-        }
-      />
-
-      <DistanceCalcField
-        id="pending-loc-distance"
-        label="One-way distance to facility (per leg, km)"
-        certifyRequired={isCertifyFormField("supplierLocation", "distanceFromFacilityKm")}
-        certifyStatus="neutral"
-        helperText="One-way road distance from this source location to the facility. Return trips are doubled at emissions time (set the trip type on each feedstock delivery)."
-        distanceKm={formData.distanceFromFacilityKm}
-        distanceSource={formData.distanceSource}
-        onDistanceChange={(km, source) =>
-          setFormData((prev) => ({
-            ...prev,
-            distanceFromFacilityKm: km,
-            distanceSource: source,
-          }))
-        }
-        origin={locationPoint}
-        destination={facilityPoint}
-        originLabel="source location position"
-        destinationLabel="selected facility"
-      />
-
-      <label htmlFor="pending-loc-default" className="flex items-center gap-12 cursor-pointer">
-        <input
-          type="checkbox"
-          id="pending-loc-default"
-          className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
-          checked={formData.isDefault}
-          onChange={(e) => setFormData((prev) => ({ ...prev, isDefault: e.target.checked }))}
-        />
-        <span className="body-medium text-[var(--color-text-primary)]">
-          Set as default source location
-        </span>
-      </label>
-
-      <div className="flex gap-12 justify-start pt-8">
-        <Button variant="primary" size="small" onClick={handleAdd}>
-          Add Location
-        </Button>
-        <Button variant="default" size="small" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </div>
   );
 }
 

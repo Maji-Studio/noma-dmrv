@@ -15,6 +15,8 @@ import type { SupplierLocation } from "@/db/schema/parties";
 import type { SupplierLocationFormData } from "@/schemas/suppliers";
 import { SupplierLocationForm } from "./supplier-location-form";
 
+const SUPPLIER_LOCATION_DIALOG_ID_PREFIX = "supplier-location-dialog";
+
 // ============================================
 // Types
 // ============================================
@@ -65,8 +67,8 @@ export function SupplierLocationDialog({
         err instanceof Error
           ? err.message
           : isEditing
-            ? "The location was not saved. Try again."
-            : "The location was not created. Check the form and try again."
+            ? "Location was not saved. Try again."
+            : "Location was not created. Check the form."
       );
     }
   };
@@ -84,6 +86,7 @@ export function SupplierLocationDialog({
       }
     >
       <SupplierLocationForm
+        idPrefix={SUPPLIER_LOCATION_DIALOG_ID_PREFIX}
         location={location}
         onSubmit={handleSubmit}
         onCancel={handleClose}

@@ -7,7 +7,10 @@ import {
   upsertCertifierCredentials,
   type CertifierCredentialsStatus,
 } from "@/data-access/certifier-credentials";
-import { logActionError } from "@/fn/action-errors";
+import {
+  formatZodActionError,
+  logActionError,
+} from "@/fn/action-errors";
 import { requireOrgContext } from "@/lib/auth/server";
 import { SafeError, toActionError } from "@/lib/errors";
 import {
@@ -39,7 +42,7 @@ async function toCredentialsResult<T>(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.issues.map((issue) => issue.message).join(", "),
+        error: formatZodActionError(error),
       };
     }
     logActionError(error, {

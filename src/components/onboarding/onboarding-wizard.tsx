@@ -86,7 +86,7 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
       setCurrent(STEP.reactor);
     } catch (error) {
       setFacilityError(
-        error instanceof Error ? error.message : "The facility was not created. Check the form and try again.",
+        error instanceof Error ? error.message : "Facility was not created. Check the form.",
       );
     }
   };
@@ -99,7 +99,7 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
       setCurrent(STEP.registry);
     } catch (error) {
       setReactorError(
-        error instanceof Error ? error.message : "The reactor was not created. Check the form and try again.",
+        error instanceof Error ? error.message : "Reactor was not created. Check the form.",
       );
     }
   };

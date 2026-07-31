@@ -215,7 +215,7 @@ export async function importIsometricFeedstockType(
   requireOrgRole(ctx, "admin");
   if (!(await hasCertifierCredentials(ctx, "isometric"))) {
     throw new SafeError(
-      "Connect this organization to Isometric before importing feedstock types.",
+      "Connect this Organization to Isometric before importing feedstock types.",
     );
   }
   const [existingImport] = await db

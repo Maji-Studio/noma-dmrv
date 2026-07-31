@@ -169,7 +169,7 @@ export function ReactorList() {
       setSideSheet(null);
       toast.success("Reactor created.");
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "The reactor was not created. Check the form and try again.");
+      setCreateError(error instanceof Error ? error.message : "Reactor was not created. Check the form.");
     }
   };
 
@@ -181,7 +181,7 @@ export function ReactorList() {
       setSideSheet(null);
       toast.success("Reactor updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "The reactor was not saved. Try again.");
+      setUpdateError(error instanceof Error ? error.message : "Reactor was not saved. Try again.");
     }
   };
 
@@ -197,7 +197,7 @@ export function ReactorList() {
       setDeletingReactorId(null);
       toast.success("Reactor deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "The reactor was not deleted. Try again.");
+      setDeleteError(error instanceof Error ? error.message : "Reactor was not deleted. Try again.");
     }
   };
 

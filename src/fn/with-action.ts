@@ -6,10 +6,10 @@ import type { OrgContext } from "@/lib/auth/server";
 import { ActionConflictError, toActionError } from "@/lib/errors";
 import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import type { ActionResult } from "@/types/actions";
-import { logActionError } from "./action-errors";
+import { formatZodActionError, logActionError } from "./action-errors";
 
 interface WithActionOptions {
-  /** Prefix for ZodError messages. Default: "Validation error" */
+  /** Optional task-specific context for ZodError messages. */
   zodErrorPrefix?: string;
   /** Fallback message when error is not an Error instance. */
   fallbackMessage?: string;
@@ -30,7 +30,7 @@ export async function withAction<T>(
   options?: WithActionOptions
 ): Promise<ActionResult<T>> {
   const {
-    zodErrorPrefix = "Validation error",
+    zodErrorPrefix,
     fallbackMessage = "The action could not be completed. Try again.",
     rateLimit,
   } = options ?? {};
@@ -56,7 +56,7 @@ export async function withAction<T>(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `${zodErrorPrefix}: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error, zodErrorPrefix),
       };
     }
     if (error instanceof ActionConflictError) {

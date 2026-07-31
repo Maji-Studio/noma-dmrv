@@ -225,7 +225,7 @@ describe("storage location archive", () => {
           reason: "Archived-bin regression check",
         }),
       ).rejects.toThrow(
-        /Storage bin was not found or is archived. Refresh the page and try again./,
+        /Storage bin was not found or is archived./,
       );
     } finally {
       await cleanupStorageArchiveFixture(fixture);

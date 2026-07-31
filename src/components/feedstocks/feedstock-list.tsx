@@ -275,15 +275,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       const result = await createFeedstock.mutateAsync(
         createFeedstockSchema.parse(data),
       );
-      if (!result.feedstocks[0]) {
-        throw new Error("Feedstock creation returned no feedstock");
-      }
       return { entities: result.feedstocks, result };
     },
     setError: setCreateError,
     setUpdateError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "The feedstock was not created. Check the form and try again.",
+      error instanceof Error ? error.message : "Feedstock was not created. Check the form.",
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this feedstock.",
     openEditOnFailure: (feedstock) =>
@@ -340,7 +337,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       setDeepLinkFocus(null);
       toast.success("Feedstock updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "The feedstock was not saved. Try again.");
+      setUpdateError(error instanceof Error ? error.message : "Feedstock was not saved. Try again.");
     }
   };
 
@@ -354,7 +351,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       setDeletingId(null);
       toast.success("Feedstock deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "The feedstock was not deleted. Try again.");
+      setDeleteError(error instanceof Error ? error.message : "Feedstock was not deleted. Try again.");
     }
   };
 

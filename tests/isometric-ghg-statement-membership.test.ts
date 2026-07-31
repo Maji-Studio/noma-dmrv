@@ -32,7 +32,7 @@ describe("decideRemovalMembership", () => {
     expect(decision.toLink).toEqual([]);
     expect(decision.linkedRemovalIds).toEqual([]);
     expect(decision.warnings).toHaveLength(1);
-    expect(decision.warnings[0]).toContain("different GHG statement");
+    expect(decision.warnings[0]).toContain("different GHG Statement");
   });
 
   it("treats a removal already linked to this statement as idempotent", () => {

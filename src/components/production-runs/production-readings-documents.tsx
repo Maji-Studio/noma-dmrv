@@ -78,7 +78,7 @@ export function ProductionReadingsDocuments({
       setDeletingId(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "The file was not deleted. Try again.",
+        err instanceof Error ? err.message : "File was not deleted. Try again.",
       );
     }
   };

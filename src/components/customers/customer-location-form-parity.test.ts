@@ -11,8 +11,14 @@ const customerLocationFormSource = readFileSync(
 );
 
 describe("customer location form parity", () => {
-  it("uses the shared location fields in both the customer sheet and location dialog", () => {
-    expect(customerFormSource).toContain("<CustomerLocationFields");
+  it("uses the shared location form in the create customer dialog", () => {
+    expect(customerFormSource).toContain("<QuickAddDialogShell");
+    expect(customerFormSource).toContain("<CustomerLocationForm");
+    expect(customerFormSource).toContain('idPrefix="pending-loc"');
     expect(customerLocationFormSource).toContain("<CustomerLocationFields");
+    expect(customerLocationFormSource).toContain("idPrefix={idPrefix}");
+    expect(customerFormSource).not.toContain("InlineLocationForm");
+    expect(customerFormSource).not.toContain("useOrganizationDefaultValues");
+    expect(customerLocationFormSource).toContain("useOrganizationDefaultValues");
   });
 });

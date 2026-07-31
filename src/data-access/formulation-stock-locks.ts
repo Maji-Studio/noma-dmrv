@@ -169,11 +169,7 @@ export async function assertFormulationRatioWithinStock(
       additionalDrawKg > 0 &&
       isOverdraw(additionalDrawKg, previous.availableKg)
     ) {
-      throw overdrawError(
-        "biochar",
-        previous.availableKg,
-        additionalDrawKg,
-      );
+      throw overdrawError("biochar");
     }
   }
 }

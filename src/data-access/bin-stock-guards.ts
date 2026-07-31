@@ -7,11 +7,6 @@
  * any withdrawal that would take the bin below zero — no tolerance (operator
  * re-confirmed 2026-07-02). Warning thresholds belong to #193, never here.
  *
- * The block error states the available quantity and points the operator at the
- * bin's on-demand reconcile workflow (#194: Storage locations → bin → Reconcile
- * stock), where a stock-take adjustment or documented loss brings the derived
- * count back in line before the draw is retried.
- *
  * The derivation mirrors `storage-location-enrichment.ts` lane-by-lane; keep the
  * two in step if either changes.
  */
@@ -33,9 +28,9 @@ import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
 import {
   binStockOverdrawMessage,
-  deliveryStockOverdrawMessage,
   formatStockKg,
   isStockOverdraw,
+  productStockOverdrawMessage,
   type StockMaterial,
 } from "@/lib/stock-overdraw";
 
@@ -94,23 +89,13 @@ export function formatKg(kg: number): string {
 }
 
 /**
- * Build the shared over-draw error: available quantity + reconcile pointer.
- * `material` names the lane in plain language ("feedstock", "biochar", …).
- * The available quantity is shown as derived — no zero-clamp — so an already
- * over-drawn bin surfaces its true (negative) deficit for reconciliation (#116).
+ * Build the shared over-draw error for a bin lane.
+ * The internal product lane is user-facing biochar.
  */
 export function overdrawError(
   material: StockMaterial,
-  availableKg: number,
-  requestedKg: number,
 ): StockOverdrawError {
-  return new StockOverdrawError(
-    binStockOverdrawMessage(
-      material,
-      availableKg,
-      requestedKg,
-    ),
-  );
+  return new StockOverdrawError(binStockOverdrawMessage(material));
 }
 
 /** True when `requestedKg` exceeds `availableKg` beyond the FP slack. */
@@ -249,7 +234,7 @@ export async function assertFeedstockDrawWithinStock(
     params.excludeRunId,
   );
   if (isOverdraw(params.requestedDryKg, available)) {
-    throw overdrawError("feedstock", available, params.requestedDryKg);
+    throw overdrawError("feedstock");
   }
 }
 
@@ -297,7 +282,7 @@ export async function assertBiocharDrawWithinStock(
     params.excludeProductId,
   );
   if (isOverdraw(params.requestedBiocharKg, available)) {
-    throw overdrawError("biochar", available, params.requestedBiocharKg);
+    throw overdrawError("biochar");
   }
 }
 
@@ -322,19 +307,11 @@ export async function assertBiocharProductDrawWithinStock(
   requireOrgScope(ctx);
   const [product] = await tx
     .select({
-      productBinName: storageLocations.name,
       massKg: biocharProducts.massKg,
       waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
     })
     .from(biocharProducts)
-    .leftJoin(
-      storageLocations,
-      and(
-        eq(biocharProducts.storageLocationId, storageLocations.id),
-        eq(storageLocations.organizationId, ctx.organizationId),
-      ),
-    )
     .where(
       and(
         eq(biocharProducts.id, params.biocharProductId),
@@ -364,16 +341,7 @@ export async function assertBiocharProductDrawWithinStock(
     Number(product?.waterAddedKg ?? 0) -
     deliveredKg;
   if (isOverdraw(params.requestedWetKg, batchAvailable)) {
-    // Batch-specific copy: a delivery over-draw is against the product batch's
-    // remaining wet mass, not a bin lane, so the #194 bin reconcile workflow is
-    // the wrong lever — point the operator at the source bin or the product.
-    throw new SafeError(
-      deliveryStockOverdrawMessage(
-        product?.productBinName ?? null,
-        batchAvailable,
-        params.requestedWetKg,
-      ),
-    );
+    throw new SafeError(productStockOverdrawMessage());
   }
 
   if (product?.storageLocationId && !params.skipBinLane) {
@@ -384,7 +352,7 @@ export async function assertBiocharProductDrawWithinStock(
       params.excludeDeliveryId,
     );
     if (isOverdraw(params.requestedWetKg, binAvailable)) {
-      throw overdrawError("product", binAvailable, params.requestedWetKg);
+      throw overdrawError("product");
     }
   }
 }

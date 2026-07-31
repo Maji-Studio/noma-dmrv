@@ -36,7 +36,7 @@ function assertCanManageOrgCredentials(
   if (ctx.isPlatformAdmin) return;
   if (ctx.organizationId !== organizationId) {
     throw new SafeError(
-      "You can only manage credentials for your active organization.",
+      "You can only manage credentials for your active Organization.",
     );
   }
   requireOrgRole(ctx, "admin");

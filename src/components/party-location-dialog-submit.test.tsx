@@ -1,6 +1,6 @@
 /**
  * Behavioral coverage for the party location edit path shipped alongside the
- * inline Edit buttons. The grep-shaped assertions in
+ * detail-page Edit buttons. The grep-shaped assertions in
  * `location-management-actions.test.ts` prove the buttons are wired up; these
  * exercise the dialogs' real `handleSubmit` and pin the exact payload handed to
  * the mutation, so a dropped `locationId` or a lost coordinate fails here

@@ -41,6 +41,8 @@ export type EditableCustomerLocation = Pick<
 interface CustomerLocationFormProps {
   /** Existing location data for editing (undefined for create mode) */
   location?: EditableCustomerLocation;
+  /** Prefix field IDs when the form opens above another form with overlapping IDs. */
+  idPrefix?: string;
   /** Form submission handler */
   onSubmit: (data: CustomerLocationFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -55,6 +57,7 @@ interface CustomerLocationFormProps {
 
 export function CustomerLocationForm({
   location,
+  idPrefix,
   onSubmit,
   onCancel,
   isSubmitting = false,
@@ -107,6 +110,7 @@ export function CustomerLocationForm({
       <CustomerLocationFields
         form={form}
         isSubmitting={isSubmitting}
+        idPrefix={idPrefix}
         certStatus={certStatus}
       />
 

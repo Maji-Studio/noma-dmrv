@@ -1,3 +1,4 @@
+import { deliveryStockOverdrawMessage } from "../stock-overdraw";
 import { tonnesToKg } from "./unit-conversions";
 
 /**
@@ -41,12 +42,10 @@ export function checkDeliveryCapacity(opts: {
 
   const requestedKg = tonnesToKg(opts.requestedTons);
   if (requestedKg > availableKg) {
-    const fmt = (n: number) =>
-      n.toLocaleString(undefined, { maximumFractionDigits: 2 });
     return {
       ok: false,
       availableKg,
-      errorMessage: `Cannot apply ${fmt(requestedKg)} kg: only ${fmt(availableKg)} kg available from this delivery`,
+      errorMessage: deliveryStockOverdrawMessage(),
     };
   }
 

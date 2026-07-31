@@ -112,7 +112,7 @@ export async function getNextGhgStatementReportVersion(
       ),
     )
     .limit(1);
-  if (!statement) throw new SafeError("GHG statement not found.");
+  if (!statement) throw new SafeError("GHG Statement not found.");
   const [latest] = await db
     .select({ version: certifierGhgStatementReports.version })
     .from(certifierGhgStatementReports)
@@ -194,7 +194,7 @@ export async function insertPreparedGhgStatementReport(
       )
       .for("update")
       .limit(1);
-    if (!statement) throw new SafeError("GHG statement not found.");
+    if (!statement) throw new SafeError("GHG Statement not found.");
 
     const [existing] = await tx
       .select()

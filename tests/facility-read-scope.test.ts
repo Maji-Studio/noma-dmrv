@@ -51,7 +51,7 @@ describe("facility-scoped read guard", () => {
     expect(result).toEqual({
       success: false,
       error:
-        "Facility was not found in this Organization. Refresh the page and try again.",
+        "Facility was not found in this Organization.",
     });
     expect(mocks.select).toHaveBeenCalledOnce();
     expect(mocks.getDashboardOverview).not.toHaveBeenCalled();

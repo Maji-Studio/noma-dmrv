@@ -43,6 +43,7 @@ export interface CustomerDetail extends Customer {
     gpsLongitude: number | null;
     address: string | null;
     distanceFromFacilityKm: number | null;
+    distanceSource: DistanceSourceValue | null;
     defaultSoilTemperatureC: number | null;
     isDefault: boolean;
     createdAt: Date;
@@ -244,6 +245,7 @@ export async function getCustomerWithRelations(
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
       distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
+      distanceSource: customerLocations.distanceSource,
       defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
       isDefault: customerLocations.isDefault,
       createdAt: customerLocations.createdAt,

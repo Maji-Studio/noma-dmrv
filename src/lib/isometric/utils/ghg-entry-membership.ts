@@ -88,7 +88,7 @@ export function decideRemovalMembership(
     } else {
       // Owned by a different statement — never steal it.
       warnings.push(
-        `Removal ${removalId} is already linked to a different GHG statement; left unchanged.`,
+        `Removal ${removalId} is already linked to a different GHG Statement; left unchanged.`,
       );
     }
   }

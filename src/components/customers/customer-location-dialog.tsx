@@ -17,6 +17,8 @@ import {
   type EditableCustomerLocation,
 } from "./customer-location-form";
 
+const CUSTOMER_LOCATION_DIALOG_ID_PREFIX = "customer-location-dialog";
+
 // ============================================
 // Types
 // ============================================
@@ -84,8 +86,8 @@ export function CustomerLocationDialog({
         err instanceof Error
           ? err.message
           : isEditing
-            ? "The location was not saved. Try again."
-            : "The location was not created. Check the form and try again."
+            ? "Location was not saved. Try again."
+            : "Location was not created. Check the form."
       );
     }
   };
@@ -101,6 +103,7 @@ export function CustomerLocationDialog({
       }
     >
       <CustomerLocationForm
+        idPrefix={CUSTOMER_LOCATION_DIALOG_ID_PREFIX}
         location={location}
         onSubmit={handleSubmit}
         onCancel={handleClose}

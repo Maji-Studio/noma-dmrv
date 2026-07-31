@@ -17,19 +17,19 @@ import {
 import { FormField, FormInput, FormTextarea, FormActions, FormSection } from "@/components/forms";
 import {
   customerFormSchema,
-  customerLocationFormSchema,
   type CustomerFormData,
   type CustomerLocationFormData,
-  type CustomerLocationFormInput,
 } from "@/schemas/customers";
 import type { Customer } from "@/db/schema/parties";
 import { useCustomerLocations, useDeleteCustomerLocation } from "@/hooks/use-customers";
-import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { CustomerLocationDialog } from "./customer-location-dialog";
-import { CustomerLocationFields } from "./customer-location-fields";
-import type { EditableCustomerLocation } from "./customer-location-form";
+import {
+  CustomerLocationForm,
+  type EditableCustomerLocation,
+} from "./customer-location-form";
 
 // ============================================
 // Types
@@ -239,7 +239,7 @@ function CreateModeLocationsSection({
   onRemove: (index: number) => void;
   error: string | null;
 }) {
-  const [showForm, setShowForm] = useState(false);
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
 
   return (
     <FormSection
@@ -252,7 +252,7 @@ function CreateModeLocationsSection({
         <Button
           variant="noOutline"
           size="small"
-          onClick={() => setShowForm(true)}
+          onClick={() => setIsLocationDialogOpen(true)}
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
@@ -266,7 +266,7 @@ function CreateModeLocationsSection({
         </p>
       )}
 
-      {locations.length === 0 && !showForm ? (
+      {locations.length === 0 ? (
         <p className="body-small text-[var(--color-text-tertiary)]">
           No locations yet. Add at least one location for this customer.
         </p>
@@ -310,76 +310,23 @@ function CreateModeLocationsSection({
         </div>
       )}
 
-      {showForm && (
-        <InlineLocationForm
-          onAdd={(loc) => {
-            onAdd(loc);
-            setShowForm(false);
+      <QuickAddDialogShell
+        isOpen={isLocationDialogOpen}
+        onClose={() => setIsLocationDialogOpen(false)}
+        title="Add Location"
+        width="lg"
+        testId="location-quick-add-dialog"
+      >
+        <CustomerLocationForm
+          idPrefix="pending-loc"
+          onSubmit={(location) => {
+            onAdd(location);
+            setIsLocationDialogOpen(false);
           }}
-          onCancel={() => setShowForm(false)}
+          onCancel={() => setIsLocationDialogOpen(false)}
         />
-      )}
+      </QuickAddDialogShell>
     </FormSection>
-  );
-}
-
-// ============================================
-// Inline Location Form (for create mode)
-// ============================================
-
-function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation) => void; onCancel: () => void }) {
-  // Organization operating defaults seed create mode only; an existing record
-  // always wins. Server-seeded in the `(app)` layout, so this is synchronous.
-  const { defaults: orgDefaults } = useOrganizationDefaultValues();
-  const form = useForm<
-    CustomerLocationFormInput,
-    unknown,
-    CustomerLocationFormData
-  >({
-    resolver: zodResolver(customerLocationFormSchema),
-    defaultValues: {
-      name: "",
-      country: orgDefaults.defaultCountry ?? "",
-      stateRegion: "",
-      city: "",
-      address: "",
-      gpsLatitude: undefined,
-      gpsLongitude: undefined,
-      distanceFromFacilityKm: undefined,
-      distanceSource: null,
-      defaultSoilTemperatureC: undefined,
-      isDefault: false,
-    },
-  });
-
-  return (
-    <div
-      className="space-y-20 border border-[var(--color-border-primary)] bg-[var(--color-surface-light)] p-16"
-      onKeyDown={(e) => {
-        if (
-          e.key === "Enter" &&
-          e.target instanceof HTMLInputElement &&
-          ["text", "number", "search", "email", "tel", "url"].includes(e.target.type)
-        ) {
-          e.preventDefault();
-        }
-      }}
-    >
-      <CustomerLocationFields form={form} idPrefix="pending-loc" />
-
-      <div className="flex gap-12 justify-start pt-8">
-        <Button
-          variant="primary"
-          size="small"
-          onClick={form.handleSubmit(onAdd)}
-        >
-          Add Location
-        </Button>
-        <Button variant="default" size="small" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </div>
   );
 }
 

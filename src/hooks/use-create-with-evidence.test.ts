@@ -133,6 +133,31 @@ describe("runCreateWithEvidenceChoreography", () => {
     expect(toast).toHaveBeenCalledTimes(1);
   });
 
+  it("uses task-specific copy when creation returns no entity", async () => {
+    const setError = vi.fn<(message: string | null) => void>();
+
+    await runCreateWithEvidenceChoreography({
+      input: undefined,
+      entityType: "sample",
+      entityNoun: "Sample",
+      executeCreate: async () => ({ entities: [], result: undefined }),
+      flushMany: vi.fn(),
+      clearAttachments: vi.fn(),
+      retainCreatedEntityIds: vi.fn(),
+      setFlushing: vi.fn(),
+      setError,
+      getCreateErrorMessage: (error) =>
+        error instanceof Error ? error.message : "Sample was not created. Try again.",
+      openEditOnFailure: vi.fn(),
+      closeOnSuccess: vi.fn(),
+      onSuccess: vi.fn(),
+    });
+
+    expect(setError).toHaveBeenLastCalledWith(
+      "Sample was not created. Try again.",
+    );
+  });
+
   it("clears the settled queue when post-flush processing overrides success", async () => {
     const setError = vi.fn<(message: string | null) => void>();
     const openEdit = vi.fn();

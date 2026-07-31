@@ -69,7 +69,7 @@ export function ProductionSampleTable({
     setError: setFormError,
     setUpdateError: setFormError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "The in-process measurement was not saved. Try again.",
+      error instanceof Error ? error.message : "In-process measurement was not saved. Try again.",
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this in-process measurement.",
     openEditOnFailure: (sample) =>
@@ -139,7 +139,7 @@ export function ProductionSampleTable({
       toast.success("In-process measurement updated.");
       closeForm();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "The in-process measurement was not saved. Try again.");
+      setFormError(err instanceof Error ? err.message : "In-process measurement was not saved. Try again.");
     }
   };
 
@@ -150,7 +150,7 @@ export function ProductionSampleTable({
       setDeletingId(null);
       toast.success("In-process measurement deleted.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "The in-process measurement was not deleted. Try again.");
+      toast.error(err instanceof Error ? err.message : "In-process measurement was not deleted. Try again.");
       setDeletingId(null);
     }
   };

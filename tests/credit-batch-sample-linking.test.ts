@@ -325,7 +325,7 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
         organicCarbonPercent: 78,
       }),
     ).rejects.toThrow(
-      "Credit batch was not found in this Organization. Refresh the page and try again.",
+      "Credit batch was not found in this Organization.",
     );
   });
 

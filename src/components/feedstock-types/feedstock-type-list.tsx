@@ -284,7 +284,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       setSideSheet(null);
       toast.success("Feedstock type created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The feedstock type was not created. Check the form and try again.");
+      setFormError(error instanceof Error ? error.message : "Feedstock type was not created. Check the form.");
     }
   };
 
@@ -299,7 +299,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       setSideSheet(null);
       toast.success("Feedstock type updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The feedstock type was not saved. Try again.");
+      setFormError(error instanceof Error ? error.message : "Feedstock type was not saved. Try again.");
     }
   };
 
@@ -328,7 +328,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       await deleteFeedstockType.mutateAsync(deletingType.id);
       toast.success("Feedstock type deleted.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "The feedstock type was not deleted. Try again.";
+      const message = error instanceof Error ? error.message : "Feedstock type was not deleted. Try again.";
       if (message.toLowerCase().includes("archive it instead")) {
         setDeleteConflict(deletingType);
       } else {

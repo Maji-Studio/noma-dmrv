@@ -160,31 +160,36 @@ test.describe("First-run onboarding", () => {
       // deep-link, then the step self-clears on client-side dashboard return.
       await guide.getByRole("link", { name: "Add supplier" }).click();
       await expect(page).toHaveURL(/\/suppliers/);
-      const sheet = page.getByRole("dialog");
+      const sheet = page.getByRole("dialog", { name: "Create Supplier" });
       await expect(sheet.getByLabel(/supplier name|^name/i)).toBeVisible();
       await sheet.getByLabel(/supplier name|^name/i).fill("CU Test Supplier");
       // Suppliers require at least one committed source location: open the
-      // inline editor, fill its required fields (name, country, GPS position),
-      // and commit it with the editor's own "Add Location" before submitting.
+      // nested dialog, fill its required fields (country and GPS position),
+      // and commit it before returning to the still-open supplier sheet.
       await sheet.getByRole("button", { name: "Add Location" }).click();
-      const locationName = sheet.getByLabel("Name", { exact: true });
+      const locationDialog = page.getByRole("dialog", {
+        name: "Add Location",
+      });
+      await expect(locationDialog).toBeVisible();
+      const locationName = locationDialog.getByLabel("Location name");
       await expect(locationName).toBeVisible();
       await locationName.fill("CU Source Site");
-      await sheet.getByLabel("Country").first().fill("Tanzania");
-      const lat = sheet.getByRole("spinbutton", {
+      await locationDialog.getByLabel("Country").fill("Tanzania");
+      const lat = locationDialog.getByRole("spinbutton", {
         name: /^GPS latitude(?: Required)?$/,
       });
-      const lng = sheet.getByRole("spinbutton", {
+      const lng = locationDialog.getByRole("spinbutton", {
         name: /^GPS longitude(?: Required)?$/,
       });
       await expect(lat).toBeVisible();
       await lat.fill("-6.163");
       await lng.fill("35.7516");
-      await sheet
+      await locationDialog
         .getByRole("button", { name: "Add Location" })
-        .last()
         .click();
-      // Editor committed → exactly one location row, one Add Location button.
+      await expect(locationDialog).not.toBeVisible();
+      await expect(sheet).toBeVisible();
+      // Dialog committed → exactly one pending location row in the supplier sheet.
       await expect(sheet.getByText("CU Source Site")).toBeVisible();
       await sheet.getByRole("button", { name: "Create Supplier" }).click();
       // The sheet closes only after the create mutation succeeds — wait for it

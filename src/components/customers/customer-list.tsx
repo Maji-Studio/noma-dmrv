@@ -192,7 +192,7 @@ export function CustomerList() {
       setSideSheet(null);
       toast.success("Customer created.");
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "The customer was not created. Check the form and try again.");
+      setCreateError(error instanceof Error ? error.message : "Customer was not created. Check the form.");
     }
   };
 
@@ -204,7 +204,7 @@ export function CustomerList() {
       setSideSheet(null);
       toast.success("Customer updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "The customer was not saved. Try again.");
+      setUpdateError(error instanceof Error ? error.message : "Customer was not saved. Try again.");
     }
   };
 
@@ -218,7 +218,7 @@ export function CustomerList() {
       setDeletingCustomerId(null);
       toast.success("Customer deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "The customer was not deleted. Try again.");
+      setDeleteError(error instanceof Error ? error.message : "Customer was not deleted. Try again.");
     }
   };
 

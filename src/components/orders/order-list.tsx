@@ -215,7 +215,7 @@ export function OrderList() {
       closeSideSheet();
       toast.success("Order created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The order was not created. Check the form and try again.");
+      setFormError(error instanceof Error ? error.message : "Order was not created. Check the form.");
     }
   };
 
@@ -227,7 +227,7 @@ export function OrderList() {
       closeSideSheet();
       toast.success("Order updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The order was not saved. Try again.");
+      setFormError(error instanceof Error ? error.message : "Order was not saved. Try again.");
     }
   };
 
@@ -241,7 +241,7 @@ export function OrderList() {
       setDeletingOrderId(null);
       toast.success("Order deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "The order was not deleted. Try again.");
+      setDeleteError(error instanceof Error ? error.message : "Order was not deleted. Try again.");
     }
   };
 

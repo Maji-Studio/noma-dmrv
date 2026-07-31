@@ -68,7 +68,7 @@ export async function runCreateWithEvidenceChoreography<
     const created = await options.executeCreate(options.input);
     const firstEntity = created.entities[0];
     if (!firstEntity) {
-      throw new Error(`${options.entityNoun} creation returned no entity`);
+      throw new Error(`${options.entityNoun} was not created. Try again.`);
     }
 
     const entityIds = created.entities.map((entity) => entity.id);

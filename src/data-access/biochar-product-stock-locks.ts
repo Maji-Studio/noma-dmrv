@@ -8,11 +8,11 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { productStockOverdrawMessage } from "@/lib/stock-overdraw";
 import {
   assertBiocharDrawWithinStock,
   deriveBiocharProductDeliveredKg,
   deriveProductAvailableKg,
-  formatKg,
   isOverdraw,
   overdrawError,
 } from "./bin-stock-guards";
@@ -334,11 +334,7 @@ export async function assertBiocharProductMassReductionWithinStock(
     productId,
   );
   if (isOverdraw(deliveredKg, transactionTotalMassKg)) {
-    throw new SafeError(
-      `Cannot reduce product ${locked.code} to ${formatKg(
-        transactionTotalMassKg,
-      )}: ${formatKg(deliveredKg)} has already been delivered. Correct the deliveries before lowering the product mass.`,
-    );
+    throw new SafeError(productStockOverdrawMessage());
   }
 
   if (!locked.storageLocationId) return;
@@ -351,7 +347,7 @@ export async function assertBiocharProductMassReductionWithinStock(
   const reductionKg =
     previousTotalMassKg - transactionTotalMassKg;
   if (isOverdraw(reductionKg, availableKg)) {
-    throw overdrawError("product", availableKg, reductionKg);
+    throw overdrawError("product");
   }
 }
 

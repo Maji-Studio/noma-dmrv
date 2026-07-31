@@ -98,7 +98,7 @@ export async function signUpWithPassword(
     if (!result) {
       return {
         success: false,
-        error: "The user account was not created. Check the form and try again.",
+        error: "User account was not created. Check the form.",
       };
     }
 
@@ -127,7 +127,7 @@ export async function signUpWithPassword(
 
     return {
       success: false,
-      error: "The account was not created. Check the form and try again.",
+      error: "Account was not created. Check the form.",
     };
   }
 }

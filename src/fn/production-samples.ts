@@ -23,12 +23,9 @@ import {
   deleteProductionSampleSchema,
 } from "@/schemas/production-samples";
 import type { ActionResult } from "@/types/actions";
+import { formatZodActionError } from "./action-errors";
 
 const productionRunIdSchema = z.string().uuid("Production run is required");
-
-function formatZodError(error: z.ZodError): string {
-  return `Validation error: ${error.issues.map((issue) => issue.message).join(", ")}`;
-}
 
 function logServerError(context: string, error: unknown): void {
   console.error(`[production-samples] ${context}`, error);
@@ -109,14 +106,14 @@ export async function createProductionSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: formatZodError(error),
+        error: formatZodActionError(error),
       };
     }
     logServerError("createProductionSampleFn failed", error);
     return {
       success: false,
       error:
-        "The in-process measurement was not created. Check the form and try again.",
+        "In-process measurement was not created. Check the form.",
     };
   }
 }
@@ -159,13 +156,13 @@ export async function updateProductionSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: formatZodError(error),
+        error: formatZodActionError(error),
       };
     }
     logServerError("updateProductionSampleFn failed", error);
     return {
       success: false,
-      error: "The in-process measurement was not saved. Try again.",
+      error: "In-process measurement was not saved. Try again.",
     };
   }
 }
@@ -191,7 +188,7 @@ export async function deleteProductionSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: formatZodError(error),
+        error: formatZodActionError(error),
       };
     }
     logServerError("deleteProductionSampleFn failed", error);
@@ -199,7 +196,7 @@ export async function deleteProductionSampleFn(
       success: false,
       error: toActionError(
         error,
-        "The in-process measurement was not deleted. Try again.",
+        "In-process measurement was not deleted. Try again.",
       ),
     };
   }

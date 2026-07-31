@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { biocharProducts, orders, storageLocations } from "@/db/schema";
+import { biocharProducts, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { StockAvailabilityRequest } from "@/schemas/stock-availability";
 import {
@@ -13,7 +13,6 @@ import { requireOrgScope } from "./utils";
 
 export interface StockAvailability {
   availableKg: number | null;
-  productLabel: string | null;
 }
 
 async function getProductionRunFeedstockAvailability(
@@ -30,7 +29,6 @@ async function getProductionRunFeedstockAvailability(
       request.storageLocationId,
       request.productionRunId,
     ),
-    productLabel: null,
   };
 }
 
@@ -45,7 +43,6 @@ async function getBiocharProductAvailability(
       request.sourceBiocharStorageLocationId,
       request.biocharProductId,
     ),
-    productLabel: null,
   };
 }
 
@@ -65,24 +62,16 @@ async function getDeliveryAvailability(
     .limit(1);
   const productId = request.biocharProductId ?? order?.biocharProductId;
   if (!productId) {
-    return { availableKg: null, productLabel: null };
+    return { availableKg: null };
   }
 
   const [product] = await db
     .select({
-      productBinName: storageLocations.name,
       massKg: biocharProducts.massKg,
       waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
     })
     .from(biocharProducts)
-    .leftJoin(
-      storageLocations,
-      and(
-        eq(biocharProducts.storageLocationId, storageLocations.id),
-        eq(storageLocations.organizationId, ctx.organizationId),
-      ),
-    )
     .where(
       and(
         eq(biocharProducts.id, productId),
@@ -91,7 +80,7 @@ async function getDeliveryAvailability(
     )
     .limit(1);
   if (!product) {
-    return { availableKg: null, productLabel: null };
+    return { availableKg: null };
   }
 
   const deliveredKg = await deriveBiocharProductDeliveredKg(
@@ -115,7 +104,6 @@ async function getDeliveryAvailability(
 
   return {
     availableKg: Math.min(batchAvailableKg, binAvailableKg),
-    productLabel: product.productBinName ?? "this product batch",
   };
 }
 

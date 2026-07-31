@@ -63,7 +63,7 @@ export function QuickAddDialog({
       onSuccess(newEntity);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "The entity was not created. Check the form and try again.");
+      setError(err instanceof Error ? err.message : "Record was not created. Check the form.");
     }
   };
 

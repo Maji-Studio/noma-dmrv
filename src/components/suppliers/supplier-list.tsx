@@ -171,7 +171,7 @@ export function SupplierList() {
       toast.success("Supplier created.");
     } catch (error) {
       setCreateError(
-        error instanceof Error ? error.message : "The supplier was not created. Check the form and try again."
+        error instanceof Error ? error.message : "Supplier was not created. Check the form."
       );
     }
   };
@@ -188,7 +188,7 @@ export function SupplierList() {
       toast.success("Supplier updated.");
     } catch (error) {
       setUpdateError(
-        error instanceof Error ? error.message : "The supplier was not saved. Try again."
+        error instanceof Error ? error.message : "Supplier was not saved. Try again."
       );
     }
   };
@@ -206,7 +206,7 @@ export function SupplierList() {
       toast.success("Supplier deleted.");
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : "The supplier was not deleted. Try again."
+        error instanceof Error ? error.message : "Supplier was not deleted. Try again."
       );
     }
   };

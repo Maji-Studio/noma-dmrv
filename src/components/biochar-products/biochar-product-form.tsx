@@ -337,11 +337,7 @@ export function BiocharProductForm({
     biocharAvailability &&
     biocharAvailability.availableKg !== null &&
     isStockOverdraw(requestedBiocharKg, biocharAvailability.availableKg)
-      ? binStockOverdrawMessage(
-          "biochar",
-          biocharAvailability.availableKg,
-          requestedBiocharKg,
-        )
+      ? binStockOverdrawMessage("biochar")
       : undefined;
   const massFieldFingerprint = [
     sourceBiocharStorageLocationId,
@@ -351,7 +347,7 @@ export function BiocharProductForm({
   const routedServerError = useInlineStockServerError(
     errorMessage,
     massFieldFingerprint,
-    (message) => /not enough biochar in this bin/i.test(message),
+    (message) => message === binStockOverdrawMessage("biochar"),
   );
   const massKgError =
     errors.massKg?.message ??

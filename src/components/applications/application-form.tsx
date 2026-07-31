@@ -36,6 +36,7 @@ import {
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import {
@@ -54,7 +55,10 @@ import {
   resolveApplicationSoilTemperatureDefault,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
-import { isStockOverdraw } from "@/lib/stock-overdraw";
+import {
+  deliveryStockOverdrawMessage,
+  isStockOverdraw,
+} from "@/lib/stock-overdraw";
 
 // ============================================
 // Constants for select options
@@ -325,10 +329,21 @@ export function ApplicationForm({
     availableKg !== null &&
     appliedKgValid !== null &&
     isStockOverdraw(appliedKgValid, availableKg)
-      ? `Cannot exceed available: ${formatKg(
-          availableKg,
-        )} remaining from this delivery`
+      ? deliveryStockOverdrawMessage()
       : undefined;
+  const applicationMassFingerprint = [
+    selectedDeliveryId,
+    watchedAppliedKg,
+  ].join(":");
+  const routedServerError = useInlineStockServerError(
+    errorMessage,
+    applicationMassFingerprint,
+    (message) => message === deliveryStockOverdrawMessage(),
+  );
+  const biocharAppliedError =
+    errors.biocharAppliedTons?.message ??
+    applicationStockError ??
+    routedServerError.inlineError;
 
   const handleFormSubmit = handleSubmit(async (data) => {
     if (applicationStockError) return;
@@ -437,10 +452,7 @@ export function ApplicationForm({
           <FormField
             id="biocharAppliedTons"
             label="Biochar applied, wet (kg)"
-            error={
-              errors.biocharAppliedTons?.message ??
-              applicationStockError
-            }
+            error={biocharAppliedError}
             required
             certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
             certifyStatus={certStatus("biocharAppliedTons")}
@@ -457,10 +469,7 @@ export function ApplicationForm({
               step="any"
               placeholder="e.g., 5000"
               disabled={isSubmitting}
-              error={
-                !!errors.biocharAppliedTons ||
-                !!applicationStockError
-              }
+              error={!!biocharAppliedError}
               {...register("biocharAppliedTons", {
                 setValueAs: numericValue,
               })}
@@ -667,7 +676,7 @@ export function ApplicationForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={errorMessage}
+        errorMessage={routedServerError.footerError}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

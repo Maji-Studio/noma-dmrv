@@ -35,9 +35,10 @@ import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import {
-  deliveryStockOverdrawMessage,
+  binStockOverdrawMessage,
   formatStockKg,
   isStockOverdraw,
+  productStockOverdrawMessage,
 } from "@/lib/stock-overdraw";
 
 // ============================================
@@ -282,11 +283,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       watchWetMass,
       deliveryAvailability.availableKg,
     )
-      ? deliveryStockOverdrawMessage(
-          deliveryAvailability.productLabel,
-          deliveryAvailability.availableKg,
-          watchWetMass,
-        )
+      ? productStockOverdrawMessage()
       : undefined;
   const deliveryMassFingerprint = [
     watchOrderId,
@@ -297,8 +294,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     errorMessage,
     deliveryMassFingerprint,
     (message) =>
-      /cannot deliver .*remain undelivered/i.test(message) ||
-      /not enough product in this bin/i.test(message),
+      message === productStockOverdrawMessage() ||
+      message === binStockOverdrawMessage("product"),
   );
   const deliveredWetMassError =
     errors.deliveredWetMassKg?.message ??

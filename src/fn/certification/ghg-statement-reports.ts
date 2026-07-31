@@ -127,7 +127,7 @@ async function loadLiveReportFacts(
     orgCtx,
     args.ghgStatementId,
   );
-  if (!statement) throw new SafeError("GHG statement not found.");
+  if (!statement) throw new SafeError("GHG Statement not found.");
   const [project, facility, organization, statementSubmission] =
     await Promise.all([
       getCertifierProjectByFacility(orgCtx, statement.facilityId),
@@ -142,7 +142,7 @@ async function loadLiveReportFacts(
     ]);
   if (!project || !organization) {
     throw new SafeError(
-      "The GHG statement document-control lineage is incomplete.",
+      "The GHG Statement document-control lineage is incomplete.",
     );
   }
   if (!statementSubmission?.externalId) {
@@ -171,12 +171,12 @@ async function loadLiveReportFacts(
     !Number.isFinite(remoteStatement.pending_total_co2e_removed_kg)
   ) {
     throw new SafeError(
-      "The live GHG statement does not expose a pending net removed total. Refresh it or wait for Isometric to finish recalculating.",
+      "The live GHG Statement does not expose a pending net removed total. Refresh it or wait for Isometric to finish recalculating.",
     );
   }
   if (remoteStatement.ghg_entry_ids.length === 0) {
     throw new SafeError(
-      "This GHG statement has no live GHG Entry membership. Submit a Removal first.",
+      "This GHG Statement has no live GHG Entry membership. Submit a Removal first.",
     );
   }
 
@@ -429,7 +429,7 @@ export async function loadGhgStatementReports(
       orgCtx,
       ghgStatementId,
     );
-    if (!statement) throw new SafeError("GHG statement not found.");
+    if (!statement) throw new SafeError("GHG Statement not found.");
     const reports = await listGhgStatementReports(orgCtx, statement.id);
     return reports.map(reportView);
   });
