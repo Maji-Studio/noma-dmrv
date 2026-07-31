@@ -505,14 +505,15 @@ export function toStorageLocationEntityOption(
   let remainingMass: EntityOption["remainingMass"];
 
   if (row.type === "feedstock_bin") {
+    const remainingDryKg =
+      stock?.feedstockStockDryKg ?? row.totalStoredKg - row.totalConsumedKg;
     remainingMass = {
       wetKg: estimateRemainingFeedstockWetMassKg({
         intakeDryKg: stock?.feedstockIntakeDryKg ?? row.totalStoredKg,
         intakeWetKg: row.totalStoredWetKg,
-        remainingDryKg:
-          stock?.feedstockStockDryKg ??
-          row.totalStoredKg - row.totalConsumedKg,
+        remainingDryKg,
       }),
+      dryKg: remainingDryKg,
     };
   } else if (row.type === "biochar_bin") {
     const movementDeltaKg = stock?.biocharMovementDeltaKg ?? 0;

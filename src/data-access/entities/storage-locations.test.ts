@@ -130,7 +130,7 @@ describe("toStorageLocationEntityOption", () => {
       }),
     );
 
-    expect(option.remainingMass).toEqual({ wetKg: 3_000 });
+    expect(option.remainingMass).toEqual({ wetKg: 3_000, dryKg: 2_400 });
   });
 
   it("uses authoritative biochar lane stock and records dry stock", () => {
