@@ -124,6 +124,7 @@ import {
   refreshGhgStatementStatus,
   submitGhgStatementToVerifier,
 } from "@/fn/certification/ghg-statements";
+import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-statement";
 
 // ---------------------------------------------------------------------------
 // Test constants.
@@ -821,6 +822,43 @@ describe("submitGhgStatementToVerifier — zero-linked backstop (#245)", () => {
 });
 
 describe("submitGhgStatementToVerifier — happy path", () => {
+  it("reports every verifier submission step in order", async () => {
+    const remoteBefore = makeRemoteStatement({ status: "DRAFT" });
+    const remoteAfter = makeRemoteStatement({
+      status: "AWAITING_VERIFICATION",
+      ghg_statement_report_url: REPORT_URL,
+      submitted_at: "2026-02-01T10:00:00Z",
+    });
+    vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteBefore);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
+    await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
+    vi.mocked(isometric.submitGhgStatement).mockResolvedValue(remoteAfter);
+    const progress = vi.fn();
+
+    await submitGhgStatementToVerifierCore({
+      orgCtx: makeTestOrgContext("user-test-1"),
+      ghgStatementId: STATEMENT_ID,
+      input: { reportUrl: REPORT_URL },
+      onProgress: progress,
+    });
+
+    expect(progress.mock.calls.map(([update]) => update)).toEqual([
+      { step: "ghg_statement.checking", state: "active" },
+      { step: "ghg_statement.checking", state: "complete" },
+      { step: "ghg_statement.preparing_report", state: "active" },
+      { step: "ghg_statement.preparing_report", state: "complete" },
+      { step: "ghg_statement.sending", state: "active" },
+      { step: "ghg_statement.sending", state: "complete" },
+      { step: "ghg_statement.confirming", state: "active" },
+      { step: "ghg_statement.confirming", state: "complete" },
+      { step: "ghg_statement.complete", state: "complete" },
+    ]);
+  });
+
   it("POSTs /ghg_statements/{id}/submit, flips remote status, attaches a report document, and updates ledger metadata", async () => {
     // Arrange the ledger to look like createGhgStatementDraft already ran.
     const remoteBefore = makeRemoteStatement({ status: "DRAFT" });

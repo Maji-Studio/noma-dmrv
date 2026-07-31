@@ -7,13 +7,13 @@
  * a11y contract consistent and gives every instance the same affordances:
  *
  * - a built-in close button in the top-right corner (no per-instance X)
- * - dismiss on ESC and on outside (backdrop) click
+ * - dismiss on ESC and on outside (backdrop) click when dismissible
  * - focus trap + scroll lock + focus restore (handled by Base UI)
  *
  * Outside-click dismissal can be turned off per instance via
  * `dismissOnClickOutside={false}` — use it for multi-step workflows where an
- * accidental backdrop click would discard in-progress work. The close button
- * and ESC stay available even then.
+ * accidental backdrop click would discard in-progress work. Set
+ * `dismissible={false}` only while an irreversible request is active.
  */
 "use client";
 
@@ -67,6 +67,11 @@ export interface ModalProps {
    * in-progress work — the close button and ESC still work.
    */
   dismissOnClickOutside?: boolean;
+  /**
+   * Whether the built-in close button, Escape, and backdrop may close the
+   * dialog. Set false only while an irreversible request is in progress.
+   */
+  dismissible?: boolean;
   children: ReactNode;
 }
 
@@ -87,6 +92,7 @@ export function Modal({
   className,
   contentClassName = "p-24",
   dismissOnClickOutside = true,
+  dismissible = true,
   children,
 }: ModalProps) {
   // A modal dialog with no accessible name is announced as just "dialog" by
@@ -118,9 +124,9 @@ export function Modal({
     <Dialog.Root
       open={isOpen}
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open && dismissible) onClose();
       }}
-      disablePointerDismissal={!dismissOnClickOutside}
+      disablePointerDismissal={!dismissOnClickOutside || !dismissible}
       modal
     >
       <Dialog.Portal>
@@ -155,6 +161,7 @@ export function Modal({
         >
           <Dialog.Close
             aria-label="Close"
+            disabled={!dismissible}
             className={cn(
               "absolute top-16 right-16 z-10",
               "flex items-center justify-center",
@@ -165,7 +172,7 @@ export function Modal({
               "transition-colors duration-200",
               "focus-visible:outline-none focus-visible:ring-2",
               "focus-visible:ring-[var(--color-border-primary)]",
-              "cursor-pointer"
+              "cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
             )}
           >
             <CloseIcon />

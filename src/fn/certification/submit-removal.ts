@@ -77,6 +77,7 @@ import {
 } from "./sources";
 import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
+import type { SubmissionProgressReporter } from "@/lib/certification/submission-progress";
 import {
   appendSyncEventBestEffort,
   assertProductionConfirmed,
@@ -105,6 +106,7 @@ export interface SubmitRemovalArgs {
   confirmProduction?: boolean;
   /** Hash of the artifact shown in the operator's compiled review. */
   expectedCompilationHash?: string;
+  onProgress?: SubmissionProgressReporter;
 }
 
 export interface RemovalSubmissionResult {
@@ -205,6 +207,7 @@ async function submitRemovalCore(
     removalId,
     confirmProduction,
     expectedCompilationHash,
+    onProgress,
   } = args;
 
   // Per-attempt correlation id so the start breadcrumb, boundary logs, and any
@@ -215,6 +218,7 @@ async function submitRemovalCore(
     submissionAttemptId: attempt.id,
   });
   log.info("removal submit started");
+  onProgress?.({ step: "removal.checking_data", state: "active" });
 
   const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
   if (!ctx.mapping) {
@@ -342,6 +346,8 @@ async function submitRemovalCore(
     hasDurabilityComponents,
     sourceIds: [],
   });
+  onProgress?.({ step: "removal.checking_data", state: "complete" });
+  onProgress?.({ step: "removal.preparing_evidence", state: "active" });
 
   // The advisory protocol check appends a local sync event on mismatch/missing.
   // Keep it after the complete side-effect-free build so invalid source data
@@ -518,6 +524,22 @@ async function submitRemovalCore(
           "The existing Removal submission changed while verifying evidence. Reload and retry.",
         );
       }
+      onProgress?.({ step: "removal.preparing_evidence", state: "complete" });
+      onProgress?.({
+        step: "removal.sending_inputs",
+        state: initialBuild.datapointBodyByKey.size > 0 ? "reused" : "skipped",
+      });
+      onProgress?.({
+        step: "removal.sending_durability",
+        state: initialBuild.durabilityMeasurementSampleArgs
+          ? "reused"
+          : "skipped",
+      });
+      onProgress?.({ step: "removal.creating", state: "reused" });
+      onProgress?.({
+        step: "removal.verifying_evidence",
+        state: "active",
+      });
       await verifyAndPersistRemovalSourceBindings({
         client,
         orgCtx,
@@ -526,6 +548,11 @@ async function submitRemovalCore(
         externalRemovalId: claimed.externalId,
         log,
       });
+      onProgress?.({
+        step: "removal.verifying_evidence",
+        state: "complete",
+      });
+      onProgress?.({ step: "removal.complete", state: "complete" });
       return {
         removalId,
         externalId: claimed.externalId,
@@ -561,6 +588,7 @@ async function submitRemovalCore(
           "removal retry will create a new version after rejected row with changed hash",
         );
       }
+      onProgress?.({ step: "removal.preparing_evidence", state: "complete" });
       // The transport snapshot comes off the claimed row: on resume it is
       // the prior attempt's stored truth; on create it carries the
       // locked-source-id version of the datapoint bodies (which may differ
@@ -604,6 +632,7 @@ async function submitRemovalCore(
         resumed: claimed.resumed,
         attempt,
         log,
+        onProgress,
       });
     }
   }
@@ -722,6 +751,7 @@ interface RunRemovalSubmissionArgs {
   attempt: RemovalSubmitAttempt;
   /** Attempt-scoped logger (carries submissionAttemptId) from submitRemoval. */
   log: Logger;
+  onProgress?: SubmissionProgressReporter;
 }
 
 async function runRemovalSubmission({
@@ -742,6 +772,7 @@ async function runRemovalSubmission({
   resumed,
   attempt,
   log,
+  onProgress,
 }: RunRemovalSubmissionArgs): Promise<RemovalSubmissionResult> {
   // On resume the datapoint bodies and fixed bindings are snapshot truth, so
   // the removal body's reporting window must also come from the snapshot — not
@@ -761,6 +792,18 @@ async function runRemovalSubmission({
     );
   }
 
+  const datapointTotal = transport.datapointBodies.length;
+  if (datapointTotal === 0) {
+    onProgress?.({ step: "removal.sending_inputs", state: "skipped" });
+  } else {
+    onProgress?.({
+      step: "removal.sending_inputs",
+      state: "active",
+      completed: 0,
+      total: datapointTotal,
+    });
+  }
+  let datapointCompleted = 0;
   for (const dp of transport.datapointBodies) {
     const supplierRefId = dp.body.supplier_reference_id;
     const { externalId } = await performRegistryCreate({
@@ -782,6 +825,14 @@ async function runRemovalSubmission({
       ...(datapointIdsByRtcInput.get(rtcInputKey) ?? []),
       externalId,
     ]);
+    datapointCompleted += 1;
+    onProgress?.({
+      step: "removal.sending_inputs",
+      state:
+        datapointCompleted === datapointTotal ? "complete" : "active",
+      completed: datapointCompleted,
+      total: datapointTotal,
+    });
   }
 
   // Phase 3: POST the sampled 1000-year durability measurement sample after
@@ -795,6 +846,13 @@ async function runRemovalSubmission({
     throw new SafeError(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
   }
   if (durabilityMeasurementSubmissions) {
+    const durabilityTotal = durabilityMeasurementSubmissions.length;
+    onProgress?.({
+      step: "removal.sending_durability",
+      state: durabilityTotal === 0 ? "skipped" : "active",
+      completed: 0,
+      total: durabilityTotal,
+    });
     const {
       submitted,
       datapointIdsByMeasurementProperty,
@@ -806,6 +864,14 @@ async function runRemovalSubmission({
       submissions: durabilityMeasurementSubmissions,
       sourceBindingPlan,
       log,
+      onProgress: (completed, total) => {
+        onProgress?.({
+          step: "removal.sending_durability",
+          state: "active",
+          completed,
+          total,
+        });
+      },
     });
     datapointIdsByRtcInput = bindSequestrationDatapointsToTemplate({
       template,
@@ -813,8 +879,19 @@ async function runRemovalSubmission({
       datapointIdsByRtcInput,
     });
     log.info({ submitted }, "durability measurement samples submitted");
+    if (durabilityTotal > 0) {
+      onProgress?.({
+        step: "removal.sending_durability",
+        state: "complete",
+        completed: durabilityTotal,
+        total: durabilityTotal,
+      });
+    }
+  } else {
+    onProgress?.({ step: "removal.sending_durability", state: "skipped" });
   }
 
+  onProgress?.({ step: "removal.creating", state: "active" });
   const removalBody = buildCreateGhgEntryRequest({
     template,
     blueprintsByKey,
@@ -852,6 +929,7 @@ async function runRemovalSubmission({
       }),
     log,
   });
+  onProgress?.({ step: "removal.creating", state: "complete" });
 
   // Persist the derived reporting window onto the removal row (best-effort —
   // a failure here doesn't unwind a successful submission).
@@ -885,6 +963,7 @@ async function runRemovalSubmission({
     );
   }
 
+  onProgress?.({ step: "removal.verifying_evidence", state: "active" });
   await verifyAndPersistRemovalSourceBindings({
     client,
     orgCtx,
@@ -893,6 +972,11 @@ async function runRemovalSubmission({
     externalRemovalId,
     log,
   });
+  onProgress?.({
+    step: "removal.verifying_evidence",
+    state: "complete",
+  });
+  onProgress?.({ step: "removal.complete", state: "complete" });
 
   return { removalId, externalId: externalRemovalId, version: row.version };
 }

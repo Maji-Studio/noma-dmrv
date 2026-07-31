@@ -10,6 +10,14 @@ export function blocksRemovalResume(state: RemovalReadinessState): boolean {
   return state === "inProgress";
 }
 
+/** Keep the local submit step mounted while its own mutation is in flight. */
+export function shouldBlockRemovalResume(
+  state: RemovalReadinessState,
+  isLocalSubmissionPending: boolean,
+): boolean {
+  return !isLocalSubmissionPending && blocksRemovalResume(state);
+}
+
 /** Submitted Removals use the same compiled, reviewed submit gate as drafts. */
 export function allowsRemovalSubmission(
   state: RemovalReadinessState,

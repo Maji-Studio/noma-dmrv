@@ -329,6 +329,9 @@ restore for free.
   full-width below `sm`.
 - **`dismissOnClickOutside={false}`** for multi-step workflows where a stray
   backdrop click would discard in-progress work. Close button and ESC stay live.
+- **`dismissible={false}`** only while an irreversible request is active. It
+  disables the close button, Escape, and backdrop dismissal until the request
+  settles. Do not use it to trap operators during ordinary form editing.
 - **Accessibility is enforced, not suggested:** Modal dev-warns at runtime when
   neither `ariaLabelledBy` (preferred — id of a visible heading) nor
   `ariaLabel` is passed.

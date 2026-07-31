@@ -29,13 +29,15 @@ import {
   useCreateRemovalWithBatches,
   useRemovalCertifyContext,
   useSelectableBatches,
+  useSubmitRemoval,
 } from "@/hooks/use-certification";
 import { deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
+import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { SelectBatchesStep } from "./select-batches-step";
 import { SubmitStep } from "./submit-step";
-import { blocksRemovalResume } from "./resume-state";
+import { shouldBlockRemovalResume } from "./resume-state";
 
 const STEPS: StepFlowStep[] = [
   { key: "select", label: "Select batches" },
@@ -58,21 +60,34 @@ export function NewRemovalDialog({
   onClose,
   resumeRemovalId = null,
 }: NewRemovalDialogProps) {
+  // Own the mutation above WizardBody so a live-lock query refresh cannot
+  // unmount the observer that controls dialog dismissal.
+  const submitMutation = useSubmitRemoval();
+  const submissionPending = submitMutation.isPending;
+  const closeIfIdle = () => {
+    if (!submissionPending) onClose();
+  };
+
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={closeIfIdle}
+      onOpen={() => {
+        if (!submitMutation.isPending) submitMutation.reset();
+      }}
       width="xl"
       contentClassName="p-20"
       ariaLabelledBy="new-removal-title"
       // Multi-step wizard: a stray backdrop click must not discard a
       // half-built removal. Close button + ESC still dismiss.
       dismissOnClickOutside={false}
+      dismissible={!submissionPending}
     >
       <WizardBody
         facilityId={facilityId}
-        onClose={onClose}
+        onClose={closeIfIdle}
         resumeRemovalId={resumeRemovalId}
+        submitMutation={submitMutation}
       />
     </Modal>
   );
@@ -82,10 +97,12 @@ function WizardBody({
   facilityId,
   onClose,
   resumeRemovalId,
+  submitMutation,
 }: {
   facilityId: string;
   onClose: () => void;
   resumeRemovalId: string | null;
+  submitMutation: ReturnType<typeof useSubmitRemoval>;
 }) {
   const [step, setStep] = useState<StepKey>(
     resumeRemovalId ? "submit" : "select",
@@ -141,15 +158,19 @@ function WizardBody({
     resumeRemovalId && ctxQuery.data
       ? deriveRemovalReadiness(toRemovalReadinessFacts(ctxQuery.data))
       : null;
-  if (resumeReadiness && blocksRemovalResume(resumeReadiness.state)) {
+  if (
+    resumeReadiness &&
+    shouldBlockRemovalResume(resumeReadiness.state, submitMutation.isPending)
+  ) {
     return (
       <div className="flex flex-col gap-24">
         <h2 id="new-removal-title" className="title-heading-2">
           Removal
         </h2>
         <p className="body-small text-[var(--color-text-secondary)]">
-          A submission for this Removal is in progress. Wait for it to finish
-          before making changes.
+          {isSubmissionStreamStalledError(submitMutation.error)
+            ? "The progress connection stopped responding. The registry submission may still be running. Close this dialog and refresh the page to reconcile its status."
+            : "A submission for this Removal is in progress. Wait for it to finish before making changes."}
         </p>
         <div className="flex justify-end">
           <Button variant="primary" onClick={onClose}>
@@ -201,6 +222,7 @@ function WizardBody({
               ctx={ctxQuery.data}
               facilityId={facilityId}
               onDone={onClose}
+              submitMutation={submitMutation}
             />
           ))}
       </StepFlow>
