@@ -148,12 +148,16 @@ export function SubmissionSummary({
           <span className="body-small text-[var(--color-text-secondary)]">
             You are sending
           </span>
-          <span className="title-heading-2 font-mono text-[var(--color-text-primary)]">
-            {facts.dryTons}
-          </span>
+          <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
+            <span className="title-heading-2 font-mono text-[var(--color-text-primary)]">
+              {facts.dryTons}
+            </span>
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              Biochar, dry mass
+            </span>
+          </div>
           <span className="body-caption text-[var(--color-text-tertiary)]">
-            Biochar, dry mass. Isometric calculates stored and net CO₂e after
-            submission.
+            Isometric calculates stored and net CO₂e after submission.
           </span>
         </div>
 
