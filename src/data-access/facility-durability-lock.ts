@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { DbTransaction } from "@/db";
+import { withDedicatedLockConnection, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 
@@ -20,4 +20,21 @@ export async function acquireFacilityDurabilityLock(
   await tx.execute(
     sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
   );
+}
+
+/**
+ * Run facility-serialized work in one transaction on a dedicated connection.
+ * Registry reconciliation may hold the lock across HTTP; keeping that work
+ * off the shared app pool prevents a waiter from starving the lock holder.
+ */
+export async function withFacilityDurabilityLock<T>(
+  ctx: OrgContext,
+  facilityId: string,
+  fn: (tx: DbTransaction) => Promise<T>,
+): Promise<T> {
+  requireOrgScope(ctx);
+  return withDedicatedLockConnection(async (tx) => {
+    await acquireFacilityDurabilityLock(ctx, tx, facilityId);
+    return fn(tx);
+  });
 }

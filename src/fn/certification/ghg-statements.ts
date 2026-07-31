@@ -8,14 +8,13 @@ import {
   getLatestSubmissionsForEntities,
   getSubmissionById,
   listRecentSyncEvents,
-  markSubmissionSubmitted,
-  updateSubmissionMetadata,
   type CertificationSubmissionRow,
   type CertifierSyncEventRow,
 } from "@/data-access/certification";
 import {
   claimSubmissionDraft,
   getLatestSubmission,
+  getLatestSubmissionWithExecutor,
   type ClaimBlockedReason,
 } from "@/data-access/certification-submissions";
 import {
@@ -41,6 +40,7 @@ import {
   type RemovalCreditBatchSummary,
 } from "@/data-access/certifier-removals";
 import { getFacilityById } from "@/data-access/facilities";
+import { withFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { requireOrgFacility } from "@/data-access/utils";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
@@ -63,10 +63,7 @@ import {
   type GhgStatementStatus,
   type IsometricClient,
 } from "@/lib/isometric";
-import {
-  expectedButExcludedWarnings,
-  type ExpectedRemoval,
-} from "@/lib/isometric/utils/ghg-entry-membership";
+import type { ExpectedRemoval } from "@/lib/isometric/utils/ghg-entry-membership";
 import {
   derivePeriodStart,
   isRemovalInWindow,
@@ -79,7 +76,6 @@ import {
   ghgSubmitFingerprintChanged,
 } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight as computeIsLockedInFlight } from "@/lib/isometric/utils/lock";
-import { SUBMISSION_METADATA_KEYS } from "@/lib/isometric/utils/submission-metadata";
 import {
   createGhgStatementSchema,
   submitGhgStatementDialogSchema,
@@ -95,8 +91,9 @@ import {
 } from "@/data-access/certifier-ghg-remote-state";
 import {
   assertDedicatedGhgStatementProject,
-  reconcileRegistryGhgStatement,
+  reconcileRegistryGhgStatementById,
 } from "./ghg-statement-reconciliation";
+import { finalizeGhgStatement } from "./ghg-statement-finalization";
 import {
   assertGhgStatementReportFresh,
   issueVerifierReportUrl,
@@ -279,12 +276,13 @@ export async function createGhgStatementDraft(
             ghgStatementCreateRefusalMessage(blocking.statement),
           );
         }
-        // Nothing is minted here — the registry statement already exists and
-        // is already on the ledger; this only re-reconciles it.
-        const reconciled = await reconcileRegistryGhgStatement(orgCtx, {
+        // List membership can lag detail, so reconcile the existing statement
+        // from its authoritative representation without minting anything.
+        const reconciled = await reconcileRegistryGhgStatementById(orgCtx, {
+          client,
           facilityId: parsed.facilityId,
           externalProjectId: project.externalProjectId,
-          remote: singleMatch,
+          externalId: singleMatch.id,
         });
         return { outcome: "existing" as const, ...reconciled };
       }
@@ -516,65 +514,6 @@ async function createGhgStatementRemote(args: {
   });
 }
 
-// Shared tail for fresh and reconciled creates. Persist the external id before
-// reconciling membership, reporting window, and ledger state transactionally;
-// losing it would let a retry POST a duplicate statement.
-async function finalizeGhgStatement(args: {
-  client: IsometricClient;
-  orgCtx: OrgContext;
-  statement: CertifierGhgStatementRow;
-  row: CertificationSubmissionRow;
-  externalId: string;
-  expected: ExpectedRemoval[];
-  outcome: GhgStatementCreateOutcome;
-}): Promise<CreateGhgStatementResult> {
-  const { client, orgCtx, statement, row, externalId, expected, outcome } =
-    args;
-
-  await markSubmissionSubmitted(orgCtx, row.id, {
-    externalId,
-    supersedePreviousId: null,
-  });
-
-  // Re-fetch outside any transaction — the create response carries neither
-  // the linked removal set nor the server-derived reporting-period start,
-  // and a DB transaction must never be held open across network I/O.
-  const remote = await getGhgStatement(client, externalId).catch(() => null);
-  if (!remote) {
-    await updateSubmissionMetadata(orgCtx, row.id, {
-      [SUBMISSION_METADATA_KEYS.remoteStatus]: "DRAFT",
-    });
-    return {
-      outcome,
-      ghgStatementId: statement.id,
-      externalId,
-      linkedRemovalIds: [],
-      warnings: [],
-    };
-  }
-
-  // Membership, reporting window and ledger state move together behind the
-  // organization-scoped data-access boundary.
-  const reconciled = await reconcileGhgStatementRemoteState(orgCtx, {
-    statementId: statement.id,
-    submission: row,
-    remote,
-  });
-  return {
-    outcome,
-    ghgStatementId: statement.id,
-    externalId,
-    linkedRemovalIds: reconciled.linkedRemovalIds,
-    // Reconcile warns about ids the registry *returned* but we couldn't
-    // match; the honesty delta is the inverse — removals we predicted
-    // in-window that the registry silently placed in a different period.
-    warnings: [
-      ...reconciled.warnings,
-      ...expectedButExcludedWarnings(expected, reconciled.linkedRemovalIds),
-    ],
-  };
-}
-
 // =====================================================================
 // Submit to verifier
 // =====================================================================
@@ -605,7 +544,7 @@ export async function submitGhgStatementToVerifier(
     );
     if (!statement) throw new SafeError("GHG Statement not found.");
 
-    const submission = await getLatestSubmission(
+    const initialSubmission = await getLatestSubmission(
       orgCtx,
       {
         provider: ISOMETRIC_PROVIDER,
@@ -615,47 +554,12 @@ export async function submitGhgStatementToVerifier(
       },
       statement.facilityId,
     );
-    if (!submission?.externalId) {
+    if (!initialSubmission?.externalId) {
       throw new SafeError("Create the GHG Statement before submitting it.");
     }
+    const initialExternalId = initialSubmission.externalId;
 
-    const [facility, remoteBefore] = await Promise.all([
-      getFacilityById(orgCtx, statement.facilityId),
-      getGhgStatement(client, submission.externalId).catch(() => null),
-    ]);
-
-    // Empty-statement backstop (#245). Never send a statement with nothing to
-    // verify. The registry's own membership (`ghg_entry_ids`) is authoritative;
-    // fall back to the reconciled local count only when the live fetch failed.
-    // This is the hard gate the predictive create-guard defers to — and it
-    // fail-closes any 0-removal statement that already exists in the registry.
-    const linkedCount = remoteBefore
-      ? remoteBefore.ghg_entry_ids.length
-      : (await countRemovalsByGhgStatementIds(orgCtx, [ghgStatementId])).get(
-          ghgStatementId,
-        ) ?? 0;
-    if (linkedCount === 0) {
-      throw new SafeError(
-      "This GHG Statement has no linked Removals. Submit a Removal in this reporting period first.",
-      );
-    }
-
-    const submitMode = chooseGhgSubmitModeFromKnownState(
-      remoteBefore,
-      submission.metadata,
-    );
-    if (submitMode === "blocked-awaiting") {
-      throw new SafeError(
-        "This GHG Statement is already awaiting verification.",
-      );
-    }
-    if (submitMode === "blocked-verified") {
-      throw new SafeError("This GHG Statement is already verified.");
-    }
-    if (submitMode === "resubmit" && !parsed.summaryOfChanges?.trim()) {
-      throw new SafeError("Summary of changes is required for resubmission.");
-    }
-
+    const facility = await getFacilityById(orgCtx, statement.facilityId);
     const externalReportUrl = parsed.externalReportUrl ?? parsed.reportUrl;
     const generatedReport = parsed.reportId
       ? await getApprovedGhgStatementReport(orgCtx, {
@@ -679,130 +583,197 @@ export async function submitGhgStatementToVerifier(
         "Approve a generated report or enter an external report URL.",
       );
     }
-    const document = generatedReport
-      ? { id: generatedReport.documentId }
-      : await attachReportDocument(orgCtx, {
-          submissionId: submission.id,
-          reportUrl,
-          description: `External GHG Statement report: ${facility.code}, period ending ${statement.reportingPeriodEndOn}`,
-          metadata: { ghgStatementExternalId: submission.externalId },
-        });
-
-    // Same payload shape for every audit event in this action — three call
-    // sites (reconciled-success, failure, success) all log the same request.
-    const summaryProvided = Boolean(parsed.summaryOfChanges?.trim());
-    const submitRequestPayload = buildGhgSubmitRequestPayload(
-      submitMode,
-      redactReportUrlSecrets(reportUrl) ?? reportUrl,
-      summaryProvided,
-    );
-
-    // Both success paths (reconciled-after-failure, and the direct one) have
-    // to finalize identically, so they share one closure.
-    const finalizeSubmitSuccess = async (remote: GhgStatement) => {
-      await applyGhgRemoteState(orgCtx, submission, remote, {
-        reportUrl: redactReportUrlSecrets(reportUrl),
-        summaryOfChanges: parsed.summaryOfChanges?.trim() || null,
-        lastReportDocumentId: document.id,
-        submittedToVerifierAt: new Date().toISOString(),
-      });
-      if (generatedReport) {
-        await markGhgStatementReportSubmitted(orgCtx, generatedReport.id);
-      }
+    const submissionKey = {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+      localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+      localEntityId: ghgStatementId,
     };
 
-    let remoteAfter: GhgStatement;
-    try {
-      remoteAfter =
-        submitMode === "resubmit"
-          ? await resubmitGhgStatement(client, submission.externalId, {
-              ghg_statement_report_url: reportUrl,
-              summary_of_changes: parsed.summaryOfChanges?.trim() ?? "",
-            })
-          : await submitGhgStatement(client, submission.externalId, {
-              ghg_statement_report_url: reportUrl,
+    const result = await withFacilityDurabilityLock(
+      orgCtx,
+      statement.facilityId,
+      async (tx): Promise<SubmitGhgStatementResult> => {
+        const readCurrentSubmission = async () => {
+          const current = await getLatestSubmissionWithExecutor(
+            orgCtx,
+            tx,
+            submissionKey,
+            statement.facilityId,
+          );
+          if (
+            !current ||
+            current.id !== initialSubmission.id ||
+            current.externalId !== initialExternalId
+          ) {
+            throw new SafeError(
+              "This GHG Statement version changed. Refresh the page and try again.",
+            );
+          }
+          return current;
+        };
+
+        let submission = await readCurrentSubmission();
+        const remoteBefore = await getGhgStatement(
+          client,
+          initialExternalId,
+        ).catch(() => null);
+        const linkedCount = remoteBefore
+          ? remoteBefore.ghg_entry_ids.length
+          : (await countRemovalsByGhgStatementIds(orgCtx, [ghgStatementId])).get(
+              ghgStatementId,
+            ) ?? 0;
+        if (linkedCount === 0) {
+          throw new SafeError(
+            "This GHG Statement has no linked Removals. Submit a Removal in this reporting period first.",
+          );
+        }
+
+        const submitMode = chooseGhgSubmitModeFromKnownState(
+          remoteBefore,
+          submission.metadata,
+        );
+        if (submitMode === "blocked-awaiting") {
+          throw new SafeError(
+            "This GHG Statement is already awaiting verification.",
+          );
+        }
+        if (submitMode === "blocked-verified") {
+          throw new SafeError("This GHG Statement is already verified.");
+        }
+        if (submitMode === "resubmit" && !parsed.summaryOfChanges?.trim()) {
+          throw new SafeError("Summary of changes is required for resubmission.");
+        }
+
+        const document = generatedReport
+          ? { id: generatedReport.documentId }
+          : await attachReportDocument(orgCtx, {
+              submissionId: submission.id,
+              reportUrl,
+              description: `External GHG Statement report: ${facility.code}, period ending ${statement.reportingPeriodEndOn}`,
+              metadata: { ghgStatementExternalId: initialExternalId },
             });
-    } catch (err) {
-      const providerFailure =
-        err instanceof IsometricApiError
-          ? {
-              status: err.status ?? null,
-              body: redactReportSecrets(
-                sanitizeIsometricErrorBody(err.body),
-              ),
-            }
-          : null;
-      logger.warn(
-        {
-          op: `ghg-statement:${submitMode}`,
-          ghgStatementId,
-          submissionId: submission.id,
-          submissionAttemptId,
-          errorName: err instanceof Error ? err.name : typeof err,
-          ...(providerFailure
-            ? { providerStatus: providerFailure.status }
-            : {}),
-        },
-        "ghg statement submit failed; attempting reconciliation",
-      );
-      const after = await getGhgStatement(client, submission.externalId).catch(
-        () => null,
-      );
-      const submitApplied =
-        after &&
-        ghgSubmitAppearsApplied(after, reportUrl) &&
-        (!remoteBefore ||
-          ghgSubmitFingerprintChanged(remoteBefore, after));
-      if (after && submitApplied) {
+        const submitRequestPayload = buildGhgSubmitRequestPayload(
+          submitMode,
+          redactReportUrlSecrets(reportUrl) ?? reportUrl,
+          Boolean(parsed.summaryOfChanges?.trim()),
+        );
+        const finalizeSubmitSuccess = async (remote: GhgStatement) => {
+          submission = await readCurrentSubmission();
+          await applyGhgRemoteState(
+            orgCtx,
+            submission,
+            remote,
+            {
+              reportUrl: redactReportUrlSecrets(reportUrl),
+              summaryOfChanges: parsed.summaryOfChanges?.trim() || null,
+              lastReportDocumentId: document.id,
+              submittedToVerifierAt: new Date().toISOString(),
+            },
+            tx,
+          );
+        };
+
+        let remoteAfter: GhgStatement;
+        try {
+          remoteAfter =
+            submitMode === "resubmit"
+              ? await resubmitGhgStatement(client, initialExternalId, {
+                  ghg_statement_report_url: reportUrl,
+                  summary_of_changes: parsed.summaryOfChanges?.trim() ?? "",
+                })
+              : await submitGhgStatement(client, initialExternalId, {
+                  ghg_statement_report_url: reportUrl,
+                });
+        } catch (err) {
+          const providerFailure =
+            err instanceof IsometricApiError
+              ? {
+                  status: err.status ?? null,
+                  body: redactReportSecrets(
+                    sanitizeIsometricErrorBody(err.body),
+                  ),
+                }
+              : null;
+          logger.warn(
+            {
+              op: `ghg-statement:${submitMode}`,
+              ghgStatementId,
+              submissionId: submission.id,
+              submissionAttemptId,
+              errorName: err instanceof Error ? err.name : typeof err,
+              ...(providerFailure
+                ? { providerStatus: providerFailure.status }
+                : {}),
+            },
+            "ghg statement submit failed; attempting reconciliation",
+          );
+          const after = await getGhgStatement(client, initialExternalId).catch(
+            () => null,
+          );
+          const submitApplied =
+            after &&
+            ghgSubmitAppearsApplied(after, reportUrl) &&
+            (!remoteBefore ||
+              ghgSubmitFingerprintChanged(remoteBefore, after));
+          if (after && submitApplied) {
+            await appendSyncEvent(orgCtx, {
+              provider: ISOMETRIC_PROVIDER,
+              entityType: GHG_STATEMENT_ENTITY_TYPE,
+              entityId: ghgStatementId,
+              operation: `ghg_statement:${submitMode}:reconciled`,
+              status: "succeeded",
+              requestPayload: submitRequestPayload,
+              responsePayload: {
+                id: initialExternalId,
+                source: "reconciliation",
+                detected_status: after.status,
+              },
+            });
+            await finalizeSubmitSuccess(after);
+            return { externalId: initialExternalId, remoteStatus: after.status };
+          }
+
+          const message =
+            err instanceof IsometricApiError
+              ? describeIsometricApiError(
+                  err,
+                  "The verifier rejected the GHG Statement. Open it in Isometric to resolve the issue.",
+                )
+              : "Submit failed. Try again.";
+          await appendSyncEvent(orgCtx, {
+            provider: ISOMETRIC_PROVIDER,
+            entityType: GHG_STATEMENT_ENTITY_TYPE,
+            entityId: ghgStatementId,
+            operation: `ghg_statement:${submitMode}`,
+            status: "failed",
+            requestPayload: submitRequestPayload,
+            responsePayload: providerFailure ?? undefined,
+            errorMessage: message,
+          });
+          throw new SafeError(message);
+        }
+
         await appendSyncEvent(orgCtx, {
           provider: ISOMETRIC_PROVIDER,
           entityType: GHG_STATEMENT_ENTITY_TYPE,
           entityId: ghgStatementId,
-          operation: `ghg_statement:${submitMode}:reconciled`,
+          operation: `ghg_statement:${submitMode}`,
           status: "succeeded",
           requestPayload: submitRequestPayload,
-          responsePayload: {
-            id: submission.externalId,
-            source: "reconciliation",
-            detected_status: after.status,
-          },
+          responsePayload: { id: remoteAfter.id, status: remoteAfter.status },
         });
-        await finalizeSubmitSuccess(after);
-        return { externalId: submission.externalId, remoteStatus: after.status };
-      }
-
-      const message =
-        err instanceof IsometricApiError
-          ? describeIsometricApiError(
-              err,
-              "The verifier rejected the GHG Statement. Open it in Isometric to resolve the issue.",
-            )
-          : "Submit failed. Try again.";
-      await appendSyncEvent(orgCtx, {
-        provider: ISOMETRIC_PROVIDER,
-        entityType: GHG_STATEMENT_ENTITY_TYPE,
-        entityId: ghgStatementId,
-        operation: `ghg_statement:${submitMode}`,
-        status: "failed",
-        requestPayload: submitRequestPayload,
-        responsePayload: providerFailure ?? undefined,
-        errorMessage: message,
-      });
-      throw new SafeError(message);
+        await finalizeSubmitSuccess(remoteAfter);
+        return {
+          externalId: initialExternalId,
+          remoteStatus: remoteAfter.status,
+        };
+      },
+    );
+    if (generatedReport) {
+      await markGhgStatementReportSubmitted(orgCtx, generatedReport.id);
     }
-
-    await appendSyncEvent(orgCtx, {
-      provider: ISOMETRIC_PROVIDER,
-      entityType: GHG_STATEMENT_ENTITY_TYPE,
-      entityId: ghgStatementId,
-      operation: `ghg_statement:${submitMode}`,
-      status: "succeeded",
-      requestPayload: submitRequestPayload,
-      responsePayload: { id: remoteAfter.id, status: remoteAfter.status },
-    });
-    await finalizeSubmitSuccess(remoteAfter);
-
-    return { externalId: submission.externalId, remoteStatus: remoteAfter.status };
+    return result;
   }, { rateLimit: submitRateLimit("cert:submit-ghg-statement") });
 }
 
@@ -832,6 +803,7 @@ export async function refreshGhgStatementStatus(
         "The GHG Statement has no registry reference. Sync it from the registry and try again.",
       );
     }
+    const externalId = submission.externalId;
     // Resolve the statement this submission anchors to, so the follow-up ledger
     // read is scoped to its facility (issue #277). The higher-consequence read
     // above (getSubmissionById by raw submissionId) is necessarily unscoped —
@@ -850,28 +822,39 @@ export async function refreshGhgStatementStatus(
     // stay frozen so the audit trail keeps showing the snapshot from when
     // they were submitted; refreshing a stale row would silently rewrite
     // history with whatever the new version's remote state happens to be.
-    const latest = await getLatestSubmission(
+    return withFacilityDurabilityLock(
       orgCtx,
-      {
-        provider: submission.provider,
-        submissionType: submission.submissionType,
-        localEntityType: submission.localEntityType,
-        localEntityId: submission.localEntityId,
-      },
       statement.facilityId,
+      async (tx) => {
+        const latest = await getLatestSubmissionWithExecutor(
+          orgCtx,
+          tx,
+          {
+            provider: submission.provider,
+            submissionType: submission.submissionType,
+            localEntityType: submission.localEntityType,
+            localEntityId: submission.localEntityId,
+          },
+          statement.facilityId,
+        );
+        if (!latest || latest.id !== submission.id) {
+          throw new SafeError(
+            "This GHG Statement version has been superseded. Refresh the page to see the latest version.",
+          );
+        }
+        const remote = await getGhgStatement(client, externalId);
+        await reconcileGhgStatementRemoteState(
+          orgCtx,
+          {
+            statementId: submission.localEntityId,
+            submission: latest,
+            remote,
+          },
+          tx,
+        );
+        return remote;
+      },
     );
-    if (!latest || latest.id !== submission.id) {
-      throw new SafeError(
-        "This GHG Statement version has been superseded. Refresh the page to see the latest version.",
-      );
-    }
-    const remote = await getGhgStatement(client, submission.externalId);
-    await reconcileGhgStatementRemoteState(orgCtx, {
-      statementId: submission.localEntityId,
-      submission,
-      remote,
-    });
-    return remote;
   });
 }
 

@@ -19,7 +19,7 @@
  * tests/registry-boundary-ghg-statement.test.ts.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual =
@@ -64,7 +64,9 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 
 const OTHER_ORG_ID = "org_test_ghg_identity_other";
 const REPORTING_PERIOD_END = "2026-03-31";
+const COLLIDING_REPORTING_PERIOD_END = "2026-04-30";
 const IN_WINDOW_COMPLETED_ON = "2026-03-15";
+const CONCURRENCY_BARRIER_TIMEOUT_MS = 10_000;
 
 const createdFacilityIds: string[] = [];
 
@@ -159,6 +161,96 @@ describe("GHG statement ledger submission type", () => {
 });
 
 describe("registry statement identity is scoped per (organization, facility)", () => {
+  it("keeps a caller transaction usable after an external-id collision", async () => {
+    const orgCtx = makeTestOrgContext();
+    const facilityId = await createFacility(TEST_ORG_ID, "Collision");
+    const externalId = `ghg_collision_${crypto.randomUUID().slice(0, 8)}`;
+    let releaseWinner = () => {};
+    let signalWinnerReady = () => {};
+    const winnerReady = new Promise<void>((resolve) => {
+      signalWinnerReady = resolve;
+    });
+    const winnerRelease = new Promise<void>((resolve) => {
+      releaseWinner = resolve;
+    });
+    let winnerBackendPid = 0;
+
+    const winnerTransaction = db.transaction(async (tx) => {
+      const winner = await createGhgStatementForRegistryDiscovery(
+        orgCtx,
+        {
+          facilityId,
+          externalId,
+          reportingPeriodEndOn: REPORTING_PERIOD_END,
+        },
+        tx,
+      );
+      const backend = await tx.execute<{ pid: number }>(
+        sql`select pg_backend_pid() as pid`,
+      );
+      winnerBackendPid = backend.rows[0]?.pid ?? 0;
+      signalWinnerReady();
+      await winnerRelease;
+      return winner;
+    });
+
+    let callerTransaction:
+      | Promise<{
+          statementId: string;
+          probe: number;
+        }>
+      | undefined;
+    try {
+      await winnerReady;
+      callerTransaction = db.transaction(async (tx) => {
+        const statement = await createGhgStatementForRegistryDiscovery(
+          orgCtx,
+          {
+            facilityId,
+            externalId,
+            reportingPeriodEndOn: COLLIDING_REPORTING_PERIOD_END,
+          },
+          tx,
+        );
+        const usable = await tx.execute<{ probe: number }>(
+          sql`select 1::int as probe`,
+        );
+        return {
+          statementId: statement.id,
+          probe: usable.rows[0]?.probe ?? 0,
+        };
+      });
+      void callerTransaction.catch(() => undefined);
+
+      await expect
+        .poll(
+          async () => {
+            const result = await db.execute<{ waiting: boolean }>(sql`
+              select exists (
+                select 1
+                from pg_stat_activity
+                where ${winnerBackendPid} = any(pg_blocking_pids(pid))
+              ) as waiting
+            `);
+            return result.rows[0]?.waiting ?? false;
+          },
+          { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS },
+        )
+        .toBe(true);
+
+      releaseWinner();
+      const winner = await winnerTransaction;
+      await expect(callerTransaction).resolves.toEqual({
+        statementId: winner.id,
+        probe: 1,
+      });
+    } finally {
+      releaseWinner();
+      await winnerTransaction.catch(() => undefined);
+      await callerTransaction?.catch(() => undefined);
+    }
+  });
+
   it("gives two facilities sharing one project their own row for the same registry statement", async () => {
     const orgCtx = makeTestOrgContext();
     const facilityA = await createFacility(TEST_ORG_ID, "A");

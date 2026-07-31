@@ -624,9 +624,10 @@ export async function markSubmissionSubmitted(
     // callers don't claim.
     productionEmissionsClaim?: { removalId: string; creditBatchIds: string[] };
   },
+  callerTx?: Tx,
 ): Promise<void> {
   requireOrgScope(ctx);
-  await db.transaction(async (tx) => {
+  const run = async (tx: Tx): Promise<void> => {
     await tx
       .update(certificationSubmissions)
       .set({
@@ -661,7 +662,8 @@ export async function markSubmissionSubmitted(
         args.productionEmissionsClaim,
       );
     }
-  });
+  };
+  await (callerTx ? run(callerTx) : db.transaction(run));
 }
 
 // Standalone claim stamp for the no-POST paths (issue #349, ADR 0020):

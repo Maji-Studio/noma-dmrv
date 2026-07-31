@@ -147,12 +147,14 @@ export interface ClaimSubmissionDraftArgs<H> {
 export async function claimSubmissionDraft<H>(
   ctx: OrgContext,
   args: ClaimSubmissionDraftArgs<H>,
+  tx?: DbTransaction,
 ): Promise<ClaimOutcome> {
   requireOrgScope(ctx);
-  await assertSubmissionAnchorSameOrg(ctx, args.key);
+  const executor = tx ?? db;
+  await assertSubmissionAnchorSameOrg(ctx, args.key, executor);
 
   const tentativeHash = args.hashOf(args.tentativeInputs);
-  const latest = await getLatestSubmissionWithExecutor(ctx, db, args.key);
+  const latest = await getLatestSubmissionWithExecutor(ctx, executor, args.key);
   const tentative = decideSubmissionClaim({
     latest,
     payloadHash: tentativeHash,
@@ -175,14 +177,14 @@ export async function claimSubmissionDraft<H>(
         version: tentative.version,
       };
     case "resume":
-      return resumeDraft(ctx, args, tentativeHash);
+      return resumeDraft(ctx, args, tentativeHash, tx);
     case "resume-poll-existing":
     case "resume-re-put":
       // Only reachable when `dataUploadResume` is passed to the pure core,
       // which this module never does (telemetry is deferred — see plan).
       throw new Error(`Unreachable claim kind: ${tentative.kind}`);
     case "create-new-version":
-      return createDraft(ctx, args);
+      return createDraft(ctx, args, tx);
   }
 }
 
@@ -200,8 +202,9 @@ async function resumeDraft<H>(
   ctx: OrgContext,
   args: ClaimSubmissionDraftArgs<H>,
   tentativeHash: string,
+  callerTx?: DbTransaction,
 ): Promise<ClaimOutcome> {
-  return db.transaction(async (tx) => {
+  const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
     await lockAndVerifyMapping(ctx, tx, args.guard);
     await lockSubmissionArtifact(tx, args.key);
 
@@ -256,15 +259,17 @@ async function resumeDraft<H>(
       supersedePreviousId: null,
       reason: "resumed",
     };
-  });
+  };
+  return callerTx ? run(callerTx) : db.transaction(run);
 }
 
 async function createDraft<H>(
   ctx: OrgContext,
   args: ClaimSubmissionDraftArgs<H>,
+  callerTx?: DbTransaction,
 ): Promise<ClaimOutcome> {
   try {
-    return await db.transaction(async (tx): Promise<ClaimOutcome> => {
+    const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
       await lockAndVerifyMapping(ctx, tx, args.guard);
       await lockSubmissionArtifact(tx, args.key);
       if (args.mirrorDocumentIds && args.mirrorDocumentIds.length > 0) {
@@ -343,7 +348,8 @@ async function createDraft<H>(
         supersedePreviousId: locked.supersedePreviousId,
         reason,
       };
-    });
+    };
+    return await (callerTx ? run(callerTx) : db.transaction(run));
   } catch (err) {
     if (isEntityVersionUniqueViolation(err)) {
       // Backstop: the in-lock re-decision makes this race practically
@@ -516,11 +522,17 @@ async function lockSubmissionArtifact(
 async function assertSubmissionAnchorSameOrg(
   ctx: OrgContext,
   key: Pick<SubmissionKey, "localEntityType" | "localEntityId">,
+  executor: DbTransaction | typeof db = db,
 ): Promise<void> {
   if (key.localEntityType === "removal") {
-    await assertSameOrg(ctx, certifierRemovals, key.localEntityId);
+    await assertSameOrg(ctx, certifierRemovals, key.localEntityId, executor);
   } else if (key.localEntityType === "ghgStatement") {
-    await assertSameOrg(ctx, certifierGhgStatements, key.localEntityId);
+    await assertSameOrg(
+      ctx,
+      certifierGhgStatements,
+      key.localEntityId,
+      executor,
+    );
   }
 }
 

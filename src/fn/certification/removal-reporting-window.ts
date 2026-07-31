@@ -48,6 +48,48 @@ export function resolveLatestApplicationTime(
 }
 
 /**
+ * Resolve the timestamp-level review/snapshot window from the date-granular
+ * registry contract.
+ *
+ * Applications currently record a calendar date, represented as UTC
+ * midnight. When production and application share that date, midnight is not
+ * an observed application time and can precede the runs that produced the
+ * applied biochar. Use the latest production end as the conservative
+ * same-day floor so the technical window is chronological and contains every
+ * member run. An earlier application day cannot contain an overnight run and
+ * fails closed; a later application date remains the completion boundary.
+ */
+export function resolveRemovalReportingWindow(args: {
+  earliestProductionStartTime: Date;
+  latestProductionEndTime: Date;
+  latestApplicationTime: Date;
+}): { startedOn: Date; completedOn: Date } {
+  const {
+    earliestProductionStartTime,
+    latestProductionEndTime,
+    latestApplicationTime,
+  } = args;
+  const applicationDate = formatUtcDate(latestApplicationTime);
+  const latestProductionEndDate = formatUtcDate(latestProductionEndTime);
+  if (applicationDate < latestProductionEndDate) {
+    throw new SafeError(
+      `Latest application date ${applicationDate} precedes latest production end date ` +
+        `${latestProductionEndDate}. Correct the application date before submitting.`,
+    );
+  }
+  const completedOn =
+    applicationDate === latestProductionEndDate &&
+    latestApplicationTime < latestProductionEndTime
+      ? latestProductionEndTime
+      : latestApplicationTime;
+
+  return {
+    startedOn: earliestProductionStartTime,
+    completedOn,
+  };
+}
+
+/**
  * Reject dates that Isometric cannot accept before the submission pipeline
  * mirrors evidence Sources or creates Datapoints. Production end is the
  * durability `measured_at`; latest application is the GHG entry's
