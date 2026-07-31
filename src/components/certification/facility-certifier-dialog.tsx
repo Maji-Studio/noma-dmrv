@@ -242,9 +242,9 @@ export function FacilityCertifierDialog({
 
         <FormField
           id="externalFacilityId"
-          label="Isometric facility ID"
+          label="Isometric facility ID (optional)"
           error={errors.externalFacilityId?.message}
-          hint="Required for the telemetry pipeline only. Create the facility in the Certify UI (Isometric exposes no POST /facilities), then paste the fcl_… id here."
+          hint="Only needed to submit reactor telemetry. Create the facility in Isometric Certify, then paste its fcl_… ID here."
         >
           <FormInput
             id="externalFacilityId"
