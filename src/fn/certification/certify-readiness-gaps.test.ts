@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportLeg } from "@/db/schema";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { buildEntityReadinessResult } from "./certify-readiness-gaps";
 
 /** A lab sample whose chemistry is complete for the 200-year tier. */
@@ -54,6 +55,28 @@ function productionRun(
 }
 
 describe("buildEntityReadinessResult", () => {
+  it("keeps the ready-batch fixture ready when Application evidence is absent", () => {
+    const fixtureRun = productionRun("fixture-run", "PR-FIXTURE", 50);
+
+    expect(
+      deriveEntityCertifyReadiness("application", {
+        biocharAppliedTons: 0.1,
+        biocharAppliedDryTons: 0.098,
+        durabilityOption: "200_year",
+        soilTemperatureC: 25,
+      }),
+    ).toMatchObject({ state: "ready", gaps: [] });
+
+    expect(
+      buildEntityReadinessResult(
+        [fixtureRun],
+        [],
+        { feedstock: [], biochar: [], sample: [] },
+        [],
+      ).gaps,
+    ).toEqual([]);
+  });
+
   it("lists only production runs that are affected by the issue", () => {
     const result = buildEntityReadinessResult(
       [
