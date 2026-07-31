@@ -125,8 +125,11 @@ describe("order product-bin options", () => {
       mass: {
         moisturePercent: 15,
       },
-      subtitle:
-        "Pure biochar · Wet biochar product: 250kg | Dry biochar: 212.5kg available",
+      remainingMass: {
+        wetKg: 250,
+        dryKg: 212.5,
+      },
+      subtitle: "Wet biochar product: 250kg | Dry biochar: 212.5kg available",
     });
   });
 
