@@ -1,7 +1,5 @@
 import {
   deriveMassDryKg,
-  DRY_MASS_EXCEEDS_WET_MESSAGE,
-  exceedsMassWithTolerance,
 } from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
@@ -109,26 +107,6 @@ export function calculateDryMass(
   if (wetKg == null || moisturePercent == null) return null;
   if (wetKg < 0 || moisturePercent < 0 || moisturePercent > 100) return null;
   return deriveMassDryKg(wetKg, moisturePercent);
-}
-
-export function getManualDryAppliedMassError(
-  wetKg: unknown,
-  dryKg: unknown,
-): string | undefined {
-  if (
-    typeof wetKg !== "number" ||
-    typeof dryKg !== "number" ||
-    !Number.isFinite(wetKg) ||
-    !Number.isFinite(dryKg) ||
-    wetKg < 0 ||
-    dryKg < 0
-  ) {
-    return undefined;
-  }
-
-  return exceedsMassWithTolerance(dryKg, wetKg)
-    ? DRY_MASS_EXCEEDS_WET_MESSAGE
-    : undefined;
 }
 
 export function applicationTonsToKg(value: number | null | undefined): number | null {

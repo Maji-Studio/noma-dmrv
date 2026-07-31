@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applicationFormSchema,
   createApplicationSchema,
   updateApplicationSchema,
 } from "@/schemas/applications";
@@ -85,5 +86,51 @@ describe("application schemas", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("applies kilogram tolerance to client form masses", () => {
+    const base = {
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 100,
+    };
+
+    expect(applicationFormSchema.safeParse({
+      ...base,
+      biocharAppliedDryTons: 100.0005,
+    }).success).toBe(true);
+    expect(applicationFormSchema.safeParse({
+      ...base,
+      biocharAppliedDryTons: 100.002,
+    }).success).toBe(false);
+  });
+
+  it("converts create and update tonnes before applying kilogram tolerance", () => {
+    const createBase = {
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 1,
+    };
+    const updateBase = {
+      applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 1,
+    };
+
+    expect(createApplicationSchema.safeParse({
+      ...createBase,
+      biocharAppliedDryTons: 1.0000005,
+    }).success).toBe(true);
+    expect(createApplicationSchema.safeParse({
+      ...createBase,
+      biocharAppliedDryTons: 1.000002,
+    }).success).toBe(false);
+    expect(updateApplicationSchema.safeParse({
+      ...updateBase,
+      biocharAppliedDryTons: 1.0000005,
+    }).success).toBe(true);
+    expect(updateApplicationSchema.safeParse({
+      ...updateBase,
+      biocharAppliedDryTons: 1.000002,
+    }).success).toBe(false);
   });
 });

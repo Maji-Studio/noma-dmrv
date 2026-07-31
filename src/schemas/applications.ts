@@ -10,9 +10,8 @@ import { gisBoundarySchema } from "./gis-boundary";
 import {
   DRY_MASS_EXCEEDS_WET_MESSAGE,
   exceedsMassWithTolerance,
-  MASS_COMPARISON_EPSILON_KG,
 } from "@/lib/calculations/mass-dry";
-import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
 // ============================================
 // Constants and Enums
@@ -113,22 +112,41 @@ const applicationFormBaseSchema = z.object({
 
 });
 
+type ApplicationMassFields = {
+  biocharAppliedTons?: number;
+  biocharAppliedDryTons?: number | null;
+};
+
+function addDryMassIssue(
+  data: ApplicationMassFields,
+  ctx: z.RefinementCtx,
+  unit: "kg" | "tonnes",
+): void {
+  if (
+    data.biocharAppliedTons == null ||
+    data.biocharAppliedDryTons == null
+  ) {
+    return;
+  }
+  const wetKg = unit === "tonnes"
+    ? tonnesToKg(data.biocharAppliedTons)
+    : data.biocharAppliedTons;
+  const dryKg = unit === "tonnes"
+    ? tonnesToKg(data.biocharAppliedDryTons)
+    : data.biocharAppliedDryTons;
+  if (!exceedsMassWithTolerance(dryKg, wetKg)) return;
+
+  ctx.addIssue({
+    code: "custom",
+    path: ["biocharAppliedDryTons"],
+    message: DRY_MASS_EXCEEDS_WET_MESSAGE,
+  });
+}
+
 export const applicationFormSchema = applicationFormBaseSchema.superRefine(
   (data, ctx) => {
     gpsPairSuperRefine(data, ctx);
-    if (
-      data.biocharAppliedDryTons != null &&
-      exceedsMassWithTolerance(
-        data.biocharAppliedDryTons,
-        data.biocharAppliedTons,
-      )
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["biocharAppliedDryTons"],
-        message: DRY_MASS_EXCEEDS_WET_MESSAGE,
-      });
-    }
+    addDryMassIssue(data, ctx, "kg");
   },
 );
 
@@ -139,7 +157,12 @@ export const applicationFormSchema = applicationFormBaseSchema.superRefine(
 /**
  * Schema for creating an application (server action)
  */
-export const createApplicationSchema = applicationFormSchema;
+export const createApplicationSchema = applicationFormBaseSchema.superRefine(
+  (data, ctx) => {
+    gpsPairSuperRefine(data, ctx);
+    addDryMassIssue(data, ctx, "tonnes");
+  },
+);
 
 /**
  * Schema for updating an application (server action)
@@ -168,18 +191,7 @@ export const updateApplicationSchema = z.object({
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
 }).superRefine((data, ctx) => {
   gpsPairSuperRefine(data, ctx);
-  if (
-    data.biocharAppliedDryTons != null &&
-    data.biocharAppliedTons != null &&
-    data.biocharAppliedDryTons >
-      data.biocharAppliedTons + MASS_COMPARISON_EPSILON_KG / KG_PER_TONNE
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["biocharAppliedDryTons"],
-      message: DRY_MASS_EXCEEDS_WET_MESSAGE,
-    });
-  }
+  addDryMassIssue(data, ctx, "tonnes");
 });
 
 /**
