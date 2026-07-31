@@ -86,9 +86,13 @@ vi.mock("@/lib/auth/server", () => ({
 vi.mock("@/db", () => ({
   db: {
     transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>
-      cb({ __fakeTx: true }),
+      cb({ __fakeTx: true, execute: vi.fn() }),
     ),
   },
+  withDedicatedLockConnection: vi.fn(
+    async (cb: (tx: unknown) => unknown) =>
+      cb({ __fakeTx: true, execute: vi.fn() }),
+  ),
 }));
 vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
@@ -312,6 +316,9 @@ beforeEach(() => {
   // module's own concern (DB-backed tests).
   vi.mocked(ledgerClaim.getLatestSubmission).mockImplementation(async () =>
     storedLatestForStatement(),
+  );
+  vi.mocked(ledgerClaim.getLatestSubmissionWithExecutor).mockImplementation(
+    async () => storedLatestForStatement(),
   );
   vi.mocked(ledgerClaim.claimSubmissionDraft).mockImplementation(
     makeClaimSubmissionDraftFake({
@@ -558,6 +565,53 @@ describe("createGhgStatementDraft — happy path", () => {
     expect(ghgDA.updateGhgStatementReportingWindow).not.toHaveBeenCalled();
     // No new ledger row — the existing v=1 row was returned.
     expect(storedLedger).toHaveLength(1);
+  });
+
+  it("reconciles an existing matching statement from detail when its list membership is stale", async () => {
+    const authoritative = makeRemoteStatement();
+    vi.mocked(isometric.createGhgStatement).mockResolvedValue(authoritative);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(authoritative);
+
+    await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    const staleSummary = makeRemoteStatement({
+      ghg_entry_ids: [],
+      removal_ids: [],
+    });
+    vi.mocked(isometric.listGhgStatementsForProject).mockResolvedValue([
+      staleSummary,
+    ]);
+    vi.mocked(
+      ghgDA.getGhgStatementSubmissionForFacility,
+    ).mockResolvedValue(storedLedger[0]);
+    vi.mocked(isometric.getGhgStatement).mockClear();
+    vi.mocked(ghgDA.reconcileRemovalMembership).mockClear();
+
+    const second = await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    expect(second).toMatchObject({
+      success: true,
+      data: {
+        outcome: "existing",
+        externalId: EXTERNAL_STATEMENT_ID,
+      },
+    });
+    expect(isometric.getGhgStatement).toHaveBeenCalledWith(
+      expect.anything(),
+      EXTERNAL_STATEMENT_ID,
+    );
+    expect(ghgDA.reconcileRemovalMembership).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      STATEMENT_ID,
+      [EXTERNAL_REMOVAL_ID],
+      expect.any(Object),
+    );
   });
 });
 

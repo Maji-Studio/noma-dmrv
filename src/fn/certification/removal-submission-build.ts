@@ -35,6 +35,7 @@ import {
   assertRemovalDatesNotFuture,
   assertReportingWindowNotInverted,
   resolveLatestApplicationTime,
+  resolveRemovalReportingWindow,
 } from "./removal-reporting-window";
 import type { ResolvedFixedInput } from "./removal-snapshot-readers";
 import {
@@ -67,7 +68,7 @@ export interface ResolvedTemplateInputs {
 
 export interface RemovalSubmissionBuild {
   agg: AggregatedProductionData;
-  latestApplicationTime: Date;
+  reportingWindow: { startedOn: Date; completedOn: Date };
   candidateDocumentIds: string[];
   candidateSourceDocuments: CandidateSourceDocument[];
   sourceIds: string[];
@@ -420,8 +421,8 @@ export async function compileRemovalSubmission(
       code: "code" in run && typeof run.code === "string" ? run.code : null,
     })),
     reportingWindow: {
-      startedOn: build.agg.earliestStartTime.toISOString(),
-      completedOn: build.latestApplicationTime.toISOString(),
+      startedOn: build.reportingWindow.startedOn.toISOString(),
+      completedOn: build.reportingWindow.completedOn.toISOString(),
     },
   };
 
@@ -675,6 +676,11 @@ export async function buildRemovalSubmissionBuild(args: {
     productionEndTime: agg.latestEndTime,
     latestApplicationTime,
   });
+  const reportingWindow = resolveRemovalReportingWindow({
+    earliestProductionStartTime: agg.earliestStartTime,
+    latestProductionEndTime: agg.latestEndTime,
+    latestApplicationTime,
+  });
 
   if (ctx.submissionWarnings.length > 0) {
     log?.warn(
@@ -796,8 +802,8 @@ export async function buildRemovalSubmissionBuild(args: {
       defaultTemplate,
     ),
     sourceProductionRunIds: [...agg.sourceProductionRunIds].sort(),
-    startedOn: agg.earliestStartTime.toISOString(),
-    completedOn: latestApplicationTime.toISOString(),
+    startedOn: reportingWindow.startedOn.toISOString(),
+    completedOn: reportingWindow.completedOn.toISOString(),
     sourceIds,
     sourceBindingPlan: semanticSourceBindingPlan,
     candidateSources: candidateSourceDocuments
@@ -836,7 +842,7 @@ export async function buildRemovalSubmissionBuild(args: {
 
   return {
     agg,
-    latestApplicationTime,
+    reportingWindow,
     candidateDocumentIds,
     candidateSourceDocuments,
     sourceIds,
