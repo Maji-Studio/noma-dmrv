@@ -60,7 +60,7 @@ export function FormActions({
           // form on short forms (overriding the form's `space-y` margin); on
           // long forms there is no free space, so `sticky bottom-0` keeps the
           // action error and CTA in view while the body scrolls.
-          ? "sticky bottom-0 mt-auto! -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
+          ? "sticky bottom-0 z-20 mt-auto! -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
           : "pt-20"
       )}
     >
