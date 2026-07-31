@@ -11,20 +11,12 @@ import { RegistryCarbonResultCard } from "./registry-carbon-result-card";
 import { RegistryObservationMessage } from "./removal-carbon-breakdown";
 
 interface GhgStatementCarbonBreakdownProps {
-  ghgStatementId: string;
-  /** Gate the fetch — the sheet only enables it while open. */
-  enabled?: boolean;
+  query: ReturnType<typeof useGhgStatementBreakdown>;
 }
 
 export function GhgStatementCarbonBreakdown({
-  ghgStatementId,
-  enabled = true,
+  query,
 }: GhgStatementCarbonBreakdownProps) {
-  const query = useGhgStatementBreakdown(
-    ghgStatementId,
-    enabled,
-  );
-
   if (query.isLoading) return <CarbonBreakdownSkeleton />;
   if (query.isError || !query.data) {
     return (

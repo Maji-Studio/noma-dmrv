@@ -18,6 +18,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import {
   useGhgStatementReports,
+  useGhgStatementBreakdown,
   useGhgStatementState,
   useRefreshGhgStatementStatus,
 } from "@/hooks/use-certification";
@@ -30,6 +31,7 @@ import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import {
+  findApprovedGhgStatementReport,
   GhgStatementWorkflow,
   type WorkflowStepModel,
 } from "./ghg-statement-workflow";
@@ -53,6 +55,7 @@ const ACCORDION_LABEL =
 interface GhgStatementDetailSheetProps {
   item: GhgStatementListItem;
   isProduction: boolean;
+  canManageReports: boolean;
   open: boolean;
   onClose: () => void;
 }
@@ -123,6 +126,7 @@ function deriveVerifierStep(
 export function GhgStatementDetailSheet({
   item,
   isProduction,
+  canManageReports,
   open,
   onClose,
 }: GhgStatementDetailSheetProps) {
@@ -136,7 +140,12 @@ export function GhgStatementDetailSheet({
           <SlideOverPanel.Description>{period}</SlideOverPanel.Description>
         </SlideOverPanel.Header>
 
-        <DetailState item={item} isProduction={isProduction} open={open} />
+        <DetailState
+          item={item}
+          isProduction={isProduction}
+          canManageReports={canManageReports}
+          open={open}
+        />
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
   );
@@ -145,15 +154,18 @@ export function GhgStatementDetailSheet({
 function DetailState({
   item,
   isProduction,
+  canManageReports,
   open,
 }: {
   item: GhgStatementListItem;
   isProduction: boolean;
+  canManageReports: boolean;
   open: boolean;
 }) {
   const { statement } = item;
   const query = useGhgStatementState(statement.id);
   const reportsQuery = useGhgStatementReports(statement.id);
+  const breakdownQuery = useGhgStatementBreakdown(statement.id, open);
   const refreshMutation = useRefreshGhgStatementStatus();
   const toast = useToast();
   const [submitOpen, setSubmitOpen] = useState(false);
@@ -203,17 +215,25 @@ function DetailState({
   const hasMembership = remote
     ? remote.ghg_entry_ids.length > 0
     : linkedRemovals.length > 0;
-  const canGenerate = Boolean(remote?.ghg_entry_ids.length);
+  const rollupReady =
+    breakdownQuery.data?.status === "available" &&
+    remote?.pending_total_co2e_removed_kg != null &&
+    Number.isFinite(remote.pending_total_co2e_removed_kg);
+  const canGenerate = Boolean(remote?.ghg_entry_ids.length) && rollupReady;
   const remoteUnavailable = created && remote === null;
   const generationUnavailableReason = canGenerate
     ? null
     : remoteUnavailable
       ? "Live Isometric statement data is unavailable. Refresh and try again."
-      : "Add a live GHG Entry before generating a report.";
-  const approvedReport = reportsQuery.data?.find(
-    (report) =>
-      report.lifecycle === "approved" || report.lifecycle === "submitted",
+      : remote?.ghg_entry_ids.length
+        ? "Wait for Isometric to finish calculating the registry totals."
+        : "Submit a Removal in this reporting period before generating a report.";
+  const approvedReport = findApprovedGhgStatementReport(
+    reportsQuery.data ?? [],
   );
+  const reportManagementUnavailableReason = !canManageReports
+    ? "An Owner or Admin generates and approves reports."
+    : generationUnavailableReason;
   const verifierStep = deriveVerifierStep(
     remote,
     remoteUnavailable,
@@ -221,7 +241,10 @@ function DetailState({
     Boolean(approvedReport),
   );
   const canSubmit =
-    created && (mode === "submit" || mode === "resubmit") && hasMembership;
+    canManageReports &&
+    created &&
+    (mode === "submit" || mode === "resubmit") &&
+    hasMembership;
   const isResubmit = mode === "resubmit";
 
   const handleRefresh = () => {
@@ -257,10 +280,7 @@ function DetailState({
           </div>
         </section>
 
-        <GhgStatementCarbonBreakdown
-          ghgStatementId={statement.id}
-          enabled={open}
-        />
+        <GhgStatementCarbonBreakdown query={breakdownQuery} />
 
         <section className="flex flex-col gap-8">
           <h3 className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
@@ -270,6 +290,7 @@ function DetailState({
             ghgStatementId={statement.id}
             reportsQuery={reportsQuery}
             created={created}
+            canManageReports={canManageReports}
             registryRecord={
               statementSubmission?.externalId ? (
                 <RegistryRecordLink
@@ -281,8 +302,9 @@ function DetailState({
                 />
               ) : undefined
             }
-            canGenerate={canGenerate}
-            generationUnavailableReason={generationUnavailableReason}
+            canGenerate={canManageReports && canGenerate}
+            autoGenerationReady={remote?.status === "DRAFT" && rollupReady}
+            generationUnavailableReason={reportManagementUnavailableReason}
             verifierStep={verifierStep}
             onSubmit={canSubmit ? () => setSubmitOpen(true) : undefined}
             submitLabel={isResubmit ? "Resubmit" : "Submit"}

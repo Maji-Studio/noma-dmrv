@@ -31,6 +31,9 @@ import type { GhgStatementReportView } from "@/fn/certification/ghg-statement-re
 import { CheckRow, type CheckStatus } from "./check-row";
 
 type ReportsQuery = ReturnType<typeof useGhgStatementReports>;
+type PrepareMutation = ReturnType<
+  typeof usePrepareGhgStatementReport
+>["mutate"];
 
 export interface WorkflowStepModel {
   status: CheckStatus;
@@ -44,7 +47,11 @@ interface GhgStatementWorkflowProps {
   created: boolean;
   /** Registry record link node, shown as the created step's detail. */
   registryRecord?: ReactNode;
+  /** Server-computed Owner/Admin capability for report mutations. */
+  canManageReports: boolean;
   canGenerate?: boolean;
+  /** The DRAFT statement's exact live registry roll-up is ready. */
+  autoGenerationReady?: boolean;
   generationUnavailableReason?: string | null;
   /** Computed by the sheet from the remote statement + submit mode. */
   verifierStep: WorkflowStepModel;
@@ -55,6 +62,63 @@ interface GhgStatementWorkflowProps {
    */
   onSubmit?: () => void;
   submitLabel?: string;
+}
+
+export function shouldAutoGenerateFirstReport({
+  created,
+  canManageReports,
+  autoGenerationReady,
+  reportsLoaded,
+  reportCount,
+}: {
+  created: boolean;
+  canManageReports: boolean;
+  autoGenerationReady: boolean;
+  reportsLoaded: boolean;
+  reportCount: number;
+}): boolean {
+  return (
+    created &&
+    canManageReports &&
+    autoGenerationReady &&
+    reportsLoaded &&
+    reportCount === 0
+  );
+}
+
+export function startAutomaticFirstReportGeneration({
+  shouldStart,
+  ghgStatementId,
+  attemptedFor,
+  mutate,
+  onError,
+}: {
+  shouldStart: boolean;
+  ghgStatementId: string;
+  attemptedFor: { current: string | null };
+  mutate: PrepareMutation;
+  onError: (error: unknown) => void;
+}): boolean {
+  if (!shouldStart || attemptedFor.current === ghgStatementId) return false;
+  attemptedFor.current = ghgStatementId;
+  mutate(
+    {
+      ghgStatementId,
+      preparationKey: ghgStatementId,
+      ensureFirst: true,
+    },
+    { onError },
+  );
+  return true;
+}
+
+export function findApprovedGhgStatementReport(
+  reports: GhgStatementReportView[],
+): GhgStatementReportView | undefined {
+  return reports.find(
+    (report) =>
+      report.lifecycle === "approved" || report.lifecycle === "submitted",
+  );
 }
 
 function reportBadge(lifecycle: string): {
@@ -77,7 +141,9 @@ export function GhgStatementWorkflow({
   reportsQuery,
   created,
   registryRecord,
+  canManageReports,
   canGenerate = true,
+  autoGenerationReady = false,
   generationUnavailableReason,
   verifierStep,
   onSubmit,
@@ -89,15 +155,12 @@ export function GhgStatementWorkflow({
     crypto.randomUUID(),
   );
   const [error, setError] = useState<string | null>(null);
-  const autoGenerateRan = useRef(false);
+  const autoGenerateAttemptedFor = useRef<string | null>(null);
 
   const reports = reportsQuery.data ?? [];
   const latest: GhgStatementReportView | undefined = reports[0];
   const generated = reports.length > 0;
-  const approvedReport = reports.find(
-    (report) =>
-      report.lifecycle === "approved" || report.lifecycle === "submitted",
-  );
+  const approvedReport = findApprovedGhgStatementReport(reports);
   const latestPrepared = latest?.lifecycle === "prepared";
 
   const runGenerate = async () => {
@@ -122,30 +185,27 @@ export function GhgStatementWorkflow({
   // version is generated automatically once the statement is ready, so the
   // operator's only gates are Approve and Submit. One attempt per mount — a
   // failure surfaces below and leaves the manual Generate button as the retry.
-  const shouldAutoGenerate =
-    created &&
-    canGenerate &&
-    !reportsQuery.isLoading &&
-    !reportsQuery.error &&
-    reports.length === 0;
-  useEffect(() => {
-    if (!shouldAutoGenerate || autoGenerateRan.current || prepare.isPending) {
-      return;
-    }
-    autoGenerateRan.current = true;
-    prepare.mutate(
-      { ghgStatementId, preparationKey },
-      {
-        onSuccess: () => setPreparationKey(crypto.randomUUID()),
-        onError: (prepareError) =>
-          setError(
-            prepareError instanceof Error
-              ? prepareError.message
-              : "The report was not generated. Try again.",
-          ),
-      },
-    );
+  const shouldAutoGenerate = shouldAutoGenerateFirstReport({
+    created,
+    canManageReports,
+    autoGenerationReady,
+    reportsLoaded: !reportsQuery.isLoading && !reportsQuery.error,
+    reportCount: reports.length,
   });
+  useEffect(() => {
+    startAutomaticFirstReportGeneration({
+      shouldStart: shouldAutoGenerate,
+      ghgStatementId,
+      attemptedFor: autoGenerateAttemptedFor,
+      mutate: prepare.mutate,
+      onError: (prepareError) =>
+        setError(
+          prepareError instanceof Error
+            ? prepareError.message
+            : "The report was not generated. Try again.",
+        ),
+    });
+  }, [ghgStatementId, prepare.mutate, shouldAutoGenerate]);
 
   if (reportsQuery.isLoading) {
     return (
@@ -223,7 +283,7 @@ export function GhgStatementWorkflow({
           label="Report generated"
           detail={generatedStep.detail}
         >
-          {created && canGenerate && (
+          {created && canGenerate && canManageReports && (
             <Button
               size="small"
               variant={generated ? "default" : "primary"}
@@ -251,7 +311,7 @@ export function GhgStatementWorkflow({
               >
                 Review
               </a>
-              {latestPrepared && (
+              {latestPrepared && canManageReports && (
                 <Button
                   size="small"
                   variant="primary"

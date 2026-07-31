@@ -1,8 +1,14 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { GhgStatementWorkflow } from "./ghg-statement-workflow";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  GhgStatementWorkflow,
+  startAutomaticFirstReportGeneration,
+  shouldAutoGenerateFirstReport,
+} from "./ghg-statement-workflow";
 
 const prepareMutation = {
+  mutate: vi.fn(),
   mutateAsync: vi.fn(),
   isPending: false,
 };
@@ -26,8 +32,17 @@ function reportsQuery(data: unknown[]) {
 }
 
 describe("GhgStatementWorkflow", () => {
+  beforeAll(() => {
+    (
+      globalThis as typeof globalThis & {
+        IS_REACT_ACT_ENVIRONMENT: boolean;
+      }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
   beforeEach(() => {
     prepareMutation.mutateAsync.mockReset();
+    prepareMutation.mutate.mockReset();
     approveMutation.mutateAsync.mockReset();
   });
 
@@ -36,6 +51,7 @@ describe("GhgStatementWorkflow", () => {
       <GhgStatementWorkflow
         ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
+        canManageReports
         verifierStep={{ status: "skipped" }}
         reportsQuery={reportsQuery([])}
       />,
@@ -55,6 +71,7 @@ describe("GhgStatementWorkflow", () => {
       <GhgStatementWorkflow
         ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
+        canManageReports
         verifierStep={{ status: "skipped" }}
         reportsQuery={reportsQuery([
           {
@@ -78,15 +95,18 @@ describe("GhgStatementWorkflow", () => {
       <GhgStatementWorkflow
         ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
+        canManageReports
         canGenerate={false}
-        generationUnavailableReason="Add a live GHG Entry before generating a report."
+        generationUnavailableReason="Submit a Removal in this reporting period before generating a report."
         verifierStep={{ status: "skipped" }}
         reportsQuery={reportsQuery([])}
       />,
     );
 
     expect(html).not.toContain("Generate report");
-    expect(html).toContain("Add a live GHG Entry before generating a report.");
+    expect(html).toContain(
+      "Submit a Removal in this reporting period before generating a report.",
+    );
   });
 
   it("surfaces the verifier step detail next to the step", () => {
@@ -94,6 +114,7 @@ describe("GhgStatementWorkflow", () => {
       <GhgStatementWorkflow
         ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
+        canManageReports
         verifierStep={{
           status: "met",
           detail: "In verification. No action is needed.",
@@ -118,6 +139,7 @@ describe("GhgStatementWorkflow", () => {
       <GhgStatementWorkflow
         ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
+        canManageReports
         verifierStep={{
           status: "active",
           detail: "Submit the approved report to the verifier.",
@@ -144,6 +166,7 @@ describe("GhgStatementWorkflow", () => {
       <GhgStatementWorkflow
         ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
+        canManageReports
         verifierStep={{ status: "skipped" }}
         reportsQuery={reportsQuery([
           {
@@ -164,5 +187,104 @@ describe("GhgStatementWorkflow", () => {
 
     expect(html).toContain("All report versions (2)");
     expect(html).toContain("<details");
+  });
+
+  it("auto-generates only for managing viewers with a ready live roll-up", () => {
+    const eligible = {
+      created: true,
+      canManageReports: true,
+      autoGenerationReady: true,
+      reportsLoaded: true,
+      reportCount: 0,
+    };
+
+    expect(shouldAutoGenerateFirstReport(eligible)).toBe(true);
+    expect(
+      shouldAutoGenerateFirstReport({
+        ...eligible,
+        canManageReports: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldAutoGenerateFirstReport({
+        ...eligible,
+        autoGenerationReady: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldAutoGenerateFirstReport({ ...eligible, reportCount: 1 }),
+    ).toBe(false);
+  });
+
+  it("starts one idempotent automatic preparation per statement", () => {
+    const attemptedFor = { current: null as string | null };
+    const onError = vi.fn();
+    const statementId = "11111111-1111-4111-8111-111111111111";
+
+    expect(
+      startAutomaticFirstReportGeneration({
+        shouldStart: true,
+        ghgStatementId: statementId,
+        attemptedFor,
+        mutate: prepareMutation.mutate as never,
+        onError,
+      }),
+    ).toBe(true);
+    expect(
+      startAutomaticFirstReportGeneration({
+        shouldStart: true,
+        ghgStatementId: statementId,
+        attemptedFor,
+        mutate: prepareMutation.mutate as never,
+        onError,
+      }),
+    ).toBe(false);
+    expect(prepareMutation.mutate).toHaveBeenCalledTimes(1);
+    expect(prepareMutation.mutate).toHaveBeenCalledWith(
+      {
+        ghgStatementId: statementId,
+        preparationKey: statementId,
+        ensureFirst: true,
+      },
+      { onError },
+    );
+  });
+
+  it("executes the guarded automatic-generation effect exactly once", async () => {
+    const statementId = "11111111-1111-4111-8111-111111111111";
+    let renderer: ReactTestRenderer | undefined;
+    const workflow = (
+      <GhgStatementWorkflow
+        ghgStatementId={statementId}
+        created
+        canManageReports
+        canGenerate
+        autoGenerationReady
+        verifierStep={{ status: "skipped" }}
+        reportsQuery={reportsQuery([])}
+      />
+    );
+
+    await act(async () => {
+      renderer = create(workflow);
+    });
+    expect(prepareMutation.mutate).toHaveBeenCalledTimes(1);
+    expect(prepareMutation.mutate).toHaveBeenCalledWith(
+      {
+        ghgStatementId: statementId,
+        preparationKey: statementId,
+        ensureFirst: true,
+      },
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
+
+    await act(async () => {
+      renderer?.update(workflow);
+    });
+    expect(prepareMutation.mutate).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      renderer?.unmount();
+    });
   });
 });
