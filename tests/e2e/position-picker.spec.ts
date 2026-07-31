@@ -73,7 +73,7 @@ async function openNewCustomerLocationEditor(page: Page, facilityId: string) {
   await page.goto(`/customers?facility=${facilityId}`);
   await page.getByRole("button", { name: "New Customer" }).click();
 
-  const customerSheet = page.getByRole("dialog");
+  const customerSheet = page.getByRole("dialog", { name: "Create Customer" });
   await expect(customerSheet).toBeVisible();
   await customerSheet.getByRole("button", { name: "Add Location" }).click();
 
