@@ -159,6 +159,48 @@ type SideSheetState =
   | { mode: "view"; entity: BiocharProductWithRelations }
   | { mode: "edit"; entity: BiocharProductWithRelations };
 
+interface BiocharProductPageMassSummaryProps {
+  products: BiocharProductWithRelations[];
+  isLoading?: boolean;
+}
+
+export function BiocharProductPageMassSummary({
+  products,
+  isLoading = false,
+}: BiocharProductPageMassSummaryProps) {
+  const pageMass = products.reduce(
+    (total, product) => {
+      const split = splitWetMassAfterAddedWater(
+        product.massKg,
+        product.moistureContentPercent,
+        product.waterAddedKg,
+      );
+      return {
+        wetKg: total.wetKg + (split?.wetKg ?? product.massKg ?? 0),
+        dryKg: total.dryKg + (split?.dryKg ?? 0),
+        hasMissingDry: total.hasMissingDry || split == null,
+      };
+    },
+    { wetKg: 0, dryKg: 0, hasMissingDry: false },
+  );
+
+  return (
+    <StatCard
+      title="Mass on This Page"
+      value={
+        <MassPair
+          wetKg={pageMass.wetKg}
+          dryKg={pageMass.hasMissingDry ? null : pageMass.dryKg}
+        />
+      }
+      valueLayout="breakdown"
+      icon={<ScalesIcon size={24} weight="bold" />}
+      description="Combined product mass on the current page"
+      isLoading={isLoading}
+    />
+  );
+}
+
 // ============================================
 // Component
 // ============================================
@@ -258,21 +300,6 @@ export function BiocharProductList() {
     isLoading,
     setCurrentPage,
   });
-  const pageMass = products.reduce(
-    (total, product) => {
-      const split = splitWetMassAfterAddedWater(
-        product.massKg,
-        product.moistureContentPercent,
-        product.waterAddedKg,
-      );
-      return {
-        wetKg: total.wetKg + (split?.wetKg ?? product.massKg ?? 0),
-        dryKg: total.dryKg + (split?.dryKg ?? 0),
-        hasMissingDry: total.hasMissingDry || split == null,
-      };
-    },
-    { wetKg: 0, dryKg: 0, hasMissingDry: false },
-  );
   const hasActiveFilters =
     searchInput.trim().length > 0 || Boolean(creditBatchFilter);
 
@@ -422,16 +449,8 @@ export function BiocharProductList() {
           description="Finished product batches"
           isLoading={isLoading}
         />
-        <StatCard
-          title="Product Mass"
-          value={
-            <MassPair
-              wetKg={pageMass.wetKg}
-              dryKg={pageMass.hasMissingDry ? null : pageMass.dryKg}
-            />
-          }
-          valueLayout="breakdown"
-          icon={<ScalesIcon size={24} weight="bold" />}
+        <BiocharProductPageMassSummary
+          products={products}
           isLoading={isLoading}
         />
       </div>
