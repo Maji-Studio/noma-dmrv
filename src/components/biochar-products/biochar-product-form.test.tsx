@@ -23,13 +23,14 @@ describe("TransferFlowPreview", () => {
     expect(text).not.toContain("(−90 kg)");
   });
 
-  it("adds the fixed allocation back before showing an edit remainder", () => {
+  it("uses the recorded edit allocation after the source ratio changes", () => {
     const html = renderToStaticMarkup(
       <TransferFlowPreview
         sourceBinName="Biochar July"
         sourceAvailableWetMassKg={100}
-        sourceAvailableDryMassKg={80}
+        sourceAvailableDryMassKg={50}
         sourceWetMassKg={50}
+        recordedSourceDryMassKg={40}
         destinationDryMassKg={45}
         destinationBinLabel={null}
         isEditMode
@@ -37,8 +38,48 @@ describe("TransferFlowPreview", () => {
     );
     const text = html.replace(/<[^>]+>/g, "");
 
-    expect(text).toContain("Dry biochar: 120 kg (−40 kg)");
-    expect(text).toContain("Remaining: 80 kg");
+    expect(text).toContain("Dry biochar: 90 kg (−40 kg)");
+    expect(text).toContain("Remaining: 50 kg");
+    expect(text).not.toContain("(−25 kg)");
+  });
+
+  it("reconstructs the recorded edit draw when the source bin is exhausted", () => {
+    const html = renderToStaticMarkup(
+      <TransferFlowPreview
+        sourceBinName="Biochar July"
+        sourceAvailableWetMassKg={0}
+        sourceAvailableDryMassKg={0}
+        sourceWetMassKg={50}
+        recordedSourceDryMassKg={40}
+        destinationDryMassKg={45}
+        destinationBinLabel={null}
+        isEditMode
+      />,
+    );
+    const text = html.replace(/<[^>]+>/g, "");
+
+    expect(text).toContain("Dry biochar: 40 kg (−40 kg)");
+    expect(text).toContain("Remaining: 0 kg");
+  });
+
+  it("does not invent an edit draw when the recorded allocation is unavailable", () => {
+    const html = renderToStaticMarkup(
+      <TransferFlowPreview
+        sourceBinName="Legacy biochar"
+        sourceAvailableWetMassKg={100}
+        sourceAvailableDryMassKg={50}
+        sourceWetMassKg={50}
+        recordedSourceDryMassKg={null}
+        destinationDryMassKg={45}
+        destinationBinLabel={null}
+        isEditMode
+      />,
+    );
+    const text = html.replace(/<[^>]+>/g, "");
+
+    expect(text).toContain("Recorded source dry allocation is not available.");
+    expect(text).not.toContain("(−25 kg)");
+    expect(text).not.toContain("Remaining:");
   });
 
   it("names unavailable source dry stock instead of asking for entered fields", () => {
