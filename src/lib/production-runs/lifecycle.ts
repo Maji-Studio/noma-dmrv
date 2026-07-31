@@ -3,6 +3,8 @@ import { dryOutputExceedsDryInput } from "@/lib/calculations/mass-dry";
 
 export const COMPLETED_PRODUCTION_RUN_STATUS = "complete" as const;
 export const CANCELLED_PRODUCTION_RUN_STATUS = "cancelled" as const;
+export const DRY_MASS_BALANCE_MESSAGE =
+  "Dry output exceeds dry input. Reduce the biochar output or correct the moisture values.";
 
 export const PRODUCTION_RUN_STATUSES = [
   "draft",
@@ -198,7 +200,7 @@ export function assertProductionRunOutcome(
     case "end-not-after-start":
       throw new SafeError("End time must be after the start time");
     case "dry-mass-balance-exceeded":
-      throw new SafeError("Dry biochar output cannot exceed dry feedstock input");
+      throw new SafeError(DRY_MASS_BALANCE_MESSAGE);
     case "cancellation-reason-required":
       throw new SafeError("A cancellation reason is required");
     case "running-end-forbidden":

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertProductionRunOutcome,
   assertProductionRunTransition,
+  DRY_MASS_BALANCE_MESSAGE,
   getProductionRunOutcomeViolations,
   shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
@@ -276,7 +277,7 @@ describe("production-run lifecycle", () => {
         },
         "cancellation reason",
       ],
-      [{ biocharOutputKg: 81 }, "Dry biochar output cannot exceed dry feedstock input"],
+      [{ biocharOutputKg: 81 }, DRY_MASS_BALANCE_MESSAGE],
     ] as const)("maps a violation to SafeError: %s", (overrides, message) => {
       expect(() => assertProductionRunOutcome(makeOutcomeInput(overrides))).toThrow(message);
     });
@@ -290,7 +291,7 @@ describe("production-run lifecycle", () => {
             biocharOutputKg: 81,
           }),
         ),
-      ).toThrow("Dry biochar output cannot exceed dry feedstock input");
+      ).toThrow(DRY_MASS_BALANCE_MESSAGE);
     });
 
     it("permits failed output to be absent", () => {

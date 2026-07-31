@@ -48,4 +48,12 @@ describe("order product-bin selection", () => {
     expect(packagingIndex).toBeLessThan(valueIndex);
     expect(valueIndex).toBeLessThan(currencyIndex);
   });
+
+  it("shows current product availability as a non-blocking quantity warning", () => {
+    expect(orderFormSource).toContain("orderAvailabilityWarning(");
+    expect(orderFormSource).toContain(
+      "selectedBiocharProduct?.remainingMass?.wetKg",
+    );
+    expect(orderFormSource).toContain("warning={availabilityWarning}");
+  });
 });
