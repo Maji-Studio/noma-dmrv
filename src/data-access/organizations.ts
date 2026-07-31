@@ -27,6 +27,7 @@ const MILLISECONDS_PER_SECOND = 1_000;
 const ORGANIZATION_SLUG_CONSTRAINT = "organizations_slug_unique";
 const ORGANIZATION_SLUG_CONFLICT_MESSAGE =
   "An Organization with this slug already exists.";
+const LAST_OWNER_MESSAGE = "An Organization must keep at least one Owner.";
 
 export type OrgMemberRow = {
   memberId: string;
@@ -222,7 +223,7 @@ export async function updateMemberRoleAsPlatformAdmin(
           )
         );
       if (Number(owners?.value ?? 0) <= 1) {
-        throw new SafeError("An Organization must keep at least one Owner.");
+        throw new SafeError(LAST_OWNER_MESSAGE);
       }
     }
     const updated = await tx
@@ -277,7 +278,7 @@ export async function removeMemberAsPlatformAdmin(
           )
         );
       if (Number(owners?.value ?? 0) <= 1) {
-        throw new SafeError("An Organization must keep at least one Owner.");
+        throw new SafeError(LAST_OWNER_MESSAGE);
       }
     }
     const removed = await tx
