@@ -84,8 +84,14 @@ export interface LoggedRequest {
   body?: unknown;
 }
 
+export interface DeferredRegistryResponse {
+  started: Promise<void>;
+  release: () => void;
+}
+
 const DEFAULT_REJECT_STATUS = 422;
 const DEFAULT_PAGE_SIZE = 50;
+const FAKE_SUBMITTED_AT = "2026-04-01T00:00:00.000Z";
 
 interface Page<T> {
   nodes: T[];
@@ -100,9 +106,17 @@ export class FakeIsometricRegistry {
   readonly ghgStatements: FakeGhgStatementRecord[] = [];
   readonly requests: LoggedRequest[] = [];
 
+  private readonly listedGhgStatementOverrides = new Map<
+    string,
+    Partial<FakeGhgStatementRecord>
+  >();
   private readonly failures = new Map<
     string,
     Array<FailureInjection | null>
+  >();
+  private readonly deferredResponses = new Map<
+    string,
+    Array<{ signalStarted: () => void; released: Promise<void> }>
   >();
   // External ids are unique table-wide per (provider, submissionType) in the
   // local ledger (`cert_submissions_external_unique`), and boundary-test rows
@@ -131,6 +145,28 @@ export class FakeIsometricRegistry {
     this.failures.set(route, queue);
   }
 
+  /**
+   * Capture the next response for a route, then hold it until released.
+   * Capturing before the wait models an authoritative detail snapshot that
+   * can become stale while another registry request observes fresher state.
+   */
+  deferNextResponse(
+    route: `${"GET" | "POST" | "PATCH" | "DELETE"} /${string}`,
+  ): DeferredRegistryResponse {
+    let signalStarted = () => {};
+    const started = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const queue = this.deferredResponses.get(route) ?? [];
+    queue.push({ signalStarted, released });
+    this.deferredResponses.set(route, queue);
+    return { started, release };
+  }
+
   /** Injects a draft statement directly (e.g. the second draft of an ambiguous period). */
   seedGhgStatement(args: {
     projectId: string;
@@ -156,6 +192,17 @@ export class FakeIsometricRegistry {
     };
     this.ghgStatements.push(statement);
     return statement;
+  }
+
+  /**
+   * Model a project-list summary that lags the authoritative statement detail.
+   * The real sync must reconcile membership from GET /ghg_statements/{id}.
+   */
+  overrideListedGhgStatement(
+    id: string,
+    override: Partial<FakeGhgStatementRecord>,
+  ): void {
+    this.listedGhgStatementOverrides.set(id, override);
   }
 
   requestCount(method: string, path: string): number {
@@ -193,6 +240,13 @@ export class FakeIsometricRegistry {
         undefined,
         "network",
       );
+    }
+    const deferred = this.deferredResponses.get(`${method} ${path}`)?.shift();
+    if (deferred) {
+      const snapshot = structuredClone(result);
+      deferred.signalStarted();
+      await deferred.released;
+      return snapshot;
     }
     return result;
   }
@@ -312,7 +366,35 @@ export class FakeIsometricRegistry {
     if (method === "GET" && path === "/ghg_statements") {
       // No server-side filter: findDraftGhgStatementsByPeriod filters
       // client-side over the paged list.
-      return paginateSlice(this.ghgStatements, query);
+      return paginateSlice(
+        this.ghgStatements.map((statement) => ({
+          ...statement,
+          ...this.listedGhgStatementOverrides.get(statement.id),
+        })),
+        query,
+      );
+    }
+    const submittedStatement = path.match(
+      /^\/ghg_statements\/([^/]+)\/submit$/,
+    );
+    if (method === "POST" && submittedStatement) {
+      const statement = this.ghgStatements.find(
+        (candidate) =>
+          candidate.id === decodeURIComponent(submittedStatement[1]),
+      );
+      if (!statement) {
+        throw new ApiError(
+          `Isometric ${method} ${path} → 404`,
+          404,
+          { errors: [{ detail: "not found" }] },
+          "http",
+        );
+      }
+      const payload = body as { ghg_statement_report_url: string };
+      statement.status = "AWAITING_VERIFICATION";
+      statement.ghg_statement_report_url = payload.ghg_statement_report_url;
+      statement.submitted_at = FAKE_SUBMITTED_AT;
+      return statement;
     }
     const statementById = path.match(/^\/ghg_statements\/([^/]+)$/);
     if (method === "GET" && statementById) {

@@ -152,7 +152,7 @@ export function FacilityList() {
         setLinkCertifierFacilityId(facility.id);
       }
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "The facility was not created. Check the form and try again.");
+      setCreateError(error instanceof Error ? error.message : "Facility was not created. Check the form.");
     }
   };
 
@@ -164,7 +164,7 @@ export function FacilityList() {
       setSideSheet(null);
       toast.success("Facility updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "The facility was not saved. Try again.");
+      setUpdateError(error instanceof Error ? error.message : "Facility was not saved. Try again.");
     }
   };
 

@@ -244,7 +244,7 @@ export function StorageLocationList() {
       setSideSheet(null);
       toast.success("Storage bin created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The storage bin was not created. Check the form and try again.");
+      setFormError(error instanceof Error ? error.message : "Storage bin was not created. Check the form.");
     }
   };
 
@@ -259,7 +259,7 @@ export function StorageLocationList() {
       setSideSheet(null);
       toast.success("Storage bin updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The storage bin was not saved. Try again.");
+      setFormError(error instanceof Error ? error.message : "Storage bin was not saved. Try again.");
     }
   };
 
@@ -303,7 +303,7 @@ export function StorageLocationList() {
       setDeletingStorageLocationId(null);
       toast.success("Storage bin deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "The storage bin was not deleted. Try again.");
+      setDeleteError(error instanceof Error ? error.message : "Storage bin was not deleted. Try again.");
     }
   };
 

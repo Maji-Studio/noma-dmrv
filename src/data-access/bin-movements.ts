@@ -37,9 +37,9 @@ const LOSS_NEGATIVITY_MESSAGE = "A loss must be recorded as a negative mass delt
 const STOCK_TAKE_INCREASE_MESSAGE =
   "Counted stock cannot exceed the current derived stock. Stock-takes can only confirm or reduce inventory.";
 const FEEDSTOCK_SNAPSHOT_MESSAGE =
-  "Feedstock stock-takes require counted wet stock and moisture content";
+  "Feedstock stock-takes require wet stock and moisture";
 const NON_FEEDSTOCK_SNAPSHOT_MESSAGE =
-  "Wet-mass moisture snapshots are only valid for feedstock bins";
+  "Wet stock and moisture are only valid for feedstock bins";
 
 // ============================================
 // Types
@@ -170,7 +170,7 @@ async function assertBinLaneTarget(
   }
 
   if (laneForStorageType(location.type) !== input.lane) {
-    throw new SafeError("This lane does not match the bin's material type");
+    throw new SafeError("This material does not match the storage bin");
   }
 }
 
@@ -216,7 +216,7 @@ export async function createBinMovement(
   requireOrgScope(ctx);
   if (input.movementType !== "loss") {
     throw new SafeError(
-      "Stock-take adjustments must be recorded through the stock-take boundary",
+      "Use Reconcile stock to record a stock-take adjustment",
     );
   }
   return db.transaction(async (tx) => {
@@ -233,7 +233,7 @@ export async function createBinMovement(
       );
       const requested = Math.abs(input.massDeltaKg);
       if (isOverdraw(requested, available)) {
-        throw overdrawError(input.lane, available, requested);
+        throw overdrawError(input.lane);
       }
     }
     return createBinMovementInTransaction(ctx, tx, input);

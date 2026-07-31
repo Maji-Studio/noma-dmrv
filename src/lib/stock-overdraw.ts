@@ -16,24 +16,15 @@ export function formatStockKg(kg: number): string {
 
 export function binStockOverdrawMessage(
   material: StockMaterial,
-  availableKg: number,
-  requestedKg: number,
 ): string {
-  return `Not enough ${material} in this bin. ${formatStockKg(
-    availableKg,
-  )} available but this draw needs ${formatStockKg(
-    requestedKg,
-  )}. Reconcile the bin's stock (Storage Bins → the bin → Reconcile stock), then try again.`;
+  const userFacingMaterial = material === "feedstock" ? "feedstock" : "biochar";
+  return `Not enough ${userFacingMaterial} in this bin`;
 }
 
-export function deliveryStockOverdrawMessage(
-  productLabel: string | null,
-  availableKg: number,
-  requestedKg: number,
-): string {
-  return `Cannot deliver ${formatStockKg(requestedKg)} from product bin ${
-    productLabel ?? "this batch"
-  }: only ${formatStockKg(
-    availableKg,
-  )} remain undelivered. Reconcile the source bin or adjust the product before delivering.`;
+export function productStockOverdrawMessage(): string {
+  return "Not enough biochar in this product";
+}
+
+export function deliveryStockOverdrawMessage(): string {
+  return "Not enough biochar in this delivery";
 }

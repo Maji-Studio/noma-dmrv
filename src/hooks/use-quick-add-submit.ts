@@ -49,7 +49,7 @@ export function useQuickAddSubmit<TFormData>({
       setError(
         err instanceof Error
           ? err.message
-          : "The record was not created. Check the form and try again.",
+          : "Record was not created. Check the form.",
       );
     } finally {
       setIsSubmitting(false);
