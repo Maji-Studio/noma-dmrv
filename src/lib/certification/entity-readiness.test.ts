@@ -426,6 +426,14 @@ describe("isCertifyFormField", () => {
     expect(isCertifyFormField("customerLocation", "distanceFromFacilityKm")).toBe(true);
   });
 
+  it.each([
+    "totalHydrogenPercent",
+    "organicCarbonPercent",
+    "hToCOrgRatio",
+  ])("badges sample H:Corg form field %s", (field) => {
+    expect(isCertifyFormField("sample", field)).toBe(true);
+  });
+
   it("badges the readings upload through its form field name", () => {
     expect(isCertifyFormField("productionRun", "readingsCsv")).toBe(true);
     expect(isCertifyEntityField("productionRun", "hasReadingsFile")).toBe(true);

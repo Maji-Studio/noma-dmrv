@@ -229,6 +229,16 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "hToCOrgRatio",
       label: "H:Corg ratio",
       kind: "entered",
+      formFields: [
+        "totalHydrogenPercent",
+        "organicCarbonPercent",
+        "hToCOrgRatio",
+      ],
+      satisfaction: {
+        mode: "anyOf",
+        fields: ["hToCOrgRatio"],
+        label: "H:Corg ratio",
+      },
       mappings: [mapping("weightedHToCorgRatio")],
     },
     {

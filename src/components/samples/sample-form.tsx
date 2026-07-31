@@ -235,9 +235,8 @@ export function SampleForm({
   );
 
   // Derive O:C org from O% and C_org% so the universal eligibility gate
-  // (O/C_org < 0.2) survives when the manual O:Corg input is left blank —
-  // relevant under 1000-year where the ratios sit behind a collapsed
-  // disclosure. A manually-entered O:Corg still wins.
+  // (O/C_org < 0.2) survives when the manual O:Corg input is left blank.
+  // A manually-entered O:Corg still wins.
   const calculatedOToCRatio = calculateOToCOrgRatio(
     watchedOxygenPercent as number | null,
     watchedOrganicCarbonPercent as number | null
@@ -247,8 +246,7 @@ export function SampleForm({
 
   const is1000Year = watchedDurabilityOption === "1000_year";
 
-  // The H:Corg / O:Corg input pair. Rendered inline under 200-year (H:Corg
-  // drives durability) and inside an optional disclosure under 1000-year.
+  // The H:Corg / O:Corg input pair stays visible for both durability tiers.
   const stabilityRatioFields = (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
       <FormField
@@ -553,6 +551,8 @@ export function SampleForm({
                 id="totalHydrogenPercent"
                 label="Hydrogen (%)"
                 error={errors.totalHydrogenPercent?.message}
+                certifyRequired={isSampleCertifyField("totalHydrogenPercent")}
+                certifyStatus={certStatus("totalHydrogenPercent")}
               >
                 <FormInput
                   id="totalHydrogenPercent"
@@ -740,32 +740,18 @@ export function SampleForm({
                   : "The durability tier is inherited from the selected credit batch."}
               </p>
 
-              {/* Under 1000-year, durability is measured by R₀ + TGA (below), so
-                  the H:Corg/O:Corg ratios move behind a collapsed disclosure —
-                  they don't feed that estimate. They are NOT optional: both are
-                  required by the universal eligibility gate (H/C_org < 0.5,
-                  O/C_org < 0.2) and a sample missing either never counts as a
-                  usable replicate. Under 200-year they stay in view (H:Corg
-                  drives durability). */}
-              {is1000Year ? (
-                <details className="border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]">
-                  <summary className="cursor-pointer px-12 py-8 body-small font-medium text-[var(--color-text-primary)] marker:text-[var(--color-text-tertiary)]">
-                    Required eligibility ratios (H:Corg, O:Corg)
-                  </summary>
-                  <div className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] p-12">
-                    <p className="body-caption text-[var(--color-text-tertiary)]">
-                      Not used for the 1000-year durability estimate, but still
-                      required by the universal eligibility check (H/C_org &lt;
-                      0.5, O/C_org &lt; 0.2). A Sample without both ratios does
-                      not count toward the credit batch&apos;s minimum number of
-                      replicates.
-                    </p>
-                    {stabilityRatioFields}
-                  </div>
-                </details>
-              ) : (
-                stabilityRatioFields
+              {/* R₀ and TGA determine the 1000-year durability estimate, but
+                  both stability ratios remain universal eligibility inputs. */}
+              {is1000Year && (
+                <p className="body-caption text-[var(--color-text-tertiary)]">
+                  These ratios are not used for the 1000-year durability
+                  estimate, but remain required for the universal eligibility
+                  check (H/C_org &lt; 0.5, O/C_org &lt; 0.2). A sample without both
+                  ratios does not count toward the credit batch&apos;s minimum
+                  number of replicates.
+                </p>
               )}
+              {stabilityRatioFields}
 
               <SampleEligibilityAdvisory
                 hToCOrgRatio={calculatedHToCRatio}
