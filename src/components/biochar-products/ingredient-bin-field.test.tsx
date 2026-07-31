@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CompositionRow } from "@/lib/biochar-composition";
 
 interface CapturedEntitySelectProps {
+  allowCreate?: boolean;
   createLabel?: string;
   emptyHint?: { message: string };
   filterBy?: Record<string, string>;
@@ -123,6 +124,7 @@ describe("IngredientBinField feedstock-bin quick add", () => {
     renderField();
 
     expect(state.select).toMatchObject({
+      allowCreate: true,
       createLabel: "Create Manure feedstock bin",
       emptyHint: {
         message:

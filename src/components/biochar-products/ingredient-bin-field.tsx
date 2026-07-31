@@ -77,6 +77,7 @@ export function IngredientBinField({
                     feedstockTypeUsage: "blend",
                   }}
                   formatSelectedLabel={formatLabel}
+                  allowCreate
                   emptyHint={{
                     message: `No ${row.feedstockTypeName} feedstock bins. Create a bin here, then record a feedstock intake to add stock.`,
                   }}
