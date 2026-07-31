@@ -852,7 +852,7 @@ export async function refreshGhgStatementStatus(
           },
           tx,
         );
-        return remote;
+        return redactReportSecrets(remote) as GhgStatement;
       },
     );
   });
@@ -907,14 +907,19 @@ export async function loadGhgStatementState(
     }));
 
     const remote = statementSubmission?.externalId
-      ? await getGhgStatement(client, statementSubmission.externalId).catch(() => null)
+      ? await getGhgStatement(client, statementSubmission.externalId).catch(
+          () => null,
+        )
       : null;
 
     return {
       statement,
       statementSubmission,
       linkedRemovals,
-      remote,
+      // The verifier URL can carry the bearer token for the generated report.
+      // Keep that plaintext capability on the server even though the rest of
+      // the registry statement is useful in the technical-details pane.
+      remote: redactReportSecrets(remote) as GhgStatement | null,
       recentSyncEvents,
       isLockedInFlight: statementSubmission
         ? computeIsLockedInFlight(statementSubmission)
