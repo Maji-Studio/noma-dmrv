@@ -24,8 +24,6 @@ import { formatMassKg, formatPercent } from "@/lib/format-utils";
 
 /** Moisture is reported to one decimal everywhere; more reads as false precision. */
 const MOISTURE_FRACTION_DIGITS = 1;
-const KG_PER_TONNE = 1000;
-const SUMMARY_TONNES_MAX_FRACTION_DIGITS = 2;
 
 const PERCENT_MAX = 100;
 
@@ -234,21 +232,6 @@ export function formatRecordedMass(
   return unitSpacing === "compact"
     ? formatted.replace(/ kg$/, "kg")
     : formatted;
-}
-
-/** Compact mass for paired KPI summaries; detailed comparisons remain in kg. */
-export function formatSummaryMass(
-  kg: number | null | undefined,
-): string {
-  if (kg == null || !Number.isFinite(kg) || kg < 0) {
-    return "Not recorded";
-  }
-
-  if (kg < KG_PER_TONNE) return formatRecordedMass(kg);
-
-  return `${(kg / KG_PER_TONNE).toLocaleString(undefined, {
-    maximumFractionDigits: SUMMARY_TONNES_MAX_FRACTION_DIGITS,
-  })} t`;
 }
 
 /**

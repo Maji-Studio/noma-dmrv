@@ -1,7 +1,6 @@
 import { cn } from "@/lib/utils";
 import {
   formatRecordedMass,
-  formatSummaryMass,
   MASS_MOISTURE_LABELS,
 } from "@/lib/mass-moisture";
 
@@ -21,11 +20,9 @@ export function MassPair({
   variant = "summary",
   className,
 }: MassPairProps) {
-  const formatValue =
-    variant === "compact" ? formatRecordedMass : formatSummaryMass;
   const figures = [
-    { label: MASS_MOISTURE_LABELS.wet, value: formatValue(wetKg) },
-    { label: MASS_MOISTURE_LABELS.dry, value: formatValue(dryKg) },
+    { label: MASS_MOISTURE_LABELS.wet, value: formatRecordedMass(wetKg) },
+    { label: MASS_MOISTURE_LABELS.dry, value: formatRecordedMass(dryKg) },
   ];
   const isCompact = variant === "compact";
 
@@ -58,7 +55,9 @@ export function MassPair({
           <dd
             className={cn(
               "m-0 whitespace-nowrap font-mono tabular-nums text-[var(--color-text-primary)]",
-              isCompact ? "body-small" : "body-large font-semibold",
+              isCompact
+                ? "text-[length:var(--text-body-small)] leading-[var(--text-body-small--line-height)]"
+                : "text-[length:var(--text-body-large)] leading-[var(--text-body-large--line-height)] font-semibold",
             )}
           >
             {figure.value}
