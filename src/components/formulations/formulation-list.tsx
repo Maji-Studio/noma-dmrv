@@ -173,7 +173,7 @@ export function FormulationList() {
       setSideSheet(null);
       toast.success("Formulation created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The formulation was not created. Check the form and try again.");
+      setFormError(error instanceof Error ? error.message : "Formulation was not created. Check the form.");
     }
   };
 
@@ -188,7 +188,7 @@ export function FormulationList() {
       setSideSheet(null);
       toast.success("Formulation updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The formulation was not saved. Try again.");
+      setFormError(error instanceof Error ? error.message : "Formulation was not saved. Try again.");
     }
   };
 
@@ -202,7 +202,7 @@ export function FormulationList() {
       setDeletingFormulationId(null);
       toast.success("Formulation deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "The formulation was not deleted. Try again.");
+      setDeleteError(error instanceof Error ? error.message : "Formulation was not deleted. Try again.");
     }
   };
 

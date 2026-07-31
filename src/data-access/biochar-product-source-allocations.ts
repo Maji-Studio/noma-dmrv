@@ -507,11 +507,7 @@ export async function buildBiocharProductSourceAllocationPlan(
     );
   } catch (error) {
     if (error instanceof InsufficientTraceableBiocharError) {
-      throw overdrawError(
-        "biochar",
-        error.availableWetMassKg,
-        error.requestedWetMassKg,
-      );
+      throw overdrawError("biochar");
     }
     if (error instanceof UnresolvedBiocharDryMassError) {
       throw new SafeError(

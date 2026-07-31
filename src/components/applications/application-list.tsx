@@ -295,7 +295,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     executeCreate: async (data: ApplicationFormData) => {
       const result = await createApplication.mutateAsync(data);
       if (result.success === false) {
-        throw new Error(result.error || "The application was not created. Check the form and try again.");
+        throw new Error(result.error || "Application was not created. Check the form.");
       }
       const createdApplication: ApplicationListItem = {
         ...result.data,
@@ -314,7 +314,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     setError: setCreateError,
     setUpdateError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "The application was not created. Check the form and try again.",
+      error instanceof Error ? error.message : "Application was not created. Check the form.",
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this application.",
     openEditOnFailure: (application) =>
@@ -369,10 +369,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         setSideSheet(null);
         toast.success("Application updated.");
       } else {
-        setUpdateError(result.error || "The application was not saved. Try again.");
+        setUpdateError(result.error || "Application was not saved. Try again.");
       }
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "The application was not saved. Try again.");
+      setUpdateError(error instanceof Error ? error.message : "Application was not saved. Try again.");
     }
   };
 
@@ -389,10 +389,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         setDeletingApplicationId(null);
         toast.success("Application deleted.");
       } else {
-        setDeleteError(result.error || "The application was not deleted. Try again.");
+        setDeleteError(result.error || "Application was not deleted. Try again.");
       }
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "The application was not deleted. Try again.");
+      setDeleteError(error instanceof Error ? error.message : "Application was not deleted. Try again.");
     }
   };
 

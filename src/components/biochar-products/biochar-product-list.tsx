@@ -290,7 +290,7 @@ export function BiocharProductList() {
       setSideSheet(null);
       toast.success("Biochar product created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The biochar product was not created. Check the form and try again.");
+      setFormError(error instanceof Error ? error.message : "Biochar product was not created. Check the form.");
     }
   };
 
@@ -310,7 +310,7 @@ export function BiocharProductList() {
       setDeepLinkFocus(null);
       toast.success("Biochar product updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The biochar product was not saved. Try again.");
+      setFormError(error instanceof Error ? error.message : "Biochar product was not saved. Try again.");
     }
   };
 
@@ -324,7 +324,7 @@ export function BiocharProductList() {
       setDeletingProductId(null);
       toast.success("Biochar product deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "The biochar product was not deleted. Try again.");
+      setDeleteError(error instanceof Error ? error.message : "Biochar product was not deleted. Try again.");
     }
   };
 

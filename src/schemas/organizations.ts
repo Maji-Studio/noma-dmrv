@@ -98,7 +98,7 @@ export const certifierCredentialsRotationSchema = z.object({
 const organizationIdSchema = z
   .string()
   .trim()
-  .min(1, "Organization id is required.");
+  .min(1, "Choose an Organization.");
 
 /**
  * The settings form seeds a stored field with a run of bullets and drops any

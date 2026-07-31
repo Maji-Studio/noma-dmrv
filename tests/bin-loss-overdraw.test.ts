@@ -109,7 +109,7 @@ describe("bin loss stock guard", () => {
         field: "lossMassKg",
       });
       if (!rejected.success) {
-        expect(rejected.error).toContain("400 kg available");
+        expect(rejected.error).toBe("Not enough feedstock in this bin");
       }
 
       const rowsAfterRejection = await db

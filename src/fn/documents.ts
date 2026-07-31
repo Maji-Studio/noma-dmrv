@@ -23,6 +23,7 @@ import {
   type DocumentRow,
 } from "@/data-access/documents";
 import type { ActionResult } from "@/types/actions";
+import { formatZodActionError } from "./action-errors";
 import { withAction } from "./with-action";
 
 export interface RequestUploadResult {
@@ -91,15 +92,11 @@ export async function requestUpload(
   input: unknown
 ): Promise<ActionResult<RequestUploadResult>> {
   return withAction(async (ctx) => {
-    // Preserve historical "join all issues with ', '" formatting by parsing
-    // explicitly and re-throwing as SafeError — withAction's default ZodError
-    // path prefixes with "Validation error:" which would change the user-facing
-    // copy here.
+    // Parse explicitly so the validation failure remains an intentional,
+    // client-safe error at this upload boundary.
     const parsed = requestUploadSchema.safeParse(input);
     if (!parsed.success) {
-      throw new SafeError(
-        parsed.error.issues.map((i) => i.message).join(", ")
-      );
+      throw new SafeError(formatZodActionError(parsed.error));
     }
 
     const docType = parsed.data.documentType as DocumentType;

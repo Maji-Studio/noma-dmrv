@@ -83,7 +83,7 @@ export function ProductionIncidentTable({
       }
       closeForm();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "The incident was not saved. Try again.");
+      setFormError(err instanceof Error ? err.message : "Incident was not saved. Try again.");
     }
   };
 
@@ -94,7 +94,7 @@ export function ProductionIncidentTable({
       setDeletingId(null);
       toast.success("Incident deleted");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "The incident was not deleted. Try again.");
+      toast.error(err instanceof Error ? err.message : "Incident was not deleted. Try again.");
       setDeletingId(null);
     }
   };

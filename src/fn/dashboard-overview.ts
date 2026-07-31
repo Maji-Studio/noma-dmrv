@@ -9,7 +9,10 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { isDatabaseSchemaMismatchError } from "@/db/errors";
 import { requireOrgContext } from "@/lib/auth/server";
 import type { ActionResult } from "@/types/actions";
-import { toLoggedActionError } from "./action-errors";
+import {
+  formatZodActionError,
+  toLoggedActionError,
+} from "./action-errors";
 
 const getDashboardOverviewSchema = z.object({
   facilityId: z.uuid(),
@@ -46,7 +49,7 @@ export async function getDashboardOverviewFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     const schemaMismatch = isDatabaseSchemaMismatchError(error);

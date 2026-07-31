@@ -44,7 +44,8 @@ components (UI)
 ### `withAction()` — the preferred pattern for new and changed server actions
 
 `src/fn/with-action.ts` is canonical. It calls `requireOrgContext()`, injects
-`ctx`, converts `ZodError` into a prefixed message, and formats `ActionResult`.
+`ctx`, converts distinct `ZodError` issues into readable sentences, and formats
+`ActionResult`.
 Use it for new actions and migrate a legacy direct wrapper when materially
 changing that action. Some older entity modules still call
 `requireOrgContext()` and format `ActionResult` in their own try/catch; their

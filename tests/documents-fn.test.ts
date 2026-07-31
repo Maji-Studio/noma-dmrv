@@ -139,12 +139,12 @@ const productionRunCsvInput = {
 describe("requestUpload", () => {
   it("returns Unauthorized when user is not signed in", async () => {
     vi.mocked(requireOrgContext).mockRejectedValueOnce(
-      new SafeError("Select an organization to continue."),
+      new SafeError("Select an Organization to continue."),
     );
     const result = await requestUpload(baseInput);
     expect(result).toEqual({
       success: false,
-      error: "Select an organization to continue.",
+      error: "Select an Organization to continue.",
     });
     expect(insertDocument).not.toHaveBeenCalled();
   });
@@ -384,12 +384,12 @@ describe("confirmUpload", () => {
 
   it("returns Unauthorized when user is not signed in", async () => {
     vi.mocked(requireOrgContext).mockRejectedValueOnce(
-      new SafeError("Select an organization to continue."),
+      new SafeError("Select an Organization to continue."),
     );
     const result = await confirmUpload({ documentId: pendingRow.id });
     expect(result).toEqual({
       success: false,
-      error: "Select an organization to continue.",
+      error: "Select an Organization to continue.",
     });
   });
 });

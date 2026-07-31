@@ -18,7 +18,8 @@ vi.mock("@/data-access/certifier-credentials", () => ({
   deleteCertifierCredentials: vi.fn(),
 }));
 
-vi.mock("@/fn/action-errors", () => ({
+vi.mock("@/fn/action-errors", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/fn/action-errors")>()),
   logActionError: vi.fn(),
 }));
 
@@ -82,7 +83,7 @@ beforeEach(() => {
 describe("setOrgCertifierCredentialsFn", () => {
   it("requires an active organization context before writing credentials", async () => {
     vi.mocked(requireOrgContext).mockRejectedValue(
-      new Error("Select an organization to continue"),
+      new Error("Select an Organization to continue"),
     );
 
     const result = await setOrgCertifierCredentialsFn({
