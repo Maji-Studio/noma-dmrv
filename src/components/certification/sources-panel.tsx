@@ -212,13 +212,18 @@ function CandidateRow({
 
       <div className="flex shrink-0 items-center gap-8">
         {isMirrored ? (
-          <span
-            className="flex items-center gap-4 body-caption text-[var(--st-ok)]"
-            title="Ready in Isometric"
-          >
-            <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
-            Ready
-          </span>
+          <div className="flex flex-col items-end gap-2">
+            <span
+              className="flex items-center gap-4 body-caption text-[var(--st-ok)]"
+              title="Ready in Isometric"
+            >
+              <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
+              Ready
+            </span>
+            <span className="body-caption max-w-[180px] truncate font-mono text-[var(--color-text-tertiary)]">
+              {mirror.externalDocumentId}
+            </span>
+          </div>
         ) : isMirrorable && isEditable ? (
           <span
             className="flex items-center gap-4 body-caption text-[var(--color-text-tertiary)]"

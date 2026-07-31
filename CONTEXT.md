@@ -355,6 +355,16 @@ measurement-sample submission out. _Avoid_: calling it a "sample"
 unqualified (collides with the lab Sample); submitting raw replicates in
 place of the mean + std-dev.
 
+**Noma evidence role**:
+The per source declaration of which exact registry input an evidence document
+satisfies. It is Noma's semantic mapping from evidence documents and generated
+ledgers to registry inputs. Current values are `inventory` for product mass,
+`feedstock_bill_of_lading` for feedstock transport mass distance,
+`delivery_bill_of_lading` for biochar transport mass distance,
+`transport_evidence_ledger` for feedstock, biochar and sampling transport mass
+distance, and `durability_evidence_ledger` for durability chemistry and product
+mass inputs.
+
 **Monitored input**:
 An Isometric removal-template input whose value comes from the
 supplier's operational data, supplied per submission.

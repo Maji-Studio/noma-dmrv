@@ -1038,9 +1038,8 @@ async function seedDemoData() {
           tgaAnalysisDate: '2026-05-24',
         },
         {
-          // Third replicate drawn from the curing pad the morning after run 3
-          // — a distinct sampling day, so the batch's replicates span three
-          // (run, day) provenance keys (§8.3.1 distribution expectation).
+          // Third replicate drawn from the curing pad the morning after run 3.
+          // Together these three Samples represent the credit batch (§8.3.1).
           id: ids.sample4,
           productionRunId: ids.productionRun3,
           creditBatchId: ids.creditBatch1,
@@ -2124,7 +2123,7 @@ async function seedDemoData() {
           gensetEnergyYieldKwhPerLitre: 3.375,
           defaultSoilTemperatureC: 24.2,
           defaultSoilTemperatureSource:
-            'Lembrechts et al. 2022 SoilTemp, 0–5 cm, Kilimanjaro region (annual mean)',
+            'Lembrechts et al. 2022 SoilTemp, 0-5 cm, Kilimanjaro region (annual mean)',
         },
       ]));
 

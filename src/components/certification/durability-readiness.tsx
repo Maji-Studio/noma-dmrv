@@ -132,9 +132,8 @@ function eligibilityChip(
 }
 
 /**
- * The three durability readiness signals as inline chips: replicate count toward
- * ≥3, distribution across runs/days, and the eligibility verdict. The
- * distribution chip only shows once ≥3 is met (below it, the ≥3 gap is the story).
+ * The two durability readiness signals as inline chips: representative Sample
+ * count toward ≥3 and the eligibility verdict.
  */
 export function DurabilityReadinessSignals({
   summary,

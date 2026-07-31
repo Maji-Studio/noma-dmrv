@@ -7,8 +7,9 @@
  *    cross-facility link hints from the Isometric API).
  *  - read-only: a DB-only summary (no management payload on the wire) with no
  *    controls — for viewers who can read the current link but not change it.
- * Mounts in /certification/settings (passing `canManage={isAdmin}`). The
- * facility side-sheet shows the lighter `FacilityCertifierSummary` instead.
+ * Mounts in /certification/settings, which passes the server-computed
+ * `viewerCanManage`. The facility side-sheet shows the lighter
+ * `FacilityCertifierSummary` instead.
  */
 "use client";
 
@@ -36,7 +37,7 @@ interface FacilityCertifierSectionProps {
    * and the heavier management loader — when false, only the read-only summary
    * is fetched (the available-project list, template options, and link hints
    * never reach a non-managing viewer). Required: every caller makes the
-   * read-vs-manage choice explicitly (Settings passes `isAdmin`).
+   * read-vs-manage choice explicitly (Settings passes `viewerCanManage`).
    */
   canManage: boolean;
   /**

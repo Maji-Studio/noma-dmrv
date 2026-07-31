@@ -4,11 +4,12 @@
 
 import { format, isValid, parseISO } from "date-fns";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { parseLocalDateString } from "@/lib/date-utils";
+import { formatFacilityTime, parseLocalDateString } from "@/lib/date-utils";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_FORMAT = "MMM d, yyyy";
 const DATE_TIME_FORMAT = "MMM d, yyyy, HH:mm";
+const FACILITY_DATE_TIME_WITH_OFFSET_FORMAT = "yyyy-MM-dd HH:mm XXX";
 const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
 const KG_PER_TONNE = 1000;
 const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
@@ -74,6 +75,18 @@ export function formatDateTime(value: DateValue): string {
   if (!value) return MISSING_VALUE.notRecorded;
   const date = parseDateValue(value);
   return date ? format(date, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
+}
+
+/** Format an instant in a facility's timezone with its numeric UTC offset. */
+export function formatFacilityDateTimeWithOffset(
+  value: Date,
+  timeZone: string,
+): string {
+  return formatFacilityTime(
+    value,
+    timeZone,
+    FACILITY_DATE_TIME_WITH_OFFSET_FORMAT,
+  );
 }
 
 /**
