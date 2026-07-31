@@ -159,7 +159,9 @@ describe("feedstock stock-take moisture integrity", () => {
           massDeltaKg: 1,
           reason: "Generic movement caller cannot bypass stock-take checks",
         }),
-      ).rejects.toThrow("Use Reconcile stock to record a stock-take adjustment");
+      ).rejects.toThrow(
+        /^Use Reconcile stock to record a stock-take adjustment$/,
+      );
 
       const preciseSnapshot = await recordStockTakeFn({
         storageLocationId: bin.id,
