@@ -17,7 +17,11 @@ import {
   users,
 } from "@/db/schema";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
-import { createBiocharProduct } from "@/data-access/biochar-products";
+import { lockBinStock } from "@/data-access/bin-stock-guards";
+import {
+  createBiocharProduct,
+  deleteBiocharProduct,
+} from "@/data-access/biochar-products";
 import { createDelivery, updateDelivery } from "@/data-access/deliveries";
 import { updateOrder } from "@/data-access/orders";
 import { createProductionRun } from "@/data-access/production-runs";
@@ -225,6 +229,152 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
       await db
         .delete(feedstockTypes)
         .where(eq(feedstockTypes.id, feedstockType.id));
+      await db.delete(facilities).where(eq(facilities.id, facility.id));
+    }
+  });
+
+  it("serializes a zero-mass product delete with an ingredient-bin stock-take", async () => {
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const [facility] = await db
+      .insert(facilities)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FAC-TAKE-DELETE-${tag}`,
+        name: `Stock Take Delete Facility ${tag}`,
+      })
+      .returning({ id: facilities.id });
+    const [feedstockType] = await db
+      .insert(feedstockTypes)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FT-TAKE-DELETE-${tag}`,
+        name: `Stock Take Delete Feedstock ${tag}`,
+        category: "forestry",
+        usage: "blend",
+      })
+      .returning({ id: feedstockTypes.id });
+    const [bin] = await db
+      .insert(storageLocations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        feedstockTypeId: feedstockType.id,
+        code: `BIN-TAKE-DELETE-${tag}`,
+        name: `Stock Take Delete Bin ${tag}`,
+        type: "feedstock_bin",
+      })
+      .returning({ id: storageLocations.id });
+    const [feedstock] = await db
+      .insert(feedstocks)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        feedstockTypeId: feedstockType.id,
+        storageLocationId: bin.id,
+        code: `FS-TAKE-DELETE-${tag}`,
+        status: "complete",
+        massDryKg: 100,
+        massWetKg: 100,
+        moistureContentPercent: 0,
+      })
+      .returning({ id: feedstocks.id });
+    const [product] = await db
+      .insert(biocharProducts)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        code: `BP-TAKE-DELETE-${tag}`,
+        massKg: 0,
+        composition: {
+          ingredients: [{
+            formulationIngredientId: crypto.randomUUID(),
+            feedstockTypeId: feedstockType.id,
+            storageLocationId: bin.id,
+            massKg: 30,
+          }],
+        },
+      })
+      .returning({ id: biocharProducts.id });
+
+    let releaseBarrier = () => {};
+    let barrierTransaction: Promise<void> | undefined;
+    let concurrentResults:
+      | Promise<[
+          PromiseSettledResult<void>,
+          PromiseSettledResult<Awaited<ReturnType<typeof recordStockTakeFn>>>,
+        ]>
+      | undefined;
+
+    try {
+      let signalBarrierReady = () => {};
+      const barrierReady = new Promise<void>((resolve) => {
+        signalBarrierReady = resolve;
+      });
+      const releaseBarrierPromise = new Promise<void>((resolve) => {
+        releaseBarrier = resolve;
+      });
+      let barrierBackendPid = 0;
+      barrierTransaction = db.transaction(async (tx) => {
+        await lockBinStock(ctx, tx, bin.id);
+        const backend = await tx.execute<{ pid: number }>(
+          sql`select pg_backend_pid() as pid`,
+        );
+        barrierBackendPid = backend.rows[0]?.pid ?? 0;
+        signalBarrierReady();
+        await releaseBarrierPromise;
+      });
+      await barrierReady;
+
+      const deletePromise = deleteBiocharProduct(ctx, product.id);
+
+      await expect.poll(async () => {
+        const waits = await db.execute<{ waiter_count: number }>(sql`
+          select count(distinct waiting.pid)::int as waiter_count
+          from pg_locks waiting
+          join pg_locks held
+            on held.locktype = waiting.locktype
+           and held.database is not distinct from waiting.database
+           and held.classid is not distinct from waiting.classid
+           and held.objid is not distinct from waiting.objid
+           and held.objsubid is not distinct from waiting.objsubid
+          where waiting.locktype = 'advisory'
+            and not waiting.granted
+            and held.granted
+            and held.pid = ${barrierBackendPid}
+        `);
+        return waits.rows[0]?.waiter_count ?? 0;
+      }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(1);
+
+      concurrentResults = Promise.allSettled([
+        deletePromise,
+        recordStockTakeFn({
+          storageLocationId: bin.id,
+          lane: "feedstock",
+          countedMassKg: 70,
+          countedWetMassKg: 70,
+          moistureRatioUsed: 0,
+          reason: "Concurrent stock-take against product delete",
+        }),
+      ]);
+
+      releaseBarrier();
+      await barrierTransaction;
+      const [deleteResult, stockTakeResult] = await concurrentResults;
+      expect(deleteResult.status).toBe("fulfilled");
+      expect(stockTakeResult.status).toBe("fulfilled");
+      if (stockTakeResult.status === "fulfilled") {
+        expect(stockTakeResult.value.success).toBe(true);
+      }
+    } finally {
+      releaseBarrier();
+      await barrierTransaction?.catch(() => undefined);
+      await concurrentResults?.catch(() => undefined);
+      await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
+      await db.delete(binMovements).where(eq(binMovements.storageLocationId, bin.id));
+      await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
+      await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
       await db.delete(facilities).where(eq(facilities.id, facility.id));
     }
   });

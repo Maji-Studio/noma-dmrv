@@ -156,6 +156,27 @@ export function EntityOptionText({ option }: { option: EntityOption }) {
 
 const SEARCH_VISIBILITY_THRESHOLD = 5;
 
+export function shouldRenderCreateAction({
+  allowCreate,
+  hasCreateAction,
+  isLoading,
+  hasFetchError,
+  optionCount,
+}: {
+  allowCreate: boolean;
+  hasCreateAction: boolean;
+  isLoading: boolean;
+  hasFetchError: boolean;
+  optionCount: number;
+}): boolean {
+  return (
+    hasCreateAction &&
+    !isLoading &&
+    (!hasFetchError || allowCreate) &&
+    (allowCreate || optionCount === 0)
+  );
+}
+
 function getFeedstockTypeDefaultUsage(filterBy?: Record<string, string>) {
   const usage = filterBy?.usage ?? filterBy?.feedstockTypeUsage;
   return usage === "pyrolysis" || usage === "blend" ? usage : undefined;
@@ -279,8 +300,13 @@ export function EntitySelect({
 
   const resolvedCreateAction = onCreateNew ?? defaultCreateAction;
   const hasCreateAction = Boolean(resolvedCreateAction);
-  const shouldShowCreateAction =
-    hasCreateAction && !isLoading && (!fetchError || allowCreate) && (allowCreate || options.length === 0);
+  const shouldShowCreateAction = shouldRenderCreateAction({
+    allowCreate,
+    hasCreateAction,
+    isLoading,
+    hasFetchError: Boolean(fetchError),
+    optionCount: options.length,
+  });
 
   // Clamp highlighted index when options change
   const clampedHighlightedIndex = useMemo(() => {

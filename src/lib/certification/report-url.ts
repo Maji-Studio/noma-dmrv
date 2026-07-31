@@ -5,12 +5,12 @@ export function redactReportUrlSecrets(
 ): string | null {
   if (!value || !URL.canParse(value)) return value;
   const url = new URL(value);
-  if (url.searchParams.has("token")) {
-    url.searchParams.set("token", REDACTED_CAPABILITY);
-  }
+  if (!url.searchParams.has("token")) return value;
+  url.searchParams.set("token", REDACTED_CAPABILITY);
   return url.toString();
 }
 
+export function redactReportSecrets<T>(value: T): T;
 export function redactReportSecrets(value: unknown): unknown {
   if (typeof value === "string") {
     return redactReportUrlSecrets(value);
@@ -22,7 +22,7 @@ export function redactReportSecrets(value: unknown): unknown {
     return value;
   }
   return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, child]) => [
+    Object.entries(value).map(([key, child]) => [
       key,
       redactReportSecrets(child),
     ]),

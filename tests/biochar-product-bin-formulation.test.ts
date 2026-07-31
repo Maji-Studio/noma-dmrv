@@ -18,8 +18,9 @@ import {
   createBiocharProduct,
   updateBiocharProduct,
 } from "@/data-access/biochar-products";
+import { getEntityById } from "@/data-access/entities";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
-import { feedstockTypes } from "@/db/schema/feedstock";
+import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
 import { productionRuns } from "@/db/schema/production";
 import {
   biocharProducts,
@@ -42,6 +43,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
   let blendTypeAId: string;
   let blendTypeBId: string;
   const createdBinIds: string[] = [];
+  const createdFeedstockIds: string[] = [];
   const createdProductIds: string[] = [];
 
   beforeAll(() => ensureTestOrg());
@@ -154,6 +156,12 @@ beforeAll(async () => {
       );
     }
 
+    if (createdFeedstockIds.length > 0) {
+      await cleanup(() =>
+        db.delete(feedstocks).where(inArray(feedstocks.id, createdFeedstockIds)),
+      );
+    }
+
     if (createdBinIds.length > 0) {
       await cleanup(() =>
         db.delete(storageLocations).where(inArray(storageLocations.id, createdBinIds)),
@@ -228,6 +236,25 @@ beforeAll(async () => {
     return bin.id;
   }
 
+  async function makeStockedFeedstockBin(massDryKg: number): Promise<string> {
+    const binId = await makeFeedstockBin(blendTypeAId);
+    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const [feedstock] = await db
+      .insert(feedstocks)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FS-PBF-${suffix}`,
+        facilityId,
+        status: "complete",
+        feedstockTypeId: blendTypeAId,
+        massDryKg,
+        storageLocationId: binId,
+      })
+      .returning({ id: feedstocks.id });
+    createdFeedstockIds.push(feedstock.id);
+    return binId;
+  }
+
   function baseProductInput() {
     return {
       code: `BP-PBF-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
@@ -249,8 +276,8 @@ beforeAll(async () => {
           feedstockTypeName: "PBF Blend Type A",
           feedstockTypeCategory: "compost",
           ratio: 0.2,
-          massKg: 100,
-          storageLocationId: null,
+          massKg: 0,
+          storageLocationId: null as string | null,
         },
       ],
     };
@@ -373,6 +400,91 @@ beforeAll(async () => {
         },
       })
     ).rejects.toThrow("Feedstock bin must match the formulation material");
+  });
+
+  it("rejects a positive ingredient draw from an empty bin", async () => {
+    const productBinId = await makeProductBin(formulationAId);
+    const ingredientBinId = await makeFeedstockBin(blendTypeAId);
+    const composition = formulationAComposition();
+    composition.ingredients[0].massKg = 1;
+    composition.ingredients[0].storageLocationId = ingredientBinId;
+
+    await expect(
+      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
+        ...baseProductInput(),
+        formulationId: formulationAId,
+        storageLocationId: productBinId,
+        composition,
+      }),
+    ).rejects.toThrow("Not enough feedstock in this bin");
+  });
+
+  it("rejects an update that increases an ingredient draw beyond stock", async () => {
+    const productBinId = await makeProductBin(formulationAId);
+    const ingredientBinId = await makeStockedFeedstockBin(100);
+    const composition = formulationAComposition();
+    composition.ingredients[0].massKg = 60;
+    composition.ingredients[0].storageLocationId = ingredientBinId;
+    const product = await createBiocharProduct(
+      makeTestOrgContext(TEST_USER_ID),
+      {
+        ...baseProductInput(),
+        formulationId: formulationAId,
+        storageLocationId: productBinId,
+        composition,
+      },
+    );
+    createdProductIds.push(product.id);
+
+    const increased = formulationAComposition();
+    increased.ingredients[0].massKg = 101;
+    increased.ingredients[0].storageLocationId = ingredientBinId;
+    await expect(
+      updateBiocharProduct(makeTestOrgContext(TEST_USER_ID), product.id, {
+        composition: increased,
+      }),
+    ).rejects.toThrow("Not enough feedstock in this bin");
+  });
+
+  it("serializes concurrent ingredient draws from the same bin", async () => {
+    const ingredientBinId = await makeStockedFeedstockBin(100);
+    const productBinIds = await Promise.all([
+      makeProductBin(formulationAId),
+      makeProductBin(formulationAId),
+    ]);
+    const create = (storageLocationId: string) => {
+      const composition = formulationAComposition();
+      composition.ingredients[0].massKg = 60;
+      composition.ingredients[0].storageLocationId = ingredientBinId;
+      return createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
+        ...baseProductInput(),
+        storageLocationId,
+        formulationId: formulationAId,
+        composition,
+      });
+    };
+
+    const results = await Promise.allSettled(productBinIds.map(create));
+    const fulfilled = results.filter(
+      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof create>>> =>
+        result.status === "fulfilled",
+    );
+    const rejected = results.filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    createdProductIds.push(...fulfilled.map((result) => result.value.id));
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toBeInstanceOf(Error);
+    expect(rejected[0].reason.message).toBe("Not enough feedstock in this bin");
+
+    const ingredientBin = await getEntityById(
+      makeTestOrgContext(TEST_USER_ID),
+      "storageLocation",
+      ingredientBinId,
+    );
+    expect(ingredientBin?.subtitle).toContain("40 kg stored");
   });
 
   it("keeps the snapshot ratio when the formulation's live ratio changes", async () => {
