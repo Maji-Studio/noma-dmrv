@@ -99,12 +99,16 @@ describe("order product-bin options", () => {
     expect(options).toContainEqual({
       id: productId,
       code: `BIN-OPB-${tag}`,
-      name: `Order Product Bin ${tag}`,
+      name: `Order Product Bin ${tag} • Pure biochar`,
       mass: {
         moisturePercent: 15,
       },
+      remainingMass: {
+        wetKg: 250,
+        dryKg: 212.5,
+      },
       subtitle:
-        "Pure biochar · Wet biochar product: 250kg | Dry biochar: 212.5kg available",
+        "Wet biochar product: 250kg | Dry biochar: 212.5kg available",
     });
   });
 
@@ -135,12 +139,16 @@ describe("order product-bin options", () => {
     await expect(getBiocharProductEntityById(ctx, productId)).resolves.toEqual({
       id: productId,
       code: `BIN-OPB-${tag}`,
-      name: `Order Product Bin ${tag}`,
+      name: `Order Product Bin ${tag} • Pure biochar`,
       mass: {
         moisturePercent: 15,
       },
+      remainingMass: {
+        wetKg: 250,
+        dryKg: 212.5,
+      },
       subtitle:
-        "Pure biochar · Wet biochar product: 250kg | Dry biochar: 212.5kg available",
+        "Wet biochar product: 250kg | Dry biochar: 212.5kg available",
     });
   });
 

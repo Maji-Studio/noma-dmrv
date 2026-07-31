@@ -402,7 +402,12 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.fill('input[name="name"]', `Chain Facility ${runId}`);
       await page.fill('input[name="country"]', "Tanzania");
-      await page.selectOption('select[name="timezone"]', "Africa/Dar_es_Salaam");
+      await facilityDialog
+        .getByRole("combobox", { name: "Timezone" })
+        .fill("Dar es Salaam");
+      await page
+        .getByRole("option", { name: "Africa/Dar es Salaam (UTC+3)" })
+        .click();
 
       await facilityDialog
         .getByRole("button", { name: "Create Facility" })

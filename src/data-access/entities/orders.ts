@@ -122,6 +122,10 @@ export function toOrderEntityOption(r: {
     ]
       .filter(Boolean)
       .join(" · "),
+    remainingMass: {
+      wetKg: remainingWetKg,
+      dryKg: remainingDryKg,
+    },
     subtitle: `${formatWetDryMass({
       wetKg: remainingWetKg,
       dryKg: remainingDryKg,

@@ -38,6 +38,7 @@ import { invalidateOnboardingProgress } from "@/hooks/use-onboarding";
 import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { invalidateStockEntityQueries } from "./entity-query-keys";
 
 const EXACT_ID_CHUNK_SIZE = 100;
 
@@ -273,6 +274,7 @@ export function useCreateProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
       await invalidateOnboardingProgress(queryClient);
 
@@ -388,6 +390,7 @@ export function useUpdateProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.all,
       });
+      invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
       await invalidateOnboardingProgress(queryClient);
 
@@ -502,6 +505,7 @@ export function useDeleteProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
       // Invalidate facility data
       if (facilityId) {

@@ -334,6 +334,13 @@ export async function prepareGhgStatementReport(
         preparationKey: parsed.preparationKey,
       });
       if (existing) return reportView(existing);
+      if (parsed.ensureFirst) {
+        const [firstReport] = await listGhgStatementReports(
+          orgCtx,
+          parsed.ghgStatementId,
+        );
+        if (firstReport) return reportView(firstReport);
+      }
 
       const version = await getNextGhgStatementReportVersion(
         orgCtx,

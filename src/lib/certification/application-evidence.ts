@@ -4,8 +4,10 @@
  * The active Biochar Protocol v1.1 project binds Agricultural Soils v1.1.
  * Project boundaries belong in the PDD, and retained application-mass records
  * support verification. A typed Application logbook is not a per-Application
- * readiness or Removal-submission requirement. The logbook taxonomy below is
- * retained only to organize optional records and their registry Source targets.
+ * readiness or Removal-submission requirement. The legacy logbook taxonomy
+ * below remains only for existing document metadata and registry Source
+ * targets. New Application uploads do not ask operators to classify records
+ * with the v1.2-only taxonomy.
  *
  * Authoritative sources (verify before any credit claim):
  * https://registry.isometric.com/protocol/biochar/1.1

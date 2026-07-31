@@ -16,6 +16,7 @@ import { deliveryKeys } from "./use-deliveries";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { invalidateCertificationReadiness } from "./use-certification";
 import { transportLegKeys } from "./use-transport-legs";
+import { productionRunKeys } from "./use-production-runs";
 
 function invalidateTransportEvidenceOwner(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -36,14 +37,38 @@ function invalidateTransportEvidenceOwner(
   }
 }
 
-type DocumentDeletionOwner = {
-  entityType: "application" | "feedstock" | "delivery" | "transport_leg";
-};
+type DocumentOwner =
+  | { entityType: "production_run"; entityId: string }
+  | {
+      entityType: "application" | "feedstock" | "delivery" | "transport_leg";
+      entityId?: string;
+    };
+
+export function invalidateDocumentOwner(
+  queryClient: ReturnType<typeof useQueryClient>,
+  owner: { entityType: string; entityId: string },
+) {
+  if (owner.entityType === "production_run") {
+    queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
+    queryClient.invalidateQueries({
+      queryKey: productionRunKeys.detail(owner.entityId),
+    });
+    // Preserve the shared evidence invalidations that every completed upload
+    // already triggered, then refresh the projections unique to run evidence.
+    invalidateTransportEvidenceOwner(queryClient, owner);
+    return;
+  }
+
+  invalidateTransportEvidenceOwner(queryClient, owner);
+}
 
 export function invalidateDeletedDocumentOwner(
   queryClient: ReturnType<typeof useQueryClient>,
-  owner: DocumentDeletionOwner,
+  owner: DocumentOwner,
 ) {
+  if (owner.entityType === "production_run") {
+    return invalidateDocumentOwner(queryClient, owner);
+  }
   if (owner.entityType === "application") {
     return invalidateCertificationReadiness(queryClient);
   }
@@ -97,7 +122,7 @@ export function useConfirmUpload() {
       qc.invalidateQueries({
         queryKey: documentKeys.forEntity(row.entityType, row.entityId),
       });
-      invalidateTransportEvidenceOwner(qc, row);
+      invalidateDocumentOwner(qc, row);
     },
   });
 }
@@ -142,7 +167,7 @@ export function useUpdateApplicationEvidenceMetadata(
 
 export function useDeleteDocument(
   invalidateKey?: readonly unknown[],
-  owner?: DocumentDeletionOwner,
+  owner?: DocumentOwner,
 ) {
   const qc = useQueryClient();
   return useMutation({

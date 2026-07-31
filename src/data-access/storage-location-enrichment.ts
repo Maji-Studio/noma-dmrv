@@ -122,6 +122,34 @@ function splitAggregateLabels(value: string | null): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Estimate remaining feedstock wet mass from the aggregate intake moisture
+ * basis. Feedstock stock is canonically dry, so callers must never expose the
+ * dry balance with a wet label when the basis is unavailable.
+ */
+export function estimateRemainingFeedstockWetMassKg(params: {
+  intakeDryKg: number;
+  intakeWetKg: number;
+  remainingDryKg: number;
+}): number | null {
+  if (params.intakeWetKg === 0 && params.remainingDryKg === 0) return 0;
+
+  const moistureRatio =
+    params.intakeWetKg > 0 && params.intakeDryKg >= 0
+      ? Math.max(
+          0,
+          Math.min(
+            1,
+            (params.intakeWetKg - params.intakeDryKg) / params.intakeWetKg,
+          ),
+        )
+      : null;
+
+  return moistureRatio != null && moistureRatio < 1
+    ? params.remainingDryKg / (1 - moistureRatio)
+    : null;
+}
+
 export async function enrichStorageLocationRows(
   ctx: OrgContext,
   rows: BaseStorageLocationRow[]
@@ -600,10 +628,11 @@ export async function enrichStorageLocationRows(
       totalWetKg > 0 && totalDryKg >= 0
         ? Math.max(0, Math.min(1, (totalWetKg - totalDryKg) / totalWetKg))
         : null;
-    const estimatedWetMassKg =
-      moistureRatio != null && moistureRatio < 1
-        ? currentDryMassKg / (1 - moistureRatio)
-        : null;
+    const estimatedWetMassKg = estimateRemainingFeedstockWetMassKg({
+      intakeDryKg: totalDryKg,
+      intakeWetKg: totalWetKg,
+      remainingDryKg: currentDryMassKg,
+    });
 
     const biocharOutputRow = biocharOutputMap.get(row.id);
     const allocatedKg = laneStock?.biocharAllocatedKg ?? 0;

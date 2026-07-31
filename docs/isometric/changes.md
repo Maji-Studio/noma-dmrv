@@ -4,6 +4,29 @@ Certification-readiness, transport-evidence, supporting-source, and sampling
 correction notes are archived in
 [`docs/archive/2026-07-28-certification-readiness-and-sampling-corrections.md`](../archive/2026-07-28-certification-readiness-and-sampling-corrections.md).
 
+Application mass records remain uploadable, but new uploads do not use the
+inapplicable Soil Environments v1.2 classification taxonomy. Completed
+production runs require one successfully uploaded, unchanged readings CSV for
+certification readiness. This file-presence check is a conservative Noma
+control and does not claim that structured telemetry was submitted to Certify.
+Dated implementation context is archived in
+[`docs/archive/isometric-changes-archive-2026-07-31-operational-feedback.md`](../archive/isometric-changes-archive-2026-07-31-operational-feedback.md).
+
+## Live submission progress
+
+Removal and GHG Statement submission dialogs now show progress from noma's
+actual orchestration checkpoints. Completed registry calls receive checkmarks,
+repeated monitored-input and durability calls show completed and total counts,
+conditional steps are marked as not required, and work recovered from an
+earlier attempt is marked as already sent. This is UI feedback over the existing
+single submission request, not a background job or a new Isometric API
+capability.
+
+Submission dialogs cannot be dismissed while the request is active. If a call
+fails, the failed step remains visible and retry continues through the existing
+submission-ledger reconciliation path without assuming that an uncertain
+registry write did not happen.
+
 Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).

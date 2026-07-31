@@ -239,6 +239,21 @@ describe("requestUpload", () => {
     );
   });
 
+  it("rejects non-CSV tabular files for production-run readings", async () => {
+    const result = await requestUpload({
+      ...productionRunCsvInput,
+      fileName: "readings.xlsx",
+      contentType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Readings files must use CSV format.",
+    });
+    expect(insertDocument).not.toHaveBeenCalled();
+  });
+
   it("accepts application photos without EXIF timestamp or GPS and flags the gap", async () => {
     vi.mocked(insertDocument).mockResolvedValueOnce({
       id: "11111111-2222-4333-8444-555555555555",
@@ -347,6 +362,31 @@ describe("confirmUpload", () => {
       expect(result.error).toMatch(/not allowed/);
     }
     expect(provider.deleted).toContain(pendingRow.storageKey);
+  });
+
+  it("rejects a non-CSV tabular object for production-run readings", async () => {
+    const readingsRow = {
+      ...pendingRow,
+      entityType: "production_run",
+      documentType: "sensor_data" as const,
+      fileName: "readings.xlsx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    };
+    vi.mocked(getDocumentById).mockResolvedValueOnce(readingsRow as never);
+    provider.simulatePut(
+      readingsRow.storageKey,
+      1024,
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+
+    const result = await confirmUpload({ documentId: readingsRow.id });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Readings files must use CSV format.",
+    });
+    expect(provider.deleted).toContain(readingsRow.storageKey);
   });
 
   it("fails when object not present in storage", async () => {
