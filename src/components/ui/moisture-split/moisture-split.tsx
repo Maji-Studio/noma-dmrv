@@ -65,8 +65,6 @@ interface MoistureSplitProps {
    * record").
    */
   note?: string;
-  /** Hide the unresolved state entirely — for surfaces where a blank is fine. */
-  hideWhenIncomplete?: boolean;
   className?: string;
 }
 
@@ -190,7 +188,6 @@ export function MoistureSplit({
   wetLabel,
   dryLabel,
   note,
-  hideWhenIncomplete = false,
   className = "",
 }: MoistureSplitProps) {
   const split = resolveDisplaySplit(
@@ -203,8 +200,6 @@ export function MoistureSplit({
     (materialLabel ? `${materialLabel} dry mass` : "Dry mass");
 
   if (!split) {
-    if (hideWhenIncomplete) return null;
-
     // The split needs BOTH inputs, so name the one actually missing — telling an
     // operator "moisture not recorded" when moisture is fine and wet mass is not
     // sends them to the wrong field, and the unresolved state exists precisely to

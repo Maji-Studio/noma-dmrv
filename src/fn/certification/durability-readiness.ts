@@ -12,7 +12,7 @@ import { formatFacilityDate } from "@/lib/date-utils";
 export interface DurabilityGateResult {
   /** Fail-closed blockers — the exact list the submit pipeline blocks on. */
   blockers: string[];
-  /** Non-blocking §8.3.1 distribution (cluster) advisories. */
+  /** Non-blocking §8.3.1 representative-sampling advisories. */
   warnings: string[];
 }
 
@@ -29,7 +29,8 @@ export interface DurabilityBatchData extends DurabilityGateResult {
  * batch's member runs to the removal's applied run set so product mass stays
  * attribution-correct, then run the D3 gates. One call returns the batches (for
  * the per-batch measurement-sample submission, Phase 3) plus the gate blockers
- * and the §8.3.1 distribution warnings. Keeps `certify-context-core` lean.
+ * and the §8.3.1 representative-sampling warnings. Keeps
+ * `certify-context-core` lean.
  */
 export async function loadDurabilityBatchData(
   orgCtx: OrgContext,
@@ -75,7 +76,7 @@ function isoSamplingDay(
 
 /**
  * Evaluate the D3 durability gates (eligibility + sampled-choice evidence + ≥3
- * replicates + the distribution warning) over a removal's CREDIT BATCHES
+ * representative replicates) over a removal's CREDIT BATCHES
  * (ADR 0016: the credit batch is the protocol production batch and the sampling
  * unit). The immutable sampling choice comes from each batch (D6). The single
  * computation behind BOTH the readiness

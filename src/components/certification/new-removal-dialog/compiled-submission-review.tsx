@@ -106,7 +106,7 @@ export function CompiledSubmissionReview({
   if (error || !compilation) {
     return (
       <div
-        className="flex items-center justify-between gap-12 border border-[var(--st-error)] px-16 py-12"
+        className="flex items-center justify-between gap-12 border border-[var(--st-bad-border)] px-16 py-12"
         role="alert"
       >
         <p className="body-small text-[var(--color-text-primary)]">

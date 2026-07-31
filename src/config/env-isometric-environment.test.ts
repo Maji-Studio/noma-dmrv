@@ -18,7 +18,7 @@ const ENV_MODULE = "./env";
 /** Parse `env` fresh under an overridden process.env; return the raised issues. */
 async function parseEnvWith(
   overrides: Record<string, string | undefined>,
-): Promise<{ threw: boolean; paths: string[] }> {
+): Promise<{ threw: boolean; paths: string[]; messages: string[] }> {
   vi.resetModules();
   const saved = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(overrides)) {
@@ -28,12 +28,15 @@ async function parseEnvWith(
   }
   try {
     await import(ENV_MODULE);
-    return { threw: false, paths: [] };
+    return { threw: false, paths: [], messages: [] };
   } catch (error) {
-    const issues = (error as { issues?: Array<{ path: unknown[] }> }).issues;
+    const issues = (
+      error as { issues?: Array<{ path: unknown[]; message: string }> }
+    ).issues;
     return {
       threw: true,
       paths: (issues ?? []).map((issue) => String(issue.path[0])),
+      messages: (issues ?? []).map((issue) => issue.message),
     };
   } finally {
     for (const [key, value] of saved) {
@@ -53,6 +56,7 @@ describe("ISOMETRIC_ENVIRONMENT production gate", () => {
     const { threw, paths } = await parseEnvWith({
       NODE_ENV: "production",
       CI: undefined,
+      NOMA_HERMETIC_CI: undefined,
       ISOMETRIC_ENVIRONMENT: undefined,
     });
 
@@ -60,12 +64,54 @@ describe("ISOMETRIC_ENVIRONMENT production gate", () => {
     expect(paths).toContain("ISOMETRIC_ENVIRONMENT");
   });
 
-  // The regression: GitHub Actions sets CI=true and builds a production bundle
-  // without this var. Firing here fails `pnpm build` for everyone.
+  // The regression: the hermetic workflows build a production bundle without
+  // this var. Firing there fails `pnpm build` for everyone.
   it("does not fire for a hermetic CI production build", async () => {
     const { paths } = await parseEnvWith({
       NODE_ENV: "production",
       CI: "true",
+      NOMA_HERMETIC_CI: "true",
+      NEXT_PUBLIC_APP_URL: "http://localhost:3100",
+      ISOMETRIC_ENVIRONMENT: undefined,
+    });
+
+    expect(paths).not.toContain("ISOMETRIC_ENVIRONMENT");
+  });
+
+  it("does not treat ambient CI on localhost as hermetic", async () => {
+    const { paths, messages } = await parseEnvWith({
+      NODE_ENV: "production",
+      CI: "true",
+      NOMA_HERMETIC_CI: undefined,
+      NEXT_PUBLIC_APP_URL: "http://localhost:3100",
+      ISOMETRIC_ENVIRONMENT: undefined,
+      STORAGE_PROVIDER: "local-fs",
+    });
+
+    expect(paths).toContain("ISOMETRIC_ENVIRONMENT");
+    expect(messages).toContain(
+      "STORAGE_PROVIDER must be 's3-compatible' in production. 'local-fs' requires NOMA_HERMETIC_CI=true in CI with an HTTP(S) loopback app URL.",
+    );
+  });
+
+  it("does not allow a non-HTTP loopback URL through the exception", async () => {
+    const { paths } = await parseEnvWith({
+      NODE_ENV: "production",
+      CI: "true",
+      NOMA_HERMETIC_CI: "true",
+      NEXT_PUBLIC_APP_URL: "ftp://localhost",
+      ISOMETRIC_ENVIRONMENT: undefined,
+    });
+
+    expect(paths).toContain("ISOMETRIC_ENVIRONMENT");
+  });
+
+  it("accepts a bracketed IPv6 loopback URL for an explicit hermetic build", async () => {
+    const { paths } = await parseEnvWith({
+      NODE_ENV: "production",
+      CI: "true",
+      NOMA_HERMETIC_CI: "true",
+      NEXT_PUBLIC_APP_URL: "http://[::1]:3100",
       ISOMETRIC_ENVIRONMENT: undefined,
     });
 
@@ -76,6 +122,7 @@ describe("ISOMETRIC_ENVIRONMENT production gate", () => {
     const { paths } = await parseEnvWith({
       NODE_ENV: "production",
       CI: undefined,
+      NOMA_HERMETIC_CI: undefined,
       ISOMETRIC_ENVIRONMENT: "production",
     });
 

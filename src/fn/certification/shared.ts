@@ -7,6 +7,7 @@ import {
 import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
+import { sanitizeErrorMessage } from "@/lib/log/sanitize";
 import { IsometricApiError, type TransportLegsByCategory } from "@/lib/isometric";
 import type { TransportEntityIdsByCategory } from "@/lib/isometric/utils/transport-lineage";
 
@@ -83,7 +84,8 @@ export async function appendSyncEventBestEffort(
         op: input.operation,
         entityId: input.entityId,
         ...logContext,
-        err: err instanceof Error ? err.message : String(err),
+        // Drizzle errors embed bound params in the message; never log raw.
+        err: sanitizeErrorMessage(err),
       },
       "failed to record certifier sync event",
     );

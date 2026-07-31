@@ -104,7 +104,7 @@ Non-obvious semantics only:
   that is never tuned. See [open-questions.md](./open-questions.md)
   (`auth/drop-self-signup-flag`).
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
-  CI carve-out below). Server-only 32-byte hex/base64 key.
+  Hermetic-CI exception below). Server-only 32-byte hex/base64 key.
 - **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In
   dev/test the local-fs provider falls back to an **ephemeral random signing
   secret** with a warning, so locally-signed URLs silently break across restarts.
@@ -122,6 +122,9 @@ Non-obvious semantics only:
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
+- `NOMA_HERMETIC_CI` — the literal `"true"` marks only the production-bundle
+  builds in `ci.yml` and the hermetic PR Playwright workflow. Live sandbox
+  workflows and deployments must not set it.
 - `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
   (`src/lib/cli/ensure-admin.ts`), never by the running app.
 - `DB_RESET_ALLOW_REMOTE` — consumed only by the database-reset CLI. Only the
@@ -138,13 +141,15 @@ Both `ADMIN_PASSWORD` and `ISOMETRIC_DEMO_PROJECT_ID` **are** pulled locally via
 `.env.local.tpl`; they are absent from the deployment-facing `.env.tpl` only and
 must be set directly on the staging/production items.
 
-### CI carve-out on the production fail-closed gates
+### Hermetic-CI exception on the production fail-closed gates
 
-All three production gates — `GEO_PROVIDER=stub`, non-`s3-compatible` storage,
-and missing `CREDENTIALS_ENCRYPTION_KEY` — are **skipped when `CI` is truthy**,
-because hermetic e2e builds a production bundle on purpose. CI local-fs storage
-is additionally only allowed against a localhost `NEXT_PUBLIC_APP_URL`. Real
-deployments never run with `CI` set, so the safeguards hold where they matter.
+The production gates — `GEO_PROVIDER=stub`, unset `ISOMETRIC_ENVIRONMENT`,
+missing `CREDENTIALS_ENCRYPTION_KEY`, and non-`s3-compatible` storage — are
+skipped only for a **hermetic CI build**: `NOMA_HERMETIC_CI=true`, `CI` truthy,
+and an HTTP(S) loopback `NEXT_PUBLIC_APP_URL` (ci.yml and e2e.yml compile
+production bundles against localhost with placeholder config on purpose).
+Live E2E does not set the marker because it loads sandbox credentials and makes
+external calls. Any unmarked build or runtime keeps every gate armed.
 
 ### The three environment items intentionally differ
 

@@ -85,6 +85,11 @@ jobs:
       - name: Spacing-scale check
         run: pnpm check:spacing-scale
 
+      # docs/ux-writing.md bans en and em dashes in user-facing copy; this
+      # parses string literals and JSX text (never comments) to enforce it.
+      - name: UX-copy dash check
+        run: pnpm check:ux-copy
+
       - name: Apply schema
         run: pnpm drizzle-kit push --force
 
@@ -102,6 +107,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_build
       NEXT_PUBLIC_APP_URL: http://localhost:3100
+      NOMA_HERMETIC_CI: "true"
       BETTER_AUTH_SECRET: ci-build-placeholder-secret-not-a-real-key
       ISOMETRIC_ENVIRONMENT: sandbox
       STORAGE_PROVIDER: s3-compatible

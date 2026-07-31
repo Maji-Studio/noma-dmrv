@@ -18,9 +18,10 @@ and secrets see [security.md](./security.md).
   `/api/storage-local/[...key]` standing in for the bucket.
 
 Production rejects `local-fs` in `src/config/env.ts` (`superRefine`), with one
-deliberate carve-out: `allowsCiLocalFsStorage` permits it when `CI` is set **and**
-`NEXT_PUBLIC_APP_URL` is localhost, so Playwright can round-trip real uploads
-hermetically ([testing.md](./testing.md)).
+deliberate carve-out: `allowsCiLocalFsStorage` permits it only when
+`NOMA_HERMETIC_CI=true`, `CI` is set, and `NEXT_PUBLIC_APP_URL` is an HTTP(S)
+loopback URL. Only the hermetic CI and PR Playwright workflows set the marker;
+live sandbox workflows and deployments do not ([testing.md](./testing.md)).
 
 **The provider is a module-level memoized singleton** (`_provider` in
 `src/lib/storage/index.ts`). Env changes need a process restart, and tests MUST

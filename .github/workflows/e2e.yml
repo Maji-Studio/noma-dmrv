@@ -32,6 +32,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_e2e
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+      NOMA_HERMETIC_CI: "true"
       ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
       # Playwright builds + serves a production bundle on CI

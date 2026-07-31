@@ -44,9 +44,10 @@ export const MINIMUM_REPLICATES_PER_BATCH = 3;
 
 /**
  * A chemistry value is usable only when present and finite. Exported so the
- * durability gates can scope the §8.3.1 distribution check to the SAME complete-
- * chemistry replicate set this module counts for `usableReplicateCount` — the
- * two must agree or an incomplete off-day sample can mask a clustered set.
+ * durability gates count the same complete-chemistry replicate set this module
+ * uses for `usableReplicateCount`. Section 8.3.1 requires at least three
+ * representative Samples from the credit batch; incomplete chemistry cannot
+ * satisfy that minimum.
  */
 export function isUsableNumber(
   value: number | null | undefined,

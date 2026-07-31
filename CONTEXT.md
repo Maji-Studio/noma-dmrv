@@ -355,6 +355,16 @@ measurement-sample submission out. _Avoid_: calling it a "sample"
 unqualified (collides with the lab Sample); submitting raw replicates in
 place of the mean + std-dev.
 
+**Noma evidence role**:
+The per-source classification that maps an evidence document or generated
+ledger to one or more intended registry inputs. Application-boundary logbooks
+use `inventory`; bills of lading use `feedstock_bill_of_lading` or
+`delivery_bill_of_lading` according to their lineage; generated ledgers use
+`transport_evidence_ledger` or `durability_evidence_ledger`. One role can target
+several inputs, and different evidence roles can support the same input. For
+example, `inventory` and `durability_evidence_ledger` can both support
+`product_mass` with different Source documents.
+
 **Monitored input**:
 An Isometric removal-template input whose value comes from the
 supplier's operational data, supplied per submission.

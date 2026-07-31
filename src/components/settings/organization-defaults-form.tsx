@@ -10,13 +10,16 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm } from "react-hook-form";
 import {
   FormActions,
   FormField,
   FormInput,
   FormSelect,
+  ServerError,
 } from "@/components/forms";
+import { EmptyState } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -88,9 +91,7 @@ export function OrganizationDefaultsForm() {
 
   if (!query.data) {
     return (
-      <p className="body-medium text-[var(--st-bad)]" role="alert">
-        Couldn&apos;t load the operating defaults. Refresh the page to retry.
-      </p>
+      <ServerError message="Couldn't load the operating defaults. Refresh the page to retry." />
     );
   }
 
@@ -98,9 +99,12 @@ export function OrganizationDefaultsForm() {
 
   if (!viewerCanManage) {
     return (
-      <p className="body-medium text-[var(--color-text-secondary)]">
-        Organization Owners and Admins set the operating defaults.
-      </p>
+      <EmptyState
+        icon={<SlidersHorizontalIcon size={32} />}
+        title="Only Organization Owners and Admins can change operating defaults"
+        description="Ask one to make changes."
+        padding="sm"
+      />
     );
   }
 

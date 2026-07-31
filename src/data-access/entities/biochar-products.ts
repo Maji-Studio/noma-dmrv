@@ -176,7 +176,19 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
   const { search, facilityId, limit } = params;
   requireOrgScope(ctx);
 
-  const conditions: SQL[] = [isNull(biocharProducts.archivedAt)];
+  const conditions: SQL[] = [
+    isNull(biocharProducts.archivedAt),
+    // Bin-less (legacy/partial) products stay orderable via their
+    // product-code fallback; products whose bin is archived or not a
+    // product bin stay hidden.
+    or(
+      isNull(biocharProducts.storageLocationId),
+      and(
+        eq(storageLocations.type, "product_bin"),
+        isNull(storageLocations.archivedAt),
+      ),
+    )!,
+  ];
 
   if (facilityId) {
     conditions.push(eq(biocharProducts.facilityId, facilityId));
@@ -199,13 +211,11 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
   const results = await db
     .select(selection)
     .from(biocharProducts)
-    .innerJoin(
+    .leftJoin(
       storageLocations,
       and(
         eq(biocharProducts.storageLocationId, storageLocations.id),
         eq(storageLocations.organizationId, ctx.organizationId),
-        eq(storageLocations.type, "product_bin"),
-        isNull(storageLocations.archivedAt),
       ),
     )
     .leftJoin(

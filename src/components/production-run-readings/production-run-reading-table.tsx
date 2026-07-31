@@ -20,7 +20,7 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
-import { formatFacilityTime } from "@/lib/date-utils";
+import { formatFacilityDateTimeWithOffset } from "@/lib/format-utils";
 
 const TABLE_MAX_HEIGHT_CLASS = "max-h-[420px]";
 const COMPACT_TABLE_MAX_HEIGHT_CLASS = "max-h-[240px]";
@@ -140,11 +140,7 @@ export function ProductionRunReadingTable({
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 font-medium">
-                    {formatFacilityTime(
-                      r.timestamp,
-                      timeZone,
-                      "yyyy-MM-dd HH:mm XXX",
-                    )}
+                    {formatFacilityDateTimeWithOffset(r.timestamp, timeZone)}
                   </td>
                   <td className="py-8 pr-12">{formatNum(r.temperatureC, 1)}</td>
                   <td className="py-8 pr-12">{formatNum(r.pressureBar, 2)}</td>

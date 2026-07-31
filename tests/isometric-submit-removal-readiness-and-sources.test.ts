@@ -112,7 +112,7 @@ describe("submitRemoval — entity readiness gate", () => {
     expect(storedRows).toHaveLength(0);
   });
 
-  it("fails when the required attempt-summary audit cannot be persisted", async () => {
+  it("surfaces the submission error when the attempt-summary audit also fails", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
         entityReadinessGaps: ["Application evidence is missing."],
@@ -122,12 +122,14 @@ describe("submitRemoval — entity readiness gate", () => {
       new Error("audit store unavailable"),
     );
 
+    // The attempt summary is best-effort: a dead audit store must not mask
+    // the error the operator can actually act on.
     await expect(
       submitRemoval({
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/audit store unavailable/i);
+    ).rejects.toThrow(/Application evidence is missing/i);
 
     expect(ledger.appendSyncEvent).toHaveBeenCalledTimes(1);
   });

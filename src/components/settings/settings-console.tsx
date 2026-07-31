@@ -28,7 +28,7 @@ import {
 } from "@/lib/settings/links";
 
 /** A rail plus a form pane stops being readable past roughly this width. */
-const CONSOLE_MAX_WIDTH = "max-w-[1160px]";
+export const SETTINGS_CONSOLE_MAX_WIDTH_CLASS = "max-w-[1160px]";
 
 const ADMIN_ORGANIZATIONS_HREF = "/admin/organizations";
 
@@ -93,12 +93,12 @@ export function SettingsConsole({
 
   return (
     <div className="container-max page-shell">
-      <div className={CONSOLE_MAX_WIDTH}>
+      <div className={SETTINGS_CONSOLE_MAX_WIDTH_CLASS}>
         <PageHeader eyebrow="Settings" title={title} subtitle={subtitle} />
       </div>
 
       <div
-        className={`${CONSOLE_MAX_WIDTH} grid gap-24 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start`}
+        className={`${SETTINGS_CONSOLE_MAX_WIDTH_CLASS} grid gap-24 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start`}
       >
         <SettingsRail
           sections={sections}

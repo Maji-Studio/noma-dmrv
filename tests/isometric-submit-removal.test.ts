@@ -328,7 +328,7 @@ describe("submitRemoval — happy path", () => {
     });
   });
 
-  it("fails loudly on attempt-audit persistence without unwinding or duplicating a confirmed submission", async () => {
+  it("keeps a confirmed submission when the attempt audit cannot be persisted", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),
     );
@@ -342,20 +342,25 @@ describe("submitRemoval — happy path", () => {
       new Error("audit database unavailable"),
     );
 
+    // The attempt summary is best-effort: a dead audit store must not turn a
+    // confirmed registry submission into a thrown error, and must not unwind
+    // or duplicate the submission.
     await expect(
       submitRemoval({
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/audit database unavailable/i);
+    ).resolves.toMatchObject({ externalId: "rmv_1" });
 
     expect(storedRows[0]).toMatchObject({
       status: "submitted",
       externalId: "rmv_1",
     });
     expect(attemptSummaryEvents()).toHaveLength(1);
+    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
 
-    vi.mocked(ledger.appendSyncEvent).mockResolvedValue(undefined as never);
+    // A retry with the audit store still down must not duplicate the
+    // registry write.
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),
     );
