@@ -10,8 +10,13 @@ export function isStockOverdraw(
 }
 
 export function formatStockKg(kg: number): string {
-  if (kg !== 0 && Math.abs(kg) < 1) return `${kg.toFixed(1)} kg`;
-  return `${Math.round(kg).toLocaleString()} kg`;
+  const safeLimitKg = Math.max(0, Math.floor(kg * 10) / 10);
+  if (safeLimitKg !== 0 && safeLimitKg < 1) {
+    return `${safeLimitKg.toFixed(1)} kg`;
+  }
+  return `${safeLimitKg.toLocaleString(undefined, {
+    maximumFractionDigits: 1,
+  })} kg`;
 }
 
 /** Compact field feedback; detailed reconciliation guidance belongs nearby. */
@@ -19,14 +24,15 @@ export function binStockOverdrawInlineMessage(
   material: StockMaterial,
   availableKg: number,
 ): string {
-  return `Only ${formatStockKg(availableKg)} of ${material} is available. Reduce the mass.`;
+  const userFacingMaterial = material === "product" ? "biochar" : material;
+  return `Only ${formatStockKg(availableKg)} of ${userFacingMaterial} is available. Reduce the mass.`;
 }
 
 /** Compact delivery-form feedback; the server keeps the detailed race message. */
 export function deliveryStockOverdrawInlineMessage(
   availableKg: number,
 ): string {
-  return `Only ${formatStockKg(availableKg)} of product is available. Reduce the delivered mass.`;
+  return `Only ${formatStockKg(availableKg)} of biochar is available. Reduce the delivered mass.`;
 }
 
 export function binStockOverdrawMessage(

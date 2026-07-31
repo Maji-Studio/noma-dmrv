@@ -4,6 +4,7 @@ import {
   binStockOverdrawMessage,
   deliveryStockOverdrawInlineMessage,
   deliveryStockOverdrawMessage,
+  formatStockKg,
   isStockOverdraw,
   productStockOverdrawMessage,
 } from "./stock-overdraw";
@@ -47,7 +48,18 @@ describe("stock overdraw", () => {
       "Only 800 kg of feedstock is available. Reduce the mass.",
     );
     expect(deliveryStockOverdrawInlineMessage(800)).toBe(
-      "Only 800 kg of product is available. Reduce the delivered mass.",
+      "Only 800 kg of biochar is available. Reduce the delivered mass.",
+    );
+  });
+
+  it("never rounds an actionable limit above the available mass", () => {
+    expect(formatStockKg(800.99)).toBe("800.9 kg");
+    expect(formatStockKg(0.99)).toBe("0.9 kg");
+  });
+
+  it("uses biochar wording for product-bin inline feedback", () => {
+    expect(binStockOverdrawInlineMessage("product", 100)).toBe(
+      "Only 100 kg of biochar is available. Reduce the mass.",
     );
   });
 });

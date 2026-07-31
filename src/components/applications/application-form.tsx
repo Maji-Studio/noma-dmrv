@@ -51,7 +51,6 @@ import {
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
   formatKg,
-  getManualDryAppliedMassError,
   resolveApplicationPositionDefault,
   resolveApplicationSoilTemperatureDefault,
   type ApplicationDeliveryOption,
@@ -218,10 +217,6 @@ export function ApplicationForm({
   const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
-  const watchedAppliedDryKg = useWatch({
-    control,
-    name: "biocharAppliedDryTons",
-  });
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
@@ -336,10 +331,6 @@ export function ApplicationForm({
     isStockOverdraw(appliedKgValid, availableKg)
       ? `Only ${formatKg(availableKg)} remains in this delivery. Reduce the applied mass.`
       : undefined;
-  const manualDryAppliedMassError =
-    moisturePercent == null && selectedDelivery
-      ? getManualDryAppliedMassError(watchedAppliedKg, watchedAppliedDryKg)
-      : undefined;
   const applicationMassFingerprint = [
     selectedDeliveryId,
     watchedAppliedKg,
@@ -355,7 +346,7 @@ export function ApplicationForm({
     routedServerError.inlineError;
 
   const handleFormSubmit = handleSubmit(async (data) => {
-    if (applicationStockError || manualDryAppliedMassError) return;
+    if (applicationStockError) return;
 
     // Custody ordering (issue #284): the server rejects this too — but a
     // legacy application can still reference an undelivered delivery (the
@@ -490,10 +481,7 @@ export function ApplicationForm({
             <FormField
               id="biocharAppliedDryTons"
               label="Biochar applied, dry (kg)"
-              error={
-                errors.biocharAppliedDryTons?.message ??
-                manualDryAppliedMassError
-              }
+              error={errors.biocharAppliedDryTons?.message}
               helperText="Moisture is not recorded for this delivery. Enter the dry mass."
               certifyRequired={isApplicationCertifyField("biocharAppliedDryTons")}
               certifyStatus={certStatus("biocharAppliedDryTons")}
@@ -504,10 +492,7 @@ export function ApplicationForm({
                 step="any"
                 placeholder="e.g., 4500"
                 disabled={isSubmitting}
-                error={
-                  !!errors.biocharAppliedDryTons ||
-                  !!manualDryAppliedMassError
-                }
+                error={!!errors.biocharAppliedDryTons}
                 {...register("biocharAppliedDryTons", {
                   setValueAs: numericValue,
                 })}

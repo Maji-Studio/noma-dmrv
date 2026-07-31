@@ -55,4 +55,35 @@ describe("application schemas", () => {
       );
     }
   });
+
+  it("rejects create input whose manually entered dry mass exceeds wet mass", () => {
+    const result = createApplicationSchema.safeParse({
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 100,
+      biocharAppliedDryTons: 101,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["biocharAppliedDryTons"],
+            message: "Dry mass cannot exceed wet mass. Reduce the dry mass.",
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("rejects update input whose manually entered dry mass exceeds wet mass", () => {
+    const result = updateApplicationSchema.safeParse({
+      applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 0.1,
+      biocharAppliedDryTons: 0.101,
+    });
+
+    expect(result.success).toBe(false);
+  });
 });

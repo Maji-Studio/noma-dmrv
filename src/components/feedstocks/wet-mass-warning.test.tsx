@@ -23,6 +23,7 @@ describe("WetMassWarning", () => {
       'aria-describedby="overrideJustification-warning"',
     );
     expect(markup).toContain('name="overrideJustification"');
+    expect(markup).toContain("color-signal-orange-strong");
     expect(markup).not.toContain(
       "Allocated wet mass exceeds total delivery",
     );

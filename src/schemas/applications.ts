@@ -7,6 +7,12 @@ import {
   MASS_MAX_TONNES_MESSAGE,
 } from "./helpers";
 import { gisBoundarySchema } from "./gis-boundary";
+import {
+  DRY_MASS_EXCEEDS_WET_MESSAGE,
+  exceedsMassWithTolerance,
+  MASS_COMPARISON_EPSILON_KG,
+} from "@/lib/calculations/mass-dry";
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 
 // ============================================
 // Constants and Enums
@@ -107,8 +113,24 @@ const applicationFormBaseSchema = z.object({
 
 });
 
-export const applicationFormSchema =
-  applicationFormBaseSchema.superRefine(gpsPairSuperRefine);
+export const applicationFormSchema = applicationFormBaseSchema.superRefine(
+  (data, ctx) => {
+    gpsPairSuperRefine(data, ctx);
+    if (
+      data.biocharAppliedDryTons != null &&
+      exceedsMassWithTolerance(
+        data.biocharAppliedDryTons,
+        data.biocharAppliedTons,
+      )
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["biocharAppliedDryTons"],
+        message: DRY_MASS_EXCEEDS_WET_MESSAGE,
+      });
+    }
+  },
+);
 
 // ============================================
 // Server Action Schemas
@@ -144,7 +166,21 @@ export const updateApplicationSchema = z.object({
   gisBoundary: gisBoundarySchema.optional().nullable(),
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
-}).superRefine(gpsPairSuperRefine);
+}).superRefine((data, ctx) => {
+  gpsPairSuperRefine(data, ctx);
+  if (
+    data.biocharAppliedDryTons != null &&
+    data.biocharAppliedTons != null &&
+    data.biocharAppliedDryTons >
+      data.biocharAppliedTons + MASS_COMPARISON_EPSILON_KG / KG_PER_TONNE
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["biocharAppliedDryTons"],
+      message: DRY_MASS_EXCEEDS_WET_MESSAGE,
+    });
+  }
+});
 
 /**
  * Schema for deleting an application
