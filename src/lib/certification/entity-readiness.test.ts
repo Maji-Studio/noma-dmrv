@@ -274,6 +274,15 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
+  it("keeps a transport leg ready without a recorded distance source", () => {
+    const readiness = deriveEntityCertifyReadiness("transportLeg", {
+      distanceKm: 25,
+      loadMassKg: 900,
+    });
+
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
+  });
+
   it("reports an upcoming delivery as a lifecycle gap", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "upcoming",
