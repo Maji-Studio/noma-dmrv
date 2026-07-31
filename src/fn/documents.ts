@@ -7,6 +7,7 @@ import {
   confirmUploadSchema,
   deleteDocumentSchema,
   isAllowedMime,
+  isProductionReadingsCsvFormat,
   maxBytesFor,
   requestUploadSchema,
   setVisibilitySchema,
@@ -100,6 +101,16 @@ export async function requestUpload(
     }
 
     const docType = parsed.data.documentType as DocumentType;
+    if (
+      parsed.data.entityType === "production_run" &&
+      docType === "sensor_data" &&
+      !isProductionReadingsCsvFormat({
+        fileName: parsed.data.fileName,
+        contentType: parsed.data.contentType,
+      })
+    ) {
+      throw new SafeError("Readings files must use CSV format.");
+    }
     if (!isAllowedMime(docType, parsed.data.contentType)) {
       throw new SafeError(
         "This file type is not allowed for this document. Choose another file."
@@ -220,6 +231,20 @@ export async function confirmUpload(
       throw new SafeError(
         "The uploaded file type is not allowed for this document. Choose another file.",
       );
+    }
+    if (
+      row.entityType === "production_run" &&
+      docType === "sensor_data" &&
+      !isProductionReadingsCsvFormat({
+        fileName: row.fileName,
+        contentType: head.contentType,
+      })
+    ) {
+      await Promise.allSettled([
+        provider.deleteObject(row.storageKey),
+        updateDocument(ctx, row.id, { uploadStatus: "failed" }),
+      ]);
+      throw new SafeError("Readings files must use CSV format.");
     }
 
     const updated = await updateDocument(ctx, row.id, {

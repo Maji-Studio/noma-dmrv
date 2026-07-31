@@ -1,8 +1,18 @@
-import { and, eq, exists, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import {
+  and,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  sql,
+  type SQL,
+  type SQLWrapper,
+} from "drizzle-orm";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
+import { PRODUCTION_READINGS_CSV_MIMES } from "@/schemas/documents";
 
 const PRODUCTION_RUN_ENTITY_TYPE = "production_run";
 const READINGS_DOCUMENT_TYPE = "sensor_data";
@@ -29,6 +39,11 @@ export function hasUploadedProductionReadingsFile(
           eq(documents.entityId, productionRunId),
           eq(documents.documentType, READINGS_DOCUMENT_TYPE),
           eq(documents.uploadStatus, UPLOADED_DOCUMENT_STATUS),
+          ilike(documents.fileName, "%.csv"),
+          inArray(
+            sql`lower(split_part(${documents.mimeType}, ';', 1))`,
+            [...PRODUCTION_READINGS_CSV_MIMES],
+          ),
         ),
       ),
   ).mapWith(Boolean);
