@@ -47,6 +47,7 @@ export function GhgStatementCarbonBreakdown({
     <RegistryCarbonResultCard
       data={query.data.value}
       scopeLabel="GHG Statement"
+      variant="compact"
     />
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
 import { formatCo2e } from "@/lib/format-utils";
 import type { RegistryCarbonResult } from "@/lib/certification/registry-carbon-result";
 
@@ -25,27 +26,18 @@ function RegistryField({
 export function RegistryCarbonResultCard({
   data,
   scopeLabel,
+  variant = "default",
 }: {
   data: RegistryCarbonResult;
   scopeLabel: "Removal" | "GHG Statement";
+  /**
+   * `compact` keeps the headline total at first glance and collapses the
+   * registry figure rows behind a disclosure (GHG statement sheet).
+   */
+  variant?: "default" | "compact";
 }) {
-  return (
-    <section
-      className="flex flex-col gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16"
-      aria-label="Isometric registry carbon result"
-    >
-      <div className="flex flex-col gap-2">
-        <span className="label-micro text-[var(--color-text-tertiary)]">
-          Isometric registry result
-        </span>
-        <span className="title-heading-2 tabular-nums text-[var(--color-text-primary)]">
-          {formatCo2e(data.netRemovedKg, { signed: true })}
-        </span>
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          Net CO₂e removed
-        </span>
-      </div>
-
+  const figures = (
+    <>
       <div>
         <RegistryField
           label="Net before registry discount"
@@ -81,6 +73,43 @@ export function RegistryCarbonResultCard({
         Values shown here come from Isometric. noma does not calculate a
         {` ${scopeLabel}`} carbon result.
       </p>
+    </>
+  );
+
+  return (
+    <section
+      className="flex flex-col gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16"
+      aria-label="Isometric registry carbon result"
+    >
+      <div className="flex flex-col gap-2">
+        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+          Isometric registry result
+        </span>
+        <span className="title-heading-2 tabular-nums text-[var(--color-text-primary)]">
+          {formatCo2e(data.netRemovedKg, { signed: true })}
+        </span>
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          Net CO₂e removed
+        </span>
+      </div>
+
+      {variant === "compact" ? (
+        <details className="group">
+          <summary className="flex cursor-pointer items-center gap-6 list-none [&::-webkit-details-marker]:hidden body-caption text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]">
+            <CaretDownIcon
+              size={10}
+              weight="bold"
+              className="transition-transform duration-150 group-open:rotate-180"
+            />
+            <span className="underline underline-offset-2">
+              Registry figures
+            </span>
+          </summary>
+          <div className="mt-8 flex flex-col gap-12">{figures}</div>
+        </details>
+      ) : (
+        figures
+      )}
     </section>
   );
 }

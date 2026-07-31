@@ -38,7 +38,6 @@ import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Button, EmptyState, Modal } from "@/components/ui";
 import { Accordion } from "@/components/ui/accordion";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { InfoHint } from "@/components/ui/tooltip";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -80,9 +79,9 @@ const STEPS: StepFlowStep[] = [
 const DIALOG_TITLE_ID = "ghg-statement-create-title";
 const DIALOG_DESCRIPTION_ID = "ghg-statement-create-description";
 const REGISTRY_STATEMENTS_ITEM = "registry-statements";
-const REGISTRY_ACCORDION_ITEM =
+const DIALOG_ACCORDION_ITEM =
   "rounded-none border-[var(--color-border-secondary)] bg-[var(--color-background-white)]";
-const REGISTRY_ACCORDION_TRIGGER =
+const DIALOG_ACCORDION_TRIGGER =
   "bg-[var(--color-background-white)] px-16 py-12 hover:bg-[var(--color-surface-light)]";
 
 // Period-derivation + window logic is shared with the server empty-statement
@@ -426,21 +425,14 @@ function StepPeriod({
 }) {
   return (
     <div className="flex flex-col gap-12">
-      <h3 className="title-heading-4 flex items-center gap-6">
-        Reporting period
-        <InfoHint>
-          Only the end date is sent. Isometric links submitted Removals
-          completed within the period.
-        </InfoHint>
-      </h3>
       <p className="body-small text-[var(--color-text-secondary)]">
         A GHG Statement bundles the Removals you&apos;ve already submitted this
-        period so a verifier can review them. Choose the period end. We&apos;ll
-        show you exactly which Removals fall inside.
+        period so a verifier can review them.
       </p>
       <FormField
         id="reportingPeriodEndOn"
         label="Reporting period end"
+        helperText="Only the end date is sent. Isometric links submitted Removals completed within the period."
         required
         error={error}
       >
@@ -525,11 +517,11 @@ export function RegistryStatementsPanel({
     >
       <Accordion.Item
         value={REGISTRY_STATEMENTS_ITEM}
-        className={REGISTRY_ACCORDION_ITEM}
+        className={DIALOG_ACCORDION_ITEM}
       >
         <Accordion.Header>
           <Accordion.Trigger
-            className={REGISTRY_ACCORDION_TRIGGER}
+            className={DIALOG_ACCORDION_TRIGGER}
             labelClassName="body-small normal-case tracking-normal text-[var(--color-text-primary)]"
           >
             <span className="flex w-full items-center justify-between gap-12">
@@ -690,14 +682,6 @@ function StepPreview({
 
   return (
     <div className="flex flex-col gap-16">
-      <h3 className="title-heading-4 flex items-center gap-6">
-        Expected contents
-        <InfoHint>
-          Isometric confirms membership after creation from each Removal&apos;s
-          completion date. Expand a Removal to view its credit batches.
-        </InfoHint>
-      </h3>
-
       <PeriodWindow derivedStart={derivedStart} endOn={endOn} />
 
       <div className="flex flex-col gap-8">
@@ -735,26 +719,39 @@ function StepPreview({
         )}
       </div>
 
-      <div className="flex flex-col gap-8 opacity-60">
-        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Other open Removals ({outside.length})
-        </span>
-        {outside.length === 0 ? (
-          <p className="body-caption text-[var(--color-text-tertiary)]">
-            No other open Removals.
-          </p>
-        ) : (
-          <RemovalBatchesAccordion
-            facilityId={facilityId}
-            entries={outside.map((removal) => ({
-              removalId: removal.removalId,
-              label: removal.externalId,
-              completedOn: removal.completedOn,
-              creditBatches: removal.creditBatches,
-            }))}
-          />
-        )}
-      </div>
+      {outside.length > 0 && (
+        <Accordion.Root className="gap-0">
+          <Accordion.Item
+            value="other-open-removals"
+            className={DIALOG_ACCORDION_ITEM}
+          >
+            <Accordion.Header>
+              <Accordion.Trigger
+                className={DIALOG_ACCORDION_TRIGGER}
+                labelClassName="body-small normal-case tracking-normal text-[var(--color-text-primary)]"
+              >
+                <span className="flex w-full items-center justify-between gap-12">
+                  <span>Other open Removals</span>
+                  <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
+                    {formatCount(outside.length, "Removal")}
+                  </span>
+                </span>
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Panel className="[&>div]:p-12">
+              <RemovalBatchesAccordion
+                facilityId={facilityId}
+                entries={outside.map((removal) => ({
+                  removalId: removal.removalId,
+                  label: removal.externalId,
+                  completedOn: removal.completedOn,
+                  creditBatches: removal.creditBatches,
+                }))}
+              />
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion.Root>
+      )}
     </div>
   );
 }
@@ -774,7 +771,6 @@ function StepConfirm({
 }) {
   return (
     <div className="flex flex-col gap-16">
-      <h3 className="title-heading-4">Confirm &amp; create</h3>
       <p className="body-small text-[var(--color-text-secondary)]">
         Isometric will create this period and link matching Removals.
       </p>
@@ -836,7 +832,7 @@ function ResultPanel({
           {alreadyExisted
             ? "already exists for this period, with"
             : "created with"}{" "}
-          <strong className="body-small-bold">
+          <strong className="font-medium">
             {formatCount(linkedCount, "Removal")}
           </strong>
           .
@@ -844,7 +840,7 @@ function ResultPanel({
       </div>
       {warnings.length > 0 && (
         <div className="flex flex-col gap-8 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-          <span className="inline-flex items-center gap-6 title-chapter-title text-[var(--color-signal-orange)]">
+          <span className="inline-flex items-center gap-6 body-caption uppercase tracking-wide text-[var(--color-signal-orange)]">
             <WarningIcon size={14} weight="fill" aria-hidden />
             {warnings.length} {warnings.length === 1 ? "warning" : "warnings"}
           </span>
