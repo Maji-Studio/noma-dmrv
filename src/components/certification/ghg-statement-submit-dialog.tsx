@@ -18,6 +18,7 @@ import { Button, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useSubmitGhgStatementToVerifier } from "@/hooks/use-certification";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
+import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import {
   buildSubmitGhgStatementDialogSchema,
   type SubmitGhgStatementDialogInput,
@@ -133,10 +134,10 @@ export function GhgStatementSubmitDialog({
   const serverError = errors.root?.serverError?.message ?? null;
   const showProgress =
     mutation.isPending || mutation.isSuccess || mutation.isError;
-  const canRetry = canRetrySubmissionProgress(
-    "ghg_statement",
-    progressUpdates,
-  );
+  const submissionStalled = isSubmissionStreamStalledError(mutation.error);
+  const canRetry =
+    !submissionStalled &&
+    canRetrySubmissionProgress("ghg_statement", progressUpdates);
   const idleTitle = isResubmit
     ? "Resubmit GHG Statement"
     : "Submit GHG Statement";
@@ -186,15 +187,17 @@ export function GhgStatementSubmitDialog({
                     ? "noma is submitting the GHG Statement to the verifier."
                     : mutation.isSuccess
                       ? "The verifier status is saved in noma."
+                      : submissionStalled
+                        ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
                       : canRetry
                         ? "Completed registry operations are preserved for a safe retry."
                         : "Review the submission details and resolve the error before submitting again."}
                 </span>
                 {!mutation.isPending && (
                   <div className="flex items-center gap-12">
-                    {mutation.isSuccess ? (
+                    {mutation.isSuccess || submissionStalled ? (
                       <Button variant="primary" onClick={onClose}>
-                        Done
+                        {submissionStalled ? "Close" : "Done"}
                       </Button>
                     ) : canRetry && lastInput ? (
                       <>

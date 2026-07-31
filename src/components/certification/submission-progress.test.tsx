@@ -50,6 +50,20 @@ describe("SubmissionProgress", () => {
     expect(html).toContain("text-[var(--st-bad)]");
   });
 
+  it("does not blame the first step when submission fails before progress starts", () => {
+    const html = renderToStaticMarkup(
+      <SubmissionProgress
+        kind="ghg_statement"
+        updates={[]}
+        error="The submission could not be started."
+      />,
+    );
+
+    expect(html).toContain("Submission failed before progress started.");
+    expect(html).not.toContain("Checking statement and report failed.");
+    expect(html).not.toContain("text-[var(--st-bad)]");
+  });
+
   it("labels conditional steps that are not required", () => {
     const html = renderToStaticMarkup(
       <SubmissionProgress
@@ -120,5 +134,17 @@ describe("SubmissionProgress", () => {
         { step: "ghg_statement.sending", state: "active" },
       ]),
     ).toBe(true);
+    expect(canRetrySubmissionProgress("ghg_statement", [])).toBe(false);
+  });
+
+  it("does not retry a deterministic GHG Statement confirmation failure", () => {
+    expect(
+      canRetrySubmissionProgress("ghg_statement", [
+        { step: "ghg_statement.checking", state: "complete" },
+        { step: "ghg_statement.preparing_report", state: "complete" },
+        { step: "ghg_statement.sending", state: "complete" },
+        { step: "ghg_statement.confirming", state: "active" },
+      ]),
+    ).toBe(false);
   });
 });

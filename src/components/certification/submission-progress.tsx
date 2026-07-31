@@ -39,7 +39,6 @@ const RETRYABLE_STEPS = new Set<SubmissionProgressStep>([
   "removal.verifying_evidence",
   "removal.complete",
   "ghg_statement.sending",
-  "ghg_statement.confirming",
   "ghg_statement.complete",
 ]);
 
@@ -117,7 +116,8 @@ function latestUpdates(
 function failedStep(
   steps: readonly SubmissionProgressStep[],
   latest: Map<SubmissionProgressStep, SubmissionProgressUpdate>,
-): SubmissionProgressStep {
+): SubmissionProgressStep | null {
+  if (latest.size === 0) return null;
   return (
     steps.find((step) => latest.get(step)?.state === "active") ??
     steps.find((step) => !latest.has(step)) ??
@@ -130,7 +130,8 @@ export function canRetrySubmissionProgress(
   updates: SubmissionProgressUpdate[],
 ): boolean {
   const steps = stepSequence(kind);
-  return RETRYABLE_STEPS.has(failedStep(steps, latestUpdates(updates)));
+  const failed = failedStep(steps, latestUpdates(updates));
+  return failed !== null && RETRYABLE_STEPS.has(failed);
 }
 
 function displayState(
@@ -211,11 +212,16 @@ export function SubmissionProgress({
     active ??
     (latest.get(terminal)?.state === "complete" ? terminal : steps[0]);
   const liveCopy = STEP_COPY[liveStep].title;
+  const statusCopy = error
+    ? failed
+      ? `${liveCopy} failed.`
+      : "Submission failed before progress started."
+    : liveCopy;
 
   return (
     <div className="flex flex-col gap-12">
       <span className="sr-only" role="status">
-        {error ? `${liveCopy} failed.` : liveCopy}
+        {statusCopy}
       </span>
       <ol aria-label="Submission progress">
         {steps.map((step, index) => {

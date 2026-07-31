@@ -525,8 +525,16 @@ async function submitRemovalCore(
         );
       }
       onProgress?.({ step: "removal.preparing_evidence", state: "complete" });
-      onProgress?.({ step: "removal.sending_inputs", state: "reused" });
-      onProgress?.({ step: "removal.sending_durability", state: "reused" });
+      onProgress?.({
+        step: "removal.sending_inputs",
+        state: initialBuild.datapointBodyByKey.size > 0 ? "reused" : "skipped",
+      });
+      onProgress?.({
+        step: "removal.sending_durability",
+        state: initialBuild.durabilityMeasurementSampleArgs
+          ? "reused"
+          : "skipped",
+      });
       onProgress?.({ step: "removal.creating", state: "reused" });
       onProgress?.({
         step: "removal.verifying_evidence",

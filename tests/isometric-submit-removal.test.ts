@@ -428,9 +428,11 @@ describe("submitRemoval — happy path", () => {
       makeContext(),
     );
 
+    const progress = vi.fn();
     const second = await submitRemoval({
       orgCtx: makeTestOrgContext(USER_ID),
       removalId: REMOVAL_ID,
+      onProgress: progress,
     });
 
     expect(second.externalId).toBe("rmv_1");
@@ -451,6 +453,68 @@ describe("submitRemoval — happy path", () => {
       makeTestOrgContext(USER_ID),
       { removalId: REMOVAL_ID, creditBatchIds: [CREDIT_BATCH_ID] },
     );
+    expect(progress).toHaveBeenCalledWith({
+      step: "removal.sending_inputs",
+      state: "reused",
+    });
+    expect(progress).toHaveBeenCalledWith({
+      step: "removal.sending_durability",
+      state: "skipped",
+    });
+    expect(progress).toHaveBeenCalledWith({
+      step: "removal.creating",
+      state: "reused",
+    });
+  });
+
+  it("marks absent datapoint and durability work as skipped when reusing a Removal", async () => {
+    const fixedOnlyTemplate = {
+      ...makeContext().defaultTemplate!,
+      groups: makeContext().defaultTemplate!.groups.map((group) => ({
+        ...group,
+        components: group.components.map((component) => ({
+          ...component,
+          inputs: component.inputs.map((input) => ({
+            ...input,
+            type: "fixed" as const,
+            datapoint_id: "dtp-fixed-product-mass",
+          })),
+        })),
+      })),
+    } as IsometricGhgEntryTemplate;
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockImplementation(
+      async () => makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
+        defaultTemplate: fixedOnlyTemplate,
+      }),
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+
+    await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+    });
+    const progress = vi.fn();
+    await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+      onProgress: progress,
+    });
+
+    expect(isometric.createDatapoint).not.toHaveBeenCalled();
+    expect(progress).toHaveBeenCalledWith({
+      step: "removal.sending_inputs",
+      state: "skipped",
+    });
+    expect(progress).toHaveBeenCalledWith({
+      step: "removal.sending_durability",
+      state: "skipped",
+    });
+    expect(progress).toHaveBeenCalledWith({
+      step: "removal.creating",
+      state: "reused",
+    });
   });
 
   it("supersedes to v=2 when the aggregated source data changes between submits", async () => {

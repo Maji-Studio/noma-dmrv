@@ -49,7 +49,10 @@ import {
 } from "@/fn/certification";
 import type { RemovalSubmissionResult } from "@/fn/certification/submit-removal";
 import type { SubmitGhgStatementResult } from "@/fn/certification/submit-ghg-statement";
-import { streamCertificationSubmission } from "@/lib/certification/submission-progress-client";
+import {
+  isSubmissionStreamStalledError,
+  streamCertificationSubmission,
+} from "@/lib/certification/submission-progress-client";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import type {
@@ -610,6 +613,11 @@ export function useSubmitRemoval() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
+    onError: (error) => {
+      if (isSubmissionStreamStalledError(error)) {
+        queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      }
+    },
   });
 }
 
@@ -701,6 +709,11 @@ export function useSyncGhgStatementsFromRegistry() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+    onError: (error) => {
+      if (isSubmissionStreamStalledError(error)) {
+        queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      }
     },
   });
 }
@@ -839,6 +852,11 @@ export function useSubmitGhgStatementToVerifier() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+    onError: (error) => {
+      if (isSubmissionStreamStalledError(error)) {
+        queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      }
     },
   });
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SafeError } from "@/lib/errors";
 
 const mocks = vi.hoisted(() => ({
   requireOrgContext: vi.fn(),
@@ -38,6 +39,7 @@ const ORG_CONTEXT = {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.requireOrgContext.mockResolvedValue(ORG_CONTEXT);
+  mocks.requireOrgRole.mockReturnValue(undefined);
   mocks.checkRateLimit.mockReturnValue({
     allowed: true,
     retryAfterSeconds: 0,
@@ -89,9 +91,10 @@ describe("certification submission progress route", () => {
       "application/x-ndjson",
     );
     expect(response.headers.get("x-accel-buffering")).toBe("no");
+    expect(mocks.requireOrgRole).toHaveBeenCalledWith(ORG_CONTEXT, "admin");
   });
 
-  it("returns safe validation errors in the stream", async () => {
+  it("returns 400 before opening a stream for an invalid request", async () => {
     const response = await POST(
       new Request("http://localhost/api/certification/submissions", {
         method: "POST",
@@ -103,9 +106,109 @@ describe("certification submission progress route", () => {
       }),
     );
 
-    const event = JSON.parse((await response.text()).trim());
-    expect(event.type).toBe("error");
-    expect(event.error).toContain("Validation error:");
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid submission request.",
+    });
     expect(mocks.submitRemoval).not.toHaveBeenCalled();
+    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for malformed JSON", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/certification/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.submitRemoval).not.toHaveBeenCalled();
+    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("denies non-admin callers before parsing or starting submission work", async () => {
+    mocks.requireOrgRole.mockImplementation(() => {
+      throw new SafeError("You don't have permission to perform this action.");
+    });
+    const json = vi.fn();
+
+    const response = await POST({ json } as unknown as Request);
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "You don't have permission to perform this action.",
+    });
+    expect(mocks.requireOrgRole).toHaveBeenCalledWith(ORG_CONTEXT, "admin");
+    expect(json).not.toHaveBeenCalled();
+    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+    expect(mocks.submitRemoval).not.toHaveBeenCalled();
+    expect(mocks.submitGhgStatement).not.toHaveBeenCalled();
+  });
+
+  it("passes the authenticated org context and parsed GHG Statement input to the core", async () => {
+    const ghgStatementId = "22222222-2222-4222-8222-222222222222";
+    const input = {
+      reportId: "33333333-3333-4333-8333-333333333333",
+      confirmProduction: true,
+    };
+    mocks.submitGhgStatement.mockResolvedValue({
+      externalId: "ghg-1",
+      remoteStatus: "AWAITING_VERIFICATION",
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/certification/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "ghg_statement", ghgStatementId, input }),
+      }),
+    );
+    await response.text();
+
+    expect(response.status).toBe(200);
+    expect(mocks.submitGhgStatement).toHaveBeenCalledWith({
+      orgCtx: ORG_CONTEXT,
+      ghgStatementId,
+      input,
+      onProgress: expect.any(Function),
+    });
+    expect(mocks.submitRemoval).not.toHaveBeenCalled();
+    expect(mocks.checkRateLimit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "cert:submit-ghg-statement:user-1",
+      }),
+    );
+  });
+
+  it("returns 429 before starting submission work when the limit is exhausted", async () => {
+    mocks.checkRateLimit.mockReturnValue({
+      allowed: false,
+      retryAfterSeconds: 17,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/certification/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "removal",
+          input: {
+            removalId: "11111111-1111-4111-8111-111111111111",
+            compilationHash: "a".repeat(64),
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("17");
+    await expect(response.json()).resolves.toEqual({
+      error: "Too many attempts. Try again in 17s.",
+    });
+    expect(mocks.submitRemoval).not.toHaveBeenCalled();
+    expect(mocks.submitGhgStatement).not.toHaveBeenCalled();
   });
 });

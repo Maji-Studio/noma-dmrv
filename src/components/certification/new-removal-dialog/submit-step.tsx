@@ -27,8 +27,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
   useRemovalCompilation,
-  useSubmitRemoval,
 } from "@/hooks/use-certification";
+import type { useSubmitRemoval } from "@/hooks/use-certification";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import {
   buildRemovalRequirementsChecklist,
@@ -42,6 +42,7 @@ import {
   SubmissionProgress,
 } from "../submission-progress";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
+import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { DebugDrawer } from "./debug-drawer";
 import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
@@ -55,7 +56,7 @@ interface SubmitStepProps {
   ctx: RemovalCertifyContext;
   facilityId: string;
   onDone: () => void;
-  onSubmissionPendingChange: (pending: boolean) => void;
+  submitMutation: ReturnType<typeof useSubmitRemoval>;
 }
 
 export function SubmitStep({
@@ -63,9 +64,8 @@ export function SubmitStep({
   ctx,
   facilityId,
   onDone,
-  onSubmissionPendingChange,
+  submitMutation,
 }: SubmitStepProps) {
-  const submitMutation = useSubmitRemoval();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -100,7 +100,6 @@ export function SubmitStep({
     }
     setSubmitError(null);
     setProgressUpdates([]);
-    onSubmissionPendingChange(true);
     submitMutation.mutate(
       {
         input: {
@@ -114,12 +113,10 @@ export function SubmitStep({
       },
       {
         onSuccess: (result) => {
-          onSubmissionPendingChange(false);
           setSubmitError(null);
           toast.success(`Removal ${result.externalId} submitted.`);
         },
         onError: (err) => {
-          onSubmissionPendingChange(false);
           setSubmitError(
             err instanceof Error
               ? err.message
@@ -205,7 +202,12 @@ export function SubmitStep({
   }
 
   if (submitMutation.isPending || progressUpdates.length > 0) {
-    const canRetry = canRetrySubmissionProgress("removal", progressUpdates);
+    const submissionStalled = isSubmissionStreamStalledError(
+      submitMutation.error,
+    );
+    const canRetry =
+      !submissionStalled &&
+      canRetrySubmissionProgress("removal", progressUpdates);
     return (
       <div className="flex flex-col gap-16">
         <SubmissionProgress
@@ -218,26 +220,32 @@ export function SubmitStep({
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {submitMutation.isPending
               ? "noma is submitting the Removal to Isometric."
-              : canRetry
-                ? "Completed registry operations are preserved for a safe retry."
-                : "Review the submission details and resolve the error before submitting again."}
+              : submissionStalled
+                ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
+                : canRetry
+                  ? "Completed registry operations are preserved for a safe retry."
+                  : "Review the submission details and resolve the error before submitting again."}
           </span>
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
-              {canRetry && (
-                <Button
-                  onClick={() => {
-                    setProgressUpdates([]);
-                    submitMutation.reset();
-                  }}
-                >
-                  Review submission
+              {submissionStalled ? (
+                <Button variant="primary" onClick={onDone}>
+                  Close
                 </Button>
-              )}
-              {canRetry ? (
-                <Button variant="primary" onClick={handleSubmit}>
-                  Try again
-                </Button>
+              ) : canRetry ? (
+                <>
+                  <Button
+                    onClick={() => {
+                      setProgressUpdates([]);
+                      submitMutation.reset();
+                    }}
+                  >
+                    Review submission
+                  </Button>
+                  <Button variant="primary" onClick={handleSubmit}>
+                    Try again
+                  </Button>
+                </>
               ) : (
                 <Button
                   variant="primary"

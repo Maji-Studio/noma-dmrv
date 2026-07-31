@@ -129,9 +129,10 @@ because of a Turbopack/Vercel runtime bug.
   explicitly allowed through.
 - Data-access org checks remain the source of truth for authorization; the proxy
   is routing, not authz. See [auth.md](./auth.md).
-- Four API route families: `/api/auth/[...all]`,
-  `/api/storage-local/[...key]`, `/api/documents/[id]`, and
-  `/api/ghg-statement-reports/[reportId]`. Documents are normally resolved
+- Five API route families: `/api/auth/[...all]`,
+  `/api/storage-local/[...key]`, `/api/documents/[id]`,
+  `/api/ghg-statement-reports/[reportId]`, and
+  `/api/certification/submissions`. Documents are normally resolved
   through `getOrgContext()`. The report route is the one deliberate public
   bearer-capability seam: middleware lets it through, then the route verifies a
   per-report token against the stored digest and redirects to a freshly signed
@@ -201,6 +202,20 @@ later; Isometric-specific HTTP, transformers, and typings live under
 components/certification/  →  hooks/use-certification.ts  →  fn/certification/
   →  data-access/certification.ts  →  lib/isometric/  →  db/schema/certification.ts
 ```
+
+Removal and GHG Statement writes add one transport seam between hooks and the
+orchestrator: `POST /api/certification/submissions` validates the organization
+context, Admin role, complete request body, and per-user submit limit before it
+opens an NDJSON response. Once admitted, it calls the same `fn/certification/`
+cores and streams orchestration checkpoints plus the final result. A client
+disconnect stops response writes but does not cancel registry reconciliation or
+audit persistence.
+
+`submitRemovalAction` and `submitGhgStatementToVerifier` remain as
+non-streaming compatibility/fallback wrappers for direct server consumers and
+backend tests. They delegate to the same cores. Their Admin guards and submit
+rate-limit keys must stay synchronized with the streaming route; new UI callers
+use the streaming route.
 
 The one non-obvious rule: **`lib/isometric/` is pure** — no DB, no auth, no
 `ActionResult`.

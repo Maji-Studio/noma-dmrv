@@ -10,6 +10,7 @@ import { logActionError } from "@/fn/action-errors";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-statement";
 import { submitRateLimit } from "@/fn/certification/shared";
+import type { OrgContext } from "@/lib/auth/server";
 import type {
   SubmissionProgressStreamEvent,
   SubmissionProgressUpdate,
@@ -27,25 +28,63 @@ const progressRequestSchema = z.discriminatedUnion("kind", [
 ]);
 
 type StreamEvent = SubmissionProgressStreamEvent<unknown>;
+type ProgressRequest = z.infer<typeof progressRequestSchema>;
 
-function assertSubmitRateLimit(args: {
+function checkSubmitRateLimit(args: {
   key: string;
   userId: string;
-}): void {
+}) {
   const rateLimit = submitRateLimit(args.key);
-  const verdict = checkRateLimit({
+  return checkRateLimit({
     key: `${rateLimit.key}:${args.userId}`,
     max: rateLimit.max,
     windowMs: rateLimit.windowMs,
   });
-  if (!verdict.allowed) {
-    throw new SafeError(
-      `Too many attempts. Try again in ${verdict.retryAfterSeconds}s.`,
-    );
-  }
+}
+
+function admissionError(error: string, status: number, headers?: HeadersInit) {
+  return Response.json({ error }, { status, headers });
 }
 
 export async function POST(request: Request): Promise<Response> {
+  let orgCtx: OrgContext;
+  try {
+    orgCtx = await requireOrgContext();
+    requireOrgRole(orgCtx, "admin");
+  } catch (error) {
+    logActionError(error, { message: "submission stream access denied" });
+    return admissionError(
+      error instanceof SafeError ? error.message : "Access denied.",
+      error instanceof SafeError ? 403 : 500,
+    );
+  }
+
+  let body: ProgressRequest;
+  try {
+    body = progressRequestSchema.parse(await request.json());
+  } catch (error) {
+    if (!(error instanceof z.ZodError) && !(error instanceof SyntaxError)) {
+      logActionError(error, { message: "submission request parsing failed" });
+    }
+    return admissionError("Invalid submission request.", 400);
+  }
+
+  const rateLimitKey =
+    body.kind === "removal"
+      ? "cert:submit-removal"
+      : "cert:submit-ghg-statement";
+  const rateLimitVerdict = checkSubmitRateLimit({
+    key: rateLimitKey,
+    userId: orgCtx.userId,
+  });
+  if (!rateLimitVerdict.allowed) {
+    return admissionError(
+      `Too many attempts. Try again in ${rateLimitVerdict.retryAfterSeconds}s.`,
+      429,
+      { "Retry-After": String(rateLimitVerdict.retryAfterSeconds) },
+    );
+  }
+
   const encoder = new TextEncoder();
   let streamOpen = true;
 
@@ -67,15 +106,6 @@ export async function POST(request: Request): Promise<Response> {
 
       void (async () => {
         try {
-          const orgCtx = await requireOrgContext();
-          requireOrgRole(orgCtx, "admin");
-          const body = progressRequestSchema.parse(await request.json());
-          const key =
-            body.kind === "removal"
-              ? "cert:submit-removal"
-              : "cert:submit-ghg-statement";
-          assertSubmitRateLimit({ key, userId: orgCtx.userId });
-
           const result =
             body.kind === "removal"
               ? await submitRemoval({

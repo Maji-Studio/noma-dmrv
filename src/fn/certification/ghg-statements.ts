@@ -488,7 +488,9 @@ async function createGhgStatementRemote(args: {
 // Submit to verifier
 // =====================================================================
 
-// Submits (or resubmits) a GHG statement to the verifier. The statement is
+// Compatibility/fallback action for direct server consumers. The current UI
+// uses the streaming API route; keep this admin guard and rate-limit key in
+// sync with src/app/api/certification/submissions/route.ts. The statement is
 // resolved from its ledger row keyed by `ghgStatementId`.
 export async function submitGhgStatementToVerifier(
   ghgStatementId: string,
