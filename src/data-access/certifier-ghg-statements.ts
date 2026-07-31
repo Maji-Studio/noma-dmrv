@@ -369,33 +369,38 @@ export async function createGhgStatementForRegistryDiscovery(
     // *period* key (the retryable one — another remote already occupies this
     // local date, pick another) is the explicit target, and the per-facility
     // *external-id* key (a concurrent reconcile of this same remote won the
-    // race) is caught by name and resolved by re-reading. Nothing is swallowed
-    // untargeted: any other violation propagates.
+    // race) is isolated behind a nested transaction/savepoint, caught by name,
+    // and resolved by re-reading. The savepoint keeps a caller transaction
+    // usable after the expected 23505. Nothing untargeted is swallowed: any
+    // other violation propagates.
     let inserted: CertifierGhgStatementRow | undefined;
     try {
-      [inserted] = await executor
-        .insert(certifierGhgStatements)
-        .values({
-          organizationId: ctx.organizationId,
-          facilityId: input.facilityId,
-          reportingPeriodEndOn: storedPeriod.endOn,
-          metadata: {
-            [REMOTE_EXTERNAL_ID_METADATA_KEY]: input.externalId,
-            [REMOTE_PERIOD_END_ON_METADATA_KEY]: input.reportingPeriodEndOn,
-            [REMOTE_PERIOD_END_IS_SYNTHETIC_METADATA_KEY]:
-              storedPeriod.synthetic,
-            [REMOTE_PERIOD_MISSING_METADATA_KEY]:
-              input.reportingPeriodEndOn === null,
-          },
-        })
-        .onConflictDoNothing({
-          target: [
-            certifierGhgStatements.provider,
-            certifierGhgStatements.facilityId,
-            certifierGhgStatements.reportingPeriodEndOn,
-          ],
-        })
-        .returning();
+      inserted = await executor.transaction(async (insertTx) => {
+        const [row] = await insertTx
+          .insert(certifierGhgStatements)
+          .values({
+            organizationId: ctx.organizationId,
+            facilityId: input.facilityId,
+            reportingPeriodEndOn: storedPeriod.endOn,
+            metadata: {
+              [REMOTE_EXTERNAL_ID_METADATA_KEY]: input.externalId,
+              [REMOTE_PERIOD_END_ON_METADATA_KEY]: input.reportingPeriodEndOn,
+              [REMOTE_PERIOD_END_IS_SYNTHETIC_METADATA_KEY]:
+                storedPeriod.synthetic,
+              [REMOTE_PERIOD_MISSING_METADATA_KEY]:
+                input.reportingPeriodEndOn === null,
+            },
+          })
+          .onConflictDoNothing({
+            target: [
+              certifierGhgStatements.provider,
+              certifierGhgStatements.facilityId,
+              certifierGhgStatements.reportingPeriodEndOn,
+            ],
+          })
+          .returning();
+        return row;
+      });
     } catch (err) {
       if (!isPgUniqueViolation(err, REMOTE_EXTERNAL_ID_UNIQUE_CONSTRAINT)) {
         throw err;
