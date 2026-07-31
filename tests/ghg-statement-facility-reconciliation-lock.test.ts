@@ -26,6 +26,8 @@ vi.mock("@/lib/auth/server", async (importOriginal) => {
 });
 
 import { db } from "@/db";
+import { users } from "@/db/schema/auth";
+import { documents } from "@/db/schema/documentation";
 import {
   certificationSubmissions,
   certifierGhgStatements,
@@ -34,7 +36,10 @@ import {
   certifierSyncEvents,
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
-import { refreshGhgStatementStatus } from "@/fn/certification/ghg-statements";
+import {
+  refreshGhgStatementStatus,
+  submitGhgStatementToVerifier,
+} from "@/fn/certification/ghg-statements";
 import { reconcileGhgStatementsFromRegistry } from "@/fn/certification/ghg-statement-sync";
 import * as authServer from "@/lib/auth/server";
 import {
@@ -45,10 +50,12 @@ import {
 
 const REPORTING_PERIOD_END = "2026-03-31";
 const LOCK_OBSERVATION_DELAY_MS = 200;
+const TEST_USER_ID = `test-user-ggs-lock-${crypto.randomUUID().slice(0, 8)}`;
 const createdFacilityIds: string[] = [];
 
 interface Fixture {
   facilityId: string;
+  statementId: string;
   firstRemovalId: string;
   secondRemovalId: string;
   firstExternalRemovalId: string;
@@ -59,14 +66,26 @@ interface Fixture {
 
 let registry: FakeIsometricRegistry;
 
-beforeAll(() => ensureTestOrg());
+beforeAll(async () => {
+  await ensureTestOrg();
+  await db.insert(users).values({
+    id: TEST_USER_ID,
+    email: `${TEST_USER_ID}@example.com`,
+    name: "Lock Tester",
+    role: "admin",
+    emailVerified: true,
+  });
+});
 
 beforeEach(() => {
   registry = installFakeRegistry();
 });
 
 afterAll(async () => {
-  if (createdFacilityIds.length === 0) return;
+  if (createdFacilityIds.length === 0) {
+    await db.delete(users).where(eq(users.id, TEST_USER_ID));
+    return;
+  }
   const statements = await db
     .select({ id: certifierGhgStatements.id })
     .from(certifierGhgStatements)
@@ -77,12 +96,25 @@ afterAll(async () => {
     .from(certifierRemovals)
     .where(inArray(certifierRemovals.facilityId, createdFacilityIds));
   const removalIds = removals.map((removal) => removal.id);
+  const localEntityIds = [...statementIds, ...removalIds];
+  const submissionRows =
+    localEntityIds.length > 0
+      ? await db
+          .select({ id: certificationSubmissions.id })
+          .from(certificationSubmissions)
+          .where(
+            inArray(certificationSubmissions.localEntityId, localEntityIds),
+          )
+      : [];
+  const submissionIds = submissionRows.map((submission) => submission.id);
   if (statementIds.length > 0) {
     await db
       .delete(certifierSyncEvents)
       .where(inArray(certifierSyncEvents.entityId, statementIds));
   }
-  const localEntityIds = [...statementIds, ...removalIds];
+  if (submissionIds.length > 0) {
+    await db.delete(documents).where(inArray(documents.entityId, submissionIds));
+  }
   if (localEntityIds.length > 0) {
     await db
       .delete(certificationSubmissions)
@@ -102,6 +134,7 @@ afterAll(async () => {
     .delete(certifierProjects)
     .where(inArray(certifierProjects.facilityId, createdFacilityIds));
   await db.delete(facilities).where(inArray(facilities.id, createdFacilityIds));
+  await db.delete(users).where(eq(users.id, TEST_USER_ID));
 });
 
 async function createFixture(): Promise<Fixture> {
@@ -150,10 +183,9 @@ async function createFixture(): Promise<Fixture> {
     })),
   );
 
-  const userId = `test-user-ggs-lock-${runId}`;
   vi.mocked(authServer.getUser).mockResolvedValue({
-    id: userId,
-    email: `${userId}@example.com`,
+    id: TEST_USER_ID,
+    email: `${TEST_USER_ID}@example.com`,
     name: "Lock Tester",
     emailVerified: true,
     role: "admin",
@@ -161,7 +193,7 @@ async function createFixture(): Promise<Fixture> {
     updatedAt: new Date(),
   } as never);
   vi.mocked(authServer.requireOrgContext).mockResolvedValue(
-    makeTestOrgContext(userId),
+    makeTestOrgContext(TEST_USER_ID),
   );
 
   const remote = registry.seedGhgStatement({
@@ -185,6 +217,7 @@ async function createFixture(): Promise<Fixture> {
 
   return {
     facilityId: facility.id,
+    statementId: statement.id,
     firstRemovalId: removalRows[0].id,
     secondRemovalId: removalRows[1].id,
     firstExternalRemovalId: externalRemovalIds[0],
@@ -224,7 +257,10 @@ async function expectFresherState(fixture: Fixture): Promise<void> {
     .where(eq(certificationSubmissions.id, fixture.submissionId));
   expect(submission).toMatchObject({
     status: "accepted",
-    metadata: expect.objectContaining({ remoteStatus: "VERIFIED" }),
+    metadata: expect.objectContaining({
+      remoteStatus: "VERIFIED",
+      removalIds: [fixture.secondExternalRemovalId],
+    }),
   });
 }
 
@@ -281,5 +317,60 @@ describe("GHG Statement facility reconciliation lock", () => {
       requestCountBefore + 2,
     );
     await expectFresherState(fixture);
+  });
+
+  it("makes refresh wait for a delayed resubmit before applying fresher remote state", async () => {
+    const fixture = await createFixture();
+    const detailPath: `/ghg_statements/${string}` =
+      `/ghg_statements/${fixture.remote.id}`;
+    const submitPath: `/ghg_statements/${string}/submit` =
+      `/ghg_statements/${fixture.remote.id}/submit`;
+    fixture.remote.status = "FAILED_VERIFICATION";
+    await expect(
+      refreshGhgStatementStatus(fixture.submissionId),
+    ).resolves.toMatchObject({
+      success: true,
+      data: expect.objectContaining({ status: "FAILED_VERIFICATION" }),
+    });
+    const detailRequestsBefore = registry.requestCount("GET", detailPath);
+    const delayedSubmit = registry.deferNextResponse(`POST ${submitPath}`);
+
+    try {
+      const submit = submitGhgStatementToVerifier(fixture.statementId, {
+        reportUrl: "https://example.com/ghg-statement-report.pdf",
+        summaryOfChanges: "Corrected the statement evidence.",
+        confirmProduction: true,
+      });
+      await delayedSubmit.started;
+
+      advanceRemote(fixture);
+      const refresh = refreshGhgStatementStatus(fixture.submissionId);
+      await new Promise((resolve) =>
+        setTimeout(resolve, LOCK_OBSERVATION_DELAY_MS),
+      );
+      expect(registry.requestCount("GET", detailPath)).toBe(
+        detailRequestsBefore + 1,
+      );
+
+      delayedSubmit.release();
+      await expect(Promise.all([submit, refresh])).resolves.toEqual([
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({
+            remoteStatus: "AWAITING_VERIFICATION",
+          }),
+        }),
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({ status: "VERIFIED" }),
+        }),
+      ]);
+      expect(registry.requestCount("GET", detailPath)).toBe(
+        detailRequestsBefore + 2,
+      );
+      await expectFresherState(fixture);
+    } finally {
+      delayedSubmit.release();
+    }
   });
 });

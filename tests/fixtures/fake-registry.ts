@@ -91,6 +91,7 @@ export interface DeferredRegistryResponse {
 
 const DEFAULT_REJECT_STATUS = 422;
 const DEFAULT_PAGE_SIZE = 50;
+const FAKE_SUBMITTED_AT = "2026-04-01T00:00:00.000Z";
 
 interface Page<T> {
   nodes: T[];
@@ -372,6 +373,28 @@ export class FakeIsometricRegistry {
         })),
         query,
       );
+    }
+    const submittedStatement = path.match(
+      /^\/ghg_statements\/([^/]+)\/submit$/,
+    );
+    if (method === "POST" && submittedStatement) {
+      const statement = this.ghgStatements.find(
+        (candidate) =>
+          candidate.id === decodeURIComponent(submittedStatement[1]),
+      );
+      if (!statement) {
+        throw new ApiError(
+          `Isometric ${method} ${path} → 404`,
+          404,
+          { errors: [{ detail: "not found" }] },
+          "http",
+        );
+      }
+      const payload = body as { ghg_statement_report_url: string };
+      statement.status = "AWAITING_VERIFICATION";
+      statement.ghg_statement_report_url = payload.ghg_statement_report_url;
+      statement.submitted_at = FAKE_SUBMITTED_AT;
+      return statement;
     }
     const statementById = path.match(/^\/ghg_statements\/([^/]+)$/);
     if (method === "GET" && statementById) {
