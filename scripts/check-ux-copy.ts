@@ -97,9 +97,7 @@ export function findDashViolations(
       const trimmed = node.text.trim();
       const literalMatch =
         trimmed.length > 1 ? BANNED.exec(node.text) : null;
-      const entityMatch = ts.isJsxText(node)
-        ? BANNED_JSX_ENTITY.exec(node.text)
-        : null;
+      const entityMatch = BANNED_JSX_ENTITY.exec(node.text);
       const match = literalMatch ?? entityMatch;
       if (match) {
         const { line } = sourceFile.getLineAndCharacterOfPosition(
@@ -129,7 +127,7 @@ function main(): void {
   const violations: Violation[] = [];
   for (const file of walkSourceFiles(SCANNED_DIR)) {
     const source = readFileSync(file, "utf8");
-    if (!BANNED.test(source)) continue;
+    if (!BANNED.test(source) && !BANNED_JSX_ENTITY.test(source)) continue;
     for (const violation of findDashViolations(source, file)) {
       violations.push({ ...violation, file: relative(ROOT, file) });
     }
