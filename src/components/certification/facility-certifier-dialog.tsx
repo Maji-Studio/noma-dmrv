@@ -309,16 +309,17 @@ export function FacilityCertifierForm({
             />
           )}
 
-          <FormActions
-            onCancel={onCancel}
-            isSubmitting={isSubmitting || saveMutation.isPending}
-            errorMessage={errors.root?.serverError?.message}
-            submitDisabled={blockedOnShareAck}
-            submitLabel={mapping ? "Save changes" : "Link project"}
-            sticky={presentation === "dialog"}
-          />
         </>
       )}
+
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting || saveMutation.isPending}
+        errorMessage={errors.root?.serverError?.message}
+        submitDisabled={blockedOnShareAck || !watchedProjectId}
+        submitLabel={mapping ? "Save changes" : "Link project"}
+        sticky={presentation === "dialog"}
+      />
     </form>
   );
 }

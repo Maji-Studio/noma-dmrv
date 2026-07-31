@@ -42,7 +42,7 @@ vi.mock("@/hooks/use-certification", () => ({
 }));
 
 describe("FacilityCertifierSection", () => {
-  it("starts an inline link flow with only the project selector", () => {
+  it("keeps the disabled link action visible until a project is selected", () => {
     const markup = renderToStaticMarkup(
       <FacilityCertifierSection
         facilityId="facility-1"
@@ -53,7 +53,8 @@ describe("FacilityCertifierSection", () => {
     );
 
     expect(markup).toContain("Select a project");
-    expect(markup).not.toContain(">Link Isometric project<");
+    expect(markup).toContain(">Link project<");
+    expect(markup).toContain("disabled");
     expect(markup).not.toContain("Default Removal template");
     expect(markup).not.toContain("Isometric facility ID");
   });
