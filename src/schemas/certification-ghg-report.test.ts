@@ -19,6 +19,12 @@ describe("GHG Statement report action schemas", () => {
     );
     expect(
       prepareGhgStatementReportSchema.safeParse({
+        ...input,
+        ensureFirst: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      prepareGhgStatementReportSchema.safeParse({
         preparationKey: PREPARATION_KEY,
       }).success,
     ).toBe(false);
