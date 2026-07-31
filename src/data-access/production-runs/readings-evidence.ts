@@ -41,7 +41,7 @@ export function hasUploadedProductionReadingsFile(
           eq(documents.uploadStatus, UPLOADED_DOCUMENT_STATUS),
           ilike(documents.fileName, "%.csv"),
           inArray(
-            sql`lower(split_part(${documents.mimeType}, ';', 1))`,
+            sql`lower(trim(split_part(${documents.mimeType}, ';', 1)))`,
             [...PRODUCTION_READINGS_CSV_MIMES],
           ),
         ),

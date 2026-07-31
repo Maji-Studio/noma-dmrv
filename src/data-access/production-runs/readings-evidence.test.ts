@@ -26,6 +26,7 @@ describe("hasUploadedProductionReadingsFile", () => {
     expect(query.sql).toContain('"documents"."upload_status"');
     expect(query.sql).toContain('"documents"."file_name"');
     expect(query.sql).toContain('"documents"."mime_type"');
+    expect(query.sql).toContain("lower(trim(split_part(");
     expect(query.params).toEqual([
       ctx.organizationId,
       "production_run",
