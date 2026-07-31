@@ -53,6 +53,7 @@ describe("ISOMETRIC_ENVIRONMENT production gate", () => {
     const { threw, paths } = await parseEnvWith({
       NODE_ENV: "production",
       CI: undefined,
+      NOMA_HERMETIC_CI: undefined,
       ISOMETRIC_ENVIRONMENT: undefined,
     });
 
@@ -60,12 +61,50 @@ describe("ISOMETRIC_ENVIRONMENT production gate", () => {
     expect(paths).toContain("ISOMETRIC_ENVIRONMENT");
   });
 
-  // The regression: GitHub Actions sets CI=true and builds a production bundle
-  // without this var. Firing here fails `pnpm build` for everyone.
+  // The regression: the hermetic workflows build a production bundle without
+  // this var. Firing there fails `pnpm build` for everyone.
   it("does not fire for a hermetic CI production build", async () => {
     const { paths } = await parseEnvWith({
       NODE_ENV: "production",
       CI: "true",
+      NOMA_HERMETIC_CI: "true",
+      NEXT_PUBLIC_APP_URL: "http://localhost:3100",
+      ISOMETRIC_ENVIRONMENT: undefined,
+    });
+
+    expect(paths).not.toContain("ISOMETRIC_ENVIRONMENT");
+  });
+
+  it("does not treat ambient CI on localhost as hermetic", async () => {
+    const { paths } = await parseEnvWith({
+      NODE_ENV: "production",
+      CI: "true",
+      NOMA_HERMETIC_CI: undefined,
+      NEXT_PUBLIC_APP_URL: "http://localhost:3100",
+      ISOMETRIC_ENVIRONMENT: undefined,
+    });
+
+    expect(paths).toContain("ISOMETRIC_ENVIRONMENT");
+  });
+
+  it("does not allow a non-HTTP loopback URL through the exception", async () => {
+    const { paths } = await parseEnvWith({
+      NODE_ENV: "production",
+      CI: "true",
+      NOMA_HERMETIC_CI: "true",
+      NEXT_PUBLIC_APP_URL: "ftp://localhost",
+      ISOMETRIC_ENVIRONMENT: undefined,
+    });
+
+    expect(paths).toContain("ISOMETRIC_ENVIRONMENT");
+  });
+
+  it("accepts a bracketed IPv6 loopback URL for an explicit hermetic build", async () => {
+    const { paths } = await parseEnvWith({
+      NODE_ENV: "production",
+      CI: "true",
+      NOMA_HERMETIC_CI: "true",
+      NEXT_PUBLIC_APP_URL: "http://[::1]:3100",
       ISOMETRIC_ENVIRONMENT: undefined,
     });
 
@@ -76,6 +115,7 @@ describe("ISOMETRIC_ENVIRONMENT production gate", () => {
     const { paths } = await parseEnvWith({
       NODE_ENV: "production",
       CI: undefined,
+      NOMA_HERMETIC_CI: undefined,
       ISOMETRIC_ENVIRONMENT: "production",
     });
 

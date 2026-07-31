@@ -107,6 +107,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_build
       NEXT_PUBLIC_APP_URL: http://localhost:3100
+      NOMA_HERMETIC_CI: "true"
       BETTER_AUTH_SECRET: ci-build-placeholder-secret-not-a-real-key
       ISOMETRIC_ENVIRONMENT: sandbox
       STORAGE_PROVIDER: s3-compatible

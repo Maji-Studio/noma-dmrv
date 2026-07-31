@@ -5,6 +5,8 @@ const emptyToUndefined = (value: unknown) =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
 
 const LOCAL_APP_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const LOCAL_APP_PROTOCOLS = new Set(["http:", "https:"]);
+const HERMETIC_CI_MARKER = "true";
 const DIGITALOCEAN_SPACES_REGIONS = new Set([
   "nyc1",
   "nyc2",
@@ -33,7 +35,10 @@ function isValidStoragePrefix(value: string): boolean {
 
 function isLocalAppUrl(value: string): boolean {
   try {
-    return LOCAL_APP_HOSTS.has(new URL(value).hostname);
+    const url = new URL(value);
+    if (!LOCAL_APP_PROTOCOLS.has(url.protocol)) return false;
+    const hostname = url.hostname.replace(/^\[(.*)\]$/, "$1");
+    return LOCAL_APP_HOSTS.has(hostname);
   } catch {
     return false;
   }
@@ -241,11 +246,14 @@ const envSchema = z.object({
   // Hermetic-CI exception shared by the production fail-closed gates below.
   // ci.yml and e2e.yml compile production bundles against localhost with
   // placeholder config by design (e2e.yml runs `pnpm build && pnpm start`
-  // with GEO_PROVIDER=stub and no real secrets). Requiring BOTH the CI flag
-  // and a local app URL keeps every gate armed for any build or runtime that
-  // targets a real domain, even when a platform sets CI during the build.
+  // with GEO_PROVIDER=stub and no real secrets). Requiring the explicit marker,
+  // CI flag, and an HTTP(S) loopback URL keeps live CI workflows and every real
+  // deployment out of this exception.
   const isCI = ["1", "true"].includes((process.env.CI ?? "").toLowerCase());
-  const isHermeticCiBuild = isCI && isLocalAppUrl(data.NEXT_PUBLIC_APP_URL);
+  const isHermeticCiBuild =
+    process.env.NOMA_HERMETIC_CI === HERMETIC_CI_MARKER &&
+    isCI &&
+    isLocalAppUrl(data.NEXT_PUBLIC_APP_URL);
 
   // Production fail-closed: never serve stubbed geo answers in prod.
   if (

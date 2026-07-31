@@ -122,6 +122,9 @@ Non-obvious semantics only:
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
+- `NOMA_HERMETIC_CI` — the literal `"true"` marks only the production-bundle
+  builds in `ci.yml` and the hermetic PR Playwright workflow. Live sandbox
+  workflows and deployments must not set it.
 - `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
   (`src/lib/cli/ensure-admin.ts`), never by the running app.
 - `DB_RESET_ALLOW_REMOTE` — consumed only by the database-reset CLI. Only the
@@ -142,11 +145,11 @@ must be set directly on the staging/production items.
 
 The production gates — `GEO_PROVIDER=stub`, unset `ISOMETRIC_ENVIRONMENT`,
 missing `CREDENTIALS_ENCRYPTION_KEY`, and non-`s3-compatible` storage — are
-skipped only for a **hermetic CI build**: `CI` truthy AND a localhost
-`NEXT_PUBLIC_APP_URL` (ci.yml and e2e.yml compile production bundles against
-localhost with placeholder config on purpose). Any build or runtime that
-targets a real domain keeps every gate armed, even when the platform sets `CI`
-during the build.
+skipped only for a **hermetic CI build**: `NOMA_HERMETIC_CI=true`, `CI` truthy,
+and an HTTP(S) loopback `NEXT_PUBLIC_APP_URL` (ci.yml and e2e.yml compile
+production bundles against localhost with placeholder config on purpose).
+Live E2E does not set the marker because it loads sandbox credentials and makes
+external calls. Any unmarked build or runtime keeps every gate armed.
 
 ### The three environment items intentionally differ
 
