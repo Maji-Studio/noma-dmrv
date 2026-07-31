@@ -16,4 +16,19 @@ describe("FeedstockAllocationSummary", () => {
     expect(markup).toContain('role="status"');
     expect(markup).not.toContain('role="alert"');
   });
+
+  it("keeps small actionable differences visible instead of rounding to zero", () => {
+    const subCentigram = renderToStaticMarkup(
+      <FeedstockAllocationSummary allocatedKg={100} deliveredKg={100.002} />,
+    );
+    const fiveCentigrams = renderToStaticMarkup(
+      <FeedstockAllocationSummary allocatedKg={100} deliveredKg={100.05} />,
+    );
+
+    expect(subCentigram).toContain(
+      "&lt;0.01 kg remains unallocated.",
+    );
+    expect(subCentigram).not.toContain("0 kg remains unallocated.");
+    expect(fiveCentigrams).toContain("0.05 kg remains unallocated.");
+  });
 });

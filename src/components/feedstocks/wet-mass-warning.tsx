@@ -37,7 +37,7 @@ export function WetMassWarning({
   const overageKg = allocatedKg - deliveredKg;
 
   return (
-    <div className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8 [&_[role=status]]:text-[var(--color-signal-orange-strong)]">
+    <div className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8">
       <FormField
         id="overrideJustification"
         label="Over-allocation justification"
