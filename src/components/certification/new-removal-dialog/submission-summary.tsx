@@ -129,9 +129,11 @@ export function SubmissionSummary({
           <span className="body-medium font-medium text-[var(--color-text-primary)]">
             {facts.headline}
           </span>
-          <span className="body-small text-[var(--color-text-secondary)]">
-            {facts.detail}
-          </span>
+          {facts.detail && (
+            <span className="body-small text-[var(--color-text-secondary)]">
+              {facts.detail}
+            </span>
+          )}
         </div>
       </div>
 

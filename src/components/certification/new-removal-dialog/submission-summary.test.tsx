@@ -110,6 +110,15 @@ describe("SubmissionSummary", () => {
     expect(html).not.toContain("Removal template resolved");
   });
 
+  it("does not render an empty verdict detail when no checks were evaluated", () => {
+    const html = render({ checks: [] });
+
+    expect(html).toContain("Ready to submit");
+    expect(html).not.toContain(
+      '<span class="body-small text-[var(--color-text-secondary)]"></span>',
+    );
+  });
+
   it("opens the checks list on the items that need attention", () => {
     const html = render({
       checks: [
