@@ -395,13 +395,17 @@ export async function lockDeleteBiocharProductStock(
         ))
     : [];
 
-  if ((snapshot.massKg ?? 0) > 0) {
-    await lockBinStocks(ctx, tx, [
+  const ingredientDraws = getCompositionIngredientDraws(
+    snapshot.composition as Record<string, unknown> | null,
+  );
+  await lockBinStocks(ctx, tx, [
+    ...ingredientDraws.map((draw) => draw.storageLocationId),
+    ...((snapshot.massKg ?? 0) > 0 ? [
       snapshot.storageLocationId,
       snapshot.sourceBiocharStorageLocationId,
       sourceRunSnapshot?.storageLocationId,
-    ]);
-  }
+    ] : []),
+  ]);
 
   const [locked] = await tx
     .select()
@@ -420,7 +424,8 @@ export async function lockDeleteBiocharProductStock(
       locked.storageLocationId === snapshot.storageLocationId &&
       locked.sourceBiocharStorageLocationId ===
         snapshot.sourceBiocharStorageLocationId &&
-      locked.linkedProductionRunId === snapshot.linkedProductionRunId,
+      locked.linkedProductionRunId === snapshot.linkedProductionRunId &&
+      JSON.stringify(locked.composition) === JSON.stringify(snapshot.composition),
   );
 
   const [lockedSourceRun] = locked.linkedProductionRunId
