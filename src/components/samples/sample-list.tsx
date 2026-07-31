@@ -319,7 +319,7 @@ export function SampleList({
     setError: setFormError,
     setUpdateError: setFormError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "The Sample was not created. Check the form and try again.",
+      error instanceof Error ? error.message : "Sample was not created. Check the form.",
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments and transport legs before saving this Sample.",
     openEditOnFailure: (sample) =>
@@ -448,7 +448,7 @@ export function SampleList({
       setSideSheet(null);
       toast.success("Sample updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The Sample was not saved. Try again.");
+      setFormError(error instanceof Error ? error.message : "Sample was not saved. Try again.");
     }
   };
 
@@ -464,7 +464,7 @@ export function SampleList({
       setDeletingSampleId(null);
       toast.success("Sample deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "The Sample was not deleted. Try again.");
+      setDeleteError(error instanceof Error ? error.message : "Sample was not deleted. Try again.");
     }
   };
 

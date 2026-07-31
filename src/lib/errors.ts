@@ -12,10 +12,9 @@ export class SafeError extends Error {
 }
 
 /**
- * Add recovery guidance to terse missing-record errors from shared data access.
- *
- * More specific messages stay unchanged. Call sites should still name record
- * codes and tailored recovery actions whenever that context is available.
+ * Normalize terse missing-record errors from shared data access without
+ * exposing internal IDs. Call sites may still provide a tailored recovery
+ * action when the operator can do something specific.
  */
 function formatSafeErrorMessage(message: string): string {
   const trimmed = message.trim();
@@ -23,22 +22,22 @@ function formatSafeErrorMessage(message: string): string {
   const missingInOrganization =
     /^(.+?) not found in this organization\.?$/i.exec(trimmed);
   if (missingInOrganization) {
-    return `${sentenceCase(missingInOrganization[1])} was not found in this Organization. Refresh the page and try again.`;
+    return `${sentenceCase(missingInOrganization[1])} was not found in this Organization.`;
   }
 
   const missingOrArchived = /^(.+?) not found or archived\.?$/i.exec(trimmed);
   if (missingOrArchived) {
-    return `${sentenceCase(missingOrArchived[1])} was not found or is archived. Refresh the page and try again.`;
+    return `${sentenceCase(missingOrArchived[1])} was not found or is archived.`;
   }
 
   const missingForRecord = /^(.+?) not found for (.+?)\.?$/i.exec(trimmed);
   if (missingForRecord) {
-    return `${sentenceCase(missingForRecord[1])} was not found for ${missingForRecord[2]}. Refresh the page and try again.`;
+    return `${sentenceCase(missingForRecord[1])} was not found for ${missingForRecord[2]}.`;
   }
 
   const missingWithInternalId = /^(.+?) not found:\s*.+$/i.exec(trimmed);
   if (missingWithInternalId) {
-    return `${sentenceCase(missingWithInternalId[1])} was not found. Refresh the page and try again.`;
+    return `${sentenceCase(missingWithInternalId[1])} was not found.`;
   }
 
   const missing = /^(.+?) not found\.?$/i.exec(trimmed);
@@ -72,7 +71,7 @@ function sentenceCase(value: string): string {
 }
 
 export function missingRecordMessage(entity: string): string {
-  return `${sentenceCase(entity)} was not found. Refresh the page and try again.`;
+  return `${sentenceCase(entity)} was not found.`;
 }
 
 function pluralAgreement(subject: string): "was" | "were" {

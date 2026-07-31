@@ -164,7 +164,7 @@ export async function saveFacilityCertifierMapping(
     } catch (error) {
       if (error instanceof IsometricApiError && error.code === "not_configured") {
         throw new SafeError(
-          "Configure this organization's Isometric credentials before mapping a facility.",
+          "Configure this Organization's Isometric credentials before mapping a facility.",
         );
       }
       throw error;

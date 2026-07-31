@@ -24,7 +24,10 @@ import {
   updateApplicationSchema,
   deleteApplicationSchema,
 } from "@/schemas/applications";
-import { toLoggedActionError } from "./action-errors";
+import {
+  formatZodActionError,
+  toLoggedActionError,
+} from "./action-errors";
 
 const MAX_APPLICATION_LIST_SIZE = 100;
 
@@ -155,7 +158,7 @@ export async function createApplicationFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.issues.map((e) => e.message).join(", "),
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -204,7 +207,7 @@ export async function updateApplicationFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.issues.map((e) => e.message).join(", "),
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -241,7 +244,7 @@ export async function deleteApplicationFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.issues.map((e) => e.message).join(", "),
+        error: formatZodActionError(error),
       };
     }
     return {

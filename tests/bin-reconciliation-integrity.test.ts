@@ -495,7 +495,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
           status: "delivered",
           deliveredWetMassKg: 60,
         }),
-      ).rejects.toThrow("50 kg available");
+      ).rejects.toThrow("Not enough biochar in this bin");
 
       await db
         .insert(biocharProducts)
@@ -794,7 +794,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     try {
       await expect(
         updateOrder(ctx, order.id, { biocharProductId: newProduct.id }),
-      ).rejects.toThrow("only 50 kg remain undelivered");
+      ).rejects.toThrow("Not enough biochar in this product");
 
       const [unchanged] = await db
         .select({ biocharProductId: orders.biocharProductId })

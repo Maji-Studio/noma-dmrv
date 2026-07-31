@@ -152,7 +152,7 @@ export function TransportLegsEditor({
       closeForm();
     } catch (err) {
       setFormError(
-        err instanceof Error ? err.message : "The transport leg was not saved. Try again.",
+        err instanceof Error ? err.message : "Transport leg was not saved. Try again.",
       );
     }
   };
@@ -175,7 +175,7 @@ export function TransportLegsEditor({
       setDeleteTarget(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "The transport leg was not deleted. Try again.",
+        err instanceof Error ? err.message : "Transport leg was not deleted. Try again.",
       );
     }
   };

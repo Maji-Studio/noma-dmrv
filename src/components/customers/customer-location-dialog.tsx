@@ -84,8 +84,8 @@ export function CustomerLocationDialog({
         err instanceof Error
           ? err.message
           : isEditing
-            ? "The location was not saved. Try again."
-            : "The location was not created. Check the form and try again."
+            ? "Location was not saved. Try again."
+            : "Location was not created. Check the form."
       );
     }
   };

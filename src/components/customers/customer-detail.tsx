@@ -69,7 +69,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       setIsAddingLocation(false);
     } catch (error) {
       setCreateError(
-        error instanceof Error ? error.message : "The location was not created. Check the form and try again."
+        error instanceof Error ? error.message : "Location was not created. Check the form."
       );
     }
   };
@@ -95,7 +95,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       setEditingLocation(null);
     } catch (error) {
       setUpdateError(
-        error instanceof Error ? error.message : "The location was not saved. Try again."
+        error instanceof Error ? error.message : "Location was not saved. Try again."
       );
     }
   };
@@ -108,7 +108,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       setDeletingLocationId(null);
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : "The location was not deleted. Try again."
+        error instanceof Error ? error.message : "Location was not deleted. Try again."
       );
     }
   };

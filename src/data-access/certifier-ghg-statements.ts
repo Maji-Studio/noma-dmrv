@@ -309,7 +309,7 @@ export async function getOrCreateGhgStatementDraft(
     // statements. There is no soft/hard delete for GHG statements today, so
     // this is effectively unreachable; surface a retryable error rather than
     // returning undefined.
-    throw new SafeError("The GHG Statement was not created. Try again.");
+    throw new SafeError("GHG Statement was not created. Try again.");
   }
   return { statement: existing, created: false };
 }

@@ -15,7 +15,7 @@ import { ensureTestOrg, TEST_ORG_ID } from "./helpers/test-org";
 const PROVIDER = "isometric" as const;
 const OTHER_ORG_ID = "org_test_certifier_credentials_other";
 const CROSS_ORG_ERROR =
-  "You can only manage credentials for your active organization.";
+  "You can only manage credentials for your active Organization.";
 const originalEncryptionKey = process.env.CREDENTIALS_ENCRYPTION_KEY;
 
 function context(

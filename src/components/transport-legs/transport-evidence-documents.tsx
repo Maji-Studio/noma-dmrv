@@ -67,7 +67,7 @@ export function TransportEvidenceDocuments({
       setDeletingId(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "The document was not deleted. Try again.",
+        err instanceof Error ? err.message : "Document was not deleted. Try again.",
       );
     }
   };

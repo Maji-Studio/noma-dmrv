@@ -295,7 +295,7 @@ export function ProductionRunList() {
       if (getRunConflict(error)) throw error;
       return error instanceof Error
         ? error.message
-        : "The production run was not created. Check the form and try again.";
+        : "Production run was not created. Check the form.";
     },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachment before saving this production run.",
@@ -335,7 +335,7 @@ export function ProductionRunList() {
       toast.success("Production run updated.");
     } catch (error) {
       if (getRunConflict(error)) throw error;
-      setUpdateError(error instanceof Error ? error.message : "The production run was not saved. Try again.");
+      setUpdateError(error instanceof Error ? error.message : "Production run was not saved. Try again.");
     }
   };
 
@@ -352,7 +352,7 @@ export function ProductionRunList() {
       setDeletingRunId(null);
       toast.success("Production run deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "The production run was not deleted. Try again.");
+      setDeleteError(error instanceof Error ? error.message : "Production run was not deleted. Try again.");
     }
   };
 

@@ -26,7 +26,7 @@ const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const MILLISECONDS_PER_SECOND = 1_000;
 const ORGANIZATION_SLUG_CONSTRAINT = "organizations_slug_unique";
 const ORGANIZATION_SLUG_CONFLICT_MESSAGE =
-  "An organization with this slug already exists.";
+  "An Organization with this slug already exists.";
 
 export type OrgMemberRow = {
   memberId: string;
@@ -131,7 +131,7 @@ export async function createInvitationAsPlatformAdmin(
         )
         .limit(1);
       if (existingMember) {
-        throw new SafeError("User is already a member of this organization.");
+        throw new SafeError("User is already a member of this Organization.");
       }
     }
 
@@ -222,7 +222,7 @@ export async function updateMemberRoleAsPlatformAdmin(
           )
         );
       if (Number(owners?.value ?? 0) <= 1) {
-        throw new SafeError("An organization must keep at least one Owner.");
+        throw new SafeError("An Organization must keep at least one Owner.");
       }
     }
     const updated = await tx
@@ -277,7 +277,7 @@ export async function removeMemberAsPlatformAdmin(
           )
         );
       if (Number(owners?.value ?? 0) <= 1) {
-        throw new SafeError("An organization must keep at least one Owner.");
+        throw new SafeError("An Organization must keep at least one Owner.");
       }
     }
     const removed = await tx
@@ -447,7 +447,7 @@ export async function persistLastActiveOrganization(
           )
           .limit(1);
   if (!accessibleOrganization) {
-    throw new SafeError("You do not have access to this organization.");
+    throw new SafeError("You do not have access to this Organization.");
   }
 
   await db
