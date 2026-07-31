@@ -7,7 +7,7 @@ import {
 } from "@/data-access/certification";
 import {
   claimSubmissionDraft,
-  getLatestSubmission,
+  getLatestSubmissionWithExecutor,
 } from "@/data-access/certification-submissions";
 import {
   createGhgStatementForRegistryDiscovery,
@@ -19,7 +19,9 @@ import {
   reconcileRemovalMembership,
 } from "@/data-access/certifier-ghg-statements";
 import { reconcileGhgStatementRemoteState } from "@/data-access/certifier-ghg-remote-state";
+import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { requireOrgFacility } from "@/data-access/utils";
+import { db, type DbTransaction } from "@/db";
 import { SafeError } from "@/lib/errors";
 import {
   getGhgStatement,
@@ -123,86 +125,112 @@ export async function reconcileGhgStatementsForFacility(
       getGhgStatement(client, statement.id),
     ),
   );
-  const projectFacilityIds = await listFacilityIdsForExternalProject(
-    orgCtx,
-    project.externalProjectId,
-  );
-
-  let warningCount = 0;
-  let reconciledCount = 0;
-  let skippedCount = 0;
-  const ownedRemotes: GhgStatement[] = [];
-  for (const remote of remotes) {
-    const facilityIds = await listFacilityIdsForExternalRemovals(
-      orgCtx,
-      remote.ghg_entry_ids,
-    );
-    assertSingleFacilityRegistryStatement(remote.id, facilityIds);
-    // Ownership is asked per facility, never globally (ADR 0023). A remote
-    // statement already mirrored by a DIFFERENT facility's local row no longer
-    // blocks this one: each facility keeps its own local identity for the same
-    // registry statement, so this facility either already holds it or is
-    // re-tested against the same assignment heuristics as a fresh discovery.
-    const existingSubmission = await getGhgStatementSubmissionForFacility(
-      orgCtx,
-      { facilityId, externalId: remote.id },
-    );
-    if (!existingSubmission) {
-      const assignedByMembership =
-        facilityIds.length === 1 && facilityIds[0] === facilityId;
-      const assignedByUniqueProject =
-        facilityIds.length === 0 &&
-        projectFacilityIds.length === 1 &&
-        projectFacilityIds[0] === facilityId;
-      if (!assignedByMembership && !assignedByUniqueProject) {
-        warningCount += 1;
-        skippedCount += 1;
-        continue;
-      }
+  return db.transaction(async (tx) => {
+    await acquireFacilityDurabilityLock(orgCtx, tx, facilityId);
+    const lockedOperatorCreateInFlight =
+      await hasInFlightGhgStatementForFacility(orgCtx, facilityId, tx);
+    if (lockedOperatorCreateInFlight) {
+      return {
+        statements: remotes.map(toRegistryGhgStatementView),
+        reconciledCount: 0,
+        warningCount: 1,
+        skippedCount: remotes.length,
+      };
     }
-    ownedRemotes.push(remote);
-  }
 
-  // Registry membership is authoritative. Clear removals omitted from their
-  // current statement across the whole remote snapshot before linking any
-  // additions, so a move A → B converges in one sweep regardless of list
-  // order (B can claim only after A has released it).
-  for (const remote of ownedRemotes) {
-    const existingSubmission = await getGhgStatementSubmissionForFacility(
+    const projectFacilityIds = await listFacilityIdsForExternalProject(
       orgCtx,
-      { facilityId, externalId: remote.id },
+      project.externalProjectId,
+      tx,
     );
-    if (!existingSubmission) continue;
-    const owner = await getCertifierGhgStatementById(
-      orgCtx,
-      existingSubmission.localEntityId,
-    );
-    if (!owner) continue;
-    await reconcileRemovalMembership(
-      orgCtx,
-      owner.id,
-      remote.ghg_entry_ids,
-      undefined,
-      "unlink-only",
-    );
-  }
 
-  for (const remote of ownedRemotes) {
-    const result = await reconcileRegistryGhgStatement(orgCtx, {
-      facilityId,
-      externalProjectId: project.externalProjectId,
-      remote,
-    });
-    reconciledCount += 1;
-    warningCount += result.warnings.length;
-  }
+    let warningCount = 0;
+    let reconciledCount = 0;
+    let skippedCount = 0;
+    const ownedRemotes: GhgStatement[] = [];
+    for (const remote of remotes) {
+      const facilityIds = await listFacilityIdsForExternalRemovals(
+        orgCtx,
+        remote.ghg_entry_ids,
+        tx,
+      );
+      assertSingleFacilityRegistryStatement(remote.id, facilityIds);
+      // Ownership is asked per facility, never globally (ADR 0023). A remote
+      // statement already mirrored by a DIFFERENT facility's local row no
+      // longer blocks this one: each facility keeps its own local identity for
+      // the same registry statement, so this facility either already holds it
+      // or is re-tested against the same assignment heuristics as a fresh
+      // discovery.
+      const existingSubmission =
+        await getGhgStatementSubmissionForFacility(
+          orgCtx,
+          { facilityId, externalId: remote.id },
+          tx,
+        );
+      if (!existingSubmission) {
+        const assignedByMembership =
+          facilityIds.length === 1 && facilityIds[0] === facilityId;
+        const assignedByUniqueProject =
+          facilityIds.length === 0 &&
+          projectFacilityIds.length === 1 &&
+          projectFacilityIds[0] === facilityId;
+        if (!assignedByMembership && !assignedByUniqueProject) {
+          warningCount += 1;
+          skippedCount += 1;
+          continue;
+        }
+      }
+      ownedRemotes.push(remote);
+    }
 
-  return {
-    statements: remotes.map(toRegistryGhgStatementView),
-    reconciledCount,
-    warningCount,
-    skippedCount,
-  };
+    // Registry membership is authoritative. Clear removals omitted from their
+    // current statement across the whole remote snapshot before linking any
+    // additions, so a move A → B converges in one sweep regardless of list
+    // order (B can claim only after A has released it).
+    for (const remote of ownedRemotes) {
+      const existingSubmission =
+        await getGhgStatementSubmissionForFacility(
+          orgCtx,
+          { facilityId, externalId: remote.id },
+          tx,
+        );
+      if (!existingSubmission) continue;
+      const owner = await getCertifierGhgStatementById(
+        orgCtx,
+        existingSubmission.localEntityId,
+        tx,
+      );
+      if (!owner) continue;
+      await reconcileRemovalMembership(
+        orgCtx,
+        owner.id,
+        remote.ghg_entry_ids,
+        tx,
+        "unlink-only",
+      );
+    }
+
+    for (const remote of ownedRemotes) {
+      const result = await reconcileRegistryGhgStatement(
+        orgCtx,
+        {
+          facilityId,
+          externalProjectId: project.externalProjectId,
+          remote,
+        },
+        tx,
+      );
+      reconciledCount += 1;
+      warningCount += result.warnings.length;
+    }
+
+    return {
+      statements: remotes.map(toRegistryGhgStatementView),
+      reconciledCount,
+      warningCount,
+      skippedCount,
+    };
+  });
 }
 
 // Read-only companion to `reconcileGhgStatementsForFacility`: the project's
@@ -236,7 +264,9 @@ export async function reconcileRegistryGhgStatement(
     externalProjectId: string;
     remote: GhgStatement;
   },
+  tx?: DbTransaction,
 ): Promise<ReconciledRegistryGhgStatement> {
+  const executor = tx ?? db;
   const period = getGhgStatementPeriod(args.remote);
   // Facility-scoped by construction (ADR 0023): another facility's mirror of
   // the same registry statement is not this facility's business and must not
@@ -244,11 +274,13 @@ export async function reconcileRegistryGhgStatement(
   const existingSubmission = await getGhgStatementSubmissionForFacility(
     orgCtx,
     { facilityId: args.facilityId, externalId: args.remote.id },
+    executor,
   );
   const existingStatement = existingSubmission
     ? await getCertifierGhgStatementById(
         orgCtx,
         existingSubmission.localEntityId,
+        executor,
       )
     : null;
   if (existingSubmission && !existingStatement) {
@@ -258,11 +290,15 @@ export async function reconcileRegistryGhgStatement(
   }
   const statement =
     existingStatement ??
-    (await createGhgStatementForRegistryDiscovery(orgCtx, {
-      facilityId: args.facilityId,
-      externalId: args.remote.id,
-      reportingPeriodEndOn: period.endOn,
-    }));
+    (await createGhgStatementForRegistryDiscovery(
+      orgCtx,
+      {
+        facilityId: args.facilityId,
+        externalId: args.remote.id,
+        reportingPeriodEndOn: period.endOn,
+      },
+      executor,
+    ));
   const key = {
     provider: ISOMETRIC_PROVIDER,
     submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
@@ -277,28 +313,47 @@ export async function reconcileRegistryGhgStatement(
   };
   let submission: CertificationSubmissionRow | null = existingSubmission;
   if (!submission) {
-    const claimed = await claimSubmissionDraft(orgCtx, {
-      key,
-      guard: {
-        facilityId: args.facilityId,
-        provider: ISOMETRIC_PROVIDER,
-        expectedExternalProjectId: args.externalProjectId,
+    const claimed = await claimSubmissionDraft(
+      orgCtx,
+      {
+        key,
+        guard: {
+          facilityId: args.facilityId,
+          provider: ISOMETRIC_PROVIDER,
+          expectedExternalProjectId: args.externalProjectId,
+        },
+        policy: { onSubmittedHashChanged: "invalid-changed-hash" },
+        tentativeInputs: semanticPayload,
+        hashOf: payloadHash,
+        buildSnapshot: ({ inputs }) => ({
+          payloadSnapshot: { semantic: inputs },
+        }),
       },
-      policy: { onSubmittedHashChanged: "invalid-changed-hash" },
-      tentativeInputs: semanticPayload,
-      hashOf: payloadHash,
-      buildSnapshot: ({ inputs }) => ({
-        payloadSnapshot: { semantic: inputs },
-      }),
-    });
+      tx,
+    );
     if (claimed.kind === "claimed") {
-      await markSubmissionSubmitted(orgCtx, claimed.row.id, {
-        externalId: args.remote.id,
-        supersedePreviousId: claimed.supersedePreviousId,
-      });
-      submission = await getLatestSubmission(orgCtx, key, args.facilityId);
+      await markSubmissionSubmitted(
+        orgCtx,
+        claimed.row.id,
+        {
+          externalId: args.remote.id,
+          supersedePreviousId: claimed.supersedePreviousId,
+        },
+        tx,
+      );
+      submission = await getLatestSubmissionWithExecutor(
+        orgCtx,
+        executor,
+        key,
+        args.facilityId,
+      );
     } else {
-      submission = await getLatestSubmission(orgCtx, key, args.facilityId);
+      submission = await getLatestSubmissionWithExecutor(
+        orgCtx,
+        executor,
+        key,
+        args.facilityId,
+      );
       if (claimed.kind === "blocked" && claimed.reason === "in-flight") {
         return {
           ghgStatementId: statement.id,
@@ -324,11 +379,15 @@ export async function reconcileRegistryGhgStatement(
     );
   }
 
-  const membership = await reconcileGhgStatementRemoteState(orgCtx, {
-    statementId: statement.id,
-    submission,
-    remote: args.remote,
-  });
+  const membership = await reconcileGhgStatementRemoteState(
+    orgCtx,
+    {
+      statementId: statement.id,
+      submission,
+      remote: args.remote,
+    },
+    tx,
+  );
   return {
     ghgStatementId: statement.id,
     externalId: args.remote.id,

@@ -36,6 +36,7 @@ import type { CertifierRemovalRow } from "./certifier-removals";
 
 export type CertifierGhgStatementRow =
   typeof certifierGhgStatements.$inferSelect;
+type GhgStatementExecutor = Tx | typeof db;
 
 const ISOMETRIC = "isometric" as const;
 const REMOTE_PERIOD_INSERT_RETRY_LIMIT = 10;
@@ -92,9 +93,10 @@ function metadataValue(
 export async function getCertifierGhgStatementById(
   ctx: OrgContext,
   id: string,
+  executor: GhgStatementExecutor = db,
 ): Promise<CertifierGhgStatementRow | null> {
   requireOrgScope(ctx);
-  const [row] = await db
+  const [row] = await executor
     .select()
     .from(certifierGhgStatements)
     .where(and(eq(certifierGhgStatements.id, id), eq(certifierGhgStatements.organizationId, ctx.organizationId)))
@@ -117,10 +119,11 @@ export async function listGhgStatementsForFacility(
 export async function listFacilityIdsForExternalRemovals(
   ctx: OrgContext,
   externalRemovalIds: string[],
+  executor: GhgStatementExecutor = db,
 ): Promise<string[]> {
   requireOrgScope(ctx);
   if (externalRemovalIds.length === 0) return [];
-  const rows = await db
+  const rows = await executor
     .select({ facilityId: certifierRemovals.facilityId })
     .from(certificationSubmissions)
     .innerJoin(
@@ -145,9 +148,10 @@ export async function listFacilityIdsForExternalRemovals(
 export async function listFacilityIdsForExternalProject(
   ctx: OrgContext,
   externalProjectId: string,
+  executor: GhgStatementExecutor = db,
 ): Promise<string[]> {
   requireOrgScope(ctx);
-  const rows = await db
+  const rows = await executor
     .select({ facilityId: certifierProjects.facilityId })
     .from(certifierProjects)
     .where(
@@ -171,9 +175,10 @@ export async function listFacilityIdsForExternalProject(
 export async function getGhgStatementSubmissionForFacility(
   ctx: OrgContext,
   args: { facilityId: string; externalId: string },
+  executor: GhgStatementExecutor = db,
 ): Promise<CertificationSubmissionRow | null> {
   requireOrgScope(ctx);
-  const [row] = await db
+  const [row] = await executor
     .select({ submission: certificationSubmissions })
     .from(certificationSubmissions)
     .innerJoin(
@@ -210,9 +215,10 @@ export async function getGhgStatementSubmissionForFacility(
 export async function hasInFlightGhgStatementForFacility(
   ctx: OrgContext,
   facilityId: string,
+  executor: GhgStatementExecutor = db,
 ): Promise<boolean> {
   requireOrgScope(ctx);
-  const [row] = await db
+  const [row] = await executor
     .select({ id: certificationSubmissions.id })
     .from(certificationSubmissions)
     .innerJoin(
@@ -326,22 +332,28 @@ export async function createGhgStatementForRegistryDiscovery(
     externalId: string;
     reportingPeriodEndOn: string | null;
   },
+  executor: GhgStatementExecutor = db,
 ): Promise<CertifierGhgStatementRow> {
   requireOrgScope(ctx);
   const existing = await findRegistryDiscoveryStatement(
     ctx,
     input.facilityId,
     input.externalId,
+    executor,
   );
   if (existing) return existing;
 
   // A stale operator create may have POSTed successfully before persisting
   // the returned registry id. Once its lock expires, adopt that unbound
   // same-period identity rather than allocating a synthetic duplicate.
-  const adoptable = await findAdoptableOperatorStatement(ctx, input);
+  const adoptable = await findAdoptableOperatorStatement(ctx, input, executor);
   if (adoptable) return adoptable;
 
-  const occupiedEndOns = await listStoredPeriodEnds(ctx, input.facilityId);
+  const occupiedEndOns = await listStoredPeriodEnds(
+    ctx,
+    input.facilityId,
+    executor,
+  );
 
   for (
     let attempt = 0;
@@ -361,7 +373,7 @@ export async function createGhgStatementForRegistryDiscovery(
     // untargeted: any other violation propagates.
     let inserted: CertifierGhgStatementRow | undefined;
     try {
-      [inserted] = await db
+      [inserted] = await executor
         .insert(certifierGhgStatements)
         .values({
           organizationId: ctx.organizationId,
@@ -394,6 +406,7 @@ export async function createGhgStatementForRegistryDiscovery(
       ctx,
       input.facilityId,
       input.externalId,
+      executor,
     );
     if (concurrentlyInserted) return concurrentlyInserted;
     occupiedEndOns.add(storedPeriod.endOn);
@@ -411,9 +424,10 @@ async function findAdoptableOperatorStatement(
     externalId: string;
     reportingPeriodEndOn: string | null;
   },
+  executor: GhgStatementExecutor,
 ): Promise<CertifierGhgStatementRow | null> {
   if (input.reportingPeriodEndOn === null) return null;
-  const [candidate] = await db
+  const [candidate] = await executor
     .select()
     .from(certifierGhgStatements)
     .where(
@@ -434,7 +448,7 @@ async function findAdoptableOperatorStatement(
   ) {
     return null;
   }
-  const [latest] = await db
+  const [latest] = await executor
     .select({
       externalId: certificationSubmissions.externalId,
       status: certificationSubmissions.status,
@@ -470,9 +484,10 @@ async function findRegistryDiscoveryStatement(
   ctx: OrgContext,
   facilityId: string,
   externalId: string,
+  executor: GhgStatementExecutor,
 ): Promise<CertifierGhgStatementRow | null> {
   requireOrgScope(ctx);
-  const rows = await db
+  const rows = await executor
     .select()
     .from(certifierGhgStatements)
     .where(

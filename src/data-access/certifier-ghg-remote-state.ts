@@ -69,10 +69,13 @@ export async function reconcileGhgStatementRemoteState(
     submission: CertificationSubmissionRow;
     remote: GhgStatement;
   },
+  callerTx?: Tx,
 ): Promise<{ linkedRemovalIds: string[]; warnings: string[] }> {
   requireOrgScope(ctx);
   const period = getGhgStatementPeriod(args.remote);
-  return db.transaction(async (tx) => {
+  const run = async (
+    tx: Tx,
+  ): Promise<{ linkedRemovalIds: string[]; warnings: string[] }> => {
     const membership = await reconcileRemovalMembership(
       ctx,
       args.statementId,
@@ -91,7 +94,8 @@ export async function reconcileGhgStatementRemoteState(
     );
     await applyGhgRemoteState(ctx, args.submission, args.remote, {}, tx);
     return membership;
-  });
+  };
+  return callerTx ? run(callerTx) : db.transaction(run);
 }
 
 function remoteMetadata(remote: GhgStatement): Record<string, unknown> {
