@@ -4,7 +4,8 @@
  * certification surfaces read identically:
  *
  *   1. Created in registry   — registry record link when present
- *   2. Report generated      — inline Generate / Generate new version action
+ *   2. Report generated      — v1 generates automatically once the statement
+ *                              is ready; the button regenerates or retries
  *   3. Report approved       — Review link + inline Approve action
  *   4. Submitted to verifier — status detail + inline Submit/Resubmit action
  *                              (opens the sheet's submit dialog)
@@ -16,7 +17,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -88,6 +89,63 @@ export function GhgStatementWorkflow({
     crypto.randomUUID(),
   );
   const [error, setError] = useState<string | null>(null);
+  const autoGenerateRan = useRef(false);
+
+  const reports = reportsQuery.data ?? [];
+  const latest: GhgStatementReportView | undefined = reports[0];
+  const generated = reports.length > 0;
+  const approvedReport = reports.find(
+    (report) =>
+      report.lifecycle === "approved" || report.lifecycle === "submitted",
+  );
+  const latestPrepared = latest?.lifecycle === "prepared";
+
+  const runGenerate = async () => {
+    try {
+      await prepare.mutateAsync({ ghgStatementId, preparationKey });
+      setPreparationKey(crypto.randomUUID());
+    } catch (prepareError) {
+      setError(
+        prepareError instanceof Error
+          ? prepareError.message
+          : "The report was not generated. Try again.",
+      );
+    }
+  };
+
+  const generateReport = () => {
+    setError(null);
+    void runGenerate();
+  };
+
+  // External-system sync (the sanctioned useEffect case): the first report
+  // version is generated automatically once the statement is ready, so the
+  // operator's only gates are Approve and Submit. One attempt per mount — a
+  // failure surfaces below and leaves the manual Generate button as the retry.
+  const shouldAutoGenerate =
+    created &&
+    canGenerate &&
+    !reportsQuery.isLoading &&
+    !reportsQuery.error &&
+    reports.length === 0;
+  useEffect(() => {
+    if (!shouldAutoGenerate || autoGenerateRan.current || prepare.isPending) {
+      return;
+    }
+    autoGenerateRan.current = true;
+    prepare.mutate(
+      { ghgStatementId, preparationKey },
+      {
+        onSuccess: () => setPreparationKey(crypto.randomUUID()),
+        onError: (prepareError) =>
+          setError(
+            prepareError instanceof Error
+              ? prepareError.message
+              : "The report was not generated. Try again.",
+          ),
+      },
+    );
+  });
 
   if (reportsQuery.isLoading) {
     return (
@@ -101,29 +159,6 @@ export function GhgStatementWorkflow({
       <ServerError message="Reports could not be loaded. Refresh the page and try again." />
     );
   }
-
-  const reports = reportsQuery.data ?? [];
-  const latest: GhgStatementReportView | undefined = reports[0];
-  const generated = reports.length > 0;
-  const approvedReport = reports.find(
-    (report) =>
-      report.lifecycle === "approved" || report.lifecycle === "submitted",
-  );
-  const latestPrepared = latest?.lifecycle === "prepared";
-
-  const generateReport = async () => {
-    setError(null);
-    try {
-      await prepare.mutateAsync({ ghgStatementId, preparationKey });
-      setPreparationKey(crypto.randomUUID());
-    } catch (prepareError) {
-      setError(
-        prepareError instanceof Error
-          ? prepareError.message
-          : "The report was not generated. Try again.",
-      );
-    }
-  };
 
   const approveLatest = async () => {
     if (!latest) return;
@@ -148,7 +183,12 @@ export function GhgStatementWorkflow({
     : generated
       ? { status: "met", detail: `Version ${latest?.version} generated from Isometric data.` }
       : canGenerate
-        ? { status: "active", detail: "Generate a report from current Isometric data." }
+        ? {
+            status: "active",
+            detail: prepare.isPending
+              ? "Generating a report from current Isometric data."
+              : "Generate a report from current Isometric data.",
+          }
         : {
             status: "warning",
             detail:
@@ -189,7 +229,7 @@ export function GhgStatementWorkflow({
               variant={generated ? "default" : "primary"}
               className="shrink-0 self-center"
               busy={prepare.isPending}
-              onClick={() => void generateReport()}
+              onClick={generateReport}
             >
               {generated ? "Generate new version" : "Generate report"}
             </Button>
