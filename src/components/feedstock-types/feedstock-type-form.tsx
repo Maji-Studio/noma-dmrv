@@ -24,6 +24,7 @@ import {
 import type { FeedstockType } from "@/db/schema/feedstock";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
 import type { IsometricFeedstockType } from "@/lib/isometric";
 import {
@@ -157,6 +158,19 @@ export function FeedstockTypeForm({
       isometricFeedstockTypeId: feedstockType?.isometricFeedstockTypeId ?? "",
     },
   });
+
+  useClearOnDependencyChange(
+    isEditMode ? undefined : showIsometricSection ? "available" : "unavailable",
+    () => {
+      if (showIsometricSection) return;
+      setSelectedIsometricFeedstock(null);
+      setValue("isometricFeedstockTypeId", "", {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    },
+  );
 
   const selectedUsage = useWatch({ control, name: "usage" });
   const selectedName = useWatch({ control, name: "name" });
