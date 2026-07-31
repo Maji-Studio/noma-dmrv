@@ -20,6 +20,7 @@ import {
   assertStockLockSnapshot,
   lockBinStocks,
 } from "./lock-bin-stocks";
+import { getCompositionIngredientDraws } from "./biochar-product-composition";
 
 interface BiocharProductStockUpdate {
   facilityId?: string;
@@ -169,6 +170,14 @@ export async function lockBiocharProductUpdateStock(
   data: BiocharProductStockUpdate,
 ): Promise<BiocharProductUpdateLockPreparation> {
   const state = deriveBiocharProductStockState(product, data);
+  const existingIngredientDraws = data.composition !== undefined
+    ? getCompositionIngredientDraws(
+        product.composition as Record<string, unknown> | null,
+      )
+    : [];
+  const transactionIngredientDraws = data.composition !== undefined
+    ? getCompositionIngredientDraws(state.transactionComposition)
+    : [];
   const productBinStockChanged =
     biocharProductBinStockChanged(product, data);
   // Mirror the defined-ness condition in assertBiocharProductUpdateDraw. Any
@@ -201,6 +210,8 @@ export async function lockBiocharProductUpdateStock(
       ? [product.storageLocationId, state.transactionStorageId]
       : []),
     ...sourceBins.map((row) => row.storageLocationId),
+    ...existingIngredientDraws.map((draw) => draw.storageLocationId),
+    ...transactionIngredientDraws.map((draw) => draw.storageLocationId),
   ]);
   return { product, sourceRuns: sourceBins };
 }
@@ -215,7 +226,10 @@ export async function lockBiocharProductUpdateRows(
 ): Promise<BiocharProductStockState> {
   assertStockLockSnapshot(
     locked.storageLocationId === preparation.product.storageLocationId &&
-      locked.linkedProductionRunId === preparation.product.linkedProductionRunId,
+      locked.linkedProductionRunId === preparation.product.linkedProductionRunId &&
+      (data.composition === undefined ||
+        JSON.stringify(locked.composition) ===
+          JSON.stringify(preparation.product.composition)),
   );
 
   const sourceRunIds = preparation.sourceRuns.map((run) => run.id);

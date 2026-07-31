@@ -95,7 +95,10 @@ import { deleteTransportLegsForEntity } from "./transport-legs";
 import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { validateCompositionIngredientBins } from "./biochar-product-composition";
+import {
+  assertCompositionIngredientDrawsWithinStock,
+  validateCompositionIngredientBins,
+} from "./biochar-product-composition";
 import {
   CODE_CONFLICT_MESSAGES,
   withUniqueCodeGuard,
@@ -762,6 +765,14 @@ export async function updateBiocharProduct(
         transactionFormulationId,
         transactionFacilityId
       );
+      if (data.composition !== undefined) {
+        await assertCompositionIngredientDrawsWithinStock(
+          ctx,
+          tx,
+          transactionComposition,
+          productId,
+        );
+      }
     }
 
     if (

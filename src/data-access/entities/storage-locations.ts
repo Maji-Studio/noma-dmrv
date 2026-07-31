@@ -198,6 +198,40 @@ function buildInventoryAggregates(ctx: OrgContext) {
   .groupBy(productionRuns.feedstockStorageLocationId)
   .as("production_run_consumption_agg");
 
+  const ingredientConsumptionAggregate = db
+  .select({
+    storageLocationId: sql<string>`ingredient.value ->> 'storageLocationId'`.as(
+      "ingredient_storage_location_id",
+    ),
+    totalConsumedKg: numericAggregate(sql<number>`
+      COALESCE(
+        SUM(
+          CASE
+            WHEN jsonb_typeof(ingredient.value -> 'massKg') = 'number'
+              AND (ingredient.value ->> 'massKg')::numeric > 0
+            THEN (ingredient.value ->> 'massKg')::numeric
+            ELSE 0
+          END
+        ),
+        0
+      )
+    `).as("ingredient_consumed_kg"),
+  })
+  .from(biocharProducts)
+  .innerJoin(
+    sql`LATERAL jsonb_array_elements(
+      CASE
+        WHEN jsonb_typeof(${biocharProducts.composition} -> 'ingredients') = 'array'
+        THEN ${biocharProducts.composition} -> 'ingredients'
+        ELSE '[]'::jsonb
+      END
+    ) AS ingredient(value)`,
+    sql`true`,
+  )
+  .where(eq(biocharProducts.organizationId, ctx.organizationId))
+  .groupBy(sql`ingredient.value ->> 'storageLocationId'`)
+  .as("ingredient_consumption_agg");
+
   const biocharOutputAggregate = db
   .select({
     storageLocationId: productionRuns.biocharStorageLocationId,
@@ -370,6 +404,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
   return {
     feedstockInventoryAggregate,
     productionRunConsumptionAggregate,
+    ingredientConsumptionAggregate,
     biocharOutputAggregate,
     legacyBiocharAllocationAggregate,
     sourceBiocharAllocationAggregate,
@@ -397,6 +432,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
   const {
     feedstockInventoryAggregate,
     productionRunConsumptionAggregate,
+    ingredientConsumptionAggregate,
     biocharOutputAggregate,
     legacyBiocharAllocationAggregate,
     sourceBiocharAllocationAggregate,
@@ -497,7 +533,10 @@ export async function getStorageLocations(ctx: OrgContext, params: {
         sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
       ),
       totalConsumedKg: numericAggregate(
-        sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
+        sql<number>`
+          COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)
+          + COALESCE(${ingredientConsumptionAggregate.totalConsumedKg}, 0)
+        `,
       ),
       totalProducedWetKg: numericAggregate(
         sql<number>`COALESCE(${biocharOutputAggregate.totalProducedWetKg}, 0)`,
@@ -558,6 +597,10 @@ export async function getStorageLocations(ctx: OrgContext, params: {
     .leftJoin(
       productionRunConsumptionAggregate,
       eq(storageLocations.id, productionRunConsumptionAggregate.storageLocationId)
+    )
+    .leftJoin(
+      ingredientConsumptionAggregate,
+      sql`${storageLocations.id}::text = ${ingredientConsumptionAggregate.storageLocationId}`,
     )
     .leftJoin(
       biocharOutputAggregate,
@@ -626,6 +669,7 @@ export async function getStorageLocationById(
   const {
     feedstockInventoryAggregate,
     productionRunConsumptionAggregate,
+    ingredientConsumptionAggregate,
     biocharOutputAggregate,
     legacyBiocharAllocationAggregate,
     sourceBiocharAllocationAggregate,
@@ -650,7 +694,10 @@ export async function getStorageLocationById(
         sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
       ),
       totalConsumedKg: numericAggregate(
-        sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
+        sql<number>`
+          COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)
+          + COALESCE(${ingredientConsumptionAggregate.totalConsumedKg}, 0)
+        `,
       ),
       totalProducedWetKg: numericAggregate(
         sql<number>`COALESCE(${biocharOutputAggregate.totalProducedWetKg}, 0)`,
@@ -711,6 +758,10 @@ export async function getStorageLocationById(
     .leftJoin(
       productionRunConsumptionAggregate,
       eq(storageLocations.id, productionRunConsumptionAggregate.storageLocationId)
+    )
+    .leftJoin(
+      ingredientConsumptionAggregate,
+      sql`${storageLocations.id}::text = ${ingredientConsumptionAggregate.storageLocationId}`,
     )
     .leftJoin(
       biocharOutputAggregate,
