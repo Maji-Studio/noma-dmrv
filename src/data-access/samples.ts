@@ -129,7 +129,7 @@ import { assertCarbonReconciliation } from "./samples/carbon-reconciliation";
 // `.unique()` on `samples.sampleCode` this constraint.
 const SAMPLE_CODE_UNIQUE_CONSTRAINT = "samples_organization_id_sample_code_unique";
 const METHOD_B_BASELINE_VIOLATION_FRAGMENT =
-  "Cannot use Method B: requires 30 or more prior Method A Samples";
+  "cannot use Method B: requires >= 30 prior Method A samples";
 const METHOD_B_BASELINE_FLOOR_MESSAGE =
   "This change would reduce the Method-B baseline below 30 qualifying Method-A Samples. Keep at least 30 qualifying Method-A Samples recorded before Method B was enabled.";
 
