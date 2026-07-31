@@ -31,15 +31,9 @@ const ENTITY_CERTIFY_KIND: Record<TransportEntityTypeValue, CertifyEntityKind> =
 };
 
 function getProvenanceDescriptor(entityType: TransportEntityTypeValue) {
-  const entityKind = ENTITY_CERTIFY_KIND[entityType];
-  return (
-    getCertifyFieldDescriptor(entityKind, "transportDistanceProvenance") ??
-    (entityKind === "transportLeg"
-      ? undefined
-      : getCertifyFieldDescriptor(
-          "transportLeg",
-          "transportDistanceProvenance",
-        ))
+  return getCertifyFieldDescriptor(
+    ENTITY_CERTIFY_KIND[entityType],
+    "transportDistanceProvenance",
   );
 }
 
