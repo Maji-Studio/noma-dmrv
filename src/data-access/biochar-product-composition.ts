@@ -18,11 +18,15 @@ import {
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import { formatCount } from "@/lib/copy-utils";
+import type { DbTransaction } from "@/db";
+import { assertFeedstockDrawWithinStock } from "./bin-stock-guards";
+import { requireOrgScope } from "./utils";
 
 interface CompositionIngredientRef {
   formulationIngredientId: string;
   feedstockTypeId: string;
   storageLocationId: string | null;
+  massKg: number;
 }
 
 function getCompositionIngredientRefs(
@@ -51,11 +55,60 @@ function getCompositionIngredientRefs(
           typeof ingredient.storageLocationId === "string"
             ? ingredient.storageLocationId
             : null,
+        massKg:
+          "massKg" in ingredient &&
+          typeof ingredient.massKg === "number" &&
+          Number.isFinite(ingredient.massKg)
+            ? ingredient.massKg
+            : 0,
       };
     })
     .filter((ref): ref is CompositionIngredientRef =>
       Boolean(ref?.formulationIngredientId && ref.feedstockTypeId),
     );
+}
+
+export interface CompositionIngredientDraw {
+  storageLocationId: string;
+  massKg: number;
+}
+
+export function getCompositionIngredientDraws(
+  composition: Record<string, unknown> | null | undefined,
+): CompositionIngredientDraw[] {
+  const byStorageLocation = new Map<string, number>();
+  for (const ref of getCompositionIngredientRefs(composition)) {
+    if (ref.massKg <= 0) continue;
+    if (!ref.storageLocationId) {
+      throw new SafeError(
+        "Choose a feedstock bin for every ingredient with a positive mass",
+      );
+    }
+    byStorageLocation.set(
+      ref.storageLocationId,
+      (byStorageLocation.get(ref.storageLocationId) ?? 0) + ref.massKg,
+    );
+  }
+  return [...byStorageLocation.entries()].map(
+    ([storageLocationId, massKg]) => ({ storageLocationId, massKg }),
+  );
+}
+
+export async function assertCompositionIngredientDrawsWithinStock(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  composition: Record<string, unknown> | null | undefined,
+  excludeProductId?: string,
+): Promise<void> {
+  requireOrgScope(ctx);
+  for (const draw of getCompositionIngredientDraws(composition)) {
+    await assertFeedstockDrawWithinStock(ctx, tx, {
+      storageLocationId: draw.storageLocationId,
+      requestedDryKg: draw.massKg,
+      excludeProductId,
+      binLockAlreadyHeld: true,
+    });
+  }
 }
 
 export async function validateCompositionIngredientBins(

@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { lockBinStock } from "@/data-access/bin-stock-guards";
 import { archiveFacility } from "@/data-access/facilities";
+import { createStorageLocation } from "@/data-access/quick-add";
 import {
   createFeedstock,
   updateFeedstock,
@@ -569,6 +570,41 @@ describe(
       );
 
       expectArchivedReferenceRejected(outcome);
+    });
+
+    it("rejects a quick-added storage location for an archived facility", async () => {
+      const fixture = await createFixture();
+
+      await expect(createStorageLocation(ctx, {
+        code: `BIN-SRA-QUICK-ARCH-${fixture.tag}`,
+        name: `Storage Reference Atomicity Quick Archived ${fixture.tag}`,
+        type: "feedstock_bin",
+        facilityId: fixture.archivedFacilityId,
+      })).rejects.toThrow(/not found|archived/i);
+    });
+
+    it("serializes quick-add creation behind a concurrent facility archive", async () => {
+      const fixture = await createFixture();
+
+      const outcome = await archiveFacilityBeforeReferenceWrite(
+        fixture,
+        () => createStorageLocation(ctx, {
+          code: `BIN-SRA-QUICK-RACE-${fixture.tag}`,
+          name: `Storage Reference Atomicity Quick Race ${fixture.tag}`,
+          type: "feedstock_bin",
+          facilityId: fixture.facilityId,
+        }),
+      );
+
+      expectArchivedReferenceRejected(outcome);
+      const [stranded] = await db
+        .select({ id: storageLocations.id })
+        .from(storageLocations)
+        .where(eq(
+          storageLocations.name,
+          `Storage Reference Atomicity Quick Race ${fixture.tag}`,
+        ));
+      expect(stranded).toBeUndefined();
     });
 
     it("rejects a production run created while its facility is being archived", async () => {

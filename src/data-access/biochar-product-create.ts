@@ -13,7 +13,11 @@ import { parseLocalDateString } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
-import { validateCompositionIngredientBins } from "./biochar-product-composition";
+import {
+  assertCompositionIngredientDrawsWithinStock,
+  getCompositionIngredientDraws,
+  validateCompositionIngredientBins,
+} from "./biochar-product-composition";
 import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 import { biocharEquivalentKg } from "./biochar-product-stock-locks";
@@ -169,6 +173,7 @@ export async function createBiocharProduct(
     : [];
   const biocharRatio = formulationRatioRow?.biocharRatio ?? null;
   const destinationBinId = data.storageLocationId;
+  const ingredientDraws = getCompositionIngredientDraws(data.composition);
 
   return db.transaction(async (tx) => {
     const sourceBinId =
@@ -178,6 +183,7 @@ export async function createBiocharProduct(
     await lockBinStocks(ctx, tx, [
       massKg > 0 ? destinationBinId : null,
       sourceBinId,
+      ...ingredientDraws.map((draw) => draw.storageLocationId),
     ]);
 
     let productionDate: Date;
@@ -288,6 +294,11 @@ export async function createBiocharProduct(
       data.composition,
       formulationId,
       data.facilityId,
+    );
+    await assertCompositionIngredientDrawsWithinStock(
+      ctx,
+      tx,
+      data.composition,
     );
 
     const [storage] = await tx

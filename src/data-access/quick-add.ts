@@ -21,6 +21,8 @@ import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardStorageLocationName } from "./unique-name-guards";
 import { isPgUniqueViolation } from "@/db/errors";
+import { getStorageLocationById } from "./entities/storage-locations";
+import { lockActiveFacilityReference } from "./facility-reference-guards";
 
 const VEHICLE_NAME_CONSTRAINT = "vehicles_organization_id_name_unique";
 const FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT =
@@ -266,33 +268,35 @@ export async function createStorageLocation(
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
 
-  if (data.feedstockTypeId) {
-    await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId);
-  }
-  if (data.formulationId) {
-    await assertSameOrg(ctx, formulations, data.formulationId);
-  }
+  return db.transaction(async (tx) => {
+    await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    if (data.feedstockTypeId) {
+      await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx);
+    }
+    if (data.formulationId) {
+      await assertSameOrg(ctx, formulations, data.formulationId, tx);
+    }
 
-  const [location] = await guardStorageLocationName(ctx, data.name, () =>
-    db
-      .insert(storageLocations)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        name: data.name,
-        type: data.type,
-        facilityId: data.facilityId,
-        capacityKg: data.capacityKg ?? null,
-        feedstockTypeId: data.feedstockTypeId ?? null,
-        formulationId: data.formulationId ?? null,
-      })
-      .returning(),
-  );
+    const [location] = await guardStorageLocationName(ctx, data.name, () =>
+      tx
+        .insert(storageLocations)
+        .values({
+          organizationId: ctx.organizationId,
+          code: data.code,
+          name: data.name,
+          type: data.type,
+          facilityId: data.facilityId,
+          capacityKg: data.capacityKg ?? null,
+          feedstockTypeId: data.feedstockTypeId ?? null,
+          formulationId: data.formulationId ?? null,
+        })
+        .returning(),
+    );
 
-  return {
-    id: location.id,
-    code: location.code,
-    name: location.name,
-    subtitle: location.type.replace(/_/g, " "),
-  };
+    const enriched = await getStorageLocationById(ctx, location.id, tx);
+    if (!enriched) {
+      throw new Error("Created storage location could not be read");
+    }
+    return enriched;
+  });
 }

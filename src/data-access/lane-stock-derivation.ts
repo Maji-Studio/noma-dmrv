@@ -97,6 +97,7 @@ export async function deriveLaneStock(
   const [
     intakeRows,
     consumptionRows,
+    ingredientConsumptionRows,
     outputRows,
     legacyAllocationRows,
     sourceAllocationRows,
@@ -140,6 +141,45 @@ export async function deriveLaneStock(
         )
         .where(and(...consumptionConditions))
         .groupBy(productionRuns.feedstockStorageLocationId),
+      executor
+        .select({
+          storageLocationId: sql<string>`ingredient.value ->> 'storageLocationId'`,
+          total: numericAggregate(sql<number>`
+            COALESCE(
+              SUM(
+                CASE
+                  WHEN jsonb_typeof(ingredient.value -> 'massKg') = 'number'
+                    AND (ingredient.value ->> 'massKg')::numeric > 0
+                  THEN (ingredient.value ->> 'massKg')::numeric
+                  ELSE 0
+                END
+              ),
+              0
+            )
+          `),
+        })
+        .from(biocharProducts)
+        .innerJoin(
+          sql`LATERAL jsonb_array_elements(
+            CASE
+              WHEN jsonb_typeof(${biocharProducts.composition} -> 'ingredients') = 'array'
+              THEN ${biocharProducts.composition} -> 'ingredients'
+              ELSE '[]'::jsonb
+            END
+          ) AS ingredient(value)`,
+          sql`true`,
+        )
+        .where(and(
+          eq(biocharProducts.organizationId, ctx.organizationId),
+          inArray(
+            sql<string>`ingredient.value ->> 'storageLocationId'`,
+            options.storageLocationIds,
+          ),
+          ...(options.excludeProductId
+            ? [ne(biocharProducts.id, options.excludeProductId)]
+            : []),
+        ))
+        .groupBy(sql`ingredient.value ->> 'storageLocationId'`),
       executor
         .select({
           storageLocationId: productionRuns.biocharStorageLocationId,
@@ -236,6 +276,12 @@ export async function deriveLaneStock(
       ? byLocation.get(row.storageLocationId)
       : undefined;
     if (stock) stock.feedstockConsumedDryKg = row.total;
+  }
+  for (const row of ingredientConsumptionRows) {
+    const stock = row.storageLocationId
+      ? byLocation.get(row.storageLocationId)
+      : undefined;
+    if (stock) stock.feedstockConsumedDryKg += row.total;
   }
   for (const row of outputRows) {
     const stock = row.storageLocationId
