@@ -343,7 +343,9 @@ describe("application mutations", () => {
           biocharAppliedTons: 2,
           biocharAppliedDryTons: 2.001,
         }),
-      ).rejects.toThrow("Dry mass cannot exceed wet mass.");
+      ).rejects.toThrow(
+        "Dry mass cannot exceed wet mass. Reduce the dry mass.",
+      );
 
       const [application] = await db
         .select({ id: applications.id })
@@ -383,7 +385,9 @@ describe("application mutations", () => {
         updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
           biocharAppliedDryTons: 2.001,
         }),
-      ).rejects.toThrow("Dry mass cannot exceed wet mass.");
+      ).rejects.toThrow(
+        "Dry mass cannot exceed wet mass. Reduce the dry mass.",
+      );
     } finally {
       await cleanupMutationFixture(fixture);
     }

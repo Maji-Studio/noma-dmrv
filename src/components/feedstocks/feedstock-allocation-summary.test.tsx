@@ -9,8 +9,10 @@ describe("FeedstockAllocationSummary", () => {
     );
     const visibleText = markup.replace(/<[^>]+>/g, "");
 
-    expect(visibleText).toContain("900.00 kg of 1000.00 kg allocated");
-    expect(visibleText).toContain("100.00 kg not allocated.");
+    expect(visibleText).toContain("900 kg of 1,000 kg allocated");
+    expect(visibleText).toContain(
+      "100 kg remains unallocated. Allocate it or review the difference before saving.",
+    );
     expect(markup).toContain('role="status"');
     expect(markup).not.toContain('role="alert"');
   });

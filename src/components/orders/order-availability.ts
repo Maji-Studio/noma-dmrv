@@ -14,5 +14,5 @@ export function orderAvailabilityWarning(
     return undefined;
   }
 
-  return `Only ${formatStockKg(availableKg)} is currently available.`;
+  return `Only ${formatStockKg(availableKg)} is currently available. Reduce the quantity or plan replenishment before fulfilling the order.`;
 }

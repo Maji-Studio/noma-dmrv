@@ -260,20 +260,44 @@ test.describe("Production Run lifecycle (#254)", () => {
     await dialog.locator('input[name="feedstockMoisturePercent"]').fill("20");
     await dialog.locator('input[name="biocharOutputKg"]').fill("20000");
 
-    await expect(dialog.getByText("Wet output exceeds wet input.")).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Wet output exceeds wet input. Review the masses before continuing.",
+      ),
+    ).toBeVisible();
 
     await dialog.locator('input[name="biocharMoisturePercent"]').fill("1.5");
-    await expect(dialog.getByText("Dry output exceeds dry input.")).toBeVisible();
-    await expect(dialog.getByText("Wet output exceeds wet input.")).not.toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Dry output exceeds dry input. Reduce the biochar output or correct the moisture values.",
+      ),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Wet output exceeds wet input. Review the masses before continuing.",
+      ),
+    ).not.toBeVisible();
 
     await dialog.locator('input[name="biocharOutputKg"]').fill("500");
-    await expect(dialog.getByText("Dry output exceeds dry input.")).not.toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Dry output exceeds dry input. Reduce the biochar output or correct the moisture values.",
+      ),
+    ).not.toBeVisible();
 
     await dialog.locator('input[name="feedstockMoisturePercent"]').fill("50");
     await dialog.locator('input[name="biocharOutputKg"]').fill("600");
     await dialog.locator('input[name="biocharMoisturePercent"]').fill("0");
-    await expect(dialog.getByText("Dry output exceeds dry input.")).toBeVisible();
-    await expect(dialog.getByText("Wet output exceeds wet input.")).not.toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Dry output exceeds dry input. Reduce the biochar output or correct the moisture values.",
+      ),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Wet output exceeds wet input. Review the masses before continuing.",
+      ),
+    ).not.toBeVisible();
   });
 
   test("defers the complete-run feedstock requirement until submit", async ({

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getSampleCarbonReconciliationErrors } from "./sample-carbon-reconciliation";
+import {
+  COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE,
+  getSampleCarbonReconciliationErrors,
+  ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE,
+} from "./samples";
 
 describe("getSampleCarbonReconciliationErrors", () => {
   it("reports organic carbon above total carbon as soon as both values are complete", () => {
@@ -9,7 +13,7 @@ describe("getSampleCarbonReconciliationErrors", () => {
         organicCarbonPercent: 76,
       }),
     ).toEqual({
-      organicCarbonPercent: "Organic carbon exceeds total carbon.",
+      organicCarbonPercent: ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE,
     });
   });
 
@@ -35,8 +39,7 @@ describe("getSampleCarbonReconciliationErrors", () => {
         inorganicCarbonPercent: 2,
       }),
     ).toEqual({
-      inorganicCarbonPercent:
-        "Organic and inorganic carbon exceed total carbon.",
+      inorganicCarbonPercent: COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE,
     });
   });
 });

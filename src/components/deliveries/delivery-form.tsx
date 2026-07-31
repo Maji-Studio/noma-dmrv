@@ -305,7 +305,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       message === productStockOverdrawMessage() ||
       message === binStockOverdrawMessage("product") ||
       /cannot deliver .*remain undelivered/i.test(message) ||
-      /exceeds order balance/i.test(message),
+      /remains on this order/i.test(message),
   );
   const deliveredWetMassError =
     errors.deliveredWetMassKg?.message ??

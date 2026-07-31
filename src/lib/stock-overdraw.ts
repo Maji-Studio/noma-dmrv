@@ -19,14 +19,14 @@ export function binStockOverdrawInlineMessage(
   material: StockMaterial,
   availableKg: number,
 ): string {
-  return `Exceeds available ${material}: ${formatStockKg(availableKg)}.`;
+  return `Only ${formatStockKg(availableKg)} of ${material} is available. Reduce the mass.`;
 }
 
 /** Compact delivery-form feedback; the server keeps the detailed race message. */
 export function deliveryStockOverdrawInlineMessage(
   availableKg: number,
 ): string {
-  return `Exceeds available product: ${formatStockKg(availableKg)}.`;
+  return `Only ${formatStockKg(availableKg)} of product is available. Reduce the delivered mass.`;
 }
 
 export function binStockOverdrawMessage(

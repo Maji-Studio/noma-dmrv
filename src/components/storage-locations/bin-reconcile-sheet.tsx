@@ -304,7 +304,8 @@ function StockTakeForm({
 
       {deltaKg != null && deltaKg > 0 && (
         <p className="body-caption text-[var(--color-signal-red)]">
-          Count exceeds current stock.
+          Count exceeds current stock. Confirm the count and explain the
+          difference before saving.
         </p>
       )}
 

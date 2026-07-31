@@ -35,7 +35,7 @@ function delivery(
 describe("application delivery option mass", () => {
   it("returns a blocking error when manual dry mass exceeds wet mass", () => {
     expect(getManualDryAppliedMassError(1_000, 1_000.002)).toBe(
-      "Dry mass cannot exceed wet mass.",
+      "Dry mass cannot exceed wet mass. Reduce the dry mass.",
     );
   });
 

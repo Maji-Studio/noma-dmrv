@@ -4,7 +4,7 @@ import { orderAvailabilityWarning } from "./order-availability";
 describe("orderAvailabilityWarning", () => {
   it("warns when the ordered quantity exceeds current product stock", () => {
     expect(orderAvailabilityWarning(1_000, 800)).toBe(
-      "Only 800 kg is currently available.",
+      "Only 800 kg is currently available. Reduce the quantity or plan replenishment before fulfilling the order.",
     );
   });
 

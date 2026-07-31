@@ -4,7 +4,8 @@ import {
 } from "@/lib/calculations/mass-dry";
 import { DRY_MASS_BALANCE_MESSAGE } from "@/schemas/production-runs";
 
-export const WET_MASS_BALANCE_WARNING = "Wet output exceeds wet input.";
+export const WET_MASS_BALANCE_WARNING =
+  "Wet output exceeds wet input. Review the masses before continuing.";
 
 interface ProductionRunMassBalanceInput {
   feedstockWetMassKg: unknown;

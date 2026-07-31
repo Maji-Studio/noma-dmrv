@@ -129,24 +129,30 @@ test.describe("Feedstock UI CRUD", () => {
 
     await firstAllocation.fill("800");
     await expect(
-      dialog.getByText("200.00 kg not allocated.", { exact: true }),
+      dialog.getByText(
+        "200 kg remains unallocated. Allocate it or review the difference before saving.",
+        { exact: true },
+      ),
     ).toBeVisible();
     await expect(firstAllocation).toBeFocused();
 
     await secondAllocation.fill("300");
     await expect(
-      dialog.getByText("100.00 kg over delivery. Add a justification.", {
+      dialog.getByText("100 kg over delivery. Add a justification.", {
         exact: true,
       }),
     ).toBeVisible();
     await expect(
-      dialog.getByText("200.00 kg not allocated.", { exact: true }),
+      dialog.getByText(
+        "200 kg remains unallocated. Allocate it or review the difference before saving.",
+        { exact: true },
+      ),
     ).toHaveCount(0);
     await expect(secondAllocation).toBeFocused();
 
     await secondAllocation.fill("200");
     await expect(
-      dialog.getByText("100.00 kg over delivery. Add a justification.", {
+      dialog.getByText("100 kg over delivery. Add a justification.", {
         exact: true,
       }),
     ).toHaveCount(0);

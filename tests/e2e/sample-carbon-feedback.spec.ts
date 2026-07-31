@@ -19,19 +19,25 @@ test.describe("Sample carbon feedback", () => {
     await totalCarbon.fill("75");
     await organicCarbon.fill("76");
     await expect(
-      dialog.getByText("Organic carbon exceeds total carbon.", { exact: true }),
+      dialog.getByText(
+        "Organic carbon cannot exceed total carbon by more than 0.5 percentage points. Correct the carbon values.",
+        { exact: true },
+      ),
     ).toBeVisible();
     await expect(organicCarbon).toBeFocused();
 
     await organicCarbon.fill("74");
     await expect(
-      dialog.getByText("Organic carbon exceeds total carbon.", { exact: true }),
+      dialog.getByText(
+        "Organic carbon cannot exceed total carbon by more than 0.5 percentage points. Correct the carbon values.",
+        { exact: true },
+      ),
     ).toHaveCount(0);
 
     await inorganicCarbon.fill("2");
     await expect(
       dialog.getByText(
-        "Organic and inorganic carbon exceed total carbon.",
+        "Organic plus inorganic carbon cannot exceed total carbon by more than 0.5 percentage points. Correct the carbon values.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -40,7 +46,7 @@ test.describe("Sample carbon feedback", () => {
     await inorganicCarbon.fill("1");
     await expect(
       dialog.getByText(
-        "Organic and inorganic carbon exceed total carbon.",
+        "Organic plus inorganic carbon cannot exceed total carbon by more than 0.5 percentage points. Correct the carbon values.",
         { exact: true },
       ),
     ).toHaveCount(0);

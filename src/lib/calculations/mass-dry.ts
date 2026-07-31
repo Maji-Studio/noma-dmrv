@@ -3,7 +3,7 @@ export type DeliveryDryMassSource = 'measured' | 'derived' | 'missing';
 /** Tolerance for comparing kg values derived from decimal form inputs. */
 export const MASS_COMPARISON_EPSILON_KG = 0.001;
 export const DRY_MASS_EXCEEDS_WET_MESSAGE =
-  "Dry mass cannot exceed wet mass.";
+  "Dry mass cannot exceed wet mass. Reduce the dry mass.";
 
 export function exceedsMassWithTolerance(
   candidateMassKg: number,

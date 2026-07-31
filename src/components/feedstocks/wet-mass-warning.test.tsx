@@ -17,7 +17,7 @@ describe("WetMassWarning", () => {
       />,
     );
 
-    expect(markup).toContain("100.00 kg over delivery. Add a justification.");
+    expect(markup).toContain("100 kg over delivery. Add a justification.");
     expect(markup).toContain('id="overrideJustification-warning"');
     expect(markup).toContain(
       'aria-describedby="overrideJustification-warning"',

@@ -726,7 +726,7 @@ test.describe("createDelivery order-balance guard", () => {
 
     const error = page.locator("#deliveredWetMassKg-error");
     await expect(error).toHaveText(
-      "Exceeds order balance: 200,000 kg remaining.",
+      "Only 200,000 kg remains on this order. Reduce the delivered mass.",
       { timeout: 10000 },
     );
     await submitDeliveryCreate(page);

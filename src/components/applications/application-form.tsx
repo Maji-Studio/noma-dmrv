@@ -334,7 +334,7 @@ export function ApplicationForm({
     availableKg !== null &&
     appliedKgValid !== null &&
     isStockOverdraw(appliedKgValid, availableKg)
-      ? `Exceeds delivery balance: ${formatKg(availableKg)} remaining.`
+      ? `Only ${formatKg(availableKg)} remains in this delivery. Reduce the applied mass.`
       : undefined;
   const manualDryAppliedMassError =
     moisturePercent == null && selectedDelivery

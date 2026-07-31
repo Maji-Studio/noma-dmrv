@@ -102,7 +102,9 @@ describe("delivery order balance", () => {
           status: "upcoming",
           deliveredWetMassKg: 50,
         }),
-      ).rejects.toThrow("Exceeds order balance: 40 kg remaining.");
+      ).rejects.toThrow(
+        "Only 40 kg remains on this order. Reduce the delivered mass.",
+      );
     } finally {
       await seeded.cleanup();
     }
@@ -134,7 +136,9 @@ describe("delivery order balance", () => {
       ).resolves.toMatchObject({ deliveredWetMassKg: 80 });
       await expect(
         updateDelivery(ctx, current.id, { deliveredWetMassKg: 81 }),
-      ).rejects.toThrow("Exceeds order balance: 80 kg remaining.");
+      ).rejects.toThrow(
+        "Only 80 kg remains on this order. Reduce the delivered mass.",
+      );
     } finally {
       await seeded.cleanup();
     }

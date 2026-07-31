@@ -1,4 +1,5 @@
 import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
+import { formatMassKg } from "@/lib/format-utils";
 
 interface FeedstockAllocationSummaryProps {
   allocatedKg: number;
@@ -21,10 +22,10 @@ export function FeedstockAllocationSummary({
     <div className="border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-12 py-8">
       <p className="body-small text-[var(--color-text-secondary)]">
         <span className="font-medium text-[var(--color-text-primary)]">
-          {allocatedKg.toFixed(2)} kg
+          {formatMassKg(allocatedKg)}
         </span>{" "}
         {hasDeliveredMass
-          ? `of ${deliveredKg.toFixed(2)} kg allocated`
+          ? `of ${formatMassKg(deliveredKg)} allocated`
           : "allocated"}
       </p>
       {hasUnallocatedMass && (
@@ -33,7 +34,8 @@ export function FeedstockAllocationSummary({
           role="status"
           aria-live="polite"
         >
-          {unallocatedKg.toFixed(2)} kg not allocated.
+          {formatMassKg(unallocatedKg)} remains unallocated. Allocate it or
+          review the difference before saving.
         </p>
       )}
     </div>

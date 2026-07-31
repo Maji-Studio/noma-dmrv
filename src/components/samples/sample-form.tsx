@@ -42,11 +42,11 @@ import {
   calculateHToCOrgRatio,
   calculateOToCOrgRatio,
   formatDurabilityOption,
+  getSampleCarbonReconciliationErrors,
   type SampleFormData,
 } from "@/schemas/samples";
 import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import { SampleBatchProgress } from "./sample-batch-progress";
-import { getSampleCarbonReconciliationErrors } from "./sample-carbon-reconciliation";
 import { SampleNutrientFields } from "./sample-nutrient-fields";
 import {
   SampleEvidenceSection,

@@ -44,10 +44,10 @@ describe("stock overdraw", () => {
 
   it("keeps field-level stock messages compact", () => {
     expect(binStockOverdrawInlineMessage("feedstock", 800)).toBe(
-      "Exceeds available feedstock: 800 kg.",
+      "Only 800 kg of feedstock is available. Reduce the mass.",
     );
     expect(deliveryStockOverdrawInlineMessage(800)).toBe(
-      "Exceeds available product: 800 kg.",
+      "Only 800 kg of product is available. Reduce the delivered mass.",
     );
   });
 });
