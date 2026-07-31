@@ -658,19 +658,29 @@ describe("submitRemoval — reporting window anchored to application date (issue
 
   it("uses MAX(applicationDate) across lineages for completed_on while durability measured_at keeps the production end", async () => {
     setDurabilityMeasurementSamplesEnabled(true);
+    const progress = vi.fn();
     vi.mocked(
       durabilitySamples.submitDurabilityMeasurementSamples,
-    ).mockResolvedValue({
-      submitted: 1,
-      samples: [],
-      datapointIdsByMeasurementProperty: new Map([
-        [
-          "mass_fraction_dry_basis|total_carbon",
-          ["dtp-carbon-1", "dtp-carbon-2", "dtp-carbon-3"],
-        ],
-        ["mass", ["dtp-product-mass"]],
-      ]),
-    } as never);
+    ).mockImplementation(async (args) => {
+      args.onProgress?.(1, 1);
+      expect(progress).toHaveBeenLastCalledWith({
+        step: "removal.sending_durability",
+        state: "active",
+        completed: 1,
+        total: 1,
+      });
+      return {
+        submitted: 1,
+        samples: [],
+        datapointIdsByMeasurementProperty: new Map([
+          [
+            "mass_fraction_dry_basis|total_carbon",
+            ["dtp-carbon-1", "dtp-carbon-2", "dtp-carbon-3"],
+          ],
+          ["mass", ["dtp-product-mass"]],
+        ]),
+      } as never;
+    });
     const baseContext = makeContext();
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...baseContext,
@@ -705,7 +715,36 @@ describe("submitRemoval — reporting window anchored to application date (issue
       fakeExternalIds("rmv") as never,
     );
 
-    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
+    await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+      onProgress: progress,
+    });
+
+    expect(
+      progress.mock.calls
+        .map(([update]) => update)
+        .filter((update) => update.step === "removal.sending_durability"),
+    ).toEqual([
+      {
+        step: "removal.sending_durability",
+        state: "active",
+        completed: 0,
+        total: 1,
+      },
+      {
+        step: "removal.sending_durability",
+        state: "active",
+        completed: 1,
+        total: 1,
+      },
+      {
+        step: "removal.sending_durability",
+        state: "complete",
+        completed: 1,
+        total: 1,
+      },
+    ]);
 
     // completed_on = the LATEST application date across lineages; started_on
     // stays the production start.

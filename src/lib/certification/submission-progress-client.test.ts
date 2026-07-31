@@ -89,6 +89,37 @@ describe("streamCertificationSubmission", () => {
     });
   });
 
+  it.each([
+    [
+      "removal",
+      { kind: "removal" as const, input: REMOVAL_INPUT },
+      "The Removal submission could not be confirmed. Close this dialog and refresh the page before trying again.",
+    ],
+    [
+      "GHG Statement",
+      {
+        kind: "ghg_statement" as const,
+        ghgStatementId: "22222222-2222-4222-8222-222222222222",
+        input: {
+          reportId: "33333333-3333-4333-8333-333333333333",
+          confirmProduction: true,
+        },
+      },
+      "The GHG Statement submission could not be confirmed. Close this dialog and refresh the page before trying again.",
+    ],
+  ])("gives a safe recovery action when a %s stream ends without a result", async (_name, request, expected) => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.close();
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body)));
+
+    await expect(
+      streamCertificationSubmission(request, () => undefined),
+    ).rejects.toThrow(expected);
+  });
+
   it("surfaces a safe streamed error", async () => {
     const body = new ReadableStream<Uint8Array>({
       start(controller) {

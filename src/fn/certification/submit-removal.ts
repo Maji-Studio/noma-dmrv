@@ -867,7 +867,7 @@ async function runRemovalSubmission({
       onProgress: (completed, total) => {
         onProgress?.({
           step: "removal.sending_durability",
-          state: completed === total ? "complete" : "active",
+          state: "active",
           completed,
           total,
         });
@@ -879,6 +879,14 @@ async function runRemovalSubmission({
       datapointIdsByRtcInput,
     });
     log.info({ submitted }, "durability measurement samples submitted");
+    if (durabilityTotal > 0) {
+      onProgress?.({
+        step: "removal.sending_durability",
+        state: "complete",
+        completed: durabilityTotal,
+        total: durabilityTotal,
+      });
+    }
   } else {
     onProgress?.({ step: "removal.sending_durability", state: "skipped" });
   }

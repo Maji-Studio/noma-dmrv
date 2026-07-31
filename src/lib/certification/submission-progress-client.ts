@@ -20,6 +20,15 @@ const UNREADABLE_SUBMISSION_STREAM_MESSAGE =
   "The progress connection returned an unreadable response. Close this dialog and refresh the page before trying again.";
 const SUBMISSION_ADMISSION_FALLBACK =
   "The submission could not be started. Try again.";
+const UNCONFIRMED_SUBMISSION_MESSAGES: Record<
+  SubmissionProgressRequest["kind"],
+  string
+> = {
+  removal:
+    "The Removal submission could not be confirmed. Close this dialog and refresh the page before trying again.",
+  ghg_statement:
+    "The GHG Statement submission could not be confirmed. Close this dialog and refresh the page before trying again.",
+};
 const SUBMISSION_PROGRESS_STATES: ReadonlySet<string> = new Set([
   "active",
   "complete",
@@ -244,7 +253,7 @@ export async function streamCertificationSubmission<T>(
     }
 
     if (result === undefined) {
-      throw new Error("The submission ended without a result. Try again.");
+      throw new Error(UNCONFIRMED_SUBMISSION_MESSAGES[request.kind]);
     }
     return result;
   } finally {
