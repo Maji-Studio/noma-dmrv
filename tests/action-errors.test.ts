@@ -140,6 +140,17 @@ describe("toLoggedActionError", () => {
     );
   });
 
+  it("hides related-record identifiers in normalized missing-record errors", () => {
+    const internalId = "org_123";
+
+    expect(new SafeError(`Delivery not found for ${internalId}`).message).toBe(
+      "Delivery was not found.",
+    );
+    expect(
+      new SafeError(`Delivery not found for ${internalId}`).message,
+    ).not.toContain(internalId);
+  });
+
   it("returns the fallback for non-Error throws and still logs them", () => {
     const result = toLoggedActionError("string error", "Failed to load samples", {
       message: "sample action failed",

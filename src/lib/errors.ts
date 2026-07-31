@@ -32,7 +32,7 @@ function formatSafeErrorMessage(message: string): string {
 
   const missingForRecord = /^(.+?) not found for (.+?)\.?$/i.exec(trimmed);
   if (missingForRecord) {
-    return `${sentenceCase(missingForRecord[1])} was not found for ${missingForRecord[2]}.`;
+    return missingRecordMessage(missingForRecord[1]);
   }
 
   const missingWithInternalId = /^(.+?) not found:\s*.+$/i.exec(trimmed);
