@@ -18,7 +18,7 @@ const ENV_MODULE = "./env";
 /** Parse `env` fresh under an overridden process.env; return the raised issues. */
 async function parseEnvWith(
   overrides: Record<string, string | undefined>,
-): Promise<{ threw: boolean; paths: string[] }> {
+): Promise<{ threw: boolean; paths: string[]; messages: string[] }> {
   vi.resetModules();
   const saved = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(overrides)) {
@@ -28,12 +28,15 @@ async function parseEnvWith(
   }
   try {
     await import(ENV_MODULE);
-    return { threw: false, paths: [] };
+    return { threw: false, paths: [], messages: [] };
   } catch (error) {
-    const issues = (error as { issues?: Array<{ path: unknown[] }> }).issues;
+    const issues = (
+      error as { issues?: Array<{ path: unknown[]; message: string }> }
+    ).issues;
     return {
       threw: true,
       paths: (issues ?? []).map((issue) => String(issue.path[0])),
+      messages: (issues ?? []).map((issue) => issue.message),
     };
   } finally {
     for (const [key, value] of saved) {
@@ -76,15 +79,19 @@ describe("ISOMETRIC_ENVIRONMENT production gate", () => {
   });
 
   it("does not treat ambient CI on localhost as hermetic", async () => {
-    const { paths } = await parseEnvWith({
+    const { paths, messages } = await parseEnvWith({
       NODE_ENV: "production",
       CI: "true",
       NOMA_HERMETIC_CI: undefined,
       NEXT_PUBLIC_APP_URL: "http://localhost:3100",
       ISOMETRIC_ENVIRONMENT: undefined,
+      STORAGE_PROVIDER: "local-fs",
     });
 
     expect(paths).toContain("ISOMETRIC_ENVIRONMENT");
+    expect(messages).toContain(
+      "STORAGE_PROVIDER must be 's3-compatible' in production. 'local-fs' requires NOMA_HERMETIC_CI=true in CI with an HTTP(S) loopback app URL.",
+    );
   });
 
   it("does not allow a non-HTTP loopback URL through the exception", async () => {

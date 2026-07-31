@@ -324,7 +324,7 @@ const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["STORAGE_PROVIDER"],
       message:
-        "STORAGE_PROVIDER must be 's3-compatible' in production. 'local-fs' is only allowed for CI localhost E2E.",
+        "STORAGE_PROVIDER must be 's3-compatible' in production. 'local-fs' requires NOMA_HERMETIC_CI=true in CI with an HTTP(S) loopback app URL.",
     });
   }
 });

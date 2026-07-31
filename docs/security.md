@@ -104,7 +104,7 @@ Non-obvious semantics only:
   that is never tuned. See [open-questions.md](./open-questions.md)
   (`auth/drop-self-signup-flag`).
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
-  CI carve-out below). Server-only 32-byte hex/base64 key.
+  Hermetic-CI exception below). Server-only 32-byte hex/base64 key.
 - **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In
   dev/test the local-fs provider falls back to an **ephemeral random signing
   secret** with a warning, so locally-signed URLs silently break across restarts.
