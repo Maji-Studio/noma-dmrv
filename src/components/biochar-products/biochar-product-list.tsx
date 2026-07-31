@@ -31,6 +31,7 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
+import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -53,7 +54,6 @@ import {
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
-  formatWetDryMass,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
   splitWetMassAfterAddedWater,
@@ -106,12 +106,12 @@ function createColumns(
           row.original.waterAddedKg,
         );
         return (
-          <span className="font-mono">
-            {formatWetDryMass({
-              wetKg: split?.wetKg ?? row.original.massKg,
-              dryKg: split?.dryKg,
-            })}
-          </span>
+          <MassPair
+            wetKg={split?.wetKg ?? row.original.massKg}
+            dryKg={split?.dryKg}
+            layout="stacked"
+            variant="compact"
+          />
         );
       },
     },
@@ -423,13 +423,15 @@ export function BiocharProductList() {
           isLoading={isLoading}
         />
         <StatCard
-          title="Mass on This Page"
-          value={formatWetDryMass({
-            wetKg: pageMass.wetKg,
-            dryKg: pageMass.hasMissingDry ? null : pageMass.dryKg,
-          })}
+          title="Product Mass"
+          value={
+            <MassPair
+              wetKg={pageMass.wetKg}
+              dryKg={pageMass.hasMissingDry ? null : pageMass.dryKg}
+            />
+          }
+          valueLayout="breakdown"
           icon={<ScalesIcon size={24} weight="bold" />}
-          description="Combined product mass on this page"
           isLoading={isLoading}
         />
       </div>

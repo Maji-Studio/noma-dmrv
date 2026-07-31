@@ -10,6 +10,7 @@ export * from "./empty-state";
 export * from "./input";
 export * from "./list-pagination";
 export * from "./modal";
+export * from "./mass-pair";
 export * from "./moisture-split";
 export * from "./page-header";
 export * from "./row-actions-menu";

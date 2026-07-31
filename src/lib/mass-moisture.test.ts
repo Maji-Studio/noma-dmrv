@@ -5,12 +5,25 @@ import {
   formatMassSplitInline,
   formatMoisturePercent,
   formatSplitMass,
+  formatSummaryMass,
   formatWetDryMass,
   parseWatchedNumber,
   splitWetMassAfterAddedWater,
   splitWatchedWetMass,
   splitWetMass,
 } from "./mass-moisture";
+
+describe("formatSummaryMass", () => {
+  it("shortens large KPI values to tonnes without hiding useful differences", () => {
+    expect(formatSummaryMass(42_210)).toBe("42.21 t");
+    expect(formatSummaryMass(41_365.8)).toBe("41.37 t");
+  });
+
+  it("keeps smaller values in kg and missing values explicit", () => {
+    expect(formatSummaryMass(850.5)).toBe("850.5 kg");
+    expect(formatSummaryMass(null)).toBe("Not recorded");
+  });
+});
 
 describe("deriveEffectiveMoisturePercent", () => {
   it("keeps base dry matter fixed when added water increases sellable wet mass", () => {
