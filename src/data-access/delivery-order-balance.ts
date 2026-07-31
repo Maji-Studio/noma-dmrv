@@ -5,7 +5,7 @@ import { deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { deliveryOrderBalanceMessage } from "@/lib/delivery-order-balance";
 import { SafeError } from "@/lib/errors";
-import { formatStockKg, isStockOverdraw } from "@/lib/stock-overdraw";
+import { formatStockMinimumKg, isStockOverdraw } from "@/lib/stock-overdraw";
 import { requireOrgScope } from "./utils";
 
 type QueryExecutor = typeof db | DbTransaction;
@@ -46,7 +46,7 @@ export async function assertOrderQuantityCoversAllocations(
   );
   if (isStockOverdraw(allocatedWetKg, params.orderQuantityKg)) {
     throw new SafeError(
-      `Order quantity cannot be less than the ${formatStockKg(allocatedWetKg)} already allocated to deliveries.`,
+      `Order quantity cannot be less than the ${formatStockMinimumKg(allocatedWetKg)} already allocated to deliveries.`,
     );
   }
 }

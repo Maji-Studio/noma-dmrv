@@ -267,6 +267,29 @@ describe("delivery order balance", () => {
     }
   });
 
+  it("rounds an actionable order minimum up to cover fractional allocations", async () => {
+    const seeded = await seedOrder(100);
+
+    try {
+      await createDelivery(ctx, {
+        code: `DL-ORDER-BAL-${seeded.tag}-FRACTIONAL`,
+        orderId: seeded.orderId,
+        facilityId: seeded.facilityId,
+        deliveryDate: new Date("2026-08-01T00:00:00Z"),
+        status: "upcoming",
+        deliveredWetMassKg: 60.05,
+      });
+
+      await expect(
+        updateOrder(ctx, seeded.orderId, { quantityKg: 60 }),
+      ).rejects.toThrow(
+        "Order quantity cannot be less than the 60.1 kg already allocated to deliveries.",
+      );
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
   it("allows unrelated edits to a legacy delivery that already exceeds its order", async () => {
     const seeded = await seedOrder(50);
 

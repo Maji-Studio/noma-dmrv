@@ -14,6 +14,12 @@ describe("delivery order balance copy", () => {
     expect(isDeliveryOrderBalanceMessage(message)).toBe(true);
   });
 
+  it("clamps a negative remaining balance to zero", () => {
+    expect(deliveryOrderBalanceMessage(-0.4)).toBe(
+      "Only 0 kg remains on this order. Reduce the delivered mass.",
+    );
+  });
+
   it("does not route unrelated server errors as order-balance feedback", () => {
     expect(isDeliveryOrderBalanceMessage("Not enough biochar in this product"))
       .toBe(false);

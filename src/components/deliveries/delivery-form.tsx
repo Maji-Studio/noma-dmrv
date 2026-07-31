@@ -37,7 +37,7 @@ import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error
 import {
   binStockOverdrawMessage,
   deliveryStockOverdrawInlineMessage,
-  formatStockKg,
+  formatStockLimitKg,
   isStockOverdraw,
   productStockOverdrawMessage,
 } from "@/lib/stock-overdraw";
@@ -418,7 +418,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             hint: "As-received weight of the delivery, water included.",
             helperText:
               deliveryAvailability?.availableKg != null
-                ? `${formatStockKg(
+                ? `${formatStockLimitKg(
                     deliveryAvailability.availableKg,
                   )} available from this product`
                 : undefined,

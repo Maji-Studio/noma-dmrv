@@ -50,13 +50,13 @@ import {
   calculateDryMass,
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
-  formatKg,
   resolveApplicationPositionDefault,
   resolveApplicationSoilTemperatureDefault,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 import {
   deliveryStockOverdrawMessage,
+  formatStockLimitKg,
   isStockOverdraw,
 } from "@/lib/stock-overdraw";
 
@@ -329,7 +329,7 @@ export function ApplicationForm({
     availableKg !== null &&
     appliedKgValid !== null &&
     isStockOverdraw(appliedKgValid, availableKg)
-      ? `Only ${formatKg(availableKg)} remains in this delivery. Reduce the applied mass.`
+      ? `Only ${formatStockLimitKg(availableKg)} remains in this delivery. Reduce the applied mass.`
       : undefined;
   const applicationMassFingerprint = [
     selectedDeliveryId,
@@ -459,7 +459,7 @@ export function ApplicationForm({
             hint="As-received mass at delivery, water included."
             helperText={
               availableKg !== null
-                ? `${formatKg(availableKg)} available from this delivery`
+                ? `${formatStockLimitKg(availableKg)} available from this delivery`
                 : undefined
             }
           >

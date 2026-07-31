@@ -1,4 +1,4 @@
-import { formatStockKg, isStockOverdraw } from "@/lib/stock-overdraw";
+import { formatStockLimitKg, isStockOverdraw } from "@/lib/stock-overdraw";
 
 export function orderAvailabilityWarning(
   quantityKg: unknown,
@@ -16,5 +16,5 @@ export function orderAvailabilityWarning(
     return undefined;
   }
 
-  return `Only ${formatStockKg(availableKg)} is currently available. Reduce the quantity or plan replenishment before fulfilling the order.`;
+  return `Only ${formatStockLimitKg(availableKg)} is currently available. Reduce the quantity or plan replenishment before fulfilling the order.`;
 }

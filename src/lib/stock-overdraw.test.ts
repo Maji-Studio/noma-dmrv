@@ -4,6 +4,8 @@ import {
   binStockOverdrawMessage,
   deliveryStockOverdrawInlineMessage,
   deliveryStockOverdrawMessage,
+  formatStockLimitKg,
+  formatStockMinimumKg,
   formatStockKg,
   isStockOverdraw,
   productStockOverdrawMessage,
@@ -53,8 +55,17 @@ describe("stock overdraw", () => {
   });
 
   it("never rounds an actionable limit above the available mass", () => {
-    expect(formatStockKg(800.99)).toBe("800.9 kg");
-    expect(formatStockKg(0.99)).toBe("0.9 kg");
+    expect(formatStockLimitKg(800.99)).toBe("800.9 kg");
+    expect(formatStockLimitKg(0.99)).toBe("0.9 kg");
+    expect(formatStockLimitKg(-0.4)).toBe("0 kg");
+  });
+
+  it("preserves signs outside actionable maximum copy", () => {
+    expect(formatStockKg(-0.4)).toBe("-0.4 kg");
+  });
+
+  it("never rounds a required minimum below the allocated mass", () => {
+    expect(formatStockMinimumKg(60.05)).toBe("60.1 kg");
   });
 
   it("uses biochar wording for product-bin inline feedback", () => {

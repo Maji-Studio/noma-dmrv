@@ -3,7 +3,7 @@ import {
   exceedsMassWithTolerance,
 } from "@/lib/calculations/mass-dry";
 import { DRY_MASS_BALANCE_MESSAGE } from "@/lib/production-runs/lifecycle";
-import { formatStockKg } from "@/lib/stock-overdraw";
+import { formatStockLimitKg } from "@/lib/stock-overdraw";
 
 export const WET_MASS_BALANCE_WARNING =
   "Wet output exceeds wet input. Review the masses before continuing.";
@@ -23,7 +23,7 @@ export function feedstockDryStockOverdrawMessage(
   moisturePercent: number,
 ): string {
   const maximumWetKg = availableDryKg / (1 - moisturePercent / 100);
-  return `Only ${formatStockKg(availableDryKg)} of dry feedstock is available. At ${moisturePercent.toLocaleString()}% moisture, enter at most ${formatStockKg(maximumWetKg)} wet mass.`;
+  return `Only ${formatStockLimitKg(availableDryKg)} of dry feedstock is available. At ${moisturePercent.toLocaleString()}% moisture, enter at most ${formatStockLimitKg(maximumWetKg)} wet mass.`;
 }
 
 export function productionRunMassBalanceFeedback(
