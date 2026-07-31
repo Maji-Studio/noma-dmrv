@@ -5,9 +5,6 @@ import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { requireOrgFacility } from "@/data-access/utils";
 import { SafeError } from "@/lib/errors";
 import {
-  payloadHash,
-} from "@/lib/isometric";
-import {
   isSequestrationBlueprintKey,
 } from "@/lib/isometric/transformers/measurement-sample";
 import type { ActionResult } from "@/types/actions";

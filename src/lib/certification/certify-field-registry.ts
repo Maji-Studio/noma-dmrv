@@ -345,17 +345,6 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       kind: "entered",
       mappings: transportMassDistanceMappings,
     },
-    {
-      key: "distanceProvenance",
-      label: "Transport distance provenance",
-      kind: "derived",
-      formFields: ["distanceSource"],
-      satisfaction: {
-        mode: "anyOf",
-        fields: ["distanceSource"],
-        label: "Transport distance provenance",
-      },
-    },
   ],
   // Issue #319 removed the litres→kWh genset conversion — diesel submits by
   // volume with the EF bound on the Isometric template, so no facility
