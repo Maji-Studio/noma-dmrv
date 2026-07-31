@@ -41,9 +41,13 @@ vi.mock("./production-readings-documents", () => {
     isUploadedReadingsDocument: (document: {
       documentType: string;
       uploadStatus: string;
+      fileName: string;
+      mimeType: string | null;
     }) =>
       document.documentType === "sensor_data" &&
-      document.uploadStatus === "uploaded",
+      document.uploadStatus === "uploaded" &&
+      document.fileName.endsWith(".csv") &&
+      document.mimeType === "text/csv",
     ProductionReadingsDocuments: () => <div data-readings-documents />,
   };
 });
@@ -62,7 +66,7 @@ describe("ProductionReadingsField certification status", () => {
   });
 
   it("shows a neutral CERT chip in create mode and while saved files load", () => {
-    documentsForEntity.mockReturnValue({ data: undefined, isLoading: true });
+    documentsForEntity.mockReturnValue({ data: undefined, isSuccess: false });
 
     expect(renderField()).toContain('data-cert-status="neutral"');
     expect(renderField("run-1")).toContain('data-cert-status="neutral"');
@@ -71,10 +75,20 @@ describe("ProductionReadingsField certification status", () => {
   it("shows missing when no successfully uploaded readings file exists", () => {
     documentsForEntity.mockReturnValue({
       data: [
-        { documentType: "sensor_data", uploadStatus: "pending" },
-        { documentType: "sensor_data", uploadStatus: "failed" },
+        {
+          documentType: "sensor_data",
+          uploadStatus: "pending",
+          fileName: "run.csv",
+          mimeType: "text/csv",
+        },
+        {
+          documentType: "sensor_data",
+          uploadStatus: "failed",
+          fileName: "run.csv",
+          mimeType: "text/csv",
+        },
       ],
-      isLoading: false,
+      isSuccess: true,
     });
 
     const html = renderField("run-1");
@@ -85,12 +99,29 @@ describe("ProductionReadingsField certification status", () => {
 
   it("shows satisfied only for saved uploaded sensor-data evidence", () => {
     documentsForEntity.mockReturnValue({
-      data: [{ documentType: "sensor_data", uploadStatus: "uploaded" }],
-      isLoading: false,
+      data: [
+        {
+          documentType: "sensor_data",
+          uploadStatus: "uploaded",
+          fileName: "run.csv",
+          mimeType: "text/csv",
+        },
+      ],
+      isSuccess: true,
     });
 
     expect(renderField("run-1")).toContain(
       'data-cert-status="satisfied"',
     );
+  });
+
+  it("keeps the CERT chip neutral when the saved-document query fails", () => {
+    documentsForEntity.mockReturnValue({
+      data: undefined,
+      isSuccess: false,
+      error: new Error("query failed"),
+    });
+
+    expect(renderField("run-1")).toContain('data-cert-status="neutral"');
   });
 });

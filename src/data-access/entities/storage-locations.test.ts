@@ -130,7 +130,8 @@ describe("toStorageLocationEntityOption", () => {
       }),
     );
 
-    expect(option.remainingMass).toEqual({ wetKg: 3_000 });
+    expect(option.remainingMass).toEqual({ wetKg: 3_000, dryKg: 2_400 });
+    expect(option.subtitle).toContain("2,400 kg stored");
   });
 
   it("uses authoritative biochar lane stock and records dry stock", () => {
@@ -167,6 +168,9 @@ describe("toStorageLocationEntityOption", () => {
     );
 
     expect(option.remainingMass).toEqual({ wetKg: 3_100, dryKg: null });
+    expect(option.subtitle).toContain(
+      "Wet biochar: 3,100kg | Dry biochar: Not recorded available",
+    );
   });
 
   it("subtracts deliveries from product-bin wet and dry stock", () => {
@@ -195,5 +199,8 @@ describe("toStorageLocationEntityOption", () => {
     );
 
     expect(option.remainingMass).toEqual({ wetKg: 2_900, dryKg: null });
+    expect(option.subtitle).toContain(
+      "Wet biochar product: 2,900kg | Dry biochar: Not recorded stored",
+    );
   });
 });

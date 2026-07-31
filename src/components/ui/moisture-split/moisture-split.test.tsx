@@ -83,6 +83,20 @@ describe("MoistureSplit", () => {
     expect(html).toContain("Moisture: 15% → 22.8%");
   });
 
+  it("uses post-addition moisture in the compact caption", () => {
+    const html = renderToStaticMarkup(
+      <MoistureSplit
+        wetMassKg={495}
+        moisturePercent={15}
+        addedWaterKg={50}
+        variant="compact"
+      />,
+    );
+
+    expect(html).toContain("22.8% moisture");
+    expect(html).not.toContain("15% moisture");
+  });
+
   it("preserves the two-segment bar and default note when added water is zero", () => {
     const html = renderToStaticMarkup(
       <MoistureSplit

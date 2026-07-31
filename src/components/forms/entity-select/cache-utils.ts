@@ -5,6 +5,7 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import type { EntityOption, EntityType } from "./types";
+import { entityKeys } from "@/hooks/entity-query-keys";
 
 /**
  * Seed the single-entity cache entry and invalidate the entity list
@@ -15,6 +16,8 @@ export function seedEntityCache(
   entityType: EntityType,
   entity: EntityOption,
 ) {
-  queryClient.setQueryData(["entity", entityType, entity.id], entity);
-  void queryClient.invalidateQueries({ queryKey: ["entities", entityType] });
+  queryClient.setQueryData(entityKeys.detail(entityType, entity.id), entity);
+  void queryClient.invalidateQueries({
+    queryKey: entityKeys.listPrefix(entityType),
+  });
 }

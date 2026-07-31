@@ -377,7 +377,12 @@ export function MoistureSplit({
           addedWaterState={addedWaterState}
         />
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          {formatMoisturePercent(split.moisturePercent)} moisture
+          {formatMoisturePercent(
+            addedWaterState
+              ? addedWaterState.finalSplit.moisturePercent
+              : split.moisturePercent,
+          )}{" "}
+          moisture
         </p>
       </div>
     );
