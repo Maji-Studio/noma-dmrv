@@ -34,6 +34,8 @@ import { resolveLocationCountry } from "@/lib/location-defaults";
 interface SupplierLocationFormProps {
   /** Existing location data for editing (undefined for create mode) */
   location?: SupplierLocation;
+  /** Prefix field IDs when the form opens above another form with overlapping IDs. */
+  idPrefix?: string;
   /** Form submission handler */
   onSubmit: (data: SupplierLocationFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -46,8 +48,13 @@ interface SupplierLocationFormProps {
   submitLabel?: string;
 }
 
+function fieldId(idPrefix: string | undefined, fieldName: string): string {
+  return idPrefix ? `${idPrefix}-${fieldName}` : fieldName;
+}
+
 export function SupplierLocationForm({
   location,
+  idPrefix,
   onSubmit,
   onCancel,
   isSubmitting = false,
@@ -91,6 +98,18 @@ export function SupplierLocationForm({
   const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
   const distanceFromFacilityKm = watch("distanceFromFacilityKm") as number | null | undefined;
   const distanceSource = watch("distanceSource");
+  const nameId = fieldId(idPrefix, "name");
+  const countryId = fieldId(idPrefix, "country");
+  const stateRegionId = idPrefix
+    ? fieldId(idPrefix, "state-region")
+    : "stateRegion";
+  const cityId = fieldId(idPrefix, "city");
+  const addressId = fieldId(idPrefix, "address");
+  const positionIdPrefix = fieldId(idPrefix, "gps");
+  const distanceId = idPrefix
+    ? fieldId(idPrefix, "distance")
+    : "distanceFromFacilityKm";
+  const defaultId = idPrefix ? fieldId(idPrefix, "default") : "isDefault";
 
   // CALC endpoints: this source location → the globally selected facility.
   const { selectedFacility } = useFacilityContext();
@@ -118,13 +137,13 @@ export function SupplierLocationForm({
       {/* Location Details Section */}
       <FormSection title="Location details" divider={false}>
         <FormField
-          id="name"
+          id={nameId}
           label="Location name"
           error={errors.name?.message}
           helperText="e.g., Main Estate, Collection Point B"
         >
           <FormInput
-            id="name"
+            id={nameId}
             type="text"
             placeholder="e.g., Main Estate"
             disabled={isSubmitting}
@@ -135,13 +154,13 @@ export function SupplierLocationForm({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
           <FormField
-            id="country"
+            id={countryId}
             label="Country"
             error={errors.country?.message}
             required
           >
             <FormInput
-              id="country"
+              id={countryId}
               type="text"
               placeholder="e.g., Tanzania"
               disabled={isSubmitting}
@@ -151,12 +170,12 @@ export function SupplierLocationForm({
           </FormField>
 
           <FormField
-            id="stateRegion"
+            id={stateRegionId}
             label="State / region"
             error={errors.stateRegion?.message}
           >
             <FormInput
-              id="stateRegion"
+              id={stateRegionId}
               type="text"
               placeholder="e.g., Kilimanjaro"
               disabled={isSubmitting}
@@ -166,12 +185,12 @@ export function SupplierLocationForm({
           </FormField>
 
           <FormField
-            id="city"
+            id={cityId}
             label="City"
             error={errors.city?.message}
           >
             <FormInput
-              id="city"
+              id={cityId}
               type="text"
               placeholder="e.g., Moshi"
               disabled={isSubmitting}
@@ -182,12 +201,12 @@ export function SupplierLocationForm({
         </div>
 
         <FormField
-          id="address"
+          id={addressId}
           label="Address / description"
           error={errors.address?.message}
         >
           <FormTextarea
-            id="address"
+            id={addressId}
             placeholder="Additional address details or site description"
             disabled={isSubmitting}
             error={!!errors.address}
@@ -199,7 +218,7 @@ export function SupplierLocationForm({
       {/* GPS Coordinates Section */}
       <FormSection title="GPS coordinates">
         <PositionPicker
-          idPrefix="gps"
+          idPrefix={positionIdPrefix}
           label="Source location position"
           accent="orange"
           required
@@ -219,7 +238,7 @@ export function SupplierLocationForm({
       <FormSection title="Logistics">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <DistanceCalcField
-            id="distanceFromFacilityKm"
+            id={distanceId}
             label="One-way distance to facility (per leg, km)"
             error={errors.distanceFromFacilityKm?.message}
             certifyRequired={isCertifyFormField("supplierLocation", "distanceFromFacilityKm")}
@@ -243,12 +262,12 @@ export function SupplierLocationForm({
         </div>
 
         <label
-          htmlFor="isDefault"
+          htmlFor={defaultId}
           className="flex items-center gap-12 cursor-pointer"
         >
           <input
             type="checkbox"
-            id="isDefault"
+            id={defaultId}
             className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
             disabled={isSubmitting}
             {...register("isDefault")}

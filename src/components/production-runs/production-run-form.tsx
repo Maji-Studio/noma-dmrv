@@ -387,11 +387,7 @@ export function ProductionRunForm({
     feedstockAvailability &&
     feedstockAvailability.availableKg !== null &&
     isStockOverdraw(previewDryMass, feedstockAvailability.availableKg)
-      ? binStockOverdrawMessage(
-          "feedstock",
-          feedstockAvailability.availableKg,
-          previewDryMass,
-        )
+      ? binStockOverdrawMessage("feedstock")
       : undefined;
   const feedstockFieldFingerprint = [
     watchedSourceBinId,
@@ -401,7 +397,7 @@ export function ProductionRunForm({
   const routedServerError = useInlineStockServerError(
     errorMessage,
     feedstockFieldFingerprint,
-    (message) => /not enough feedstock in this bin/i.test(message),
+    (message) => message === binStockOverdrawMessage("feedstock"),
   );
   const feedstockWetMassError =
     errors.feedstockWetMassKg?.message ??

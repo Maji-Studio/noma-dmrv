@@ -65,7 +65,7 @@ export const STORAGE_LOCATION_TYPE_DESCRIPTIONS: Record<StorageLocationType, str
 };
 
 const FORMULATION_PRODUCT_BIN_MESSAGE =
-  "formulationId is only allowed for product_bin storageMethod";
+  "A formulation can only be assigned to a product bin";
 
 const FEEDSTOCK_TYPE_REQUIRED_MESSAGE =
   "Feedstock bins must be restricted to one feedstock type";

@@ -37,7 +37,10 @@ import {
   deliveryFilterSchema,
 } from "@/schemas/deliveries";
 import type { ActionResult } from "@/types/actions";
-import { toLoggedActionError } from "./action-errors";
+import {
+  formatZodActionError,
+  toLoggedActionError,
+} from "./action-errors";
 
 function deliveryActionError(
   error: unknown,
@@ -83,7 +86,7 @@ export async function getDeliveriesFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Invalid filter parameters: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error, "Invalid filter parameters"),
       };
     }
     return {
@@ -286,7 +289,7 @@ export async function createDeliveryFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -341,7 +344,7 @@ export async function updateDeliveryFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -376,7 +379,7 @@ export async function deleteDeliveryFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {

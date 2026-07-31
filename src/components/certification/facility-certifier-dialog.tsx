@@ -142,7 +142,7 @@ export function FacilityCertifierDialog({
       setError("root.serverError", {
         type: "server",
         message:
-          error instanceof Error ? error.message : "The mapping was not saved. Try again.",
+          error instanceof Error ? error.message : "Mapping was not saved. Try again.",
       });
     }
   };

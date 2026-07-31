@@ -35,7 +35,10 @@ import {
 import { requireOrgFacility } from "@/data-access/utils";
 import { biocharProducts } from "@/db/schema";
 import { toCompositionJsonb } from "@/lib/biochar-composition/composition";
-import { toLoggedActionError } from "./action-errors";
+import {
+  formatZodActionError,
+  toLoggedActionError,
+} from "./action-errors";
 
 function biocharProductActionError(
   error: unknown,
@@ -74,7 +77,7 @@ export async function getBiocharProductsFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Invalid filter parameters: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error, "Invalid filter parameters"),
       };
     }
     return {
@@ -208,7 +211,7 @@ export async function createBiocharProductFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -257,7 +260,7 @@ export async function updateBiocharProductFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -292,7 +295,7 @@ export async function deleteBiocharProductFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {

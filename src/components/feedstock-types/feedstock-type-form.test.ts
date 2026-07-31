@@ -6,6 +6,7 @@ import {
   shouldSetUsageToPyrolysisForIsometricSelection,
   shouldShowCertifiedFeedstockWarning,
   shouldShowIsometricFeedstockSection,
+  visibleFeedstockTypeSection,
 } from "./feedstock-type-form-logic";
 
 describe("initialFeedstockTypeUsage", () => {
@@ -23,17 +24,41 @@ describe("initialFeedstockTypeUsage", () => {
 });
 
 describe("shouldShowIsometricFeedstockSection", () => {
+  it("hides the Isometric section without an Isometric certifier", () => {
+    expect(
+      shouldShowIsometricFeedstockSection(false, false, undefined),
+    ).toBe(false);
+    expect(
+      shouldShowIsometricFeedstockSection(false, true, "pyrolysis"),
+    ).toBe(false);
+  });
+
   it("shows the Isometric section when usage is not locked", () => {
-    expect(shouldShowIsometricFeedstockSection(false, undefined)).toBe(true);
-    expect(shouldShowIsometricFeedstockSection(false, "blend")).toBe(true);
+    expect(shouldShowIsometricFeedstockSection(true, false, undefined)).toBe(
+      true,
+    );
+    expect(shouldShowIsometricFeedstockSection(true, false, "blend")).toBe(
+      true,
+    );
   });
 
   it("hides the Isometric section when locked to blend usage", () => {
-    expect(shouldShowIsometricFeedstockSection(true, "blend")).toBe(false);
+    expect(shouldShowIsometricFeedstockSection(true, true, "blend")).toBe(
+      false,
+    );
   });
 
   it("shows the Isometric section when locked to pyrolysis usage", () => {
-    expect(shouldShowIsometricFeedstockSection(true, "pyrolysis")).toBe(true);
+    expect(shouldShowIsometricFeedstockSection(true, true, "pyrolysis")).toBe(
+      true,
+    );
+  });
+});
+
+describe("visibleFeedstockTypeSection", () => {
+  it("falls back to General when the Isometric gate closes", () => {
+    expect(visibleFeedstockTypeSection("isometric", true)).toBe("isometric");
+    expect(visibleFeedstockTypeSection("isometric", false)).toBe("general");
   });
 });
 
@@ -97,27 +122,33 @@ describe("handleSelectIsometricFeedstock — usage/category mutation conditions"
 });
 
 describe("shouldShowCertifiedFeedstockWarning", () => {
+  it("hides the warning without an Isometric certifier", () => {
+    expect(
+      shouldShowCertifiedFeedstockWarning(false, false, "pyrolysis", false),
+    ).toBe(false);
+  });
+
   it("hides the warning for Blend in create mode", () => {
     expect(
-      shouldShowCertifiedFeedstockWarning(false, "blend", false),
+      shouldShowCertifiedFeedstockWarning(true, false, "blend", false),
     ).toBe(false);
   });
 
   it("shows the warning for Pyrolysis in create mode without an Isometric selection", () => {
     expect(
-      shouldShowCertifiedFeedstockWarning(false, "pyrolysis", false),
+      shouldShowCertifiedFeedstockWarning(true, false, "pyrolysis", false),
     ).toBe(true);
   });
 
   it("hides the warning after selecting an Isometric feedstock", () => {
     expect(
-      shouldShowCertifiedFeedstockWarning(false, "pyrolysis", true),
+      shouldShowCertifiedFeedstockWarning(true, false, "pyrolysis", true),
     ).toBe(false);
   });
 
   it("hides the warning in edit mode", () => {
     expect(
-      shouldShowCertifiedFeedstockWarning(true, "pyrolysis", false),
+      shouldShowCertifiedFeedstockWarning(true, true, "pyrolysis", false),
     ).toBe(false);
   });
 });

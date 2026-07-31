@@ -40,7 +40,10 @@ import {
 } from "@/schemas/suppliers";
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
-import { toLoggedActionError } from "./action-errors";
+import {
+  formatZodActionError,
+  toLoggedActionError,
+} from "./action-errors";
 
 function supplierActionError(
   error: unknown,
@@ -76,7 +79,7 @@ export async function getSuppliersFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Invalid filter parameters: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error, "Invalid filter parameters"),
       };
     }
     return {
@@ -234,7 +237,7 @@ export async function createSupplierFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -302,7 +305,7 @@ export async function createSupplierWithLocationsFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -354,7 +357,7 @@ export async function updateSupplierFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -389,7 +392,7 @@ export async function deleteSupplierFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -462,7 +465,7 @@ export async function createSupplierLocationFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -505,7 +508,7 @@ export async function updateSupplierLocationFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -533,7 +536,7 @@ export async function deleteSupplierLocationFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {

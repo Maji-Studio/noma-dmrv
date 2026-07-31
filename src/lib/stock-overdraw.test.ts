@@ -3,6 +3,7 @@ import {
   binStockOverdrawMessage,
   deliveryStockOverdrawMessage,
   isStockOverdraw,
+  productStockOverdrawMessage,
 } from "./stock-overdraw";
 
 describe("stock overdraw", () => {
@@ -12,15 +13,30 @@ describe("stock overdraw", () => {
     expect(isStockOverdraw(100.001, 100)).toBe(true);
   });
 
-  it("builds the shared inline bin message", () => {
-    expect(binStockOverdrawMessage("feedstock", 100, 180)).toBe(
-      "Not enough feedstock in this bin. 100 kg available but this draw needs 180 kg. Reconcile the bin's stock (Storage Bins → the bin → Reconcile stock), then try again.",
+  it("builds the shared feedstock-bin message", () => {
+    expect(binStockOverdrawMessage("feedstock")).toBe(
+      "Not enough feedstock in this bin",
     );
   });
 
-  it("builds the inline delivery message", () => {
-    expect(deliveryStockOverdrawMessage("BP-001", 100, 120)).toBe(
-      "Cannot deliver 120 kg from product bin BP-001: only 100 kg remain undelivered. Reconcile the source bin or adjust the product before delivering.",
+  it.each(["biochar", "product"] as const)(
+    "uses biochar wording for the %s bin lane",
+    (material) => {
+      expect(binStockOverdrawMessage(material)).toBe(
+        "Not enough biochar in this bin",
+      );
+    },
+  );
+
+  it("builds the product-batch delivery message", () => {
+    expect(productStockOverdrawMessage()).toBe(
+      "Not enough biochar in this product",
+    );
+  });
+
+  it("builds the delivery-to-application message", () => {
+    expect(deliveryStockOverdrawMessage()).toBe(
+      "Not enough biochar in this delivery",
     );
   });
 });

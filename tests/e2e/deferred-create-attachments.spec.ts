@@ -112,38 +112,47 @@ test.describe("Deferred create attachments", () => {
 
     await page.click('button:has-text("New Sample")');
     await waitForSideSheet(page);
-    const dialog = page.locator('[role="dialog"]');
+    const parentDialog = page.getByRole("dialog", { name: "Create Sample" });
 
     await selectFirstEntity(page, "Credit Batch");
     await page.fill('input[name="totalCarbonPercent"]', "75");
     await page.fill('input[name="organicCarbonPercent"]', "70");
 
     // Deferred lab report.
-    await dialog
+    await parentDialog
       .locator("#sample-deferred-documents-upload")
       .setInputFiles(pdf("lab-report-deferred.pdf"));
-    await expect(dialog.getByText("lab-report-deferred.pdf")).toBeVisible();
+    await expect(parentDialog.getByText("lab-report-deferred.pdf")).toBeVisible();
 
-    // Deferred transport leg via the inline editor (no sample exists yet).
-    await dialog.locator('button:has-text("Add leg")').click();
-    await dialog.locator("#distanceKm").fill("12");
-    await dialog.locator('input[name="loadMassKg"]').fill("5");
-    await dialog.locator('button:has-text("Add transport leg")').click();
-    await expect(dialog.getByText("12 km")).toBeVisible();
+    // Deferred transport leg via the nested dialog (no sample exists yet).
+    await parentDialog.getByRole("button", { name: "Add leg" }).click();
+    const transportDialog = page.getByRole("dialog", {
+      name: "Add transport leg",
+    });
+    await expect(transportDialog).toBeVisible();
+    await transportDialog.locator("#distanceKm").fill("12");
+    await transportDialog.locator('input[name="loadMassKg"]').fill("5");
+    await transportDialog
+      .getByRole("button", { name: "Add transport leg" })
+      .click();
+    await expect(transportDialog).toBeHidden();
+    await expect(parentDialog).toBeVisible();
+    await expect(parentDialog.getByText("12 km")).toBeVisible();
 
-    await dialog.locator('button:has-text("Create Sample")').click();
+    await parentDialog.getByRole("button", { name: "Create Sample" }).click();
     await waitForSideSheetClose(page);
 
     // Reopen: view mode shows both the document and the leg, read-only.
     await page.waitForLoadState("networkidle");
     await page.locator("table tbody tr").first().click();
     await waitForSideSheet(page);
-    await expect(dialog.getByText("lab-report-deferred.pdf")).toBeVisible({
+    const sampleDialog = page.getByRole("dialog");
+    await expect(sampleDialog.getByText("lab-report-deferred.pdf")).toBeVisible({
       timeout: 15000,
     });
-    await expect(dialog.getByText("12 km")).toBeVisible();
+    await expect(sampleDialog.getByText("12 km")).toBeVisible();
     await expect(
-      dialog.getByLabel("Delete lab-report-deferred.pdf"),
+      sampleDialog.getByLabel("Delete lab-report-deferred.pdf"),
     ).toHaveCount(0);
   });
 

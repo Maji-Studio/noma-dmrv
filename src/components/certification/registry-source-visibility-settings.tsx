@@ -87,7 +87,7 @@ function RegistrySourceVisibilityForm({
         message:
           error instanceof Error
             ? error.message
-            : "The registry Source visibility was not saved. Try again.",
+            : "Registry Source visibility was not saved. Try again.",
       });
     }
   };

@@ -1,6 +1,5 @@
 "use client";
 
-import type { FormEventHandler, ReactNode } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -36,29 +35,6 @@ interface TransportLegFormProps {
   onCancel: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
-  /** Render without a nested form when an owning parent form surrounds this UI. */
-  embedded?: boolean;
-}
-
-interface TransportLegFormContainerProps {
-  embedded: boolean;
-  onSubmit: FormEventHandler<HTMLFormElement>;
-  children: ReactNode;
-}
-
-function TransportLegFormContainer({
-  embedded,
-  onSubmit,
-  children,
-}: TransportLegFormContainerProps) {
-  const className = "flex flex-col gap-20";
-  return embedded ? (
-    <div className={className}>{children}</div>
-  ) : (
-    <form onSubmit={onSubmit} className={className}>
-      {children}
-    </form>
-  );
 }
 
 const transportMethodOptions = selectableTransportMethods.map((m) => ({
@@ -103,9 +79,8 @@ function legToFormDefaults(
 }
 
 /**
- * Inline transport-leg form (matches the production-run child-entity pattern).
- * The parent editor owns the create/update mutations and renders this in a box;
- * the form just validates and calls `onSubmit`.
+ * Transport-leg form rendered inside the editor's centered dialog. The editor
+ * owns create/update behavior; this form validates and calls `onSubmit`.
  */
 export function TransportLegForm({
   leg,
@@ -113,7 +88,6 @@ export function TransportLegForm({
   onCancel,
   isSubmitting = false,
   errorMessage,
-  embedded = false,
 }: TransportLegFormProps) {
   const isEditMode = !!leg;
   const isPersisted = !!leg && isSavedTransportLeg(leg);
@@ -167,7 +141,15 @@ export function TransportLegForm({
   });
 
   return (
-    <TransportLegFormContainer embedded={embedded} onSubmit={submit}>
+    <form
+      onSubmit={(event) => {
+        // The dialog portal avoids invalid nested form markup, but React portal
+        // events still bubble through the component tree to an owning form.
+        event.stopPropagation();
+        return submit(event);
+      }}
+      className="flex flex-col gap-20"
+    >
       <FormSection
         title="Route"
         divider={false}
@@ -360,9 +342,7 @@ export function TransportLegForm({
         isSubmitting={isSubmitting}
         errorMessage={errors.root?.serverError?.message ?? errorMessage}
         submitLabel={isEditMode ? "Save changes" : "Add transport leg"}
-        submitType={embedded ? "button" : "submit"}
-        onSubmitClick={embedded ? () => void submit() : undefined}
       />
-    </TransportLegFormContainer>
+    </form>
   );
 }

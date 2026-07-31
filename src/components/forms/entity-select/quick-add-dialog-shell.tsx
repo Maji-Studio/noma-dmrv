@@ -1,6 +1,6 @@
 /**
  * Quick Add Dialog Shell
- * Generic dialog wrapper for inline entity creation. Composes the shared
+ * Generic dialog wrapper for nested entity creation and editing. Composes the shared
  * `Modal` primitive (chrome, centering, focus, backdrop, ESC) and adds an
  * inset header around the embedded form.
  */

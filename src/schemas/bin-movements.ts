@@ -160,7 +160,7 @@ export const recordStockTakeSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["countedWetMassKg"],
-        message: "Wet-mass moisture snapshots are only valid for feedstock bins",
+        message: "Wet stock and moisture are only valid for feedstock bins",
       });
     }
   });

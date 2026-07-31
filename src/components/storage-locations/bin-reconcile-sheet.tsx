@@ -370,7 +370,7 @@ function LossForm({
   const liveStockError =
     lossMassKg !== null &&
     isStockOverdraw(lossMassKg, availableKg)
-      ? binStockOverdrawMessage(lane, availableKg, lossMassKg)
+      ? binStockOverdrawMessage(lane)
       : undefined;
   const currentFieldServerError =
     fieldServerError?.lossMassKg === lossMassKg

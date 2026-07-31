@@ -314,7 +314,7 @@ describe("stock-reducing update guards", () => {
       updateOrder(makeTestOrgContext(), order.id, {
         biocharProductId: targetProduct.id,
       }),
-    ).rejects.toThrow("Not enough product in this bin");
+    ).rejects.toThrow(/^Not enough biochar in this bin$/);
 
     const [persisted] = await db
       .select({ biocharProductId: orders.biocharProductId })
@@ -405,9 +405,7 @@ describe("stock-reducing update guards", () => {
       updateBiocharProduct(makeTestOrgContext(), product.id, {
         massKg: SHRINK_PRODUCT_TARGET_MASS_KG,
       }),
-    ).rejects.toThrow(
-      new RegExp(`${productCode}.*800 kg has already been delivered`),
-    );
+    ).rejects.toThrow(/^Not enough biochar in this product$/);
 
     const [persisted] = await db
       .select({ massKg: biocharProducts.massKg })

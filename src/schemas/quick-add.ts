@@ -90,13 +90,13 @@ export {
 // ============================================
 
 const FORMULATION_PRODUCT_BIN_MESSAGE =
-  "formulationId is only allowed for type 'product_bin'";
+  "A formulation can only be assigned to a product bin";
 
 const FEEDSTOCK_TYPE_REQUIRED_MESSAGE =
   "Feedstock bins must be restricted to one feedstock type";
 
 const FEEDSTOCK_TYPE_FEEDSTOCK_BIN_MESSAGE =
-  "feedstockTypeId is only allowed for feedstock bins";
+  "A feedstock type can only be assigned to a feedstock bin";
 
 export const storageLocationQuickAddSchema = z.object({
   name: z
