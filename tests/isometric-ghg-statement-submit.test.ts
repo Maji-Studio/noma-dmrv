@@ -86,9 +86,13 @@ vi.mock("@/lib/auth/server", () => ({
 vi.mock("@/db", () => ({
   db: {
     transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>
-      cb({ __fakeTx: true }),
+      cb({ __fakeTx: true, execute: vi.fn() }),
     ),
   },
+  withDedicatedLockConnection: vi.fn(
+    async (cb: (tx: unknown) => unknown) =>
+      cb({ __fakeTx: true, execute: vi.fn() }),
+  ),
 }));
 vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
@@ -312,6 +316,9 @@ beforeEach(() => {
   // module's own concern (DB-backed tests).
   vi.mocked(ledgerClaim.getLatestSubmission).mockImplementation(async () =>
     storedLatestForStatement(),
+  );
+  vi.mocked(ledgerClaim.getLatestSubmissionWithExecutor).mockImplementation(
+    async () => storedLatestForStatement(),
   );
   vi.mocked(ledgerClaim.claimSubmissionDraft).mockImplementation(
     makeClaimSubmissionDraftFake({

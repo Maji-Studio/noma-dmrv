@@ -19,9 +19,9 @@ import {
   reconcileRemovalMembership,
 } from "@/data-access/certifier-ghg-statements";
 import { reconcileGhgStatementRemoteState } from "@/data-access/certifier-ghg-remote-state";
-import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
+import { withFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { requireOrgFacility } from "@/data-access/utils";
-import { db, type DbTransaction } from "@/db";
+import type { DbTransaction } from "@/db";
 import { SafeError } from "@/lib/errors";
 import {
   getGhgStatement,
@@ -31,6 +31,7 @@ import {
   payloadHash,
   type GhgStatement,
   type GhgStatementStatus,
+  type IsometricClient,
 } from "@/lib/isometric";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
@@ -116,28 +117,27 @@ export async function reconcileGhgStatementsForFacility(
       skippedCount: listedRemotes.length,
     };
   }
-  // The project list can lag statement membership while the detail endpoint
-  // already exposes newly attached GHG Entries. Reconciliation changes local
-  // ownership, counts, and submission state, so it must use the authoritative
-  // detail representation rather than a potentially stale list summary.
-  const remotes = await Promise.all(
-    listedRemotes.map((statement) =>
-      getGhgStatement(client, statement.id),
-    ),
-  );
-  return db.transaction(async (tx) => {
-    await acquireFacilityDurabilityLock(orgCtx, tx, facilityId);
+  return withFacilityDurabilityLock(orgCtx, facilityId, async (tx) => {
     const lockedOperatorCreateInFlight =
       await hasInFlightGhgStatementForFacility(orgCtx, facilityId, tx);
     if (lockedOperatorCreateInFlight) {
       return {
-        statements: remotes.map(toRegistryGhgStatementView),
+        statements: listedRemotes.map(toRegistryGhgStatementView),
         reconciledCount: 0,
         warningCount: 1,
-        skippedCount: remotes.length,
+        skippedCount: listedRemotes.length,
       };
     }
 
+    // The project list can lag statement membership while the detail endpoint
+    // already exposes newly attached GHG Entries. Fetch each authoritative
+    // detail only after facility serialization so no pre-lock snapshot can
+    // queue behind fresher state and commit last.
+    const remotes = await Promise.all(
+      listedRemotes.map((statement) =>
+        getGhgStatement(client, statement.id),
+      ),
+    );
     const projectFacilityIds = await listFacilityIdsForExternalProject(
       orgCtx,
       project.externalProjectId,
@@ -264,9 +264,8 @@ export async function reconcileRegistryGhgStatement(
     externalProjectId: string;
     remote: GhgStatement;
   },
-  tx?: DbTransaction,
+  tx: DbTransaction,
 ): Promise<ReconciledRegistryGhgStatement> {
-  const executor = tx ?? db;
   const period = getGhgStatementPeriod(args.remote);
   // Facility-scoped by construction (ADR 0023): another facility's mirror of
   // the same registry statement is not this facility's business and must not
@@ -274,13 +273,13 @@ export async function reconcileRegistryGhgStatement(
   const existingSubmission = await getGhgStatementSubmissionForFacility(
     orgCtx,
     { facilityId: args.facilityId, externalId: args.remote.id },
-    executor,
+    tx,
   );
   const existingStatement = existingSubmission
     ? await getCertifierGhgStatementById(
         orgCtx,
         existingSubmission.localEntityId,
-        executor,
+        tx,
       )
     : null;
   if (existingSubmission && !existingStatement) {
@@ -297,7 +296,7 @@ export async function reconcileRegistryGhgStatement(
         externalId: args.remote.id,
         reportingPeriodEndOn: period.endOn,
       },
-      executor,
+      tx,
     ));
   const key = {
     provider: ISOMETRIC_PROVIDER,
@@ -343,14 +342,14 @@ export async function reconcileRegistryGhgStatement(
       );
       submission = await getLatestSubmissionWithExecutor(
         orgCtx,
-        executor,
+        tx,
         key,
         args.facilityId,
       );
     } else {
       submission = await getLatestSubmissionWithExecutor(
         orgCtx,
-        executor,
+        tx,
         key,
         args.facilityId,
       );
@@ -394,6 +393,33 @@ export async function reconcileRegistryGhgStatement(
     linkedRemovalIds: membership.linkedRemovalIds,
     warnings: membership.warnings,
   };
+}
+
+export async function reconcileRegistryGhgStatementById(
+  orgCtx: OrgContext,
+  args: {
+    client: IsometricClient;
+    facilityId: string;
+    externalProjectId: string;
+    externalId: string;
+  },
+): Promise<ReconciledRegistryGhgStatement> {
+  return withFacilityDurabilityLock(
+    orgCtx,
+    args.facilityId,
+    async (tx) => {
+      const remote = await getGhgStatement(args.client, args.externalId);
+      return reconcileRegistryGhgStatement(
+        orgCtx,
+        {
+          facilityId: args.facilityId,
+          externalProjectId: args.externalProjectId,
+          remote,
+        },
+        tx,
+      );
+    },
+  );
 }
 
 function toRegistryGhgStatementView(

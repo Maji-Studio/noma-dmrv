@@ -8,14 +8,13 @@ import {
   getLatestSubmissionsForEntities,
   getSubmissionById,
   listRecentSyncEvents,
-  markSubmissionSubmitted,
-  updateSubmissionMetadata,
   type CertificationSubmissionRow,
   type CertifierSyncEventRow,
 } from "@/data-access/certification";
 import {
   claimSubmissionDraft,
   getLatestSubmission,
+  getLatestSubmissionWithExecutor,
   type ClaimBlockedReason,
 } from "@/data-access/certification-submissions";
 import {
@@ -41,6 +40,7 @@ import {
   type RemovalCreditBatchSummary,
 } from "@/data-access/certifier-removals";
 import { getFacilityById } from "@/data-access/facilities";
+import { withFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { requireOrgFacility } from "@/data-access/utils";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
@@ -63,10 +63,7 @@ import {
   type GhgStatementStatus,
   type IsometricClient,
 } from "@/lib/isometric";
-import {
-  expectedButExcludedWarnings,
-  type ExpectedRemoval,
-} from "@/lib/isometric/utils/ghg-entry-membership";
+import type { ExpectedRemoval } from "@/lib/isometric/utils/ghg-entry-membership";
 import {
   derivePeriodStart,
   isRemovalInWindow,
@@ -79,7 +76,6 @@ import {
   ghgSubmitFingerprintChanged,
 } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight as computeIsLockedInFlight } from "@/lib/isometric/utils/lock";
-import { SUBMISSION_METADATA_KEYS } from "@/lib/isometric/utils/submission-metadata";
 import {
   createGhgStatementSchema,
   submitGhgStatementDialogSchema,
@@ -95,8 +91,9 @@ import {
 } from "@/data-access/certifier-ghg-remote-state";
 import {
   assertDedicatedGhgStatementProject,
-  reconcileRegistryGhgStatement,
+  reconcileRegistryGhgStatementById,
 } from "./ghg-statement-reconciliation";
+import { finalizeGhgStatement } from "./ghg-statement-finalization";
 import {
   assertGhgStatementReportFresh,
   issueVerifierReportUrl,
@@ -281,10 +278,11 @@ export async function createGhgStatementDraft(
         }
         // List membership can lag detail, so reconcile the existing statement
         // from its authoritative representation without minting anything.
-        const reconciled = await reconcileRegistryGhgStatement(orgCtx, {
+        const reconciled = await reconcileRegistryGhgStatementById(orgCtx, {
+          client,
           facilityId: parsed.facilityId,
           externalProjectId: project.externalProjectId,
-          remote: await getGhgStatement(client, singleMatch.id),
+          externalId: singleMatch.id,
         });
         return { outcome: "existing" as const, ...reconciled };
       }
@@ -516,65 +514,6 @@ async function createGhgStatementRemote(args: {
   });
 }
 
-// Shared tail for fresh and reconciled creates. Persist the external id before
-// reconciling membership, reporting window, and ledger state transactionally;
-// losing it would let a retry POST a duplicate statement.
-async function finalizeGhgStatement(args: {
-  client: IsometricClient;
-  orgCtx: OrgContext;
-  statement: CertifierGhgStatementRow;
-  row: CertificationSubmissionRow;
-  externalId: string;
-  expected: ExpectedRemoval[];
-  outcome: GhgStatementCreateOutcome;
-}): Promise<CreateGhgStatementResult> {
-  const { client, orgCtx, statement, row, externalId, expected, outcome } =
-    args;
-
-  await markSubmissionSubmitted(orgCtx, row.id, {
-    externalId,
-    supersedePreviousId: null,
-  });
-
-  // Re-fetch outside any transaction — the create response carries neither
-  // the linked removal set nor the server-derived reporting-period start,
-  // and a DB transaction must never be held open across network I/O.
-  const remote = await getGhgStatement(client, externalId).catch(() => null);
-  if (!remote) {
-    await updateSubmissionMetadata(orgCtx, row.id, {
-      [SUBMISSION_METADATA_KEYS.remoteStatus]: "DRAFT",
-    });
-    return {
-      outcome,
-      ghgStatementId: statement.id,
-      externalId,
-      linkedRemovalIds: [],
-      warnings: [],
-    };
-  }
-
-  // Membership, reporting window and ledger state move together behind the
-  // organization-scoped data-access boundary.
-  const reconciled = await reconcileGhgStatementRemoteState(orgCtx, {
-    statementId: statement.id,
-    submission: row,
-    remote,
-  });
-  return {
-    outcome,
-    ghgStatementId: statement.id,
-    externalId,
-    linkedRemovalIds: reconciled.linkedRemovalIds,
-    // Reconcile warns about ids the registry *returned* but we couldn't
-    // match; the honesty delta is the inverse — removals we predicted
-    // in-window that the registry silently placed in a different period.
-    warnings: [
-      ...reconciled.warnings,
-      ...expectedButExcludedWarnings(expected, reconciled.linkedRemovalIds),
-    ],
-  };
-}
-
 // =====================================================================
 // Submit to verifier
 // =====================================================================
@@ -700,12 +639,23 @@ export async function submitGhgStatementToVerifier(
     // Both success paths (reconciled-after-failure, and the direct one) have
     // to finalize identically, so they share one closure.
     const finalizeSubmitSuccess = async (remote: GhgStatement) => {
-      await applyGhgRemoteState(orgCtx, submission, remote, {
-        reportUrl: redactReportUrlSecrets(reportUrl),
-        summaryOfChanges: parsed.summaryOfChanges?.trim() || null,
-        lastReportDocumentId: document.id,
-        submittedToVerifierAt: new Date().toISOString(),
-      });
+      await withFacilityDurabilityLock(
+        orgCtx,
+        statement.facilityId,
+        async (tx) =>
+          applyGhgRemoteState(
+            orgCtx,
+            submission,
+            remote,
+            {
+              reportUrl: redactReportUrlSecrets(reportUrl),
+              summaryOfChanges: parsed.summaryOfChanges?.trim() || null,
+              lastReportDocumentId: document.id,
+              submittedToVerifierAt: new Date().toISOString(),
+            },
+            tx,
+          ),
+      );
       if (generatedReport) {
         await markGhgStatementReportSubmitted(orgCtx, generatedReport.id);
       }
@@ -832,6 +782,7 @@ export async function refreshGhgStatementStatus(
         "The GHG Statement has no registry reference. Sync it from the registry and try again.",
       );
     }
+    const externalId = submission.externalId;
     // Resolve the statement this submission anchors to, so the follow-up ledger
     // read is scoped to its facility (issue #277). The higher-consequence read
     // above (getSubmissionById by raw submissionId) is necessarily unscoped —
@@ -850,28 +801,39 @@ export async function refreshGhgStatementStatus(
     // stay frozen so the audit trail keeps showing the snapshot from when
     // they were submitted; refreshing a stale row would silently rewrite
     // history with whatever the new version's remote state happens to be.
-    const latest = await getLatestSubmission(
+    return withFacilityDurabilityLock(
       orgCtx,
-      {
-        provider: submission.provider,
-        submissionType: submission.submissionType,
-        localEntityType: submission.localEntityType,
-        localEntityId: submission.localEntityId,
-      },
       statement.facilityId,
+      async (tx) => {
+        const latest = await getLatestSubmissionWithExecutor(
+          orgCtx,
+          tx,
+          {
+            provider: submission.provider,
+            submissionType: submission.submissionType,
+            localEntityType: submission.localEntityType,
+            localEntityId: submission.localEntityId,
+          },
+          statement.facilityId,
+        );
+        if (!latest || latest.id !== submission.id) {
+          throw new SafeError(
+            "This GHG Statement version has been superseded. Refresh the page to see the latest version.",
+          );
+        }
+        const remote = await getGhgStatement(client, externalId);
+        await reconcileGhgStatementRemoteState(
+          orgCtx,
+          {
+            statementId: submission.localEntityId,
+            submission: latest,
+            remote,
+          },
+          tx,
+        );
+        return remote;
+      },
     );
-    if (!latest || latest.id !== submission.id) {
-      throw new SafeError(
-        "This GHG Statement version has been superseded. Refresh the page to see the latest version.",
-      );
-    }
-    const remote = await getGhgStatement(client, submission.externalId);
-    await reconcileGhgStatementRemoteState(orgCtx, {
-      statementId: submission.localEntityId,
-      submission,
-      remote,
-    });
-    return remote;
   });
 }
 

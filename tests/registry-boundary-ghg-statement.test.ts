@@ -810,13 +810,13 @@ describe("registry-list GHG statement reconciliation", () => {
       () => { syncSettled = true; },
       () => { syncSettled = true; },
     );
-    await vi.waitFor(() => {
-      expect(
-        registry.requestCount("GET", `/ghg_statements/${remote.id}`),
-      ).toBe(1);
-    });
+    // Authoritative detail now stays behind the shared facility lock. Sync
+    // must wait without taking a snapshot that could become stale.
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(syncSettled).toBe(false);
+    expect(
+      registry.requestCount("GET", `/ghg_statements/${remote.id}`),
+    ).toBe(0);
     releaseOperator();
 
     const [operatorStatementId, syncResult] = await Promise.all([
@@ -831,6 +831,9 @@ describe("registry-list GHG statement reconciliation", () => {
         skippedCount: 1,
       },
     });
+    expect(
+      registry.requestCount("GET", `/ghg_statements/${remote.id}`),
+    ).toBe(0);
 
     const statements = await db
       .select()
