@@ -124,14 +124,19 @@ export function FacilityCertifierForm({
   // wrong facility, and the ack must be re-confirmed for the new project.
   const handleProjectChange = (event: ChangeEvent<HTMLSelectElement>) => {
     projectRegistration.onChange(event);
-    if (
-      !event.target.value ||
-      mapping?.externalProjectId !== event.target.value
-    ) {
-      setValue("defaultRemovalTemplateId", "");
-      setValue("externalFacilityId", "");
-      setAcknowledgeSharedProject(false);
-    }
+    const returnsToPersistedProject =
+      mapping?.externalProjectId === event.target.value;
+    setValue(
+      "defaultRemovalTemplateId",
+      returnsToPersistedProject
+        ? mapping.defaultRemovalTemplateId ?? ""
+        : "",
+    );
+    setValue(
+      "externalFacilityId",
+      returnsToPersistedProject ? mapping.externalFacilityId ?? "" : "",
+    );
+    setAcknowledgeSharedProject(false);
   };
 
   const linkedFacilitiesByProject = (() => {
