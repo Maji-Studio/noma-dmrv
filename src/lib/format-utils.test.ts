@@ -14,6 +14,13 @@ describe("formatFacilityDateTimeWithOffset", () => {
         "Europe/Zurich",
       ),
     ).toBe("2026-07-31 14:34 +02:00");
+
+    expect(
+      formatFacilityDateTimeWithOffset(
+        new Date("2026-07-31T12:34:00.000Z"),
+        "UTC",
+      ),
+    ).toBe("2026-07-31 12:34 +00:00");
   });
 });
 

@@ -9,7 +9,7 @@ import { formatFacilityTime, parseLocalDateString } from "@/lib/date-utils";
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_FORMAT = "MMM d, yyyy";
 const DATE_TIME_FORMAT = "MMM d, yyyy, HH:mm";
-const FACILITY_DATE_TIME_WITH_OFFSET_FORMAT = "yyyy-MM-dd HH:mm XXX";
+const FACILITY_DATE_TIME_WITH_OFFSET_FORMAT = "yyyy-MM-dd HH:mm xxx";
 const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
 const KG_PER_TONNE = 1000;
 const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
