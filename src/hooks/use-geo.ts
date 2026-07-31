@@ -105,12 +105,13 @@ export function useRouteDistance() {
   });
 }
 
-/** Roads don't move — geometry for a leg set is stable for the session. */
+/** Roads don't move — geometry for a route set is stable for the session. */
 const ROUTE_GEOMETRY_STALE_TIME_MS = 30 * 60 * 1000;
 
 /**
- * Carbon Viewer: road polylines per transport leg (null = straight dashed
- * fallback). Pass null while legs are still loading.
+ * Cached road polylines per caller-defined route id. Null geometry means the
+ * caller should draw its straight dashed fallback. Pass null while endpoints
+ * are unavailable or the map cannot render.
  */
 export function useRouteGeometries(request: RouteGeometriesRequest | null) {
   return useQuery({

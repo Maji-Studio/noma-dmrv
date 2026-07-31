@@ -152,10 +152,11 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
             </p>
             <FacilityForm
               onSubmit={handleFacilitySubmit}
-              onCancel={() => setCurrent(STEP.welcome)}
+              onCancel={wizard.dismiss}
               isSubmitting={createFacility.isPending}
               errorMessage={facilityError ?? undefined}
               submitLabel="Add facility"
+              cancelLabel="Skip setup"
             />
           </div>
         );
@@ -177,10 +178,11 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
             </p>
             <ReactorForm
               onSubmit={handleReactorSubmit}
-              onCancel={() => setCurrent(STEP.facility)}
+              onCancel={wizard.dismiss}
               isSubmitting={createReactor.isPending}
               errorMessage={reactorError ?? undefined}
               submitLabel="Register reactor"
+              cancelLabel="Skip setup"
             />
           </div>
         );
@@ -204,17 +206,16 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
   }
 
   function renderFooter() {
-    // Form steps own their action row (the form's submit + Cancel-as-Back), so
-    // the wizard footer there is just the always-available skip. Non-form steps
-    // get the full Back / Skip / advance row.
+    // Form steps own the only action row, including their context-specific
+    // "Skip setup" secondary action. Non-form steps use the wizard footer.
+    if (current === STEP.facility && !facilityDone) return null;
+    if (current === STEP.reactor && !reactorDone) return null;
+
     const skip = (
       <Button variant="weak" size="small" onClick={wizard.dismiss}>
         Skip setup
       </Button>
     );
-
-    if (current === STEP.facility && !facilityDone) return skip;
-    if (current === STEP.reactor && !reactorDone) return skip;
 
     return (
       <div className="flex flex-wrap items-center justify-between gap-12">

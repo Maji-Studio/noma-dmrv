@@ -29,12 +29,15 @@ interface CertifierSettingsPanelProps {
   facilityLabel?: string;
   /** Server-computed. Gates the keys form and the link controls together. */
   canManage: boolean;
+  /** Inline avoids opening a project-link dialog inside an existing modal. */
+  projectLinkPresentation?: "dialog" | "inline";
 }
 
 export function CertifierSettingsPanel({
   facilityId,
   facilityLabel,
   canManage,
+  projectLinkPresentation = "dialog",
 }: CertifierSettingsPanelProps) {
   const { data: organization, isLoading } = useActiveOrganizationProfile();
 
@@ -68,6 +71,7 @@ export function CertifierSettingsPanel({
           facilityId={facilityId}
           canManage={canManage}
           embedded
+          linkPresentation={projectLinkPresentation}
         />
       </div>
     </div>

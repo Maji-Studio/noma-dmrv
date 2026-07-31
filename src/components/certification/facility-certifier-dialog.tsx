@@ -4,8 +4,8 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useState, type ChangeEvent } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/ui";
 import {
@@ -41,6 +41,45 @@ export function FacilityCertifierDialog({
   facilityId,
   loaderData,
 }: FacilityCertifierDialogProps) {
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="facility-certifier-dialog-title"
+      width="md"
+    >
+      <FacilityCertifierForm
+        key={isOpen ? "open" : "closed"}
+        facilityId={facilityId}
+        loaderData={loaderData}
+        onSaved={onClose}
+        onCancel={onClose}
+        presentation="dialog"
+      />
+    </Modal>
+  );
+}
+
+interface FacilityCertifierFormProps {
+  facilityId: string;
+  loaderData: FacilityCertifierMapping;
+  onSaved?: () => void;
+  onCancel?: () => void;
+  presentation: "dialog" | "inline";
+}
+
+/**
+ * Shared project-link form. Dialog presentation remains available on routed
+ * Settings surfaces; onboarding uses the inline presentation so a modal never
+ * opens inside its wizard.
+ */
+export function FacilityCertifierForm({
+  facilityId,
+  loaderData,
+  onSaved,
+  onCancel,
+  presentation,
+}: FacilityCertifierFormProps) {
   const { mapping, availableProjects, linkHints, isProduction } = loaderData;
 
   const defaultValues: SaveMappingInput = {
@@ -55,8 +94,7 @@ export function FacilityCertifierDialog({
   const {
     register,
     handleSubmit,
-    reset,
-    watch,
+    control,
     setValue,
     setError,
     formState: { errors, isSubmitting },
@@ -75,7 +113,8 @@ export function FacilityCertifierDialog({
   const [acknowledgeSharedProject, setAcknowledgeSharedProject] =
     useState(false);
 
-  const watchedProjectId = watch("externalProjectId");
+  const watchedProjectId = useWatch({ control, name: "externalProjectId" });
+  const projectRegistration = register("externalProjectId");
   const { data: liveTemplates, isLoading: templatesLoading } =
     useIsometricProjectTemplates(watchedProjectId || null);
 
@@ -83,13 +122,22 @@ export function FacilityCertifierDialog({
   // reset the share acknowledgment. A stale template or facility id from the
   // previous Isometric project would fail validation or send telemetry to the
   // wrong facility, and the ack must be re-confirmed for the new project.
-  useEffect(() => {
-    if (!watchedProjectId || mapping?.externalProjectId !== watchedProjectId) {
-      setValue("defaultRemovalTemplateId", "");
-      setValue("externalFacilityId", "");
-      setAcknowledgeSharedProject(false);
-    }
-  }, [watchedProjectId, mapping?.externalProjectId, setValue]);
+  const handleProjectChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    projectRegistration.onChange(event);
+    const returnsToPersistedProject =
+      mapping?.externalProjectId === event.target.value;
+    setValue(
+      "defaultRemovalTemplateId",
+      returnsToPersistedProject
+        ? mapping.defaultRemovalTemplateId ?? ""
+        : "",
+    );
+    setValue(
+      "externalFacilityId",
+      returnsToPersistedProject ? mapping.externalFacilityId ?? "" : "",
+    );
+    setAcknowledgeSharedProject(false);
+  };
 
   const linkedFacilitiesByProject = (() => {
     const map = new Map<string, string[]>();
@@ -137,12 +185,14 @@ export function FacilityCertifierDialog({
     try {
       await saveMutation.mutateAsync(data);
       toast.success("Certifier mapping saved");
-      onClose();
+      onSaved?.();
     } catch (error) {
       setError("root.serverError", {
         type: "server",
         message:
-          error instanceof Error ? error.message : "Mapping was not saved. Try again.",
+          error instanceof Error
+            ? error.message
+            : "The mapping was not saved. Try again.",
       });
     }
   };
@@ -150,25 +200,20 @@ export function FacilityCertifierDialog({
   const templateHelperText = (() => {
     if (!watchedProjectId) return "Pick a project to load templates.";
     if (templatesLoading) return "Loading templates…";
-    if (templateOptions.length === 0) return "This project has no Removal templates.";
+    if (templateOptions.length === 0) {
+      return "This project has no Removal templates.";
+    }
     return "Used as the default when submitting credit batches.";
   })();
 
+  const showProjectDetails = !!watchedProjectId;
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      onOpen={() => {
-        reset(defaultValues);
-        setAcknowledgeSharedProject(false);
-      }}
-      ariaLabelledBy="facility-certifier-dialog-title"
-      width="md"
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="flex flex-col gap-24"
     >
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="flex flex-col gap-24"
-      >
+      {presentation === "dialog" && (
         <header className="flex flex-col gap-4">
           <h2
             id="facility-certifier-dialog-title"
@@ -181,101 +226,106 @@ export function FacilityCertifierDialog({
             submissions for this facility.
           </p>
         </header>
+      )}
 
-        <FormField
+      <FormField
+        id="externalProjectId"
+        label="Isometric project"
+        required
+        error={errors.externalProjectId?.message}
+      >
+        <FormSelect
           id="externalProjectId"
-          label="Isometric project"
-          required
-          error={errors.externalProjectId?.message}
-        >
-          <FormSelect
-            id="externalProjectId"
-            placeholder="Select a project"
-            options={projectOptions}
-            error={!!errors.externalProjectId}
-            {...register("externalProjectId")}
-          />
-        </FormField>
-
-        {requiresShareAck && (
-          <div className="flex flex-col gap-12 border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-16">
-            <p className="body-small text-[var(--color-text-primary)]">
-              This project is already linked to{" "}
-              <strong className="body-small-bold">
-                {linkedHintForSelected?.join(", ")}
-              </strong>
-              . Submissions from this and the listed facilities will target the
-              same Isometric project. The Isometric facility ID below stays
-              unique per facility.
-            </p>
-            <label className="flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
-              <input
-                type="checkbox"
-                className="mt-2 shrink-0"
-                checked={acknowledgeSharedProject}
-                onChange={(e) =>
-                  setAcknowledgeSharedProject(e.target.checked)
-                }
-              />
-              <span>
-                I intend to share this project across facilities.
-              </span>
-            </label>
-          </div>
-        )}
-
-        <FormField
-          id="defaultRemovalTemplateId"
-          label="Default Removal template"
-          error={errors.defaultRemovalTemplateId?.message}
-          helperText={templateHelperText}
-        >
-          <FormSelect
-            id="defaultRemovalTemplateId"
-            placeholder="No default"
-            options={templateOptions}
-            error={!!errors.defaultRemovalTemplateId}
-            disabled={!watchedProjectId || templatesLoading}
-            {...register("defaultRemovalTemplateId")}
-          />
-        </FormField>
-
-        <FormField
-          id="externalFacilityId"
-          label="Isometric facility ID"
-          error={errors.externalFacilityId?.message}
-          hint="Required for the telemetry pipeline only. Create the facility in the Certify UI (Isometric exposes no POST /facilities), then paste the fcl_… id here."
-        >
-          <FormInput
-            id="externalFacilityId"
-            error={!!errors.externalFacilityId}
-            placeholder="fcl_1K9YJQNA7SBXAG15"
-            {...register("externalFacilityId")}
-          />
-        </FormField>
-
-        {isProduction && (
-          <ProductionConfirmation
-            actionLabel={
-              mapping
-                ? "update this facility's production Isometric link"
-                : "link this facility to the production Isometric registry"
-            }
-            consequenceLabel="Future submissions from this facility will use production."
-            registerProps={register("confirmProduction")}
-            errorMessage={errors.confirmProduction?.message}
-          />
-        )}
-
-        <FormActions
-          onCancel={onClose}
-          isSubmitting={isSubmitting || saveMutation.isPending}
-          errorMessage={errors.root?.serverError?.message}
-          submitDisabled={blockedOnShareAck}
-          submitLabel={mapping ? "Save changes" : "Link project"}
+          placeholder="Select a project"
+          options={projectOptions}
+          error={!!errors.externalProjectId}
+          {...projectRegistration}
+          onChange={handleProjectChange}
         />
-      </form>
-    </Modal>
+      </FormField>
+
+      {showProjectDetails && (
+        <>
+          {requiresShareAck && (
+            <div className="flex flex-col gap-12 border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-16">
+              <p className="body-small text-[var(--color-text-primary)]">
+                This project is already linked to{" "}
+                <strong className="body-small-bold">
+                  {linkedHintForSelected?.join(", ")}
+                </strong>
+                . Submissions from this and the listed facilities will target
+                the same Isometric project. The Isometric facility ID below
+                stays unique per facility.
+              </p>
+              <label className="flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-2 shrink-0"
+                  checked={acknowledgeSharedProject}
+                  onChange={(e) =>
+                    setAcknowledgeSharedProject(e.target.checked)
+                  }
+                />
+                <span>I intend to share this project across facilities.</span>
+              </label>
+            </div>
+          )}
+
+          <FormField
+            id="defaultRemovalTemplateId"
+            label="Default Removal template"
+            error={errors.defaultRemovalTemplateId?.message}
+            helperText={templateHelperText}
+          >
+            <FormSelect
+              id="defaultRemovalTemplateId"
+              placeholder="No default"
+              options={templateOptions}
+              error={!!errors.defaultRemovalTemplateId}
+              disabled={!watchedProjectId || templatesLoading}
+              {...register("defaultRemovalTemplateId")}
+            />
+          </FormField>
+
+          <FormField
+            id="externalFacilityId"
+            label="Isometric facility ID (optional)"
+            error={errors.externalFacilityId?.message}
+            hint="Only needed to submit reactor telemetry. Create the facility in Isometric Certify, then paste its fcl_… ID here."
+          >
+            <FormInput
+              id="externalFacilityId"
+              error={!!errors.externalFacilityId}
+              placeholder="fcl_1K9YJQNA7SBXAG15"
+              {...register("externalFacilityId")}
+            />
+          </FormField>
+
+          {isProduction && (
+            <ProductionConfirmation
+              actionLabel={
+                mapping
+                  ? "update this facility's production Isometric link"
+                  : "link this facility to the production Isometric registry"
+              }
+              consequenceLabel="Future submissions from this facility will use production."
+              registerProps={register("confirmProduction")}
+              errorMessage={errors.confirmProduction?.message}
+            />
+          )}
+
+        </>
+      )}
+
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting || saveMutation.isPending}
+        errorMessage={errors.root?.serverError?.message}
+        submitDisabled={blockedOnShareAck || !watchedProjectId}
+        submitLabel={mapping ? "Save changes" : "Link project"}
+        sticky={presentation === "dialog"}
+      />
+    </form>
   );
 }
 

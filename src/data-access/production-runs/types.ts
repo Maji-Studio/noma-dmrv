@@ -39,6 +39,8 @@ export interface ProductionRunWithRelations {
   feedstockWetMassKg: number | null;
   feedstockMoisturePercent: number | null;
   feedstockMassDryKg: number | null;
+  /** True only when an uploaded sensor-data document is saved for this run. */
+  hasReadingsFile: boolean;
   createdAt: Date;
   updatedAt: Date;
   // Relations
@@ -93,5 +95,6 @@ export interface ProductionRunReadingRecord {
 }
 
 export type ProductionRunWithSamples = ProductionRun & {
+  hasReadingsFile: boolean;
   samples: Sample[];
 };

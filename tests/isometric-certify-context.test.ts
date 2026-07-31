@@ -375,6 +375,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        hasReadingsFile: true,
         // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
         startTime: new Date("2026-01-05T00:00:00Z"),
         biocharDryMassKg: 1000,
@@ -394,7 +395,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedGetLineage).toHaveBeenCalledWith(makeTestOrgContext(USER_ID), "app-1");
   });
 
-  it("does not require row-level telemetry for resolved production runs", async () => {
+  it("uses uploaded readings evidence without requiring row-level telemetry", async () => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
@@ -433,6 +434,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        hasReadingsFile: true,
         // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
         startTime: new Date("2026-01-05T00:00:00Z"),
         biocharDryMassKg: 1000,
@@ -587,6 +589,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        hasReadingsFile: true,
         // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
         startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,
@@ -781,6 +784,7 @@ describe("requiredTransportCategories", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        hasReadingsFile: true,
         // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
         startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,
@@ -858,6 +862,7 @@ describe("requiredTransportCategories", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        hasReadingsFile: true,
         // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
         startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,

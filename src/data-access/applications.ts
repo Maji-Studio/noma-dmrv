@@ -78,6 +78,7 @@ export interface ApplicationDeliveryOptionData {
   destinationGpsLatitude: number | null;
   destinationGpsLongitude: number | null;
   alreadyAppliedWetKg: number;
+  alreadyAppliedDryKg: number;
 }
 
 type CreateApplicationInput = Omit<
@@ -546,6 +547,9 @@ export async function getApplicationDeliveryOptions(
         totalAppliedKg: numericAggregate(
           sql<number>`coalesce(sum(${applications.biocharAppliedTons}) * ${KG_PER_TONNE}, 0)`,
         ),
+        totalAppliedDryKg: numericAggregate(
+          sql<number>`coalesce(sum(${applications.biocharAppliedDryTons}) * ${KG_PER_TONNE}, 0)`,
+        ),
       })
       .from(applications)
       .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
@@ -554,13 +558,17 @@ export async function getApplicationDeliveryOptions(
   ]);
 
   const appliedByDeliveryId = new Map(
-    appliedRows.map((row) => [row.deliveryId, row.totalAppliedKg])
+    appliedRows.map((row) => [row.deliveryId, row])
   );
 
-  return rawDeliveries.map((delivery) => ({
-    ...delivery,
-    alreadyAppliedWetKg: appliedByDeliveryId.get(delivery.id) ?? 0,
-  }));
+  return rawDeliveries.map((delivery) => {
+    const applied = appliedByDeliveryId.get(delivery.id);
+    return {
+      ...delivery,
+      alreadyAppliedWetKg: applied?.totalAppliedKg ?? 0,
+      alreadyAppliedDryKg: applied?.totalAppliedDryKg ?? 0,
+    };
+  });
 }
 
 export interface CreditBatchApplicationOption {

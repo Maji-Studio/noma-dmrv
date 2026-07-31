@@ -10,7 +10,7 @@ import {
   TrashIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { FormFileUpload, FormSelect, ServerError } from "@/components/forms";
+import { FormFileUpload, ServerError } from "@/components/forms";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -24,17 +24,11 @@ import {
   documentKeys,
   useDeleteDocument,
   useDocumentsForEntity,
-  useUpdateApplicationEvidenceMetadata,
 } from "@/hooks/use-documents";
 import {
-  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_DESCRIPTIONS,
-  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS,
-  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
   APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
   APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS,
-  isApplicationBoundaryLogbookEvidenceType,
   isApplicationVisualEvidenceRole,
-  type ApplicationBoundaryLogbookEvidenceType,
 } from "@/lib/certification/application-evidence";
 import { formatDate, formatFileSize } from "@/lib/format-utils";
 import type {
@@ -49,8 +43,6 @@ import { RadioCardGroup } from "./radio-card-group";
 const ENTITY_TYPE = "application" satisfies DocumentEntityType;
 const LOGBOOK_DOC_TYPE: DocumentType = "pdf";
 const GIS_BOUNDARY_DOC_TYPE: DocumentType = "gis_boundary";
-const DEFAULT_LOGBOOK_EVIDENCE_TYPE: ApplicationBoundaryLogbookEvidenceType =
-  "weighbridge";
 
 const METHOD_OPTIONS = [
   {
@@ -66,12 +58,6 @@ const METHOD_OPTIONS = [
     badge: "Available later",
   },
 ] as const;
-
-const LOGBOOK_EVIDENCE_TYPE_OPTIONS =
-  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map((type) => ({
-    value: type,
-    label: APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[type],
-  }));
 
 interface ApplicationEvidencePanelProps {
   applicationId?: string;
@@ -94,35 +80,6 @@ function isUploadedDocument(doc: DocumentRow): boolean {
   return doc.uploadStatus === "uploaded" || doc.fileUrl != null;
 }
 
-function documentLogbookEvidenceType(
-  doc: DocumentRow,
-): ApplicationBoundaryLogbookEvidenceType | null {
-  const value = metadataRecord(doc.metadata).logbookEvidenceType;
-  return isApplicationBoundaryLogbookEvidenceType(value) ? value : null;
-}
-
-function documentCreatedAtMs(doc: DocumentRow): number {
-  const ms = new Date(doc.createdAt).getTime();
-  return Number.isNaN(ms) ? 0 : ms;
-}
-
-export function savedLogbookEvidenceType(
-  docs: DocumentRow[],
-): ApplicationBoundaryLogbookEvidenceType | null {
-  let latestType: ApplicationBoundaryLogbookEvidenceType | null = null;
-  let latestMs = -Infinity;
-  for (const doc of docs) {
-    const type = documentLogbookEvidenceType(doc);
-    if (!type) continue;
-    const createdAtMs = documentCreatedAtMs(doc);
-    if (createdAtMs > latestMs) {
-      latestType = type;
-      latestMs = createdAtMs;
-    }
-  }
-  return latestType;
-}
-
 function isLogbookDocument(doc: DocumentRow): boolean {
   return (
     doc.documentType === LOGBOOK_DOC_TYPE ||
@@ -143,21 +100,12 @@ function EvidenceDocumentList({
   docs,
   disabled,
   deleteMutationPending,
-  classifyMutationPending,
-  classifyingDocumentId,
   onDelete,
-  onSetLogbookEvidenceType,
 }: {
   docs: DocumentRow[];
   disabled: boolean;
   deleteMutationPending: boolean;
-  classifyMutationPending: boolean;
-  classifyingDocumentId: string | null;
   onDelete?: (id: string) => void;
-  onSetLogbookEvidenceType?: (
-    id: string,
-    type: ApplicationBoundaryLogbookEvidenceType,
-  ) => void;
 }) {
   if (docs.length === 0) {
     return (
@@ -170,7 +118,6 @@ function EvidenceDocumentList({
   return (
     <ul className="flex flex-col gap-8">
       {docs.map((doc) => {
-        const logbookEvidenceType = documentLogbookEvidenceType(doc);
         const evidenceRoleValue = metadataRecord(doc.metadata).evidenceRole;
         const evidenceRole = isApplicationVisualEvidenceRole(evidenceRoleValue)
           ? evidenceRoleValue
@@ -182,8 +129,6 @@ function EvidenceDocumentList({
                 .filter((item) => typeof item === "string")
                 .join(", ")
             : null;
-        const isClassifying =
-          classifyMutationPending && classifyingDocumentId === doc.id;
         return (
           <li
             key={doc.id}
@@ -201,9 +146,6 @@ function EvidenceDocumentList({
               <span className="body-caption text-[var(--color-text-tertiary)]">
                 {formatFileSize(doc.fileSizeBytes)}
                 {doc.capturedAt ? ` · ${formatDate(doc.capturedAt)}` : ""}
-                {logbookEvidenceType
-                  ? ` · ${APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[logbookEvidenceType]}`
-                  : ""}
                 {evidenceRole
                   ? ` · ${APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[evidenceRole]}`
                   : ""}
@@ -215,24 +157,6 @@ function EvidenceDocumentList({
                 </span>
               )}
             </div>
-            {onSetLogbookEvidenceType &&
-              doc.documentType === LOGBOOK_DOC_TYPE && (
-                <div className="w-full sm:w-192">
-                  <FormSelect
-                    aria-label={`Logbook evidence type for ${doc.fileName}`}
-                    value={logbookEvidenceType ?? ""}
-                    placeholder="Classify logbook"
-                    options={LOGBOOK_EVIDENCE_TYPE_OPTIONS}
-                    disabled={disabled || classifyMutationPending}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      if (isApplicationBoundaryLogbookEvidenceType(value)) {
-                        onSetLogbookEvidenceType(doc.id, value);
-                      }
-                    }}
-                  />
-                </div>
-              )}
             <a
               href={`/api/documents/${doc.id}`}
               target="_blank"
@@ -247,7 +171,7 @@ function EvidenceDocumentList({
                 variant="destructive"
                 size="icon"
                 onClick={() => onDelete(doc.id)}
-                disabled={deleteMutationPending || disabled || isClassifying}
+                disabled={deleteMutationPending || disabled}
                 className="shrink-0"
                 aria-label={`Delete ${doc.fileName}`}
               >
@@ -276,11 +200,6 @@ export function ApplicationEvidencePanel({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [classifyingDocumentId, setClassifyingDocumentId] = useState<
-    string | null
-  >(null);
-  const [pickedLogbookEvidenceType, setPickedLogbookEvidenceType] =
-    useState<ApplicationBoundaryLogbookEvidenceType | null>(null);
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     ENTITY_TYPE,
     applicationId,
@@ -292,16 +211,9 @@ export function ApplicationEvidencePanel({
   const deleteMutation = useDeleteDocument(invalidateKey, {
     entityType: ENTITY_TYPE,
   });
-  const classifyMutation =
-    useUpdateApplicationEvidenceMetadata(invalidateKey);
   const retainedDocs = (docs ?? [])
     .filter(isUploadedDocument)
     .filter(isRetainedEvidenceDocument);
-  const logbookDocs = retainedDocs.filter(isLogbookDocument);
-  const logbookEvidenceType =
-    pickedLogbookEvidenceType ??
-    savedLogbookEvidenceType(logbookDocs) ??
-    DEFAULT_LOGBOOK_EVIDENCE_TYPE;
 
   const invalidateApplicationLists = () => {
     queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
@@ -334,22 +246,6 @@ export function ApplicationEvidencePanel({
     onBoundaryChange?.(null);
   };
 
-  const handleLogbookEvidenceTypeChange = (
-    type: ApplicationBoundaryLogbookEvidenceType,
-  ) => {
-    setPickedLogbookEvidenceType(type);
-    for (const attachment of deferredAttachments?.attachments ?? []) {
-      if (
-        attachment.documentType === LOGBOOK_DOC_TYPE &&
-        attachment.status !== "uploaded"
-      ) {
-        deferredAttachments?.updateMeta(attachment.key, {
-          applicationLogbookEvidenceType: type,
-        });
-      }
-    }
-  };
-
   const handleDelete = async () => {
     if (!deleteId) return;
     setErrorMessage(null);
@@ -364,30 +260,6 @@ export function ApplicationEvidencePanel({
           ? deleteError.message
           : "Evidence was not deleted. Try again.",
       );
-    }
-  };
-
-  const setLogbookEvidenceTypeForDocument = async (
-    documentId: string,
-    type: ApplicationBoundaryLogbookEvidenceType,
-  ) => {
-    setErrorMessage(null);
-    setClassifyingDocumentId(documentId);
-    try {
-      await classifyMutation.mutateAsync({
-        documentId,
-        applicationLogbookEvidenceType: type,
-      });
-      invalidateApplicationLists();
-      toast.success("Evidence classified");
-    } catch (classifyError) {
-      setErrorMessage(
-        classifyError instanceof Error
-          ? classifyError.message
-          : "Evidence type was not saved. Try again.",
-      );
-    } finally {
-      setClassifyingDocumentId(null);
     }
   };
 
@@ -488,47 +360,6 @@ export function ApplicationEvidencePanel({
           )}
         </div>
 
-        {!readOnly && (
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-8">
-              <h5 className="body-small-bold">Record type for the next upload</h5>
-              <InfoHint side="top" label="How the record type is applied">
-                This classifies the next mass record you upload. Change an
-                attached file from the select beside it.
-              </InfoHint>
-            </div>
-            <div
-              className="flex flex-wrap gap-8"
-              role="radiogroup"
-              aria-label="Mass record type for the next upload"
-            >
-              {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map((type) => (
-                <label
-                  key={type}
-                  className="inline-flex min-h-44 items-center gap-8 border border-[var(--color-border-secondary)] px-12 body-small"
-                >
-                  <input
-                    type="radio"
-                    name={`application-${applicationId ?? "create"}-logbook-evidence-type`}
-                    value={type}
-                    checked={logbookEvidenceType === type}
-                    onChange={() => handleLogbookEvidenceTypeChange(type)}
-                    disabled={disabled}
-                  />
-                  {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[type]}
-                </label>
-              ))}
-            </div>
-            <p className="body-caption text-[var(--color-text-tertiary)]">
-              {
-                APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_DESCRIPTIONS[
-                  logbookEvidenceType
-                ]
-              }
-            </p>
-          </div>
-        )}
-
         {(error || errorMessage) && (
           <ServerError
             message={
@@ -549,12 +380,7 @@ export function ApplicationEvidencePanel({
             docs={retainedDocs}
             disabled={disabled}
             deleteMutationPending={deleteMutation.isPending}
-            classifyMutationPending={classifyMutation.isPending}
-            classifyingDocumentId={classifyingDocumentId}
             onDelete={readOnly ? undefined : setDeleteId}
-            onSetLogbookEvidenceType={
-              readOnly ? undefined : setLogbookEvidenceTypeForDocument
-            }
           />
         )}
 
@@ -569,7 +395,6 @@ export function ApplicationEvidencePanel({
               entityType={ENTITY_TYPE}
               entityId={applicationId}
               documentType={LOGBOOK_DOC_TYPE}
-              applicationLogbookEvidenceType={logbookEvidenceType}
               onUploaded={() => {
                 setErrorMessage(null);
                 invalidateApplicationLists();
@@ -589,9 +414,7 @@ export function ApplicationEvidencePanel({
                   attachment.documentType === LOGBOOK_DOC_TYPE,
               )}
               onDeferredAdd={(files) =>
-                deferredAttachments?.add(files, LOGBOOK_DOC_TYPE, {
-                  applicationLogbookEvidenceType: logbookEvidenceType,
-                })
+                deferredAttachments?.add(files, LOGBOOK_DOC_TYPE)
               }
               onDeferredRemove={(key) => deferredAttachments?.remove(key)}
             />
