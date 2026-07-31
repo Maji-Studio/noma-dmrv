@@ -14,7 +14,6 @@ import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/d
 import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { formatMassKg } from "@/lib/format-utils";
 import {
-  formatMoisturePercent,
   formatWetDryMass,
   splitWetMassAfterAddedWater,
 } from "@/lib/mass-moisture";
@@ -361,7 +360,10 @@ export function BiocharProductForm({
   // Derive preview values
   const massKgNum = typeof watchedMassKg === "number" ? watchedMassKg : null;
   const moistureNum = typeof watchedMoisture === "number" ? watchedMoisture : null;
-  const waterAddedKgNum = typeof watchedWaterAddedKg === "number" ? watchedWaterAddedKg : null;
+  const waterAddedKgNum =
+    typeof watchedWaterAddedKg === "number" && Number.isFinite(watchedWaterAddedKg)
+      ? watchedWaterAddedKg
+      : null;
   const effectiveWetMassKg =
     massKgNum !== null && (waterAddedKgNum === null || waterAddedKgNum >= 0)
       ? massKgNum + (waterAddedKgNum ?? 0)
@@ -372,7 +374,6 @@ export function BiocharProductForm({
     moistureNum,
     waterAddedKgNum,
   );
-  const finalMoisturePercent = finalMassSplit?.moisturePercent ?? null;
 
   return (
     <div className="space-y-20">
@@ -477,11 +478,7 @@ export function BiocharProductForm({
           materialLabel="Biochar"
           wetMassKg={watchedMassKg}
           moisturePercent={watchedMoisture}
-          splitNote={
-            hasWaterAdded && effectiveWetMassKg !== null
-              ? `Before added water. With ${formatMassKg(waterAddedKgNum)} added: ${formatMassKg(effectiveWetMassKg)} wet at ${formatMoisturePercent(finalMoisturePercent)} moisture.`
-              : undefined
-          }
+          addedWaterKg={watchedWaterAddedKg}
           wet={{
             id: "massKg",
             label: hasWaterAdded
