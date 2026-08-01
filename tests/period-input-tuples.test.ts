@@ -308,6 +308,16 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
 });
 
 describe("MAPPING_REVISION", () => {
+  function containsFunction(value: unknown): boolean {
+    if (typeof value === "function") return true;
+    if (!value || typeof value !== "object") return false;
+    return Object.values(value).some(containsFunction);
+  }
+
+  it("uses only declarative values so production bundles compute the same revision", () => {
+    expect(containsFunction(MAPPING_REVISION_INPUT)).toBe(false);
+  });
+
   it("hashes both ordinary inputs and explicit sequestration bindings", () => {
     expect(MAPPING_REVISION).toMatch(/^[0-9a-f]{64}$/);
     expect(MAPPING_REVISION).toBe(payloadHash(MAPPING_REVISION_INPUT));
