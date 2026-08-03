@@ -1,6 +1,11 @@
 "use client";
 
-import { Controller, type Control, type FieldValues } from "react-hook-form";
+import { useState } from "react";
+import {
+  Controller,
+  type Control,
+  type FieldValues,
+} from "react-hook-form";
 import { FormField, FormInput, EntitySelect } from "@/components/forms";
 import {
   StorageLocationQuickAddDialog,
@@ -11,7 +16,6 @@ import {
   INGREDIENT_MASS_DEVIATION_WARN_PERCENT,
   type CompositionRow,
 } from "@/lib/biochar-composition";
-import { nullableNumericValue } from "@/lib/form-utils";
 import { WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 import { formatStorageLocationType } from "@/schemas/storage-locations";
@@ -37,12 +41,89 @@ function formatKgShort(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
-/** Keep controlled ingredient mass state finite; blank or invalid input clears it. */
-export function normalizeIngredientMassInput(value: unknown): number | null {
-  const normalized = nullableNumericValue(value);
-  return normalized !== null && Number.isFinite(normalized)
-    ? normalized
-    : null;
+function formatIngredientMass(value: unknown): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? String(value)
+    : "";
+}
+
+/** Empty → null; parseable → number; anything else → undefined (keep draft). */
+export function parseIngredientMassDraft(
+  raw: string,
+): number | null | undefined {
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+interface IngredientMassInputProps {
+  name: string;
+  value: unknown;
+  onChange: (value: number | null) => void;
+  onBlur: () => void;
+  inputRef: (instance: HTMLInputElement | null) => void;
+  disabled: boolean;
+  error: boolean;
+}
+
+export function IngredientMassInput({
+  name,
+  value: fieldValue,
+  onChange,
+  onBlur,
+  inputRef,
+  disabled,
+  error,
+}: IngredientMassInputProps) {
+  const value =
+    typeof fieldValue === "number" && Number.isFinite(fieldValue)
+      ? fieldValue
+      : null;
+  const [draft, setDraft] = useState(formatIngredientMass(value));
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (value !== syncedValue) {
+    setSyncedValue(value);
+    if (parseIngredientMassDraft(draft) !== value) {
+      setDraft(formatIngredientMass(value));
+    }
+  }
+
+  const handleChange = (raw: string) => {
+    setDraft(raw);
+    const parsed = parseIngredientMassDraft(raw);
+    if (parsed === undefined || parsed === syncedValue) return;
+    setSyncedValue(parsed);
+    onChange(parsed);
+  };
+
+  const handleBlur = () => {
+    const parsed = parseIngredientMassDraft(draft);
+    const committed = parsed === undefined ? null : parsed;
+    setDraft(formatIngredientMass(committed));
+    if (committed !== syncedValue) {
+      setSyncedValue(committed);
+      onChange(committed);
+    }
+    onBlur();
+  };
+
+  return (
+    <FormInput
+      id={name}
+      type="number"
+      step={MASS_KG_INPUT_STEP}
+      min="0"
+      placeholder="e.g., 120"
+      disabled={disabled}
+      error={error}
+      value={draft}
+      onChange={(event) => handleChange(event.currentTarget.value)}
+      onBlur={handleBlur}
+      name={name}
+      ref={inputRef}
+    />
+  );
 }
 
 interface IngredientBinFieldProps {
@@ -144,23 +225,14 @@ export function IngredientBinField({
                   : undefined
               }
             >
-              <FormInput
-                id={row.massKgFieldName}
-                type="number"
-                step={MASS_KG_INPUT_STEP}
-                min="0"
-                placeholder="e.g., 120"
+              <IngredientMassInput
+                name={field.name}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                inputRef={field.ref}
                 disabled={isSubmitting || allocationFrozen}
                 error={!!fieldState.error}
-                value={field.value ?? ""}
-                onChange={(event) =>
-                  field.onChange(
-                    normalizeIngredientMassInput(event.currentTarget.value),
-                  )
-                }
-                onBlur={field.onBlur}
-                name={field.name}
-                ref={field.ref}
               />
             </FormField>
             {showDeviation && row.deviationPercent != null && (
