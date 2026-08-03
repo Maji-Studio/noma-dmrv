@@ -540,6 +540,50 @@ beforeAll(async () => {
     expect(ingredientBin?.subtitle).toContain("140 kg stored");
   });
 
+  it("derives a new ingredient basis from mixed-history remaining stock", async () => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const ingredientBinId = await makeStockedFeedstockBin(80, 100);
+    const firstProductBinId = await makeProductBin(formulationAId);
+    const firstComposition = formulationAComposition();
+    firstComposition.ingredients[0].massKg = 50;
+    firstComposition.ingredients[0].storageLocationId = ingredientBinId;
+
+    const firstProduct = await createBiocharProduct(ctx, {
+      ...baseProductInput(),
+      formulationId: formulationAId,
+      storageLocationId: firstProductBinId,
+      composition: firstComposition,
+    });
+    createdProductIds.push(firstProduct.id);
+
+    await addCompletedFeedstock(ingredientBinId, 100, 100);
+
+    const secondProductBinId = await makeProductBin(formulationAId);
+    const secondComposition = formulationAComposition();
+    secondComposition.ingredients[0].massKg = 30;
+    secondComposition.ingredients[0].storageLocationId = ingredientBinId;
+    const secondProduct = await createBiocharProduct(ctx, {
+      ...baseProductInput(),
+      formulationId: formulationAId,
+      storageLocationId: secondProductBinId,
+      composition: secondComposition,
+    });
+    createdProductIds.push(secondProduct.id);
+
+    const [ingredient] = (
+      secondProduct.composition as {
+        ingredients: Array<{
+          massDryKg: number;
+          moistureContentPercent: number;
+        }>;
+      }
+    ).ingredients;
+    expect(ingredient).toMatchObject({
+      massDryKg: 28,
+      moistureContentPercent: 6.666667,
+    });
+  });
+
   it("rejects an update that increases an ingredient draw beyond stock", async () => {
     const productBinId = await makeProductBin(formulationAId);
     const ingredientBinId = await makeStockedFeedstockBin(100);

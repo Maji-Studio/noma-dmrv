@@ -48,9 +48,12 @@ function laneStock(
   return {
     storageLocationId: "bin-1",
     feedstockIntakeDryKg: 0,
+    feedstockIntakeWetKg: 0,
     feedstockConsumedDryKg: 0,
+    feedstockConsumedWetKg: 0,
     feedstockMovementDeltaKg: 0,
     feedstockStockDryKg: 0,
+    feedstockStockWetKg: null,
     biocharProducedKg: 0,
     biocharAllocatedKg: 0,
     biocharMovementDeltaKg: 0,

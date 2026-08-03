@@ -8,12 +8,10 @@
  * to keep that file under the 1000-line cap.
  */
 
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { countRows, sumNumeric } from "@/db/aggregate";
 import type { OrgContext } from "@/lib/auth/server";
 import {
-  feedstocks,
   formulationIngredients,
   storageLocations,
   feedstockTypes,
@@ -27,6 +25,7 @@ import {
 } from "@/lib/biochar-composition";
 import type { DbTransaction } from "@/db";
 import { assertFeedstockDrawWithinStock } from "./bin-stock-guards";
+import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
 
 interface CompositionIngredientRef {
@@ -249,9 +248,8 @@ function roundPercent(value: number): number {
 }
 
 interface FeedstockMassBasis {
-  totalWetKg: number;
-  totalDryKg: number;
-  missingWetMassCount: number;
+  remainingWetKg: number | null;
+  remainingDryKg: number;
 }
 
 function deriveIngredientMassSnapshot(
@@ -260,15 +258,15 @@ function deriveIngredientMassSnapshot(
 ): { massDryKg: number; moistureContentPercent: number } {
   if (
     !basis ||
-    basis.missingWetMassCount > 0 ||
-    basis.totalWetKg <= 0 ||
-    basis.totalDryKg <= 0 ||
-    basis.totalDryKg > basis.totalWetKg
+    basis.remainingWetKg === null ||
+    basis.remainingWetKg <= 0 ||
+    basis.remainingDryKg <= 0 ||
+    basis.remainingDryKg > basis.remainingWetKg
   ) {
     throw new SafeError(INGREDIENT_MOISTURE_BASIS_ERROR);
   }
 
-  const dryRatio = basis.totalDryKg / basis.totalWetKg;
+  const dryRatio = basis.remainingDryKg / basis.remainingWetKg;
   return {
     massDryKg: roundMassKg(wetMassKg * dryRatio),
     moistureContentPercent: roundPercent((1 - dryRatio) * 100),
@@ -277,7 +275,7 @@ function deriveIngredientMassSnapshot(
 
 /**
  * Freeze each ingredient's dry-mass withdrawal from the selected bin's
- * completed intake basis. `massKg` stays the operator's wet/as-received mass;
+ * current remaining wet/dry stock. `massKg` stays the operator's wet/as-received mass;
  * the derived fields are server-owned allocation facts persisted in JSONB.
  * Call only while the caller holds every ingredient bin's stock lock.
  */
@@ -286,6 +284,7 @@ export async function resolveCompositionIngredientMassBasis(
   tx: DbTransaction,
   composition: Record<string, unknown> | null | undefined,
   previousComposition?: Record<string, unknown> | null,
+  excludeProductId?: string,
 ): Promise<Record<string, unknown>> {
   requireOrgScope(ctx);
   const ingredients = getCompositionIngredientObjects(composition);
@@ -312,33 +311,18 @@ export async function resolveCompositionIngredientMassBasis(
     ),
   ];
 
-  const basisRows = storageLocationIds.length > 0
-    ? await tx
-        .select({
-          storageLocationId: feedstocks.storageLocationId,
-          totalWetKg: sumNumeric(feedstocks.massWetKg),
-          totalDryKg: sumNumeric(feedstocks.massDryKg),
-          missingWetMassCount: countRows(
-            sql`${feedstocks.massWetKg} IS NULL AND ${feedstocks.massDryKg} > 0`,
-          ),
-        })
-        .from(feedstocks)
-        .where(
-          and(
-            inArray(feedstocks.storageLocationId, storageLocationIds),
-            eq(feedstocks.organizationId, ctx.organizationId),
-            eq(feedstocks.status, "complete"),
-          ),
-        )
-        .groupBy(feedstocks.storageLocationId)
-    : [];
+  const basisRows = await deriveLaneStock(ctx, tx, {
+    storageLocationIds,
+    excludeProductId,
+  });
   const basisByStorageLocation = new Map(
-    basisRows
-      .filter(
-        (row): row is typeof row & { storageLocationId: string } =>
-          row.storageLocationId !== null,
-      )
-      .map((row) => [row.storageLocationId, row]),
+    basisRows.map((row) => [
+      row.storageLocationId,
+      {
+        remainingWetKg: row.feedstockStockWetKg,
+        remainingDryKg: row.feedstockStockDryKg,
+      },
+    ]),
   );
 
   return {
