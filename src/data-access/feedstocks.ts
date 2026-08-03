@@ -613,6 +613,8 @@ export async function updateFeedstock(
     const stockDerivationChanged =
       status !== locked.status ||
       (feedstockData.massDryKg !== undefined && feedstockData.massDryKg !== locked.massDryKg) ||
+      (feedstockData.massWetKg !== undefined &&
+        feedstockData.massWetKg !== locked.massWetKg) ||
       (feedstockData.storageLocationId !== undefined &&
         feedstockData.storageLocationId !== locked.storageLocationId);
 

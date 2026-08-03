@@ -493,6 +493,20 @@ describe(
       expectArchivedReferenceRejected(outcome);
     });
 
+    it("serializes a wet-only feedstock mass change with its bin", async () => {
+      const fixture = await createFixture();
+
+      const outcome = await archiveBeforeReferenceWrite(
+        fixture.untypedFeedstockBinId,
+        () =>
+          updateFeedstock(ctx, fixture.existingFeedstockId, {
+            massWetKg: 1,
+          }),
+      );
+
+      expectArchivedReferenceRejected(outcome);
+    });
+
     it("rejects an archived facility when moving an unlocated feedstock", async () => {
       const fixture = await createFixture();
 
