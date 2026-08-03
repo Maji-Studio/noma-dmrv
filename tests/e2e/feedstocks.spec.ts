@@ -19,11 +19,12 @@ test.describe("Feedstock UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
+    const suffix = crypto.randomUUID();
     const blendType = {
       id: crypto.randomUUID(),
       organizationId: DEC_ORG_ID,
-      code: `E2E-FST-BLEND-${Date.now()}`,
-      name: `E2E Blend Material ${Date.now()}`,
+      code: `E2E-FST-BLEND-${suffix}`,
+      name: `E2E Blend Material ${suffix}`,
       category: "compost",
       usage: "blend" as const,
     };
@@ -55,10 +56,13 @@ test.describe("Feedstock UI CRUD", () => {
         page.getByRole("option").filter({ hasText: blendType.name }),
       ).toBeVisible();
     } finally {
-      await db
-        .delete(schema.feedstockTypes)
-        .where(eq(schema.feedstockTypes.id, blendType.id));
-      await pool.end();
+      try {
+        await db
+          .delete(schema.feedstockTypes)
+          .where(eq(schema.feedstockTypes.id, blendType.id));
+      } finally {
+        await pool.end();
+      }
     }
   });
 
