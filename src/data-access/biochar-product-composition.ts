@@ -88,7 +88,7 @@ function getCompositionIngredientRefs(
 }
 
 const MASS_PRECISION_FACTOR = 1_000;
-const PERCENT_PRECISION_FACTOR = 10_000_000;
+const PERCENT_PRECISION_FACTOR = 1_000_000;
 
 function massSnapshotKey(ingredient: Record<string, unknown>): string {
   const massGrams =
