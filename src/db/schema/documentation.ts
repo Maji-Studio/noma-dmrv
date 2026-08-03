@@ -79,3 +79,32 @@ export const documents = pgTable(
     index('documents_document_type_idx').on(table.documentType),
   ]
 );
+
+// Durable hand-off between rollbackable document-row deletion and irreversible
+// object-storage deletion. Entries are organization-scoped so ordinary request
+// paths can drain only work belonging to their active organization.
+export const storageObjectDeletions = pgTable(
+  'storage_object_deletions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    storageProvider: text('storage_provider').notNull(),
+    storageBucket: text('storage_bucket').notNull(),
+    storageKey: text('storage_key').notNull(),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    lastAttemptAt: timestamp('last_attempt_at'),
+    lastErrorCode: text('last_error_code'),
+    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('storage_object_deletions_org_pending_idx').on(
+      table.organizationId,
+      table.completedAt,
+      table.createdAt,
+    ),
+  ],
+);

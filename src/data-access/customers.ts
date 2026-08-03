@@ -70,6 +70,7 @@ import {
   lockBiocharTransportRouteTopology,
   syncBiocharLegsForCustomerLocation,
 } from "./transport-legs";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 
 // ============================================
 // Customer Read Operations
@@ -666,6 +667,7 @@ export async function updateCustomerLocation(
 
     return updated;
   });
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 /**

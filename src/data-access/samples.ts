@@ -19,6 +19,7 @@ import {
 import type { SampleFilterData } from "@/schemas/samples";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import type { OrgContext } from "@/lib/auth/server";
 
 // ============================================
@@ -889,6 +890,7 @@ export async function deleteSample(
       ...transportLegDocuments,
     ]);
   }));
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 // ============================================

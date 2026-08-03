@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   certifierGhgStatementReports,
@@ -334,11 +334,11 @@ export async function approveGhgStatementReport(
 }
 
 /**
- * Mints a fresh verifier capability token for an approved report, persists only
- * its digest, and returns the plaintext once so the caller can build the link.
- * Issuing again rotates the token, which revokes any previously shared URL.
+ * Stage a fresh verifier capability while leaving the accepted capability
+ * untouched. The committed pending digest lets the public route serve the URL
+ * during the provider call; only the plaintext returned here leaves this seam.
  */
-export async function issueVerifierReportToken(
+export async function stageVerifierReportToken(
   ctx: OrgContext,
   reportId: string,
 ): Promise<string> {
@@ -347,7 +347,7 @@ export async function issueVerifierReportToken(
   const updated = await db
     .update(certifierGhgStatementReports)
     .set({
-      verifierTokenHash: hashVerifierToken(token),
+      pendingVerifierTokenHash: hashVerifierToken(token),
       updatedAt: sql`now()`,
     })
     .where(
@@ -357,6 +357,7 @@ export async function issueVerifierReportToken(
           "approved",
           "submitted",
         ]),
+        isNull(certifierGhgStatementReports.pendingVerifierTokenHash),
         eq(certifierGhgStatementReports.organizationId, ctx.organizationId),
       ),
     )
@@ -367,14 +368,17 @@ export async function issueVerifierReportToken(
   return token;
 }
 
-export async function markGhgStatementReportSubmitted(
+export async function promotePendingVerifierReportToken(
   ctx: OrgContext,
-  reportId: string,
-): Promise<void> {
+  args: { reportId: string; token: string },
+): Promise<boolean> {
   requireOrgScope(ctx);
+  const pendingTokenHash = hashVerifierToken(args.token);
   const updated = await db
     .update(certifierGhgStatementReports)
     .set({
+      verifierTokenHash: pendingTokenHash,
+      pendingVerifierTokenHash: null,
       lifecycle: "submitted",
       submittedBy: sql`coalesce(${certifierGhgStatementReports.submittedBy}, ${ctx.userId})`,
       submittedAt: sql`coalesce(${certifierGhgStatementReports.submittedAt}, now())`,
@@ -382,7 +386,20 @@ export async function markGhgStatementReportSubmitted(
     })
     .where(
       and(
-        eq(certifierGhgStatementReports.id, reportId),
+        eq(certifierGhgStatementReports.id, args.reportId),
+        or(
+          eq(
+            certifierGhgStatementReports.pendingVerifierTokenHash,
+            pendingTokenHash,
+          ),
+          and(
+            isNull(certifierGhgStatementReports.pendingVerifierTokenHash),
+            eq(
+              certifierGhgStatementReports.verifierTokenHash,
+              pendingTokenHash,
+            ),
+          ),
+        ),
         inArray(certifierGhgStatementReports.lifecycle, [
           "approved",
           "submitted",
@@ -394,9 +411,32 @@ export async function markGhgStatementReportSubmitted(
       ),
     )
     .returning({ id: certifierGhgStatementReports.id });
-  if (updated.length === 0) {
-    throw new SafeError("Approved report not found.");
-  }
+  return updated.length > 0;
+}
+
+export async function clearPendingVerifierReportToken(
+  ctx: OrgContext,
+  args: { reportId: string; expectedTokenHash: string },
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const updated = await db
+    .update(certifierGhgStatementReports)
+    .set({
+      pendingVerifierTokenHash: null,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(certifierGhgStatementReports.id, args.reportId),
+        eq(
+          certifierGhgStatementReports.pendingVerifierTokenHash,
+          args.expectedTokenHash,
+        ),
+        eq(certifierGhgStatementReports.organizationId, ctx.organizationId),
+      ),
+    )
+    .returning({ id: certifierGhgStatementReports.id });
+  return updated.length > 0;
 }
 
 export async function getVerifierReportDocument(
@@ -406,6 +446,7 @@ export async function getVerifierReportDocument(
   storageKey: string | null;
   uploadStatus: string;
   verifierTokenHash: string;
+  pendingVerifierTokenHash: string | null;
 } | null> {
   // org-scope-ok: verifier capability-token lookup intentionally crosses organizations.
   const [row] = await db
@@ -414,6 +455,8 @@ export async function getVerifierReportDocument(
       storageKey: documents.storageKey,
       uploadStatus: documents.uploadStatus,
       verifierTokenHash: certifierGhgStatementReports.verifierTokenHash,
+      pendingVerifierTokenHash:
+        certifierGhgStatementReports.pendingVerifierTokenHash,
     })
     .from(certifierGhgStatementReports)
     .innerJoin(

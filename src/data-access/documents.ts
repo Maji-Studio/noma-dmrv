@@ -23,8 +23,6 @@ import {
 import { SafeError } from "@/lib/errors";
 import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
 import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
-import { getStorageProvider } from "@/lib/storage";
-import { logger } from "@/lib/log";
 import {
   DOCUMENT_ENTITY_TYPES,
   type DocumentEntityType,
@@ -35,6 +33,10 @@ import {
   getDocumentUploadByDocument,
   isExternalSourceReferencedInSnapshots,
 } from "./certifier-document-uploads";
+import {
+  enqueueStorageObjectDeletion,
+  processPendingStorageObjectDeletions,
+} from "./storage-object-deletions";
 
 /**
  * Hard cap on documents returned for a single entity. This is a guardrail
@@ -46,7 +48,6 @@ const DELIVERY_TABLE_NAME = "deliveries";
 const DELIVERY_ARCHIVED_AT_COLUMN = "archived_at";
 const TRANSPORT_LEDGER_DOCUMENT_ENTITY_TYPE = "credit_batch";
 const TRANSPORT_LEDGER_DOCUMENT_TYPE = "pdf";
-const log = logger.child({ mod: "documents" });
 
 let deliveryArchivedAtColumnAvailablePromise: Promise<boolean> | null = null;
 
@@ -451,7 +452,7 @@ export async function deleteDocumentWithCertificationSafety(
   id: string,
 ): Promise<DocumentRow | null> {
   requireOrgScope(ctx);
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     await acquireMirrorLock(tx, id);
 
     const [row] = await tx
@@ -464,7 +465,7 @@ export async function deleteDocumentWithCertificationSafety(
         ),
       )
       .for("update");
-    if (!row) return null;
+    if (!row) return { deleted: null, queued: false };
 
     const isometricMapping = await getDocumentUploadByDocument(
       ctx,
@@ -529,17 +530,14 @@ export async function deleteDocumentWithCertificationSafety(
     }
 
     if (row.storageKey) {
-      try {
-        await getStorageProvider().deleteObject(row.storageKey);
-      } catch {
-        log.error(
-          { documentId: row.id },
-          "failed to delete storage object",
-        );
-        throw new SafeError(
-          "The stored file was not deleted. The document and certification link were kept. Try again.",
-        );
+      if (!row.storageProvider || !row.storageBucket) {
+        throw new Error("Stored document is missing its provider or bucket");
       }
+      await enqueueStorageObjectDeletion(ctx, tx, {
+        storageProvider: row.storageProvider,
+        storageBucket: row.storageBucket,
+        storageKey: row.storageKey,
+      });
     }
 
     const [deleted] = await tx
@@ -551,8 +549,13 @@ export async function deleteDocumentWithCertificationSafety(
         ),
       )
       .returning();
-    return deleted ?? null;
+    return { deleted: deleted ?? null, queued: row.storageKey !== null };
   });
+
+  if (result.queued) {
+    await processPendingStorageObjectDeletions(ctx);
+  }
+  return result.deleted;
 }
 
 /**
@@ -561,9 +564,9 @@ export async function deleteDocumentWithCertificationSafety(
  * Call this as the final operation inside the parent's delete transaction,
  * after every FK-constrained database delete has succeeded. Document rows are
  * locked before the mirror check, which makes the FK from
- * certifier_document_uploads the race backstop while storage cleanup runs. A
- * storage failure aborts the transaction, preserving both the parent and
- * document rows for an idempotent retry.
+ * certifier_document_uploads the race backstop. Managed storage objects are
+ * queued durably in this transaction; callers drain that queue only after the
+ * outer parent transaction commits.
  */
 export async function retireDocumentsForEntities(
   ctx: OrgContext,
@@ -619,25 +622,16 @@ export async function retireDocumentsForEntities(
     );
   }
 
-  const managedDocuments = ownedDocuments.filter(
-    (document): document is DocumentRow & { storageKey: string } =>
-      document.storageKey !== null,
-  );
-  if (managedDocuments.length > 0) {
-    const provider = getStorageProvider();
-    for (const document of managedDocuments) {
-      try {
-        await provider.deleteObject(document.storageKey);
-      } catch (error) {
-        console.error("Failed to retire parent-owned storage object", {
-          documentId: document.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw new SafeError(
-          "An attached file was not deleted. The record and document details were kept. Try deleting the record again.",
-        );
-      }
+  for (const document of ownedDocuments) {
+    if (!document.storageKey) continue;
+    if (!document.storageProvider || !document.storageBucket) {
+      throw new Error("Stored document is missing its provider or bucket");
     }
+    await enqueueStorageObjectDeletion(ctx, tx, {
+      storageProvider: document.storageProvider,
+      storageBucket: document.storageBucket,
+      storageKey: document.storageKey,
+    });
   }
 
   await tx

@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
   biocharProducts,
@@ -17,6 +17,7 @@ import {
   productionSamples,
   productionRuns,
   reactors,
+  storageObjectDeletions,
   transportLegs,
 } from "@/db/schema";
 import { deleteFeedstock } from "@/data-access/feedstocks";
@@ -27,6 +28,8 @@ import { deleteProductionSample } from "@/data-access/production-samples";
 import { deleteReactor } from "@/data-access/reactors";
 import { deleteSample } from "@/data-access/samples";
 import { syncFeedstockTransportLeg } from "@/data-access/transport-legs";
+import { retireDocumentsForEntities } from "@/data-access/documents";
+import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import { __setStorageProviderForTests } from "@/lib/storage";
 import type {
   ObjectHead,
@@ -140,6 +143,7 @@ describe("parent document retirement", () => {
     const otherOrgId = `org_document_retirement_${tag}`;
     const managedKey = `reactor/${fixture.reactorId}/pdf/${tag}.pdf`;
     const otherOrgKey = `reactor/${fixture.reactorId}/pdf/${tag}-other.pdf`;
+    const otherPendingKey = `reactor/${fixture.reactorId}/pdf/${tag}-pending.pdf`;
 
     try {
       await db.insert(organizations).values({
@@ -162,6 +166,13 @@ describe("parent document retirement", () => {
         otherOrgKey,
         otherOrgId,
       );
+      provider.objects.add(otherPendingKey);
+      await db.insert(storageObjectDeletions).values({
+        organizationId: otherOrgId,
+        storageProvider: provider.name,
+        storageBucket: provider.bucket,
+        storageKey: otherPendingKey,
+      });
 
       await deleteReactor(
         makeTestOrgContext(TEST_USER_ID),
@@ -171,6 +182,18 @@ describe("parent document retirement", () => {
       expect(provider.deleteCalls).toEqual([managedKey]);
       expect(provider.objects.has(managedKey)).toBe(false);
       expect(provider.objects.has(otherOrgKey)).toBe(true);
+      expect(provider.objects.has(otherPendingKey)).toBe(true);
+      expect(
+        await db
+          .select()
+          .from(storageObjectDeletions)
+          .where(
+            and(
+              eq(storageObjectDeletions.organizationId, otherOrgId),
+              isNull(storageObjectDeletions.completedAt),
+            ),
+          ),
+      ).toHaveLength(1);
       expect(
         await db.select().from(documents).where(eq(documents.id, otherDocumentId)),
       ).toHaveLength(1);
@@ -186,6 +209,9 @@ describe("parent document retirement", () => {
           ),
       ).toHaveLength(0);
     } finally {
+      await db
+        .delete(storageObjectDeletions)
+        .where(eq(storageObjectDeletions.organizationId, otherOrgId));
       await db.delete(documents).where(eq(documents.organizationId, otherOrgId));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
       await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
@@ -441,7 +467,58 @@ describe("parent document retirement", () => {
     }
   });
 
-  it("keeps rows after storage failure and succeeds on an idempotent retry", async () => {
+  it("rolls back queued deletion without touching storage when later database work fails", async () => {
+    const tag = crypto.randomUUID().slice(0, 8);
+    const fixture = await createReactorFixture(tag);
+    const key = `reactor/${fixture.reactorId}/pdf/${tag}-rollback.pdf`;
+    const documentId = await insertManagedDocument(
+      "reactor",
+      fixture.reactorId,
+      key,
+    );
+
+    try {
+      await expect(
+        db.transaction(async (tx) => {
+          await tx
+            .delete(reactors)
+            .where(
+              and(
+                eq(reactors.id, fixture.reactorId),
+                eq(reactors.organizationId, TEST_ORG_ID),
+              ),
+            );
+          await retireDocumentsForEntities(
+            makeTestOrgContext(TEST_USER_ID),
+            tx,
+            [{ entityType: "reactor", entityId: fixture.reactorId }],
+          );
+          throw new Error("Injected failure after outbox enqueue");
+        }),
+      ).rejects.toThrow(/Injected failure/);
+
+      expect(provider.deleteCalls).toEqual([]);
+      expect(provider.objects.has(key)).toBe(true);
+      expect(
+        await db.select().from(reactors).where(eq(reactors.id, fixture.reactorId)),
+      ).toHaveLength(1);
+      expect(
+        await db.select().from(documents).where(eq(documents.id, documentId)),
+      ).toHaveLength(1);
+      expect(
+        await db
+          .select()
+          .from(storageObjectDeletions)
+          .where(eq(storageObjectDeletions.storageKey, key)),
+      ).toHaveLength(0);
+    } finally {
+      await db.delete(documents).where(eq(documents.id, documentId));
+      await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
+      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    }
+  });
+
+  it("keeps partial storage failures pending and retries idempotently", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const fixture = await createReactorFixture(tag);
     const keys = [
@@ -453,36 +530,49 @@ describe("parent document retirement", () => {
     provider.failKey = keys[1];
 
     try {
-      await expect(
-        deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId),
-      ).rejects.toThrow(
-        /An attached file was not deleted. The record and document details were kept./i,
-      );
-
-      expect(
-        await db.select().from(reactors).where(eq(reactors.id, fixture.reactorId)),
-      ).toHaveLength(1);
-      expect(
-        await db
-          .select()
-          .from(documents)
-          .where(eq(documents.entityId, fixture.reactorId)),
-      ).toHaveLength(2);
-
-      provider.failKey = null;
       await deleteReactor(
         makeTestOrgContext(TEST_USER_ID),
         fixture.reactorId,
       );
-      expect(provider.objects.has(keys[0])).toBe(false);
-      expect(provider.objects.has(keys[1])).toBe(false);
+
+      expect(
+        await db.select().from(reactors).where(eq(reactors.id, fixture.reactorId)),
+      ).toHaveLength(0);
       expect(
         await db
           .select()
           .from(documents)
           .where(eq(documents.entityId, fixture.reactorId)),
       ).toHaveLength(0);
+      expect(provider.objects.has(keys[0])).toBe(false);
+      expect(provider.objects.has(keys[1])).toBe(true);
+      const queuedAfterFailure = await db
+        .select()
+        .from(storageObjectDeletions)
+        .where(inArray(storageObjectDeletions.storageKey, keys));
+      expect(queuedAfterFailure).toHaveLength(2);
+      expect(
+        queuedAfterFailure.filter((entry) => entry.completedAt === null),
+      ).toHaveLength(1);
+
+      provider.failKey = null;
+      const retryResult = await processPendingStorageObjectDeletions(
+        makeTestOrgContext(TEST_USER_ID),
+      );
+      expect(retryResult).toEqual({ completed: 1, failed: 0 });
+      expect(provider.objects.has(keys[0])).toBe(false);
+      expect(provider.objects.has(keys[1])).toBe(false);
+      const callsAfterRetry = provider.deleteCalls.length;
+      expect(
+        await processPendingStorageObjectDeletions(
+          makeTestOrgContext(TEST_USER_ID),
+        ),
+      ).toEqual({ completed: 0, failed: 0 });
+      expect(provider.deleteCalls).toHaveLength(callsAfterRetry);
     } finally {
+      await db
+        .delete(storageObjectDeletions)
+        .where(inArray(storageObjectDeletions.storageKey, keys));
       await db.delete(documents).where(eq(documents.entityId, fixture.reactorId));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
       await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
@@ -564,6 +654,9 @@ describe("parent document retirement", () => {
           tx,
           feedstock.id,
         ),
+      );
+      await processPendingStorageObjectDeletions(
+        makeTestOrgContext(TEST_USER_ID),
       );
       expect(provider.objects.has(key)).toBe(false);
       expect(

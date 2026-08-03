@@ -41,6 +41,7 @@ import {
   retireDocumentsForEntities,
   type DocumentEntityRef,
 } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
   biocharTransportEvidenceDocumentCount,
   transportEvidenceDocumentCount,
@@ -376,6 +377,7 @@ export async function deleteTransportLeg(
   if (result.length === 0) {
     throw new SafeError("Transport leg not found");
   }
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 // Internal cascade helper for parent deletes. `transport_legs.entity_id` is

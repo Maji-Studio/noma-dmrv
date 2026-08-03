@@ -64,6 +64,7 @@ import {
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { assertRemovalAllowsCreditBatchMutation } from "./credit-batch-certification-lock";
 
 const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
@@ -816,6 +817,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
       { entityType: "credit_batch", entityId: id },
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 /**
