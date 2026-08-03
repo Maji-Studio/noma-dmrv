@@ -287,7 +287,7 @@ export function SampleForm({
         id="oToCOrgRatio"
         label="O:C org ratio"
         error={errors.oToCOrgRatio?.message}
-        helperText="Enter to override, or leave blank to derive from O% and C_org%"
+        helperText="Enter the lab ratio, or derive it from O% and C_org%."
         certifyRequired={isSampleCertifyField("oToCOrgRatio")}
         certifyStatus={certStatus("oToCOrgRatio")}
       >
@@ -603,6 +603,7 @@ export function SampleForm({
                 id="totalOxygenPercent"
                 label="Oxygen (%)"
                 error={errors.totalOxygenPercent?.message}
+                helperText="Used to calculate required O:C org when no lab ratio is entered."
               >
                 <FormInput
                   id="totalOxygenPercent"
@@ -743,6 +744,11 @@ export function SampleForm({
         {/* ── Stability Ratios ── */}
         <FormSection
           title="Stability ratios"
+          hint={
+            is1000Year
+              ? "These ratios are not used for the 1000-year durability estimate, but remain required for the universal eligibility check (H/C_org < 0.5, O/C_org < 0.2). A sample without both ratios does not count toward the credit batch's minimum number of replicates."
+              : undefined
+          }
           icon={<CalculatorIcon size={14} weight="bold" />}
           fields={["hToCOrgRatio", "oToCOrgRatio"]}
         >
@@ -754,17 +760,6 @@ export function SampleForm({
                   : "The durability tier is inherited from the selected credit batch."}
               </p>
 
-              {/* R₀ and TGA determine the 1000-year durability estimate, but
-                  both stability ratios remain universal eligibility inputs. */}
-              {is1000Year && (
-                <p className="body-caption text-[var(--color-text-tertiary)]">
-                  These ratios are not used for the 1000-year durability
-                  estimate, but remain required for the universal eligibility
-                  check (H/C_org &lt; 0.5, O/C_org &lt; 0.2). A sample without both
-                  ratios does not count toward the credit batch&apos;s minimum
-                  number of replicates.
-                </p>
-              )}
               {stabilityRatioFields}
 
               <SampleEligibilityAdvisory
