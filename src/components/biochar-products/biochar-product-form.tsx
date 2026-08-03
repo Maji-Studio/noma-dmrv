@@ -35,7 +35,6 @@ import type { BiocharProductWithRelations } from "@/data-access/biochar-products
 import {
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
-  shouldPrefillSuggestedMasses,
   SOURCE_BIOCHAR_MASS_ERROR,
   useBiocharComposition,
 } from "@/lib/biochar-composition";
@@ -337,11 +336,6 @@ export function BiocharProductForm({
     formulationId: selectedFormulationId,
     facilityId: selectedFacilityId,
     productMassKg: massKgNumForComposition,
-    prefillSuggestedMasses: shouldPrefillSuggestedMasses({
-      isEditMode,
-      initialFormulationId,
-      selectedFormulationId,
-    }),
   });
 
   const { data: selectedSourceBiocharBin } = useEntityById(

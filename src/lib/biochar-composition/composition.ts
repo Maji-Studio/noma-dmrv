@@ -121,23 +121,6 @@ export function deriveSourceBiocharMassKg(
 }
 
 /**
- * Suggestions may become form values only while creating a composition. An
- * existing product keeps saved null masses empty unless the operator explicitly
- * assigns a different formulation, whose ingredient rows have no saved facts.
- */
-export function shouldPrefillSuggestedMasses(input: {
-  isEditMode: boolean;
-  initialFormulationId: string | null | undefined;
-  selectedFormulationId: string | null | undefined;
-}): boolean {
-  if (!input.selectedFormulationId) return false;
-  return (
-    !input.isEditMode ||
-    input.selectedFormulationId !== input.initialFormulationId
-  );
-}
-
-/**
  * Threshold (in percent) past which the entered ingredient mass shows a soft
  * "vs recipe" hint. Never blocks submission — the recipe is orientation, not
  * a constraint.

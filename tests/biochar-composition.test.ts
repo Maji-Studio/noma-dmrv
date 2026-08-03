@@ -5,7 +5,6 @@ import {
   deriveSourceBiocharMassKg,
   deriveMassDeviationPercent,
   fromCompositionJsonb,
-  shouldPrefillSuggestedMasses,
   toCompositionJsonb,
 } from "@/lib/biochar-composition";
 import type { IngredientBin } from "@/lib/biochar-composition";
@@ -244,53 +243,6 @@ describe("deriveSourceBiocharMassKg", () => {
         { massKg: -1 },
       ]),
     ).toBe(1);
-  });
-});
-
-describe("shouldPrefillSuggestedMasses", () => {
-  it("allows suggestions while creating a new product composition", () => {
-    expect(
-      shouldPrefillSuggestedMasses({
-        isEditMode: false,
-        initialFormulationId: null,
-        selectedFormulationId: ING_A,
-      }),
-    ).toBe(true);
-  });
-
-  it("does not fabricate a null saved mass during an unrelated edit", () => {
-    const savedWithNullMass: IngredientBin[] = [
-      {
-        formulationIngredientId: ING_A,
-        feedstockTypeId: FT_A,
-        feedstockTypeName: "Compost",
-        feedstockTypeCategory: "compost",
-        ratio: 0.2,
-        massKg: null,
-        storageLocationId: BIN_A,
-      },
-    ];
-
-    expect(
-      shouldPrefillSuggestedMasses({
-        isEditMode: true,
-        initialFormulationId: ING_C,
-        selectedFormulationId: ING_C,
-      }),
-    ).toBe(false);
-    expect(toCompositionJsonb(savedWithNullMass, { mode: "update" })).toEqual({
-      ingredients: [expect.objectContaining({ massKg: null })],
-    });
-  });
-
-  it("allows suggestions after an explicit formulation reassignment", () => {
-    expect(
-      shouldPrefillSuggestedMasses({
-        isEditMode: true,
-        initialFormulationId: ING_A,
-        selectedFormulationId: ING_B,
-      }),
-    ).toBe(true);
   });
 });
 
