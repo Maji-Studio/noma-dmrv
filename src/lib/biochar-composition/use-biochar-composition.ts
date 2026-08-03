@@ -8,7 +8,7 @@
  *   - the formulation fetch (via `useFormulation`),
  *   - the formulation-change sync effect (preserves user-entered fields),
  *   - the facility-change cascade (clears each row's `storageLocationId`),
- *   - the removal-kg derivation per row.
+ *   - the recipe suggestion and deviation per row.
  *
  * The form passes its `useForm` return value in and renders rows from the
  * `rows` array — no `useFieldArray`, no sync effect, no inline math.

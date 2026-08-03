@@ -119,6 +119,7 @@ import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards"
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import {
   assertCompositionIngredientDrawsWithinStock,
+  compositionAllocationChanged,
   validateCompositionIngredientBins,
 } from "./biochar-product-composition";
 import {
@@ -578,8 +579,10 @@ export async function updateBiocharProduct(
     (data.massKg !== undefined &&
       data.massKg !== existing.massKg) ||
     (data.composition !== undefined &&
-      JSON.stringify(data.composition) !==
-        JSON.stringify(existing.composition)) ||
+      compositionAllocationChanged(
+        existing.composition as Record<string, unknown> | null,
+        data.composition,
+      )) ||
     (data.linkedProductionRunId !== undefined &&
       data.linkedProductionRunId !==
         existing.linkedProductionRunId);

@@ -320,13 +320,6 @@ function buildInventoryAggregates(
       eq(biocharProducts.organizationId, ctx.organizationId),
     ),
   )
-  .leftJoin(
-    formulations,
-    and(
-      eq(biocharProducts.formulationId, formulations.id),
-      eq(formulations.organizationId, ctx.organizationId),
-    ),
-  )
   .where(and(
     eq(productionRuns.organizationId, ctx.organizationId),
     ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
@@ -412,13 +405,6 @@ function buildInventoryAggregates(
     `).as("biochar_equivalent_kg"),
   })
   .from(biocharProducts)
-  .leftJoin(
-    formulations,
-    and(
-      eq(biocharProducts.formulationId, formulations.id),
-      eq(formulations.organizationId, ctx.organizationId),
-    ),
-  )
   .where(eq(biocharProducts.organizationId, ctx.organizationId))
   .groupBy(biocharProducts.storageLocationId)
   .as("product_inventory_agg");

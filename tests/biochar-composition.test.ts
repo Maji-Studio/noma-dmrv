@@ -211,6 +211,15 @@ describe("deriveSourceBiocharMassKg", () => {
     ).toBe(80);
   });
 
+  it("uses exact persisted gram arithmetic", () => {
+    expect(
+      deriveSourceBiocharMassKg(0.3, [
+        { massKg: 0.1 },
+        { massKg: 0.2 },
+      ]),
+    ).toBe(0);
+  });
+
   it("does not infer mass from formulation volume shares", () => {
     const ingredient = { massKg: 20, ratio: 0.4 };
     expect(
@@ -223,6 +232,18 @@ describe("deriveSourceBiocharMassKg", () => {
     expect(
       deriveSourceBiocharMassKg(Number.NaN, [{ massKg: 20 }]),
     ).toBeNull();
+  });
+
+  it("intentionally ignores missing, non-finite, and non-positive ingredient masses", () => {
+    expect(
+      deriveSourceBiocharMassKg(1, [
+        {},
+        { massKg: Number.NaN },
+        { massKg: Number.POSITIVE_INFINITY },
+        { massKg: 0 },
+        { massKg: -1 },
+      ]),
+    ).toBe(1);
   });
 });
 

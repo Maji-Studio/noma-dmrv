@@ -18,6 +18,7 @@ import {
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import { formatCount } from "@/lib/copy-utils";
+import { deriveSourceBiocharMassKg } from "@/lib/biochar-composition";
 import type { DbTransaction } from "@/db";
 import { assertFeedstockDrawWithinStock } from "./bin-stock-guards";
 import { requireOrgScope } from "./utils";
@@ -66,6 +67,67 @@ function getCompositionIngredientRefs(
     .filter((ref): ref is CompositionIngredientRef =>
       Boolean(ref?.formulationIngredientId && ref.feedstockTypeId),
     );
+}
+
+const GRAMS_PER_KILOGRAM = 1_000;
+
+function getCompositionIngredientObjects(
+  composition: Record<string, unknown> | null | undefined,
+): Record<string, unknown>[] {
+  return Array.isArray(composition?.ingredients)
+    ? composition.ingredients.filter(
+        (ingredient): ingredient is Record<string, unknown> =>
+          typeof ingredient === "object" && ingredient !== null,
+      )
+    : [];
+}
+
+function canonicalAllocationIngredients(
+  composition: Record<string, unknown> | null | undefined,
+) {
+  return getCompositionIngredientObjects(composition)
+    .map((ingredient) => ({
+      formulationIngredientId:
+        typeof ingredient.formulationIngredientId === "string"
+          ? ingredient.formulationIngredientId
+          : null,
+      feedstockTypeId:
+        typeof ingredient.feedstockTypeId === "string"
+          ? ingredient.feedstockTypeId
+          : null,
+      storageLocationId:
+        typeof ingredient.storageLocationId === "string"
+          ? ingredient.storageLocationId
+          : null,
+      massGrams:
+        typeof ingredient.massKg === "number" &&
+        Number.isFinite(ingredient.massKg)
+          ? Math.round(ingredient.massKg * GRAMS_PER_KILOGRAM)
+          : null,
+    }))
+    .sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    );
+}
+
+/** Compare only persisted composition facts that affect physical allocations. */
+export function compositionAllocationChanged(
+  previous: Record<string, unknown> | null | undefined,
+  next: Record<string, unknown> | null | undefined,
+): boolean {
+  return JSON.stringify(canonicalAllocationIngredients(previous)) !==
+    JSON.stringify(canonicalAllocationIngredients(next));
+}
+
+/** Derive source mass without requiring legacy ingredient rows to name a bin. */
+export function deriveCompositionSourceBiocharMassKg(
+  blendMassKg: number | null | undefined,
+  composition: Record<string, unknown> | null | undefined,
+): number | null {
+  return deriveSourceBiocharMassKg(
+    blendMassKg,
+    getCompositionIngredientObjects(composition),
+  );
 }
 
 export interface CompositionIngredientDraw {

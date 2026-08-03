@@ -7,7 +7,6 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import {
-  deriveSourceBiocharMassKg,
   SOURCE_BIOCHAR_MASS_ERROR,
 } from "@/lib/biochar-composition";
 import { SafeError } from "@/lib/errors";
@@ -23,7 +22,11 @@ import {
   assertStockLockSnapshot,
   lockBinStocks,
 } from "./lock-bin-stocks";
-import { getCompositionIngredientDraws } from "./biochar-product-composition";
+import {
+  compositionAllocationChanged,
+  deriveCompositionSourceBiocharMassKg,
+  getCompositionIngredientDraws,
+} from "./biochar-product-composition";
 
 interface BiocharProductStockUpdate {
   facilityId?: string;
@@ -211,8 +214,10 @@ export async function lockBiocharProductUpdateRows(
     locked.storageLocationId === preparation.product.storageLocationId &&
       locked.linkedProductionRunId === preparation.product.linkedProductionRunId &&
       (data.composition === undefined ||
-        JSON.stringify(locked.composition) ===
-          JSON.stringify(preparation.product.composition)),
+        !compositionAllocationChanged(
+          locked.composition as Record<string, unknown> | null,
+          preparation.product.composition as Record<string, unknown> | null,
+        )),
   );
 
   const sourceRunIds = preparation.sourceRuns.map((run) => run.id);
@@ -274,9 +279,9 @@ export async function assertBiocharProductUpdateDraw(
     ));
   if (!effectiveRun?.biocharStorageLocationId) return;
 
-  const requestedBiocharKg = deriveSourceBiocharMassKg(
+  const requestedBiocharKg = deriveCompositionSourceBiocharMassKg(
     state.transactionMassKg,
-    getCompositionIngredientDraws(state.transactionComposition),
+    state.transactionComposition,
   );
   if (requestedBiocharKg === null || requestedBiocharKg < 0) {
     throw new SafeError(SOURCE_BIOCHAR_MASS_ERROR);

@@ -3,7 +3,7 @@
  *
  * Server-safe (no React, no DB, no Zod). All transforms between the form
  * shape (`IngredientBin[]`) and the persisted JSONB envelope live here, plus
- * the formulation-driven reconcile and the removal-kg derivation.
+ * the formulation-driven reconcile and source-biochar mass derivation.
  */
 
 import type { IngredientBin } from "./types";
@@ -51,11 +51,9 @@ export function reconcileComposition(
 }
 
 /**
- * Recipe-suggested mass for a single ingredient =
- * productMassKg * ingredientRatio.
- * Orientation only — prefills the editable mass field; the entered mass is
- * authoritative. Formulation ratios partition the total solid blend, so the
- * product mass is already the correct basis. Returns null whenever either
+ * Recipe-suggested mass for a single ingredient = productMassKg *
+ * ingredientRatio. This value only prefills the editable mass field; the
+ * recorded mass is authoritative for allocation. Returns null whenever either
  * input is missing or non-positive.
  */
 export function deriveSuggestedIngredientMassKg(
@@ -79,19 +77,26 @@ interface IngredientMassLike {
 }
 
 export const SOURCE_BIOCHAR_MASS_ERROR =
-  "Ingredient mass cannot exceed wet mass.";
+  "Recorded ingredient mass exceeds blend mass. Reduce ingredient mass or increase blend mass.";
+
+const GRAMS_PER_KILOGRAM = 1_000;
+
+function toPersistedMassGrams(massKg: number): number {
+  return Math.round(massKg * GRAMS_PER_KILOGRAM);
+}
 
 /** Sum the actual ingredient masses recorded for one product blend. */
-export function sumRecordedIngredientMassKg(
+function sumRecordedIngredientMassKg(
   ingredients: readonly IngredientMassLike[] | null | undefined,
 ): number {
-  return (ingredients ?? []).reduce((total, ingredient) => {
+  const totalGrams = (ingredients ?? []).reduce((total, ingredient) => {
     const massKg = ingredient.massKg;
     return total +
       (typeof massKg === "number" && Number.isFinite(massKg) && massKg > 0
-        ? massKg
+        ? toPersistedMassGrams(massKg)
         : 0);
   }, 0);
+  return totalGrams / GRAMS_PER_KILOGRAM;
 }
 
 /**
@@ -108,7 +113,11 @@ export function deriveSourceBiocharMassKg(
   ) {
     return null;
   }
-  return blendMassKg - sumRecordedIngredientMassKg(ingredients);
+  const blendMassGrams = toPersistedMassGrams(blendMassKg);
+  const ingredientMassGrams = toPersistedMassGrams(
+    sumRecordedIngredientMassKg(ingredients),
+  );
+  return (blendMassGrams - ingredientMassGrams) / GRAMS_PER_KILOGRAM;
 }
 
 /**

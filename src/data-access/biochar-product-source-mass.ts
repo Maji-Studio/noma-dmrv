@@ -12,17 +12,20 @@ export function sourceBiocharMassKgSql(
   composition: SQLWrapper,
 ): SQL<number> {
   return sql<number>`
-    COALESCE(${blendMassKg}, 0) - COALESCE((
-      SELECT SUM((ingredient.value ->> 'massKg')::numeric)
-      FROM jsonb_array_elements(
-        CASE
-          WHEN jsonb_typeof(${composition} -> 'ingredients') = 'array'
-          THEN ${composition} -> 'ingredients'
-          ELSE '[]'::jsonb
-        END
-      ) AS ingredient(value)
-      WHERE jsonb_typeof(ingredient.value -> 'massKg') = 'number'
-        AND (ingredient.value ->> 'massKg')::numeric > 0
-    ), 0)
+    GREATEST(
+      COALESCE(${blendMassKg}, 0) - COALESCE((
+        SELECT SUM((ingredient.value ->> 'massKg')::numeric)
+        FROM jsonb_array_elements(
+          CASE
+            WHEN jsonb_typeof(${composition} -> 'ingredients') = 'array'
+            THEN ${composition} -> 'ingredients'
+            ELSE '[]'::jsonb
+          END
+        ) AS ingredient(value)
+        WHERE jsonb_typeof(ingredient.value -> 'massKg') = 'number'
+          AND (ingredient.value ->> 'massKg')::numeric > 0
+      ), 0),
+      0::numeric
+    )
   `;
 }

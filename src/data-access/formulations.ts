@@ -54,11 +54,6 @@ export type IngredientInput = {
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { formatCount } from "@/lib/copy-utils";
-import {
-  assertFormulationRatioWithinStock,
-  lockFormulationRatioRows,
-  lockFormulationRatioStock,
-} from "./formulation-stock-locks";
 
 async function assertBlendFeedstockTypes(ctx: OrgContext, ingredients?: IngredientInput[]) {
   const feedstockTypeIds = [
@@ -342,10 +337,6 @@ export async function updateFormulation(
   const { ingredients: ingredientData, ...formulationFields } = data;
 
   return db.transaction(async (tx) => {
-    const ratioLockPreparation = data.biocharRatio !== undefined
-      ? await lockFormulationRatioStock(ctx, tx, formulationId)
-      : null;
-
     // Lock the parent row so concurrent updates serialize and the ratio guard
     // below always reconciles against the latest committed state — validating
     // outside the transaction lets two partial updates (one changing the
@@ -380,18 +371,6 @@ export async function updateFormulation(
             ));
     assertRatioSumWithinBounds(effectiveBiocharRatio, effectiveIngredients);
 
-    const biocharRatioChanged =
-      data.biocharRatio !== undefined &&
-      data.biocharRatio !== locked.biocharRatio;
-    const ratioStockState = biocharRatioChanged && ratioLockPreparation
-      ? await lockFormulationRatioRows(
-          ctx,
-          tx,
-          formulationId,
-          ratioLockPreparation,
-        )
-      : [];
-
     const [updated] = await tx
       .update(formulations)
       .set({
@@ -403,8 +382,6 @@ export async function updateFormulation(
         eq(formulations.organizationId, ctx.organizationId),
       ))
       .returning();
-
-    await assertFormulationRatioWithinStock(ctx, tx, ratioStockState);
 
     let ingredients: FormulationIngredientWithFeedstockType[] = [];
 
