@@ -77,18 +77,25 @@ export function BiocharSourceMassFields({
 /**
  * The form captures the biochar-only wet mass, while the persisted `massKg`
  * stays the pre-water blend total (biochar plus every recorded ingredient) so
- * server accounting is unchanged. Immutable source allocations additionally
- * keep their persisted composition server-side.
+ * server accounting is unchanged. Edits pass the stored total through
+ * verbatim: the mass field is disabled, and rebuilding the total from rows
+ * reconciled against a since-edited formulation would silently change the
+ * record. Immutable source allocations additionally keep their persisted
+ * composition server-side.
  */
 export function prepareBiocharProductSubmission(
   data: BiocharProductFormData,
   allocationFrozen: boolean,
+  persistedBlendMassKg?: number | null,
 ): BiocharProductFormData {
-  const blendMassKg = deriveBlendMassKg(
-    typeof data.massKg === "number" ? data.massKg : null,
-    data.ingredientBins,
-  );
-  const next = { ...data, massKg: blendMassKg ?? data.massKg };
+  const massKg =
+    persistedBlendMassKg !== undefined
+      ? persistedBlendMassKg
+      : deriveBlendMassKg(
+          typeof data.massKg === "number" ? data.massKg : null,
+          data.ingredientBins,
+        ) ?? data.massKg;
+  const next = { ...data, massKg };
   return allocationFrozen
     ? { ...next, ingredientBins: undefined }
     : next;
@@ -496,6 +503,7 @@ export function BiocharProductForm({
       prepareBiocharProductSubmission(
         data as BiocharProductFormData,
         hasFrozenSourceAllocation,
+        isEditMode ? product?.massKg ?? null : undefined,
       ),
     );
   });
@@ -524,9 +532,23 @@ export function BiocharProductForm({
     waterAddedKgNum !== null && waterAddedKgNum > 0
       ? [...ingredientAdditions, { label: "Water", massKg: waterAddedKgNum }]
       : ingredientAdditions;
+  // The wet product total is a claim about the finished blend, so it stays
+  // hidden until water and every ingredient mass are actually entered —
+  // otherwise blank required fields read as a smaller final product.
+  const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
+    (ingredient) =>
+      typeof ingredient.massKg === "number" &&
+      Number.isFinite(ingredient.massKg) &&
+      ingredient.massKg >= 0,
+  );
   const blendMassKg = deriveBlendMassKg(massKgNum, watchedIngredientBins);
   const destinationWetProductKg =
-    blendMassKg !== null ? blendMassKg + (waterAddedKgNum ?? 0) : null;
+    blendMassKg !== null &&
+    ingredientMassesComplete &&
+    waterAddedKgNum !== null &&
+    waterAddedKgNum >= 0
+      ? blendMassKg + waterAddedKgNum
+      : null;
 
   return (
     <div className="space-y-20">

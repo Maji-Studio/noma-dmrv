@@ -63,6 +63,14 @@ describe("prepareBiocharProductSubmission", () => {
     expect(prepareBiocharProductSubmission(pure, false).massKg).toBe(100);
   });
 
+  it("passes the stored blend total through verbatim on edit", () => {
+    // Edit rows may be reconciled against a since-edited formulation, so the
+    // stored total must never be rebuilt from them.
+    expect(prepareBiocharProductSubmission(data, false, 90).massKg).toBe(90);
+    expect(prepareBiocharProductSubmission(data, true, 90).massKg).toBe(90);
+    expect(prepareBiocharProductSubmission(data, false, null).massKg).toBeNull();
+  });
+
   it("omits immutable composition from a frozen allocation update", () => {
     expect(prepareBiocharProductSubmission(data, true).ingredientBins)
       .toBeUndefined();
