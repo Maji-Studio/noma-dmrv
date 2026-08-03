@@ -247,19 +247,19 @@ export function planBiocharProductSourceAllocations(
   );
   const roundedRequestedWetMassKg = gramsToMassKg(requestedWetMassGrams);
 
-  if (requestedWetMassGrams > availableWetMassGrams) {
-    throw new InsufficientTraceableBiocharError(
-      availableWetMassKg,
-      roundedRequestedWetMassKg,
-    );
-  }
-
   if (requestedWetMassGrams === 0) {
     return {
       allocations: [],
       productionDate: null,
       availableWetMassKg,
     };
+  }
+
+  if (requestedWetMassGrams > availableWetMassGrams) {
+    throw new InsufficientTraceableBiocharError(
+      availableWetMassKg,
+      roundedRequestedWetMassKg,
+    );
   }
 
   const allocatedWetMassByLotGrams = distributeGramsProportionally(

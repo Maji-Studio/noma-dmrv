@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { DRY_MASS_EXCEEDS_WET_MESSAGE } from "@/lib/calculations/mass-dry";
 import {
   emptyToNull,
   massKgSchema,
@@ -82,17 +83,44 @@ const ingredientBinBaseSchema = z.object({
     .nullable(),
 });
 
-const ingredientBinFormSchema = ingredientBinBaseSchema.extend({
-  storageLocationId: emptyToNull.or(z.string().uuid()).optional().nullable(),
-  massKg: requiredNumber(
-    "Ingredient mass is required",
-    "Ingredient mass must be a number",
-  ).pipe(massKgSchema("Ingredient mass must be 0 or greater")),
-});
+type IngredientMassFields = {
+  massKg: number;
+  massDryKg?: number | null;
+};
 
-const ingredientBinUpdateSchema = ingredientBinBaseSchema.extend({
-  storageLocationId: z.string().uuid().optional().nullable(),
-});
+function ingredientDryMassRefinement(
+  ingredient: IngredientMassFields,
+  ctx: z.RefinementCtx,
+): void {
+  if (
+    ingredient.massDryKg == null ||
+    ingredient.massDryKg <= ingredient.massKg
+  ) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ["massDryKg"],
+    message: DRY_MASS_EXCEEDS_WET_MESSAGE,
+  });
+}
+
+const ingredientBinFormSchema = ingredientBinBaseSchema
+  .extend({
+    storageLocationId: emptyToNull.or(z.string().uuid()).optional().nullable(),
+    massKg: requiredNumber(
+      "Ingredient mass is required",
+      "Ingredient mass must be a number",
+    ).pipe(massKgSchema("Ingredient mass must be 0 or greater")),
+  })
+  .superRefine(ingredientDryMassRefinement);
+
+const ingredientBinUpdateSchema = ingredientBinBaseSchema
+  .extend({
+    storageLocationId: z.string().uuid().optional().nullable(),
+  })
+  .superRefine(ingredientDryMassRefinement);
 
 export type IngredientBin = z.infer<typeof ingredientBinFormSchema>;
 

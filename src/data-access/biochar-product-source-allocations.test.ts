@@ -239,13 +239,28 @@ describe("planBiocharProductSourceAllocations", () => {
     );
   });
 
-  it("returns no allocations for a zero draw", () => {
+  it("returns no allocations for a zero draw even when the bin is negative", () => {
     expect(
-      planBiocharProductSourceAllocations([lot()], 0, 10),
+      planBiocharProductSourceAllocations(
+        [lot({ feasibilityWetMassKg: -10 })],
+        0,
+        60,
+      ),
     ).toEqual({
       allocations: [],
       productionDate: null,
-      availableWetMassKg: 40,
+      availableWetMassKg: -70,
     });
+  });
+
+  it.each([
+    ["null", null as unknown as number],
+    ["NaN", Number.NaN],
+    ["infinity", Number.POSITIVE_INFINITY],
+    ["negative", -1],
+  ])("rejects a %s requested source mass", (_case, requestedWetMassKg) => {
+    expect(() =>
+      planBiocharProductSourceAllocations([lot()], requestedWetMassKg),
+    ).toThrow("requestedWetMassKg must be a finite number at or above 0");
   });
 });
