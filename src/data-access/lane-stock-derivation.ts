@@ -6,11 +6,21 @@
  * source row and movement overlay is read from the same snapshot.
  */
 
-import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  sql,
+  type SQLWrapper,
+} from "drizzle-orm";
 import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
   biocharProductSourceAllocations,
+  binMovements,
   feedstocks,
   productionRunFeedstocks,
   productionRuns,
@@ -44,6 +54,23 @@ export interface DeriveLaneStockOptions {
   storageLocationIds: string[];
   excludeRunId?: string;
   excludeProductId?: string;
+}
+
+function latestFeedstockStockTakeAtSql(
+  storageLocationId: SQLWrapper,
+  organizationId: string,
+) {
+  // Keep this validity rule aligned with latestFeedstockStockTakeRows below.
+  return sql<Date | null>`(
+    SELECT MAX(stock_take.created_at)
+    FROM bin_movements stock_take
+    WHERE stock_take.organization_id = ${organizationId}
+      AND stock_take.storage_location_id = (${storageLocationId})::uuid
+      AND stock_take.lane = 'feedstock'
+      AND stock_take.movement_type = 'adjustment'
+      AND stock_take.counted_wet_mass_kg IS NOT NULL
+      AND stock_take.moisture_ratio_used IS NOT NULL
+  )`;
 }
 
 export async function deriveLaneStock(
@@ -106,6 +133,8 @@ export async function deriveLaneStock(
     legacyAllocationRows,
     sourceAllocationRows,
     movementRows,
+    latestFeedstockStockTakeRows,
+    feedstockLossRows,
   ] =
     await Promise.all([
       executor
@@ -124,6 +153,33 @@ export async function deriveLaneStock(
               eq(feedstocks.status, "complete"),
               sql`${feedstocks.massDryKg} > 0`,
               isNull(feedstocks.massWetKg),
+            ),
+          ),
+          replayWet: sumNumeric(
+            feedstocks.massWetKg,
+            and(
+              eq(feedstocks.status, "complete"),
+              sql`${feedstocks.createdAt} > COALESCE(
+                ${latestFeedstockStockTakeAtSql(
+                  feedstocks.storageLocationId,
+                  ctx.organizationId,
+                )},
+                '-infinity'::timestamp
+              )`,
+            ),
+          ),
+          replayMissingWetMassCount: countRows(
+            and(
+              eq(feedstocks.status, "complete"),
+              sql`${feedstocks.massDryKg} > 0`,
+              isNull(feedstocks.massWetKg),
+              sql`${feedstocks.createdAt} > COALESCE(
+                ${latestFeedstockStockTakeAtSql(
+                  feedstocks.storageLocationId,
+                  ctx.organizationId,
+                )},
+                '-infinity'::timestamp
+              )`,
             ),
           ),
         })
@@ -173,6 +229,36 @@ export async function deriveLaneStock(
               )
             )
           `),
+          replayWet: sumNumeric(
+            productionRuns.feedstockWetMassKg,
+            sql`${productionRuns.createdAt} > COALESCE(
+              ${latestFeedstockStockTakeAtSql(
+                productionRuns.feedstockStorageLocationId,
+                ctx.organizationId,
+              )},
+              '-infinity'::timestamp
+            )`,
+          ),
+          replayMissingWetMassCount: countRows(sql`
+            ${productionRuns.createdAt} > COALESCE(
+              ${latestFeedstockStockTakeAtSql(
+                productionRuns.feedstockStorageLocationId,
+                ctx.organizationId,
+              )},
+              '-infinity'::timestamp
+            )
+            AND ${productionRuns.feedstockWetMassKg} IS NULL
+            AND (
+              COALESCE(${productionRuns.feedstockMassDryKg}, 0) > 0
+              OR EXISTS (
+                SELECT 1
+                FROM ${productionRunFeedstocks} replay_consumed_feedstock
+                WHERE replay_consumed_feedstock.production_run_id = ${productionRuns.id}
+                  AND replay_consumed_feedstock.organization_id = ${ctx.organizationId}
+                  AND replay_consumed_feedstock.mass_used_kg > 0
+              )
+            )
+          `),
         })
         .from(productionRuns)
         .where(and(...consumptionConditions))
@@ -208,6 +294,38 @@ export async function deriveLaneStock(
           `),
           missingWetMassCount: countRows(sql`
             jsonb_typeof(ingredient.value -> 'massDryKg') = 'number'
+            AND (ingredient.value ->> 'massDryKg')::numeric > 0
+            AND jsonb_typeof(ingredient.value -> 'massKg') IS DISTINCT FROM 'number'
+          `),
+          replayWet: numericAggregate(sql<number>`
+            COALESCE(
+              SUM(
+                CASE
+                  WHEN ${biocharProducts.createdAt} > COALESCE(
+                    ${latestFeedstockStockTakeAtSql(
+                      sql`ingredient.value ->> 'storageLocationId'`,
+                      ctx.organizationId,
+                    )},
+                    '-infinity'::timestamp
+                  )
+                    AND jsonb_typeof(ingredient.value -> 'massKg') = 'number'
+                    AND (ingredient.value ->> 'massKg')::numeric > 0
+                  THEN (ingredient.value ->> 'massKg')::numeric
+                  ELSE 0
+                END
+              ),
+              0
+            )
+          `),
+          replayMissingWetMassCount: countRows(sql`
+            ${biocharProducts.createdAt} > COALESCE(
+              ${latestFeedstockStockTakeAtSql(
+                sql`ingredient.value ->> 'storageLocationId'`,
+                ctx.organizationId,
+              )},
+              '-infinity'::timestamp
+            )
+            AND jsonb_typeof(ingredient.value -> 'massDryKg') = 'number'
             AND (ingredient.value ->> 'massDryKg')::numeric > 0
             AND jsonb_typeof(ingredient.value -> 'massKg') IS DISTINCT FROM 'number'
           `),
@@ -295,6 +413,47 @@ export async function deriveLaneStock(
         options.storageLocationIds,
         executor,
       ),
+      executor
+        .select({
+          storageLocationId: binMovements.storageLocationId,
+          countedWetMassKg: numericAggregate(sql<number>`
+            (ARRAY_AGG(
+              ${binMovements.countedWetMassKg}
+              ORDER BY ${binMovements.createdAt} DESC, ${binMovements.id} DESC
+            ))[1]
+          `),
+        })
+        .from(binMovements)
+        .where(and(
+          inArray(binMovements.storageLocationId, options.storageLocationIds),
+          eq(binMovements.organizationId, ctx.organizationId),
+          eq(binMovements.lane, "feedstock"),
+          eq(binMovements.movementType, "adjustment"),
+          isNotNull(binMovements.countedWetMassKg),
+          isNotNull(binMovements.moistureRatioUsed),
+        ))
+        .groupBy(binMovements.storageLocationId),
+      executor
+        .select({
+          storageLocationId: binMovements.storageLocationId,
+          hasBasislessLoss: sql<boolean>`COALESCE(BOOL_OR(
+            ${binMovements.movementType} = 'loss'
+            AND ${binMovements.createdAt} > COALESCE(
+              ${latestFeedstockStockTakeAtSql(
+                binMovements.storageLocationId,
+                ctx.organizationId,
+              )},
+              '-infinity'::timestamp
+            )
+          ), false)`,
+        })
+        .from(binMovements)
+        .where(and(
+          inArray(binMovements.storageLocationId, options.storageLocationIds),
+          eq(binMovements.organizationId, ctx.organizationId),
+          eq(binMovements.lane, "feedstock"),
+        ))
+        .groupBy(binMovements.storageLocationId),
     ]);
 
   const byLocation = new Map<string, LaneStockDerivation>(
@@ -317,6 +476,30 @@ export async function deriveLaneStock(
       },
     ]),
   );
+  const wetReplayByLocation = new Map(
+    options.storageLocationIds.map((storageLocationId) => [
+      storageLocationId,
+      {
+        intakeWetKg: 0,
+        consumedWetKg: 0,
+        missingWetBasis: false,
+      },
+    ]),
+  );
+  const latestStockTakeByLocation = new Map<
+    string,
+    { countedWetMassKg: number }
+  >();
+
+  for (const stockTake of latestFeedstockStockTakeRows) {
+    latestStockTakeByLocation.set(stockTake.storageLocationId, {
+      countedWetMassKg: Number(stockTake.countedWetMassKg),
+    });
+  }
+  for (const lossState of feedstockLossRows) {
+    const replay = wetReplayByLocation.get(lossState.storageLocationId);
+    if (replay && lossState.hasBasislessLoss) replay.missingWetBasis = true;
+  }
 
   for (const row of intakeRows) {
     const stock = row.storageLocationId
@@ -326,6 +509,11 @@ export async function deriveLaneStock(
       stock.feedstockIntakeDryKg = row.total;
       stock.feedstockIntakeWetKg =
         row.missingWetMassCount > 0 ? null : row.totalWet;
+      const replay = wetReplayByLocation.get(stock.storageLocationId);
+      if (replay) {
+        replay.intakeWetKg = row.replayWet;
+        replay.missingWetBasis ||= row.replayMissingWetMassCount > 0;
+      }
     }
   }
   for (const row of consumptionRows) {
@@ -341,6 +529,11 @@ export async function deriveLaneStock(
     if (stock) {
       stock.feedstockConsumedWetKg =
         row.missingWetMassCount > 0 ? null : row.totalWet;
+      const replay = wetReplayByLocation.get(stock.storageLocationId);
+      if (replay) {
+        replay.consumedWetKg = row.replayWet;
+        replay.missingWetBasis ||= row.replayMissingWetMassCount > 0;
+      }
     }
   }
   for (const row of ingredientConsumptionRows) {
@@ -354,6 +547,11 @@ export async function deriveLaneStock(
         row.missingWetMassCount > 0
           ? null
           : stock.feedstockConsumedWetKg + row.totalWet;
+      const replay = wetReplayByLocation.get(row.storageLocationId);
+      if (replay) {
+        replay.consumedWetKg += row.replayWet;
+        replay.missingWetBasis ||= row.replayMissingWetMassCount > 0;
+      }
     }
   }
   for (const row of outputRows) {
@@ -391,11 +589,15 @@ export async function deriveLaneStock(
       stock.feedstockIntakeDryKg -
       stock.feedstockConsumedDryKg +
       stock.feedstockMovementDeltaKg;
+    const wetReplay = wetReplayByLocation.get(stock.storageLocationId);
+    const latestStockTake = latestStockTakeByLocation.get(
+      stock.storageLocationId,
+    );
     stock.feedstockStockWetKg =
-      stock.feedstockIntakeWetKg !== null &&
-      stock.feedstockConsumedWetKg !== null &&
-      stock.feedstockMovementDeltaKg === 0
-        ? stock.feedstockIntakeWetKg - stock.feedstockConsumedWetKg
+      wetReplay && !wetReplay.missingWetBasis
+        ? (latestStockTake?.countedWetMassKg ?? 0) +
+          wetReplay.intakeWetKg -
+          wetReplay.consumedWetKg
         : null;
     stock.biocharStockKg =
       stock.biocharProducedKg -
