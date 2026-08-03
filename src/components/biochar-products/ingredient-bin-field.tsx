@@ -82,6 +82,8 @@ export function IngredientMassInput({
       : null;
   const [draft, setDraft] = useState(formatIngredientMass(value));
   const [syncedValue, setSyncedValue] = useState(value);
+  // Intentionally adjust during render when the form value changes externally;
+  // a useEffect would briefly render the stale draft before synchronizing it.
   if (value !== syncedValue) {
     setSyncedValue(value);
     if (parseIngredientMassDraft(draft) !== value) {

@@ -8,7 +8,6 @@
 
 import {
   and,
-  desc,
   eq,
   inArray,
   isNotNull,
@@ -61,6 +60,7 @@ function latestFeedstockStockTakeAtSql(
   storageLocationId: SQLWrapper,
   organizationId: string,
 ) {
+  // Keep this validity rule aligned with latestFeedstockStockTakeRows below.
   return sql<Date | null>`(
     SELECT MAX(stock_take.created_at)
     FROM bin_movements stock_take
@@ -133,7 +133,8 @@ export async function deriveLaneStock(
     legacyAllocationRows,
     sourceAllocationRows,
     movementRows,
-    feedstockMovementRows,
+    latestFeedstockStockTakeRows,
+    feedstockLossRows,
   ] =
     await Promise.all([
       executor
@@ -415,19 +416,44 @@ export async function deriveLaneStock(
       executor
         .select({
           storageLocationId: binMovements.storageLocationId,
-          movementType: binMovements.movementType,
-          countedWetMassKg: binMovements.countedWetMassKg,
-          moistureRatioUsed: binMovements.moistureRatioUsed,
-          createdAt: binMovements.createdAt,
+          countedWetMassKg: numericAggregate(sql<number>`
+            (ARRAY_AGG(
+              ${binMovements.countedWetMassKg}
+              ORDER BY ${binMovements.createdAt} DESC, ${binMovements.id} DESC
+            ))[1]
+          `),
         })
         .from(binMovements)
         .where(and(
           inArray(binMovements.storageLocationId, options.storageLocationIds),
           eq(binMovements.organizationId, ctx.organizationId),
           eq(binMovements.lane, "feedstock"),
-          isNotNull(binMovements.createdAt),
+          eq(binMovements.movementType, "adjustment"),
+          isNotNull(binMovements.countedWetMassKg),
+          isNotNull(binMovements.moistureRatioUsed),
         ))
-        .orderBy(desc(binMovements.createdAt)),
+        .groupBy(binMovements.storageLocationId),
+      executor
+        .select({
+          storageLocationId: binMovements.storageLocationId,
+          hasBasislessLoss: sql<boolean>`COALESCE(BOOL_OR(
+            ${binMovements.movementType} = 'loss'
+            AND ${binMovements.createdAt} > COALESCE(
+              ${latestFeedstockStockTakeAtSql(
+                binMovements.storageLocationId,
+                ctx.organizationId,
+              )},
+              '-infinity'::timestamp
+            )
+          ), false)`,
+        })
+        .from(binMovements)
+        .where(and(
+          inArray(binMovements.storageLocationId, options.storageLocationIds),
+          eq(binMovements.organizationId, ctx.organizationId),
+          eq(binMovements.lane, "feedstock"),
+        ))
+        .groupBy(binMovements.storageLocationId),
     ]);
 
   const byLocation = new Map<string, LaneStockDerivation>(
@@ -462,34 +488,17 @@ export async function deriveLaneStock(
   );
   const latestStockTakeByLocation = new Map<
     string,
-    { countedWetMassKg: number; createdAt: Date }
+    { countedWetMassKg: number }
   >();
 
-  for (const movement of feedstockMovementRows) {
-    if (
-      movement.movementType === "adjustment" &&
-      movement.countedWetMassKg !== null &&
-      movement.moistureRatioUsed !== null &&
-      !latestStockTakeByLocation.has(movement.storageLocationId)
-    ) {
-      latestStockTakeByLocation.set(movement.storageLocationId, {
-        countedWetMassKg: Number(movement.countedWetMassKg),
-        createdAt: movement.createdAt,
-      });
-    }
+  for (const stockTake of latestFeedstockStockTakeRows) {
+    latestStockTakeByLocation.set(stockTake.storageLocationId, {
+      countedWetMassKg: Number(stockTake.countedWetMassKg),
+    });
   }
-  for (const movement of feedstockMovementRows) {
-    if (movement.movementType !== "loss") continue;
-    const latestStockTake = latestStockTakeByLocation.get(
-      movement.storageLocationId,
-    );
-    if (
-      !latestStockTake ||
-      movement.createdAt.getTime() > latestStockTake.createdAt.getTime()
-    ) {
-      const replay = wetReplayByLocation.get(movement.storageLocationId);
-      if (replay) replay.missingWetBasis = true;
-    }
+  for (const lossState of feedstockLossRows) {
+    const replay = wetReplayByLocation.get(lossState.storageLocationId);
+    if (replay && lossState.hasBasislessLoss) replay.missingWetBasis = true;
   }
 
   for (const row of intakeRows) {
