@@ -163,7 +163,7 @@ export function CustomerLocationFields({
 
         <FormField
           id={addressId}
-          label="Site description (optional)"
+          label="Site description"
           error={errors.address?.message}
         >
           <FormTextarea
