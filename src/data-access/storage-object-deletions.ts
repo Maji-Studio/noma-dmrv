@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { storageObjectDeletions } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -7,6 +7,7 @@ import { getStorageProvider } from "@/lib/storage";
 import { requireOrgScope } from "./utils";
 
 const DELETION_BATCH_SIZE = 50;
+const DELETION_RETRY_BACKOFF_MS = 60_000;
 const STORAGE_DELETE_FAILED = "storage_delete_failed";
 const STORAGE_CONFIGURATION_MISMATCH = "storage_configuration_mismatch";
 const log = logger.child({ mod: "storage-object-deletions" });
@@ -131,6 +132,43 @@ export async function processPendingStorageObjectDeletions(
 ): Promise<StorageDeletionRunResult> {
   requireOrgScope(ctx);
   try {
+    const provider = getStorageProvider();
+    const mismatchUpdatedAt = new Date();
+    const mismatches = await db
+      .update(storageObjectDeletions)
+      .set({
+        lastErrorCode: STORAGE_CONFIGURATION_MISMATCH,
+        updatedAt: mismatchUpdatedAt,
+      })
+      .where(
+        and(
+          eq(storageObjectDeletions.organizationId, ctx.organizationId),
+          isNull(storageObjectDeletions.completedAt),
+          or(
+            ne(storageObjectDeletions.storageProvider, provider.name),
+            ne(storageObjectDeletions.storageBucket, provider.bucket),
+          ),
+          or(
+            isNull(storageObjectDeletions.lastErrorCode),
+            ne(
+              storageObjectDeletions.lastErrorCode,
+              STORAGE_CONFIGURATION_MISMATCH,
+            ),
+          ),
+        ),
+      )
+      .returning({ id: storageObjectDeletions.id });
+    if (mismatches.length > 0) {
+      log.error(
+        {
+          organizationId: ctx.organizationId,
+          mismatchCount: mismatches.length,
+        },
+        "storage deletion provider configuration does not match queued objects",
+      );
+    }
+
+    const retryBefore = new Date(Date.now() - DELETION_RETRY_BACKOFF_MS);
     const entries = await db
       .select({ id: storageObjectDeletions.id })
       .from(storageObjectDeletions)
@@ -138,12 +176,24 @@ export async function processPendingStorageObjectDeletions(
         and(
           eq(storageObjectDeletions.organizationId, ctx.organizationId),
           isNull(storageObjectDeletions.completedAt),
+          eq(storageObjectDeletions.storageProvider, provider.name),
+          eq(storageObjectDeletions.storageBucket, provider.bucket),
+          or(
+            isNull(storageObjectDeletions.lastAttemptAt),
+            lte(storageObjectDeletions.lastAttemptAt, retryBefore),
+          ),
         ),
       )
-      .orderBy(asc(storageObjectDeletions.createdAt))
+      .orderBy(
+        sql`${storageObjectDeletions.lastAttemptAt} asc nulls first`,
+        asc(storageObjectDeletions.createdAt),
+      )
       .limit(DELETION_BATCH_SIZE);
 
-    const result: StorageDeletionRunResult = { completed: 0, failed: 0 };
+    const result: StorageDeletionRunResult = {
+      completed: 0,
+      failed: mismatches.length,
+    };
     for (const entry of entries) {
       const outcome = await processStorageObjectDeletion(ctx, entry.id);
       if (outcome === "completed") result.completed += 1;

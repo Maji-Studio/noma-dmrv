@@ -24,6 +24,7 @@ import {
 } from "./helpers/test-org";
 
 const TEST_USER_ID = "document-certification-history-user";
+const RETRY_BACKOFF_ELAPSED_AT = new Date("2000-01-01T00:00:00.000Z");
 
 class DeleteSafetyStorageProvider implements StorageProvider {
   readonly name = "local-fs" as const;
@@ -194,6 +195,10 @@ describe("owning-document certification safety", () => {
       });
 
       provider.failKey = null;
+      await db
+        .update(storageObjectDeletions)
+        .set({ lastAttemptAt: RETRY_BACKOFF_ELAPSED_AT })
+        .where(eq(storageObjectDeletions.storageKey, fixture.storageKey));
       expect(
         await processPendingStorageObjectDeletions(
           makeTestOrgContext(TEST_USER_ID),
