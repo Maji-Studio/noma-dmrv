@@ -91,6 +91,9 @@ describe("MoistureSplit", () => {
     expect(html).toContain('data-moisture-segment="dry"');
     expect(html).toContain('data-moisture-segment="water"');
     expect(html).toContain('data-moisture-segment="added-water"');
+    expect(html).toContain(
+      'aria-label="500 kg final wet mass: 405 kg dry mass, 45 kg water before addition, and 50 kg added water at 19% moisture."',
+    );
     expect(html).toContain("Water before addition: 45 kg");
     expect(html).toContain("Water added: 50 kg");
     expect(html).toContain("Final moisture: 19%");

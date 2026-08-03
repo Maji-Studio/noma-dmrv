@@ -53,6 +53,7 @@ import {
 } from "@/config/product-labels";
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import {
+  deriveEffectiveMoisturePercent,
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
@@ -117,10 +118,21 @@ function createColumns(
     {
       id: "moistureContentPercent",
       header: "Moisture",
-      accessorFn: (row) => row.moistureContentPercent,
+      accessorFn: (row) =>
+        deriveEffectiveMoisturePercent(
+          row.massKg,
+          row.moistureContentPercent,
+          row.waterAddedKg,
+        ) ?? row.moistureContentPercent,
       cell: ({ row }) => (
         <span className="font-mono">
-          {formatMoisturePercent(row.original.moistureContentPercent)}
+          {formatMoisturePercent(
+            deriveEffectiveMoisturePercent(
+              row.original.massKg,
+              row.original.moistureContentPercent,
+              row.original.waterAddedKg,
+            ) ?? row.original.moistureContentPercent,
+          )}
         </span>
       ),
     },

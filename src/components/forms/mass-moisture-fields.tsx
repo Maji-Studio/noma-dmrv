@@ -175,8 +175,6 @@ interface MassMoistureFieldsProps {
   wetSplitLabel?: string;
   /** Overrides the dry figure label without changing the input label. */
   drySplitLabel?: string;
-  /** Replaces the split's footnote — use for provenance, e.g. "Moisture from delivery record". */
-  splitNote?: string;
   /** Extra content rendered inside the split panel, below the bar. */
   splitFooter?: ReactNode;
 }
@@ -195,7 +193,6 @@ export function MassMoistureFields({
   materialLabel,
   wetSplitLabel,
   drySplitLabel,
-  splitNote,
   splitFooter,
 }: MassMoistureFieldsProps) {
   return (
@@ -218,7 +215,6 @@ export function MassMoistureFields({
           materialLabel={materialLabel}
           wetLabel={wetSplitLabel}
           dryLabel={drySplitLabel}
-          note={splitNote}
         />
         {splitFooter}
       </div>
