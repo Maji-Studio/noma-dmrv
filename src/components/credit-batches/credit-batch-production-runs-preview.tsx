@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
-import { formatDate, formatTonnes } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
 export interface RetainedProductionRunPreview {
@@ -57,14 +58,16 @@ function ProductionRunPreviewRow({
               : "text-[var(--color-text-primary)]"
           }`}
         >
-          {run.code}
-        </span>
-        <span className="body-caption text-[var(--color-text-tertiary)]">
           {formatDate(run.date)}
         </span>
+        {run.biocharStorageName && (
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            {run.biocharStorageName}
+          </span>
+        )}
         {assignedElsewhere && (
           <span className="body-caption text-[var(--color-text-tertiary)]">
-            Assigned to {run.assignedCreditBatchCode ?? "another Credit batch"}
+            Assigned to another credit batch
           </span>
         )}
       </span>
@@ -72,12 +75,13 @@ function ProductionRunPreviewRow({
         {isPreview && <StatusBadge status={run.status} size="small" />}
         <span className="text-right">
           <span className="block label-micro text-[var(--color-text-tertiary)]">
-            Dry output
+            Biochar output
           </span>
           <span className="block body-small tabular-nums text-[var(--color-text-secondary)]">
-            {run.biocharDryMassKg == null
-              ? "—"
-              : formatTonnes(run.biocharDryMassKg / 1000)}
+            {formatWetDryMass({
+              wetKg: run.biocharOutputKg,
+              dryKg: run.biocharDryMassKg,
+            })}
           </span>
         </span>
       </span>
@@ -89,14 +93,15 @@ function UnavailableProductionRunPreviewRow({ id }: { id: string }) {
   return (
     <div
       data-testid="credit-batch-production-run-fallback"
+      data-production-run-id={id}
       className="flex min-w-0 items-center justify-between gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-12 py-10"
     >
       <span className="flex min-w-0 flex-col gap-2">
         <span className="body-small font-medium text-[var(--color-text-secondary)]">
           Saved production run
         </span>
-        <span className="body-caption font-mono break-all text-[var(--color-text-tertiary)]">
-          {id}
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          Date and biochar bin unavailable
         </span>
       </span>
       <span className="body-caption text-right text-[var(--color-text-tertiary)]">

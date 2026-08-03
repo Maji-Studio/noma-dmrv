@@ -47,7 +47,7 @@ export function SampleNutrientFields({
 
   return (
     <FormSection
-      title="Nutrient Claims"
+      title="Nutrient claims"
       icon={<LeafIcon size={14} weight="bold" />}
       fields={fields.map((field) => field.id)}
       __spine={__spine}
@@ -75,7 +75,7 @@ export function SampleNutrientFields({
               <FormInput
                 id={field.id}
                 type="number"
-                step="0.01"
+                step="any"
                 placeholder={field.placeholder}
                 disabled={isSubmitting}
                 error={!!field.error}

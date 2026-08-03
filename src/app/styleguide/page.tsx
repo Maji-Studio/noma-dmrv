@@ -5,6 +5,18 @@ export const metadata: Metadata = {
   robots: "noindex",
 };
 
+/**
+ * The five canonical state classes of the status ramp, in the order used by
+ * `src/lib/status-state.ts`. Each has a solid, a `-bg` tint and a `-border`.
+ */
+const STATUS_RAMP = [
+  { label: "Neutral", token: "st-off" },
+  { label: "In progress", token: "st-run" },
+  { label: "Success", token: "st-ok" },
+  { label: "Warning", token: "st-wait" },
+  { label: "Error", token: "st-bad" },
+] as const;
+
 /* ── tiny helpers ── */
 
 function Section({
@@ -183,9 +195,30 @@ export default function StyleguidePage() {
             <Swatch name="Red" cssVar="--color-signal-red" />
             <Swatch name="Orange" cssVar="--color-signal-orange" />
             <Swatch name="Orange Light" cssVar="--color-signal-orange-light" />
-            <Swatch name="Green" cssVar="--color-signal-green" />
-            <Swatch name="Green Light" cssVar="--color-signal-green-light" />
           </div>
+          <p className="body-caption" style={{ color: "var(--color-text-tertiary)" }}>
+            The green signal tokens are retired. Use the status ramp below.
+          </p>
+        </Section>
+
+        {/* ═══ STATUS RAMP ═══ */}
+        <Section title="Status Ramp">
+          <p className="body-caption" style={{ color: "var(--color-text-tertiary)" }}>
+            Shared palette for status badges, dots, and state text. Use the
+            solid color for icons, text, and rules; use the lighter colors for
+            backgrounds and borders.
+          </p>
+          {STATUS_RAMP.map((state) => (
+            <ColorRow
+              key={state.label}
+              label={state.label}
+              swatches={[
+                { name: "Solid", cssVar: `--${state.token}` },
+                { name: "BG", cssVar: `--${state.token}-bg` },
+                { name: "Border", cssVar: `--${state.token}-border` },
+              ]}
+            />
+          ))}
         </Section>
 
         {/* ═══ STATUS COLORS ═══ */}
@@ -418,7 +451,7 @@ export default function StyleguidePage() {
             <div className="flex flex-col gap-12">
               <div className="flex flex-col gap-4">
                 <span className="body-medium" style={{ fontFamily: "var(--font-standard)" }}>
-                  GT-Flexa (Standard) &mdash; The quick brown fox jumps over the lazy dog
+                  GT-Flexa (Standard): The quick brown fox jumps over the lazy dog
                 </span>
                 <span className="body-caption" style={{ color: "var(--color-text-tertiary)" }}>
                   --font-standard
@@ -426,7 +459,7 @@ export default function StyleguidePage() {
               </div>
               <div className="flex flex-col gap-4">
                 <span className="body-medium" style={{ fontFamily: "var(--font-mono)" }}>
-                  GT-Flexa-Mono &mdash; The quick brown fox jumps over the lazy dog
+                  GT-Flexa-Mono: The quick brown fox jumps over the lazy dog
                 </span>
                 <span className="body-caption" style={{ color: "var(--color-text-tertiary)" }}>
                   --font-mono

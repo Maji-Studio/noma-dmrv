@@ -7,11 +7,6 @@
  * any withdrawal that would take the bin below zero — no tolerance (operator
  * re-confirmed 2026-07-02). Warning thresholds belong to #193, never here.
  *
- * The block error states the available quantity and points the operator at the
- * bin's on-demand reconcile workflow (#194: Storage locations → bin → Reconcile
- * stock), where a stock-take adjustment or documented loss brings the derived
- * count back in line before the draw is retried.
- *
  * The derivation mirrors `storage-location-enrichment.ts` lane-by-lane; keep the
  * two in step if either changes.
  */
@@ -31,18 +26,18 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { BinMovementLane } from "@/schemas/bin-movements";
 import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
+import {
+  binStockOverdrawMessage,
+  formatStockKg,
+  isStockOverdraw,
+  productStockOverdrawMessage,
+  type StockMaterial,
+} from "@/lib/stock-overdraw";
 
 /** Any Drizzle client that can run reads — the live `db` or a transaction. */
 type DbReader = Pick<typeof db, "select">;
 
 const BIN_STOCK_LOCK_SCOPE = "bin-stock";
-
-/**
- * Floating-point slack (kg). Derived stock is a sum of floating-point masses, so
- * an exactly-equal draw can land a hair over its available stock. Only a draw
- * beyond this slack is a real over-draw.
- */
-const STOCK_OVERDRAW_EPSILON_KG = 1e-6;
 
 /** SafeError subtype so server actions can attach field-level metadata. */
 export class StockOverdrawError extends SafeError {
@@ -80,7 +75,7 @@ export async function lockBinStock(
   // key when no physical bin exists. Missing rows are validated by the caller's
   // entity boundary; an actual archived bin must never accept a stock write.
   if (bin?.archivedAt) {
-    throw new SafeError("Storage location not found or archived");
+    throw new SafeError("Storage bin not found or archived");
   }
 }
 
@@ -90,37 +85,27 @@ export async function lockBinStock(
  * them to "0 kg" and drop the sign of a small negative deficit (#116).
  */
 export function formatKg(kg: number): string {
-  if (kg !== 0 && Math.abs(kg) < 1) return `${kg.toFixed(1)} kg`;
-  return `${Math.round(kg).toLocaleString()} kg`;
+  return formatStockKg(kg);
 }
 
 /**
- * Build the shared over-draw error: available quantity + reconcile pointer.
- * `material` names the lane in plain language ("feedstock", "biochar", …).
- * The available quantity is shown as derived — no zero-clamp — so an already
- * over-drawn bin surfaces its true (negative) deficit for reconciliation (#116).
+ * Build the shared over-draw error for a bin lane.
+ * The internal product lane is user-facing biochar.
  */
 export function overdrawError(
-  material: string,
-  availableKg: number,
-  requestedKg: number,
+  material: StockMaterial,
 ): StockOverdrawError {
-  const available = formatKg(availableKg);
-  return new StockOverdrawError(
-    `Not enough ${material} in this bin — ${available} available but this draw needs ${formatKg(
-      requestedKg,
-    )}. Reconcile the bin's stock (Storage locations → the bin → Reconcile stock), then try again.`,
-  );
+  return new StockOverdrawError(binStockOverdrawMessage(material));
 }
 
 /** True when `requestedKg` exceeds `availableKg` beyond the FP slack. */
 export function isOverdraw(requestedKg: number, availableKg: number): boolean {
-  return requestedKg - availableKg > STOCK_OVERDRAW_EPSILON_KG;
+  return isStockOverdraw(requestedKg, availableKg);
 }
 
 /** True when a derived balance is materially above or below zero. */
 export function hasNonZeroStock(availableKg: number): boolean {
-  return Math.abs(availableKg) > STOCK_OVERDRAW_EPSILON_KG;
+  return isStockOverdraw(Math.abs(availableKg), 0);
 }
 
 /**
@@ -128,15 +113,17 @@ export function hasNonZeroStock(availableKg: number): boolean {
  * complete-batch intake − consumption by production runs + reconciliation deltas.
  * `excludeRunId` drops one run's consumption (its allocation is being replaced).
  */
-async function deriveFeedstockAvailableKg(
+export async function deriveFeedstockAvailableKg(
   ctx: OrgContext,
   tx: DbReader,
   storageLocationId: string,
   excludeRunId?: string,
+  excludeProductId?: string,
 ): Promise<number> {
   const [stock] = await deriveLaneStock(ctx, tx, {
     storageLocationIds: [storageLocationId],
     excludeRunId,
+    excludeProductId,
   });
   return stock?.feedstockStockDryKg ?? 0;
 }
@@ -159,7 +146,9 @@ export async function deriveProductAvailableKg(
   const [[product], [delivered], [movement]] = await Promise.all([
     tx
       .select({
-        total: sumNumeric(biocharProducts.massKg),
+        total: sumNumeric(
+          sql`COALESCE(${biocharProducts.massKg}, 0) + COALESCE(${biocharProducts.waterAddedKg}, 0)`,
+        ),
       })
       .from(biocharProducts)
       .where(
@@ -233,6 +222,7 @@ export async function assertFeedstockDrawWithinStock(
     storageLocationId: string;
     requestedDryKg: number;
     excludeRunId?: string;
+    excludeProductId?: string;
     binLockAlreadyHeld?: boolean;
   },
 ): Promise<void> {
@@ -245,9 +235,10 @@ export async function assertFeedstockDrawWithinStock(
     tx,
     params.storageLocationId,
     params.excludeRunId,
+    params.excludeProductId,
   );
   if (isOverdraw(params.requestedDryKg, available)) {
-    throw overdrawError("feedstock", available, params.requestedDryKg);
+    throw overdrawError("feedstock");
   }
 }
 
@@ -295,7 +286,7 @@ export async function assertBiocharDrawWithinStock(
     params.excludeProductId,
   );
   if (isOverdraw(params.requestedBiocharKg, available)) {
-    throw overdrawError("biochar", available, params.requestedBiocharKg);
+    throw overdrawError("biochar");
   }
 }
 
@@ -320,8 +311,8 @@ export async function assertBiocharProductDrawWithinStock(
   requireOrgScope(ctx);
   const [product] = await tx
     .select({
-      code: biocharProducts.code,
       massKg: biocharProducts.massKg,
+      waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
     })
     .from(biocharProducts)
@@ -349,18 +340,12 @@ export async function assertBiocharProductDrawWithinStock(
     params.biocharProductId,
     params.excludeDeliveryId,
   );
-  const batchAvailable = Number(product?.massKg ?? 0) - deliveredKg;
+  const batchAvailable =
+    Number(product?.massKg ?? 0) +
+    Number(product?.waterAddedKg ?? 0) -
+    deliveredKg;
   if (isOverdraw(params.requestedWetKg, batchAvailable)) {
-    // Batch-specific copy: a delivery over-draw is against the product batch's
-    // remaining wet mass, not a bin lane, so the #194 bin reconcile workflow is
-    // the wrong lever — point the operator at the source bin or the product.
-    throw new SafeError(
-      `Cannot deliver ${formatKg(params.requestedWetKg)} from product ${
-        product?.code ?? "this batch"
-      }: only ${formatKg(
-        batchAvailable,
-      )} remain undelivered. Reconcile the source bin or adjust the product before delivering.`,
-    );
+    throw new SafeError(productStockOverdrawMessage());
   }
 
   if (product?.storageLocationId && !params.skipBinLane) {
@@ -371,7 +356,7 @@ export async function assertBiocharProductDrawWithinStock(
       params.excludeDeliveryId,
     );
     if (isOverdraw(params.requestedWetKg, binAvailable)) {
-      throw overdrawError("product", binAvailable, params.requestedWetKg);
+      throw overdrawError("product");
     }
   }
 }

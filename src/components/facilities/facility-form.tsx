@@ -1,12 +1,15 @@
 "use client";
 
-import { formatTimezoneLabel } from "@/lib/date-utils";
-
 import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, PositionPicker, FormActions } from "@/components/forms";
-import { FormSelect } from "@/components/forms/form-select";
+import {
+  FormActions,
+  FormField,
+  FormInput,
+  PositionPicker,
+  ResolvedErrorRevalidator,
+} from "@/components/forms";
 import {
   facilityFormSchema,
   timezones,
@@ -22,12 +25,23 @@ import {
   DurabilityTierSelect,
   FacilityIsometricConnector,
 } from "@/components/certification";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
+import { TimezoneCombobox } from "./timezone-combobox";
 
 // 1000-year is the go-forward tier (ADR 0021); new facilities default to it.
 const DEFAULT_DURABILITY_OPTION: DurabilityOption = "1000_year";
 
-const timezoneOptions: readonly { value: string; label: string }[] =
-  timezones.map((tz) => ({ value: tz, label: formatTimezoneLabel(tz) }));
+/**
+ * A zone the picker actually offers, or `undefined`. Both the facility column
+ * and the organization default are free text, so either can hold a zone this
+ * list does not carry; seeding the select with one would leave it showing the
+ * first option and silently save that instead.
+ */
+function resolveTimezone(zone: string | null | undefined): Timezone | undefined {
+  return zone && timezones.includes(zone as Timezone)
+    ? (zone as Timezone)
+    : undefined;
+}
 
 function getDefaultDurabilityOption(
   option: Facility["durabilityOption"] | null | undefined
@@ -44,6 +58,7 @@ interface FacilityFormProps {
   isSubmitting?: boolean;
   errorMessage?: string;
   submitLabel?: string;
+  cancelLabel?: string;
 }
 
 export function FacilityForm({
@@ -53,12 +68,19 @@ export function FacilityForm({
   isSubmitting = false,
   errorMessage,
   submitLabel,
+  cancelLabel,
 }: FacilityFormProps) {
   const isEditMode = !!facility;
+  // Organization operating defaults seed create mode only; an existing record
+  // always wins. Warmed once per session in FacilityProvider, so this is a
+  // cache read rather than a round trip on open.
+  const { defaults: orgDefaults } = useOrganizationDefaultValues();
 
   const {
     register,
     handleSubmit,
+    control,
+    trigger,
     watch,
     setValue,
     formState: { errors },
@@ -66,16 +88,15 @@ export function FacilityForm({
     resolver: zodResolver(facilityFormSchema),
     defaultValues: {
       name: facility?.name ?? "",
-      country: facility?.country ?? "",
+      country: facility?.country ?? orgDefaults.defaultCountry ?? "",
       location: facility?.location ?? "",
       address: facility?.address ?? "",
       gpsLatitude: facility?.gpsLatitude ?? undefined,
       gpsLongitude: facility?.gpsLongitude ?? undefined,
       contactEmail: facility?.contactEmail ?? "",
       contactPhone: facility?.contactPhone ?? "",
-      timezone: (facility?.timezone && timezones.includes(facility.timezone as Timezone)
-        ? facility.timezone as Timezone
-        : undefined),
+      timezone: resolveTimezone(facility?.timezone)
+        ?? resolveTimezone(orgDefaults.defaultTimezone),
       durabilityOption: getDefaultDurabilityOption(
         facility?.durabilityOption,
       ),
@@ -86,7 +107,9 @@ export function FacilityForm({
 
   const gpsLatitude = watch("gpsLatitude");
   const gpsLongitude = watch("gpsLongitude");
+  const timezone = watch("timezone") as Timezone | undefined;
   const durabilityOption = watch("durabilityOption") ?? DEFAULT_DURABILITY_OPTION;
+  const timezoneField = register("timezone");
 
   // Re-entrancy latch against a rapid double-submit (QA: a double-click on
   // Create Facility created two facilities). The parent's `isSubmitting`
@@ -111,8 +134,9 @@ export function FacilityForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-        <FormField id="name" label="Facility Name" error={errors.name?.message} required>
+        <FormField id="name" label="Facility name" error={errors.name?.message} required>
           <FormInput
             id="name"
             type="text"
@@ -142,13 +166,24 @@ export function FacilityForm({
           error={errors.timezone?.message}
           required
         >
-          <FormSelect
+          <TimezoneCombobox
             id="timezone"
-            placeholder="Select timezone..."
+            name={timezoneField.name}
+            inputRef={timezoneField.ref}
+            value={timezone}
+            onChange={(value) =>
+              setValue("timezone", value, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
+            onBlur={() =>
+              setValue("timezone", timezone, {
+                shouldTouch: true,
+              })
+            }
             disabled={isSubmitting}
             error={!!errors.timezone}
-            options={timezoneOptions}
-            {...register("timezone")}
           />
         </FormField>
       </div>
@@ -193,7 +228,7 @@ export function FacilityForm({
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-        <FormField id="contactEmail" label="Contact Email" error={errors.contactEmail?.message}>
+        <FormField id="contactEmail" label="Contact email" error={errors.contactEmail?.message}>
           <FormInput
             id="contactEmail"
             type="email"
@@ -204,7 +239,7 @@ export function FacilityForm({
           />
         </FormField>
 
-        <FormField id="contactPhone" label="Contact Phone" error={errors.contactPhone?.message}>
+        <FormField id="contactPhone" label="Contact phone" error={errors.contactPhone?.message}>
           <FormInput
             id="contactPhone"
             type="tel"
@@ -219,9 +254,9 @@ export function FacilityForm({
       <div className="grid grid-cols-1 gap-y-20">
         <FormField
           id="durabilityOption"
-          label="Durability Tier"
+          label="Durability tier"
           error={errors.durabilityOption?.message}
-          hint="Set once for your registry program and inherited by every credit batch and sample at this facility. The 200-year pathway opens when a 200-year client onboards."
+          hint="Set once for your registry program and inherited by every credit batch and Sample at this facility. The 200-year pathway opens when a 200-year client onboards."
         >
           <DurabilityTierSelect
             value={durabilityOption}
@@ -251,6 +286,7 @@ export function FacilityForm({
         errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        cancelLabel={cancelLabel}
       />
     </form>
   );

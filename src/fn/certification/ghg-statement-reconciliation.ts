@@ -2,32 +2,36 @@ import { z } from "zod";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   getCertifierProjectByFacility,
-  getSubmissionByExternalId,
   markSubmissionSubmitted,
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
 import {
   claimSubmissionDraft,
-  getLatestSubmission,
+  getLatestSubmissionWithExecutor,
 } from "@/data-access/certification-submissions";
 import {
   createGhgStatementForRegistryDiscovery,
   getCertifierGhgStatementById,
+  getGhgStatementSubmissionForFacility,
   hasInFlightGhgStatementForFacility,
   listFacilityIdsForExternalProject,
   listFacilityIdsForExternalRemovals,
   reconcileRemovalMembership,
 } from "@/data-access/certifier-ghg-statements";
 import { reconcileGhgStatementRemoteState } from "@/data-access/certifier-ghg-remote-state";
+import { withFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { requireOrgFacility } from "@/data-access/utils";
+import type { DbTransaction } from "@/db";
 import { SafeError } from "@/lib/errors";
 import {
+  getGhgStatement,
   getGhgStatementPeriod,
   getIsometricClientForOrg,
   listGhgStatementsForProject,
   payloadHash,
   type GhgStatement,
   type GhgStatementStatus,
+  type IsometricClient,
 } from "@/lib/isometric";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
@@ -39,7 +43,7 @@ const facilityIdSchema = z.uuid();
 const CONCURRENT_RECONCILIATION_WARNING =
   "This registry statement is already being reconciled by another request.";
 export const SHARED_PROJECT_GHG_CREATE_MESSAGE =
-  "GHG statements cannot be created while this Isometric project is shared across multiple noma facilities. Link each facility to a dedicated Isometric project first.";
+  "GHG Statements cannot be created while this Isometric project is shared across multiple noma facilities. Link each facility to a dedicated Isometric project first.";
 
 export function assertDedicatedGhgStatementProject(
   projectFacilityIds: string[],
@@ -55,7 +59,7 @@ function assertSingleFacilityRegistryStatement(
 ): void {
   if (new Set(facilityIds).size > 1) {
     throw new SafeError(
-      `Registry statement ${remoteId} contains removals from multiple noma facilities. Split it into one statement per facility in Isometric, then sync again.`,
+      `Registry GHG Statement ${remoteId} contains Removals from multiple noma facilities. Split it into one GHG Statement per facility in Isometric, then sync again.`,
     );
   }
 }
@@ -72,6 +76,11 @@ export interface ReconcileRegistryGhgStatementsResult {
   statements: RegistryGhgStatementView[];
   reconciledCount: number;
   warningCount: number;
+  // Remote statements this sweep deliberately did not reconcile into this
+  // facility — an operator create holding the facility, or a statement whose
+  // ownership heuristics point elsewhere. Every skip is counted here, so
+  // "nothing happened" is never indistinguishable from "nothing to do".
+  skippedCount: number;
 }
 
 export interface ReconciledRegistryGhgStatement {
@@ -90,7 +99,154 @@ export async function reconcileGhgStatementsForFacility(
   const project = await getCertifierProjectByFacility(orgCtx, facilityId);
   if (!project) {
     throw new SafeError(
-      "Link this facility to an Isometric project before syncing GHG statements.",
+      "Link this facility to an Isometric project before syncing GHG Statements.",
+    );
+  }
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  const listedRemotes = await listGhgStatementsForProject(
+    client,
+    project.externalProjectId,
+  );
+  const operatorCreateInFlight =
+    await hasInFlightGhgStatementForFacility(orgCtx, facilityId);
+  if (operatorCreateInFlight) {
+    return {
+      statements: listedRemotes.map(toRegistryGhgStatementView),
+      reconciledCount: 0,
+      warningCount: 1,
+      skippedCount: listedRemotes.length,
+    };
+  }
+  return withFacilityDurabilityLock(orgCtx, facilityId, async (tx) => {
+    const lockedOperatorCreateInFlight =
+      await hasInFlightGhgStatementForFacility(orgCtx, facilityId, tx);
+    if (lockedOperatorCreateInFlight) {
+      return {
+        statements: listedRemotes.map(toRegistryGhgStatementView),
+        reconciledCount: 0,
+        warningCount: 1,
+        skippedCount: listedRemotes.length,
+      };
+    }
+
+    // The project list can lag statement membership while the detail endpoint
+    // already exposes newly attached GHG Entries. Fetch each authoritative
+    // detail only after facility serialization so no pre-lock snapshot can
+    // queue behind fresher state and commit last.
+    const remotes = await Promise.all(
+      listedRemotes.map((statement) =>
+        getGhgStatement(client, statement.id),
+      ),
+    );
+    const projectFacilityIds = await listFacilityIdsForExternalProject(
+      orgCtx,
+      project.externalProjectId,
+      tx,
+    );
+
+    let warningCount = 0;
+    let reconciledCount = 0;
+    let skippedCount = 0;
+    const ownedRemotes: GhgStatement[] = [];
+    for (const remote of remotes) {
+      const facilityIds = await listFacilityIdsForExternalRemovals(
+        orgCtx,
+        remote.ghg_entry_ids,
+        tx,
+      );
+      assertSingleFacilityRegistryStatement(remote.id, facilityIds);
+      // Ownership is asked per facility, never globally (ADR 0023). A remote
+      // statement already mirrored by a DIFFERENT facility's local row no
+      // longer blocks this one: each facility keeps its own local identity for
+      // the same registry statement, so this facility either already holds it
+      // or is re-tested against the same assignment heuristics as a fresh
+      // discovery.
+      const existingSubmission =
+        await getGhgStatementSubmissionForFacility(
+          orgCtx,
+          { facilityId, externalId: remote.id },
+          tx,
+        );
+      if (!existingSubmission) {
+        const assignedByMembership =
+          facilityIds.length === 1 && facilityIds[0] === facilityId;
+        const assignedByUniqueProject =
+          facilityIds.length === 0 &&
+          projectFacilityIds.length === 1 &&
+          projectFacilityIds[0] === facilityId;
+        if (!assignedByMembership && !assignedByUniqueProject) {
+          warningCount += 1;
+          skippedCount += 1;
+          continue;
+        }
+      }
+      ownedRemotes.push(remote);
+    }
+
+    // Registry membership is authoritative. Clear removals omitted from their
+    // current statement across the whole remote snapshot before linking any
+    // additions, so a move A → B converges in one sweep regardless of list
+    // order (B can claim only after A has released it).
+    for (const remote of ownedRemotes) {
+      const existingSubmission =
+        await getGhgStatementSubmissionForFacility(
+          orgCtx,
+          { facilityId, externalId: remote.id },
+          tx,
+        );
+      if (!existingSubmission) continue;
+      const owner = await getCertifierGhgStatementById(
+        orgCtx,
+        existingSubmission.localEntityId,
+        tx,
+      );
+      if (!owner) continue;
+      await reconcileRemovalMembership(
+        orgCtx,
+        owner.id,
+        remote.ghg_entry_ids,
+        tx,
+        "unlink-only",
+      );
+    }
+
+    for (const remote of ownedRemotes) {
+      const result = await reconcileRegistryGhgStatement(
+        orgCtx,
+        {
+          facilityId,
+          externalProjectId: project.externalProjectId,
+          remote,
+        },
+        tx,
+      );
+      reconciledCount += 1;
+      warningCount += result.warnings.length;
+    }
+
+    return {
+      statements: remotes.map(toRegistryGhgStatementView),
+      reconciledCount,
+      warningCount,
+      skippedCount,
+    };
+  });
+}
+
+// Read-only companion to `reconcileGhgStatementsForFacility`: the project's
+// registry statements as the operator would see them, with NO local writes.
+// The create dialog only needs this view, and a dialog opening must not
+// silently reconcile (issue: read-that-writes).
+export async function listRegistryGhgStatementsForFacility(
+  orgCtx: OrgContext,
+  facilityId: string,
+): Promise<RegistryGhgStatementView[]> {
+  facilityIdSchema.parse(facilityId);
+  await requireOrgFacility(orgCtx, facilityId);
+  const project = await getCertifierProjectByFacility(orgCtx, facilityId);
+  if (!project) {
+    throw new SafeError(
+      "Link this facility to an Isometric project before syncing GHG Statements.",
     );
   }
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
@@ -98,89 +254,7 @@ export async function reconcileGhgStatementsForFacility(
     client,
     project.externalProjectId,
   );
-  const projectFacilityIds = await listFacilityIdsForExternalProject(
-    orgCtx,
-    project.externalProjectId,
-  );
-
-  const operatorCreateInFlight =
-    await hasInFlightGhgStatementForFacility(orgCtx, facilityId);
-  let warningCount = operatorCreateInFlight ? 1 : 0;
-  let reconciledCount = 0;
-  const ownedRemotes: GhgStatement[] = [];
-  for (const remote of remotes) {
-    if (operatorCreateInFlight) continue;
-    const facilityIds = await listFacilityIdsForExternalRemovals(
-      orgCtx,
-      remote.ghg_entry_ids,
-    );
-    assertSingleFacilityRegistryStatement(remote.id, facilityIds);
-    const existingSubmission = await getSubmissionByExternalId(orgCtx, {
-      provider: ISOMETRIC_PROVIDER,
-      submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-      externalId: remote.id,
-    });
-    if (existingSubmission) {
-      const owner = await getCertifierGhgStatementById(
-        orgCtx,
-        existingSubmission.localEntityId,
-      );
-      if (owner?.facilityId !== facilityId) continue;
-    } else {
-      const assignedByMembership =
-        facilityIds.length === 1 && facilityIds[0] === facilityId;
-      const assignedByUniqueProject =
-        facilityIds.length === 0 &&
-        projectFacilityIds.length === 1 &&
-        projectFacilityIds[0] === facilityId;
-      if (!assignedByMembership && !assignedByUniqueProject) {
-        warningCount += 1;
-        continue;
-      }
-    }
-    ownedRemotes.push(remote);
-  }
-
-  // Registry membership is authoritative. Clear removals omitted from their
-  // current statement across the whole remote snapshot before linking any
-  // additions, so a move A → B converges in one sweep regardless of list
-  // order (B can claim only after A has released it).
-  for (const remote of ownedRemotes) {
-    const existingSubmission = await getSubmissionByExternalId(orgCtx, {
-      provider: ISOMETRIC_PROVIDER,
-      submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-      externalId: remote.id,
-    });
-    if (!existingSubmission) continue;
-    const owner = await getCertifierGhgStatementById(
-      orgCtx,
-      existingSubmission.localEntityId,
-    );
-    if (owner?.facilityId !== facilityId) continue;
-    await reconcileRemovalMembership(
-      orgCtx,
-      owner.id,
-      remote.ghg_entry_ids,
-      undefined,
-      "unlink-only",
-    );
-  }
-
-  for (const remote of ownedRemotes) {
-    const result = await reconcileRegistryGhgStatement(orgCtx, {
-      facilityId,
-      externalProjectId: project.externalProjectId,
-      remote,
-    });
-    reconciledCount += 1;
-    warningCount += result.warnings.length;
-  }
-
-  return {
-    statements: remotes.map(toRegistryGhgStatementView),
-    reconciledCount,
-    warningCount,
-  };
+  return remotes.map(toRegistryGhgStatementView);
 }
 
 export async function reconcileRegistryGhgStatement(
@@ -190,34 +264,40 @@ export async function reconcileRegistryGhgStatement(
     externalProjectId: string;
     remote: GhgStatement;
   },
+  tx: DbTransaction,
 ): Promise<ReconciledRegistryGhgStatement> {
   const period = getGhgStatementPeriod(args.remote);
-  const existingSubmission = await getSubmissionByExternalId(orgCtx, {
-    provider: ISOMETRIC_PROVIDER,
-    submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-    externalId: args.remote.id,
-  });
+  // Facility-scoped by construction (ADR 0023): another facility's mirror of
+  // the same registry statement is not this facility's business and must not
+  // be adopted, nor block this facility from minting its own.
+  const existingSubmission = await getGhgStatementSubmissionForFacility(
+    orgCtx,
+    { facilityId: args.facilityId, externalId: args.remote.id },
+    tx,
+  );
   const existingStatement = existingSubmission
     ? await getCertifierGhgStatementById(
         orgCtx,
         existingSubmission.localEntityId,
+        tx,
       )
     : null;
-  if (
-    existingSubmission &&
-    (!existingStatement || existingStatement.facilityId !== args.facilityId)
-  ) {
+  if (existingSubmission && !existingStatement) {
     throw new SafeError(
-      `Registry statement ${args.remote.id} is already linked to another local facility.`,
+      `Registry GHG Statement ${args.remote.id} could not be synced. Refresh the page and try again.`,
     );
   }
   const statement =
     existingStatement ??
-    (await createGhgStatementForRegistryDiscovery(orgCtx, {
-      facilityId: args.facilityId,
-      externalId: args.remote.id,
-      reportingPeriodEndOn: period.endOn,
-    }));
+    (await createGhgStatementForRegistryDiscovery(
+      orgCtx,
+      {
+        facilityId: args.facilityId,
+        externalId: args.remote.id,
+        reportingPeriodEndOn: period.endOn,
+      },
+      tx,
+    ));
   const key = {
     provider: ISOMETRIC_PROVIDER,
     submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
@@ -232,28 +312,47 @@ export async function reconcileRegistryGhgStatement(
   };
   let submission: CertificationSubmissionRow | null = existingSubmission;
   if (!submission) {
-    const claimed = await claimSubmissionDraft(orgCtx, {
-      key,
-      guard: {
-        facilityId: args.facilityId,
-        provider: ISOMETRIC_PROVIDER,
-        expectedExternalProjectId: args.externalProjectId,
+    const claimed = await claimSubmissionDraft(
+      orgCtx,
+      {
+        key,
+        guard: {
+          facilityId: args.facilityId,
+          provider: ISOMETRIC_PROVIDER,
+          expectedExternalProjectId: args.externalProjectId,
+        },
+        policy: { onSubmittedHashChanged: "invalid-changed-hash" },
+        tentativeInputs: semanticPayload,
+        hashOf: payloadHash,
+        buildSnapshot: ({ inputs }) => ({
+          payloadSnapshot: { semantic: inputs },
+        }),
       },
-      policy: { onSubmittedHashChanged: "invalid-changed-hash" },
-      tentativeInputs: semanticPayload,
-      hashOf: payloadHash,
-      buildSnapshot: ({ inputs }) => ({
-        payloadSnapshot: { semantic: inputs },
-      }),
-    });
+      tx,
+    );
     if (claimed.kind === "claimed") {
-      await markSubmissionSubmitted(orgCtx, claimed.row.id, {
-        externalId: args.remote.id,
-        supersedePreviousId: claimed.supersedePreviousId,
-      });
-      submission = await getLatestSubmission(orgCtx, key, args.facilityId);
+      await markSubmissionSubmitted(
+        orgCtx,
+        claimed.row.id,
+        {
+          externalId: args.remote.id,
+          supersedePreviousId: claimed.supersedePreviousId,
+        },
+        tx,
+      );
+      submission = await getLatestSubmissionWithExecutor(
+        orgCtx,
+        tx,
+        key,
+        args.facilityId,
+      );
     } else {
-      submission = await getLatestSubmission(orgCtx, key, args.facilityId);
+      submission = await getLatestSubmissionWithExecutor(
+        orgCtx,
+        tx,
+        key,
+        args.facilityId,
+      );
       if (claimed.kind === "blocked" && claimed.reason === "in-flight") {
         return {
           ghgStatementId: statement.id,
@@ -268,28 +367,59 @@ export async function reconcileRegistryGhgStatement(
         submission?.externalId !== args.remote.id
       ) {
         throw new SafeError(
-          `Registry statement ${args.remote.id} could not be reconciled to its local record. Reload and retry.`,
+          `Registry GHG Statement ${args.remote.id} could not be synced. Refresh the page and try again.`,
         );
       }
     }
   }
   if (!submission) {
     throw new SafeError(
-      `Registry statement ${args.remote.id} could not be reconciled to its local record. Reload and retry.`,
+      `Registry GHG Statement ${args.remote.id} could not be synced. Refresh the page and try again.`,
     );
   }
 
-  const membership = await reconcileGhgStatementRemoteState(orgCtx, {
-    statementId: statement.id,
-    submission,
-    remote: args.remote,
-  });
+  const membership = await reconcileGhgStatementRemoteState(
+    orgCtx,
+    {
+      statementId: statement.id,
+      submission,
+      remote: args.remote,
+    },
+    tx,
+  );
   return {
     ghgStatementId: statement.id,
     externalId: args.remote.id,
     linkedRemovalIds: membership.linkedRemovalIds,
     warnings: membership.warnings,
   };
+}
+
+export async function reconcileRegistryGhgStatementById(
+  orgCtx: OrgContext,
+  args: {
+    client: IsometricClient;
+    facilityId: string;
+    externalProjectId: string;
+    externalId: string;
+  },
+): Promise<ReconciledRegistryGhgStatement> {
+  return withFacilityDurabilityLock(
+    orgCtx,
+    args.facilityId,
+    async (tx) => {
+      const remote = await getGhgStatement(args.client, args.externalId);
+      return reconcileRegistryGhgStatement(
+        orgCtx,
+        {
+          facilityId: args.facilityId,
+          externalProjectId: args.externalProjectId,
+          remote,
+        },
+        tx,
+      );
+    },
+  );
 }
 
 function toRegistryGhgStatementView(

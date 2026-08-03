@@ -6,7 +6,7 @@ import { z } from "zod";
  * client-supplied column mapping is needed.
  */
 export const importProductionRunReadingsSchema = z.object({
-  documentId: z.uuid("Invalid document ID"),
+  documentId: z.uuid("Choose a valid document."),
 });
 
 export type ImportProductionRunReadingsInput = z.infer<

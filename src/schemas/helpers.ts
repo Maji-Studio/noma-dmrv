@@ -142,7 +142,7 @@ export const optionalPositiveNumber = z.preprocess(
  */
 export function requiredNumber(
   requiredMessage = "Required",
-  invalidMessage = "Invalid number",
+  invalidMessage = "Enter a valid number.",
 ) {
   return z.preprocess(
     toNumberOrUndefined,
@@ -160,11 +160,47 @@ export const optionalPercent = z.preprocess(
   toNumberOrNull,
   z
     .number()
-    .min(0, "Must be 0–100")
-    .max(100, "Must be 0–100")
+    .min(0, "Enter a value from 0 to 100")
+    .max(100, "Enter a value from 0 to 100")
     .nullable()
     .optional()
 );
+
+// ============================================
+// Exact Numeric Storage Precision
+// ============================================
+
+/** HTML/Zod increment for values stored through the `numeric(14,3)` family. */
+export const MASS_KG_INPUT_STEP = 0.001;
+/** HTML/Zod increment for values stored through the `numeric(9,6)` family. */
+export const STORED_PERCENT_INPUT_STEP = 0.000001;
+
+export const MASS_KG_PRECISION_MESSAGE = "Use at most 3 decimal places";
+export const STORED_PERCENT_PRECISION_MESSAGE =
+  "Use at most 6 decimal places";
+
+/** Percent value whose fractional precision round-trips through `numeric(9,6)`. */
+export function storedPercentSchema() {
+  return z
+    .number()
+    .multipleOf(STORED_PERCENT_INPUT_STEP, STORED_PERCENT_PRECISION_MESSAGE);
+}
+
+/** Optional 0–100 percent input backed by the exact `numeric(9,6)` family. */
+export const optionalStoredPercent = optionalPercent.pipe(
+  storedPercentSchema().nullable().optional(),
+);
+
+/**
+ * Bounded stored percent for callers that already coerce form input before
+ * schema validation (for example React Hook Form's `setValueAs`).
+ */
+export const optionalStoredPercentValue = storedPercentSchema()
+  .finite()
+  .min(0, "Moisture content must be 0% or more")
+  .max(100, "Moisture content must be 100% or less")
+  .optional()
+  .nullable();
 
 // ============================================
 // Mass Input Caps
@@ -184,16 +220,38 @@ export const MASS_INPUT_MAX_TONNES = MASS_INPUT_MAX_KG / 1000;
 export const MASS_MAX_KG_MESSAGE = `Must be ${MASS_INPUT_MAX_KG.toLocaleString("en-US")} kg or less`;
 export const MASS_MAX_TONNES_MESSAGE = `Must be ${MASS_INPUT_MAX_TONNES.toLocaleString("en-US")} tonnes or less`;
 
+function massKgRangeSchema(minMessage = "Must be 0 or greater") {
+  return z
+    .number()
+    .min(0, minMessage)
+    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE);
+}
+
 export function massKgSchema(minMessage = "Must be 0 or greater") {
-  return z.number().min(0, minMessage).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE);
+  return massKgRangeSchema(minMessage)
+    .multipleOf(MASS_KG_INPUT_STEP, MASS_KG_PRECISION_MESSAGE);
 }
 
 export function positiveMassKgSchema(message = "Must be greater than 0") {
-  return z.number().positive(message).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE);
+  return z
+    .number()
+    .positive(message)
+    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
+    .multipleOf(MASS_KG_INPUT_STEP, MASS_KG_PRECISION_MESSAGE);
 }
 
 export function requiredMassKgSchema(message = "Must be 0 or greater") {
   return requiredNumber().pipe(massKgSchema(message));
+}
+
+/**
+ * Accepts a higher-precision mass that an authoritative boundary canonicalizes
+ * to the persisted scale before writing.
+ */
+export function requiredCanonicalizableMassKgSchema(
+  message = "Must be 0 or greater",
+) {
+  return requiredNumber().pipe(massKgRangeSchema(message));
 }
 
 export function requiredPositiveMassKgSchema(
@@ -212,6 +270,19 @@ export function optionalMassKgSchema(message = "Must be 0 or greater") {
 
 export function optionalMassKgInputSchema(message = "Must be 0 or greater") {
   return z.preprocess(toNumberOrNull, optionalMassKgSchema(message));
+}
+
+/**
+ * Accepts a higher-precision wet-mass snapshot that an authoritative boundary
+ * canonicalizes to the persisted mass scale before writing.
+ */
+export function optionalCanonicalizableMassKgInputSchema(
+  message = "Must be 0 or greater",
+) {
+  return z.preprocess(
+    toNumberOrNull,
+    massKgRangeSchema(message).optional().nullable(),
+  );
 }
 
 /** Largest value a Postgres `integer` column can hold. */
@@ -274,11 +345,11 @@ export const requiredDateOnly = z.union([
         date.getMonth() !== Number(dateOnly[2]) - 1 ||
         date.getDate() !== Number(dateOnly[3]))
     ) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
       return z.NEVER;
     }
     if (isNaN(date.getTime())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
       return z.NEVER;
     }
     return date;

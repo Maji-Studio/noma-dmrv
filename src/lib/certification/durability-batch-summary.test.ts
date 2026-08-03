@@ -92,8 +92,6 @@ describe("buildDurabilityBatchSummaries", () => {
     expect(summary.usableReplicateCount).toBe(3);
     expect(summary.meetsMinimum).toBe(true);
     expect(summary.minimumReplicates).toBe(3);
-    expect(summary.distinctRunDayCount).toBe(3);
-    expect(summary.distributionWarning).toBe(false);
     expect(summary.eligibility.eligible).toBe(true);
     // Submitted H/C_org mean of {0.3, 0.32, 0.34} = 0.32, with a real std-dev.
     expect(summary.submitted.hToCorg?.mean).toBeCloseTo(0.32, 5);
@@ -108,7 +106,10 @@ describe("buildDurabilityBatchSummaries", () => {
     ]);
   });
 
-  it("warns when ≥3 replicates cluster on a single run/day", () => {
+  // §8.3.1 requires 3 samples representative of the batch's full range of
+  // physical characteristics — NOT samples drawn from distinct runs or days. So
+  // three replicates sharing one run/day is a fully ready batch.
+  it("treats ≥3 replicates on a single run/day as ready", () => {
     const clustered = eligibleSamples().map((s) =>
       sample({
         ...s,
@@ -125,22 +126,7 @@ describe("buildDurabilityBatchSummaries", () => {
     ]);
 
     expect(summary.meetsMinimum).toBe(true);
-    expect(summary.distinctRunDayCount).toBe(1);
-    expect(summary.distributionWarning).toBe(true);
-  });
-
-  it("does not raise the distribution warning below the ≥3 minimum", () => {
-    const [summary] = buildDurabilityBatchSummaries([
-      batch({
-        creditBatchId: "cb-a",
-        creditBatchCode: "CB-A",
-        samples: eligibleSamples().slice(0, 2),
-      }),
-    ]);
-
-    expect(summary.usableReplicateCount).toBe(2);
-    expect(summary.meetsMinimum).toBe(false);
-    expect(summary.distributionWarning).toBe(false);
+    expect(summary.eligibility.eligible).toBe(true);
   });
 
   it("flags ineligibility on the pooled mean breaching the ceiling", () => {
@@ -233,11 +219,9 @@ describe("buildDurabilityBatchSummaries", () => {
     );
   });
 
-  it("counts distribution over USABLE replicates only — an incomplete off-day sample can't mask a clustered set", () => {
-    // 3 complete replicates clustered on one run/day + 1 incomplete (H/C only)
-    // on a different day. The incomplete one must NOT add a phantom distinct key
-    // (it would otherwise read as 2 distinct and suppress the cluster warning) —
-    // this is the readiness mirror of the §8.3.1 gate fix (PR #296).
+  it("counts only USABLE (paired-chemistry) replicates toward the ≥3 minimum", () => {
+    // 3 complete replicates + 1 carrying H/C only. The incomplete one is shown
+    // as a sample row but must not count toward the §8.3.1 ≥3 minimum.
     const clustered = [0, 1, 2].map((i) =>
       sample({
         id: `c${i}`,
@@ -268,11 +252,10 @@ describe("buildDurabilityBatchSummaries", () => {
 
     expect(summary.sampleCount).toBe(4);
     expect(summary.usableReplicateCount).toBe(3);
-    expect(summary.distinctRunDayCount).toBe(1);
-    expect(summary.distributionWarning).toBe(true);
+    expect(summary.meetsMinimum).toBe(true);
   });
 
-  it("handles string sampling timestamps for the distribution count", () => {
+  it("handles string sampling timestamps when resolving replicate days", () => {
     const stringDays = eligibleSamples().map((s, i) =>
       sample({
         ...s,
@@ -287,14 +270,18 @@ describe("buildDurabilityBatchSummaries", () => {
       }),
     ]);
 
-    expect(summary.distinctRunDayCount).toBe(3);
+    expect(summary.replicates.map((r) => r.samplingDay)).toEqual([
+      "2026-01-12",
+      "2026-01-13",
+      "2026-01-14",
+    ]);
   });
 });
 
 // The readiness surface must classify a sampling instant on the facility-LOCAL
 // calendar day, matching the write guard (`assertSampleNotBeforeBatchWindow`)
-// and the submission gate (`isoSamplingDay`) — otherwise the distribution/
-// provenance evidence shown here diverges from what submission accepts (issue
+// and the submission gate (`isoSamplingDay`) — otherwise the sampling days shown
+// here diverge from the production-window checks submission applies (issue
 // #455). Boundary cases across a positive- and a negative-offset facility.
 describe("buildDurabilityBatchSummaries facility-local sampling day", () => {
   it("resolves the local day for a positive-offset facility (UTC+3)", () => {
@@ -349,10 +336,10 @@ describe("buildDurabilityBatchSummaries facility-local sampling day", () => {
     expect(summary.replicates[0].samplingDay).toBe("2026-01-14");
   });
 
-  it("counts distinct run/day provenance in facility-local days (UTC-8)", () => {
+  it("resolves replicate days in facility-local days (UTC-8)", () => {
     // Two run-a samples share the UTC day 2026-01-15 but fall on different LA
-    // local days — the local classification yields 2 distinct keys, where a UTC
-    // reading would collapse them to 1.
+    // local days — the local classification separates them, where a UTC reading
+    // would collapse them onto one day.
     const [summary] = buildDurabilityBatchSummaries([
       batch({
         creditBatchId: "cb-a",
@@ -384,7 +371,10 @@ describe("buildDurabilityBatchSummaries facility-local sampling day", () => {
       }),
     ]);
 
-    expect(summary.distinctRunDayCount).toBe(2);
+    expect(summary.replicates.map((r) => r.samplingDay)).toEqual([
+      "2026-01-14",
+      "2026-01-15",
+    ]);
   });
 
   it("resolves offset-bearing string timestamps through the facility branch (UTC-8)", () => {
@@ -423,8 +413,10 @@ describe("buildDurabilityBatchSummaries facility-local sampling day", () => {
       }),
     ]);
 
-    expect(summary.replicates[0].samplingDay).toBe("2026-01-14");
-    expect(summary.distinctRunDayCount).toBe(2);
+    expect(summary.replicates.map((r) => r.samplingDay)).toEqual([
+      "2026-01-14",
+      "2026-01-15",
+    ]);
   });
 
   it("keeps a date-only string as its calendar day", () => {

@@ -4,12 +4,15 @@
  */
 
 import { z } from "zod";
+import { DRY_MASS_EXCEEDS_WET_MESSAGE } from "@/lib/calculations/mass-dry";
 import {
   emptyToNull,
   massKgSchema,
   optionalPositiveNumber,
   requiredMassKgSchema,
   requiredNumber,
+  requiredPositiveMassKgSchema,
+  storedPercentSchema,
 } from "./helpers";
 
 // ============================================
@@ -18,13 +21,14 @@ import {
 
 export const MOISTURE_MIN = 0;
 export const MOISTURE_MAX = 100;
+export const DUPLICATE_FORMULATION_INGREDIENT_MESSAGE =
+  "Each formulation ingredient can appear only once.";
 
 const requiredNonNegativeNumber = (message: string) =>
   requiredMassKgSchema(message);
 
 const requiredPercent = requiredNumber().pipe(
-  z
-    .number()
+  storedPercentSchema()
     .min(MOISTURE_MIN, "Must be 0-100")
     .max(MOISTURE_MAX, "Must be 0-100")
 );
@@ -55,23 +59,84 @@ const ingredientBinBaseSchema = z.object({
   feedstockTypeName: z.string(),
   feedstockTypeCategory: z.string(),
   // Recipe share snapshot — orientation only. The entered massKg is the
-  // record of what actually went into the blend; it is never validated
-  // against the ratio (deviation surfaces as a soft UI hint instead).
+  // wet/as-received record of what actually went into the blend; it is never
+  // validated against the ratio (deviation surfaces as a soft UI hint instead).
   ratio: z.number().min(0).max(1).optional().nullable(),
   massKg: massKgSchema("Ingredient mass must be 0 or greater"),
+  // Server-derived allocation snapshots. The client carries these through an
+  // edit, but create/update data access remains authoritative for their values.
+  massDryKg: massKgSchema("Ingredient dry mass must be 0 or greater")
+    .optional()
+    .nullable(),
+  moistureContentPercent: storedPercentSchema()
+    .min(MOISTURE_MIN)
+    .max(MOISTURE_MAX)
+    .optional()
+    .nullable(),
 });
 
-const ingredientBinFormSchema = ingredientBinBaseSchema.extend({
-  storageLocationId: emptyToNull.or(z.string().uuid()).optional().nullable(),
-  massKg: requiredNumber(
-    "Ingredient mass is required",
-    "Ingredient mass must be a number",
-  ).pipe(massKgSchema("Ingredient mass must be 0 or greater")),
-});
+type IngredientMassFields = {
+  massKg: number;
+  massDryKg?: number | null;
+};
 
-const ingredientBinUpdateSchema = ingredientBinBaseSchema.extend({
-  storageLocationId: z.string().uuid().optional().nullable(),
-});
+function ingredientDryMassRefinement(
+  ingredient: IngredientMassFields,
+  ctx: z.RefinementCtx,
+): void {
+  if (
+    ingredient.massDryKg == null ||
+    ingredient.massDryKg <= ingredient.massKg
+  ) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ["massDryKg"],
+    message: DRY_MASS_EXCEEDS_WET_MESSAGE,
+  });
+}
+
+const ingredientBinFormSchema = ingredientBinBaseSchema
+  .extend({
+    storageLocationId: emptyToNull.or(z.string().uuid()).optional().nullable(),
+    massKg: requiredNumber(
+      "Ingredient mass is required",
+      "Ingredient mass must be a number",
+    ).pipe(massKgSchema("Ingredient mass must be 0 or greater")),
+  })
+  .superRefine(ingredientDryMassRefinement);
+
+const ingredientBinUpdateSchema = ingredientBinBaseSchema
+  .extend({
+    storageLocationId: z.string().uuid().optional().nullable(),
+  })
+  .superRefine(ingredientDryMassRefinement);
+
+function uniqueFormulationIngredientsRefinement(
+  ingredients: ReadonlyArray<{ formulationIngredientId: string }>,
+  ctx: z.RefinementCtx,
+): void {
+  const seen = new Set<string>();
+  ingredients.forEach((ingredient, index) => {
+    if (seen.has(ingredient.formulationIngredientId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [index, "formulationIngredientId"],
+        message: DUPLICATE_FORMULATION_INGREDIENT_MESSAGE,
+      });
+    }
+    seen.add(ingredient.formulationIngredientId);
+  });
+}
+
+const ingredientBinsFormSchema = z
+  .array(ingredientBinFormSchema)
+  .superRefine(uniqueFormulationIngredientsRefinement);
+const ingredientBinsUpdateSchema = z
+  .array(ingredientBinUpdateSchema)
+  .superRefine(uniqueFormulationIngredientsRefinement);
 
 export type IngredientBin = z.infer<typeof ingredientBinFormSchema>;
 
@@ -85,34 +150,40 @@ export type IngredientBin = z.infer<typeof ingredientBinFormSchema>;
  */
 export const biocharProductFormSchema = z.object({
   // Required fields
-  facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
+  facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   // Optional: empty = pure-biochar product (no amendment blend)
-  formulationId: emptyToNull.or(z.string().uuid("Please select a valid formulation")).nullable().optional(),
+  formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
 
-  // No productionDate here: it is derived server-side from the linked production
-  // run (the biochar's production date), not entered on the product form.
+  // No productionDate here: it is derived server-side from the oldest
+  // production-run lot allocated from the selected source bin.
 
   // Status field
   status: z.enum(biocharProductStatusValues).default("testing"),
 
-  // Optional relation fields (empty string → null, otherwise must be valid UUID)
-  linkedProductionRunId: z
+  // Source and destination bins. The server resolves the source-bin draw to
+  // immutable production-run lots; operators never need to choose an internal
+  // production-run record.
+  sourceBiocharStorageLocationId: z
     .string()
-    .min(1, "Please select a production run")
-    .uuid("Invalid production run"),
+    .min(1, "Select a biochar bin.")
+    .uuid("Choose a valid biochar bin."),
   storageLocationId: z
     .string()
-    .min(1, "Please select a product bin")
-    .uuid("Invalid storage location"),
+    .min(1, "Select a product bin.")
+    .uuid("Choose a valid storage bin."),
 
   // Measurement fields (setValueAs in form converts "" to null and strings to numbers)
-  massKg: requiredNonNegativeNumber("Wet mass must be 0 or greater"),
+  massKg: requiredPositiveMassKgSchema(
+    "Wet mass is required",
+    "Wet mass must be a number",
+    "Wet mass must be greater than 0",
+  ),
   moistureContentPercent: requiredPercent,
   densityKgM3: optionalPositiveNumber,
   waterAddedKg: requiredNonNegativeNumber("Water added must be 0 or greater"),
 
   // Ingredient bin mappings (formulation ingredient → physical bin)
-  ingredientBins: z.array(ingredientBinFormSchema).optional(),
+  ingredientBins: ingredientBinsFormSchema.optional(),
 });
 
 // ============================================
@@ -129,7 +200,7 @@ export const createBiocharProductSchema = biocharProductFormSchema;
  * All fields optional except productId
  */
 export const updateBiocharProductSchema = z.object({
-  productId: z.string().uuid("Invalid product ID"),
+  productId: z.string().uuid("Choose a valid biochar product."),
   code: z
     .string()
     .min(1)
@@ -139,20 +210,26 @@ export const updateBiocharProductSchema = z.object({
   facilityId: z.string().uuid().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(biocharProductStatusValues).optional(),
-  linkedProductionRunId: z.string().uuid("Invalid production run").optional(),
-  storageLocationId: z.string().uuid("Invalid storage location").optional(),
+  sourceBiocharStorageLocationId: z
+    .string()
+    .uuid("Choose a valid biochar bin.")
+    .optional(),
+  storageLocationId: z.string().uuid("Choose a valid storage bin.").optional(),
   massKg: massKgSchema().optional(),
-  moistureContentPercent: z.number().min(MOISTURE_MIN).max(MOISTURE_MAX).optional(),
+  moistureContentPercent: storedPercentSchema()
+    .min(MOISTURE_MIN)
+    .max(MOISTURE_MAX)
+    .optional(),
   densityKgM3: z.number().min(0).optional().nullable(),
   waterAddedKg: massKgSchema().optional(),
-  ingredientBins: z.array(ingredientBinUpdateSchema).optional(),
+  ingredientBins: ingredientBinsUpdateSchema.optional(),
 });
 
 /**
  * Schema for deleting a biochar product
  */
 export const deleteBiocharProductSchema = z.object({
-  productId: z.string().uuid("Invalid product ID"),
+  productId: z.string().uuid("Choose a valid biochar product."),
 });
 
 // ============================================

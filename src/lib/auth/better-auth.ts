@@ -182,10 +182,10 @@ export const auth = betterAuth({
           url,
           html: `
             <p>Hello ${escapeHtml(user.name || "there")},</p>
-            <p>You requested to reset your password. Click the link below to continue:</p>
-            <p><a href="${url}">Reset Password</a></p>
-            <p>This link will expire in 24 hours.</p>
-            <p>If you didn't request this, you can safely ignore this email.</p>
+            <p>Use the link below to choose a new password:</p>
+            <p><a href="${url}">Choose a new password</a></p>
+            <p>This link expires in 24 hours.</p>
+            <p>If you did not request a password reset, ignore this email.</p>
           `,
         });
       } catch (error) {
@@ -212,9 +212,9 @@ export const auth = betterAuth({
           subject: "Verify your email",
           html: `
             <p>Hello ${escapeHtml(user.name || "there")},</p>
-            <p>Please verify your email address by clicking the link below:</p>
-            <p><a href="${url}">Verify Email</a></p>
-            <p>This link will expire in 24 hours.</p>
+            <p>Use the link below to verify your email address:</p>
+            <p><a href="${url}">Verify email</a></p>
+            <p>This link expires in 24 hours.</p>
           `,
         });
       } catch (error) {
@@ -366,7 +366,7 @@ export const auth = betterAuth({
             subject: `You're invited to join ${data.organization.name}`,
             html: `
               <p>Hello,</p>
-              <p>You've been invited to join <strong>${escapeHtml(data.organization.name)}</strong> as ${escapeHtml(data.role)}.</p>
+              <p>Join <strong>${escapeHtml(data.organization.name)}</strong> as ${escapeHtml(data.role)}.</p>
               <p><a href="${acceptUrl}">Accept invitation</a></p>
               <p>This invitation expires in 7 days.</p>
             `,

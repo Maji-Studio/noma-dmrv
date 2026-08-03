@@ -4,7 +4,7 @@ import { z } from "zod";
  * Schema for login form
  */
 export const loginSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address" }),
+  email: z.string().email({ message: "Enter a valid email address." }),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
@@ -12,7 +12,7 @@ export const loginSchema = z.object({
  * Schema for forgot password form
  */
 export const forgotPasswordSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address" }),
+  email: z.string().email({ message: "Enter a valid email address." }),
 });
 
 /**

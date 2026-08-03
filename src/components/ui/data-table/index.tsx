@@ -24,6 +24,7 @@ import {
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
+import { pluralize } from "@/lib/copy-utils";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Button } from "@/components/ui/button";
 import { TableRowSkeleton } from "@/components/ui/loading-skeleton";
@@ -66,7 +67,7 @@ const tableVariants = cva(
       size: {
         default: "",
         compact: "[&_th]:py-6 [&_th]:px-8 [&_td]:py-4 [&_td]:px-8",
-        comfortable: "[&_th]:py-14 [&_th]:px-16 [&_td]:py-12 [&_td]:px-16",
+        comfortable: "[&_th]:py-16 [&_th]:px-16 [&_td]:py-12 [&_td]:px-16",
       },
     },
     defaultVariants: {
@@ -879,7 +880,8 @@ function DataTablePagination({
       leadingContent={
         showSelectedCount && selectedCount > 0 ? (
           <span className="body-small text-[var(--color-text-secondary)]">
-            {selectedCount} of {totalRows} row(s) selected
+            {selectedCount} of {totalRows}{" "}
+            {pluralize(totalRows, "row")} selected
           </span>
         ) : undefined
       }

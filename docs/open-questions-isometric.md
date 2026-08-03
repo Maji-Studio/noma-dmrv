@@ -4,6 +4,10 @@ Registry-specific deferred decisions indexed from
 [`open-questions.md`](./open-questions.md). The schema, invariants, resolution
 rules, and `needs-registry-check` requirements defined there apply here.
 
+Current interpretation pin: Biochar Protocol v1.1 with the five module versions
+in [`docs/isometric/versions.json`](./isometric/versions.json). Resolved or
+retired questions do not belong in this file.
+
 ### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
 
 - **Decision needed** — where should the "this template component carries this
@@ -23,25 +27,18 @@ rules, and `needs-registry-check` requirements defined there apply here.
 
 ### Eq.6 R₀-term semantics — 1000-year F_durable normalization (`certification/fdurable-1000-r0-semantics`, opened 2026-07-03)
 
-- The storage module ("Biochar Storage in Soil
-  Environments" v1.2, Eq.6 §5.1.1.3.2) is internally inconsistent about the
-  units/semantics of the first Eq.6 factor: the formal glossary defines R̄₀ as a
-  mean of R₀ measurements in **percent**, but the narrative ("credited for the
-  percentage of their biochar which passes the 2% R₀ benchmark") implies the
-  histogram **fraction of R₀ measurements ≥ 2%** (0–1). The two readings are
-  dimensionally incompatible with the 0.95 cap.
-- **Local choice (preview only):** `computeFDurable1000`
-  (`src/lib/calculations/biochar-removal.ts`) applies Eq.6 literally to the
-  stored batch columns, with the mandatory `min(0.95, max(0, …))` bounds. The
-  interpretation is documented at the function. The registry computes the
-  authoritative F_durable at submission, so this is a preview — but a wrong
-  reading shows operators a misleading crediting estimate.
-- **Still open — needs-registry-check:** which of Eq.6 vs. the
-  `biochar_sequestration_1000_year` blueprint governs verification credit (the
-  blueprint is what runs and it diverges from Eq.6 — see
-  [ADR 0021](./adr/0021-durability-tier-is-facility-scoped.md)), and
-  total-vs-organic carbon for `carbon_contents`. Authoritative module:
-  <https://registry.isometric.com/module/biochar-storage-soil-environments/1.2?tag=1.2.0>.
+- The pinned Biochar Storage in Agricultural Soils v1.1 module's Eq.6 and the
+  live `biochar_sequestration_1000_year` blueprint do not express the same
+  calculation. The blueprint consumes total-carbon replicates, product mass,
+  and the fraction of R0 readings meeting the threshold; it omits the module's
+  non-reactive-carbon term and 0.95 cap.
+- The sandbox submission follows the live blueprint because that is the
+  executable wire contract. The module-based local calculation remains a
+  preview and must not be represented as the registry result.
+- **Still open — needs-registry-check:** which calculation governs verification
+  credit, and whether `carbon_contents` should be total or organic carbon.
+  Authoritative pinned module:
+  <https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1?tag=1.1.0>.
   Record the answer in [`docs/isometric/changes.md`](./isometric/changes.md).
 
 ### Credit-batch lab-sampling — Method-B Track 2 unlock followups (`certification/method-b-unlock-track-2`)
@@ -53,8 +50,8 @@ everywhere today, so none of this blocks current work — but do not enable
 Method B until all three close.
 
 - **`_unsampled` registry wire contract — needs-registry-check.** The live
-  `_unsampled` POST stays behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE`
-  (`src/config/env.ts`) because the submitted representation is unconfirmed. The
+  `_unsampled` POST stays sandbox-only (`ISOMETRIC_ENVIRONMENT === "sandbox"`)
+  because the submitted representation is unconfirmed. The
   working product expectation is to reuse the trailing eligible historical sample
   pool/average rather than require three new 1000-year replicates per unsampled
   batch — but noma must not invent it. Also unconfirmed: whether
@@ -64,59 +61,18 @@ Method B until all three close.
   a production-process history rule, not just the removal member-batch subset;
   the live gate must load the full process batch window or accept an explicit
   process-level cadence fact.
-- **Version dependency → #278.** The Certify project was observed on biochar
-  protocol 1.1 on 2026-07-24, the local interpretation pin remains 1.2, and
-  ADR 0017's historical text cites 1.3 (now qualified by a dated amendment).
-  Resolve the project version with Isometric before encoding more
-  credit-bearing Method-B logic. Also entangled with #291 (template-driven
-  remodel) — coordinate so the submission layer isn't double-built.
+- **Pinned-version dependency → #278.** The project and local interpretation
+  are pinned to Biochar v1.1. ADR 0017's historical v1.3 reasoning is not
+  sufficient evidence for more v1.1 credit-bearing Method-B logic. Re-verify
+  the relevant v1.1 rule and the unsampled blueprint contract together. Also
+  coordinate with #291 so the submission layer is not double-built.
 
-### Method-B compute — tracked cleanups on the process-grain surface (`certification/method-b-compute-cleanups`, opened 2026-06-20)
+### 200-year durability binding confirmation (`isometric/durability-measurement-samples`, opened 2026-06-18)
 
-Low-priority consolidations on the Track 2 surface (PR #301 review), deferred so
-they don't churn a freshly-introduced surface mid-review:
-
-- **`sampleMeanStdDev` ⇄ `meanAndStdDev` convergence.**
-  `src/lib/calculations/stats.ts` is a knowing near-duplicate of the private
-  `meanAndStdDev` in `src/lib/isometric/utils/durability-aggregation.ts`. The
-  aggregation copy can collapse onto the client-safe `stats.ts` helper once its
-  server-coupled neighbour (`./aggregation`) is untangled from the client-safe
-  path.
-- **O(n²) leave-one-out in `countSubThreeSigmaMeasurements`.** It recomputes
-  `sampleMeanStdDev` over a fresh `filter` array per element. Fine for a 6-month
-  window pool; if pools grow, compute the leave-one-out mean/variance
-  analytically in O(n) from running sums.
-
-### Durability measurement-samples — sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
-
-**Flag semantics:** `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (`src/config/env.ts`)
-is an optional flag *plus* a cross-field refinement rejecting it whenever
-`ISOMETRIC_ENVIRONMENT !== "sandbox"` — a sandbox-only kill-switch that cannot be
-enabled against production. The whole surface sits behind it. This entry closes
-when the flag is retired.
-
-Phases 1–5 and the 1000-year extension are **built and committed** (ADR 0021;
-issues #358 and #348); the phased plan and its decision record live in
-[`docs/plans/2026-06-19-tier1-durability-live-wiring.md`](./plans/2026-06-19-tier1-durability-live-wiring.md).
-One 200-year unit confirm and the legacy-template cutover checklist remain.
-
-**Resolved — datapoint↔component-input binding is explicit.** There is no
-measurement-property auto-link. `POST /measurement_samples` returns the required
-`values[].datapoint_id`; the submit pipeline captures those IDs and
-`transformers/sequestration-binding.ts` maps the 1000-year properties to the
-template component's `carbon_contents` / `product_mass` / `s_fraction` inputs.
-`buildCreateGhgEntryRequest` emits the corresponding LIST / SCALAR input
-variants. Unknown sequestration blueprints and missing IDs fail the submission
-instead of being skipped. The explicit table also permits the live
-`biochar_sequestration_1000_year` template key even though that exact key is
-absent from the blueprint catalog.
-
-**One sandbox-empirical confirm still gates the 200-year live submit —
-needs-registry-check.** The bodies, HTTP wrappers
-(`src/lib/isometric/measurement-samples.ts`), and per-batch aggregation are done
-and unit-tested; the remaining 200-year question needs the operator's
-`pnpm isometric:coverage-check -- --source=db` against the sandbox (interactive
-1Password — an agent can't run it).
+The sampled 1,000-year measurement-sample path is sandbox-verified and no
+longer an open implementation question. The remaining question is 200-year
+only. Its builders and aggregation exist, but submission fails closed because
+the input binding and one unit transform remain unconfirmed.
 
 - **H/C unit transform — needs-registry-check.** The 200-year blueprint declares
   `h_c_molar_ratios` in `%` while samples store a dimensionless molar ratio
@@ -127,17 +83,11 @@ and unit-tested; the remaining 200-year question needs the operator's
   ×100 wrong. Verify the live template's blueprint input unit before adding the
   200-year explicit binding.
 
-**Cutover checklist (verified still load-bearing).** At the live flip, and not
-before: delete the stale `carbon_rich_substance_sequestration` `INPUT_MAPPING`
-entry (`src/lib/isometric/transformers/datapoint.ts`) plus the two `tuple(…)`
-descriptors in `src/lib/certification/certify-field-registry.ts`
-(`biocharOutputKg`→`product_mass`, `organicCarbonPercent`→`carbon_content`), and
-retarget the 5 tests that reference it (`isometric-submit-removal`,
-`registry-boundary-removal`, `period-input-tuples`, `isometric-transformers`,
-`isometric-sources`). It is load-bearing on the still-live old-template carbon
-path, so deleting it early breaks working tests for zero gain. Then wire the live
-200-year property/input table after its unit confirm. The 1000-year path is
-already explicitly bound and does not use the legacy mapping.
+After the unit and live component-input table are confirmed, add the explicit
+200-year binding, verify both sampled and unsampled behavior separately, and
+only then retire the legacy `carbon_rich_substance_sequestration` mapping and
+its tests. Do not delete the legacy mapping while a configured facility still
+uses it.
 
 ### Ambiguous-lookup rejection records no failed sync event (`isometric/ambiguous-lookup-audit-silence`, opened 2026-06-10)
 
@@ -159,21 +109,19 @@ already explicitly bound and does not use the legacy mapping.
   wording, no response body). One-line change in `reconcileToResult` plus the
   pinned assertion; no migration.
 
-### GHG Entry API rename — September 2026 sunset cleanup (`isometric/ghg-entry-migration`, opened 2026-06-10)
+### GHG Entry deprecated-alias cleanup after the September 2026 sunset (`isometric/ghg-entry-migration`, opened 2026-06-10)
 
-- **Migration landed.** noma calls the `ghg_entry` route family; the regen
-  pipeline points at the docs-hosted Certify spec. Full inventory + phased plan:
-  [`docs/plans/2026-06-10-isometric-ghg-entry-migration.md`](./plans/2026-06-10-isometric-ghg-entry-migration.md).
-- **Sunset CONFIRMED ~September 2026.** No tracking issue exists for it — file
-  one. What remains post-sunset:
+noma already calls only the `ghg_entry` route family. The remaining work begins
+after the confirmed alias sunset:
   (a) regenerate `certify.d.ts` — the deprecated `Removal*` schemas and the
   `GhgStatement.removal_ids` / `Component.removal_template_component_id` keys
   disappear, so the test mocks still carrying both old+new fields
   (`isometric-reconciliation.test.ts`, `isometric-ghg-statement-flow.test.ts`,
-  `isometric-ghg-statement-submit.test.ts`) drop the deprecated keys; (b) delete
-  the 🚫-marked deprecated rows from
-  [`docs/isometric/openapi-index.md`](./isometric/openapi-index.md). No app-code
-  change expected — the wire layer only calls new routes.
+  `isometric-ghg-statement-submit.test.ts`) drop the deprecated keys; (b) drop
+  the deprecated-`/removals*`-alias note from
+  [`docs/isometric/openapi-index.md`](./isometric/openapi-index.md), which now
+  carries the aliases as prose rather than marked rows. No app-code route
+  migration is expected.
 ### GHG entry / statement free-field follow-ups (`isometric/ghg-entry-free-fields`, opened 2026-06-10)
 
 The migrated surface returns fields noma does not yet capture — new capability,
@@ -196,14 +144,15 @@ itself is **built and enforced** — see the invariants section,
 / `tests/e2e/organization-settings.spec.ts` specs. What does not exist is a
 "user X may access facility Y" check *inside* an org.
 
-- **Consequence:** any member of an org can drive irreversible Isometric writes
-  against any facility **in that org** by id — `submitRemovalAction`,
-  `submitTelemetryAction`, `createGhgStatementDraft`,
-  `submitGhgStatementToVerifier`, `refreshGhgStatementStatus`,
-  `createRemovalWithBatchesAction`, and the certifier-removal accessors in
-  `src/data-access/certifier-removals.ts`. Acceptable while an org is one
-  operator team; a decision is needed before an org onboards a second,
-  mutually-untrusted facility operator.
+- **Current authorization:** irreversible Isometric writes require organization
+  Admin role: Removal submit, telemetry submit, GHG Statement create/submit,
+  Source mirror, report prepare/approve, and mapping changes. The local
+  `createRemovalWithBatchesAction` grouping step is facility/org-scoped but is
+  not Admin-only because it creates no remote registry resource.
+- **Consequence:** an Admin may act on any facility in the organization; an
+  ordinary member may still read/manage organization-scoped resources according
+  to the current entity actions, including local Removal grouping. A decision is
+  needed before an organization contains mutually untrusted facility teams.
 - **The durable lesson (do not regress):** a server action must resolve the
   facility from the **anchor row**, never from a client-supplied field. The
   shipped seam `resolveSubmissionFacilityId` / `assertSubmissionInFacility`
@@ -226,21 +175,16 @@ itself is **built and enforced** — see the invariants section,
   check once membership lands (a `createdBy`-only stopgap is too tight —
   operators share documents on shared entities) and implement the `it.todo`
   negative tests in `tests/documents-authz.test.ts` against the scoped helper.
-- **Not wired to that seam:** `submitRemovalAction` and
-  `createRemovalWithBatchesAction`; the three admin mapping/emission actions
-  stay on `requireAdminAction()` (platform-global, see
-  [`docs/auth.md`](./auth.md)).
 - **Resolve via:** build a real `requireFacilityAccess(ctx, facilityId)` first
   (do not wire calls to a missing helper), then gate every
-  removal/statement/telemetry/mapping/emission accessor on the *resolved*
-  facility, scope the three admin actions, and audit all `localEntityId`
+  removal/statement/telemetry/mapping accessor on the *resolved*
+  facility, preserve the Admin requirement for remote writes, and audit all `localEntityId`
   accessors in `certifier_sync_events` for the same shape. Also swap
   `resolveEntityFacility` (`src/data-access/transport-legs.ts` — the polymorphic
   parent-chain walk that already closed the orphan-mutation hole) for the new
-  helper at that one chokepoint, then propagate. Formalizes pre-deploy gate #3
-  in [`docs/isometric/integration-plan.md`](./isometric/integration-plan.md).
-- **Pattern to copy:** `mirrorDocumentToSource` / `unlinkDocumentSource` enforce
-  a forgery-proof document→removal lineage anchor
+  helper at that one chokepoint, then propagate.
+- **Pattern to copy:** `mirrorDocumentToSource` enforces a forgery-proof
+  document→removal lineage anchor
   (`assertDocumentIsCandidateForRemoval`); `reconcileRemovalMembership` is
   facility-predicated + `FOR UPDATE` internally.
 
@@ -290,12 +234,6 @@ itself is **built and enforced** — see the invariants section,
     per-mode component instances. Out of scope while the transport UI is
     road-only; re-raise when a non-road mode is enterable.
 
-> **Note:** ADR 0003 / ADR 0004 pre-deploy gates (legacy ledger cutover,
-> destructive migration `0021`, wide id-addressable removal/GHG-statement
-> surface, no-zero-stub-in-prod) live in
-> [`docs/isometric/integration-plan.md`](./isometric/integration-plan.md) →
-> **Pre-deploy gates**. They are actions before deploy, not open questions.
-
 ### Blueprint versioning in `INPUT_MAPPING`
 
 - **Blueprint version dimension in `INPUT_MAPPING`**
@@ -316,8 +254,9 @@ itself is **built and enforced** — see the invariants section,
 ### Phase 5 Slice B / C deferrals (opened 2026-05-29)
 
 Scoped out of the Phase 5 Slice A design (biochar reactor time-series via
-Parquet — [ADR 0006](./adr/0006-data-upload-submission-idempotency.md)). Each is
-independently shippable once Slice A is in production and demand surfaces.
+Parquet — [ADR 0006](./adr/0006-data-upload-submission-idempotency.md)). The
+Slice A server pipeline exists but its UI is dark. Each item below is
+independently shippable when its upstream primitives and operator demand exist.
 
 - **Slice B — `POST /biochar_applications`** (`isometric/phase-5-slice-b`).
   Per-spread-event JSON submission (`application_date`,
@@ -371,8 +310,8 @@ independently shippable once Slice A is in production and demand surfaces.
   shape, header name, and algorithm. **Resolve via:** ask Isometric support;
   check `api-reference/` quarterly via
   [`docs/isometric/update-playbook.md`](./isometric/update-playbook.md). Once
-  published, build `src/app/api/certification/webhook/route.ts` with HMAC +
-  reconciliation tests.
+  published, build a certification webhook route with HMAC and reconciliation
+  tests.
 
 - **External GHG statement amendment claiming** (`isometric/phase-5`).
   Detect when an admin edits statement dates or attached Removals directly in
@@ -389,16 +328,6 @@ independently shippable once Slice A is in production and demand surfaces.
   changed-hash retries intentionally create a fresh version, so remote resources
   from the failed old hash can remain orphaned. **Resolve only if** production
   traffic shows this often enough to justify per-Datapoint sub-ledger bookkeeping.
-
-- **Per-input source attribution** (`isometric/sources-per-input-attribution`).
-  Phase 3.5 ships removal-wide attribution: every monitored Datapoint receives
-  the same `source_ids` list. Verifiers see complete evidence per Datapoint but
-  lose the narrowing that "this lab report supports carbon_content +
-  product_mass, not transport distance" would convey. A verification-quality
-  concern, not an API correctness one — the API accepts removal-wide attribution.
-  **Resolve via:** extend `loadCandidateDocumentsForRemovalAction` to return
-  per-input bindings (or a per-blueprint heuristic) and thread them through
-  `buildCreateDatapointRequest`'s `sourceIds` arg, which is already per-input.
 
 - **Stream large source files** (`isometric/sources-stream-large-files`).
   Phase 3.5 caps mirror size at 50 MB with a **pre-flight** check —
@@ -431,8 +360,8 @@ independently shippable once Slice A is in production and demand surfaces.
   re-submits; the leaked rows have no Removal reference — cosmetic clutter, not
   a data-quality issue. **Resolve only if** partial-failure rates rise.
 
-- **PATCH `/removals` vs supersede-and-create** (`isometric/phase-4`).
-  Phase 3 always creates a new versioned remote Removal on payload changes. If
+- **PATCH `/ghg_entries/{id}` vs supersede-and-create** (`isometric/phase-4`).
+  The current flow creates a new versioned remote GHG Entry on payload changes. If
   Certify supports in-place PATCH for selected fields and verifier UX prefers
   it, branch 3e gains a PATCH path (more accurate audit trail when only metadata
   changes; no v=2 Removal flooding the registry UI). **Resolve via** reading
@@ -459,7 +388,7 @@ independently shippable once Slice A is in production and demand surfaces.
   working as external/legacy links via the `/api/documents/[id]` proxy route's
   `fileUrl` branch.
 
-### Phase 3.5 source-mutation hardening — deferred simplifications (opened 2026-05-26)
+### Phase 3.5 source-mirroring hardening — deferred simplifications (opened 2026-05-26)
 
 Surfaced by the `/simplify` pass after the P1/P2 fix set. All below the
 threshold for the same PR; revisit next time the area is touched.
@@ -477,15 +406,15 @@ threshold for the same PR; revisit next time the area is touched.
   inline at 3 sites. As more data-access modules accept optional `tx`, the
   duplication compounds.
 
-- **Shared test fixture builder for Isometric submission tests**
-  (`tests/isometric-submission-fixtures`). `tests/isometric-submit-removal.test.ts`,
+- **Shared test fixture builder for Isometric submission tests.**
+  `tests/isometric-submit-removal.test.ts`,
   `tests/isometric-sources-mirror-flow.test.ts`, and
   `tests/isometric-ghg-statement-submit.test.ts` each repeat ~8 `vi.mock(...)`
   declarations and a similar `beforeEach` block; a new data-access dependency in
   `submit-removal.ts` typically breaks all three. **Resolve via:**
-  `tests/fixtures/isometric-submission-mocks.ts` exporting the mock path list
-  and per-test default data. Note `vi.mock` factories are hoisted, so each file
-  still calls them in its hoisted section. See [`docs/testing.md`](./testing.md).
+  add a shared fixture builder exporting the mock path list and per-test
+  defaults. Note `vi.mock` factories are hoisted, so each file still calls them
+  in its hoisted section. See [`docs/testing.md`](./testing.md).
 
 ### Phase 3.5 Sources panel test-pass follow-ups (opened 2026-05-27)
 
@@ -522,41 +451,37 @@ are clean deferrals.
   fixed.
   **Resolve via:** accumulate event payloads in a closure and flush after the
   transaction settles (success or rollback). Touch points:
-  `src/fn/certification/sources.ts` (`withSyncEventOnFailure`, the
+  `src/fn/certification/sources.ts` (`withSourceSyncEventOnFailure`, the
   `appendSyncEventBestEffort` calls inside the mirror transaction),
   `src/data-access/certification.ts` (`appendSyncEvent`).
 
-- **`ux/sources-panel-row-layout` — buttons clip on narrow viewports.** The
-  Mirror / Unlink / visibility-toggle button row in
-  `src/components/certification/sources-panel.tsx` clips below ~640px when
-  filenames are long. Pure UX follow-up: wrap the action row, go icon-only on
-  narrow viewports, or move buttons to a per-row overflow menu. See
+- **`ux/sources-panel-row-layout` — Mirror clips on narrow viewports.** The
+  Mirror action in `src/components/certification/sources-panel.tsx` can clip
+  below ~640px when filenames are long. Pure UX follow-up: wrap the action row
+  or go icon-only on narrow viewports. See
   [`docs/design-system.md`](./design-system.md).
 
-### Submit-removal — `pyrolyzer_direct` PROJECT-scope conflict in default template (opened 2026-05-27)
+### Annual-test attribution for `pyrolyzer_direct` (`isometric/pyrolyzer-direct-attribution`)
 
-**Settled — see #304,
-[ADR 0005](./adr/0005-period-emissions-as-project-components.md) and
-[ADR 0018](./adr/0018-isometric-owns-project-emissions.md).** `pyrolyzer_direct`
-stays a PROJECT-scope Component updated yearly from the emissions test / LCA. The
-guard is permanent and test-covered: `PERIOD_INPUT_TUPLES`
-(`src/lib/isometric/transformers/datapoint.ts`) is consulted *before*
-`INPUT_MAPPING`, pinned by `tests/period-input-tuples.test.ts`. Do not re-add a
-zero-stub `INPUT_MAPPING` entry to bypass it — `0` is an over-claim, not a
-neutral placeholder.
+`pyrolyzer_direct` is already settled as a registry-owned PROJECT-scope
+Component, guarded against Removal-scope zero stubs by
+`PERIOD_INPUT_TUPLES`.
 
 - **Still open — needs-registry-check:** whether Isometric or a verifier accepts
-  annual-test + throughput-proportional PROJECT-scope attribution, given biochar
-  §8.6.2 / §10.1 prefer Reporting-Period grain.
+  annual-test plus throughput-proportional PROJECT-scope attribution, given the
+  pinned Biochar v1.1 reporting-period/direct-emissions requirements. Keep the
+  fail-closed scope guard regardless of the answer.
 
 ### Pinned biochar protocol behind latest certified (opened 2026-06-04)
 
 **Owned by #278** — impact analysis, acceptance checklist, and the
 migration sequence all live there; do not duplicate them here. Local pins are in
-[`docs/isometric/versions.json`](./isometric/versions.json), but the real work is
-registry-side (re-authoring the GHG-entry template in Certify), so editing that
-file migrates nothing. **Which versions are currently latest-certified is
-needs-registry-check** — do not restate version numbers from local docs. Re-run
+[`docs/isometric/versions.json`](./isometric/versions.json): the project and
+local interpretation are pinned to Biochar Protocol v1.1. The remaining
+question is whether and when to migrate beyond that pin; the real work is
+registry-side (including template re-authoring), so editing the file migrates
+nothing. **Which versions are currently latest-certified is
+needs-registry-check** — do not restate unverified latest-version numbers. Re-run
 `.claude/workflows/isometric-gap-check.js` on any bump to regenerate the
 authority-vs-docs-vs-code gap list before re-pinning.
 
@@ -573,7 +498,7 @@ authority-vs-docs-vs-code gap list before re-pinning.
 - **Why it matters:** the New-Removal wizard's first step and the submit path;
   cost scales with batches × applications-per-batch. The per-batch Isometric
   *remote* calls were already hoisted and the create-removal confirm loop fixed
-  (`buildCreditBatchContextWithFacts` loads facility facts once) — what's left is
+  (`buildCreditBatchContexts` loads facility facts once) — what's left is
   the per-batch DB lineage fan-out.
 - **Resolve via:** rework `buildRemovalContext` to batch the lineage walks across
   a batch set (one chain-of-custody resolve keyed by all `applicationIds`, one

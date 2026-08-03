@@ -12,7 +12,11 @@ import {
   type DistanceSourceValue,
 } from "./distance-source";
 import { optionalTripType } from "./trip-type";
-import { emptyToNull, optionalMassKgSchema } from "./helpers";
+import {
+  emptyToNull,
+  optionalMassKgSchema,
+  optionalStoredPercentValue,
+} from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -43,8 +47,11 @@ export function resolveDeliveryDistanceSource(
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
-const optionalWetMassKg = optionalMassKgSchema("Wet mass must be >= 0");
-const optionalDryMassKg = optionalMassKgSchema("Dry mass must be >= 0");
+const WET_MASS_RANGE_MESSAGE = "Wet mass must be 0 or more";
+const DRY_MASS_RANGE_MESSAGE = "Dry mass must be 0 or more";
+const DISTANCE_RANGE_MESSAGE = "Distance must be 0 or more";
+const optionalWetMassKg = optionalMassKgSchema(WET_MASS_RANGE_MESSAGE);
+const optionalDryMassKg = optionalMassKgSchema(DRY_MASS_RANGE_MESSAGE);
 const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
 
 function validateDistanceOverride(
@@ -55,7 +62,7 @@ function validateDistanceOverride(
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["distanceKmOverride"],
-      message: "Distance must be >= 0",
+      message: DISTANCE_RANGE_MESSAGE,
     });
   }
 }
@@ -69,7 +76,7 @@ function validateDistanceOverride(
  */
 const deliveryFormBaseSchema = z.object({
   // Required fields
-  orderId: z.string().min(1, "Please select an order").uuid("Invalid order"),
+  orderId: z.string().min(1, "Select an order.").uuid("Choose a valid order."),
   deliveryDate: z.coerce.date({ error: "Delivery date is required" }),
 
   // Optional fields
@@ -79,7 +86,7 @@ const deliveryFormBaseSchema = z.object({
   status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalWetMassKg,
   massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalNumber,
+  moistureContentPercent: optionalStoredPercentValue,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
@@ -98,7 +105,7 @@ export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["massDryKg"],
-      message: "Dry mass must be >= 0",
+      message: DRY_MASS_RANGE_MESSAGE,
     });
   }
 
@@ -112,23 +119,6 @@ export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx
       path: ["massDryKg"],
       message: "Dry mass must be less than or equal to wet mass",
     });
-  }
-
-  if (value.moistureContentPercent != null) {
-    if (value.moistureContentPercent < 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["moistureContentPercent"],
-        message: "Moisture content must be >= 0%",
-      });
-    }
-    if (value.moistureContentPercent > 100) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["moistureContentPercent"],
-        message: "Moisture content must be <= 100%",
-      });
-    }
   }
 
   validateDistanceOverride(value, ctx);
@@ -148,8 +138,8 @@ export const createDeliverySchema = z.object({
     .min(1, "Delivery code is required")
     .max(50)
     .regex(/^[A-Z0-9-]+$/),
-  orderId: z.string().min(1, "Please select an order").uuid("Invalid order"),
-  facilityId: z.string().min(1, "Facility is required").uuid("Invalid facility"),
+  orderId: z.string().min(1, "Select an order.").uuid("Choose a valid order."),
+  facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   deliveryDate: z.coerce.date(),
   biocharProductId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
@@ -157,7 +147,7 @@ export const createDeliverySchema = z.object({
   status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalWetMassKg,
   massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalNumber,
+  moistureContentPercent: optionalStoredPercentValue,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
@@ -167,7 +157,7 @@ export const createDeliverySchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["massDryKg"],
-      message: "Dry mass must be >= 0",
+      message: DRY_MASS_RANGE_MESSAGE,
     });
   }
 
@@ -191,7 +181,7 @@ export const createDeliverySchema = z.object({
  * All fields optional except deliveryId
  */
 export const updateDeliverySchema = z.object({
-  deliveryId: z.string().uuid("Invalid delivery ID"),
+  deliveryId: z.string().uuid("Choose a valid delivery."),
   code: z
     .string()
     .min(1)
@@ -207,7 +197,7 @@ export const updateDeliverySchema = z.object({
   status: z.enum(deliveryStatuses).optional(),
   deliveredWetMassKg: optionalWetMassKg,
   massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalNumber,
+  moistureContentPercent: optionalStoredPercentValue,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
@@ -217,7 +207,7 @@ export const updateDeliverySchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["massDryKg"],
-      message: "Dry mass must be >= 0",
+      message: DRY_MASS_RANGE_MESSAGE,
     });
   }
 
@@ -240,7 +230,7 @@ export const updateDeliverySchema = z.object({
  * Schema for deleting a delivery
  */
 export const deleteDeliverySchema = z.object({
-  deliveryId: z.string().uuid("Invalid delivery ID"),
+  deliveryId: z.string().uuid("Choose a valid delivery."),
 });
 
 // ============================================

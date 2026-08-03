@@ -13,6 +13,7 @@
 
 import { createHash } from "node:crypto";
 import { SafeError } from "@/lib/errors";
+import { pluralize } from "@/lib/copy-utils";
 import type { IsometricClient } from "./client";
 import type { components } from "./generated/certify";
 import { encodeMeasurementProperty } from "./utils/measurement-property";
@@ -60,12 +61,12 @@ export function captureMeasurementSampleDatapointIds(
       value.datapoint_id.length === 0
     ) {
       throw new SafeError(
-        `Measurement sample ${sample.id} returned a value without the required datapoint_id; the GHG entry cannot bind sequestration inputs.`,
+        `Registry measurement ${sample.id} has a value with no identifier. Ask support to check the registry response.`,
       );
     }
     if (returnedDatapointIds.has(value.datapoint_id)) {
       throw new SafeError(
-        `Measurement sample ${sample.id} returned duplicate datapoint_id "${value.datapoint_id}"; the GHG entry cannot bind sequestration inputs safely.`,
+        `Registry measurement ${sample.id} repeats value ${value.datapoint_id}. Ask support to check the registry response.`,
       );
     }
     returnedDatapointIds.add(value.datapoint_id);
@@ -73,7 +74,7 @@ export function captureMeasurementSampleDatapointIds(
     const propertyKey = encodeMeasurementProperty(value.measurement_property);
     if (!expectedCountByMeasurementProperty.has(propertyKey)) {
       throw new SafeError(
-        `Measurement sample ${sample.id} returned unexpected measurement property "${propertyKey}".`,
+        `Registry measurement ${sample.id} contains a value the Removal template does not use. Ask support to check the registry template.`,
       );
     }
     returnedCountByMeasurementProperty.set(
@@ -90,7 +91,7 @@ export function captureMeasurementSampleDatapointIds(
       returnedCountByMeasurementProperty.get(propertyKey) ?? 0;
     if (returnedCount !== expectedCount) {
       throw new SafeError(
-        `Measurement sample ${sample.id} returned ${returnedCount} value(s) for measurement property "${propertyKey}"; expected ${expectedCount}.`,
+        `Registry measurement ${sample.id} returned ${returnedCount} ${pluralize(returnedCount, "value")} for one durability field, but ${expectedCount} ${expectedCount === 1 ? "is" : "are"} required. Refresh the registry data and try again.`,
       );
     }
   }
@@ -166,15 +167,6 @@ export async function createMeasurementSample(
   );
 }
 
-export async function getMeasurementSampleById(
-  client: IsometricClient,
-  id: string,
-): Promise<IsometricMeasurementSample> {
-  return client.get<IsometricMeasurementSample>(
-    `/measurement_samples/${encodeURIComponent(id)}`,
-  );
-}
-
 /**
  * Looks up a measurement sample by its noma-controlled supplier reference for
  * the reconcile path. The `GET /measurement_samples` endpoint exposes no
@@ -185,10 +177,10 @@ export async function findMeasurementSampleBySupplierRef(
   client: IsometricClient,
   supplierReferenceId: string,
 ): Promise<IsometricMeasurementSample | null> {
-  const matches = await client.paginateAll<IsometricMeasurementSample>(
+  for await (const sample of client.paginate<IsometricMeasurementSample>(
     "/measurement_samples",
-  );
-  return (
-    matches.find((m) => m.supplier_reference_id === supplierReferenceId) ?? null
-  );
+  )) {
+    if (sample.supplier_reference_id === supplierReferenceId) return sample;
+  }
+  return null;
 }

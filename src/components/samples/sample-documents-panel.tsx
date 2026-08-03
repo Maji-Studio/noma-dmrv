@@ -54,7 +54,7 @@ export function SampleDocumentsPanel({
       toast.success(`Document is now ${next}`);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Failed to update visibility",
+        err instanceof Error ? err.message : "Visibility was not saved. Try again.",
       );
     }
   };
@@ -68,7 +68,7 @@ export function SampleDocumentsPanel({
       setDeletingId(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Failed to delete document",
+        err instanceof Error ? err.message : "Document was not deleted. Try again.",
       );
     }
   };
@@ -88,7 +88,7 @@ export function SampleDocumentsPanel({
       {error && (
         <ServerError
           message={
-            error instanceof Error ? error.message : "Failed to load documents"
+            error instanceof Error ? error.message : "The documents could not be loaded. Refresh the page and try again."
           }
         />
       )}

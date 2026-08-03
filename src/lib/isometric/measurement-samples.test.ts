@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   captureMeasurementSampleDatapointIds,
+  findMeasurementSampleBySupplierRef,
   mergeMeasurementSampleDatapointIds,
   type CreateMeasurementSampleRequest,
   type IsometricMeasurementSample,
@@ -121,7 +122,7 @@ describe("captureMeasurementSampleDatapointIds", () => {
     ]);
 
     expect(() => capture(sample)).toThrow(
-      /without the required datapoint_id.*cannot bind sequestration inputs/,
+      /value with no identifier.*check the registry response/,
     );
   });
 
@@ -154,7 +155,7 @@ describe("captureMeasurementSampleDatapointIds", () => {
         response,
         requestForSample(response, expectedValues),
       ),
-    ).toThrow(/returned 1 value.*expected 2/);
+    ).toThrow(/returned 1 value.*2 are required/);
   });
 
   it("fails closed on an unexpected response property", () => {
@@ -183,7 +184,7 @@ describe("captureMeasurementSampleDatapointIds", () => {
         response,
         requestForSample(response, response.values.slice(0, 1)),
       ),
-    ).toThrow(/unexpected measurement property/);
+    ).toThrow(/contains a value the Removal template does not use/);
   });
 
   it("fails closed on duplicate response datapoint IDs", () => {
@@ -207,7 +208,7 @@ describe("captureMeasurementSampleDatapointIds", () => {
       },
     ]);
 
-    expect(() => capture(response)).toThrow(/duplicate datapoint_id/);
+    expect(() => capture(response)).toThrow(/repeats value dtp_duplicate/);
   });
 });
 
@@ -251,5 +252,30 @@ describe("mergeMeasurementSampleDatapointIds", () => {
         "mass_fraction_dry_basis|total_carbon",
       ),
     ).toEqual(["dtp_c1", "dtp_c2"]);
+  });
+});
+
+describe("findMeasurementSampleBySupplierRef", () => {
+  it("stops paginated scanning at the first supplier-reference match", async () => {
+    let yielded = 0;
+    const client = {
+      paginate: async function* () {
+        for (const id of ["before", "target", "after"]) {
+          yielded += 1;
+          yield measurementSample(id, []);
+        }
+      },
+      paginateAll: () => {
+        throw new Error("paginateAll must not be used");
+      },
+    };
+
+    await expect(
+      findMeasurementSampleBySupplierRef(
+        client as never,
+        "ref-target",
+      ),
+    ).resolves.toMatchObject({ id: "target" });
+    expect(yielded).toBe(2);
   });
 });

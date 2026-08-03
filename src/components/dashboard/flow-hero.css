@@ -18,8 +18,10 @@
   18% {
     opacity: 0.55;
   }
+  /* Rise is kept inside the cropped viewBox so the plume never meets a hard
+     ceiling at the top of the scene. */
   100% {
-    transform: translateY(-30px);
+    transform: translateY(-20px);
     opacity: 0;
   }
 }

@@ -17,10 +17,36 @@ Guards live in `src/lib/auth/server.ts`; the client hook `useAuth` is exported f
 
 Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto) instead of `middleware.ts`. It delegates to `updateSession()` in `src/lib/auth/middleware.ts`, which is the authority on route access:
 
-- `PUBLIC_ROUTES` — reachable signed out. Includes `/schema` and `/api/storage-local` alongside the auth pages. Matching is prefix-based (`pathname === route || pathname.startsWith(route + "/")`), so every descendant is public too.
+- `PUBLIC_ROUTES` — reachable signed out. Includes `/schema`,
+  `/api/storage-local`, and `/api/ghg-statement-reports` alongside the auth
+  pages. Matching is prefix-based
+  (`pathname === route || pathname.startsWith(route + "/")`), so every
+  descendant is public too.
 - `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected to `/dashboard`. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.
 - Unverified sessions are redirected to `/verify-email` (403 JSON for `/api/*`). `requireAuth()` does **not** check `emailVerified` — the `(app)` layout calls bare `requireAuth()`, so verification enforcement there comes entirely from the proxy. Use `requireVerifiedAuth()` where the page itself must guarantee it.
 - `/admin/*` is gated by the admin layout's `requireAdmin()`.
+
+### Public verifier report capability
+
+`GET /api/ghg-statement-reports/[reportId]?token=…` is intentionally public at
+the middleware layer because an external verifier may not have a noma account.
+It does **not** make the report public by id:
+
+- the report id selects one `certifier_ghg_statement_reports` row and the token
+  is checked against that row's stored SHA-256 digest with a timing-safe
+  comparison;
+- plaintext tokens are returned only when a new verifier URL is issued;
+  reissuing rotates the digest and revokes the previous URL;
+- missing rows, bad ids/tokens, and incomplete uploads fail without disclosing
+  another organization (the route uses 404 for capability failures);
+- a valid capability receives a 302 to a freshly signed private-storage URL,
+  with `Cache-Control: private, no-store` and `Referrer-Policy: no-referrer`.
+
+The lookup in `src/data-access/ghg-statement-reports.ts` deliberately lacks an
+`OrgContext` and carries the exact `// org-scope-ok:` waiver because the
+unguessable bearer token is the authorization boundary. This is the only
+cross-org verifier seam; every authenticated workspace and document read keeps
+normal organization scoping.
 
 ## Roles and active organization
 
@@ -56,7 +82,7 @@ Data-access functions take an `OrgContext` and call `requireOrgScope(ctx)` — t
 - **`assertSameOrg()` must be passed the current `tx` as its `executor`** when called inside a transaction — reading through the global pool from inside a transaction starves the pool under parallel load. See `src/data-access/utils.ts`.
 - `organizationId` is never accepted from form data; cross-org IDs resolve as absent rather than disclosing another org's data.
 
-Registry credentials are owned per organization and managed only by Platform Admins; members use them through scoped certification flows but cannot read or replace the stored secrets.
+Registry credentials are owned per organization and managed by its Owners and Admins (and by Platform Admins), gated on the server-computed `viewerCanManage` rather than on `users.role`. Ordinary members use them through scoped certification flows but cannot read or replace the stored secrets.
 
 ## Rate limiting
 

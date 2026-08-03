@@ -11,6 +11,7 @@ import {
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+import type { StoredSourceBindingVerification } from "@/lib/certification/removal-evidence-health";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import type { OrgContext } from "@/lib/auth/server";
@@ -195,8 +196,8 @@ export async function getCreditBatchSummariesByRemovalIds(
 
 // A credit batch not yet grouped into a removal, with the display fields the
 // New-Removal wizard's selection cards render (code, crediting window,
-// durability). Applied weight and stored CO₂e are derived per batch by the
-// wizard (issue #285); this query is the cheap list half.
+// durability). Applied weight is derived per batch by the wizard (issue #285);
+// carbon is intentionally absent because Isometric is the Removal authority.
 export interface UngroupedCreditBatchRow {
   id: string;
   code: string;
@@ -276,12 +277,12 @@ export async function createRemovalWithCreditBatches(
     for (const batch of batches) {
       if (batch.facilityId !== facilityId) {
         throw new SafeError(
-          "A credit batch can only join a removal in the same facility.",
+          "A credit batch can only join a Removal in the same facility.",
         );
       }
       if (batch.removalId) {
         throw new SafeError(
-          "A selected credit batch is already grouped into a removal.",
+          "A selected credit batch is already grouped into a Removal.",
         );
       }
     }
@@ -315,4 +316,31 @@ export async function updateRemovalDates(
       updatedAt: sql`now()`,
     })
     .where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)));
+}
+
+export async function updateRemovalSourceBindingVerification(
+  ctx: OrgContext,
+  removalId: string,
+  verification: StoredSourceBindingVerification,
+): Promise<void> {
+  requireOrgScope(ctx);
+  const [updated] = await db
+    .update(certifierRemovals)
+    .set({
+      metadata: sql`jsonb_set(
+        coalesce(${certifierRemovals.metadata}, '{}'::jsonb),
+        '{sourceBindingVerification}',
+        ${JSON.stringify(verification)}::jsonb,
+        true
+      )`,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(certifierRemovals.id, removalId),
+        eq(certifierRemovals.organizationId, ctx.organizationId),
+      ),
+    )
+    .returning({ id: certifierRemovals.id });
+  if (!updated) throw new SafeError("Removal not found.");
 }

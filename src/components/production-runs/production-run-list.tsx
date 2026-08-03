@@ -16,7 +16,7 @@ import {
   CheckCircleIcon,
   WarningIcon,
   ProhibitIcon,
-} from "@phosphor-icons/react";
+} from "@phosphor-icons/react/dist/ssr";
 import {
   useCreateProductionRun,
   useDeleteProductionRun,
@@ -33,7 +33,6 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
-import { useImportProductionRunReadings } from "@/hooks/use-production-run-reading-imports";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -41,6 +40,7 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
+import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
@@ -48,18 +48,24 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
-import { formatDate } from "@/lib/format-utils";
-import { formatLocalTime } from "@/lib/date-utils";
+import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
+import { resolveFacilityTimezone } from "@/lib/date-utils";
+import {
+  formatMoisturePercent,
+  MOISTURE_FIELD_LABEL,
+  qualifyMassLabel,
+  WET_MASS_FIELD_LABEL,
+} from "@/lib/mass-moisture";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
-import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
   buildProductionRunFeedstockDetailField,
-  buildProductionRunReadingsDetailField,
+  buildProductionRunWindowDetailFields,
   productionRunStatusCertStatus,
 } from "./production-run-detail-fields";
 import {
@@ -118,7 +124,7 @@ function createColumns(
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => <span>{row.original.facilityName || "—"}</span>,
+      cell: ({ row }) => <span>{row.original.facilityName || "Not available"}</span>,
     },
     {
       id: "reactor",
@@ -127,13 +133,24 @@ function createColumns(
     },
     {
       accessorKey: "totalFeedstockMassKg",
-      header: "Feedstock (kg)",
-      cell: ({ row }) => row.original.totalFeedstockMassKg?.toLocaleString() ?? "\u2014",
+      header: "Feedstock wet mass",
+      cell: ({ row }) => (
+        <span className="font-mono">{formatMassKg(row.original.totalFeedstockMassKg)}</span>
+      ),
     },
     {
       accessorKey: "biocharOutputKg",
-      header: "Biochar Wet (kg)",
-      cell: ({ row }) => row.original.biocharOutputKg?.toLocaleString() ?? "\u2014",
+      header: "Biochar wet mass",
+      cell: ({ row }) => (
+        <span className="font-mono">{formatMassKg(row.original.biocharOutputKg)}</span>
+      ),
+    },
+    {
+      accessorKey: "biocharDryMassKg",
+      header: "Biochar dry mass",
+      cell: ({ row }) => (
+        <span className="font-mono">{formatMassKg(row.original.biocharDryMassKg)}</span>
+      ),
     },
     {
       accessorKey: "status",
@@ -178,7 +195,7 @@ function createColumns(
 
 export function ProductionRunList() {
   // Global facility context
-  const { facilityId } = useFacilityContext();
+  const { facilityId, facilities } = useFacilityContext();
   const [focusedRunId, setFocusedRunId] = useQueryState(
     "run",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -253,7 +270,6 @@ export function ProductionRunList() {
   const updateRun = useUpdateProductionRun();
   const deleteRun = useDeleteProductionRun();
   const toast = useToast();
-  const importReadings = useImportProductionRunReadings();
 
   const runs = runsData?.items ?? [];
   const totalPages = runsData?.totalPages ?? 0;
@@ -279,64 +295,15 @@ export function ProductionRunList() {
       if (getRunConflict(error)) throw error;
       return error instanceof Error
         ? error.message
-        : "Failed to create production run";
+        : "Production run was not created. Check the form.";
     },
     unresolvedUpdateMessage:
-      "Resolve or remove the failed readings file before saving this production run.",
+      "Resolve or remove the failed attachment before saving this production run.",
     openEditOnFailure: (run) =>
       setSideSheet({ entity: run, mode: "edit" }),
     closeOnSuccess: () => setSideSheet(null),
-    onAfterFlush: async ({ flushResult }) => {
-      // Import every readings CSV that uploaded, including on a partial upload
-      // failure. Deferred retry skips uploaded entries, so delaying these
-      // imports would leave their documents without readings rows.
-      const readingsDocuments = flushResult.uploaded.filter(
-        (attachment) =>
-          attachment.documentType === "sensor_data" && attachment.documentId,
-      );
-      let importFailedCount = 0;
-      const importFailureMessages: string[] = [];
-      for (const attachment of readingsDocuments) {
-        try {
-          const importResult = await importReadings.mutateAsync(
-            attachment.documentId as string,
-          );
-          toast.success(`Imported ${importResult.insertedRows} readings`);
-        } catch (error) {
-          importFailedCount += 1;
-          if (error instanceof Error && error.message.trim()) {
-            importFailureMessages.push(error.message.trim());
-          }
-        }
-      }
-
-      const uploadFailedCount = flushResult.failed.length;
-      if (uploadFailedCount === 0 && importFailedCount === 0) return;
-
-      const messages: string[] = [];
-      if (uploadFailedCount > 0) {
-        messages.push(
-          `${uploadFailedCount} ${uploadFailedCount === 1 ? "attachment" : "attachments"} failed to upload`,
-        );
-      }
-      if (importFailedCount > 0) {
-        messages.push(
-          `${importFailedCount} readings ${importFailedCount === 1 ? "file" : "files"} could not be imported`,
-        );
-      }
-      const firstImportFailureMessage = importFailureMessages[0];
-      const importFailureDetail = firstImportFailureMessage
-        ? ` Import error: ${firstImportFailureMessage}`
-        : "";
-      return {
-        failureMessage: `Production run created, but ${messages.join(" and ")}. Resolve ${messages.length > 1 || importFailedCount > 1 || uploadFailedCount > 1 ? "them" : "it"} below.${importFailureDetail}`,
-        // Import-only failures are durable on the document and need no upload
-        // retry queue; upload failures retain the queue for retry in edit mode.
-        clearAttachmentsOnFailure: uploadFailedCount === 0,
-      };
-    },
     onSuccess: () =>
-      toast.success("Production run created successfully"),
+      toast.success("Production run created."),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
@@ -365,10 +332,10 @@ export function ProductionRunList() {
       });
       createWithEvidence.reset();
       setSideSheet(null);
-      toast.success("Production run updated successfully");
+      toast.success("Production run updated.");
     } catch (error) {
       if (getRunConflict(error)) throw error;
-      setUpdateError(error instanceof Error ? error.message : "Failed to update production run");
+      setUpdateError(error instanceof Error ? error.message : "Production run was not saved. Try again.");
     }
   };
 
@@ -383,9 +350,9 @@ export function ProductionRunList() {
         setFocusedRunId(null);
       }
       setDeletingRunId(null);
-      toast.success("Production run deleted successfully");
+      toast.success("Production run deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete production run");
+      setDeleteError(error instanceof Error ? error.message : "Production run was not deleted. Try again.");
     }
   };
 
@@ -492,7 +459,7 @@ export function ProductionRunList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load production runs"} />
+        <ServerError message={fetchError.message || "The production runs could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }
@@ -501,7 +468,6 @@ export function ProductionRunList() {
   const sideSheetOpen = !!displaySideSheet;
   const sideSheetMode = displaySideSheet?.mode ?? "create";
   const sideSheetEntity = displaySideSheet?.entity ?? null;
-
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create Production Run" : sideSheetEntity?.code ?? "";
 
@@ -529,7 +495,18 @@ export function ProductionRunList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
         <StatCard title="Total Runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
-        <StatCard title="Biochar Output" value={`${((statsData?.totalBiocharKg ?? 0) / 1000).toFixed(1)} t`} icon={<LeafIcon size={24} weight="bold" />} description="Total biochar produced" isLoading={statsLoading} />
+        <StatCard
+          title="Biochar Output"
+          value={
+            <MassPair
+              wetKg={statsData?.totalBiocharKg ?? 0}
+              dryKg={statsData ? statsData.totalBiocharDryKg : 0}
+            />
+          }
+          valueLayout="breakdown"
+          icon={<LeafIcon size={24} weight="bold" />}
+          isLoading={statsLoading}
+        />
         <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} description="Currently active runs" isLoading={statsLoading} />
         <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} description="Finished production runs" isLoading={statsLoading} />
       </div>
@@ -565,12 +542,12 @@ export function ProductionRunList() {
                   ? "No production runs found"
                   : "No production runs yet"
             }
-            description={hasActiveFilters ? "Try adjusting your search or filters." : "Create your first production run to start tracking pyrolysis batches."}
+            description={hasActiveFilters ? "Try adjusting your search or filters." : "A production run is one pyrolysis batch, turning feedstock into biochar."}
             action={
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create Production Run
+                  Create your first production run
                 </Button>
               ) : undefined
             }
@@ -598,10 +575,10 @@ export function ProductionRunList() {
               }}
               aria-label="Filter production runs by credit batch"
             >
-              <option value="">All Credit Batches</option>
+              <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.code}
+                  {formatDateRange(batch.startDate, batch.endDate)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -610,7 +587,7 @@ export function ProductionRunList() {
               onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
               aria-label="Filter production runs by status"
             >
-              <option value="">All Statuses</option>
+              <option value="">All statuses</option>
               <option value="draft">Draft</option>
               <option value="running">Running</option>
               <option value="complete">Complete</option>
@@ -653,7 +630,7 @@ export function ProductionRunList() {
         size="wide"
         sections={sideSheetEntity ? [
           {
-            title: "Run Setup",
+            title: "Run setup",
             fields: [
               { label: "Reactor", value: sideSheetEntity.reactorIdentifier },
               {
@@ -667,60 +644,72 @@ export function ProductionRunList() {
               ...(sideSheetEntity.status === "cancelled"
                 ? [{ label: "Cancellation reason", value: sideSheetEntity.cancellationReason }]
                 : []),
-              { label: "Start Date", value: formatDate(sideSheetEntity.startTime) },
-              { label: "Start Time", value: formatLocalTime(sideSheetEntity.startTime) },
-              { label: "End Date", value: sideSheetEntity.endTime ? formatDate(sideSheetEntity.endTime) : null },
-              { label: "End Time", value: sideSheetEntity.endTime ? formatLocalTime(sideSheetEntity.endTime) : null },
+              ...buildProductionRunWindowDetailFields(sideSheetEntity, facilities),
               { label: "Operator", value: sideSheetEntity.operatorName },
             ],
           },
           {
-            title: "Feedstock & Processing",
+            title: "Feedstock & processing",
             fields: [
               buildProductionRunFeedstockDetailField(sideSheetEntity.feedstocks),
-              { label: "Source Bin", value: sideSheetEntity.feedstockStorageLocationCode },
-              { label: "Wet Mass (kg)", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: sideSheetEntity.feedstockWetMassKg != null ? `${sideSheetEntity.feedstockWetMassKg.toLocaleString()} kg` : null },
-              { label: "Moisture Content (%)", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: sideSheetEntity.feedstockMoisturePercent != null ? `${sideSheetEntity.feedstockMoisturePercent}%` : null },
-              { label: "Dry Mass (derived)", value: sideSheetEntity.feedstockMassDryKg != null ? `${sideSheetEntity.feedstockMassDryKg.toLocaleString()} kg` : null },
-              { label: "Feed Rate (kg/hr)", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
-              { label: "Residence Time (min)", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
+              {
+                label: "Source bin",
+                value: sideSheetEntity.feedstockStorageLocationName,
+              },
+              { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Feedstock"), ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: formatMassKg(sideSheetEntity.feedstockWetMassKg) },
+              { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Feedstock"), ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.feedstockMoisturePercent) },
+              { label: "Feed rate (kg/hr)", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
+              { label: "Residence time (min)", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
             ],
+            content: (
+              <MoistureSplit
+                wetMassKg={sideSheetEntity.feedstockWetMassKg}
+                moisturePercent={sideSheetEntity.feedstockMoisturePercent}
+                dryMassKg={sideSheetEntity.feedstockMassDryKg}
+                materialLabel="Feedstock"
+              />
+            ),
           },
           {
             title: "Output",
             fields: [
-              { label: "Biochar Storage", value: sideSheetEntity.biocharStorageLocationCode },
-              { label: "Biochar Wet Mass (kg)", ...certificationDetailField("productionRun", "biocharOutputKg"), value: sideSheetEntity.biocharOutputKg != null ? `${sideSheetEntity.biocharOutputKg.toLocaleString()} kg` : null },
-              { label: "Biochar Moisture (%)", ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: sideSheetEntity.biocharMoisturePercent != null ? `${sideSheetEntity.biocharMoisturePercent}%` : null },
-              { label: "Biochar Dry Mass (derived)", value: sideSheetEntity.biocharDryMassKg != null ? `${sideSheetEntity.biocharDryMassKg.toLocaleString()} kg` : null },
+              {
+                label: "Biochar storage",
+                value: sideSheetEntity.biocharStorageLocationName,
+              },
+              { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharOutputKg"), value: formatMassKg(sideSheetEntity.biocharOutputKg) },
+              { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.biocharMoisturePercent) },
             ],
+            content: (
+              <MoistureSplit
+                wetMassKg={sideSheetEntity.biocharOutputKg}
+                moisturePercent={sideSheetEntity.biocharMoisturePercent}
+                dryMassKg={sideSheetEntity.biocharDryMassKg}
+                materialLabel="Biochar"
+              />
+            ),
           },
           {
             title: "Energy",
             fields: [
-              { label: "Startup / Plant Diesel (L)", ...certificationDetailField("productionRun", "dieselOperationLiters"), value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
-              { label: "Genset Diesel (L)", ...certificationDetailField("productionRun", "dieselGensetLiters"), value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
-              { label: "Preprocess Fuel (L)", ...certificationDetailField("productionRun", "preprocessingFuelLiters"), value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
+              { label: "Startup / plant diesel (L)", ...certificationDetailField("productionRun", "dieselOperationLiters"), value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
+              { label: "Genset diesel (L)", ...certificationDetailField("productionRun", "dieselGensetLiters"), value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
+              { label: "Preprocess fuel (L)", ...certificationDetailField("productionRun", "preprocessingFuelLiters"), value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
               { label: "Electricity (kWh)", ...certificationDetailField("productionRun", "electricityKwh"), value: sideSheetEntity.electricityKwh != null ? `${sideSheetEntity.electricityKwh} kWh` : null },
             ],
           },
           {
-            title: "Readings CSV Import",
-            fields: [
-              buildProductionRunReadingsDetailField(
-                sideSheetEntity.status,
-                sideSheetEntity.readingsCount,
-              ),
-            ],
+            title: "Readings file",
+            fields: [],
             content: (
-              <div className="space-y-20">
-                <ProductionReadingsDocuments productionRunId={sideSheetEntity.id} readOnly />
-                <ProductionRunReadingTable productionRunId={sideSheetEntity.id} readOnly />
-              </div>
+              <ProductionReadingsDocuments
+                productionRunId={sideSheetEntity.id}
+                readOnly
+              />
             ),
           },
           {
-            title: "Samples & Incidents",
+            title: "Samples & incidents",
             fields: [],
             content: (
               <div className="space-y-20">

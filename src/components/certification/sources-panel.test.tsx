@@ -1,6 +1,13 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const rowMutationState = vi.hoisted(() => ({
+  confirmed: false,
+}));
+const queryState = vi.hoisted(() => ({
+  isError: false,
+}));
 
 vi.mock("@/hooks/use-certification-sources", () => ({
   useCandidateDocumentsForRemoval: () => ({
@@ -18,50 +25,70 @@ vi.mock("@/hooks/use-certification-sources", () => ({
           lineageEntity: {
             entityLabel: "Application AP-26-001",
           },
-          mirror: null,
+          binding: {
+            nomaRole: "inventory",
+            nomaRoleLabel: "Inventory",
+          },
+          mirror: rowMutationState.confirmed
+            ? {
+                externalDocumentId: "source-confirmed",
+                isPublic: false,
+                mirroredAt: new Date("2026-07-27T00:00:00.000Z"),
+              }
+            : null,
         },
         {
           document: {
             id: "mime-pdf-document-id",
-            fileName: "laboratory-report",
-            documentType: "lab_report",
+            fileName: "delivery-bol",
+            documentType: "bill_of_lading",
             mimeType: "application/pdf; charset=binary",
-            storageKey: "samples/laboratory-report",
+            storageKey: "deliveries/delivery-bol",
           },
           lineageEntity: {
-            entityLabel: "Lab sample CB-26-001",
+            entityLabel: "Delivery DEL-26-001",
           },
-          mirror: null,
+          binding: {
+            nomaRole: "delivery_bill_of_lading",
+            nomaRoleLabel: "Delivery bill of lading",
+          },
+          mirror: rowMutationState.confirmed
+            ? {
+                externalDocumentId: "source-confirmed",
+                isPublic: false,
+                mirroredAt: new Date("2026-07-27T00:00:00.000Z"),
+              }
+            : null,
         },
         {
           document: {
-            id: "csv-document-id",
-            fileName: "readings.csv",
-            documentType: "sensor_data",
+            id: "feedstock-document-id",
+            fileName: "feedstock-bol.csv",
+            documentType: "bill_of_lading",
             mimeType: "text/csv",
-            storageKey: "runs/readings.csv",
+            storageKey: "feedstocks/feedstock-bol.csv",
           },
           lineageEntity: {
-            entityLabel: "Production run PR-26-001",
+            entityLabel: "Feedstock FS-26-001",
           },
-          mirror: null,
+          binding: {
+            nomaRole: "feedstock_bill_of_lading",
+            nomaRoleLabel: "Feedstock bill of lading",
+          },
+          mirror: rowMutationState.confirmed
+            ? {
+                externalDocumentId: "source-confirmed",
+                isPublic: false,
+                mirroredAt: new Date("2026-07-27T00:00:00.000Z"),
+              }
+            : null,
         },
       ],
     },
     isLoading: false,
-    error: null,
+    isError: queryState.isError,
+    error: queryState.isError ? new Error("background refetch failed") : null,
   }),
-  useMirrorDocumentToSource: () => ({
-    isPending: false,
-    mutate: vi.fn(),
-  }),
-  useUnlinkDocumentSource: () => ({
-    isPending: false,
-    mutate: vi.fn(),
-  }),
-}));
-vi.mock("@/components/ui/toast", () => ({
-  useToast: () => ({ success: vi.fn(), error: vi.fn() }),
 }));
 vi.mock("@/components/ui", () => ({
   Button: ({
@@ -93,12 +120,19 @@ vi.mock("./panel-layout", () => ({
   ),
 }));
 
-import { SourcesPanel } from "./sources-panel";
+import {
+  SourcesPanel,
+} from "./sources-panel";
 
 describe("SourcesPanel supporting document affordances", () => {
+  beforeEach(() => {
+    rowMutationState.confirmed = false;
+    queryState.isError = false;
+  });
+
   it("renders legacy URL-only documents as a non-interactive status", () => {
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" isEditable />,
     );
 
     expect(html).toContain("No managed file bytes");
@@ -108,12 +142,12 @@ describe("SourcesPanel supporting document affordances", () => {
 
   it("previews PDFs through the authenticated document route only", () => {
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" isEditable />,
     );
 
     expect(html).toContain('href="/api/documents/legacy-document-id"');
     expect(html).toContain('href="/api/documents/mime-pdf-document-id"');
-    expect(html).not.toContain('href="/api/documents/csv-document-id"');
+    expect(html).not.toContain('href="/api/documents/feedstock-document-id"');
     expect(html.match(/target="_blank"/g)).toHaveLength(2);
     expect(html.match(/rel="noopener noreferrer"/g)).toHaveLength(2);
     expect(html).not.toContain("signed");
@@ -121,11 +155,57 @@ describe("SourcesPanel supporting document affordances", () => {
 
   it("has no per-file registry visibility controls", () => {
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" isEditable />,
     );
 
     expect(html).not.toContain("Private");
     expect(html).not.toContain("Public");
     expect(html).not.toContain("aria-pressed");
   });
+
+  it("shows managed files as automatic submit work with no per-file action", () => {
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" isEditable />,
+    );
+
+    expect(html.match(/On submit/g)).toHaveLength(2);
+    expect(html).toContain("3 files linked");
+    expect(html).not.toContain(">Mirror<");
+    expect(html).not.toContain(">Retry<");
+    expect(html).not.toContain("<button");
+  });
+
+  it("shows persisted mappings as ready", () => {
+    rowMutationState.confirmed = true;
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" isEditable />,
+    );
+
+    expect(html.match(/>Ready<\/span>/g)).toHaveLength(3);
+    expect(html).not.toContain("On submit");
+  });
+
+  it("surfaces a background refetch failure instead of stale cached data", () => {
+    queryState.isError = true;
+
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" isEditable />,
+    );
+
+    expect(html).toContain(
+      "Registry value sources could not be loaded. Refresh the page and try again.",
+    );
+    expect(html).not.toContain("legacy-boundary-logbook.PDF");
+  });
+
+  it("keeps submitted removal sources status-only", () => {
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" isEditable={false} />,
+    );
+
+    expect(html).toContain("Not mirrored");
+    expect(html).not.toContain(">Mirror<");
+    expect(html).not.toContain("Unlink locally");
+  });
+
 });

@@ -1,7 +1,7 @@
 /**
  * Shared presentation for the 200-year durability sampling readiness of a credit
- * batch — the three signals the protocol gate turns on (§8.3.1 ≥3 replicates,
- * §8.3.1 distribution across distinct runs/days, §3 Table 2 eligibility), plus a
+ * batch — the signals the protocol gate turns on (§8.3.1 ≥3 replicates,
+ * §3 Table 2 eligibility), plus a
  * mean ± std-dev formatter. Used by BOTH Phase-5 surfaces (the lab-sample form's
  * derived-batch preview and the credit-batch detail's durability section) so they
  * read identically. Pure presentation over a `DurabilityBatchSummary`.
@@ -12,6 +12,7 @@ import {
   CheckCircleIcon,
   XCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
@@ -34,23 +35,40 @@ const TONE_CLASSES: Record<Tone, string> = {
 function ReadinessChip({
   tone,
   icon,
+  hint,
   children,
 }: {
   tone: Tone;
   icon?: React.ReactNode;
+  /** Plain-language explanation of what the signal means; shown on hover/focus. */
+  hint?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-6 border px-8 py-4 body-caption font-medium ${TONE_CLASSES[tone]}`}
-    >
+  const body = (
+    <>
       {icon && (
         <span className="shrink-0" aria-hidden>
           {icon}
         </span>
       )}
       {children}
-    </span>
+    </>
+  );
+  const className = `inline-flex items-center gap-6 border px-8 py-4 body-caption font-medium ${TONE_CLASSES[tone]}`;
+
+  if (!hint) return <span className={className}>{body}</span>;
+
+  // The chip itself is the tooltip trigger — a separate ⓘ icon on each of three
+  // adjacent chips reads as noise, and every chip here needs an explanation.
+  return (
+    <Tooltip content={hint}>
+      <button
+        type="button"
+        className={`${className} cursor-help text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]`}
+      >
+        {body}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -63,7 +81,7 @@ export function formatDurabilityStat(
   stat: ValueWithStdDev | null,
   digits = 3,
 ): string {
-  if (stat == null) return "—";
+  if (stat == null) return "Not available";
   const mean = stat.mean.toFixed(digits);
   return stat.stdDev == null ? mean : `${mean} ± ${stat.stdDev.toFixed(digits)}`;
 }
@@ -78,12 +96,15 @@ export function formatDurabilityStat(
 function eligibilityChip(
   eligibility: DurabilitySummaryEligibility,
   hasUsableReplicates: boolean,
-): { tone: Tone; icon: React.ReactNode; label: string } {
+): { tone: Tone; icon: React.ReactNode; label: string; hint: string } {
+  const thresholds = `H/C_org below ${DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org below ${DURABILITY_ELIGIBILITY_CEILINGS.oToC}`;
+
   if (eligibility.eligible === true) {
     return {
       tone: "ok",
       icon: <CheckCircleIcon size={14} weight="fill" />,
       label: "Chemistry eligible",
+      hint: `This batch's pooled Sample chemistry qualifies as biochar: ${thresholds}. The mean across Samples determines eligibility.`,
     };
   }
   if (eligibility.eligible === false) {
@@ -91,6 +112,7 @@ function eligibilityChip(
       tone: "bad",
       icon: <XCircleIcon size={14} weight="fill" />,
       label: "Chemistry ineligible",
+      hint: `The pooled mean misses the biochar thresholds (${thresholds}), so this batch cannot be certified with its current Samples.`,
     };
   }
   // null — indeterminate. Distinguish "no chemistry yet" from "partial chemistry".
@@ -99,18 +121,19 @@ function eligibilityChip(
         tone: "wait",
         icon: undefined,
         label: "Chemistry indeterminate",
+        hint: `The recorded Samples do not resolve both ratios, so eligibility (${thresholds}) cannot be judged. Add the missing H/C_org or O/C_org results.`,
       }
     : {
         tone: "off",
         icon: undefined,
         label: "Awaiting chemistry",
+        hint: `No Sample has lab chemistry yet. Eligibility needs ${thresholds} on the pooled mean.`,
       };
 }
 
 /**
- * The three durability readiness signals as inline chips: replicate count toward
- * ≥3, distribution across runs/days, and the eligibility verdict. The
- * distribution chip only shows once ≥3 is met (below it, the ≥3 gap is the story).
+ * The two durability readiness signals as inline chips: representative Sample
+ * count toward ≥3 and the eligibility verdict.
  */
 export function DurabilityReadinessSignals({
   summary,
@@ -127,12 +150,14 @@ export function DurabilityReadinessSignals({
     tone: Tone;
     icon?: React.ReactNode;
     content: React.ReactNode;
+    hint?: React.ReactNode;
   }> = [
     {
       key: "chemistry",
       tone: eligibility.tone,
       icon: eligibility.icon,
       content: eligibility.label,
+      hint: eligibility.hint,
     },
     {
       key: "replicates",
@@ -140,20 +165,11 @@ export function DurabilityReadinessSignals({
       icon: meetsMinimum ? (
         <CheckCircleIcon size={14} weight="fill" />
       ) : undefined,
-      content: `${usableReplicateCount} of ${minimumReplicates} usable samples`,
+      content: `${usableReplicateCount} of ${minimumReplicates} usable Samples`,
+      hint: `Only Samples with both H/C_org and O/C_org results count. This batch needs at least ${minimumReplicates}; ${usableReplicateCount} ${
+        usableReplicateCount === 1 ? "is" : "are"
+      } complete so far.`,
     },
-    ...(meetsMinimum
-      ? [{
-          key: "distribution",
-          tone: summary.distributionWarning ? "wait" as const : "ok" as const,
-          icon: summary.distributionWarning ? undefined : (
-            <CheckCircleIcon size={14} weight="fill" />
-          ),
-          content: summary.distributionWarning
-            ? "Clustered on one run/day"
-            : `${summary.distinctRunDayCount} distinct runs/days`,
-        }]
-      : []),
   ].sort(
     (left, right) =>
       Number(right.tone === "ok") - Number(left.tone === "ok"),
@@ -169,6 +185,7 @@ export function DurabilityReadinessSignals({
           key={signal.key}
           tone={signal.tone}
           icon={signal.icon}
+          hint={signal.hint}
         >
           {signal.content}
         </ReadinessChip>

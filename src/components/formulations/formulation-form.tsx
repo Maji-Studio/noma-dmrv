@@ -13,9 +13,21 @@
 import { useEffect, useState } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormEntitySelect, FormField, FormInput, FormTextarea, FormSection, FormActions } from "@/components/forms";
+import {
+  FormActions,
+  FormEntitySelect,
+  FormField,
+  FormInput,
+  FormSection,
+  FormTextarea,
+  ResolvedErrorRevalidator,
+} from "@/components/forms";
 import { Button } from "@/components/ui";
-import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import {
+  CubeIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import {
   formulationPercentFormSchema,
   percentFormToRatioPayload,
@@ -46,8 +58,17 @@ const SHARE_PERCENT_STEP = String(1 / PERCENT_DECIMALS);
 /** A fresh formulation starts as pure biochar; adding ingredients rebalances. */
 const DEFAULT_BIOCHAR_PERCENT = 100;
 
-function formatPercent(value: number): string {
-  return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+/** Blend shares are read against each other, so they keep two decimals. */
+const SHARE_FRACTION_DIGITS = 2;
+
+/**
+ * Blend shares only — the call sites below supply their own "%" and read the
+ * four figures against each other, so this keeps two decimals and no suffix.
+ * Not a substitute for `formatPercent` from `@/lib/format-utils`; named apart
+ * from it so neither shadows the other.
+ */
+function formatSharePercent(value: number): string {
+  return value.toLocaleString("en-US", { maximumFractionDigits: SHARE_FRACTION_DIGITS });
 }
 
 /**
@@ -92,7 +113,7 @@ function AllocationBar({
             : "border-[var(--color-border-tertiary)]"
         }`}
         role="img"
-        aria-label={`Blend allocation: biochar ${formatPercent(biocharPercent)}%, ingredients ${formatPercent(ingredientPercent)}%, unallocated ${formatPercent(unallocated)}%`}
+        aria-label={`Blend volume allocation: biochar ${formatSharePercent(biocharPercent)}%, ingredients ${formatSharePercent(ingredientPercent)}%, unallocated ${formatSharePercent(unallocated)}%`}
       >
         {biocharPercent > 0 && (
           <div
@@ -111,16 +132,16 @@ function AllocationBar({
       <div className="flex flex-wrap items-center gap-x-16 gap-y-4">
         <span className="body-caption text-[var(--color-text-secondary)] inline-flex items-center gap-6">
           <span aria-hidden className="inline-block w-8 h-8 bg-[var(--acc-prod)]" />
-          Biochar {formatPercent(biocharPercent)}%
+          Biochar {formatSharePercent(biocharPercent)}%
         </span>
         <span className="body-caption text-[var(--color-text-secondary)] inline-flex items-center gap-6">
           <span aria-hidden className="inline-block w-8 h-8 bg-[var(--acc-infra)]" />
-          Ingredients {formatPercent(ingredientPercent)}%
+          Ingredients {formatSharePercent(ingredientPercent)}%
         </span>
         {unallocated > PERCENT_DISPLAY_TOLERANCE && (
           <span className="body-caption text-[var(--color-text-tertiary)] inline-flex items-center gap-6">
             <span aria-hidden className="inline-block w-8 h-8 border border-[var(--color-border-tertiary)]" />
-            Unallocated {formatPercent(unallocated)}%
+            Unallocated {formatSharePercent(unallocated)}%
           </span>
         )}
         <span
@@ -132,8 +153,8 @@ function AllocationBar({
                 : "text-[var(--color-text-secondary)]"
           }`}
         >
-          Total {formatPercent(total)}%
-          {isOver && " — exceeds 100%"}
+          Total {formatSharePercent(total)}%
+          {isOver && ". Exceeds 100%"}
         </span>
       </div>
     </div>
@@ -167,6 +188,7 @@ export function FormulationForm({
     register,
     handleSubmit,
     control,
+    trigger,
     setValue,
     formState: { errors },
   } = useForm({
@@ -238,12 +260,13 @@ export function FormulationForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* Required Fields Section */}
-      <FormSection title="Required Information" divider={false}>
+      <FormSection title="Required information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="name"
-            label="Formulation Name"
+            label="Formulation name"
             error={errors.name?.message}
             required
           >
@@ -259,10 +282,9 @@ export function FormulationForm({
         </div>
       </FormSection>
 
-      {/* Blend Composition — biochar and ingredients partition one whole */}
+      {/* Blend Composition — volume shares partition one whole */}
       <FormSection
-        title="Blend Composition"
-        hint="Shares are percentages of the solid blend. Water is tracked on the product, so the total may stay under 100%."
+        title="Blend composition by volume"
         actions={
           <Button
             type="button"
@@ -276,6 +298,24 @@ export function FormulationForm({
           </Button>
         }
       >
+        <div className="flex items-start gap-12 border-l-4 border-[var(--acc-prod)] bg-[var(--st-wait-bg)] px-16 py-12">
+          <CubeIcon
+            aria-hidden
+            className="mt-2 shrink-0 text-[var(--acc-prod-ink)]"
+            size={20}
+            weight="fill"
+          />
+          <div className="space-y-2">
+            <p className="body-small font-medium text-[var(--color-text-primary)]">
+              Volume-based formulation
+            </p>
+            <p className="body-caption text-[var(--color-text-secondary)]">
+              Enter the percentage of the solid blend&apos;s volume occupied by
+              each material. Water is recorded separately on the product.
+            </p>
+          </div>
+        </div>
+
         {/* Biochar row — the base material, styled like an ingredient row */}
         <div className="border border-[var(--color-border-tertiary)] p-16 space-y-12">
           <div className="flex items-center justify-between">
@@ -293,7 +333,7 @@ export function FormulationForm({
             </p>
             <FormField
               id="biocharPercent"
-              label="Share (%)"
+              label="Volume share (%)"
               error={errors.biocharPercent?.message}
               helperText={
                 autoBalance ? "Auto-fills the remaining share" : undefined
@@ -320,8 +360,8 @@ export function FormulationForm({
 
         {fields.length === 0 && (
           <p className="body-small text-[var(--color-text-tertiary)] py-8">
-            No ingredients added — this is a pure-biochar formulation. Click
-            &quot;Add Ingredient&quot; to blend in amendment components.
+            No blend feedstock types are added. This is a pure-biochar formulation.
+            Add a feedstock type to create a blend.
           </p>
         )}
 
@@ -350,7 +390,7 @@ export function FormulationForm({
                 <FormEntitySelect
                   control={formControl}
                   name={`ingredients.${index}.feedstockTypeId`}
-                  label="Blend Material"
+                  label="Blend material"
                   entityType="feedstockType"
                   placeholder="Select a blend material..."
                   disabled={isSubmitting}
@@ -372,7 +412,7 @@ export function FormulationForm({
 
               <FormField
                 id={`ingredients.${index}.sharePercent`}
-                label="Share (%)"
+                label="Volume share (%)"
                 error={errors.ingredients?.[index]?.sharePercent?.message}
               >
                 <FormInput
@@ -414,7 +454,7 @@ export function FormulationForm({
       </FormSection>
 
       {/* Description Section */}
-      <FormSection title="Additional Information">
+      <FormSection title="Additional information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <div className="md:col-span-2">
             <FormField

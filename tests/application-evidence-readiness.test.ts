@@ -8,6 +8,7 @@ import {
   APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
   APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
 } from "@/lib/certification/application-evidence";
+import { TEST_GIS_BOUNDARY } from "./helpers/application-evidence-fixtures";
 
 vi.mock("@/data-access/documents", () => ({
   listDocumentsForEntityIds: vi.fn(),
@@ -16,9 +17,6 @@ vi.mock("@/data-access/documents", () => ({
 const USER_ID = "user-1";
 const APPLICATION_ID = "app-1";
 const APPLICATION_CODE = "APP-1";
-const BOUNDARY_LOGBOOK_GAP =
-  "Application APP-1: boundary logbook evidence (Weighbridge, Inventory, Affidavit)";
-
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
 
 function lineage(
@@ -30,7 +28,7 @@ function lineage(
       id: APPLICATION_ID,
       code: APPLICATION_CODE,
       evidenceMethod: "visual",
-      gisBoundaryReference: null,
+      gisBoundary: null,
       ...application,
     } as ChainOfCustodyData["application"],
     delivery: { id: "del-1" } as ChainOfCustodyData["delivery"],
@@ -124,20 +122,17 @@ describe("buildApplicationEvidenceGaps", () => {
     expect(gaps).toEqual([]);
   });
 
-  it("flags boundary applications missing boundary reference and logbook", async () => {
+  it("flags boundary applications missing a GIS reference", async () => {
     mockedListDocuments.mockResolvedValue([]);
 
     const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
-      lineage({ evidenceMethod: "boundary", gisBoundaryReference: null }),
+      lineage({ evidenceMethod: "boundary", gisBoundary: null }),
     ]);
 
-    expect(gaps).toEqual([
-      "Application APP-1: GIS boundary reference",
-      BOUNDARY_LOGBOOK_GAP,
-    ]);
+    expect(gaps).toEqual(["Application APP-1: GIS reference"]);
   });
 
-  it("does not let an untyped PDF satisfy boundary logbook evidence", async () => {
+  it("does not require a typed logbook when the GIS reference exists", async () => {
     mockedListDocuments.mockResolvedValue([
       {
         entityId: APPLICATION_ID,
@@ -151,14 +146,14 @@ describe("buildApplicationEvidenceGaps", () => {
     const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({
         evidenceMethod: "boundary",
-        gisBoundaryReference: "field-boundary-1",
+        gisBoundary: TEST_GIS_BOUNDARY,
       }),
     ]);
 
-    expect(gaps).toEqual([BOUNDARY_LOGBOOK_GAP]);
+    expect(gaps).toEqual([]);
   });
 
-  it("accepts typed boundary logbook evidence but still flags a blank boundary reference", async () => {
+  it("accepts typed boundary logbook evidence but still flags a missing GIS reference", async () => {
     mockedListDocuments.mockResolvedValue([
       {
         entityId: APPLICATION_ID,
@@ -170,13 +165,13 @@ describe("buildApplicationEvidenceGaps", () => {
     ]);
 
     const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
-      lineage({ evidenceMethod: "boundary", gisBoundaryReference: "   " }),
+      lineage({ evidenceMethod: "boundary", gisBoundary: null }),
     ]);
 
-    expect(gaps).toEqual(["Application APP-1: GIS boundary reference"]);
+    expect(gaps).toEqual(["Application APP-1: GIS reference"]);
   });
 
-  it("does not count a non-uploaded logbook document toward boundary evidence", async () => {
+  it("does not turn a pending retained record into a boundary gap", async () => {
     mockedListDocuments.mockResolvedValue([
       {
         entityId: APPLICATION_ID,
@@ -190,14 +185,14 @@ describe("buildApplicationEvidenceGaps", () => {
     const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({
         evidenceMethod: "boundary",
-        gisBoundaryReference: "field-boundary-1",
+        gisBoundary: TEST_GIS_BOUNDARY,
       }),
     ]);
 
-    expect(gaps).toEqual([BOUNDARY_LOGBOOK_GAP]);
+    expect(gaps).toEqual([]);
   });
 
-  it("does not count a geotagged photo toward boundary logbook evidence", async () => {
+  it("does not require a logbook when other retained evidence exists", async () => {
     mockedListDocuments.mockResolvedValue([
       {
         entityId: APPLICATION_ID,
@@ -211,11 +206,11 @@ describe("buildApplicationEvidenceGaps", () => {
     const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({
         evidenceMethod: "boundary",
-        gisBoundaryReference: "field-boundary-1",
+        gisBoundary: TEST_GIS_BOUNDARY,
       }),
     ]);
 
-    expect(gaps).toEqual([BOUNDARY_LOGBOOK_GAP]);
+    expect(gaps).toEqual([]);
   });
 
   it("treats applications with no evidence method selected as visual", async () => {
@@ -234,13 +229,8 @@ describe("buildApplicationEvidenceGaps", () => {
 });
 
 /**
- * Drift guard for the evidence-gap document-type taxonomy. The same rule is
- * implemented twice — the gate here (`buildApplicationEvidenceGaps`) and the
- * dashboard count (`loadApplicationEvidenceGapCount`, raw SQL in
- * `src/data-access/dashboard-stations.ts`). Both now read the document types
- * from `@/lib/certification/application-evidence`, so they cannot drift. These
- * tests pin the shared taxonomy and exercise the gate for every type in it, so a
- * taxonomy change is a deliberate, test-visible decision both sides inherit.
+ * The optional retained-record taxonomy remains stable for upload and Source
+ * classification even though those records do not affect readiness.
  */
 describe("evidence-gap document-type taxonomy parity", () => {
   beforeEach(() => {
@@ -257,7 +247,7 @@ describe("evidence-gap document-type taxonomy parity", () => {
   });
 
   it.each(APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES)(
-    "accepts %s as boundary logbook evidence on its own",
+    "keeps %s optional when the GIS reference exists",
     async (documentType) => {
       mockedListDocuments.mockResolvedValue([
         {
@@ -272,7 +262,7 @@ describe("evidence-gap document-type taxonomy parity", () => {
       const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
         lineage({
           evidenceMethod: "boundary",
-          gisBoundaryReference: "field-boundary-1",
+          gisBoundary: TEST_GIS_BOUNDARY,
         }),
       ]);
 

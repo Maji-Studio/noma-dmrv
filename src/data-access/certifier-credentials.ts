@@ -9,11 +9,17 @@ import { requireOrgScope } from "./utils";
 type CertifierCredentialRow = typeof certifierCredentials.$inferSelect;
 type CertifierProvider = CertifierCredentialRow["provider"];
 
+/**
+ * Either secret may be omitted to rotate the other one on its own. The stored
+ * value is kept for an omitted field, so the settings form can leave a masked
+ * input untouched and still save. A first save must carry both — there is
+ * nothing to keep.
+ */
 export type UpsertCertifierCredentialsInput = {
   organizationId: string;
   provider: CertifierProvider;
-  accessToken: string;
-  clientSecret: string;
+  accessToken?: string;
+  clientSecret?: string;
 };
 
 export type CertifierCredentialsStatus = {
@@ -30,7 +36,7 @@ function assertCanManageOrgCredentials(
   if (ctx.isPlatformAdmin) return;
   if (ctx.organizationId !== organizationId) {
     throw new SafeError(
-      "You can only manage credentials for your active organization.",
+      "You can only manage credentials for your active Organization.",
     );
   }
   requireOrgRole(ctx, "admin");
@@ -41,6 +47,44 @@ export async function upsertCertifierCredentials(
   input: UpsertCertifierCredentialsInput,
 ): Promise<void> {
   assertCanManageOrgCredentials(ctx, input.organizationId);
+
+  // Rotating one half: UPDATE only the column that was supplied. Reading the
+  // row and writing both columns back would let two admins rotating opposite
+  // halves clobber each other — the later writer would restore the earlier
+  // one's stale value from the snapshot it read. A single statement cannot.
+  if (!input.accessToken || !input.clientSecret) {
+    const set: Partial<{
+      accessTokenEncrypted: string;
+      clientSecretEncrypted: string;
+      updatedAt: ReturnType<typeof sql>;
+    }> = { updatedAt: sql`now()` };
+    if (input.accessToken) {
+      set.accessTokenEncrypted = encryptSecret(input.accessToken);
+    }
+    if (input.clientSecret) {
+      set.clientSecretEncrypted = encryptSecret(input.clientSecret);
+    }
+
+    const updated = await db
+      .update(certifierCredentials)
+      .set(set)
+      .where(
+        and(
+          eq(certifierCredentials.organizationId, input.organizationId),
+          eq(certifierCredentials.provider, input.provider),
+        ),
+      )
+      .returning({ id: certifierCredentials.id });
+
+    // No row to merge into, so there is nothing to keep for the omitted half.
+    if (updated.length === 0) {
+      throw new SafeError(
+        "Enter both the access token and the client secret the first time you connect.",
+      );
+    }
+    return;
+  }
+
   const accessTokenEncrypted = encryptSecret(input.accessToken);
   const clientSecretEncrypted = encryptSecret(input.clientSecret);
 

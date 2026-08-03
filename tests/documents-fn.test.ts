@@ -21,6 +21,7 @@ vi.mock("@/data-access/documents", () => ({
   getDocumentById: vi.fn(),
   updateDocument: vi.fn(),
   deleteDocumentRow: vi.fn(),
+  deleteDocumentWithCertificationSafety: vi.fn(),
   listDocumentsForEntity: vi.fn(),
 }));
 
@@ -30,9 +31,11 @@ import {
   getDocumentById,
   updateDocument,
   assertCanManageDocumentEntity,
+  deleteDocumentWithCertificationSafety,
 } from "@/data-access/documents";
 import {
   confirmUpload,
+  deleteDocument,
   requestUpload,
   updateApplicationEvidenceMetadata,
 } from "@/fn/documents";
@@ -136,12 +139,12 @@ const productionRunCsvInput = {
 describe("requestUpload", () => {
   it("returns Unauthorized when user is not signed in", async () => {
     vi.mocked(requireOrgContext).mockRejectedValueOnce(
-      new SafeError("Select an organization to continue."),
+      new SafeError("Select an Organization to continue."),
     );
     const result = await requestUpload(baseInput);
     expect(result).toEqual({
       success: false,
-      error: "Select an organization to continue.",
+      error: "Select an Organization to continue.",
     });
     expect(insertDocument).not.toHaveBeenCalled();
   });
@@ -165,7 +168,7 @@ describe("requestUpload", () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toMatch(/exceeds/);
+      expect(result.error).toMatch(/larger than/);
     }
     expect(insertDocument).not.toHaveBeenCalled();
   });
@@ -234,6 +237,21 @@ describe("requestUpload", () => {
         mimeType: "text/csv",
       }),
     );
+  });
+
+  it("rejects non-CSV tabular files for production-run readings", async () => {
+    const result = await requestUpload({
+      ...productionRunCsvInput,
+      fileName: "readings.xlsx",
+      contentType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Readings files must use CSV format.",
+    });
+    expect(insertDocument).not.toHaveBeenCalled();
   });
 
   it("accepts application photos without EXIF timestamp or GPS and flags the gap", async () => {
@@ -319,7 +337,7 @@ describe("confirmUpload", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toMatch(/exceeds/);
+      expect(result.error).toMatch(/larger than/);
     }
     expect(provider.deleted).toContain(pendingRow.storageKey);
     expect(updateDocument).toHaveBeenCalledWith(
@@ -346,6 +364,31 @@ describe("confirmUpload", () => {
     expect(provider.deleted).toContain(pendingRow.storageKey);
   });
 
+  it("rejects a non-CSV tabular object for production-run readings", async () => {
+    const readingsRow = {
+      ...pendingRow,
+      entityType: "production_run",
+      documentType: "sensor_data" as const,
+      fileName: "readings.xlsx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    };
+    vi.mocked(getDocumentById).mockResolvedValueOnce(readingsRow as never);
+    provider.simulatePut(
+      readingsRow.storageKey,
+      1024,
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+
+    const result = await confirmUpload({ documentId: readingsRow.id });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Readings files must use CSV format.",
+    });
+    expect(provider.deleted).toContain(readingsRow.storageKey);
+  });
+
   it("fails when object not present in storage", async () => {
     vi.mocked(getDocumentById).mockResolvedValueOnce(pendingRow as never);
     vi.mocked(updateDocument).mockResolvedValueOnce({
@@ -357,7 +400,9 @@ describe("confirmUpload", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toMatch(/not found in storage/);
+      expect(result.error).toBe(
+        "The uploaded file could not be found. Upload it again.",
+      );
     }
   });
 
@@ -371,18 +416,20 @@ describe("confirmUpload", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toMatch(/already in/);
+      expect(result.error).toBe(
+        "This file is no longer waiting for confirmation. Upload it again.",
+      );
     }
   });
 
   it("returns Unauthorized when user is not signed in", async () => {
     vi.mocked(requireOrgContext).mockRejectedValueOnce(
-      new SafeError("Select an organization to continue."),
+      new SafeError("Select an Organization to continue."),
     );
     const result = await confirmUpload({ documentId: pendingRow.id });
     expect(result).toEqual({
       success: false,
-      error: "Select an organization to continue.",
+      error: "Select an Organization to continue.",
     });
   });
 });
@@ -493,5 +540,60 @@ describe("updateApplicationEvidenceMetadata", () => {
         },
       },
     );
+  });
+});
+
+describe("deleteDocument", () => {
+  const owningRecordDocument = {
+    id: "11111111-2222-4333-8444-555555555555",
+    entityType: "feedstock",
+    entityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    storageKey: "feedstock/evidence.pdf",
+  };
+
+  it("deletes owning-record evidence through certification-safe retirement", async () => {
+    vi.mocked(getDocumentById).mockResolvedValueOnce(
+      owningRecordDocument as never,
+    );
+    vi.mocked(deleteDocumentWithCertificationSafety).mockResolvedValueOnce(
+      owningRecordDocument as never,
+    );
+
+    const result = await deleteDocument({
+      documentId: owningRecordDocument.id,
+    });
+
+    expect(result).toEqual({
+      success: true,
+      data: { id: owningRecordDocument.id },
+    });
+    expect(assertCanManageDocumentEntity).toHaveBeenCalledWith(
+      TEST_CTX,
+      "feedstock",
+      owningRecordDocument.entityId,
+    );
+    expect(deleteDocumentWithCertificationSafety).toHaveBeenCalledWith(
+      TEST_CTX,
+      owningRecordDocument.id,
+    );
+  });
+
+  it("surfaces submitted-history deletion refusal from the safety boundary", async () => {
+    vi.mocked(getDocumentById).mockResolvedValueOnce(
+      owningRecordDocument as never,
+    );
+    vi.mocked(deleteDocumentWithCertificationSafety).mockRejectedValueOnce(
+      new SafeError(
+        "This document belongs to submitted certification history and cannot be deleted or replaced.",
+      ),
+    );
+
+    const result = await deleteDocument({
+      documentId: owningRecordDocument.id,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/submitted certification history/i);
   });
 });

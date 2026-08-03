@@ -17,7 +17,7 @@ export const transportLegConditionSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['load_mass_kg'],
-        message: 'load_mass_kg is required',
+        message: "Load mass is required",
       });
     }
 
@@ -25,7 +25,7 @@ export const transportLegConditionSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['distance_km'],
-        message: 'distance_km is required',
+        message: "Distance is required",
       });
     }
   });
@@ -45,7 +45,7 @@ export const creditBatchConditionSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['h_to_c_org_ratio'],
-          message: 'h_to_c_org_ratio is required when durability_option=200_year',
+          message: "H/C_org ratio is required for 200-year durability",
         });
       }
     }
@@ -56,7 +56,7 @@ export const creditBatchConditionSchema = z
           code: z.ZodIssueCode.custom,
           path: ['mean_random_reflectance_percent'],
           message:
-            'mean_random_reflectance_percent is required when durability_option=1000_year',
+            "Mean random reflectance is required for 1000-year durability",
         });
       }
 
@@ -65,7 +65,7 @@ export const creditBatchConditionSchema = z
           code: z.ZodIssueCode.custom,
           path: ['mean_non_reactive_carbon_percent'],
           message:
-            'mean_non_reactive_carbon_percent is required when durability_option=1000_year',
+            "Mean non-reactive carbon is required for 1000-year durability",
         });
       }
     }
@@ -81,7 +81,7 @@ export const applicationSoilTemperatureSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['soil_temperature_c'],
-        message: 'soil_temperature_c is required for 200-year durability calculation',
+        message: "Soil temperature is required for 200-year durability",
       });
     }
   });
@@ -99,11 +99,11 @@ export const sampleConditionSchema = z
     if (!value.nutrient_claim_enabled) return;
 
     const nutrientFields: Array<[keyof typeof value, string]> = [
-      ['phosphorus_g_per_kg', 'phosphorus_g_per_kg'],
-      ['potassium_g_per_kg', 'potassium_g_per_kg'],
-      ['magnesium_g_per_kg', 'magnesium_g_per_kg'],
-      ['calcium_g_per_kg', 'calcium_g_per_kg'],
-      ['iron_g_per_kg', 'iron_g_per_kg'],
+      ["phosphorus_g_per_kg", "Phosphorus"],
+      ["potassium_g_per_kg", "Potassium"],
+      ["magnesium_g_per_kg", "Magnesium"],
+      ["calcium_g_per_kg", "Calcium"],
+      ["iron_g_per_kg", "Iron"],
     ];
 
     for (const [fieldKey, fieldName] of nutrientFields) {
@@ -111,7 +111,7 @@ export const sampleConditionSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: [fieldKey],
-        message: `${fieldName} is required when nutrient_claim_enabled=true`,
+        message: `${fieldName} is required when nutrient claims are enabled`,
       });
     }
   });
@@ -126,7 +126,7 @@ export const deliveryDryMassSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['mass_dry_kg'],
-        message: 'mass_dry_kg must be >= 0',
+        message: "Dry mass must be 0 kg or more",
       });
     }
 
@@ -138,7 +138,7 @@ export const deliveryDryMassSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['mass_dry_kg'],
-        message: 'mass_dry_kg must be <= delivered_wet_mass_kg',
+        message: "Dry mass cannot exceed delivered wet mass",
       });
     }
   });

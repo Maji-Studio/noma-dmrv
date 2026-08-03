@@ -10,7 +10,7 @@
 "use client";
 
 import Link from "next/link";
-import { SealCheckIcon } from "@phosphor-icons/react";
+import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
@@ -51,7 +51,11 @@ export function IsometricFeedstockBrowser({
   }
 
   if (summary.error || !summary.data) {
-    return <ErrorMessage>Unable to check the registry link.</ErrorMessage>;
+    return (
+      <ErrorMessage>
+        The registry link could not be checked. Refresh the page and try again.
+      </ErrorMessage>
+    );
   }
 
   if (!isConnected) {
@@ -75,7 +79,12 @@ export function IsometricFeedstockBrowser({
   }
 
   if (localFeedstockTypes.error || !localFeedstockTypes.data) {
-    return <ErrorMessage>Unable to check existing feedstock types.</ErrorMessage>;
+    return (
+      <ErrorMessage>
+        Existing feedstock types could not be checked. Refresh the page and try
+        again.
+      </ErrorMessage>
+    );
   }
 
   if (catalogue.isLoading) {
@@ -85,8 +94,8 @@ export function IsometricFeedstockBrowser({
   if (catalogue.error || !catalogue.data) {
     return (
       <ErrorMessage>
-        Failed to load registry feedstock types
-        {catalogue.error instanceof Error ? `: ${catalogue.error.message}` : "."}
+        Registry feedstock types could not be loaded. Refresh the page and try
+        again.
       </ErrorMessage>
     );
   }
@@ -111,8 +120,8 @@ export function IsometricFeedstockBrowser({
   return (
     <div className="flex flex-col gap-12">
       <p className="body-caption text-[var(--color-text-tertiary)]">
-        Choose the certified Isometric feedstock first. Noma will prefill the
-        local record, then you finish the category and save.
+        Choose the certified Isometric feedstock first. noma fills in its
+        details, then you choose the category and save.
       </p>
       <ul
         className="max-h-[320px] overflow-y-auto border border-[var(--color-border-secondary)] divide-y divide-[var(--color-border-tertiary)]"

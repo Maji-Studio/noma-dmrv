@@ -61,7 +61,7 @@ describe("buildDurabilityGates facility-local sampling day", () => {
     ]);
 
     expect(result.blockers).toContain(
-      "Sample SAM-1 was taken on 2026-01-14, before credit batch CB-1's production window 2026-01-15–2026-01-31. The biochar did not yet exist; correct this data error before submission (§8.3.1).",
+      "Sample SAM-1 was taken on 2026-01-14, before credit batch CB-1's production window, 2026-01-15 to 2026-01-31. Correct the Sample date before submitting (§8.3.1).",
     );
   });
 });
@@ -80,7 +80,7 @@ describe("load-ready gate attribution", () => {
 
     expect(result.blockersByBatchId).toEqual({
       "batch-1": [
-          "Credit batch CB-1 is marked sampled but has no samples (§8.3).",
+          "Credit batch CB-1 is marked as sampled but has no Samples. Add at least 3 Samples before submitting.",
       ],
       "batch-2": [],
     });

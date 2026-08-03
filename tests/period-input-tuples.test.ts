@@ -99,6 +99,41 @@ describe("PERIOD_INPUT_TUPLES", () => {
     }
   });
 
+  it("releases only the named Safety margin component from the miscellaneous guard", () => {
+    expect(
+      lookupPeriodInputTuple(
+        "miscellaneous",
+        "mass_based_ci_emissions",
+        "mass",
+        "  SAFETY Margin  ",
+      ),
+    ).toBeUndefined();
+    expect(
+      lookupPeriodInputTuple(
+        "miscellaneous",
+        "mass_based_ci_emissions",
+        "mass",
+        "Some other overhead",
+      ),
+    ).toEqual({ category: "miscellaneous" });
+    expect(
+      lookupPeriodInputTuple(
+        "miscellaneous",
+        "mass_based_ci_emissions",
+        "mass",
+        undefined,
+      ),
+    ).toEqual({ category: "miscellaneous" });
+    expect(
+      lookupPeriodInputTuple(
+        "miscellaneous",
+        "mass_based_ci_emissions",
+        "mass",
+        "constructor",
+      ),
+    ).toEqual({ category: "miscellaneous" });
+  });
+
   it("does not match a tuple that lives in INPUT_MAPPING", () => {
     // `co2-stored / carbon_rich_substance_sequestration / product_mass` is a
     // real Removal-scope mapping. It must NOT be flagged as a period input.
@@ -128,6 +163,16 @@ describe("INPUT_MAPPING (post-ADR-0005 cleanup)", () => {
 
   it("removed the seven previously-zero-stubbed families", () => {
     for (const t of PERIOD_INPUT_TUPLE_CANON) {
+      // The tuple stays canonical and guarded, but the explicitly named Safety
+      // margin component now has a REMOVAL-scope mapping.
+      if (
+        t.group === "miscellaneous" &&
+        t.blueprint === "mass_based_ci_emissions" &&
+        t.input === "mass"
+      ) {
+        expect(lookupInputMapping(t.group, t.blueprint, t.input)).toBeDefined();
+        continue;
+      }
       expect(
         lookupInputMapping(t.group, t.blueprint, t.input),
         `${t.group}/${t.blueprint}/${t.input} must not appear in INPUT_MAPPING — period inputs live as PROJECT-scope Components.`,
@@ -168,7 +213,10 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
 
   function callWith(
     tuple: typeof PERIOD_INPUT_TUPLE_CANON[number],
-    opts?: { allowPeriodInputStub?: boolean },
+    opts?: {
+      allowPeriodInputStub?: boolean;
+      componentDisplayName?: string;
+    },
   ) {
     const blueprintInput: ComponentBlueprintInput = {
       compatible_unit: STUB_COMPATIBLE_UNIT,
@@ -188,6 +236,7 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
       buildCreateDatapointRequest({
         groupKey: tuple.group,
         componentBlueprintKey: tuple.blueprint,
+        componentDisplayName: opts?.componentDisplayName,
         rtcInput,
         blueprintInput,
         agg: minimalAgg,
@@ -207,9 +256,9 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
       }
       expect(err).toBeInstanceOf(SafeError);
       const message = (err as Error).message;
-      expect(message).toMatch(/PROJECT/);
-      expect(message).toContain(t.category);
-      expect(message).toContain(t.input);
+      expect(message).toContain("belongs at the project level");
+      expect(message).toContain("Remove it from the Removal template");
+      expect(message).toContain("add the project emissions in Isometric");
       // The generic missing-entry message must NOT fire — that would mean the
       // scope-conflict guard didn't run first.
       expect(message).not.toMatch(/No INPUT_MAPPING entry/);
@@ -235,7 +284,7 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
     };
     try {
       expect(callWith(tuple)).toThrowError(SafeError);
-      expect(callWith(tuple)).toThrowError(/PROJECT/);
+      expect(callWith(tuple)).toThrowError(/belongs at the project level/);
       const dp = callWith(tuple, { allowPeriodInputStub: true })();
       expect(dp.quantity.magnitude).toBe(0);
     } finally {
@@ -259,6 +308,16 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
 });
 
 describe("MAPPING_REVISION", () => {
+  function containsFunction(value: unknown): boolean {
+    if (typeof value === "function") return true;
+    if (!value || typeof value !== "object") return false;
+    return Object.values(value).some(containsFunction);
+  }
+
+  it("uses only declarative values so production bundles compute the same revision", () => {
+    expect(containsFunction(MAPPING_REVISION_INPUT)).toBe(false);
+  });
+
   it("hashes both ordinary inputs and explicit sequestration bindings", () => {
     expect(MAPPING_REVISION).toMatch(/^[0-9a-f]{64}$/);
     expect(MAPPING_REVISION).toBe(payloadHash(MAPPING_REVISION_INPUT));

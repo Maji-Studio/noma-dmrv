@@ -4,10 +4,15 @@
  * wizard's gate (the two can never disagree).
  *
  * The checklist only DETAILS the checks that still need work: each open check
- * is an action row stating the requirement and missing items, with a single
- * button that lands where the gap is actually resolved.
+ * states the requirement and missing items. Most rows include a button that
+ * lands where the gap is resolved; lab-sample actions live in the Lab Samples
+ * panel immediately below instead of being duplicated here.
  * A `skipped` transport check is a facility-setup concern and never counts as
  * a batch issue.
+ *
+ * A passing batch states that ONCE, in the header — the lifecycle rail above
+ * already carries the milestone label ("Batch data ready"), so the section no
+ * longer repeats it as a right-hand status AND a green confirmation panel.
  */
 "use client";
 
@@ -16,7 +21,7 @@ import Link from "next/link";
 import {
   ArrowRightIcon,
   ArrowSquareOutIcon,
-  ShieldCheckIcon,
+  CheckCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms";
@@ -24,12 +29,13 @@ import { InfoHint, Tooltip } from "@/components/ui/tooltip";
 import { useBatchHealth } from "@/hooks/use-certification";
 import type { BatchHealth, BatchHealthCheck } from "@/lib/certification/batch-health";
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
-import { formatDate, formatTonnes } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import {
   batchHealthFixLinkFor,
   compactBatchHealthDetail,
+  resolveBatchHealthFixTarget,
 } from "@/lib/certification/batch-health-links";
-import { CREDIT_BATCH_READY_LABEL } from "@/lib/certification/credit-batch-lifecycle";
 import { cn } from "@/lib/utils";
 
 /** Stagger between open-row entrance reveals (ms). */
@@ -58,12 +64,28 @@ function AffectedRecordChips({
     <div className="flex flex-wrap items-center gap-6 pt-4">
       {visibleRecords.map((record) => {
         const run = productionRuns.find((candidate) => candidate.id === record.id);
+        const isProductionRunRecord =
+          check.fixTarget === "productionRuns" ||
+          check.fixTarget === "sourceData";
+        const recordLabel = run
+          ? run.biocharStorageName ?? formatDate(run.date)
+          : isProductionRunRecord
+            ? "Affected production run"
+            : record.code;
         const tooltip = (
-          <span className="flex flex-col gap-3">
+          <span className="flex flex-col gap-4">
             {run && <span>{formatDate(run.date)}</span>}
             {run && feedstockName && <span>{feedstockName}</span>}
-            {run?.biocharDryMassKg != null && (
-              <span>{formatTonnes(run.biocharDryMassKg / 1000)} dry output</span>
+            {run &&
+              (run.biocharOutputKg != null ||
+                run.biocharDryMassKg != null) && (
+              <span>
+                Biochar output:{" "}
+                {formatWetDryMass({
+                  wetKg: run.biocharOutputKg,
+                  dryKg: run.biocharDryMassKg,
+                })}
+              </span>
             )}
             <span>Missing: {record.missing.join(", ")}</span>
           </span>
@@ -73,9 +95,9 @@ function AffectedRecordChips({
             <button
               type="button"
               className="inline-flex h-28 items-center border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-8 body-caption text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-              aria-label={`${record.code}: ${record.missing.join(", ")}`}
+              aria-label={`${recordLabel}: ${record.missing.join(", ")}`}
             >
-              {record.code}
+              {recordLabel}
             </button>
           </Tooltip>
         );
@@ -105,9 +127,8 @@ function AffectedRecordChips({
 }
 
 /**
- * One open (unmet) check: problem headline, the missing items inline, and the
- * single action that resolves it. Replaces both the old check chip and the
- * duplicated "Clear this gate" panel — every open check is self-contained.
+ * One open (unmet) check: problem headline, the missing items inline, and an
+ * action when it is not already provided by the following detail panel.
  */
 function OpenCheckRow({
   check,
@@ -125,6 +146,8 @@ function OpenCheckRow({
   feedstockName?: string | null;
 }) {
   const fix = batchHealthFixLinkFor(check, facilityId, creditBatchId);
+  const fixTarget = resolveBatchHealthFixTarget(check);
+  const actionOwnedByLabSamplesPanel = fixTarget === "labSamples";
   const isCrossPage = fix.href.startsWith("/");
 
   return (
@@ -156,20 +179,22 @@ function OpenCheckRow({
           feedstockName={feedstockName}
         />
       </div>
-      <Link
-        href={fix.href}
-        className={cn(
-          buttonVariants({ variant: "default", size: "small" }),
-          "shrink-0 self-start",
-        )}
-      >
-        {fix.label}
-        {isCrossPage ? (
-          <ArrowSquareOutIcon size={14} aria-hidden />
-        ) : (
-          <ArrowRightIcon size={14} aria-hidden />
-        )}
-      </Link>
+      {!actionOwnedByLabSamplesPanel && (
+        <Link
+          href={fix.href}
+          className={cn(
+            buttonVariants({ variant: "default", size: "small" }),
+            "shrink-0 self-start",
+          )}
+        >
+          {fix.label}
+          {isCrossPage ? (
+            <ArrowSquareOutIcon size={14} aria-hidden />
+          ) : (
+            <ArrowRightIcon size={14} aria-hidden />
+          )}
+        </Link>
+      )}
     </li>
   );
 }
@@ -187,22 +212,10 @@ function GateBody({
   productionRuns: CreditBatchProductionRunOption[];
   feedstockName?: string | null;
 }) {
-  const open = health.checks.filter((c) => c.status === "unmet");
+  // A ready batch says so once, in the section header — no body at all.
+  if (health.state === "ready") return null;
 
-  if (health.state === "ready") {
-    return (
-      <div className="flex items-center gap-12 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] px-16 py-12">
-        <ShieldCheckIcon
-          size={20}
-          weight="fill"
-          className="shrink-0 text-[var(--st-ok)]"
-        />
-        <p className="body-small font-medium text-[var(--color-text-primary)]">
-          All checks passed.
-        </p>
-      </div>
-    );
-  }
+  const open = health.checks.filter((c) => c.status === "unmet");
 
   return (
     <ul className="flex flex-col gap-10">
@@ -249,15 +262,19 @@ export function CreditBatchHealthStrip({
             </p>
           )}
         </div>
-        {health && (
-          <span className="shrink-0 body-caption font-medium text-[var(--color-text-secondary)]">
-            {health.state === "ready"
-              ? CREDIT_BATCH_READY_LABEL
-              : `${health.issueCount} ${
-                  health.issueCount === 1 ? "issue" : "issues"
-                } open`}
-          </span>
-        )}
+        {health &&
+          (health.state === "ready" ? (
+            <span className="inline-flex shrink-0 items-center gap-6 body-caption font-medium text-[var(--st-ok)]">
+              <CheckCircleIcon size={14} weight="fill" aria-hidden />
+              All checks passed
+            </span>
+          ) : (
+            <span className="shrink-0 body-caption font-medium text-[var(--color-text-secondary)]">
+              {`${health.issueCount} ${
+                health.issueCount === 1 ? "issue" : "issues"
+              } open`}
+            </span>
+          ))}
       </div>
 
       {isLoading ? (
@@ -269,7 +286,8 @@ export function CreditBatchHealthStrip({
         </span>
       ) : error || !health ? (
         <span className="body-caption text-[var(--st-wait)]">
-          {error?.message ?? "Couldn't evaluate this batch's health."}
+          {error?.message ??
+            "This credit batch's readiness could not be checked. Refresh the page and try again."}
         </span>
       ) : (
         <GateBody

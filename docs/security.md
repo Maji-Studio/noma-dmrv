@@ -21,7 +21,7 @@ policy live in [auth.md](./auth.md); the tenancy rationale in
 ## Tenancy — the #1 invariant
 
 Multi-tenancy **is implemented**. Every domain table carries
-`organizationId NOT NULL`, enforced across ~211 `src/data-access/` functions.
+`organizationId NOT NULL`, enforced uniformly in `src/data-access/`.
 Organization is the tenant boundary; facilities are org-owned and facility
 context scopes workflows *within* an org.
 
@@ -46,6 +46,30 @@ context scopes workflows *within* an org.
   `executor`, or the pool starves under parallel load.
 - Coverage: `tests/e2e/org-isolation.spec.ts`,
   `tests/e2e/organization-settings.spec.ts`.
+
+### Deliberate bearer-capability exception
+
+The external verifier download at
+`/api/ghg-statement-reports/[reportId]?token=…` is intentionally reachable
+without a noma session. It is authorized by possession of a random per-report
+token, not by making the private document public:
+
+- only the token's SHA-256 digest is stored on
+  `certifier_ghg_statement_reports`; issuing a new link rotates the digest and
+  revokes the previous link;
+- lookup by report id crosses organizations only in
+  `getVerifierReportDocument`, marked with the required
+  `// org-scope-ok: verifier capability-token lookup intentionally crosses organizations.`
+  comment;
+- token comparison is timing-safe, all capability failures return 404, and a
+  valid request gets only a short-lived signed redirect to the private object;
+- the response suppresses caching and referrer propagation, and verifier URLs
+  require HTTPS outside test/localhost.
+
+This seam exists for a verifier who has no account. It does not relax
+authentication for the Certification workspace, normal `/api/documents/[id]`
+reads, or any other data-access function. Never log or persist the plaintext
+query token; URL redaction uses `src/lib/certification/report-url.ts`.
 
 ## Server-Action Error Handling
 
@@ -80,7 +104,7 @@ Non-obvious semantics only:
   that is never tuned. See [open-questions.md](./open-questions.md)
   (`auth/drop-self-signup-flag`).
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
-  CI carve-out below). Server-only 32-byte hex/base64 key.
+  Hermetic-CI exception below). Server-only 32-byte hex/base64 key.
 - **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In
   dev/test the local-fs provider falls back to an **ephemeral random signing
   secret** with a warning, so locally-signed URLs silently break across restarts.
@@ -89,12 +113,18 @@ Non-obvious semantics only:
 - **`STORAGE_ENDPOINT`** — DigitalOcean Spaces regions require it; env parse
   fails closed rather than minting phantom `amazonaws.com` URLs. See
   [storage.md](./storage.md).
-- **`DURABILITY_MEASUREMENT_SAMPLES_LIVE`** — sandbox-only; rejected otherwise.
+- **`ISOMETRIC_ENVIRONMENT`** — `sandbox` (default) or `production`. Selects the
+  registry base URL AND gates the durability measurement-sample POSTs, so it must
+  be set explicitly in production; `envSchema` rejects an unset value there rather
+  than inheriting the sandbox default. Targeting the sandbox is the opt-in.
 - **`GEO_PROVIDER`** — `ors` default, `stub` = hermetic test fixtures. See
   [ADR 0009](./adr/0009-provider-agnostic-server-proxied-geo.md).
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
+- `NOMA_HERMETIC_CI` — the literal `"true"` marks only the production-bundle
+  builds in `ci.yml` and the hermetic PR Playwright workflow. Live sandbox
+  workflows and deployments must not set it.
 - `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
   (`src/lib/cli/ensure-admin.ts`), never by the running app.
 - `DB_RESET_ALLOW_REMOTE` — consumed only by the database-reset CLI. Only the
@@ -111,13 +141,15 @@ Both `ADMIN_PASSWORD` and `ISOMETRIC_DEMO_PROJECT_ID` **are** pulled locally via
 `.env.local.tpl`; they are absent from the deployment-facing `.env.tpl` only and
 must be set directly on the staging/production items.
 
-### CI carve-out on the production fail-closed gates
+### Hermetic-CI exception on the production fail-closed gates
 
-All three production gates — `GEO_PROVIDER=stub`, non-`s3-compatible` storage,
-and missing `CREDENTIALS_ENCRYPTION_KEY` — are **skipped when `CI` is truthy**,
-because hermetic e2e builds a production bundle on purpose. CI local-fs storage
-is additionally only allowed against a localhost `NEXT_PUBLIC_APP_URL`. Real
-deployments never run with `CI` set, so the safeguards hold where they matter.
+The production gates — `GEO_PROVIDER=stub`, unset `ISOMETRIC_ENVIRONMENT`,
+missing `CREDENTIALS_ENCRYPTION_KEY`, and non-`s3-compatible` storage — are
+skipped only for a **hermetic CI build**: `NOMA_HERMETIC_CI=true`, `CI` truthy,
+and an HTTP(S) loopback `NEXT_PUBLIC_APP_URL` (ci.yml and e2e.yml compile
+production bundles against localhost with placeholder config on purpose).
+Live E2E does not set the marker because it loads sandbox credentials and makes
+external calls. Any unmarked build or runtime keeps every gate armed.
 
 ### The three environment items intentionally differ
 
@@ -172,8 +204,11 @@ Notes:
 Runtime registry credentials are stored per organization in
 `certifier_credentials`, encrypted at rest with AES-256-GCM using
 `CREDENTIALS_ENCRYPTION_KEY`. Only masked status (configured, access-token last
-four, update time) may cross a server-action boundary. Platform Admins manage
-these write-only values from the organization admin area. Certification readiness
+four, update time) may cross a server-action boundary. Each organization's Owners
+and Admins manage these write-only values themselves from the organization admin
+area, with Platform Admins as an override
+(`assertCanManageOrgCredentials`, `src/data-access/certifier-credentials.ts`; see
+[auth.md](./auth.md)). Certification readiness
 and live submission **fail closed** when the active organization has no
 credential row. Keep the same key while stored rows exist — rotating it requires
 re-encrypting or replacing every organization's credentials.

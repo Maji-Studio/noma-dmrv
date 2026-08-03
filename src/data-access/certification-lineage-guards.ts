@@ -1,8 +1,9 @@
-import { and, eq, inArray, or, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { DbTransaction } from "@/db";
 import {
   applications,
+  biocharProductSourceAllocations,
   biocharProducts,
   certifierRemovals,
   certificationSubmissions,
@@ -118,8 +119,36 @@ function lineageQuery(
       ),
     )
     .leftJoin(
+      biocharProductSourceAllocations,
+      and(
+        eq(
+          biocharProductSourceAllocations.productionRunId,
+          productionRuns.id,
+        ),
+        eq(
+          biocharProductSourceAllocations.organizationId,
+          ctx.organizationId,
+        ),
+      ),
+    )
+    .leftJoin(
       biocharProducts,
-      and(eq(biocharProducts.linkedProductionRunId, productionRuns.id), eq(biocharProducts.organizationId, ctx.organizationId)),
+      and(
+        or(
+          eq(
+            biocharProducts.id,
+            biocharProductSourceAllocations.biocharProductId,
+          ),
+          and(
+            isNull(biocharProducts.sourceBiocharStorageLocationId),
+            eq(
+              biocharProducts.linkedProductionRunId,
+              productionRuns.id,
+            ),
+          ),
+        )!,
+        eq(biocharProducts.organizationId, ctx.organizationId),
+      ),
     )
     .leftJoin(orders, and(eq(orders.biocharProductId, biocharProducts.id), eq(orders.organizationId, ctx.organizationId)))
     .leftJoin(

@@ -38,7 +38,10 @@ import {
   withAutoCode,
 } from "@/data-access/code-generator";
 import { facilities as facilitiesTable } from "@/db/schema";
-import { toLoggedActionError } from "./action-errors";
+import {
+  formatZodActionError,
+  toLoggedActionError,
+} from "./action-errors";
 
 function facilityActionError(
   error: unknown,
@@ -74,7 +77,7 @@ export async function getFacilitiesFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Invalid filter parameters: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error, "Invalid filter parameters"),
       };
     }
     return {
@@ -201,7 +204,7 @@ export async function getFacilityStorageLocationsFn(
       success: false,
       error: facilityActionError(
         error,
-        "Failed to load facility storage locations",
+        "Failed to load facility storage bins",
         "facility:storage-locations",
       ),
     };
@@ -305,7 +308,7 @@ export async function createFacilityFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -353,7 +356,7 @@ export async function updateFacilityFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -411,7 +414,7 @@ export async function archiveFacilityFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -442,7 +445,7 @@ export async function restoreFacilityFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {

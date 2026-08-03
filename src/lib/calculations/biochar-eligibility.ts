@@ -1,3 +1,5 @@
+import { pluralize } from "@/lib/copy-utils";
+
 /**
  * Biochar sample-eligibility gates — the protocol's hard characterization
  * thresholds, evaluated on the POOLED MEAN of a credit batch's replicate
@@ -42,9 +44,10 @@ export const MINIMUM_REPLICATES_PER_BATCH = 3;
 
 /**
  * A chemistry value is usable only when present and finite. Exported so the
- * durability gates can scope the §8.3.1 distribution check to the SAME complete-
- * chemistry replicate set this module counts for `usableReplicateCount` — the
- * two must agree or an incomplete off-day sample can mask a clustered set.
+ * durability gates count the same complete-chemistry replicate set this module
+ * uses for `usableReplicateCount`. Section 8.3.1 requires at least three
+ * representative Samples from the credit batch; incomplete chemistry cannot
+ * satisfy that minimum.
  */
 export function isUsableNumber(
   value: number | null | undefined,
@@ -125,10 +128,14 @@ export function evaluateRunEligibility(
       : meanOToCOrgRatio < O_TO_C_ORG_ELIGIBILITY_MAX;
 
   if (meanHToCOrgRatio == null) {
-    warnings.push("No usable H/C_org replicate — eligibility indeterminate.");
+    warnings.push(
+      "No Sample has a usable H/C_org ratio. Record the ratio before checking eligibility.",
+    );
   }
   if (meanOToCOrgRatio == null) {
-    warnings.push("No usable O/C_org replicate — eligibility indeterminate.");
+    warnings.push(
+      "No Sample has a usable O/C_org ratio. Record the ratio before checking eligibility.",
+    );
   }
 
   // The eligibility VERDICT is judged only on replicates carrying BOTH ratios, so
@@ -167,7 +174,7 @@ export function evaluateRunEligibility(
   });
   if (outlierReplicateIndexes.length > 0) {
     warnings.push(
-      `${outlierReplicateIndexes.length} replicate(s) individually exceed the eligibility ceilings (H/C_org ≥ ${H_TO_C_ORG_ELIGIBILITY_MAX} or O/C_org ≥ ${O_TO_C_ORG_ELIGIBILITY_MAX}); review for an outlier.`,
+      `${outlierReplicateIndexes.length} ${pluralize(outlierReplicateIndexes.length, "replicate")} exceed the eligibility limits (H/C_org ≥ ${H_TO_C_ORG_ELIGIBILITY_MAX} or O/C_org ≥ ${O_TO_C_ORG_ELIGIBILITY_MAX}). Review the flagged values for an outlier.`,
     );
   }
 

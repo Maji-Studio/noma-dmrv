@@ -209,6 +209,19 @@ describe("storage location archive", () => {
     }
   });
 
+  it("preserves the sign of a sub-kilogram archive deficit", async () => {
+    const fixture = await createStorageArchiveFixture({ endingBalanceKg: -0.4 });
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+
+    try {
+      await expect(
+        archiveStorageLocation(ctx, fixture.storageLocationId),
+      ).rejects.toThrow(/-0\.4 kg on hand/);
+    } finally {
+      await cleanupStorageArchiveFixture(fixture);
+    }
+  });
+
   it("rejects reconciliation writes after a bin is archived", async () => {
     const fixture = await createStorageArchiveFixture();
     const ctx = makeTestOrgContext(TEST_USER_ID);
@@ -224,7 +237,9 @@ describe("storage location archive", () => {
           moistureRatioUsed: 0,
           reason: "Archived-bin regression check",
         }),
-      ).rejects.toThrow(/not found or archived/);
+      ).rejects.toThrow(
+        /Storage bin was not found or is archived./,
+      );
     } finally {
       await cleanupStorageArchiveFixture(fixture);
     }
@@ -240,7 +255,7 @@ describe("storage location archive", () => {
         updateStorageLocation(ctx, fixture.storageLocationId, {
           name: "Archived bins must not be editable",
         }),
-      ).rejects.toThrow(/restore this storage location before editing it/i);
+      ).rejects.toThrow(/restore this storage bin before editing it/i);
 
       const [unchanged] = await db
         .select({ name: storageLocations.name })
@@ -326,7 +341,7 @@ describe("storage location archive", () => {
       }
       expect(outcome.error).toBeInstanceOf(SafeError);
       expect((outcome.error as Error).message).toMatch(
-        /restore the facility before restoring this storage location/i,
+        /restore the facility before restoring this storage bin/i,
       );
 
       const [state] = await db

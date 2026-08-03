@@ -10,6 +10,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 
 // ============================================
 // Types
@@ -94,7 +95,7 @@ export async function getProductionSampleById(
     .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)));
 
   if (rows.length === 0) {
-    throw new SafeError("Production sample not found");
+    throw new SafeError("In-process measurement not found.");
   }
 
   return rows[0];
@@ -205,10 +206,11 @@ export async function deleteProductionSample(
       .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)))
       .returning({ id: productionSamples.id });
     if (rows.length === 0) {
-      throw new SafeError("Production sample not found");
+    throw new SafeError("In-process measurement not found.");
     }
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "production_sample", entityId: id },
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }

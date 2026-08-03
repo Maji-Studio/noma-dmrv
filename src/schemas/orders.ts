@@ -32,10 +32,10 @@ export type PackagingType = (typeof packagingTypes)[number];
  */
 export const orderFormSchema = z.object({
   // Required fields
-  facilityId: z.string().min(1, "Please select a facility").uuid("Invalid facility"),
-  customerId: z.string().min(1, "Please select a customer").uuid("Invalid customer"),
-  customerLocationId: emptyToNull.or(z.string().uuid("Invalid customer location")).optional().nullable(),
-  biocharProductId: z.string().min(1, "Please select a biochar product").uuid("Invalid biochar product"),
+  facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
+  customerId: z.string().min(1, "Select a customer.").uuid("Choose a valid customer."),
+  customerLocationId: emptyToNull.or(z.string().uuid("Choose a valid customer location.")).optional().nullable(),
+  biocharProductId: z.string().min(1, "Select a product bin.").uuid("Choose a valid product bin."),
   orderDate: z.coerce.date({ error: "Order date is required" }),
   quantityKg: z
     .number({ error: "Quantity is required" })
@@ -69,7 +69,7 @@ export const createOrderSchema = orderFormSchema;
  * All fields optional except orderId
  */
 export const updateOrderSchema = z.object({
-  orderId: z.string().uuid("Invalid order ID"),
+  orderId: z.string().uuid("Choose a valid order."),
   code: z
     .string()
     .min(1)
@@ -91,7 +91,7 @@ export const updateOrderSchema = z.object({
  * Schema for deleting an order
  */
 export const deleteOrderSchema = z.object({
-  orderId: z.string().uuid("Invalid order ID"),
+  orderId: z.string().uuid("Choose a valid order."),
 });
 
 // ============================================

@@ -15,6 +15,7 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import {
   OnboardingWizard,
   SetupGuide,
+  SetupGuideSkeleton,
   SetupInProgressState,
   SetupStrip,
   useOnboardingGate,
@@ -75,7 +76,9 @@ export function DashboardView() {
         )}
       </header>
 
-      {isTakeover ? (
+      {onboarding.mode === "loading" ? (
+        <SetupGuideSkeleton />
+      ) : isTakeover ? (
         onboarding.mode === "takeover-member" ? (
           <SetupInProgressState />
         ) : (
@@ -99,7 +102,7 @@ export function DashboardView() {
             <EmptyState
               padding="md"
               icon={<WarningOctagonIcon size={40} />}
-              title="Couldn't load the dashboard"
+              title="The dashboard could not be loaded"
               description={error.message}
             />
           ) : (

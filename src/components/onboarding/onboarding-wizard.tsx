@@ -80,13 +80,13 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
       // Make the new facility active so the reactor + registry steps scope to
       // it (ReactorForm reads facilityId from context; the registry surfaces
       // take activeFacilityId). Goes through the context setter, not a
-      // hand-rolled localStorage write. The onboarding-status refetch is
-      // deferred to wizard dismiss (see useOnboardingGate).
+      // hand-rolled localStorage write. The wizard is latched open before the
+      // mutation refreshes onboarding status, so this cannot close it mid-flow.
       setFacilityId(facility.id);
       setCurrent(STEP.reactor);
     } catch (error) {
       setFacilityError(
-        error instanceof Error ? error.message : "Failed to create facility.",
+        error instanceof Error ? error.message : "Facility was not created. Check the form.",
       );
     }
   };
@@ -99,7 +99,7 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
       setCurrent(STEP.registry);
     } catch (error) {
       setReactorError(
-        error instanceof Error ? error.message : "Failed to create reactor.",
+        error instanceof Error ? error.message : "Reactor was not created. Check the form.",
       );
     }
   };
@@ -152,10 +152,11 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
             </p>
             <FacilityForm
               onSubmit={handleFacilitySubmit}
-              onCancel={() => setCurrent(STEP.welcome)}
+              onCancel={wizard.dismiss}
               isSubmitting={createFacility.isPending}
               errorMessage={facilityError ?? undefined}
               submitLabel="Add facility"
+              cancelLabel="Skip setup"
             />
           </div>
         );
@@ -177,10 +178,11 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
             </p>
             <ReactorForm
               onSubmit={handleReactorSubmit}
-              onCancel={() => setCurrent(STEP.facility)}
+              onCancel={wizard.dismiss}
               isSubmitting={createReactor.isPending}
               errorMessage={reactorError ?? undefined}
               submitLabel="Register reactor"
+              cancelLabel="Skip setup"
             />
           </div>
         );
@@ -204,17 +206,16 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
   }
 
   function renderFooter() {
-    // Form steps own their action row (the form's submit + Cancel-as-Back), so
-    // the wizard footer there is just the always-available skip. Non-form steps
-    // get the full Back / Skip / advance row.
+    // Form steps own the only action row, including their context-specific
+    // "Skip setup" secondary action. Non-form steps use the wizard footer.
+    if (current === STEP.facility && !facilityDone) return null;
+    if (current === STEP.reactor && !reactorDone) return null;
+
     const skip = (
       <Button variant="weak" size="small" onClick={wizard.dismiss}>
         Skip setup
       </Button>
     );
-
-    if (current === STEP.facility && !facilityDone) return skip;
-    if (current === STEP.reactor && !reactorDone) return skip;
 
     return (
       <div className="flex flex-wrap items-center justify-between gap-12">
@@ -256,8 +257,8 @@ function WelcomeStep() {
       </p>
       <p className="body-small text-[var(--color-text-secondary)]">
         We&apos;ll set up your facility, its first reactor, and your registry
-        connection. Everything else — suppliers, feedstock, production runs, and
-        credit batches — you can add from the dashboard whenever you&apos;re
+        connection. You can add suppliers, feedstock, production runs, and
+        credit batches from the dashboard whenever you&apos;re
         ready.
       </p>
     </div>

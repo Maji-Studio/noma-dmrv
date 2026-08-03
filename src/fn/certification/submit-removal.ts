@@ -11,12 +11,13 @@ import {
   type MappingClaimGuard,
 } from "@/data-access/certification-submissions";
 import { env } from "@/config/env";
-import { updateRemovalDates } from "@/data-access/certifier-removals";
+import {
+  updateRemovalDates,
+} from "@/data-access/certifier-removals";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
 import {
-  buildRemovalSupplierRef,
   createDatapoint,
   createGhgEntry,
   getIsometricClientForOrg,
@@ -31,31 +32,30 @@ import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import {
   bindSequestrationDatapointsToTemplate,
-  buildDirectSequestrationDatapoints,
 } from "@/lib/isometric/transformers/sequestration-binding";
 import {
-  expectedSequestrationBlueprintKeys,
-  isSequestrationBlueprintFamily,
   isSequestrationBlueprintKey,
 } from "@/lib/isometric/transformers/measurement-sample";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
-  DURABILITY_MEASUREMENT_SAMPLES_LIVE,
+  assertSupportedDurabilityConfiguration,
+  DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
+  DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
   submitDurabilityMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
 import {
-  buildVersionedMeasurementSampleSubmissions,
   readRemovalDurabilityMeasurementSamples,
 } from "./durability-measurement-sample-snapshot";
-import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
   assertNoForeignProductionClaims,
   assertProductionClaimGateFresh,
   assertResumedSnapshotRevisionCurrent,
 } from "./production-claim-gate";
+import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
   readRemovalFixedInputs,
+  readRemovalSourceBindingPlan,
   readRemovalTransport,
   type ResolvedFixedInput,
   type RemovalTransportSnapshot,
@@ -64,10 +64,19 @@ import { readRemovalReportingWindow } from "./removal-reporting-window";
 import {
   assertEntityReadinessGapsResolved,
   buildRemovalSubmissionBuild,
+  compileRemovalSubmission,
+  materializeRemovalSubmissionSnapshot,
+  removalTemplateTierCompatibilityBlocker,
 } from "./removal-submission-build";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
-import { resolveSourceIdsForRemoval } from "./sources";
+import {
+  mirrorCandidateSourcesForSubmission,
+  resolveSourceBindingCandidates,
+} from "./sources";
+import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
+import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
+import type { SubmissionProgressReporter } from "@/lib/certification/submission-progress";
 import {
   appendSyncEventBestEffort,
   assertProductionConfirmed,
@@ -79,26 +88,63 @@ import {
 // Domain wording for the claim module's blocked outcomes (the module owns
 // only the mapping-guard wording; claim decisions are translated here).
 const REMOVAL_CLAIM_BLOCKED_MESSAGES: Record<ClaimBlockedReason, string> = {
-  "in-flight": "A Removal submission for this removal is already in progress.",
+  "in-flight": "A submission for this Removal is already in progress.",
   "rejected-with-external":
     "This Removal was rejected by the verifier. Resolve the rejection in the Isometric registry before retrying.",
   // Removal policy is `supersede`; invalid-changed-hash is unreachable but
   // kept so future policy changes are explicit.
-  "invalid-changed-hash": "Unexpected submission state for this removal.",
+  "invalid-changed-hash":
+    "This Removal changed while the submission was being prepared. Reload and try again.",
   "state-changed":
-    "Submission state changed while preparing the removal. Reload and retry.",
+    "The submission changed while preparing the Removal. Reload and try again.",
 };
 
 export interface SubmitRemovalArgs {
   orgCtx: OrgContext;
   removalId: string;
   confirmProduction?: boolean;
+  /** Hash of the artifact shown in the operator's compiled review. */
+  expectedCompilationHash?: string;
+  onProgress?: SubmissionProgressReporter;
 }
 
 export interface RemovalSubmissionResult {
   removalId: string;
   externalId: string;
   version: number;
+}
+
+type GhgEntryExternalMutation = "none" | "possible" | "confirmed";
+
+interface RemovalSubmitAttempt {
+  id: string;
+  attemptedAt: Date;
+  externalMutation: GhgEntryExternalMutation;
+}
+
+function recordExternalMutation(
+  attempt: RemovalSubmitAttempt,
+  next: Exclude<GhgEntryExternalMutation, "none">,
+): void {
+  if (next === "confirmed" || attempt.externalMutation === "none") {
+    attempt.externalMutation = next;
+  }
+}
+
+function safeAttemptError(error: unknown): {
+  errorClass: string | null;
+  errorMessage: string | null;
+} {
+  if (error === null) {
+    return { errorClass: null, errorMessage: null };
+  }
+  if (error instanceof SafeError) {
+    return { errorClass: "SafeError", errorMessage: error.message };
+  }
+  return {
+    errorClass: "UnexpectedError",
+    errorMessage: "Removal submission failed unexpectedly. Retry the submission.",
+  };
 }
 
 // The submission unit: one Isometric Removal == one certifierRemovals row.
@@ -111,17 +157,69 @@ export interface RemovalSubmissionResult {
 export async function submitRemoval(
   args: SubmitRemovalArgs,
 ): Promise<RemovalSubmissionResult> {
-  const { orgCtx, removalId, confirmProduction } = args;
+  const attempt: RemovalSubmitAttempt = {
+    id: crypto.randomUUID(),
+    attemptedAt: new Date(),
+    externalMutation: "none",
+  };
+  let outcome: "succeeded" | "refused" | "failed" = "failed";
+  let attemptError: unknown = null;
+
+  try {
+    const result = await submitRemovalCore(args, attempt);
+    outcome = "succeeded";
+    return result;
+  } catch (error) {
+    attemptError = error;
+    outcome =
+      attempt.externalMutation === "none" && error instanceof SafeError
+        ? "refused"
+        : "failed";
+    throw error;
+  } finally {
+    const safeError = safeAttemptError(attemptError);
+    // Best-effort: a failed audit insert must not mask the submission's own
+    // error or turn a successful return into a throw.
+    await appendSyncEventBestEffort(args.orgCtx, {
+      provider: ISOMETRIC_PROVIDER,
+      entityType: REMOVAL_ENTITY_TYPE,
+      entityId: args.removalId,
+      operation: "removal:submit:attempt-summary",
+      status: outcome === "succeeded" ? "succeeded" : "failed",
+      responsePayload: {
+        attempt_id: attempt.id,
+        outcome,
+        error_class: safeError.errorClass,
+        error_message: safeError.errorMessage,
+        ghg_entry_external_mutation: attempt.externalMutation,
+      },
+      errorMessage: safeError.errorMessage,
+      attemptedAt: attempt.attemptedAt,
+    });
+  }
+}
+
+async function submitRemovalCore(
+  args: SubmitRemovalArgs,
+  attempt: RemovalSubmitAttempt,
+): Promise<RemovalSubmissionResult> {
+  const {
+    orgCtx,
+    removalId,
+    confirmProduction,
+    expectedCompilationHash,
+    onProgress,
+  } = args;
 
   // Per-attempt correlation id so the start breadcrumb, boundary logs, and any
   // best-effort warnings for one submit can be tied together in an aggregator.
-  const submissionAttemptId = crypto.randomUUID();
   const log = logger.child({
     op: "removal:submit",
     removalId,
-    submissionAttemptId,
+    submissionAttemptId: attempt.id,
   });
   log.info("removal submit started");
+  onProgress?.({ step: "removal.checking_data", state: "active" });
 
   const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
   if (!ctx.mapping) {
@@ -132,26 +230,19 @@ export async function submitRemoval(
       "Configure organization Isometric credentials before submitting.",
     );
   }
-  await checkProtocolVersionAtSubmit({
-    orgCtx,
-    removalId,
-    mapping: ctx.mapping,
-    log,
-  });
   // Fail before the submit-phase client, evidence-ledger generation/mirroring,
   // local ledger claims, or registry writes. Context loading may already make
   // read-only registry calls to resolve the configured project and template.
   // The build layer repeats this assertion as a defensive seam for callers that
   // prepare a submission outside this orchestrator.
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
   if (ctx.missingDefaultTemplateId) {
     throw new SafeError(
-      "The facility's default removal template was not found in Certify. Refresh the link in facility settings.",
+      "The facility's default Removal template was not found in Certify. Refresh the link in facility settings.",
     );
   }
   if (!ctx.defaultTemplate) {
-    throw new SafeError("Set a default removal template before submitting.");
+    throw new SafeError("Set a default Removal template before submitting.");
   }
   // Pin the narrowed (non-null) template into a const — TS loses narrowing of
   // a property access (`ctx.defaultTemplate`) inside async callbacks below.
@@ -165,12 +256,12 @@ export async function submitRemoval(
   }
   if (ctx.unresolvedBlueprintKeys.length > 0) {
     throw new SafeError(
-      `Cannot submit: blueprints out of sync with Certify (${ctx.unresolvedBlueprintKeys.join(", ")}). Refresh in facility settings.`,
+      "The registry template is out of date. Refresh the facility link in settings before submitting.",
     );
   }
   if (defaultTemplate.groups.length === 0) {
     throw new SafeError(
-      "Default removal template has no components - nothing to submit.",
+      "The default Removal template has no fields to submit. Choose another template in facility settings.",
     );
   }
 
@@ -184,27 +275,11 @@ export async function submitRemoval(
   // "staged but not live". The tier is a single facility-scoped value (ADR 0021),
   // read here from the durability data plane.
   const facilityTier = ctx.batchesWithSamples[0]?.durabilityOption ?? null;
-  const templateSequestrationKeys = defaultTemplate.groups.flatMap((group) =>
-    group.components
-      .map((component) => component.blueprint_key)
-      .filter(isSequestrationBlueprintFamily),
+  const tierBlocker = removalTemplateTierCompatibilityBlocker(
+    ctx,
+    defaultTemplate,
   );
-  if (facilityTier && templateSequestrationKeys.length > 0) {
-    const expectedKeys = expectedSequestrationBlueprintKeys(facilityTier);
-    const mismatched = templateSequestrationKeys.find(
-      (key) => !expectedKeys.has(key),
-    );
-    if (mismatched) {
-      const tierLabel = facilityTier === "1000_year" ? "1000-year" : "200-year";
-      throw new SafeError(
-        `This facility is on the ${tierLabel} durability tier, but its removal ` +
-          `template's sequestration component is "${mismatched}". Re-author the ` +
-          `facility's Isometric removal template to the ` +
-          `${Array.from(expectedKeys).join(" or ")} blueprint, or change the ` +
-          `facility's durability tier in facility settings.`,
-      );
-    }
-  }
+  if (tierBlocker) throw new SafeError(tierBlocker);
 
   // Durability evidence comes through measurement samples; each binding then
   // declares whether its GHG input consumes a sample-response datapoint or an
@@ -214,19 +289,17 @@ export async function submitRemoval(
   const hasDurabilityComponents = defaultTemplate.groups.some((group) =>
     group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
   );
-  if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
-    throw new SafeError(
-      "Durability submission is staged but not yet live — measurement-sample " +
-        "POSTs are disabled, so the required sequestration datapoint IDs cannot " +
-        "be bound. Enable DURABILITY_MEASUREMENT_SAMPLES_LIVE only for the " +
-        "sandbox after operator validation.",
-    );
+  if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
+    throw new SafeError(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
+  }
+  if (hasDurabilityComponents) {
+    assertSupportedDurabilityConfiguration(ctx.batchesWithSamples);
   }
 
   assertProductionConfirmed(confirmProduction);
 
   if (ctx.memberBatches.length === 0) {
-    throw new SafeError("This removal has no credit batches.");
+    throw new SafeError("This Removal has no credit batches.");
   }
   if (!facilityTier) {
     throw new SafeError(
@@ -274,18 +347,56 @@ export async function submitRemoval(
     hasDurabilityComponents,
     sourceIds: [],
   });
+  onProgress?.({ step: "removal.checking_data", state: "complete" });
+  onProgress?.({ step: "removal.preparing_evidence", state: "active" });
 
-  // Regenerate every Source-mirrored evidence ledger (transport mass·distance +
-  // 200-year durability) from the live context and mirror them BEFORE candidate
-  // documents are collected, so the current ledgers ride into source_ids on this
-  // submit (and supersede any prior ones). Done here — before the locked claim
-  // transaction below — because it makes HTTP calls to Isometric and inserts
-  // documents under a per-removal artifact lock. Best-effort and idempotent on
-  // content (an unchanged resubmit is a no-op); each ledger self-skips when it
-  // has nothing to evidence.
+  // The advisory protocol check appends a local sync event on mismatch/missing.
+  // Keep it after the complete side-effect-free build so invalid source data
+  // leaves no audit mutation, but before client construction and every registry
+  // or submission-ledger mutation.
+  await checkProtocolVersionAtSubmit({
+    orgCtx,
+    removalId,
+    mapping: ctx.mapping,
+    log,
+  });
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+
+  // Materialize the deterministic transport and durability evidence PDFs
+  // before candidate discovery. The generated documents attach to member
+  // credit batches, then enter the same candidate, mirror-lock, snapshot, and
+  // per-input attribution path as operator-provided evidence.
   await ensureEvidenceLedgersFromContext(orgCtx, removalId, ctx, log);
 
-  const initialBuild = await buildRemovalSubmissionBuild({
+  const reviewedCompilation = await compileRemovalSubmission({
+    orgCtx,
+    removalId,
+    ctx,
+    defaultTemplate,
+    blueprintsByKey,
+    externalProjectId,
+    allowPeriodInputStub,
+    hasDurabilityComponents,
+    log,
+    allowPendingSources: true,
+  });
+  if (!reviewedCompilation.transportPlan) {
+    throw new SafeError(
+      `Removal submission blocked:\n${reviewedCompilation.blockers.join("\n")}`,
+    );
+  }
+  const reviewedBuild = reviewedCompilation.transportPlan;
+  assertReviewedCompilationHash(expectedCompilationHash, reviewedBuild);
+
+  await mirrorCandidateSourcesForSubmission(orgCtx, {
+    removalId,
+    candidateDocumentIds: reviewedBuild.candidateDocumentIds,
+  });
+
+  // Compile again from persisted mappings. Only this strict artifact can be
+  // claimed and sent; a failed/partial automatic mirror therefore leaves no
+  // submission snapshot or registry GHG Entry behind.
+  const initialCompilation = await compileRemovalSubmission({
     orgCtx,
     removalId,
     ctx,
@@ -296,16 +407,24 @@ export async function submitRemoval(
     hasDurabilityComponents,
     log,
   });
+  if (!initialCompilation.transportPlan) {
+    throw new SafeError(
+      `Removal submission blocked:\n${initialCompilation.blockers.join("\n")}`,
+    );
+  }
+  const initialBuild = initialCompilation.transportPlan;
+  // Re-assert AFTER copying evidence. The reviewed fingerprint is Source-ID
+  // independent, so this compares like with like: it passes when the only change
+  // was IDs materializing, and fails when the evidence set itself moved — e.g.
+  // another operator removed or reclassified a supporting file mid-submission.
+  // Without this, that changed artifact could be claimed and sent unreviewed.
+  assertReviewedCompilationHash(expectedCompilationHash, initialBuild);
   const {
-    agg,
-    latestApplicationTime,
+    reportingWindow,
     candidateDocumentIds,
+    candidateSourceDocuments,
     sourceIds,
-    semanticPayload,
-    monitored,
     fixed,
-    datapointBodyByKey,
-    durabilityMeasurementSampleArgs,
     memberCreditBatchIds,
   } = initialBuild;
 
@@ -325,13 +444,7 @@ export async function submitRemoval(
     },
     guard: mappingGuard,
     policy: { onSubmittedHashChanged: "supersede" },
-    tentativeInputs: {
-      semanticPayload,
-      monitored,
-      datapointBodyByKey,
-      durabilityMeasurementSampleArgs,
-      sourceIds,
-    },
+    tentativeInputs: initialBuild,
     hashOf: (inputs) => payloadHash(inputs.semanticPayload),
     mirrorDocumentIds: candidateDocumentIds,
     resolve: async (tx, tentative) => {
@@ -339,17 +452,22 @@ export async function submitRemoval(
       // against us, so this result is the authoritative source set. Common
       // case: it matches the tentative set and everything built above
       // remains valid; the rare path rebuilds the template inputs once.
-      const lockedSourceIds = await resolveSourceIdsForRemoval(
+      const lockedSourceBindingCandidates = await resolveSourceBindingCandidates(
         orgCtx,
-        { candidateDocumentIds },
+        { candidates: candidateSourceDocuments },
         tx,
       );
+      const lockedSourceIds = Array.from(
+        new Set(
+          lockedSourceBindingCandidates.map((candidate) => candidate.sourceId),
+        ),
+      ).sort();
       const sourceIdsChanged =
         lockedSourceIds.length !== sourceIds.length ||
         lockedSourceIds.some((id, i) => id !== sourceIds[i]);
       if (!sourceIdsChanged) return tentative;
 
-      const finalBuild = await buildRemovalSubmissionBuild({
+      const finalCompilation = await compileRemovalSubmission({
         orgCtx,
         removalId,
         ctx,
@@ -358,90 +476,29 @@ export async function submitRemoval(
         externalProjectId,
         allowPeriodInputStub,
         hasDurabilityComponents,
-        sourceIds: lockedSourceIds,
+        candidateDocumentIds,
+        candidateSourceDocuments,
+        sourceBindingCandidates: lockedSourceBindingCandidates,
       });
-      return {
-        semanticPayload: finalBuild.semanticPayload,
-        monitored: finalBuild.monitored,
-        datapointBodyByKey: finalBuild.datapointBodyByKey,
-        durabilityMeasurementSampleArgs: finalBuild.durabilityMeasurementSampleArgs,
-        sourceIds: finalBuild.sourceIds,
-      };
+      if (!finalCompilation.transportPlan) {
+        throw new SafeError(
+          `Removal submission blocked:\n${finalCompilation.blockers.join("\n")}`,
+        );
+      }
+      assertReviewedCompilationHash(
+        expectedCompilationHash,
+        finalCompilation.transportPlan,
+      );
+      return finalCompilation.transportPlan;
     },
-    buildSnapshot: ({ inputs, nextVersion }) => {
-      const removalSupplierRef = buildRemovalSupplierRef({
+    buildSnapshot: ({ inputs, nextVersion }) =>
+      materializeRemovalSubmissionSnapshot({
+        compiled: inputs,
+        template: defaultTemplate,
+        externalProjectId,
         removalId,
-        role: "removal",
-        version: nextVersion,
-      });
-
-      const finalDatapointBodies = inputs.monitored.map((m) => {
-        const supplierRefId = buildRemovalSupplierRef({
-          removalId,
-          role: "datapoint",
-          version: nextVersion,
-          inputKey: `${m.removalTemplateComponentId}-${m.inputKey}`,
-        });
-        const draftKey = `${m.removalTemplateComponentId}::${m.inputKey}`;
-        const draft = inputs.datapointBodyByKey.get(draftKey);
-        if (!draft) {
-          // monitored and datapointBodyByKey are produced by the same
-          // resolveTemplateInputs pass, so a miss means the two fell out of
-          // sync — fail loudly rather than emit a Datapoint body missing
-          // its resolved fields.
-          throw new SafeError(
-            `Internal: no resolved Datapoint body for ${draftKey}. Reload and retry the submission.`,
-          );
-        }
-        return {
-          rtcId: m.removalTemplateComponentId,
-          inputKey: m.inputKey,
-          body: { ...draft, supplier_reference_id: supplierRefId },
-        };
-      });
-      const durabilityMeasurementSamples = inputs.durabilityMeasurementSampleArgs
-        ? {
-            submissions: buildVersionedMeasurementSampleSubmissions({
-              ...inputs.durabilityMeasurementSampleArgs,
-              version: nextVersion,
-            }),
-          }
-        : undefined;
-      const directSequestrationDatapoints = durabilityMeasurementSamples
-        ? buildDirectSequestrationDatapoints({
-            template: defaultTemplate,
-            measurementSampleSubmissions:
-              durabilityMeasurementSamples.submissions,
-            projectId: externalProjectId,
-            removalId,
-            version: nextVersion,
-            sourceIds: inputs.sourceIds,
-          })
-        : [];
-
-      return {
-        payloadSnapshot: {
-          // ADR 0005 / B3 — content hash of INPUT_MAPPING that produced
-          // this payload, surfaced at the top level so an audit query
-          // (`WHERE payload_snapshot->>'__mappingRevision' = ?`) can
-          // correlate a registry-side issue back to a specific noma
-          // mapping revision in git.
-          __mappingRevision: MAPPING_REVISION,
-          semantic: inputs.semanticPayload,
-          memberCreditBatchIds,
-          transport: {
-            removalSupplierRef,
-            datapointBodies: [
-              ...finalDatapointBodies,
-              ...directSequestrationDatapoints,
-            ],
-          },
-          ...(durabilityMeasurementSamples
-            ? { durabilityMeasurementSamples }
-            : {}),
-        },
-      };
-    },
+        nextVersion,
+      }),
   });
 
   switch (claimed.kind) {
@@ -459,6 +516,44 @@ export async function submitRemoval(
         removalId,
         creditBatchIds: memberCreditBatchIds,
       });
+      if (
+        !ctx.latestSubmission ||
+        ctx.latestSubmission.externalId !== claimed.externalId ||
+        ctx.latestSubmission.version !== claimed.version
+      ) {
+        throw new SafeError(
+          "The existing Removal submission changed while verifying evidence. Reload and retry.",
+        );
+      }
+      onProgress?.({ step: "removal.preparing_evidence", state: "complete" });
+      onProgress?.({
+        step: "removal.sending_inputs",
+        state: initialBuild.datapointBodyByKey.size > 0 ? "reused" : "skipped",
+      });
+      onProgress?.({
+        step: "removal.sending_durability",
+        state: initialBuild.durabilityMeasurementSampleArgs
+          ? "reused"
+          : "skipped",
+      });
+      onProgress?.({ step: "removal.creating", state: "reused" });
+      onProgress?.({
+        step: "removal.verifying_evidence",
+        state: "active",
+      });
+      await verifyAndPersistRemovalSourceBindings({
+        client,
+        orgCtx,
+        removalId,
+        submissionRow: ctx.latestSubmission,
+        externalRemovalId: claimed.externalId,
+        log,
+      });
+      onProgress?.({
+        step: "removal.verifying_evidence",
+        state: "complete",
+      });
+      onProgress?.({ step: "removal.complete", state: "complete" });
       return {
         removalId,
         externalId: claimed.externalId,
@@ -494,12 +589,14 @@ export async function submitRemoval(
           "removal retry will create a new version after rejected row with changed hash",
         );
       }
+      onProgress?.({ step: "removal.preparing_evidence", state: "complete" });
       // The transport snapshot comes off the claimed row: on resume it is
       // the prior attempt's stored truth; on create it carries the
       // locked-source-id version of the datapoint bodies (which may differ
       // from the tentative `datapointBodyByKey` if a concurrent
       // mirror/unlink shifted the source set during lock acquisition).
       const transport = readRemovalTransport(claimed.row);
+      const sourceBindingPlan = readRemovalSourceBindingPlan(claimed.row);
       // On resume, the fixed bindings must come from the SAME snapshot as the
       // transport — not the live `fixed` recomputed above, which may have
       // drifted from the version the snapshot was built against.
@@ -522,21 +619,42 @@ export async function submitRemoval(
         template: defaultTemplate,
         blueprintsByKey,
         reportingWindow: {
-          startedOn: agg.earliestStartTime,
-          completedOn: latestApplicationTime,
+          startedOn: reportingWindow.startedOn,
+          completedOn: reportingWindow.completedOn,
         },
         externalProjectId,
         durabilityMeasurementSubmissions,
+        sourceBindingPlan,
         // The live member set — membership can't drift under a locked draft
         // (assertRemovalAllowsCreditBatchMutation), so these are the batches
         // whose production bucket this submission claims.
         claimBatchIds: memberCreditBatchIds,
         supersedePreviousId: claimed.supersedePreviousId,
         resumed: claimed.resumed,
+        attempt,
         log,
+        onProgress,
       });
     }
   }
+}
+
+/**
+ * Re-assert the fingerprint the operator reviewed. Uses `reviewPayloadHash`, not
+ * the full payload hash, so that registry Source IDs materializing during this
+ * submission do not invalidate the operator's own artifact — see
+ * `removal-review-hash.ts`. A genuine evidence change (a file added, removed, or
+ * rebound) still moves this hash through `candidateSources`.
+ */
+function assertReviewedCompilationHash(
+  expectedHash: string | undefined,
+  compiled: { semanticPayload: Record<string, unknown> },
+): void {
+  if (!expectedHash) return;
+  if (reviewPayloadHash(compiled.semanticPayload) === expectedHash) return;
+  throw new SafeError(
+    "This Removal's data changed after you reviewed it. Reload the Removal and check the updated summary before submitting.",
+  );
 }
 
 async function assertClaimedRemovalPayloadFresh(args: {
@@ -566,7 +684,7 @@ async function assertClaimedRemovalPayloadFresh(args: {
   const freshHasDurabilityComponents = freshCtx.defaultTemplate.groups.some((group) =>
     group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
   );
-  if (freshHasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
+  if (freshHasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
     await retireStaleSubmissionDraft(orgCtx, row.id, {
       reason: "durability measurement-sample gate changed after draft claim",
     });
@@ -625,13 +743,16 @@ interface RunRemovalSubmissionArgs {
   durabilityMeasurementSubmissions:
     | DurabilityMeasurementSampleSubmission[]
     | null;
+  sourceBindingPlan: ReturnType<typeof readRemovalSourceBindingPlan>;
   // Member credit batches whose §8.6.2 production-bucket claim this submission
   // stamps on success (issue #349, ADR 0020).
   claimBatchIds: string[];
   supersedePreviousId: string | null;
   resumed: boolean;
+  attempt: RemovalSubmitAttempt;
   /** Attempt-scoped logger (carries submissionAttemptId) from submitRemoval. */
   log: Logger;
+  onProgress?: SubmissionProgressReporter;
 }
 
 async function runRemovalSubmission({
@@ -646,10 +767,13 @@ async function runRemovalSubmission({
   reportingWindow,
   externalProjectId,
   durabilityMeasurementSubmissions,
+  sourceBindingPlan,
   claimBatchIds,
   supersedePreviousId,
   resumed,
+  attempt,
   log,
+  onProgress,
 }: RunRemovalSubmissionArgs): Promise<RemovalSubmissionResult> {
   // On resume the datapoint bodies and fixed bindings are snapshot truth, so
   // the removal body's reporting window must also come from the snapshot — not
@@ -669,6 +793,18 @@ async function runRemovalSubmission({
     );
   }
 
+  const datapointTotal = transport.datapointBodies.length;
+  if (datapointTotal === 0) {
+    onProgress?.({ step: "removal.sending_inputs", state: "skipped" });
+  } else {
+    onProgress?.({
+      step: "removal.sending_inputs",
+      state: "active",
+      completed: 0,
+      total: datapointTotal,
+    });
+  }
+  let datapointCompleted = 0;
   for (const dp of transport.datapointBodies) {
     const supplierRefId = dp.body.supplier_reference_id;
     const { externalId } = await performRegistryCreate({
@@ -690,31 +826,53 @@ async function runRemovalSubmission({
       ...(datapointIdsByRtcInput.get(rtcInputKey) ?? []),
       externalId,
     ]);
+    datapointCompleted += 1;
+    onProgress?.({
+      step: "removal.sending_inputs",
+      state:
+        datapointCompleted === datapointTotal ? "complete" : "active",
+      completed: datapointCompleted,
+      total: datapointTotal,
+    });
   }
 
-  // Phase 3: POST the durability measurement samples (per-batch chemistry +
-  // facility soil reference) after the datapoint loop, before the removal body.
+  // Phase 3: POST the sampled 1000-year durability measurement sample after
+  // the datapoint loop, before the removal body.
   // Measurement-property inputs bind response datapoints; direct-datapoint
   // inputs (currently 1000-year s_fraction) were already posted through the
   // same idempotent loop above and remain duplicated in the sample as
-  // data-quality evidence. The flag is already on whenever submissions are
+  // data-quality evidence. The gate is already open whenever submissions are
   // present; the explicit guard is defence-in-depth for future callers.
-  if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
-    throw new SafeError(
-      "Durability measurement-sample submission is disabled. The GHG entry cannot be created without explicit sequestration datapoint bindings.",
-    );
+  if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
+    throw new SafeError(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
   }
   if (durabilityMeasurementSubmissions) {
+    const durabilityTotal = durabilityMeasurementSubmissions.length;
+    onProgress?.({
+      step: "removal.sending_durability",
+      state: durabilityTotal === 0 ? "skipped" : "active",
+      completed: 0,
+      total: durabilityTotal,
+    });
     const {
       submitted,
       datapointIdsByMeasurementProperty,
     } = await submitDurabilityMeasurementSamples({
       orgCtx,
       removalId,
-      submissionRowId: row.id,
+      submissionRow: row,
       resumed,
       submissions: durabilityMeasurementSubmissions,
+      sourceBindingPlan,
       log,
+      onProgress: (completed, total) => {
+        onProgress?.({
+          step: "removal.sending_durability",
+          state: "active",
+          completed,
+          total,
+        });
+      },
     });
     datapointIdsByRtcInput = bindSequestrationDatapointsToTemplate({
       template,
@@ -722,8 +880,19 @@ async function runRemovalSubmission({
       datapointIdsByRtcInput,
     });
     log.info({ submitted }, "durability measurement samples submitted");
+    if (durabilityTotal > 0) {
+      onProgress?.({
+        step: "removal.sending_durability",
+        state: "complete",
+        completed: durabilityTotal,
+        total: durabilityTotal,
+      });
+    }
+  } else {
+    onProgress?.({ step: "removal.sending_durability", state: "skipped" });
   }
 
+  onProgress?.({ step: "removal.creating", state: "active" });
   const removalBody = buildCreateGhgEntryRequest({
     template,
     blueprintsByKey,
@@ -747,16 +916,21 @@ async function runRemovalSubmission({
         supplierRefLookup,
       ),
     failureMessagePrefix: "Removal POST failed",
+    onExternalMutation: (state) => recordExternalMutation(attempt, state),
+    onConfirmed: (externalId) =>
+      markSubmissionSubmitted(orgCtx, row.id, {
+        externalId,
+        supersedePreviousId,
+        // §8.6.2 (issue #349, ADR 0020): stamp the production-bucket claim
+        // in the same transaction as the immediate Submitted transition.
+        productionEmissionsClaim: {
+          removalId,
+          creditBatchIds: claimBatchIds,
+        },
+      }),
     log,
   });
-
-  await markSubmissionSubmitted(orgCtx, row.id, {
-    externalId: externalRemovalId,
-    supersedePreviousId,
-    // §8.6.2 (issue #349, ADR 0020): stamp the production-bucket claim onto
-    // the member batches in the same transaction as the ledger flip.
-    productionEmissionsClaim: { removalId, creditBatchIds: claimBatchIds },
-  });
+  onProgress?.({ step: "removal.creating", state: "complete" });
 
   // Persist the derived reporting window onto the removal row (best-effort —
   // a failure here doesn't unwind a successful submission).
@@ -789,6 +963,21 @@ async function runRemovalSubmission({
       { submissionId: row.id },
     );
   }
+
+  onProgress?.({ step: "removal.verifying_evidence", state: "active" });
+  await verifyAndPersistRemovalSourceBindings({
+    client,
+    orgCtx,
+    removalId,
+    submissionRow: row,
+    externalRemovalId,
+    log,
+  });
+  onProgress?.({
+    step: "removal.verifying_evidence",
+    state: "complete",
+  });
+  onProgress?.({ step: "removal.complete", state: "complete" });
 
   return { removalId, externalId: externalRemovalId, version: row.version };
 }

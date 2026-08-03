@@ -18,6 +18,7 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
 import { SafeError } from "@/lib/errors";
+import { pluralize } from "@/lib/copy-utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
@@ -262,7 +263,7 @@ export async function upsertCertifierProject(
           .limit(1);
         if (collision) {
           throw new SafeError(
-            `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code} — ${collision.name}. Each Isometric facility maps to exactly one facility here.`,
+            `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code}: ${collision.name}. Each Isometric facility maps to one noma facility.`,
           );
         }
       }
@@ -623,9 +624,10 @@ export async function markSubmissionSubmitted(
     // callers don't claim.
     productionEmissionsClaim?: { removalId: string; creditBatchIds: string[] };
   },
+  callerTx?: Tx,
 ): Promise<void> {
   requireOrgScope(ctx);
-  await db.transaction(async (tx) => {
+  const run = async (tx: Tx): Promise<void> => {
     await tx
       .update(certificationSubmissions)
       .set({
@@ -660,7 +662,8 @@ export async function markSubmissionSubmitted(
         args.productionEmissionsClaim,
       );
     }
-  });
+  };
+  await (callerTx ? run(callerTx) : db.transaction(run));
 }
 
 // Standalone claim stamp for the no-POST paths (issue #349, ADR 0020):
@@ -711,8 +714,7 @@ async function stampProductionEmissionsClaimWithExecutor(
     const stampedIds = new Set(stamped.map((row) => row.id));
     const skipped = creditBatchIds.filter((id) => !stampedIds.has(id));
     throw new SafeError(
-      `Production-emissions claim failed: ${skipped.length} credit batch(es) ` +
-        "were claimed by another removal mid-submission (§8.6.2). Reload and retry.",
+      `${skipped.length} credit ${pluralize(skipped.length, "batch", "batches")} ${skipped.length === 1 ? "was" : "were"} claimed by another Removal while this submission was running (§8.6.2). Reload and submit again.`,
     );
   }
 }
@@ -884,6 +886,20 @@ export async function attachReportDocument(
 ): Promise<DocumentRow> {
   requireOrgScope(ctx);
   await assertSameOrg(ctx, certificationSubmissions, args.submissionId);
+  const [existing] = await db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.entityType, "ghgStatement"),
+        eq(documents.entityId, args.submissionId),
+        eq(documents.fileUrl, args.reportUrl),
+        eq(documents.organizationId, ctx.organizationId),
+      ),
+    )
+    .orderBy(desc(documents.createdAt))
+    .limit(1);
+  if (existing) return existing;
   const [row] = await db
     .insert(documents)
     .values({
@@ -894,7 +910,10 @@ export async function attachReportDocument(
       fileUrl: args.reportUrl,
       fileName: deriveFileName(args.reportUrl),
       description: args.description,
-      metadata: (args.metadata ?? {}) as Record<string, unknown>,
+      metadata: {
+        kind: "external_ghg_statement_report",
+        ...(args.metadata ?? {}),
+      } as Record<string, unknown>,
       createdBy: ctx.userId,
     })
     .returning();
@@ -910,6 +929,7 @@ export interface AppendSyncEventInput {
   requestPayload?: unknown;
   responsePayload?: unknown;
   errorMessage?: string | null;
+  attemptedAt?: Date;
 }
 
 export async function appendSyncEvent(
@@ -927,6 +947,7 @@ export async function appendSyncEvent(
     requestPayload: (input.requestPayload ?? null) as Record<string, unknown>,
     responsePayload: (input.responsePayload ?? null) as Record<string, unknown>,
     errorMessage: input.errorMessage ?? null,
+    attemptedAt: input.attemptedAt,
   });
 }
 

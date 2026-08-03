@@ -7,21 +7,33 @@
 import { z } from "zod";
 import {
   emptyToNull,
-  MASS_INPUT_MAX_KG,
-  MASS_MAX_KG_MESSAGE,
+  massKgSchema,
   optionalDateOnly,
-  optionalPercent,
+  optionalStoredPercent,
   PG_INTEGER_MAX,
   requiredDateOnly,
+  storedPercentSchema,
   toIntOrNull,
   toNumberOrNull,
 } from "./helpers";
 import {
   allowedProductionRunStatusesFrom,
+  DRY_MASS_BALANCE_MESSAGE,
   getProductionRunOutcomeViolations,
   PRODUCTION_RUN_STATUSES,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
+import {
+  AmbiguousLocalTimeError,
+  combineDateAndTime,
+  DEFAULT_FACILITY_TIMEZONE,
+  formatLocalDate,
+  NonexistentLocalTimeError,
+} from "@/lib/date-utils";
+import {
+  getFutureProductionRunTimeFields,
+  PRODUCTION_RUN_FUTURE_TIME_MESSAGES,
+} from "@/lib/production-runs/time-validation";
 
 // ============================================
 // Time-window helpers (start/end date + time pairs)
@@ -30,32 +42,76 @@ import {
 const TIME_ONLY_RE = /^\d{2}:\d{2}$/;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const CANCELLATION_REASON_MAX_LENGTH = 2000;
-const DRY_MASS_BALANCE_MESSAGE =
-  "Dry biochar output cannot exceed dry feedstock input";
+export { DRY_MASS_BALANCE_MESSAGE } from "@/lib/production-runs/lifecycle";
+
+/**
+ * Outcome of {@link resolveInstant}. `instant` is null both when the pair is
+ * incomplete/malformed and when the wall clock does not exist; only the latter
+ * sets `wallClockErrorMessage`, so the caller can tell "nothing to check yet"
+ * from "the operator entered a time that is not a unique instant".
+ */
+type ResolvedInstant = {
+  instant: Date | null;
+  wallClockErrorMessage: string | null;
+};
+
+const UNRESOLVED_INSTANT: ResolvedInstant = {
+  instant: null,
+  wallClockErrorMessage: null,
+};
 
 /**
  * Resolve a calendar-date value + a time value into a single instant, robust to
  * either shape the schema produces: on the client the date field has been
  * transformed to a `Date` (local midnight) and the time is an "HH:MM" string;
- * on server re-validation the time is already a combined `Date`. Returns null
- * when either part is missing/malformed (the field-level validators surface the
- * specific error).
+ * on server re-validation the time is already a combined `Date`. Returns a null
+ * instant when either part is missing/malformed (the field-level validators
+ * surface the specific error).
+ *
+ * `timeZone` must be the facility's IANA zone, matching what the form submits
+ * via `combineDateAndTime`. Resolving here in the browser's zone while the
+ * submitted instant is built in the facility's zone lets the two disagree
+ * across a DST boundary that only one of the zones observes (a run that is
+ * valid when saved can be rejected by the client, or vice versa). Sharing the
+ * combiner also means the two share its DST gap/fold policy, so validation
+ * rejects exactly the wall clocks the submit path would refuse to build.
  */
-function resolveInstant(dateVal: unknown, timeVal: unknown): Date | null {
-  if (timeVal instanceof Date) return timeVal;
-  if (typeof timeVal !== "string" || !TIME_ONLY_RE.test(timeVal)) return null;
-
-  let base: Date | null = null;
-  if (dateVal instanceof Date) {
-    base = dateVal;
-  } else if (typeof dateVal === "string" && DATE_ONLY_RE.test(dateVal)) {
-    const [y, m, d] = dateVal.split("-").map(Number);
-    base = new Date(y, m - 1, d);
+function resolveInstant(
+  dateVal: unknown,
+  timeVal: unknown,
+  timeZone: string
+): ResolvedInstant {
+  if (timeVal instanceof Date) {
+    return { instant: timeVal, wallClockErrorMessage: null };
   }
-  if (!base) return null;
+  if (typeof timeVal !== "string" || !TIME_ONLY_RE.test(timeVal)) {
+    return UNRESOLVED_INSTANT;
+  }
 
-  const [hh, mm] = timeVal.split(":").map(Number);
-  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), hh, mm);
+  // `requiredDateOnly`/`optionalDateOnly` parse "YYYY-MM-DD" at local midnight,
+  // so reading the calendar day back off the Date is the exact inverse.
+  let dateStr: string | null = null;
+  if (dateVal instanceof Date) {
+    dateStr = formatLocalDate(dateVal);
+  } else if (typeof dateVal === "string" && DATE_ONLY_RE.test(dateVal)) {
+    dateStr = dateVal;
+  }
+  if (!dateStr) return UNRESOLVED_INSTANT;
+
+  try {
+    return {
+      instant: combineDateAndTime(dateStr, timeVal, timeZone),
+      wallClockErrorMessage: null,
+    };
+  } catch (error) {
+    if (
+      error instanceof NonexistentLocalTimeError ||
+      error instanceof AmbiguousLocalTimeError
+    ) {
+      return { instant: null, wallClockErrorMessage: error.message };
+    }
+    throw error;
+  }
 }
 
 /** Whether an end-time value is actually present (Date or non-empty "HH:MM"). */
@@ -78,13 +134,13 @@ export type { ProductionRunStatus };
 // ============================================
 
 /**
- * Schema for production run form (client-side validation)
- * Used in ProductionRunForm component for creating/editing runs
+ * Field shape for the production run form. Timing cross-field checks live in
+ * {@link makeProductionRunFormSchema}, which binds them to a facility timezone.
  */
-export const productionRunFormSchema = z.object({
+const productionRunFormObject = z.object({
   // Required fields
-  facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
-  reactorId: z.string().min(1, "Please select a reactor").uuid("Please select a valid reactor"),
+  facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
+  reactorId: z.string().min(1, "Select a reactor.").uuid("Choose a valid reactor."),
 
   // Status
   status: z.enum(productionRunStatuses).default("draft"),
@@ -100,11 +156,11 @@ export const productionRunFormSchema = z.object({
   // re-validation of an already-combined instant).
   startTime: z.union([
     z.date(),
-    z.string().min(1, "Please enter a start time").transform((val, ctx) => {
+    z.string().min(1, "Enter a start time.").transform((val, ctx) => {
       if (TIME_ONLY_RE.test(val)) return val;
       const date = new Date(val);
       if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid start time" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid start time." });
         return z.NEVER;
       }
       return date;
@@ -121,7 +177,7 @@ export const productionRunFormSchema = z.object({
       if (typeof val === "string") {
         const date = new Date(val);
         if (isNaN(date.getTime())) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid end time" });
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid end time." });
           return z.NEVER;
         }
         return date;
@@ -133,8 +189,13 @@ export const productionRunFormSchema = z.object({
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
   // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
-  feedstockWetMassKg: z.preprocess(toNumberOrNull, z.number().positive("Wet mass must be a positive number").max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).nullable()).optional(),
-  feedstockMoisturePercent: optionalPercent,
+  feedstockWetMassKg: z.preprocess(
+    toNumberOrNull,
+    massKgSchema("Wet mass must be a positive number")
+      .positive("Wet mass must be a positive number")
+      .nullable(),
+  ).optional(),
+  feedstockMoisturePercent: optionalStoredPercent,
 
   // Processing Parameters (Isometric Protocol Section 9)
   feedingRateKgHr: z.preprocess(toNumberOrNull, z.number().positive("Feeding rate must be positive").nullable()).optional(),
@@ -147,20 +208,78 @@ export const productionRunFormSchema = z.object({
   electricityKwh: z.preprocess(toNumberOrNull, z.number().min(0, "Electricity must be non-negative").nullable()).optional(),
 
   // Biochar Output
-  biocharOutputKg: z.preprocess(toNumberOrNull, z.number().nonnegative("Biochar output must be non-negative").max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).nullable()).optional(),
-  biocharMoisturePercent: optionalPercent,
+  biocharOutputKg: z.preprocess(
+    toNumberOrNull,
+    massKgSchema("Biochar output must be non-negative").nullable(),
+  ).optional(),
+  biocharMoisturePercent: optionalStoredPercent,
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-})
-  .superRefine((data, ctx) => {
-    const start = resolveInstant(data.startDate, data.startTime);
+});
+
+/**
+ * Schema for the production run form (client-side validation), bound to the
+ * IANA timezone of the run's facility.
+ *
+ * The zone is a parameter rather than a schema field because it is not user
+ * input — it is a property of the facility, and putting it on the wire would
+ * let a client override how its own times are interpreted. Callers that hold a
+ * facility (the form) pass its zone; the exported {@link productionRunFormSchema}
+ * binds {@link DEFAULT_FACILITY_TIMEZONE} for the server-action path, where the
+ * start/end values have already been combined into `Date` instants by the
+ * client and the zone is therefore never consulted.
+ */
+export function makeProductionRunFormSchema(
+  timeZone: string,
+  now: () => Date = () => new Date(),
+) {
+  return productionRunFormObject.superRefine((data, ctx) => {
+    const start = resolveInstant(data.startDate, data.startTime, timeZone);
     const endPresent = hasEndTime(data.endTime);
     const endDateVal = data.endDate ?? data.startDate;
-    const end = endPresent ? resolveInstant(endDateVal, data.endTime) : null;
+    const end = endPresent
+      ? resolveInstant(endDateVal, data.endTime, timeZone)
+      : UNRESOLVED_INSTANT;
+
+    // A wall clock inside a DST gap or fold is not a unique instant, so it is
+    // reported on its own field and then treated as unresolved. The
+    // downstream window checks all guard on a non-null instant, so they stay
+    // silent rather than piling a second, misleading message onto the same
+    // field ("End must be after start" for a time that has no instant at all).
+    if (start.wallClockErrorMessage) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["startTime"],
+        message: start.wallClockErrorMessage,
+      });
+    }
+    if (end.wallClockErrorMessage) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endTime"],
+        message: end.wallClockErrorMessage,
+      });
+    }
+
+    const futureTimeFields = getFutureProductionRunTimeFields(
+      {
+        startTime: start.instant,
+        endTime: end.instant,
+      },
+      now(),
+    );
+    for (const field of futureTimeFields) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [field],
+        message: PRODUCTION_RUN_FUTURE_TIME_MESSAGES[field],
+      });
+    }
+
     const violations = getProductionRunOutcomeViolations({
       status: data.status,
-      startTime: start,
-      endTime: end,
+      startTime: start.instant,
+      endTime: end.instant,
       endTimePresent: endPresent,
       cancellationReason: data.cancellationReason,
       biocharOutputKg: data.biocharOutputKg,
@@ -179,7 +298,7 @@ export const productionRunFormSchema = z.object({
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["endTime"],
-            message: "End must be after start — check the end date for overnight runs.",
+            message: "End time must be after start time. Check the end date for overnight runs.",
           });
           break;
         case "terminal-end-required":
@@ -197,11 +316,27 @@ export const productionRunFormSchema = z.object({
           });
           break;
         case "feedstock-required":
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["feedstockWetMassKg"],
-            message: `A ${violation.status} run needs a source bin, moisture %, and wet mass to compute consumed feedstock.`,
-          });
+          if (!data.feedstockStorageLocationId) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["feedstockStorageLocationId"],
+              message: "Select a source bin.",
+            });
+          }
+          if (data.feedstockWetMassKg == null) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["feedstockWetMassKg"],
+              message: "Enter feedstock wet mass.",
+            });
+          }
+          if (data.feedstockMoisturePercent == null) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["feedstockMoisturePercent"],
+              message: "Enter feedstock moisture.",
+            });
+          }
           break;
         case "cancellation-reason-required":
           ctx.addIssue({
@@ -224,6 +359,15 @@ export const productionRunFormSchema = z.object({
       }
     }
   });
+}
+
+/**
+ * Server-action / default-bound instance of the form schema. See
+ * {@link makeProductionRunFormSchema} for why the zone defaults here.
+ */
+export const productionRunFormSchema = makeProductionRunFormSchema(
+  DEFAULT_FACILITY_TIMEZONE,
+);
 
 // ============================================
 // Server Action Schemas
@@ -246,7 +390,7 @@ export const createProductionRunSchema = productionRunFormSchema.refine(
  * All fields optional except productionRunId
  */
 export const updateProductionRunSchema = z.object({
-  productionRunId: z.string().uuid("Invalid production run ID"),
+  productionRunId: z.string().uuid("Choose a valid production run."),
   code: z
     .string()
     .min(1)
@@ -263,7 +407,7 @@ export const updateProductionRunSchema = z.object({
     z.string().transform((val, ctx) => {
       const date = new Date(val);
       if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid start time" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid start time." });
         return z.NEVER;
       }
       return date;
@@ -277,23 +421,31 @@ export const updateProductionRunSchema = z.object({
     z.string().transform((val, ctx) => {
       const date = new Date(val);
       if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid end time" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid end time." });
         return z.NEVER;
       }
       return date;
     }),
   ]).optional(),
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  feedstockWetMassKg: z.number().positive().max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional().nullable(),
-  feedstockMoisturePercent: z.number().min(0).max(100).optional().nullable(),
+  feedstockWetMassKg: massKgSchema().positive().optional().nullable(),
+  feedstockMoisturePercent: storedPercentSchema()
+    .min(0)
+    .max(100)
+    .optional()
+    .nullable(),
   feedingRateKgHr: z.number().positive().optional().nullable(),
   residenceTimeMinutes: z.number().int().positive().max(PG_INTEGER_MAX, "Residence time is too large").optional().nullable(),
   dieselOperationLiters: z.number().min(0).optional().nullable(),
   dieselGensetLiters: z.number().min(0).optional().nullable(),
   preprocessingFuelLiters: z.number().min(0).optional().nullable(),
   electricityKwh: z.number().min(0).optional().nullable(),
-  biocharOutputKg: z.number().nonnegative().max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional().nullable(),
-  biocharMoisturePercent: z.number().min(0).max(100).optional().nullable(),
+  biocharOutputKg: massKgSchema().optional().nullable(),
+  biocharMoisturePercent: storedPercentSchema()
+    .min(0)
+    .max(100)
+    .optional()
+    .nullable(),
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 });
@@ -302,7 +454,7 @@ export const updateProductionRunSchema = z.object({
  * Schema for deleting a production run
  */
 export const deleteProductionRunSchema = z.object({
-  productionRunId: z.string().uuid("Invalid production run ID"),
+  productionRunId: z.string().uuid("Choose a valid production run."),
 });
 
 // ============================================

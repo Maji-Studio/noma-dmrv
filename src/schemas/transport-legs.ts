@@ -120,7 +120,7 @@ export type TransportLegFormData = z.infer<typeof transportLegFormSchema>;
 
 const entityContextShape = {
   entityType: z.enum(transportEntityTypes),
-  entityId: z.string().uuid("Invalid entity id"),
+  entityId: z.string().uuid("Choose a valid record."),
 };
 
 export const createTransportLegSchema = z.object({
@@ -131,14 +131,14 @@ export const createTransportLegSchema = z.object({
 export type CreateTransportLegData = z.infer<typeof createTransportLegSchema>;
 
 export const updateTransportLegSchema = z.object({
-  id: z.string().uuid("Invalid transport leg id"),
+  id: z.string().uuid("Choose a valid transport leg."),
   ...baseTransportLegShape,
 });
 
 export type UpdateTransportLegData = z.infer<typeof updateTransportLegSchema>;
 
 export const deleteTransportLegSchema = z.object({
-  id: z.string().uuid("Invalid transport leg id"),
+  id: z.string().uuid("Choose a valid transport leg."),
 });
 
 export type DeleteTransportLegData = z.infer<typeof deleteTransportLegSchema>;

@@ -61,7 +61,6 @@ function run(
     preprocessingFuelLiters: 0,
     dieselGensetLiters: 0,
     samples: [],
-    readingsCount: 0,
     ...overrides,
   } as unknown as ProductionRunWithSamples;
 }
@@ -99,8 +98,8 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
       lineages: [],
     });
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatch(/fuel-usage-by-volume/);
-    expect(warnings[0]).toMatch(/cannot include these fuel emissions/);
+    expect(warnings[0]).toMatch(/monitored pyrolysis fuel input/);
+    expect(warnings[0]).toMatch(/before submitting these fuel emissions/);
   });
 
   it("warns when startup/preprocessing diesel is recorded without the component", () => {
@@ -302,7 +301,7 @@ describe("buildSubmissionWarnings — combined advisories", () => {
       lineages: [lineage(new Date("2026-02-05T00:00:00Z"))],
     });
     expect(warnings).toHaveLength(2);
-    expect(warnings[0]).toContain("Diesel fuel");
+    expect(warnings[0]).toContain("Genset or startup diesel");
     expect(warnings[1]).toContain("spans multiple months");
   });
 
@@ -318,6 +317,6 @@ describe("buildSubmissionWarnings — combined advisories", () => {
       lineages: [lineage(new Date("2026-01-25T00:00:00Z"))],
     });
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain("Diesel fuel");
+    expect(warnings[0]).toContain("Genset or startup diesel");
   });
 });

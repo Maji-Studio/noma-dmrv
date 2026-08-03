@@ -8,7 +8,12 @@ import { useAuth } from "@/lib/auth/client";
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { setPasswordSchema, type SetPasswordFormData } from "@/schemas/auth";
-import { FormField, FormInput, ServerError } from "@/components/forms";
+import {
+  FormField,
+  FormInput,
+  ResolvedErrorRevalidator,
+  ServerError,
+} from "@/components/forms";
 
 function SetPasswordFormContent() {
   const [success, setSuccess] = useState(false);
@@ -23,6 +28,8 @@ function SetPasswordFormContent() {
   const {
     register,
     handleSubmit,
+    control,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<SetPasswordFormData>({
     resolver: zodResolver(setPasswordSchema),
@@ -37,7 +44,7 @@ function SetPasswordFormContent() {
 
     // Validate token exists
     if (!token) {
-      setServerError("Invalid invitation link. Please contact your administrator.");
+      setServerError("This invitation link is invalid. Ask your Admin for a new one.");
       return;
     }
 
@@ -57,7 +64,9 @@ function SetPasswordFormContent() {
         router.push("/verify-email");
       }, 2000);
     } else {
-      setServerError(result.error || "Failed to set password");
+      setServerError(
+        result.error || "The password was not set. Check the form and try again.",
+      );
     }
   }
 
@@ -69,10 +78,10 @@ function SetPasswordFormContent() {
           className="p-24 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
           role="alert"
         >
-          <h3 className="body-bold mb-16">Invalid Invitation Link</h3>
+          <h3 className="body-bold mb-16">Invalid invitation link</h3>
           <p className="body-small">
-            This invitation link is invalid or has expired. Please contact your
-            administrator for a new invitation.
+            This invitation link is invalid or has expired. Ask your Admin for
+            a new invitation.
           </p>
         </div>
 
@@ -90,6 +99,7 @@ function SetPasswordFormContent() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-24">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {success ? (
         <div className="space-y-24">
           <div
@@ -98,11 +108,11 @@ function SetPasswordFormContent() {
             aria-live="polite"
           >
             <h3 className="body-bold mb-16">
-              Password set successfully
+              Password set
             </h3>
             <p className="body-small">
-              Your password has been set. Please verify your email address to
-              complete your account setup. Redirecting...
+              Your password is set. Verify your email address to complete your
+              account setup. You are being redirected.
             </p>
           </div>
         </div>
@@ -136,7 +146,7 @@ function SetPasswordFormContent() {
 
           <FormField
             id="confirmPassword"
-            label="Confirm Password"
+            label="Confirm password"
             error={errors.confirmPassword?.message}
           >
             <FormInput

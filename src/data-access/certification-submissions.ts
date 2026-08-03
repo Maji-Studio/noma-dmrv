@@ -13,7 +13,7 @@
  * (ADR 0008) — no port, no in-memory fake. It ends at a claimed draft row;
  * no network I/O happens inside.
  *
- * Plan: docs/plans/2026-06-10-certification-reliability-track.md (Phase 1).
+ * Plan: docs/archive/plans/2026-06-10-certification-reliability-track.md (Phase 1).
  */
 import { and, desc, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -112,7 +112,8 @@ export interface ClaimSubmissionDraftArgs<H> {
   hashOf: (inputs: H) => string;
   // v1's only extra locks: per-document source mirror locks. Acquired
   // sorted, AFTER the mapping lock, so every submit path shares one lock
-  // order with the mirror/unlink/admin-repoint flows (no ABBA deadlock).
+  // order with mirroring, owning-document deletion, and admin-repoint flows
+  // (no ABBA deadlock).
   mirrorDocumentIds?: string[];
   // In-lock re-resolution of hash-covered inputs (e.g. mirrored source IDs).
   // Return `tentative` unchanged when nothing shifted.
@@ -146,12 +147,14 @@ export interface ClaimSubmissionDraftArgs<H> {
 export async function claimSubmissionDraft<H>(
   ctx: OrgContext,
   args: ClaimSubmissionDraftArgs<H>,
+  tx?: DbTransaction,
 ): Promise<ClaimOutcome> {
   requireOrgScope(ctx);
-  await assertSubmissionAnchorSameOrg(ctx, args.key);
+  const executor = tx ?? db;
+  await assertSubmissionAnchorSameOrg(ctx, args.key, executor);
 
   const tentativeHash = args.hashOf(args.tentativeInputs);
-  const latest = await getLatestSubmissionWithExecutor(ctx, db, args.key);
+  const latest = await getLatestSubmissionWithExecutor(ctx, executor, args.key);
   const tentative = decideSubmissionClaim({
     latest,
     payloadHash: tentativeHash,
@@ -174,14 +177,14 @@ export async function claimSubmissionDraft<H>(
         version: tentative.version,
       };
     case "resume":
-      return resumeDraft(ctx, args, tentativeHash);
+      return resumeDraft(ctx, args, tentativeHash, tx);
     case "resume-poll-existing":
     case "resume-re-put":
       // Only reachable when `dataUploadResume` is passed to the pure core,
       // which this module never does (telemetry is deferred — see plan).
       throw new Error(`Unreachable claim kind: ${tentative.kind}`);
     case "create-new-version":
-      return createDraft(ctx, args);
+      return createDraft(ctx, args, tx);
   }
 }
 
@@ -199,8 +202,9 @@ async function resumeDraft<H>(
   ctx: OrgContext,
   args: ClaimSubmissionDraftArgs<H>,
   tentativeHash: string,
+  callerTx?: DbTransaction,
 ): Promise<ClaimOutcome> {
-  return db.transaction(async (tx) => {
+  const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
     await lockAndVerifyMapping(ctx, tx, args.guard);
     await lockSubmissionArtifact(tx, args.key);
 
@@ -255,15 +259,17 @@ async function resumeDraft<H>(
       supersedePreviousId: null,
       reason: "resumed",
     };
-  });
+  };
+  return callerTx ? run(callerTx) : db.transaction(run);
 }
 
 async function createDraft<H>(
   ctx: OrgContext,
   args: ClaimSubmissionDraftArgs<H>,
+  callerTx?: DbTransaction,
 ): Promise<ClaimOutcome> {
   try {
-    return await db.transaction(async (tx): Promise<ClaimOutcome> => {
+    const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
       await lockAndVerifyMapping(ctx, tx, args.guard);
       await lockSubmissionArtifact(tx, args.key);
       if (args.mirrorDocumentIds && args.mirrorDocumentIds.length > 0) {
@@ -342,7 +348,8 @@ async function createDraft<H>(
         supersedePreviousId: locked.supersedePreviousId,
         reason,
       };
-    });
+    };
+    return await (callerTx ? run(callerTx) : db.transaction(run));
   } catch (err) {
     if (isEntityVersionUniqueViolation(err)) {
       // Backstop: the in-lock re-decision makes this race practically
@@ -374,15 +381,24 @@ export async function getLatestSubmission(
   // acting within one facility and must not receive another's ledger row.
   expectedFacilityId?: string,
 ): Promise<CertificationSubmissionRow | null> {
+  return getLatestSubmissionWithExecutor(ctx, db, key, expectedFacilityId);
+}
+
+export async function getLatestSubmissionWithExecutor(
+  ctx: OrgContext,
+  executor: DbTransaction | typeof db,
+  key: SubmissionKey,
+  expectedFacilityId?: string,
+): Promise<CertificationSubmissionRow | null> {
   requireOrgScope(ctx);
-  const row = await getLatestSubmissionWithExecutor(ctx, db, key);
+  const row = await readLatestSubmission(ctx, executor, key);
   if (row && expectedFacilityId !== undefined) {
-    await assertSubmissionInFacility(ctx, db, row, expectedFacilityId);
+    await assertSubmissionInFacility(ctx, executor, row, expectedFacilityId);
   }
   return row;
 }
 
-async function getLatestSubmissionWithExecutor(
+async function readLatestSubmission(
   ctx: OrgContext,
   executor: DbTransaction | typeof db,
   key: SubmissionKey,
@@ -485,7 +501,7 @@ async function lockAndVerifyMapping(
     current.defaultRemovalTemplateId !== guard.expectedDefaultRemovalTemplateId
   ) {
     throw new SafeError(
-      "Facility's default removal template changed mid-submission. Refresh and retry.",
+      "The facility's default Removal template changed during submission. Refresh and try again.",
     );
   }
 }
@@ -506,11 +522,17 @@ async function lockSubmissionArtifact(
 async function assertSubmissionAnchorSameOrg(
   ctx: OrgContext,
   key: Pick<SubmissionKey, "localEntityType" | "localEntityId">,
+  executor: DbTransaction | typeof db = db,
 ): Promise<void> {
   if (key.localEntityType === "removal") {
-    await assertSameOrg(ctx, certifierRemovals, key.localEntityId);
+    await assertSameOrg(ctx, certifierRemovals, key.localEntityId, executor);
   } else if (key.localEntityType === "ghgStatement") {
-    await assertSameOrg(ctx, certifierGhgStatements, key.localEntityId);
+    await assertSameOrg(
+      ctx,
+      certifierGhgStatements,
+      key.localEntityId,
+      executor,
+    );
   }
 }
 

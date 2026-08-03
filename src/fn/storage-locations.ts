@@ -36,7 +36,10 @@ import {
   storageLocationFilterSchema,
 } from "@/schemas/storage-locations";
 import type { ActionResult } from "@/types/actions";
-import { toLoggedActionError } from "./action-errors";
+import {
+  formatZodActionError,
+  toLoggedActionError,
+} from "./action-errors";
 import { withAction } from "./with-action";
 
 function storageLocationActionError(
@@ -45,7 +48,7 @@ function storageLocationActionError(
   op: string,
 ): string {
   return toLoggedActionError(error, fallbackMessage, {
-    message: "storage location action failed",
+    message: "storage bin action failed",
     context: { op },
   });
 }
@@ -79,14 +82,14 @@ export async function getStorageLocationsFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Invalid filter parameters: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error, "Invalid filter parameters"),
       };
     }
     return {
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to load storage locations",
+        "Failed to load storage bins",
         "storage-location:list",
       ),
     };
@@ -94,7 +97,7 @@ export async function getStorageLocationsFn(
 }
 
 /**
- * Get a single storage location by ID
+ * Get a single storage bin by ID
  */
 export async function getStorageLocationByIdFn(
   storageLocationId: string
@@ -112,7 +115,7 @@ export async function getStorageLocationByIdFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to load storage location",
+        "Failed to load storage bin",
         "storage-location:get",
       ),
     };
@@ -120,7 +123,7 @@ export async function getStorageLocationByIdFn(
 }
 
 /**
- * Get a storage location with its facility info
+ * Get a storage bin with its facility info
  */
 export async function getStorageLocationWithFacilityFn(
   storageLocationId: string
@@ -138,7 +141,7 @@ export async function getStorageLocationWithFacilityFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to load storage location details",
+        "Failed to load storage bin details",
         "storage-location:detail",
       ),
     };
@@ -146,7 +149,7 @@ export async function getStorageLocationWithFacilityFn(
 }
 
 /**
- * Get storage locations by facility ID
+ * Get storage bins by facility ID
  */
 export async function getStorageLocationsByFacilityFn(
   facilityId: string
@@ -165,7 +168,7 @@ export async function getStorageLocationsByFacilityFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to load storage locations for facility",
+        "Failed to load storage bins for facility",
         "storage-location:by-facility",
       ),
     };
@@ -173,7 +176,7 @@ export async function getStorageLocationsByFacilityFn(
 }
 
 /**
- * Check if a storage location code is available
+ * Check if a storage bin code is available
  */
 export async function checkStorageLocationCodeFn(
   code: string,
@@ -193,7 +196,7 @@ export async function checkStorageLocationCodeFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to check storage location code",
+        "Failed to check storage bin code",
         "storage-location:check-code",
       ),
     };
@@ -205,7 +208,7 @@ export async function checkStorageLocationCodeFn(
 // ============================================
 
 /**
- * Create a new storage location
+ * Create a new storage bin
  */
 export async function createStorageLocationFn(
   data: z.infer<typeof createStorageLocationSchema>
@@ -241,14 +244,14 @@ export async function createStorageLocationFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to create storage location",
+        "Failed to create storage bin",
         "storage-location:create",
       ),
     };
@@ -260,7 +263,7 @@ export async function createStorageLocationFn(
 // ============================================
 
 /**
- * Update an existing storage location
+ * Update an existing storage bin
  */
 export async function updateStorageLocationFn(
   data: z.infer<typeof updateStorageLocationSchema>
@@ -292,14 +295,14 @@ export async function updateStorageLocationFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to update storage location",
+        "Failed to update storage bin",
         "storage-location:update",
       ),
     };
@@ -311,7 +314,7 @@ export async function updateStorageLocationFn(
 // ============================================
 
 /**
- * Archive a storage location while retaining all operational history.
+ * Archive a storage bin while retaining all operational history.
  */
 export async function archiveStorageLocationFn(
   data: z.infer<typeof archiveStorageLocationSchema>,
@@ -321,12 +324,12 @@ export async function archiveStorageLocationFn(
       const validated = archiveStorageLocationSchema.parse(data);
       return archiveStorageLocation(ctx, validated.storageLocationId);
     },
-    { fallbackMessage: "Failed to archive storage location" },
+    { fallbackMessage: "Failed to archive storage bin" },
   );
 }
 
 /**
- * Restore an individually archived storage location.
+ * Restore an individually archived storage bin.
  */
 export async function restoreStorageLocationFn(
   data: z.infer<typeof restoreStorageLocationSchema>,
@@ -336,7 +339,7 @@ export async function restoreStorageLocationFn(
       const validated = restoreStorageLocationSchema.parse(data);
       return restoreStorageLocation(ctx, validated.storageLocationId);
     },
-    { fallbackMessage: "Failed to restore storage location" },
+    { fallbackMessage: "Failed to restore storage bin" },
   );
 }
 
@@ -345,7 +348,7 @@ export async function restoreStorageLocationFn(
 // ============================================
 
 /**
- * Delete a storage location
+ * Delete a storage bin
  */
 export async function deleteStorageLocationFn(
   data: z.infer<typeof deleteStorageLocationSchema>
@@ -361,14 +364,14 @@ export async function deleteStorageLocationFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to delete storage location",
+        "Failed to delete storage bin",
         "storage-location:delete",
       ),
     };

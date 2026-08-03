@@ -131,6 +131,18 @@ export const CERTIFY_FIELD_REGISTRY: Record<
 > = {
   productionRun: [
     {
+      key: "hasReadingsFile",
+      label: "Readings CSV file",
+      kind: "derived",
+      formFields: ["readingsCsv"],
+      satisfaction: {
+        mode: "equals",
+        field: "hasReadingsFile",
+        value: true,
+        label: "Readings CSV file supplied",
+      },
+    },
+    {
       key: "feedstockWetMassKg",
       label: "Feedstock wet mass",
       kind: "entered",
@@ -217,7 +229,29 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "hToCOrgRatio",
       label: "H:Corg ratio",
       kind: "entered",
+      formFields: [
+        "totalHydrogenPercent",
+        "organicCarbonPercent",
+        "hToCOrgRatio",
+      ],
+      satisfaction: {
+        mode: "anyOf",
+        fields: ["hToCOrgRatio"],
+        label: "H:Corg ratio",
+      },
       mappings: [mapping("weightedHToCorgRatio")],
+    },
+    {
+      // Unconditional, like H:Corg: the Soil Module §3.3 Table 2 eligibility
+      // check is universal (pooled mean H/C_org < 0.5 AND O/C_org < 0.2), not
+      // tier-specific. Without this descriptor a sample missing oxygen badged
+      // "chemistry complete" while the usable-replicate gate
+      // (biochar-eligibility.ts, durability-submission-gates.ts) refused to
+      // count it toward the §8.3.1 ≥3 minimum (QA 2026-07-25 F-6).
+      key: "oToCOrgRatio",
+      label: "O:Corg ratio",
+      kind: "entered",
+      mappings: [mapping("weightedOToCorgRatio")],
     },
     {
       key: "tgaNonReactiveCarbonData",
@@ -292,10 +326,9 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       label: "Transport distance provenance",
       kind: "derived",
       satisfaction: {
-        mode: "equals",
-        field: "transportDistanceSource",
-        value: "document",
-        label: "Distance source marked Document",
+        mode: "anyOf",
+        fields: ["transportDistanceSource"],
+        label: "Transport distance provenance",
       },
     },
   ],
@@ -311,18 +344,6 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       label: "Load mass",
       kind: "entered",
       mappings: transportMassDistanceMappings,
-    },
-    {
-      key: "distanceProvenance",
-      label: "Transport distance provenance",
-      kind: "derived",
-      formFields: ["distanceSource"],
-      satisfaction: {
-        mode: "equals",
-        field: "distanceSource",
-        value: "document",
-        label: "Distance source marked Document",
-      },
     },
   ],
   // Issue #319 removed the litres→kWh genset conversion — diesel submits by

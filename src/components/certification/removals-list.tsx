@@ -20,7 +20,6 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
 import {
-  CheckCircleIcon,
   PlusIcon,
   SealCheckIcon,
   WarningIcon,
@@ -29,12 +28,18 @@ import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useCertificationOverview } from "@/hooks/use-certification";
-import type { RemovalPreflightSummary } from "@/fn/certification";
-import { deriveRemovalStatus } from "@/lib/certification/status";
+import {
+  useRemovalPreflightSummaries,
+  useRemovalsForFacility,
+} from "@/hooks/use-certification";
+import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
+import {
+  buildRemovalListRows,
+  type RemovalListRow,
+} from "./removal-list-state";
 
 const SHORT_ID = 8;
 
@@ -65,14 +70,14 @@ export function RemovalsList() {
           <h1 className="title-heading-2">Removals</h1>
           <p className="body-medium text-[var(--color-text-secondary)] max-w-[680px]">
             A Removal is the registry submission unit. Group one or more complete
-            credit batches that share a reporting period into a removal, then
-            submit it to the registry.
+            credit batches that share a reporting period, then submit the
+            Removal to the registry.
           </p>
         </div>
         {facilityId && (
           <Button variant="primary" onClick={() => setDialogOpen(true)}>
             <PlusIcon size={16} weight="bold" />
-            New removal
+            New Removal
           </Button>
         )}
       </header>
@@ -81,7 +86,7 @@ export function RemovalsList() {
         <EmptyState
           icon={<SealCheckIcon size={48} />}
           title="Select a facility"
-          description="Choose a facility from the sidebar to view its removals."
+          description="Choose a facility from the sidebar to view its Removals."
         />
       ) : (
         <ListBody facilityId={facilityId} onNewRemoval={() => setDialogOpen(true)} />
@@ -103,29 +108,32 @@ function shortId(id: string): string {
   return id.slice(0, SHORT_ID);
 }
 
-function reportingWindow(summary: RemovalPreflightSummary): string {
+function reportingWindow(summary: RemovalListRow): string | null {
   return summary.startedOn && summary.completedOn
     ? formatDateRange(summary.startedOn, summary.completedOn)
-    : "Set on submit";
+    : null;
 }
 
-function RemovalCell({ summary }: { summary: RemovalPreflightSummary }) {
+function RemovalCell({ summary }: { summary: RemovalListRow }) {
+  const window = reportingWindow(summary);
   return (
     <div className="flex flex-col gap-2 min-w-0">
       <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
         {shortId(summary.removalId)}…
       </span>
-      <span className="body-caption text-[var(--color-text-tertiary)]">
-        {reportingWindow(summary)}
-      </span>
+      {window && (
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          {window}
+        </span>
+      )}
     </div>
   );
 }
 
-function MemberBatchesCell({ summary }: { summary: RemovalPreflightSummary }) {
+function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
   const { memberBatchCodes } = summary;
   if (memberBatchCodes.length === 0) {
-    return <span className="body-small text-[var(--color-text-tertiary)]">—</span>;
+    return <span className="body-small text-[var(--color-text-tertiary)]">None</span>;
   }
   return (
     <div className="flex flex-col gap-2 min-w-0">
@@ -140,86 +148,55 @@ function MemberBatchesCell({ summary }: { summary: RemovalPreflightSummary }) {
   );
 }
 
-function StatusCell({ summary }: { summary: RemovalPreflightSummary }) {
-  const derived = deriveRemovalStatus({
+function StatusCell({ summary }: { summary: RemovalListRow }) {
+  const status = deriveRemovalWorkflowStatus({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
+    enrichmentStatus: summary.enrichmentStatus,
+    readiness: summary.readiness,
   });
-  return <StatusBadge status={derived.value} label={derived.label} />;
-}
+  const firstReason = status.reasons[0];
+  const remainingReasonCount = status.reasons.length - 1;
 
-function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
-  const { state, reasons, advisories } = summary.readiness;
-  if (state === "ready") {
-    return (
-      <span className="flex flex-col gap-4">
-        <span className="inline-flex items-center gap-6 body-caption text-[var(--color-signal-green)]">
-          <CheckCircleIcon size={16} weight="fill" aria-hidden />
-          Ready to submit
+  return (
+    <span className="flex flex-col items-start gap-4">
+      <StatusBadge status={status.value} label={status.label} />
+      {firstReason && (
+        <span className="inline-flex items-start gap-6 body-caption text-[var(--color-text-secondary)]">
+          <WarningIcon
+            size={14}
+            weight="fill"
+            aria-hidden
+            className="mt-px shrink-0 text-[var(--color-signal-orange)]"
+          />
+          <span className="line-clamp-2">
+            {firstReason}
+            {remainingReasonCount > 0 ? ` +${remainingReasonCount} more` : ""}
+          </span>
         </span>
-        {advisories.map((advisory) => (
-          <span
-            key={advisory}
-            className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]"
-          >
-            <WarningIcon
-              size={16}
-              weight="fill"
-              aria-hidden
-              className="mt-px shrink-0"
-            />
-            <span className="line-clamp-2">{advisory}</span>
-          </span>
-        ))}
-      </span>
-    );
-  }
-  if (state === "blocked") {
-    return (
-      <span className="flex flex-col gap-4">
-        {reasons.map((reason) => (
-          <span
-            key={reason}
-            className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]"
-          >
-            <WarningIcon
-              size={16}
-              weight="fill"
-              aria-hidden
-              className="mt-px shrink-0"
-            />
-            <span className="line-clamp-2">{reason}</span>
-          </span>
-        ))}
-        {advisories.map((advisory) => (
-          <span
-            key={advisory}
-            className="inline-flex items-start gap-6 body-caption"
-          >
-            <WarningIcon
-              size={16}
-              weight="fill"
-              aria-hidden
-              className="mt-px shrink-0 text-[var(--color-signal-orange)]"
-            />
-            <span className="line-clamp-2 text-[var(--color-text-secondary)]">
-              Advisory — {advisory}
-            </span>
-          </span>
-        ))}
-      </span>
-    );
-  }
-  // submitted / inProgress — the status column already carries the verdict.
-  return <span className="body-caption text-[var(--color-text-tertiary)]">—</span>;
+      )}
+      {status.canRetry && (
+        <Button
+          variant="default"
+          size="small"
+          onClick={(event) => {
+            event.stopPropagation();
+            void summary.retry?.();
+          }}
+        >
+          Retry
+        </Button>
+      )}
+    </span>
+  );
 }
 
-const columns: ColumnDef<RemovalPreflightSummary>[] = [
+const columns: ColumnDef<RemovalListRow>[] = [
   {
     id: "removal",
     header: "Removal",
     accessorFn: (summary) =>
-      `${summary.removalId} ${reportingWindow(summary)}`,
+      `${summary.removalId} ${reportingWindow(summary) ?? ""}`,
     cell: ({ row }) => <RemovalCell summary={row.original} />,
   },
   {
@@ -231,19 +208,16 @@ const columns: ColumnDef<RemovalPreflightSummary>[] = [
   {
     id: "status",
     header: "Status",
-    accessorFn: (summary) =>
-      deriveRemovalStatus({
+    accessorFn: (summary) => {
+      const status = deriveRemovalWorkflowStatus({
         local: summary.local,
         lockInFlight: summary.lockInFlight,
-      }).label,
+        enrichmentStatus: summary.enrichmentStatus,
+        readiness: summary.readiness,
+      });
+      return `${status.label} ${status.reasons.join(" ")}`;
+    },
     cell: ({ row }) => <StatusCell summary={row.original} />,
-  },
-  {
-    id: "readiness",
-    header: "Readiness",
-    accessorFn: (summary) =>
-      `${summary.readiness.state} ${summary.readiness.reasons.join(" ")} ${summary.readiness.advisories.join(" ")}`,
-    cell: ({ row }) => <ReadinessCell summary={row.original} />,
   },
 ];
 
@@ -254,25 +228,30 @@ function ListBody({
   facilityId: string;
   onNewRemoval: () => void;
 }) {
-  const overview = useCertificationOverview(facilityId);
+  const identities = useRemovalsForFacility(facilityId);
   const [searchQuery, setSearchQuery] = useState("");
   const [removalId, setRemovalId] = useQueryState(
     "removal",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
-  if (overview.error) {
+  const identityRows = identities.data?.removals ?? [];
+  const enrichmentByRemovalId = useRemovalPreflightSummaries(
+    facilityId,
+    identityRows.map((entry) => entry.removal.id),
+  );
+
+  if (identities.error) {
     return (
       <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
         <p className="body-medium text-[var(--clr-red)]" role="alert">
-          Unable to load removals. Try refreshing the page.
+          Removals could not be loaded. Refresh the page and try again.
         </p>
       </div>
     );
   }
 
-  const data = overview.data;
-  const rows = data?.removals ?? [];
+  const rows = buildRemovalListRows(identityRows, enrichmentByRemovalId);
   const selected = removalId
     ? rows.find((r) => r.removalId === removalId)
     : undefined;
@@ -293,7 +272,7 @@ function ListBody({
           enablePagination
           globalFilter={searchQuery}
           onGlobalFilterChange={setSearchQuery}
-          isLoading={overview.isLoading}
+          isLoading={identities.isLoading}
           hoverable
           onRowClick={(row) => setRemovalId(row.removalId)}
           aria-label="Removals"
@@ -301,17 +280,17 @@ function ListBody({
             <EmptyState
               padding="md"
               icon={<SealCheckIcon size={40} />}
-              title={searchQuery ? "No matching removals" : "No removals yet"}
+              title={searchQuery ? "No matching Removals" : "No Removals yet"}
               description={
                 searchQuery
                   ? "Try clearing your search."
-                  : "Start one with “New removal” to group complete credit batches."
+                  : "Group complete credit batches into a Removal to submit them."
               }
               action={
                 searchQuery ? undefined : (
                   <Button variant="default" onClick={onNewRemoval}>
                     <PlusIcon size={16} weight="bold" />
-                    New removal
+                    Create your first Removal
                   </Button>
                 )
               }
@@ -320,8 +299,8 @@ function ListBody({
         >
           <DataTable.Toolbar>
             <DataTable.Search
-              placeholder="Search removals..."
-              aria-label="Search removals"
+              placeholder="Search Removals..."
+              aria-label="Search Removals"
             />
             <DataTable.Controls>
               <DataTable.ColumnVisibility />
@@ -331,10 +310,10 @@ function ListBody({
         </DataTable>
       </section>
 
-      {selected && data && (
+      {selected && identities.data && (
         <RemovalDetailSheet
           summary={selected}
-          isProduction={data.isProduction}
+          isProduction={identities.data.isProduction}
           facilityId={facilityId}
           open
           onClose={() => setRemovalId(null)}

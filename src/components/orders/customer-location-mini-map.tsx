@@ -2,9 +2,9 @@
 
 /**
  * Read-only MapLibre mini map for the order form's delivery-location panel:
- * facility marker, destination marker, and a straight dashed connector
- * (dashed = estimated path, not a road — the Carbon Viewer convention for
- * unrouted legs; route geometry is out of scope per issue #196).
+ * facility marker, destination marker, and a cached road route when available.
+ * Unresolved or unavailable geometry uses the Carbon Viewer's straight dashed
+ * fallback convention.
  *
  * Loaded via next/dynamic (ssr: false) from customer-location-details.tsx —
  * never imported directly, so maplibre-gl stays out of the route bundle.
@@ -33,6 +33,11 @@ import {
   MapControls,
   OWN_LAYER_PREFIX,
 } from "@/components/map";
+import type { RouteGeometry } from "@/lib/geo/types";
+import {
+  resolveCustomerLocationRoutePreview,
+  type CustomerLocationMapPoint,
+} from "./customer-location-route-preview";
 
 // Inlined at build time — public, domain-locked key (browser-safe).
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
@@ -41,9 +46,10 @@ const SAT_SOURCE_ID = `${OWN_LAYER_PREFIX}order-sat`;
 const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}order-sat-layer`;
 const SAT_TILE_SIZE = 256;
 const CONNECTOR_SOURCE_ID = `${OWN_LAYER_PREFIX}order-connector`;
-const CONNECTOR_LAYER_ID = `${OWN_LAYER_PREFIX}order-connector-line`;
-// Line treatment mirrors the Carbon Viewer's unrouted-leg fallback
-// (chain-of-custody/map/viewer-constants.ts) so the connector reads the same.
+const CONNECTOR_ROAD_LAYER_ID = `${OWN_LAYER_PREFIX}order-connector-road`;
+const CONNECTOR_FALLBACK_LAYER_ID = `${OWN_LAYER_PREFIX}order-connector-fallback`;
+// Line treatments mirror the Carbon Viewer's solid-road and dashed-fallback
+// convention (chain-of-custody/map/viewer-constants.ts).
 const CONNECTOR_LINE_WIDTH = 1.6;
 const CONNECTOR_LINE_OPACITY = 0.85;
 const CONNECTOR_DASHARRAY = [2, 2];
@@ -52,19 +58,16 @@ const FIT_PADDING = 48;
 /** Don't zoom past street level when the endpoints are very close. */
 const FIT_MAX_ZOOM = 13;
 
-export interface MiniMapPoint {
-  lat: number;
-  lng: number;
-}
-
 export interface CustomerLocationMiniMapProps {
-  facility: MiniMapPoint;
-  destination: MiniMapPoint;
+  facility: CustomerLocationMapPoint;
+  destination: CustomerLocationMapPoint;
+  routeGeometry: RouteGeometry | null | undefined;
 }
 
-interface MiniMapPoints {
-  facility: MiniMapPoint;
-  destination: MiniMapPoint;
+interface MiniMapPreview {
+  facility: CustomerLocationMapPoint;
+  destination: CustomerLocationMapPoint;
+  routeGeometry: RouteGeometry | null | undefined;
 }
 
 /** Resolve a design token at runtime — MapLibre paints to canvas, so CSS
@@ -76,56 +79,77 @@ function token(name: string, fallback: string): string {
   );
 }
 
-function connectorData({ facility, destination }: MiniMapPoints) {
+function connectorData({
+  facility,
+  destination,
+  routeGeometry,
+}: MiniMapPreview) {
+  const preview = resolveCustomerLocationRoutePreview(
+    facility,
+    destination,
+    routeGeometry
+  );
   return {
     type: "Feature" as const,
-    properties: {},
+    properties: { routed: preview.routed },
     geometry: {
       type: "LineString" as const,
-      coordinates: [
-        [facility.lng, facility.lat],
-        [destination.lng, destination.lat],
-      ],
+      coordinates: preview.coordinates,
     },
   };
 }
 
-function boundsFor({ facility, destination }: MiniMapPoints): maplibregl.LngLatBounds {
+function boundsFor({
+  facility,
+  destination,
+  routeGeometry,
+}: MiniMapPreview): maplibregl.LngLatBounds {
   const bounds = new maplibregl.LngLatBounds();
-  bounds.extend([facility.lng, facility.lat]);
-  bounds.extend([destination.lng, destination.lat]);
+  const preview = resolveCustomerLocationRoutePreview(
+    facility,
+    destination,
+    routeGeometry
+  );
+  for (const coordinate of preview.boundsCoordinates) {
+    bounds.extend(coordinate);
+  }
   return bounds;
 }
 
 export default function CustomerLocationMiniMap({
   facility,
   destination,
+  routeGeometry,
 }: CustomerLocationMiniMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const facilityMarkerRef = useRef<maplibregl.Marker | null>(null);
   const destinationMarkerRef = useRef<maplibregl.Marker | null>(null);
-  // The load handler lives for the map's lifetime; it reads the endpoints
-  // through this ref so it always paints the latest props.
-  const pointsRef = useRef<MiniMapPoints>({ facility, destination });
+  // The load handler lives for the map's lifetime; it reads the endpoints and
+  // route through this ref so it always paints the latest props.
+  const previewRef = useRef<MiniMapPreview>({
+    facility,
+    destination,
+    routeGeometry,
+  });
   const [satOn, setSatOn] = useState(false);
   // WebGL can be unavailable (headless browsers, exhausted contexts) — the
   // panel keeps its textual details instead of crashing the form.
   const [mapFailed, setMapFailed] = useState(false);
 
   useEffect(() => {
-    pointsRef.current = { facility, destination };
+    previewRef.current = { facility, destination, routeGeometry };
   });
 
   /** (Re)place both markers and the connector line on a loaded map. */
-  const paintEndpoints = (map: maplibregl.Map, points: MiniMapPoints) => {
+  const paintPreview = (map: maplibregl.Map, preview: MiniMapPreview) => {
     const facilityLngLat: [number, number] = [
-      points.facility.lng,
-      points.facility.lat,
+      preview.facility.lng,
+      preview.facility.lat,
     ];
     const destinationLngLat: [number, number] = [
-      points.destination.lng,
-      points.destination.lat,
+      preview.destination.lng,
+      preview.destination.lat,
     ];
 
     if (!facilityMarkerRef.current) {
@@ -151,7 +175,7 @@ export default function CustomerLocationMiniMap({
     const source = map.getSource(CONNECTOR_SOURCE_ID) as
       | maplibregl.GeoJSONSource
       | undefined;
-    source?.setData(connectorData(points));
+    source?.setData(connectorData(preview));
   };
 
   // Map instance lifecycle — the legitimate imperative-DOM exception.
@@ -164,7 +188,7 @@ export default function CustomerLocationMiniMap({
       map = new maplibregl.Map({
         container,
         style: maptilerStyleUrl(MAPTILER_KEY),
-        bounds: boundsFor(pointsRef.current),
+        bounds: boundsFor(previewRef.current),
         fitBoundsOptions: { padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM },
         attributionControl: { compact: true },
         dragRotate: false,
@@ -198,9 +222,21 @@ export default function CustomerLocationMiniMap({
         data: { type: "FeatureCollection", features: [] },
       });
       map.addLayer({
-        id: CONNECTOR_LAYER_ID,
+        id: CONNECTOR_ROAD_LAYER_ID,
         type: "line",
         source: CONNECTOR_SOURCE_ID,
+        filter: ["==", ["get", "routed"], true],
+        paint: {
+          "line-color": token("--clr-pink", "#A6216E"),
+          "line-width": CONNECTOR_LINE_WIDTH,
+          "line-opacity": CONNECTOR_LINE_OPACITY,
+        },
+      });
+      map.addLayer({
+        id: CONNECTOR_FALLBACK_LAYER_ID,
+        type: "line",
+        source: CONNECTOR_SOURCE_ID,
+        filter: ["==", ["get", "routed"], false],
         paint: {
           "line-color": token("--clr-pink", "#A6216E"),
           "line-width": CONNECTOR_LINE_WIDTH,
@@ -208,7 +244,7 @@ export default function CustomerLocationMiniMap({
           "line-dasharray": CONNECTOR_DASHARRAY,
         },
       });
-      paintEndpoints(map, pointsRef.current);
+      paintPreview(map, previewRef.current);
     });
 
     return () => {
@@ -217,24 +253,28 @@ export default function CustomerLocationMiniMap({
       mapRef.current = null;
       map.remove();
     };
-    // Initial bounds come from pointsRef; endpoint changes are synced below.
+    // Initial bounds come from previewRef; later prop changes are synced below.
   }, []);
 
-  // Sync endpoint changes after the initial paint. Before the map's `load`
-  // the connector source doesn't exist yet — skip; the load handler paints
-  // from pointsRef, which already holds these props.
+  // Sync endpoint or route changes after the initial paint. Before the map's
+  // `load` the connector source doesn't exist yet; the load handler paints
+  // from previewRef, which already holds the latest props.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.getSource(CONNECTOR_SOURCE_ID)) return;
 
-    const points: MiniMapPoints = { facility, destination };
-    paintEndpoints(map, points);
-    map.fitBounds(boundsFor(points), {
+    const preview: MiniMapPreview = {
+      facility,
+      destination,
+      routeGeometry,
+    };
+    paintPreview(map, preview);
+    map.fitBounds(boundsFor(preview), {
       padding: FIT_PADDING,
       maxZoom: FIT_MAX_ZOOM,
       duration: 0,
     });
-  }, [facility, destination]);
+  }, [facility, destination, routeGeometry]);
 
   const toggleSat = () => {
     const map = mapRef.current;
@@ -272,10 +312,13 @@ export default function CustomerLocationMiniMap({
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}
         onFit={() =>
-          mapRef.current?.fitBounds(boundsFor({ facility, destination }), {
-            padding: FIT_PADDING,
-            maxZoom: FIT_MAX_ZOOM,
-          })
+          mapRef.current?.fitBounds(
+            boundsFor({ facility, destination, routeGeometry }),
+            {
+              padding: FIT_PADDING,
+              maxZoom: FIT_MAX_ZOOM,
+            }
+          )
         }
         satOn={satOn}
         onToggleSat={toggleSat}

@@ -1,7 +1,10 @@
 import dagre from "@dagrejs/dagre";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { formatDate } from "@/lib/format-utils";
+import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
 import type { ChainNodeData } from "./chain-node";
 import {
   DAGRE_CONFIG,
@@ -76,6 +79,17 @@ const STORAGE_REMAINDER_EPSILON_KG = 0.5;
 const SUB_ONE_PERCENT = 0.01;
 const NEAR_FULL_PERCENT = 0.995;
 
+/** Preferred separation between parallel fan routes, in graph coordinates. */
+const EDGE_ROUTE_LANE_GAP = 28;
+/**
+ * Keeps large fans inside the corridor between adjacent Dagre ranks. 70 is
+ * safe only because `DAGRE_CONFIG.ranksep` is 208 (`chain-constants.ts`):
+ * xyflow's smooth-step path reserves a 20px gap point at each end, leaving a
+ * midpoint band of ±84, so 70 keeps 14px of clearance. Lowering `ranksep`
+ * means lowering this too, or the outer lanes cross into the node rows.
+ */
+const EDGE_ROUTE_MAX_OFFSET = 70;
+
 /** A unit must never be mixed within one fan when normalizing to a share. */
 type EdgeMassUnit = "kg" | "tDry";
 
@@ -97,6 +111,8 @@ export interface ChainEdgeBuildData {
   unit: EdgeMassUnit | null;
   kgLabel: string | null;
   pctLabel: string | null;
+  /** Horizontal offset from the default midpoint for split/merge fan routing. */
+  routeOffsetX: number | null;
   [key: string]: unknown;
 }
 
@@ -110,13 +126,23 @@ function formatDryTons(value: number | null | undefined): string | null {
   return `${value.toFixed(2)} t dry`;
 }
 
+function formatWetDryTonnes(
+  wetTons: number | null | undefined,
+  dryTons: number | null | undefined,
+): string {
+  return formatWetDryMass({
+    wetKg: wetTons == null ? null : tonnesToKg(wetTons),
+    dryKg: dryTons == null ? null : tonnesToKg(dryTons),
+  });
+}
+
 function massLabel(mass: EdgeMass | null): string | null {
   if (!mass || mass.value == null) return null;
   return mass.unit === "kg" ? formatKg(mass.value) : formatDryTons(mass.value);
 }
 
 function formatShare(fraction: number): string {
-  if (!Number.isFinite(fraction) || fraction <= 0) return "—";
+  if (!Number.isFinite(fraction) || fraction <= 0) return "Not available";
   if (fraction < SUB_ONE_PERCENT) return "<1%";
   if (fraction >= NEAR_FULL_PERCENT) return "100%";
   return `${Math.round(fraction * 100)}%`;
@@ -161,10 +187,98 @@ function computeEdgeShareLabels(edges: Edge[]): void {
   }
 }
 
+/**
+ * React Flow's smooth-step default sends every edge between two ranks through
+ * the same midpoint. In a split/merge fan that makes distinct allocations
+ * look like one shared line carrying several labels. Give each connected fan
+ * edge its own midpoint lane while leaving ordinary 1:1 hand-offs unchanged.
+ *
+ * Call this **after** `dagre.layout`: `getNodeY` reports each node's laid-out
+ * centre, and lanes are ordered by their endpoints' vertical position so the
+ * routes do not cross. Without it, lanes fall back to edge-id order, which is
+ * only stable, not geometrically sensible.
+ */
+export function assignEdgeRouteOffsets(
+  edges: Edge[],
+  getNodeY?: (nodeId: string) => number,
+): void {
+  const flowEdges = edges.filter((graphEdge) => {
+    const data = graphEdge.data as ChainEdgeBuildData | undefined;
+    return data?.variant === "flow";
+  });
+  const bySource = new Map<string, Edge[]>();
+  const byTarget = new Map<string, Edge[]>();
+
+  for (const graphEdge of flowEdges) {
+    const sourceEdges = bySource.get(graphEdge.source) ?? [];
+    sourceEdges.push(graphEdge);
+    bySource.set(graphEdge.source, sourceEdges);
+
+    const targetEdges = byTarget.get(graphEdge.target) ?? [];
+    targetEdges.push(graphEdge);
+    byTarget.set(graphEdge.target, targetEdges);
+  }
+
+  const fanEdges = new Set(
+    flowEdges.filter(
+      (graphEdge) =>
+        (bySource.get(graphEdge.source)?.length ?? 0) > 1 ||
+        (byTarget.get(graphEdge.target)?.length ?? 0) > 1,
+    ),
+  );
+  const visited = new Set<Edge>();
+
+  for (const firstEdge of fanEdges) {
+    if (visited.has(firstEdge)) continue;
+    const component: Edge[] = [];
+    const queue = [firstEdge];
+    visited.add(firstEdge);
+
+    while (queue.length > 0) {
+      const graphEdge = queue.pop()!;
+      component.push(graphEdge);
+      const neighbors = [
+        ...(bySource.get(graphEdge.source) ?? []),
+        ...(byTarget.get(graphEdge.target) ?? []),
+      ];
+      for (const neighbor of neighbors) {
+        if (!fanEdges.has(neighbor) || visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+
+    // Endpoint midpoint: an edge between two high cards takes a high lane.
+    const laneKeys = new Map(
+      component.map((graphEdge) => [
+        graphEdge,
+        getNodeY
+          ? getNodeY(graphEdge.source) + getNodeY(graphEdge.target)
+          : 0,
+      ]),
+    );
+    component.sort((left, right) => {
+      const delta = (laneKeys.get(left) ?? 0) - (laneKeys.get(right) ?? 0);
+      return delta !== 0 ? delta : left.id.localeCompare(right.id);
+    });
+    const preferredSpan = (component.length - 1) * EDGE_ROUTE_LANE_GAP;
+    const span = Math.min(preferredSpan, EDGE_ROUTE_MAX_OFFSET * 2);
+    const laneGap = component.length > 1 ? span / (component.length - 1) : 0;
+    const centerIndex = (component.length - 1) / 2;
+
+    component.forEach((graphEdge, index) => {
+      const data = graphEdge.data as ChainEdgeBuildData;
+      data.routeOffsetX = (index - centerIndex) * laneGap;
+    });
+  }
+}
+
 function formatDateOrNull(value: Date | string | null | undefined): string | null {
   if (!value) return null;
   const formatted = formatDate(value);
-  return formatted === "—" ? null : formatted;
+  return formatted === "Not recorded" || formatted === "Not available"
+    ? null
+    : formatted;
 }
 
 function addRow(
@@ -180,26 +294,34 @@ function addRow(
 /** Also feeds the Carbon Viewer's marker popups (same codes + detail rows). */
 export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] {
   const nodes: LineageGraphNode[] = [];
+  const sources = resolveChainSources(data);
+  const seenNodeIds = new Set<string>();
 
-  if (data.reactor) {
+  for (const source of sources) {
+    const reactor = source.reactor;
+    if (!reactor || seenNodeIds.has(`reactor:${reactor.id}`)) continue;
     const details: LineageDetailRow[] = [];
-    addRow(details, "Unit", data.reactor.identifier);
-    addRow(details, "Type", data.reactor.reactorType ?? "Not set");
+    addRow(details, "Unit", reactor.identifier);
+    addRow(details, "Type", reactor.reactorType ?? "Not set");
 
     nodes.push({
-      id: `reactor:${data.reactor.id}`,
+      id: `reactor:${reactor.id}`,
       kind: "reactor",
-      code: data.reactor.code,
-      href: data.reactor.href,
+      code: reactor.code,
+      href: reactor.href,
       date: null,
       details,
     });
+    seenNodeIds.add(`reactor:${reactor.id}`);
   }
 
-  const sortedFeedstocks = [...data.feedstocks].sort((left, right) =>
+  const sortedFeedstocks = sources
+    .flatMap((source) => source.feedstocks)
+    .sort((left, right) =>
     left.code.localeCompare(right.code)
   );
   for (const feedstock of sortedFeedstocks) {
+    if (seenNodeIds.has(`feedstock:${feedstock.id}`)) continue;
     const details: LineageDetailRow[] = [];
     addRow(details, "Type", feedstock.feedstockTypeName);
     addRow(details, "Supplier", feedstock.supplierName);
@@ -216,27 +338,60 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
       date: formatDateOrNull(feedstock.deliveryDate),
       details,
     });
+    seenNodeIds.add(`feedstock:${feedstock.id}`);
   }
 
-  if (data.productionRun) {
+  for (const source of sources) {
+    const productionRun = source.productionRun;
     const details: LineageDetailRow[] = [];
-    addRow(details, "Feedstock in", formatKg(data.productionRun.feedstockMassDryKg));
-    addRow(details, "Biochar out", formatKg(data.productionRun.biocharDryMassKg));
+    addRow(details, "Feedstock in", formatKg(productionRun.feedstockMassDryKg));
+    addRow(
+      details,
+      "Biochar out",
+      formatWetDryMass({
+        wetKg: productionRun.biocharOutputKg,
+        dryKg: productionRun.biocharDryMassKg,
+      }),
+    );
+    if (
+      source.allocatedWetMassKg != null ||
+      source.allocatedDryMassKg != null
+    ) {
+      addRow(
+        details,
+        "Used in product",
+        formatWetDryMass({
+          wetKg: source.allocatedWetMassKg,
+          dryKg: source.allocatedDryMassKg,
+        }),
+      );
+    }
 
     nodes.push({
-      id: `production-run:${data.productionRun.id}`,
+      id: `production-run:${productionRun.id}`,
       kind: "productionRun",
-      code: data.productionRun.code,
-      href: data.productionRun.href,
-      status: data.productionRun.status,
-      date: formatDateOrNull(data.productionRun.date),
+      code: productionRun.biocharStorageName ?? productionRun.code,
+      href: productionRun.href,
+      status: productionRun.status,
+      date: formatDateOrNull(productionRun.date),
       details,
     });
   }
 
   if (data.biocharProduct) {
     const details: LineageDetailRow[] = [];
-    addRow(details, "Mass", formatKg(data.biocharProduct.massKg));
+    const productDryKg = splitWetMass(
+      data.biocharProduct.massKg,
+      data.biocharProduct.moistureContentPercent,
+    )?.dryKg;
+    addRow(
+      details,
+      "Mass",
+      formatWetDryMass({
+        wetKg: data.biocharProduct.massKg,
+        dryKg: productDryKg,
+      }),
+    );
     // The unsold remainder sitting in storage — material that entered the
     // bin instead of moving on (per this rollback's order).
     if (
@@ -246,14 +401,27 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
     ) {
       const remainderKg = data.biocharProduct.massKg - data.order.quantityKg;
       if (remainderKg > STORAGE_REMAINDER_EPSILON_KG) {
-        addRow(details, "In storage", formatKg(remainderKg));
+        const dryFraction =
+          data.biocharProduct.massKg > 0 && productDryKg != null
+            ? productDryKg / data.biocharProduct.massKg
+            : null;
+        addRow(
+          details,
+          "In storage",
+          formatWetDryMass({
+            wetKg: remainderKg,
+            dryKg:
+              dryFraction == null ? null : remainderKg * dryFraction,
+          }),
+        );
       }
     }
 
     nodes.push({
       id: `biochar-product:${data.biocharProduct.id}`,
       kind: "biocharProduct",
-      code: data.biocharProduct.code,
+      code:
+        data.biocharProduct.formulationName ?? "Pure biochar",
       href: data.biocharProduct.href,
       status: data.biocharProduct.status,
       date: formatDateOrNull(data.biocharProduct.productionDate),
@@ -263,12 +431,22 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
 
   if (data.order) {
     const details: LineageDetailRow[] = [];
-    addRow(details, "Quantity", formatKg(data.order.quantityKg));
+    addRow(
+      details,
+      "Quantity",
+      formatWetDryMass({
+        wetKg: data.order.quantityKg,
+        dryKg: splitWetMass(
+          data.order.quantityKg,
+          data.biocharProduct?.moistureContentPercent,
+        )?.dryKg,
+      }),
+    );
 
     nodes.push({
       id: `order:${data.order.id}`,
       kind: "order",
-      code: data.order.code,
+      code: "Order",
       href: data.order.href,
       date: formatDateOrNull(data.order.orderDate),
       details,
@@ -277,12 +455,19 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
 
   {
     const details: LineageDetailRow[] = [];
-    addRow(details, "Dry mass", formatKg(data.delivery.massDryKg));
+    addRow(
+      details,
+      "Biochar delivered",
+      formatWetDryMass({
+        wetKg: data.delivery.deliveredWetMassKg,
+        dryKg: data.delivery.massDryKg,
+      }),
+    );
 
     nodes.push({
       id: `delivery:${data.delivery.id}`,
       kind: "delivery",
-      code: data.delivery.code,
+      code: "Delivery",
       href: data.delivery.href,
       status: data.delivery.status,
       date: formatDateOrNull(data.delivery.deliveryDate),
@@ -293,12 +478,20 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
   {
     const details: LineageDetailRow[] = [];
     addRow(details, "Field", data.application.fieldIdentifier);
-    addRow(details, "Applied", formatDryTons(data.application.biocharAppliedDryTons));
+    addRow(
+      details,
+      "Biochar applied",
+      formatWetDryTonnes(
+        data.application.biocharAppliedTons,
+        data.application.biocharAppliedDryTons,
+      ),
+    );
 
     nodes.push({
       id: `application:${data.application.id}`,
       kind: "application",
-      code: data.application.code,
+      code:
+        data.application.fieldIdentifier ?? "Field application",
       href: data.application.href,
       status: data.application.status,
       date: formatDateOrNull(data.application.applicationDate),
@@ -312,7 +505,11 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
 function edge(
   source: string,
   target: string,
-  opts?: { mass?: EdgeMass | null; variant?: "flow" | "equipment" }
+  opts?: {
+    mass?: EdgeMass | null;
+    massLabel?: string | null;
+    variant?: "flow" | "equipment";
+  },
 ): Edge {
   const variant = opts?.variant ?? "flow";
   const mass = opts?.mass ?? null;
@@ -328,8 +525,9 @@ function edge(
       color,
       mass: mass?.value ?? null,
       unit: mass?.unit ?? null,
-      kgLabel: massLabel(mass),
+      kgLabel: opts?.massLabel ?? massLabel(mass),
       pctLabel: null,
+      routeOffsetX: null,
     } satisfies ChainEdgeBuildData,
   };
 }
@@ -341,34 +539,52 @@ function edge(
  */
 function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
   const edges: Edge[] = [];
+  const sources = resolveChainSources(data);
 
-  if (data.productionRun) {
-    for (const feedstock of data.feedstocks) {
+  for (const source of sources) {
+    const productionRun = source.productionRun;
+    for (const feedstock of source.feedstocks) {
       edges.push(
-        edge(`feedstock:${feedstock.id}`, `production-run:${data.productionRun.id}`, {
+        edge(`feedstock:${feedstock.id}`, `production-run:${productionRun.id}`, {
           mass: { value: feedstock.massUsedKg, unit: "kg" },
         })
       );
     }
 
-    if (data.reactor) {
+    if (source.reactor) {
       // Equipment association, not a mass flow — drawn as a quiet dashed link.
       edges.push(
-        edge(`reactor:${data.reactor.id}`, `production-run:${data.productionRun.id}`, {
+        edge(`reactor:${source.reactor.id}`, `production-run:${productionRun.id}`, {
           variant: "equipment",
         })
       );
     }
-  }
 
-  if (data.productionRun && data.biocharProduct) {
-    edges.push(
-      edge(
-        `production-run:${data.productionRun.id}`,
-        `biochar-product:${data.biocharProduct.id}`,
-        { mass: { value: data.biocharProduct.massKg, unit: "kg" } }
-      )
-    );
+    if (data.biocharProduct) {
+      const legacyDryMassKg = splitWetMass(
+        data.biocharProduct.massKg,
+        data.biocharProduct.moistureContentPercent,
+      )?.dryKg;
+      const wetMassKg =
+        source.allocatedWetMassKg ??
+        (sources.length === 1 ? data.biocharProduct.massKg : null);
+      const dryMassKg =
+        source.allocatedDryMassKg ??
+        (sources.length === 1 ? legacyDryMassKg : null);
+      edges.push(
+        edge(
+          `production-run:${productionRun.id}`,
+          `biochar-product:${data.biocharProduct.id}`,
+          {
+            mass: { value: dryMassKg ?? wetMassKg, unit: "kg" },
+            massLabel: formatWetDryMass({
+              wetKg: wetMassKg,
+              dryKg: dryMassKg,
+            }),
+          },
+        ),
+      );
+    }
   }
 
   if (data.biocharProduct && data.order) {
@@ -380,22 +596,37 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
   }
 
   const deliveryMass: EdgeMass = { value: data.delivery.massDryKg, unit: "kg" };
+  const deliveryMassLabel = formatWetDryMass({
+    wetKg: data.delivery.deliveredWetMassKg,
+    dryKg: data.delivery.massDryKg,
+  });
   if (data.order) {
     edges.push(
-      edge(`order:${data.order.id}`, `delivery:${data.delivery.id}`, { mass: deliveryMass })
+      edge(`order:${data.order.id}`, `delivery:${data.delivery.id}`, {
+        mass: deliveryMass,
+        massLabel: deliveryMassLabel,
+      }),
     );
   } else if (data.biocharProduct) {
     edges.push(
       edge(`biochar-product:${data.biocharProduct.id}`, `delivery:${data.delivery.id}`, {
         mass: deliveryMass,
-      })
+        massLabel: deliveryMassLabel,
+      }),
     );
   }
 
   edges.push(
     edge(`delivery:${data.delivery.id}`, `application:${data.application.id}`, {
+      // Branch-share accounting stays on the authoritative dry value. The
+      // visible label carries both bases so operators never have to infer
+      // whether the application figure is wet or dry.
       mass: { value: data.application.biocharAppliedDryTons, unit: "tDry" },
-    })
+      massLabel: formatWetDryTonnes(
+        data.application.biocharAppliedTons,
+        data.application.biocharAppliedDryTons,
+      ),
+    }),
   );
 
   return edges;
@@ -435,6 +666,10 @@ function layoutGraph(
   }
 
   dagre.layout(g);
+
+  // Fan lanes read the laid-out vertical positions, so they are assigned once
+  // the ranks exist.
+  assignEdgeRouteOffsets(edges, (nodeId) => g.node(nodeId)?.y ?? 0);
 
   const nodes: Node[] = lineageNodes.map((node) => {
     const position = g.node(node.id);
@@ -496,9 +731,42 @@ export function useBatchChainGraph(
     return { nodes: [], edges: [] };
   }
 
+  const applicationMasses = new Map<
+    string,
+    { wetTons: number | null; dryTons: number | null }
+  >();
+  for (const lineage of lineages) {
+    const totals = applicationMasses.get(lineage.application.id) ?? {
+      wetTons: null,
+      dryTons: null,
+    };
+    if (lineage.application.biocharAppliedTons != null) {
+      totals.wetTons =
+        (totals.wetTons ?? 0) +
+        lineage.application.biocharAppliedTons;
+    }
+    if (lineage.application.biocharAppliedDryTons != null) {
+      totals.dryTons =
+        (totals.dryTons ?? 0) +
+        lineage.application.biocharAppliedDryTons;
+    }
+    applicationMasses.set(lineage.application.id, totals);
+  }
+  const normalizedLineages = lineages.map((lineage) => {
+    const totals = applicationMasses.get(lineage.application.id);
+    return {
+      ...lineage,
+      application: {
+        ...lineage.application,
+        biocharAppliedTons: totals?.wetTons ?? null,
+        biocharAppliedDryTons: totals?.dryTons ?? null,
+      },
+    };
+  });
+
   const nodeById = new Map<string, LineageGraphNode>();
   const edgeById = new Map<string, Edge>();
-  for (const lineage of lineages) {
+  for (const lineage of normalizedLineages) {
     for (const node of buildLineageNodes(lineage)) {
       if (!nodeById.has(node.id)) nodeById.set(node.id, node);
     }

@@ -17,6 +17,7 @@ import type {
   RecordStockTakeData,
 } from "@/schemas/bin-movements";
 import { storageLocationKeys } from "@/hooks/use-storage-locations";
+import { invalidateStockEntityQueries } from "./entity-query-keys";
 
 /** Client-side carrier for a structured loss action field error. */
 export class RecordLossFieldError extends Error {
@@ -74,6 +75,7 @@ function useInvalidateAfterMovement() {
     queryClient.invalidateQueries({
       queryKey: storageLocationKeys.detailWithFacility(storageLocationId),
     });
+    invalidateStockEntityQueries(queryClient, "binMovement");
   };
 }
 

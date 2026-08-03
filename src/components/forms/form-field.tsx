@@ -17,6 +17,8 @@ interface FormFieldProps {
   id: string;
   label: string;
   error?: string;
+  /** Non-blocking field advisory. Hidden whenever a blocking error is present. */
+  warning?: string;
   helperText?: string;
   /**
    * Explanatory text shown via an info ⓘ icon next to the label instead of
@@ -85,6 +87,7 @@ export function FormField({
   id,
   label,
   error,
+  warning,
   helperText,
   hint,
   required,
@@ -93,21 +96,25 @@ export function FormField({
   children,
 }: FormFieldProps) {
   const errorId = `${id}-error`;
+  const warningId = `${id}-warning`;
   const helperId = `${id}-helper`;
   const collapsedHelperText = shouldCollapseHelperText(helperText)
     ? helperText
     : undefined;
   const inlineHelperText = collapsedHelperText ? undefined : helperText;
   const hintContent = composeHintContent(hint, collapsedHelperText);
-  const showInlineHelper = Boolean(inlineHelperText) && !error;
-  const showScreenReaderHelper = Boolean(collapsedHelperText) && !error;
+  const showWarning = Boolean(warning) && !error;
+  const showInlineHelper = Boolean(inlineHelperText) && !error && !showWarning;
+  const showScreenReaderHelper = Boolean(collapsedHelperText) && !error && !showWarning;
 
   // Point the control at whichever message is actually rendered below it.
   const describedBy = error
     ? errorId
-    : showInlineHelper || showScreenReaderHelper
-      ? helperId
-      : undefined;
+    : showWarning
+      ? warningId
+      : showInlineHelper || showScreenReaderHelper
+        ? helperId
+        : undefined;
 
   return (
     <div>
@@ -146,6 +153,16 @@ export function FormField({
         </p>
       )}
       {showScreenReaderHelper && <p id={helperId} className="sr-only">{collapsedHelperText}</p>}
+      {showWarning && (
+        <p
+          id={warningId}
+          className="body-caption text-[var(--st-wait)] mt-6"
+          role="status"
+          aria-live="polite"
+        >
+          {warning}
+        </p>
+      )}
       <FormError id={errorId} message={error} />
     </div>
   );

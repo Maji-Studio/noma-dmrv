@@ -1,13 +1,22 @@
 /**
  * WetMassWarning component
- * Amber warning banner shown when allocated wet mass exceeds delivered wet mass.
- * Includes optional justification text field.
+ * Compact over-allocation feedback with the required justification field.
  */
 "use client";
 
-import { WarningIcon } from "@phosphor-icons/react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField, FormTextarea } from "@/components/forms";
+
+const MIN_DISPLAYED_OVERAGE_KG = 0.01;
+
+function formatOverageKg(overageKg: number): string {
+  if (overageKg > 0 && overageKg < MIN_DISPLAYED_OVERAGE_KG) {
+    return `<${MIN_DISPLAYED_OVERAGE_KG} kg`;
+  }
+  return `${overageKg.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  })} kg`;
+}
 
 interface WetMassWarningProps {
   allocatedKg: number;
@@ -26,31 +35,18 @@ export function WetMassWarning({
   disabled,
 }: WetMassWarningProps) {
   const overageKg = allocatedKg - deliveredKg;
-  const overagePercent = deliveredKg > 0 ? ((overageKg / deliveredKg) * 100).toFixed(1) : null;
 
   return (
-    <div className="border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-16 space-y-12">
-      <div className="flex items-start gap-12">
-        <WarningIcon size={20} weight="fill" className="text-[var(--color-signal-orange)] mt-1 shrink-0" />
-        <div className="space-y-4">
-          <p className="body-medium font-medium text-[var(--color-text-primary)]">
-            Allocated wet mass exceeds total delivery
-          </p>
-          <p className="body-small text-[var(--color-text-secondary)]">
-            Allocated: {allocatedKg.toFixed(2)} kg &middot; Delivered: {deliveredKg.toFixed(2)} kg &middot; Over by {overageKg.toFixed(2)} kg{overagePercent ? ` (${overagePercent}%)` : ""}
-          </p>
-        </div>
-      </div>
-
+    <div className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8">
       <FormField
         id="overrideJustification"
-        label="Justification"
+        label="Over-allocation justification"
         error={justificationError}
-        helperText="Explain why allocated mass exceeds the total delivery weight"
+        warning={`${formatOverageKg(overageKg)} over delivery. Add a justification.`}
       >
         <FormTextarea
           id="overrideJustification"
-          placeholder="e.g., Moisture reading may be inaccurate, prior bin stock included..."
+          placeholder="Explain the difference..."
           disabled={disabled}
           error={!!justificationError}
           rows={2}

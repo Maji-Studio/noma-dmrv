@@ -25,6 +25,7 @@ import {
   FormEntitySelect,
   FormField,
   FormInput,
+  ResolvedErrorRevalidator,
   FormSection,
   FormTextarea,
 } from "@/components/forms";
@@ -101,6 +102,7 @@ export function CreditBatchForm({
     register,
     handleSubmit,
     control,
+    trigger,
     formState: { errors },
     setValue,
   } = useForm({
@@ -279,6 +281,7 @@ export function CreditBatchForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* ── Batch definition ── */}
       <FormSection title="Batch definition" divider={false}>
 
@@ -286,12 +289,13 @@ export function CreditBatchForm({
           <FormEntitySelect
             control={control}
             name="feedstockTypeId"
-            label="Feedstock Type"
+            label="Feedstock type"
             entityType="feedstockType"
             placeholder="Select feedstock type..."
             disabled={isSubmitting}
             required
             filterBy={{ usage: "pyrolysis" }}
+            onChange={() => onClearServerError?.()}
           />
         </div>
 
@@ -323,7 +327,7 @@ export function CreditBatchForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="startDate"
-            label="Start Date"
+            label="Start date"
             error={errors.startDate?.message}
           >
             <FormInput
@@ -339,7 +343,7 @@ export function CreditBatchForm({
 
           <FormField
             id="endDate"
-            label="End Date"
+            label="End date"
             error={errors.endDate?.message}
           >
             <FormInput

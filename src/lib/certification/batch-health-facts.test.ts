@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { deriveBatchHealth } from "./batch-health";
-import { toBatchHealthFacts } from "./batch-health-facts";
+import { carbonGapLabels, toBatchHealthFacts } from "./batch-health-facts";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
 
 describe("toBatchHealthFacts", () => {
@@ -11,15 +11,8 @@ describe("toBatchHealthFacts", () => {
         {
           id: "batch-1",
           code: "CB-1",
-          co2eStoredPreview: {
-            missingInputs: [
-              "applicationIds",
-              STORED_CO2E_PREVIEW_REVERIFICATION_GAP,
-              "thousandYearReplicates",
-            ],
-          },
           durabilityGateBlockers: [
-            "Credit batch CB-1 has 0 replicate(s) with complete H/C_org + O/C_org chemistry; ≥ 3 required per sampled batch (§8.3.1).",
+            "Credit batch CB-1 has no replicates with complete H/C_org and O/C_org chemistry. Record at least 3 for each sampled batch (§8.3.1).",
           ],
           facilityEmissionsGateBlockers: [
             "Set the facility reference soil temperature.",
@@ -51,16 +44,10 @@ describe("toBatchHealthFacts", () => {
     expect(health.issueCount).toBe(3);
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
-    ).toContain("At least 3 usable 1000-year lab samples");
-    expect(
-      health.checks.find((check) => check.key === "carbon")?.detail,
-    ).not.toContain("complete H/C_org + O/C_org chemistry");
+    ).toContain("complete H/C_org and O/C_org chemistry");
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
     ).not.toContain("reference soil temperature");
-    expect(
-      health.checks.find((check) => check.key === "carbon")?.detail,
-    ).not.toContain(STORED_CO2E_PREVIEW_REVERIFICATION_GAP);
     expect(
       health.checks.find((check) => check.key === "facilityEmissions"),
     ).toMatchObject({
@@ -71,5 +58,24 @@ describe("toBatchHealthFacts", () => {
     expect(
       health.checks.find((check) => check.key === "production")?.status,
     ).toBe("unmet");
+  });
+});
+
+describe("carbonGapLabels", () => {
+  it("labels genuine carbon gaps and drops the keys other checks own", () => {
+    expect(
+      carbonGapLabels([
+        "organicCarbonPercent",
+        "applicationIds",
+        "isometricCertifier",
+        STORED_CO2E_PREVIEW_REVERIFICATION_GAP,
+      ]),
+    ).toEqual(["Organic carbon content"]);
+  });
+
+  it("passes an unknown calc input through rather than dropping it silently", () => {
+    expect(carbonGapLabels(["someNewInput", "someNewInput"])).toEqual([
+      "someNewInput",
+    ]);
   });
 });

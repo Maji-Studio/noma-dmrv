@@ -25,14 +25,54 @@ vi.mock("@/lib/log", async (importOriginal) => {
   };
 });
 
-import { toLoggedActionError } from "@/fn/action-errors";
+import {
+  formatZodActionError,
+  toLoggedActionError,
+} from "@/fn/action-errors";
 import { SafeError } from "@/lib/errors";
+import { z } from "zod";
 
 // Drizzle's DrizzleQueryError format: `Failed query: <sql>\nparams: <values>`.
 // The bound values deliberately include PII-shaped data (fake) to pin that it
 // never reaches the server log.
 const RAW_DB_ERROR =
   'Failed query: update "suppliers" set "contact_name" = $1, "contact_phone" = $2 where "suppliers"."id" = $3\nparams: ["Jane Fakename","+15550100000","11111111-1111-4111-8111-111111111111"]';
+
+describe("formatZodActionError", () => {
+  it("formats distinct issue messages as readable sentences", () => {
+    const schema = z
+      .object({
+        name: z.string().min(1, "Name is required"),
+        code: z.string().min(1, "Code is required."),
+      })
+      .superRefine((_value, ctx) => {
+        ctx.addIssue({
+          code: "custom",
+          path: ["name"],
+          message: "Name is required",
+        });
+      });
+    const result = schema.safeParse({ name: "", code: "" });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(formatZodActionError(result.error)).toBe(
+      "Name is required. Code is required.",
+    );
+  });
+
+  it("keeps task-specific context without a generic validation prefix", () => {
+    const result = z
+      .object({ latitude: z.number("Enter a latitude") })
+      .safeParse({ latitude: "north" });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(formatZodActionError(result.error, "Invalid coordinates")).toBe(
+      "Invalid coordinates: Enter a latitude.",
+    );
+  });
+});
 
 describe("toLoggedActionError", () => {
   beforeEach(() => {
@@ -49,7 +89,7 @@ describe("toLoggedActionError", () => {
       },
     );
 
-    expect(result).toBe("Failed to update supplier");
+    expect(result).toBe("Supplier was not saved. Try again.");
     expect(result).not.toMatch(/update "suppliers"/);
     expect(result).not.toMatch(/params:/);
   });
@@ -85,8 +125,30 @@ describe("toLoggedActionError", () => {
       { message: "delivery action failed", context: { op: "delivery:get" } },
     );
 
-    expect(result).toBe("Delivery not found");
+    expect(result).toBe("Delivery was not found.");
     expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+
+  it("hides internal IDs in normalized missing-record errors", () => {
+    const internalId = "11111111-1111-4111-8111-111111111111";
+
+    expect(new SafeError(`Delivery not found: ${internalId}`).message).toBe(
+      "Delivery was not found.",
+    );
+    expect(new SafeError(`Delivery not found: ${internalId}`).message).not.toContain(
+      internalId,
+    );
+  });
+
+  it("hides related-record identifiers in normalized missing-record errors", () => {
+    const internalId = "org_123";
+
+    expect(new SafeError(`Delivery not found for ${internalId}`).message).toBe(
+      "Delivery was not found.",
+    );
+    expect(
+      new SafeError(`Delivery not found for ${internalId}`).message,
+    ).not.toContain(internalId);
   });
 
   it("returns the fallback for non-Error throws and still logs them", () => {
@@ -95,10 +157,38 @@ describe("toLoggedActionError", () => {
       context: { op: "sample:list" },
     });
 
-    expect(result).toBe("Failed to load samples");
+    expect(result).toBe("Samples could not be loaded. Refresh the page and try again.");
     expect(mockLoggerError).toHaveBeenCalledOnce();
     const [context] = mockLoggerError.mock.calls[0] as [Record<string, unknown>];
     expect(context.errorName).toBe("string");
     expect(context.errorMessage).toBe("string error");
+  });
+
+  it("uses natural agreement for plural fallback subjects", () => {
+    const result = toLoggedActionError(
+      new Error("registry unavailable"),
+      "Failed to save Isometric credentials",
+      {
+        message: "credential action failed",
+        context: { op: "credentials:save" },
+      },
+    );
+
+    expect(result).toBe("Isometric credentials were not saved. Try again.");
+  });
+
+  it("keeps unknown fallback verbs grammatical", () => {
+    const result = toLoggedActionError(
+      new Error("database unavailable"),
+      "Failed to change member role",
+      {
+        message: "member action failed",
+        context: { op: "member:update" },
+      },
+    );
+
+    expect(result).toBe(
+      "The action to change member role could not be completed. Try again.",
+    );
   });
 });

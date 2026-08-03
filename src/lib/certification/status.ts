@@ -10,8 +10,9 @@
  *
  *   - **Removal** → submitted to the **registry**. Single-phase `submitRemoval`.
  *     There is NO remote Removal status in this integration, so the lifecycle
- *     ends at "Submitted" (+ "Superseded" on a re-version). Verified in code:
- *     `submit-removal.ts` only ever marks the ledger row `submitted`.
+ *     ends at "Submitted". A latest `superseded` row is a retired attempt with
+ *     no current version and must remain actionable; successful re-versioning
+ *     exposes the newer `submitted` row instead.
  *
  *   - **GHG Statement** → submitted to a **verifier**. One linear ladder
  *     (#250): Draft → In registry → In verification → Verified → Issued (with
@@ -26,6 +27,7 @@ import type { StatusValue } from "@/components/ui/status-badge";
 // Type-only — erased at build time, so the generated types never reach the
 // client bundle as runtime code.
 import type { components } from "@/lib/isometric/generated/certify";
+import type { RemovalReadiness } from "./readiness";
 
 /**
  * Local certification-submission ledger status. Mirrors the DB enum in
@@ -102,9 +104,39 @@ export interface RemovalStatusInput {
   lockInFlight: boolean;
 }
 
+export type RemovalEnrichmentStatus =
+  | "loading"
+  | "available"
+  | "unavailable";
+
+export type RemovalWorkflowStatusKind =
+  | "checking"
+  | "unavailable"
+  | "ready"
+  | "blocked"
+  | "submitting"
+  | "submitted"
+  | "superseded";
+
+export interface RemovalWorkflowStatus {
+  /** The single operator-facing state used by list and detail surfaces. */
+  kind: RemovalWorkflowStatusKind;
+  value: StatusValue;
+  label: string;
+  /** Blocking reasons only; non-blocking notes live in their owning section. */
+  reasons: string[];
+  isActionable: boolean;
+  canRetry: boolean;
+}
+
+export interface RemovalWorkflowStatusInput extends RemovalStatusInput {
+  enrichmentStatus: RemovalEnrichmentStatus;
+  readiness: RemovalReadiness | null;
+}
+
 /**
  * Operator-facing status for a Removal. Local-only — removals carry no remote
- * status, so the high end is "Submitted" / "Superseded".
+ * status, so the high end is "Submitted".
  */
 export function deriveRemovalStatus({
   local,
@@ -150,12 +182,114 @@ export function deriveRemovalStatus({
         isTerminal: false,
       };
     case "superseded":
+      // Callers pass the latest row. When superseding succeeds, a newer draft
+      // or submitted row is therefore latest; a latest superseded row means a
+      // stale attempt was retired before replacement (for example after the
+      // fail-closed payload-freshness gate). The claim layer's
+      // `after-superseded` path explicitly mints a fresh version on retry.
       return {
-        kind: "superseded",
-        value: "superseded",
-        label: "Superseded",
+        kind: "not-submitted",
+        value: "draft",
+        label: "Not submitted",
+        isActionable: true,
+        isTerminal: false,
+      };
+  }
+}
+
+/**
+ * Folds the persisted submission lifecycle and the readiness verdict into the
+ * one state an operator needs. Callers should not present lifecycle and
+ * readiness as separate, competing statuses.
+ */
+export function deriveRemovalWorkflowStatus({
+  local,
+  lockInFlight,
+  enrichmentStatus,
+  readiness,
+}: RemovalWorkflowStatusInput): RemovalWorkflowStatus {
+  const lifecycle = deriveRemovalStatus({ local, lockInFlight });
+
+  if (lifecycle.kind === "submitted" || lifecycle.kind === "superseded") {
+    return {
+      kind: lifecycle.kind,
+      value: lifecycle.value,
+      label: lifecycle.label,
+      reasons: [],
+      isActionable: false,
+      canRetry: false,
+    };
+  }
+
+  if (lifecycle.kind === "in-progress") {
+    return {
+      kind: "submitting",
+      value: "running",
+      label: "Submitting",
+      reasons: [],
+      isActionable: false,
+      canRetry: false,
+    };
+  }
+
+  if (enrichmentStatus === "loading") {
+    return {
+      kind: "checking",
+      value: "running",
+      label: "Checking status",
+      reasons: [],
+      isActionable: false,
+      canRetry: false,
+    };
+  }
+
+  if (enrichmentStatus === "unavailable" || !readiness) {
+    return {
+      kind: "unavailable",
+      value: "pending",
+      label: "Status unavailable",
+      reasons: [],
+      isActionable: false,
+      canRetry: true,
+    };
+  }
+
+  switch (readiness.state) {
+    case "ready":
+      return {
+        kind: "ready",
+        value: "ready",
+        label: local === "rejected" ? "Ready to resubmit" : "Ready to submit",
+        reasons: [],
+        isActionable: true,
+        canRetry: false,
+      };
+    case "blocked":
+      return {
+        kind: "blocked",
+        value: "pending",
+        label: "Needs attention",
+        reasons: readiness.reasons,
+        isActionable: true,
+        canRetry: false,
+      };
+    case "inProgress":
+      return {
+        kind: "submitting",
+        value: "running",
+        label: "Submitting",
+        reasons: [],
         isActionable: false,
-        isTerminal: true,
+        canRetry: false,
+      };
+    case "submitted":
+      return {
+        kind: "submitted",
+        value: "issued",
+        label: "Submitted",
+        reasons: [],
+        isActionable: false,
+        canRetry: false,
       };
   }
 }

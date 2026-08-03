@@ -28,9 +28,9 @@ export const optionalDistanceSource = z
   .optional();
 
 export const DISTANCE_SOURCE_LABELS: Record<DistanceSourceValue, string> = {
-  map_estimate: "Map estimate",
-  manual: "Manual",
-  document: "Document",
+  map_estimate: "Route calculation",
+  manual: "Manual entry",
+  document: "Transport document",
 };
 
 /**

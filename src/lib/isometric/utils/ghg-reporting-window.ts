@@ -17,6 +17,18 @@
 
 import { addDaysIso } from "@/lib/date-utils";
 
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Years below this are keystroke artifacts, not chosen periods. An
+ * `<input type="date">` fires a change for every digit of the year segment, so
+ * typing "2028" emits "0002-01-31", "0020-01-31", "0202-01-31" on the way. Each
+ * is a well-formed date that sorts before every existing period end, so judging
+ * one against the overlap rule flashes an error contradicting what the operator
+ * is still typing.
+ */
+const MIN_PERIOD_END_YEAR = 1000;
+
 /**
  * The reporting-period start for a statement ending `endOn`: the day after the
  * latest existing period end strictly before `endOn`. `null` for the first
@@ -47,6 +59,30 @@ export function overlappingEnd(
     .filter((end) => end !== endOn)
     .reduce<string | null>((max, end) => (!max || end > max ? end : max), null);
   return latestOther && endOn <= latestOther ? latestOther : null;
+}
+
+/**
+ * Whether `endOn` is a finished entry rather than a value mid-keystroke. Shape
+ * only — callers still validate that the date exists on the calendar.
+ */
+export function isSettledPeriodEnd(endOn: string): boolean {
+  if (!ISO_DATE_PATTERN.test(endOn)) return false;
+  return Number(endOn.slice(0, 4)) >= MIN_PERIOD_END_YEAR;
+}
+
+/**
+ * The overlap to surface *while the operator is editing* the period end:
+ * `overlappingEnd`, suppressed for an entry that is still being typed. Callers
+ * derive this on every render rather than pushing it in with `setError`, so
+ * editing the date clears the message by itself. `overlappingEnd` remains the
+ * authoritative rule, mirrored server-side on create.
+ */
+export function liveOverlapEnd(
+  endOn: string,
+  existingEnds: string[],
+): string | null {
+  if (!isSettledPeriodEnd(endOn)) return null;
+  return overlappingEnd(endOn, existingEnds);
 }
 
 /**

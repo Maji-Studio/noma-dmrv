@@ -5,10 +5,11 @@
  */
 "use client";
 
-import { TrashIcon } from "@phosphor-icons/react";
+import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Control, UseFormRegisterReturn, FieldError } from "react-hook-form";
 import { FormField, FormInput, FormEntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui/button";
+import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
 interface BinAllocationRowProps {
   index: number;
@@ -49,7 +50,7 @@ export function BinAllocationRow({
         <FormEntitySelect
           control={control}
           name={`allocations.${index}.storageLocationId`}
-          label="Storage Bin"
+          label="Storage bin"
           entityType="storageLocation"
           placeholder="Select bin..."
           disabled={disabled}
@@ -61,20 +62,19 @@ export function BinAllocationRow({
             ...(feedstockTypeId ? { feedstockTypeId } : {}),
           }}
           dependsOn={[feedstockTypeId, facilityId]}
-          createLabel="Add New Bin"
           onCreateNew={onCreateNew}
         />
 
         <FormField
           id={`allocations.${index}.allocatedWetMassKg`}
-          label="Allocated Wet Mass (kg)"
+          label="Allocated wet mass (kg)"
           error={massError?.message}
           required
         >
           <FormInput
             id={`allocations.${index}.allocatedWetMassKg`}
             type="number"
-            step="0.01"
+            step={MASS_KG_INPUT_STEP}
             min="0"
             placeholder="e.g., 975"
             disabled={disabled}

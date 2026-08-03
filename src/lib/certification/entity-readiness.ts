@@ -3,7 +3,6 @@ import {
   type CertifyEntityKind,
   type CertifyFieldDescriptor,
 } from "./certify-field-registry";
-import { hasCompleteTransportEvidence } from "./transport-evidence";
 
 export type EntityCertifyReadinessState = "ready" | "incomplete";
 
@@ -20,7 +19,10 @@ export interface EntityCertifyGap {
 export interface EntityCertifyReadiness {
   state: EntityCertifyReadinessState;
   gaps: EntityCertifyGap[];
+  warnings: EntityCertifyWarning[];
 }
+
+export type EntityCertifyWarning = Omit<EntityCertifyGap, "kind">;
 
 export type EntityReadinessRecord = object;
 
@@ -28,35 +30,6 @@ const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = 
   productionRun: ["complete"],
   feedstock: ["complete"],
   delivery: ["delivered"],
-};
-
-const TELEMETRY_GAP: EntityCertifyGap = {
-  kind: "field",
-  key: "telemetryReadings",
-  label: "Telemetry readings",
-  fields: ["readingsCount"],
-  detail: "Production readings CSV is required to certify",
-};
-
-const APPLICATION_EVIDENCE_GAP: EntityCertifyGap = {
-  kind: "field",
-  key: "applicationEvidence",
-  label: "Application evidence",
-  fields: ["evidenceGapCount"],
-  detail: "Geotagged photos or boundary evidence required to certify",
-};
-
-const TRANSPORT_EVIDENCE_GAP: EntityCertifyGap = {
-  kind: "field",
-  key: "transportEvidence",
-  label: "Transport evidence",
-  fields: [
-    "transportDistanceSource",
-    "effectiveDistanceSource",
-    "transportEvidenceDocumentCount",
-  ],
-  detail:
-    "Saved Document provenance and at least one classified uploaded transport-evidence file are required to certify",
 };
 
 function fieldValue(
@@ -164,6 +137,11 @@ export function deriveEntityCertifyReadiness(
   lifecycleState?: string | null,
 ): EntityCertifyReadiness {
   const gaps: EntityCertifyGap[] = [];
+  // No entity kind produces warnings today: application evidence was the only
+  // producer and it stopped being a readiness concern. The channel is kept as
+  // the seam for the next non-blocking entity warning, so a warning can be
+  // surfaced without re-threading it through every caller.
+  const warnings: EntityCertifyWarning[] = [];
   const effectiveLifecycleState =
     lifecycleState ?? (fieldValue(entity, "status") as string | null | undefined);
 
@@ -172,91 +150,16 @@ export function deriveEntityCertifyReadiness(
 
   // Failed and cancelled runs are audit records, not certification candidates.
   // Their lifecycle state is the only actionable certification gap; surfacing
-  // output, telemetry, or document gaps would send operators to fill data that
+  // output or document gaps would send operators to fill data that
   // cannot make these outcomes certifiable.
   if (
     entityKind === "productionRun" &&
     (effectiveLifecycleState === "failed" || effectiveLifecycleState === "cancelled")
   ) {
-    return { state: "incomplete", gaps };
-  }
-
-  if (entityKind === "productionRun") {
-    const readingsCount = fieldValue(entity, "readingsCount");
-    if (
-      typeof readingsCount !== "number" ||
-      !Number.isFinite(readingsCount) ||
-      readingsCount <= 0
-    ) {
-      gaps.push(TELEMETRY_GAP);
-    }
-  }
-
-  if (entityKind === "application") {
-    const evidenceGapCount = fieldValue(entity, "evidenceGapCount");
-    if (
-      typeof evidenceGapCount !== "number" ||
-      !Number.isFinite(evidenceGapCount) ||
-      evidenceGapCount !== 0
-    ) {
-      gaps.push(APPLICATION_EVIDENCE_GAP);
-    }
-  }
-
-  if (entityKind === "feedstock" || entityKind === "delivery") {
-    const source =
-      entityKind === "feedstock"
-        ? fieldValue(entity, "transportDistanceSource")
-        : fieldValue(entity, "effectiveDistanceSource");
-    const documentCount = fieldValue(
-      entity,
-      "transportEvidenceDocumentCount",
-    );
-    if (
-      !hasCompleteTransportEvidence(
-        source === "document" ? "document" : null,
-        typeof documentCount === "number" ? documentCount : undefined,
-      )
-    ) {
-      gaps.push(TRANSPORT_EVIDENCE_GAP);
-    }
-  }
-
-  // A raw leg's Document provenance means nothing without an accepted upload —
-  // the same composite rule the entity-level projections apply. Callers load
-  // legs via `getTransportLegsWithEvidenceForEntities` so the count is present;
-  // a missing count fails closed (gap), never silently green.
-  if (entityKind === "transportLeg") {
-    const source = fieldValue(entity, "distanceSource");
-    const documentCount = fieldValue(
-      entity,
-      "transportEvidenceDocumentCount",
-    );
-    if (
-      !hasCompleteTransportEvidence(
-        source === "document" ? "document" : null,
-        typeof documentCount === "number" ? documentCount : undefined,
-      )
-    ) {
-      gaps.push(TRANSPORT_EVIDENCE_GAP);
-    }
+    return { state: "incomplete", gaps, warnings };
   }
 
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
-    if (
-      entityKind === "feedstock" &&
-      descriptor.key === "transportDistanceProvenance"
-    ) {
-      continue;
-    }
-    // The composite transport-evidence check above owns this requirement; the
-    // bare equals-Document descriptor would clear the gap without any file.
-    if (
-      entityKind === "transportLeg" &&
-      descriptor.key === "distanceProvenance"
-    ) {
-      continue;
-    }
     if (!conditionApplies(descriptor, entity)) continue;
     if (descriptorSatisfied(descriptor, entity)) continue;
     gaps.push(fieldGap(descriptor));
@@ -265,5 +168,6 @@ export function deriveEntityCertifyReadiness(
   return {
     state: gaps.length === 0 ? "ready" : "incomplete",
     gaps,
+    warnings,
   };
 }

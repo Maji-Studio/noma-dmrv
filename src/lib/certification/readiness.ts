@@ -22,6 +22,7 @@ import {
   type ProductionReadinessGap,
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import { pluralize } from "@/lib/copy-utils";
 
 export type RemovalReadinessState =
   | "submitted" // done from noma's side — nothing to action
@@ -72,6 +73,14 @@ export interface RemovalReadinessFacts {
    * eligibility are submission-ready. Surfaced so readiness predicts the gate.
    */
   durabilityGateBlockers?: string[];
+  /**
+   * Production-run end times / biochar application dates that still lie in the
+   * future, already phrased as blocker sentences. Computed SERVER-SIDE (this
+   * module is deliberately clock-free and deterministic) by
+   * `collectFutureDatedMeasurements`, which mirrors the submit-time guard
+   * `assertRemovalDatesNotFuture`. Empty ⇒ every date has already happened.
+   */
+  futureDatedMeasurements?: string[];
 }
 
 export interface RemovalReadiness {
@@ -91,7 +100,10 @@ const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
 const ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT = 5;
 const DURABILITY_LABEL = "Sampling & durability eligibility met";
-const EVIDENCE_LABEL = "Supporting documents mirrored";
+const EVIDENCE_LABEL = "Registry value sources linked";
+const MEASUREMENT_DATES_LABEL = "Production and application dates";
+const FUTURE_DATE_REASON_PREVIEW_LIMIT = 3;
+const FUTURE_DATE_CHECK_DISPLAY_LIMIT = 3;
 // Keep the blocker list readable: show the first few full blocker lines as
 // reasons, then a "+N more" rollup rather than flooding the verdict.
 const DURABILITY_BLOCKER_REASON_PREVIEW_LIMIT = 3;
@@ -105,8 +117,28 @@ function durabilityBlockerReasons(blockers: string[]): string[] {
   const shown = blockers.slice(0, DURABILITY_BLOCKER_REASON_PREVIEW_LIMIT);
   const overflow = blockers.length - shown.length;
   return overflow > 0
-    ? [...shown, `+${overflow} more sampling/eligibility issue(s)`]
+    ? [...shown, `+${overflow} more sampling or eligibility ${pluralize(overflow, "issue")}`]
     : shown;
+}
+
+// Future-dated run ends / application dates (mirrors the submit-time guard
+// `assertRemovalDatesNotFuture`). Each entry is already a full actionable
+// sentence naming the record, so they are pushed verbatim, capped.
+function futureDatedMeasurementReasons(measurements: string[]): string[] {
+  if (measurements.length === 0) return [];
+  const shown = measurements.slice(0, FUTURE_DATE_REASON_PREVIEW_LIMIT);
+  const overflow = measurements.length - shown.length;
+  const dateLabel = overflow === 1 ? "date" : "dates";
+  return overflow > 0
+    ? [...shown, `+${overflow} more future ${dateLabel}`]
+    : shown;
+}
+
+function futureDatedMeasurementSummary(measurement: string): string {
+  const instructionStart = measurement.indexOf(". Change the ");
+  return instructionStart === -1
+    ? measurement
+    : measurement.slice(0, instructionStart + 1);
 }
 
 function describeCategories(categories: TransportCategory[]): string {
@@ -121,7 +153,7 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
     return `Default removal template ${facts.missingDefaultTemplateId} is no longer available`;
   }
   if (!facts.hasDefaultTemplate) {
-    return "No default removal template selected for this facility";
+    return "No default Removal template selected for this facility";
   }
   if (facts.unresolvedBlueprintKeys.length > 0) {
     const n = facts.unresolvedBlueprintKeys.length;
@@ -167,7 +199,10 @@ function evidenceMirrorDetail(
   const total = facts.supportingDocumentCount ?? 0;
   if (total === 0) return null;
   const mirrored = Math.min(facts.mirroredDocumentCount ?? 0, total);
-  return `${mirrored} of ${total} supporting documents mirrored`;
+  const pending = total - mirrored;
+  return pending > 0
+    ? `${pending}${pending === total ? "" : ` of ${total}`} ${pending === 1 ? "file is" : "files are"} sent automatically when you submit`
+    : `${total} of ${total} ${total === 1 ? "file" : "files"} ready`;
 }
 
 function evidenceAdvisories(facts: RemovalReadinessFacts): string[] {
@@ -180,7 +215,7 @@ function evidenceAdvisories(facts: RemovalReadinessFacts): string[] {
 
 /**
  * Folds removal status + submission preconditions into one verdict.
- * Precedence: live lock → terminal (submitted/superseded) → blocked → ready.
+ * Precedence: live lock → terminal submitted row → blocked → ready.
  */
 export function deriveRemovalReadiness(
   facts: RemovalReadinessFacts,
@@ -188,8 +223,10 @@ export function deriveRemovalReadiness(
   const advisories = evidenceAdvisories(facts);
   if (facts.lockInFlight) return { state: "inProgress", reasons: [], advisories };
 
-  // Status drives the high end. `isTerminal` covers submitted/superseded — a
-  // removal is "done" at submitted (no remote lifecycle exists; see status.ts).
+  // Status drives the high end. A latest superseded row is non-terminal: it is
+  // a retired attempt for which `claimSubmissionDraft` will mint a fresh
+  // version. A removal is done only at submitted (no remote lifecycle exists;
+  // see status.ts).
   const status = deriveRemovalStatus({ local: facts.local, lockInFlight: false });
   if (status.isTerminal) return { state: "submitted", reasons: [], advisories };
 
@@ -235,6 +272,14 @@ export function deriveRemovalReadiness(
     );
   }
 
+  // Measurement dates — the same guard the submit pipeline runs LAST
+  // (`assertRemovalDatesNotFuture`). Blocking here means a future-dated run end
+  // or application shows red in the checklist instead of only failing after the
+  // operator clicks submit.
+  reasons.push(
+    ...futureDatedMeasurementReasons(facts.futureDatedMeasurements ?? []),
+  );
+
   // Durability sampling/eligibility — the same fail-closed gate the submit
   // pipeline throws on (D3). Surfacing it here means a removal can't read
   // "ready" then bounce at submit on an unsampled run or out-of-spec chemistry.
@@ -255,6 +300,11 @@ export type PreflightCheckStatus =
   | "skipped" // not yet evaluable (an upstream check is unmet)
   | "warning"; // advisory is incomplete, but does not block submission
 
+export type RemovalMeasurementDateFixTarget =
+  | "productionRuns"
+  | "applications"
+  | "productionRunsAndApplications";
+
 export interface PreflightCheck {
   key:
     | "mapping"
@@ -262,6 +312,7 @@ export interface PreflightCheck {
     | "template"
     | "transport"
     | "production"
+    | "measurementDates"
     | "entityReadiness"
     | "evidence"
     | "durability";
@@ -275,11 +326,10 @@ export interface PreflightCheck {
   /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
   whyDetail?: string;
   /**
-   * Deep-link target for the fix (Phase 2, readiness workspace). Left unset in
-   * Phase 0 — resolving the concrete href needs facility context the pure
-   * classifier doesn't hold; the workspace step attaches it at render.
+   * Typed destination for repairing a future measurement date. Mixed blocker
+   * kinds intentionally leave this unset rather than linking to the wrong list.
    */
-  fixTarget?: string;
+  fixTarget?: RemovalMeasurementDateFixTarget;
   status: PreflightCheckStatus;
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
@@ -313,6 +363,61 @@ function evidencePreflightCheck(facts: RemovalReadinessFacts) {
     label: EVIDENCE_LABEL,
     status,
     detail,
+  };
+}
+
+/**
+ * Measurement-dates row, shared verbatim by both checklists — a future-dated
+ * run end or application is the one blocker the submit pipeline used to raise
+ * only AFTER the operator clicked submit. Narrowly typed so it satisfies both
+ * the pre-flight and requirements check shapes. Skips (rather than reads "met")
+ * when there is nothing to submit AND no offending date, mirroring durability.
+ */
+function measurementDateFixTarget(
+  measurements: readonly string[],
+): RemovalMeasurementDateFixTarget | undefined {
+  const hasProductionRuns = measurements.some((measurement) =>
+    measurement.startsWith("Production run "),
+  );
+  const hasApplications = measurements.some((measurement) =>
+    measurement.startsWith("Application "),
+  );
+  if (hasProductionRuns && hasApplications) {
+    return "productionRunsAndApplications";
+  }
+  if (hasProductionRuns) {
+    return "productionRuns";
+  }
+  if (hasApplications) {
+    return "applications";
+  }
+  return undefined;
+}
+
+function measurementDatesCheck(facts: RemovalReadinessFacts): {
+  key: "measurementDates";
+  label: string;
+  fixTarget?: RemovalMeasurementDateFixTarget;
+  status: PreflightCheckStatus;
+  detail?: string;
+} {
+  const measurements = facts.futureDatedMeasurements ?? [];
+  if (measurements.length === 0) {
+    return {
+      key: "measurementDates",
+      label: MEASUREMENT_DATES_LABEL,
+      status: facts.hasSubmittableRuns ? "met" : "skipped",
+    };
+  }
+  return {
+    key: "measurementDates",
+    label: MEASUREMENT_DATES_LABEL,
+    fixTarget: measurementDateFixTarget(measurements),
+    status: "unmet",
+    detail: measurements
+      .slice(0, FUTURE_DATE_CHECK_DISPLAY_LIMIT)
+      .map(futureDatedMeasurementSummary)
+      .join(" · "),
   };
 }
 
@@ -424,6 +529,7 @@ export function buildRemovalPreflightChecklist(
         ? undefined
         : productionGapDetail(facts),
     },
+    measurementDatesCheck(facts),
     entityReadiness,
     evidencePreflightCheck(facts),
     durabilityPreflightCheck(facts),
@@ -468,6 +574,7 @@ export type RemovalRequirementKey =
   | "transport"
   | "transportUniformity"
   | "production"
+  | "measurementDates"
   | "entityReadiness"
   | "evidence"
   | "durability";
@@ -484,11 +591,10 @@ export interface RemovalRequirementCheck {
   /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
   whyDetail?: string;
   /**
-   * Deep-link target for the fix (Phase 2, readiness workspace). Left unset in
-   * Phase 0 — resolving the concrete href needs facility context the pure
-   * classifier doesn't hold; the workspace step attaches it at render.
+   * Typed destination for repairing a future measurement date. Mixed blocker
+   * kinds intentionally leave this unset rather than linking to the wrong list.
    */
-  fixTarget?: string;
+  fixTarget?: RemovalMeasurementDateFixTarget;
   status: PreflightCheckStatus;
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
@@ -550,7 +656,7 @@ export function buildRemovalRequirementsChecklist(
           key: "transportUniformity",
           label: TRANSPORT_UNIFORMITY_LABEL,
           status: "unmet",
-          detail: `Mixed method/factor across ${describeCategories(mixed)} legs`,
+          detail: `Mixed method or factor across ${describeCategories(mixed)} transport legs`,
         };
   })();
 
@@ -663,6 +769,7 @@ export function buildRemovalRequirementsChecklist(
     transport,
     uniformity,
     production,
+    measurementDatesCheck(facts),
     entityReadiness,
     evidencePreflightCheck(facts),
     durability,

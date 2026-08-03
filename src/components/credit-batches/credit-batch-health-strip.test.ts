@@ -5,6 +5,7 @@ import {
   compactBatchHealthDetail,
   fallbackBatchHealthFixTarget,
   NEXT_ACTION_DETAIL_MAX_CHARS,
+  resolveBatchHealthFixTarget,
 } from "@/lib/certification/batch-health-links";
 
 describe("compactBatchHealthDetail", () => {
@@ -76,6 +77,21 @@ describe("fallbackBatchHealthFixTarget", () => {
   });
 });
 
+describe("resolveBatchHealthFixTarget", () => {
+  it("uses the shared fallback when the check has no explicit target", () => {
+    expect(resolveBatchHealthFixTarget({ key: "carbon" })).toBe("labSamples");
+  });
+
+  it("preserves an explicit target", () => {
+    expect(
+      resolveBatchHealthFixTarget({
+        key: "production",
+        fixTarget: "applications",
+      }),
+    ).toBe("applications");
+  });
+});
+
 describe("batchHealthFixLinkFor", () => {
   const facilityId = "fac-001";
 
@@ -97,7 +113,7 @@ describe("batchHealthFixLinkFor", () => {
       facilityId,
       "batch-001",
     );
-    expect(link.label).toBe("Add lab sample data");
+    expect(link.label).toBe("Add Sample data");
     expect(link.href).toBe(
       `/samples?facility=${facilityId}&create=true&createCreditBatch=batch-001`,
     );
@@ -110,7 +126,7 @@ describe("batchHealthFixLinkFor", () => {
     );
     expect(link.label).toBe("Open emission estimates");
     expect(link.href).toBe(
-      `/certification/settings?facility=${facilityId}#emission-estimates`,
+      `/certification/settings?section=emission-estimates&facility=${facilityId}`,
     );
   });
 

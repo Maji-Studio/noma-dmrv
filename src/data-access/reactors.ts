@@ -39,6 +39,7 @@ import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardReactorIdentifier } from "./unique-name-guards";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 
 // ============================================
 // Read Operations
@@ -420,6 +421,7 @@ export async function deleteReactor(
       { entityType: "reactor", entityId: reactorId },
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 // ============================================

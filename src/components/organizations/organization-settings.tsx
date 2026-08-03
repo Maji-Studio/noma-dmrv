@@ -18,7 +18,7 @@ import {
   CopyIcon,
   EnvelopeSimpleIcon,
   UsersIcon,
-} from "@phosphor-icons/react";
+} from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
@@ -54,7 +54,8 @@ type InviteForm = z.infer<typeof inviteMemberSchema>;
 export function OrganizationSettings({ canManage }: { canManage: boolean }) {
   const toast = useToast();
   const { data: members, isLoading: membersLoading } = useOrgMembers();
-  const { data: invitations } = useOrgInvitations(canManage);
+  const { data: invitations, isLoading: invitationsLoading } =
+    useOrgInvitations(canManage);
 
   const inviteMember = useInviteMember();
   const changeRole = useChangeMemberRole();
@@ -90,7 +91,11 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       reset({ email: "", role: "member" });
       toast.success("Invitation created.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to invite.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "The invitation was not created. Check the email and try again.",
+      );
     }
   }
 
@@ -101,7 +106,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       setCopied(true);
       toast.success("Invitation link copied.");
     } catch {
-      toast.error("Could not copy — select and copy the link manually.");
+      toast.error("The invitation link was not copied. Select and copy it manually.");
     }
   }
 
@@ -111,7 +116,9 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       toast.success("Role updated.");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to change role."
+        error instanceof Error
+          ? error.message
+          : "The member role was not changed. Try again."
       );
     }
   }
@@ -123,7 +130,9 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       toast.success("Member removed.");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to remove member."
+        error instanceof Error
+          ? error.message
+          : "The member was not removed. Try again."
       );
     } finally {
       setRemovingMember(null);
@@ -137,7 +146,9 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       toast.success("Invitation revoked.");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to revoke."
+        error instanceof Error
+          ? error.message
+          : "The invitation was not revoked. Try again."
       );
     } finally {
       setRevokingInvite(null);
@@ -220,9 +231,12 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
         </section>
       )}
 
-      {/* Members */}
+      {/* The roster. Named "Current members" rather than "Members" because the
+          pane it sits in is already titled Members — and because it reads as
+          one of three states beside "Pending invitations" and "Invite a
+          member". */}
       <section className="flex flex-col gap-16">
-        <h2 className="title-heading-3">Members</h2>
+        <h2 className="title-heading-3">Current members</h2>
         {membersLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : !members || members.length === 0 ? (
@@ -283,7 +297,11 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       {canManage && (
         <section className="flex flex-col gap-16">
           <h2 className="title-heading-3">Pending invitations</h2>
-          {!invitations || invitations.length === 0 ? (
+          {invitationsLoading ? (
+            <div aria-busy="true">
+              <Skeleton className="h-64 w-full" />
+            </div>
+          ) : !invitations || invitations.length === 0 ? (
             <EmptyState
               icon={<EnvelopeSimpleIcon size={40} />}
               title="No pending invitations"

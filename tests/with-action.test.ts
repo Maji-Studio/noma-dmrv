@@ -37,14 +37,14 @@ const TEST_CTX = makeTestOrgContext(mockUser.id);
 describe("withAction", () => {
   it("returns the org-context guard error when no organization is active", async () => {
     vi.mocked(requireOrgContext).mockRejectedValue(
-      new SafeError("Select an organization to continue."),
+      new SafeError("Select an Organization to continue."),
     );
 
     const result = await withAction(async () => "data");
 
     expect(result).toEqual({
       success: false,
-      error: "Select an organization to continue.",
+      error: "Select an Organization to continue.",
     });
   });
 
@@ -69,7 +69,7 @@ describe("withAction", () => {
     });
   });
 
-  it("formats ZodError with default prefix", async () => {
+  it("formats ZodError without a generic prefix", async () => {
     vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
 
     const schema = z.object({ name: z.string().min(1, "Name is required") });
@@ -80,7 +80,7 @@ describe("withAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Validation error: Name is required",
+      error: "Name is required.",
     });
   });
 
@@ -95,7 +95,7 @@ describe("withAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Invalid filter parameters: Page must be positive",
+      error: "Invalid filter parameters: Page must be positive.",
     });
   });
 
@@ -108,7 +108,7 @@ describe("withAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Order not found",
+      error: "Order was not found.",
     });
   });
 
@@ -123,7 +123,7 @@ describe("withAction", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "An unexpected error occurred",
+        error: "The action could not be completed. Try again.",
       });
     } finally {
       vi.unstubAllEnvs();
@@ -141,7 +141,7 @@ describe("withAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Failed to create storage location",
+      error: "Storage location was not created. Try again.",
     });
   });
 
@@ -154,7 +154,7 @@ describe("withAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "An unexpected error occurred",
+      error: "The action could not be completed. Try again.",
     });
   });
 
@@ -167,7 +167,7 @@ describe("withAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Failed to create order",
+      error: "Order was not created. Try again.",
     });
   });
 });

@@ -19,12 +19,12 @@ export const recordMethodBPrerequisitesSchema = z.object({
     z
       .number({
         error: (issue) =>
-          issue.input === undefined ? "Required" : "Invalid number",
+          issue.input === undefined ? "Required" : "Enter a valid number.",
       })
-      .int("Must be a whole number of samples")
+      .int("Enter a whole number of Samples.")
       .min(
         METHOD_B_MINIMUM_METHOD_A_SAMPLES,
-        `Must be at least ${METHOD_B_MINIMUM_METHOD_A_SAMPLES} (protocol minimum)`,
+        `Enter at least ${METHOD_B_MINIMUM_METHOD_A_SAMPLES} Samples.`,
       ),
   ),
   randomSamplingPlanRef: z

@@ -1,9 +1,9 @@
 /**
  * Facility-scoped certification structure checks for the dashboard.
  *
- * These are deliberately separate from flow-station attention: GPS and
- * transport provenance are cross-cutting certification inputs, so they block
- * the dashboard's all-clear state without changing any station badge.
+ * These are deliberately separate from flow-station attention: GPS is a
+ * cross-cutting certification input, so it blocks the dashboard's all-clear
+ * state without changing any station badge.
  */
 import {
   and,
@@ -14,17 +14,13 @@ import {
   ne,
   or,
   sql,
-  type SQL,
 } from "drizzle-orm";
 import { db } from "@/db";
 import {
   biocharProducts,
-  customerLocations,
   creditBatches,
-  deliveries,
   facilities,
   feedstocks,
-  orders,
   productionRuns,
   samples,
   supplierLocations,
@@ -34,34 +30,29 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { requireOrgScope } from "./utils";
-import { DOCUMENT_BACKED_DISTANCE_SOURCE } from "@/lib/certification/transport-evidence";
 import {
   buildEntityDeepLink,
   type EntityFocusTarget,
   ENTITY_FOCUS_TARGETS,
 } from "@/lib/entity-deep-link";
-import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 
 export interface DashboardStructuralGapCounts {
   missingFacilityGps: number;
   missingFeedstockGps: number;
   transportEndpointGpsGaps: number;
-  transportDistanceEvidenceGaps: number;
   missingFeedstockGpsSupplierId: string | null;
   transportEndpointGpsTarget: TransportGapTarget | null;
-  transportDistanceEvidenceTarget: TransportGapTarget | null;
 }
 
 export interface TransportGapTarget {
-  entityType: "feedstock" | "biochar" | "sample" | "delivery";
+  entityType: "feedstock" | "biochar" | "sample";
   entityId: string;
 }
 
 export type DashboardStructuralGapKey =
   | "facilityGps"
   | "feedstockGps"
-  | "transportEndpointGps"
-  | "transportDistanceEvidence";
+  | "transportEndpointGps";
 
 export interface DashboardStructuralGap {
   key: DashboardStructuralGapKey;
@@ -72,78 +63,12 @@ export interface DashboardStructuralGap {
 }
 
 interface TransportGapRow {
-  entityType: Exclude<TransportGapTarget["entityType"], "delivery">;
+  entityType: TransportGapTarget["entityType"];
   endpointGpsGaps: number;
-  distanceEvidenceGaps: number;
   endpointGpsTargetId: string | null;
-  distanceEvidenceTargetId: string | null;
 }
 
-function deliveryHasDocumentProvenance() {
-  // Middle branch: a trip-specific override whose source isn't `document`
-  // (first branch already matched that) is NOT document-backed — it must not
-  // fall through to the inherited customer-location source below.
-  return sql`case
-    when ${deliveries.distanceSource} = ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-      then true
-    when ${deliveries.distanceKmOverride} is not null
-      then false
-    else ${customerLocations.distanceSource} = ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-  end`;
-}
-
-function contributingDeliveryCondition(
-  organizationId: string,
-  facilityId: string,
-) {
-  return sql`
-    ${deliveries.organizationId} = ${organizationId}
-    and ${deliveries.facilityId} = ${facilityId}
-    and ${deliveries.archivedAt} is null
-    and ${deliveries.status} = 'delivered'
-    and coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId}) = ${transportLegs.entityId}
-  `;
-}
-
-function biocharDistanceEvidenceMissing(
-  organizationId: string,
-  facilityId: string,
-) {
-  const contributing = contributingDeliveryCondition(organizationId, facilityId);
-  return sql`
-    ${transportLegs.distanceSource} is null
-    or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-    or not exists (
-      select 1
-      from ${deliveries}
-      left join ${orders}
-        on ${orders.id} = ${deliveries.orderId}
-       and ${orders.organizationId} = ${organizationId}
-      where ${contributing}
-    )
-    or exists (
-      select 1
-      from ${deliveries}
-      left join ${orders}
-        on ${orders.id} = ${deliveries.orderId}
-       and ${orders.organizationId} = ${organizationId}
-      left join ${customerLocations}
-        on ${customerLocations.id} = coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})
-       and ${customerLocations.organizationId} = ${organizationId}
-      where ${contributing}
-        and (
-          (${deliveryHasDocumentProvenance()}) is not true
-          or ${transportEvidenceDocumentCount(
-            organizationId,
-            "delivery",
-            "deliveryId",
-          )} = 0
-        )
-    )
-  `;
-}
-
-function transportGapSelection(distanceEvidenceMissing: SQL) {
+function transportGapSelection() {
   return {
     endpointGpsGaps: sql<number>`count(*) filter (where
     ${transportLegs.originGpsLatitude} is null
@@ -151,14 +76,12 @@ function transportGapSelection(distanceEvidenceMissing: SQL) {
     or ${transportLegs.destinationGpsLatitude} is null
     or ${transportLegs.destinationGpsLongitude} is null
   )::int`,
-    distanceEvidenceGaps: sql<number>`count(*) filter (where ${distanceEvidenceMissing})::int`,
     endpointGpsTargetId: sql<string | null>`min(${transportLegs.entityId}::text) filter (where
     ${transportLegs.originGpsLatitude} is null
     or ${transportLegs.originGpsLongitude} is null
     or ${transportLegs.destinationGpsLatitude} is null
     or ${transportLegs.destinationGpsLongitude} is null
   )`,
-    distanceEvidenceTargetId: sql<string | null>`min(${transportLegs.entityId}::text) filter (where ${distanceEvidenceMissing})`,
   };
 }
 
@@ -168,25 +91,16 @@ function addTransportGapRows(rows: TransportGapRow[]) {
       (total, row) => total + Number(row.endpointGpsGaps ?? 0),
       0,
     ),
-    distanceEvidenceGaps: rows.reduce(
-      (total, row) => total + Number(row.distanceEvidenceGaps ?? 0),
-      0,
-    ),
-    endpointGpsTarget: resolveTransportGapTarget(rows, "endpointGpsTargetId"),
-    distanceEvidenceTarget: resolveTransportGapTarget(
-      rows,
-      "distanceEvidenceTargetId",
-    ),
+    endpointGpsTarget: resolveTransportGapTarget(rows),
   };
 }
 
 function resolveTransportGapTarget(
   rows: TransportGapRow[],
-  key: "endpointGpsTargetId" | "distanceEvidenceTargetId",
 ): TransportGapTarget | null {
-  const row = rows.find((candidate) => candidate[key] != null);
-  return row?.[key]
-    ? { entityType: row.entityType, entityId: row[key] }
+  const row = rows.find((candidate) => candidate.endpointGpsTargetId != null);
+  return row?.endpointGpsTargetId
+    ? { entityType: row.entityType, entityId: row.endpointGpsTargetId }
     : null;
 }
 
@@ -202,7 +116,6 @@ function parentEditorHref(
     feedstock: { path: "/feedstocks", queryKey: "feedstock" },
     biochar: { path: "/biochar-products", queryKey: "biocharProduct" },
     sample: { path: "/samples", queryKey: "sample" },
-    delivery: { path: "/deliveries", queryKey: "delivery" },
   } as const;
   const route = targetRoutes[target.entityType];
   return buildEntityDeepLink({
@@ -219,7 +132,6 @@ function transportTargetForm(target: TransportGapTarget | null): string {
     feedstock: "Feedstock form",
     biochar: "Biochar product form",
     sample: "Sample form",
-    delivery: "Delivery form",
   };
   return formNames[target?.entityType ?? "feedstock"];
 }
@@ -279,26 +191,11 @@ export function buildDashboardStructuralGaps(
         ENTITY_FOCUS_TARGETS.transportRoute,
       ),
     },
-    {
-      key: "transportDistanceEvidence" as const,
-      label: "Transport distance lacks document evidence",
-      metadata: structuralGapMetadata(
-        transportTargetForm(counts.transportDistanceEvidenceTarget),
-        "Transport evidence",
-        counts.transportDistanceEvidenceGaps,
-      ),
-      count: counts.transportDistanceEvidenceGaps,
-      href: parentEditorHref(
-        facilityId,
-        counts.transportDistanceEvidenceTarget,
-        ENTITY_FOCUS_TARGETS.transportEvidence,
-      ),
-    },
   ].filter((gap) => gap.count > 0);
 }
 
 /**
- * Count the four structural certification gaps for one active facility.
+ * Count the three structural certification gaps for one active facility.
  * Transport legs are resolved through their polymorphic active parent so an
  * archived feedstock, product, run, or credit batch cannot keep a stale gap
  * alive. Every leg and parent predicate is organization-scoped.
@@ -362,17 +259,7 @@ export async function loadDashboardStructuralGapCounts(
         ),
       ),
     db
-      .select(
-        transportGapSelection(sql`
-          ${transportLegs.distanceSource} is null
-          or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-          or ${transportEvidenceDocumentCount(
-            orgId,
-            "feedstock",
-            "feedstockId",
-          )} = 0
-        `),
-      )
+      .select(transportGapSelection())
       .from(transportLegs)
       .innerJoin(
         feedstocks,
@@ -390,11 +277,7 @@ export async function loadDashboardStructuralGapCounts(
         ),
       ),
     db
-      .select(
-        transportGapSelection(
-          biocharDistanceEvidenceMissing(orgId, facilityId),
-        ),
-      )
+      .select(transportGapSelection())
       .from(transportLegs)
       .innerJoin(
         biocharProducts,
@@ -412,17 +295,7 @@ export async function loadDashboardStructuralGapCounts(
         ),
       ),
     db
-      .select(
-        transportGapSelection(sql`
-          ${transportLegs.distanceSource} is null
-          or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-          or ${transportEvidenceDocumentCount(
-            orgId,
-            "transport_leg",
-            "transportLegId",
-          )} = 0
-        `),
-      )
+      .select(transportGapSelection())
       .from(transportLegs)
       .innerJoin(
         samples,
@@ -471,65 +344,12 @@ export async function loadDashboardStructuralGapCounts(
     { ...biocharTransport, entityType: "biochar" },
     { ...sampleTransport, entityType: "sample" },
   ]);
-  let distanceEvidenceTarget = transport.distanceEvidenceTarget;
-  if (distanceEvidenceTarget?.entityType === "biochar") {
-    const [deliveryTarget] = await db
-      .select({ id: deliveries.id })
-      .from(deliveries)
-      .leftJoin(
-        orders,
-        and(
-          eq(deliveries.orderId, orders.id),
-          eq(orders.organizationId, orgId),
-        ),
-      )
-      .leftJoin(
-        customerLocations,
-        and(
-          eq(
-            customerLocations.id,
-            sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
-          ),
-          eq(customerLocations.organizationId, orgId),
-        ),
-      )
-      .where(
-        and(
-          eq(deliveries.organizationId, orgId),
-          eq(deliveries.facilityId, facilityId),
-          isNull(deliveries.archivedAt),
-          eq(deliveries.status, "delivered"),
-          eq(
-            sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
-            distanceEvidenceTarget.entityId,
-          ),
-          sql`
-            (${deliveryHasDocumentProvenance()}) is not true
-            or ${transportEvidenceDocumentCount(
-              orgId,
-              "delivery",
-              "deliveryId",
-            )} = 0
-          `,
-        ),
-      )
-      .limit(1);
-
-    if (deliveryTarget) {
-      distanceEvidenceTarget = {
-        entityType: "delivery",
-        entityId: deliveryTarget.id,
-      };
-    }
-  }
 
   return {
     missingFacilityGps: Number(facilityGps?.count ?? 0),
     missingFeedstockGps: Number(feedstockGps?.count ?? 0),
     transportEndpointGpsGaps: transport.endpointGpsGaps,
-    transportDistanceEvidenceGaps: transport.distanceEvidenceGaps,
     missingFeedstockGpsSupplierId: feedstockGps?.supplierId ?? null,
     transportEndpointGpsTarget: transport.endpointGpsTarget,
-    transportDistanceEvidenceTarget: distanceEvidenceTarget,
   };
 }

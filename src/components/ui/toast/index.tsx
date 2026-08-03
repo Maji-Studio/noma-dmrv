@@ -131,7 +131,7 @@ function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
 
   return (
     <div
-      className="pointer-events-none fixed bottom-24 right-24 z-50 flex flex-col gap-8 sm:max-w-[380px]"
+      className="pointer-events-none fixed bottom-24 right-24 z-[var(--z-layer-toast)] flex flex-col gap-8 sm:max-w-[380px]"
       role="region"
       aria-label="Notifications"
     >
@@ -192,7 +192,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       aria-live={isAssertive ? "assertive" : "polite"}
       aria-atomic="true"
     >
-      <div className={cn("absolute inset-y-0 left-0 w-3", styles.accent)} aria-hidden="true" />
+      <div className={cn("absolute inset-y-0 left-0 w-4", styles.accent)} aria-hidden="true" />
       <div className="flex items-center gap-12 pl-16 pr-8 py-12">
         <Icon size={20} weight="fill" className={cn("shrink-0", styles.icon)} aria-hidden="true" />
         <p className="body-small min-w-0 flex-1 text-[var(--color-text-primary)]">

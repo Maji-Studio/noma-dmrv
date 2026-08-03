@@ -99,6 +99,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
           feedstockId: seededData.feedstock.id,
           feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
           biocharStorageLocationId: seededData.biocharStorageLocation.id,
+          productStorageLocationId: seededData.productStorageLocation.id,
           customerId: seededData.customer.id,
           customerLocationId: seededData.customerLocation.id,
           vehicleId: seededData.vehicle.id,
@@ -111,13 +112,13 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
 
       // ── Step 1: open the wizard and select the ready batch ──────────────
       await page
-        .getByRole("button", { name: "New removal", exact: true })
+        .getByRole("button", { name: "New Removal", exact: true })
         .first()
         .click();
 
       const dialog = page.getByRole("dialog");
       await expect(
-        dialog.getByRole("heading", { name: "New removal", level: 2 }),
+        dialog.getByRole("heading", { name: "New Removal", level: 2 }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(
         dialog.getByRole("heading", { name: "Select credit batches" }),
@@ -126,8 +127,9 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       // The seeded ready batch renders a selectable checkbox (incomplete
       // siblings, e.g. the chain seed's own E2E-CB batch, render no checkbox).
       const checkbox = dialog.getByRole("checkbox", {
-        name: `Select credit batch ${code}`,
-        exact: true,
+        name: new RegExp(
+          `^Select credit batch for .+, ${code}$`,
+        ),
       });
       await expect(checkbox).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await checkbox.check();
@@ -140,18 +142,18 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
         "Confirm & submit",
         { timeout: COLD_COMPILE_TIMEOUT_MS },
       );
-      // ...and the requirements checklist renders (not the loading/error fallback) —
+      // ...and the submission summary renders (not the loading/error fallback) —
       // proof the removal context resolved against the real project.
-      await expect(
-        dialog.getByRole("heading", { name: "Confirm & submit" }),
-      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      await expect(dialog.getByText("You are sending")).toBeVisible({
+        timeout: COLD_COMPILE_TIMEOUT_MS,
+      });
 
       // Every facility-level check met ⇒ the submit button is enabled.
       // This is the canonical "removal is ready to submit" signal (it gates on
       // `deriveRemovalReadiness(...).state === "ready"`). The COMMITTED assertion
       // stops here — no external write.
       const submitButton = dialog.getByRole("button", {
-        name: "Submit removal",
+        name: "Submit Removal",
         exact: true,
       });
       await expect(submitButton).toBeEnabled({

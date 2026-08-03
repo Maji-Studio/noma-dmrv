@@ -9,7 +9,7 @@ function toDateString(value: string | Date): string {
 
 function toUtcDateOnly(value: string | Date): Date {
   const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(toDateString(value));
-  if (!match) throw new Error("Invalid date");
+  if (!match) throw new Error("Enter a valid date.");
 
   const year = Number(match[1]);
   const month = Number(match[2]);
@@ -20,7 +20,7 @@ function toUtcDateOnly(value: string | Date): Date {
     parsed.getUTCMonth() !== month - 1 ||
     parsed.getUTCDate() !== day
   ) {
-    throw new Error("Invalid date");
+    throw new Error("Enter a valid date.");
   }
   return parsed;
 }
@@ -35,7 +35,7 @@ export function getCreditBatchProductionWindowIssue(
     start = toUtcDateOnly(startDate);
     end = toUtcDateOnly(endDate);
   } catch {
-    return "Invalid date";
+    return "Enter a valid date.";
   }
 
   if (isAfter(start, end)) {

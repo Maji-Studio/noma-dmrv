@@ -1,18 +1,17 @@
 /**
- * WizardRegistryStep — the wizard's "connect your registry" step. Composes the
- * existing certification surfaces rather than reimplementing them.
+ * WizardRegistryStep — the wizard's "connect your registry" step.
  *
- * Org Owners/Admins and platform admins get the full self-serve credentials
- * and facility-mapping surface. Members get the persisted read-only state.
+ * It renders the same `CertifierSettingsPanel` that `/certification/settings`
+ * does, so the surface an operator meets on day one is the surface they return
+ * to. It used to compose the registry picker, the credentials form, and the
+ * facility link itself, which meant the two places drifted: the wizard kept the
+ * project link in a hand-rolled card long after settings stopped using one.
+ *
  * The step is skippable — the getting-started guide re-surfaces it later.
  */
 "use client";
 
-import { FacilityCertifierSection } from "@/components/certification";
-import { OrganizationCertifierCredentials } from "@/components/organizations/organization-certifier-credentials";
-import { Skeleton } from "@/components/ui/loading-skeleton";
-import { useActiveOrganizationProfile } from "@/hooks/use-organizations";
-import { RegistryPicker } from "./registry-picker";
+import { CertifierSettingsPanel } from "@/components/certification";
 
 interface WizardRegistryStepProps {
   facilityId: string;
@@ -23,44 +22,19 @@ export function WizardRegistryStep({
   facilityId,
   canManage,
 }: WizardRegistryStepProps) {
-  const { data: organization, isLoading } = useActiveOrganizationProfile();
-
   return (
     <div className="flex flex-col gap-24">
       <p className="body-small text-[var(--color-text-secondary)]">
         {canManage
-          ? "Isometric is your registry. Add the organization's credentials, then link this facility to its Isometric project. You can skip this and connect later."
-          : "Isometric is your registry. The connection is set up together with the Maji platform team — once it's live, this facility's project link appears here. You can skip this step and keep going."}
+          ? "Isometric is your registry. Save the organization's keys, then link this facility to its Isometric project. You can skip this and connect later."
+          : "Isometric is your registry. The Maji platform team helps set up the connection. Once it is live, this facility's project link appears here. You can skip this step and continue."}
       </p>
 
-      <RegistryPicker />
-
-      {canManage &&
-        (isLoading ? (
-          <Skeleton className="h-64 w-full" />
-        ) : organization ? (
-          <OrganizationCertifierCredentials
-            organizationId={organization.id}
-            organizationName={organization.name ?? "your organization"}
-          />
-        ) : (
-          <p className="body-small text-[var(--color-text-secondary)]">
-            Couldn&apos;t load your organization. You can connect your registry
-            later from certification settings.
-          </p>
-        ))}
-
-      <div className="flex flex-col gap-8 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16">
-        <h3 className="body-small font-medium text-[var(--color-text-primary)]">
-          Facility project link
-        </h3>
-        <FacilityCertifierSection
-          key={`wizard-certifier-${facilityId}`}
-          facilityId={facilityId}
-          canManage={canManage}
-          embedded
-        />
-      </div>
+      <CertifierSettingsPanel
+        facilityId={facilityId}
+        canManage={canManage}
+        projectLinkPresentation="inline"
+      />
     </div>
   );
 }

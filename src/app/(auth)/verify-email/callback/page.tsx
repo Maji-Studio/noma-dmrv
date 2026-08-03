@@ -24,7 +24,7 @@ function VerifyEmailCallbackContent() {
 
       if (!token) {
         setStatus("error");
-        setError("Invalid verification link");
+        setError("This verification link is invalid. Request a new email.");
         return;
       }
 
@@ -47,11 +47,16 @@ function VerifyEmailCallbackContent() {
         } else {
           const data = await response.json();
           setStatus("error");
-          setError(data.message || "Verification failed");
+          setError(
+            data.message ||
+              "Your email could not be verified. Request a new verification email.",
+          );
         }
       } catch {
         setStatus("error");
-        setError("An unexpected error occurred");
+        setError(
+          "Your email could not be verified. Check your connection and try again.",
+        );
       }
     }
 
@@ -67,7 +72,7 @@ function VerifyEmailCallbackContent() {
           </div>
           <h1 className="title-heading-2 mb-16">Verifying your email</h1>
           <p className="body-medium text-[var(--color-text-secondary)]">
-            Please wait while we verify your email address...
+            This may take a moment.
           </p>
         </div>
       </div>
@@ -95,17 +100,16 @@ function VerifyEmailCallbackContent() {
             </svg>
           </div>
 
-          <h1 className="title-heading-2 mb-16">Email verified!</h1>
+          <h1 className="title-heading-2 mb-16">Email verified</h1>
           <p className="body-medium text-[var(--color-text-secondary)] mb-24">
-            Your email has been successfully verified. Redirecting you to
-            login...
+            Your email is verified. You are being redirected to sign in.
           </p>
 
           <Link
             href="/login"
             className="inline-block px-32 py-16 bg-[var(--clr-dark-purple)] text-white rounded-none hover:opacity-90 transition-opacity body-medium"
           >
-            Go to login
+            Sign in
           </Link>
         </div>
       </div>
@@ -134,7 +138,8 @@ function VerifyEmailCallbackContent() {
 
         <h1 className="title-heading-2 mb-16">Verification failed</h1>
         <p className="body-medium text-[var(--color-text-secondary)] mb-24">
-          {error || "Unable to verify your email address"}
+          {error ||
+            "Your email could not be verified. Request a new verification email."}
         </p>
 
         <div className="space-y-16">

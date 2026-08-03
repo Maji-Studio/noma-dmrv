@@ -35,7 +35,7 @@ export function resolveLatestApplicationTime(
 ): Date {
   if (lineages.length === 0) {
     throw new SafeError(
-      "Cannot derive the removal's reporting-period end: no applications in the lineage.",
+      "This Removal has no applications. Link an application before submitting.",
     );
   }
   let latest = lineages[0].application.applicationDate;
@@ -45,6 +45,80 @@ export function resolveLatestApplicationTime(
     }
   }
   return latest;
+}
+
+/**
+ * Resolve the timestamp-level review/snapshot window from the date-granular
+ * registry contract.
+ *
+ * Applications currently record a calendar date, represented as UTC
+ * midnight. When production and application share that date, midnight is not
+ * an observed application time and can precede the runs that produced the
+ * applied biochar. Use the latest production end as the conservative
+ * same-day floor so the technical window is chronological and contains every
+ * member run. An earlier application day cannot contain an overnight run and
+ * fails closed; a later application date remains the completion boundary.
+ */
+export function resolveRemovalReportingWindow(args: {
+  earliestProductionStartTime: Date;
+  latestProductionEndTime: Date;
+  latestApplicationTime: Date;
+}): { startedOn: Date; completedOn: Date } {
+  const {
+    earliestProductionStartTime,
+    latestProductionEndTime,
+    latestApplicationTime,
+  } = args;
+  const applicationDate = formatUtcDate(latestApplicationTime);
+  const latestProductionEndDate = formatUtcDate(latestProductionEndTime);
+  if (applicationDate < latestProductionEndDate) {
+    throw new SafeError(
+      `Latest application date ${applicationDate} precedes latest production end date ` +
+        `${latestProductionEndDate}. Correct the application date before submitting.`,
+    );
+  }
+  const completedOn =
+    applicationDate === latestProductionEndDate &&
+    latestApplicationTime < latestProductionEndTime
+      ? latestProductionEndTime
+      : latestApplicationTime;
+
+  return {
+    startedOn: earliestProductionStartTime,
+    completedOn,
+  };
+}
+
+/**
+ * Reject dates that Isometric cannot accept before the submission pipeline
+ * mirrors evidence Sources or creates Datapoints. Production end is the
+ * durability `measured_at`; latest application is the GHG entry's
+ * `completed_on`. Equality is valid because neither date is in the future.
+ */
+export function assertRemovalDatesNotFuture(args: {
+  productionEndTime: Date;
+  latestApplicationTime: Date;
+  now?: Date;
+}): void {
+  const {
+    productionEndTime,
+    latestApplicationTime,
+    now = new Date(),
+  } = args;
+
+  if (productionEndTime.getTime() > now.getTime()) {
+    throw new SafeError(
+      `Latest production run ends at ${productionEndTime.toISOString()}. ` +
+        "Change the end time or wait until the run ends.",
+    );
+  }
+
+  if (latestApplicationTime.getTime() > now.getTime()) {
+    throw new SafeError(
+      `Latest application is dated ${latestApplicationTime.toISOString()}. ` +
+        "Change the application date or wait until then.",
+    );
+  }
 }
 
 // Guards the window inversion BEFORE any registry POST — the local stamp's
@@ -72,8 +146,8 @@ export function assertReportingWindowNotInverted(args: {
     const runStartTime = run ? runStartTimeByRunId.get(run.id) : undefined;
     if (!run || !runStartTime) {
       throw new SafeError(
-        `Application ${lineage.application.code} has no resolvable production ` +
-          "run start — cannot validate the removal's reporting window.",
+        `Application ${lineage.application.code} has no resolvable production run start. ` +
+          "Record the run start before submitting the Removal.",
       );
     }
     const applicationDate = formatUtcDate(lineage.application.applicationDate);
@@ -81,8 +155,8 @@ export function assertReportingWindowNotInverted(args: {
     if (applicationDate < runStartDate) {
       throw new SafeError(
         `Application ${lineage.application.code} is dated ${applicationDate}, ` +
-          `before its production run ${run.code} started ${runStartDate} — ` +
-          "correct the application date before submitting.",
+          `before its production run ${run.code} started ${runStartDate}. ` +
+          "Correct the application date before submitting.",
       );
     }
   }
@@ -112,12 +186,12 @@ export function readRemovalReportingWindow(row: CertificationSubmissionRow): {
     : new Date(NaN);
   if (Number.isNaN(startedOn.getTime()) || Number.isNaN(completedOn.getTime())) {
     throw new SafeError(
-      "Stale submission cannot be resumed because its reporting-window snapshot does not match the current schema.",
+      "This saved submission uses an outdated reporting window. Start a new submission.",
     );
   }
   if (startedOn.getTime() > completedOn.getTime()) {
     throw new SafeError(
-      "Stale submission cannot be resumed because its reporting-window snapshot has an inverted window (start after end).",
+      "This saved submission has an invalid reporting window. Start a new submission.",
     );
   }
   return { startedOn, completedOn };

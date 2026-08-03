@@ -30,7 +30,7 @@ function requireKey(): string {
   const key = env.OPENROUTESERVICE_API_KEY;
   if (!key) {
     throw new SafeError(
-      "Geocoding/routing is not configured (OPENROUTESERVICE_API_KEY is missing)."
+      "Map search and routes are not configured. Ask a Platform Admin to configure the mapping service."
     );
   }
   return key;
@@ -48,12 +48,25 @@ async function orsFetch(
       ...init,
       signal: AbortSignal.timeout(ORS_REQUEST_TIMEOUT_MS),
     });
-  } catch {
+  } catch (error) {
+    // `AbortSignal.timeout` rejects with a DOMException named "TimeoutError";
+    // anything else (DNS, TLS, refused) is a genuine connectivity failure.
+    // Collapsing both into "could not reach" reads as if the operator's own
+    // network were at fault, which sends them debugging the wrong thing.
+    const timedOut = error instanceof DOMException && error.name === "TimeoutError";
     log.error(
-      { action, code: "network", duration_ms: Date.now() - startedAt },
-      "ors request failed (network)"
+      {
+        action,
+        code: timedOut ? "timeout" : "network",
+        duration_ms: Date.now() - startedAt,
+      },
+      timedOut ? "ors request failed (timeout)" : "ors request failed (network)"
     );
-    throw new SafeError("Could not reach the routing service. Try again.");
+    throw new SafeError(
+      timedOut
+        ? "The routing service did not respond in time. Try again, or enter the distance manually."
+        : "Could not reach the routing service. Try again."
+    );
   }
 
   if (!response.ok) {

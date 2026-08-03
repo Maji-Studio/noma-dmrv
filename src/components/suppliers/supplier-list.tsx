@@ -7,7 +7,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
-import { UsersIcon, PlusIcon } from "@phosphor-icons/react";
+import { UsersIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Supplier } from "@/db/schema";
 import {
   useCreateSupplierWithLocations,
@@ -73,7 +73,7 @@ function createColumns(
           {resolveSupplierLocationText(
             row.original.location,
             row.original.defaultLocationDisplay,
-          ) || "\u2014"}
+          ) || "Not recorded"}
         </span>
       ),
     },
@@ -83,7 +83,7 @@ function createColumns(
       accessorFn: (row) => row.contactName || row.contactEmail || "",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.contactName || row.original.contactEmail || "\u2014"}
+          {row.original.contactName || row.original.contactEmail || "Not recorded"}
         </span>
       ),
     },
@@ -168,10 +168,10 @@ export function SupplierList() {
         locations: pendingLocations ?? [],
       });
       setSideSheet(null);
-      toast.success("Supplier created successfully");
+      toast.success("Supplier created.");
     } catch (error) {
       setCreateError(
-        error instanceof Error ? error.message : "Failed to create supplier"
+        error instanceof Error ? error.message : "Supplier was not created. Check the form."
       );
     }
   };
@@ -185,10 +185,10 @@ export function SupplierList() {
         ...data,
       });
       setSideSheet(null);
-      toast.success("Supplier updated successfully");
+      toast.success("Supplier updated.");
     } catch (error) {
       setUpdateError(
-        error instanceof Error ? error.message : "Failed to update supplier"
+        error instanceof Error ? error.message : "Supplier was not saved. Try again."
       );
     }
   };
@@ -203,10 +203,10 @@ export function SupplierList() {
     try {
       await deleteSupplier.mutateAsync(deletingSupplierId);
       setDeletingSupplierId(null);
-      toast.success("Supplier deleted successfully");
+      toast.success("Supplier deleted.");
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : "Failed to delete supplier"
+        error instanceof Error ? error.message : "Supplier was not deleted. Try again."
       );
     }
   };
@@ -222,7 +222,7 @@ export function SupplierList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load suppliers"} />
+        <ServerError message={fetchError.message || "The suppliers could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }
@@ -291,13 +291,13 @@ export function SupplierList() {
             description={
               hasActiveSearch
                 ? "Try clearing your search."
-                : "Create your first supplier to get started tracking biomass feedstock providers."
+                : "Suppliers are where your feedstock deliveries come from."
             }
             action={
               !hasActiveSearch ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create Supplier
+                  Create your first supplier
                 </Button>
               ) : undefined
             }
@@ -343,9 +343,9 @@ export function SupplierList() {
         editLabel="Edit Supplier"
         sections={sideSheetEntity ? [
           {
-            title: "Required Information",
+            title: "Required information",
             fields: [
-              { label: "Supplier Name", value: sideSheetEntity.name },
+              { label: "Supplier name", value: sideSheetEntity.name },
             ],
           },
           {
@@ -369,18 +369,18 @@ export function SupplierList() {
             ),
           },
           {
-            title: "Contact Information",
+            title: "Contact information",
             fields: [
-              { label: "Contact Name", value: sideSheetEntity.contactName },
-              { label: "Contact Email", value: sideSheetEntity.contactEmail },
-              { label: "Contact Phone", value: sideSheetEntity.contactPhone },
+              { label: "Contact name", value: sideSheetEntity.contactName },
+              { label: "Contact email", value: sideSheetEntity.contactEmail },
+              { label: "Contact phone", value: sideSheetEntity.contactPhone },
             ],
           },
           {
-            title: "Sourcing Information",
+            title: "Sourcing information",
             fields: [
               { label: "Location", value: sideSheetEntity.location },
-              { label: "Source Region", value: sideSheetEntity.sourceRegion },
+              { label: "Source region", value: sideSheetEntity.sourceRegion },
               { label: "Address", value: sideSheetEntity.address },
               buildSupplierFallbackDistanceField({
                 defaultLocationDistanceKm:

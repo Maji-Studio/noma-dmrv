@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveRemovalStatus,
+  deriveRemovalWorkflowStatus,
   deriveStatementStatus,
   type LocalSubmissionStatus,
   type RemoteGhgStatus,
@@ -35,11 +36,12 @@ describe("deriveRemovalStatus", () => {
     expect(s.isActionable).toBe(false);
   });
 
-  it("renders a superseded removal with the distinct superseded value", () => {
+  it("treats a retired superseded draft as not submitted and actionable", () => {
     const s = deriveRemovalStatus({ local: "superseded", lockInFlight: false });
-    expect(s.label).toBe("Superseded");
-    expect(s.value).toBe("superseded");
-    expect(s.isTerminal).toBe(true);
+    expect(s.label).toBe("Not submitted");
+    expect(s.value).toBe("draft");
+    expect(s.isTerminal).toBe(false);
+    expect(s.isActionable).toBe(true);
   });
 
   it("maps a rejected removal back to actionable", () => {
@@ -61,6 +63,92 @@ describe("deriveRemovalStatus", () => {
         deriveRemovalStatus({ local, lockInFlight: false }),
       ).not.toThrow();
     }
+  });
+});
+
+describe("deriveRemovalWorkflowStatus", () => {
+  it("presents one ready state instead of competing lifecycle and readiness states", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: null,
+      lockInFlight: false,
+      enrichmentStatus: "available",
+      readiness: { state: "ready", reasons: [], advisories: [] },
+    });
+
+    expect(status).toMatchObject({
+      kind: "ready",
+      value: "ready",
+      label: "Ready to submit",
+      isActionable: true,
+    });
+  });
+
+  it("uses the readiness blockers as the overall status detail", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: null,
+      lockInFlight: false,
+      enrichmentStatus: "available",
+      readiness: {
+        state: "blocked",
+        reasons: ["Add the missing delivery document"],
+        advisories: [],
+      },
+    });
+
+    expect(status.label).toBe("Needs attention");
+    expect(status.reasons).toEqual(["Add the missing delivery document"]);
+  });
+
+  it("preserves terminal lifecycle states without waiting for enrichment", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "submitted",
+      lockInFlight: false,
+      enrichmentStatus: "loading",
+      readiness: null,
+    });
+
+    expect(status.label).toBe("Submitted");
+    expect(status.kind).toBe("submitted");
+  });
+
+  it("makes an unavailable preflight explicitly retryable", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: null,
+      lockInFlight: false,
+      enrichmentStatus: "unavailable",
+      readiness: null,
+    });
+
+    expect(status.label).toBe("Status unavailable");
+    expect(status.canRetry).toBe(true);
+    expect(status.isActionable).toBe(false);
+  });
+
+  it("labels a recovered rejected removal as ready to resubmit", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "rejected",
+      lockInFlight: false,
+      enrichmentStatus: "available",
+      readiness: { state: "ready", reasons: [], advisories: [] },
+    });
+
+    expect(status.label).toBe("Ready to resubmit");
+  });
+
+  it("offers a fresh submit after the production gate retires a stale draft", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "superseded",
+      lockInFlight: false,
+      enrichmentStatus: "available",
+      readiness: { state: "ready", reasons: [], advisories: [] },
+    });
+
+    expect(status).toMatchObject({
+      kind: "ready",
+      value: "ready",
+      label: "Ready to submit",
+      isActionable: true,
+    });
   });
 });
 

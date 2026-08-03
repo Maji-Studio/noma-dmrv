@@ -8,7 +8,7 @@
  *   - the formulation fetch (via `useFormulation`),
  *   - the formulation-change sync effect (preserves user-entered fields),
  *   - the facility-change cascade (clears each row's `storageLocationId`),
- *   - the removal-kg derivation per row.
+ *   - the recipe suggestion and deviation per row.
  *
  * The form passes its `useForm` return value in and renders rows from the
  * `rows` array — no `useFieldArray`, no sync effect, no inline math.
@@ -30,20 +30,19 @@ import {
 } from "./composition";
 import type { CompositionRow, IngredientBin } from "./types";
 
-/** Mass inputs step 0.01 kg — round auto-filled suggestions to match. */
-const SUGGESTED_MASS_DECIMALS = 100;
-
 export interface UseBiocharCompositionArgs {
   formulationId: string | null | undefined;
   facilityId: string | null | undefined;
   productMassKg: number | null | undefined;
-  prefillSuggestedMasses: boolean;
+  /** Persisted source allocations keep their exact saved composition snapshot. */
+  allocationFrozen: boolean;
 }
 
 export interface UseBiocharCompositionResult {
   rows: CompositionRow[];
   isLoading: boolean;
   facilityId: string;
+  biocharRatio: number | null;
   /** Cast control suitable for passing to the row renderer. */
   control: Control<FieldValues>;
 }
@@ -67,7 +66,7 @@ export function useBiocharComposition(
     formulationId,
     facilityId,
     productMassKg,
-    prefillSuggestedMasses,
+    allocationFrozen,
   } = args;
 
   const control = form.control as Control<FieldValues>;
@@ -79,14 +78,13 @@ export function useBiocharComposition(
     !!formulationId,
   );
 
-  // Sync rows whenever a formulation's ingredient list arrives — including
-  // the initial load when editing a saved product. `reconcileComposition`
-  // preserves the saved/user-entered massKg and bin per ingredient line, so
-  // this never loses data; it refreshes catalog fields and, crucially, adds
-  // rows for recipe lines added after the product was saved (the server
-  // rejects compositions that don't cover every formulation line).
+  // Sync rows whenever an unfrozen formulation's ingredient list arrives.
+  // Products with persisted source allocations retain the exact saved rows and
+  // metadata because those facts are part of the immutable allocation.
   const syncedFormulationIdRef = useRef("");
   useEffect(() => {
+    if (allocationFrozen) return;
+
     // Pure-biochar product (no formulation) → no ingredient bins. Clear any rows
     // left over from a previously-selected formulation.
     if (!formulationId) {
@@ -103,7 +101,7 @@ export function useBiocharComposition(
     const live = (form.getValues("ingredientBins") as IngredientBin[] | undefined) ?? [];
     const next = reconcileComposition(formulation, live);
     replace(next);
-  }, [formulationId, formulation, form, replace]);
+  }, [allocationFrozen, formulationId, formulation, form, replace]);
 
   // Facility cascade: clear each row's storageLocationId when the user picks
   // a different facility. Skips the initial mount.
@@ -122,44 +120,6 @@ export function useBiocharComposition(
   }, [facilityId, form]);
 
   const productMass = typeof productMassKg === "number" ? productMassKg : null;
-
-  // Prefill newly-created composition rows from the recipe suggestion. A
-  // suggestion only ever writes over an empty field or its own previous
-  // auto-filled value (tracked per ingredient in the ref) — a mass the user
-  // typed or one hydrated from a saved product is never touched. Existing
-  // compositions do not opt into this effect, so a saved null mass remains an
-  // explicit missing fact rather than silently becoming a persisted guess. RHF dirty
-  // state is deliberately not consulted: `useFieldArray.replace` marks whole
-  // rows dirty relative to the defaults, which would block prefill entirely
-  // on a freshly selected formulation.
-  const autoFilledMassRef = useRef<Record<string, number>>({});
-  useEffect(() => {
-    if (!prefillSuggestedMasses) return;
-    const ingredients = formulation?.ingredients;
-    if (!ingredients) return;
-    const live = (form.getValues("ingredientBins") as IngredientBin[] | undefined) ?? [];
-    live.forEach((row, i) => {
-      if (!row) return;
-      const ingredient = ingredients.find(
-        (ing: { id: string }) => ing.id === row.formulationIngredientId,
-      );
-      const suggested = deriveSuggestedIngredientMassKg(
-        productMass,
-        ingredient?.ratio ?? null,
-      );
-      if (suggested == null) return;
-      const rounded =
-        Math.round(suggested * SUGGESTED_MASS_DECIMALS) / SUGGESTED_MASS_DECIMALS;
-      const previousAuto = autoFilledMassRef.current[row.formulationIngredientId];
-      const isEmptyOrAuto = row.massKg == null || row.massKg === previousAuto;
-      if (!isEmptyOrAuto || row.massKg === rounded) return;
-      autoFilledMassRef.current[row.formulationIngredientId] = rounded;
-      form.setValue(`ingredientBins.${i}.massKg`, rounded, {
-        shouldDirty: false,
-        shouldValidate: false,
-      });
-    });
-  }, [formulation, productMass, form, prefillSuggestedMasses]);
 
   // Live values (not the field-array snapshot) so the deviation hint tracks
   // the user's typing.
@@ -202,6 +162,7 @@ export function useBiocharComposition(
     rows,
     isLoading,
     facilityId: facilityId ?? "",
+    biocharRatio: formulation?.biocharRatio ?? null,
     control,
   };
 }

@@ -104,14 +104,17 @@ describe("bootstrapInvitationAccountAction", () => {
 
   it("rejects an invalid or expired invitation", async () => {
     mockReadState.mockRejectedValue(
-      new SafeError("Invitation not found, expired, or already used.")
+      new SafeError(
+        "This invitation is invalid, expired, or already used. Ask an Admin for a new invitation.",
+      )
     );
 
     const result = await bootstrapInvitationAccountAction(VALID_INPUT);
 
     expect(result).toEqual({
       success: false,
-      error: "Invitation not found, expired, or already used.",
+      error:
+        "This invitation is invalid, expired, or already used. Ask an Admin for a new invitation.",
     });
     expect(mockCreateAccount).not.toHaveBeenCalled();
   });

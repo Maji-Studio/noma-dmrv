@@ -6,12 +6,24 @@ Symptom-to-fix lookup for issues that have actually bitten someone in this repo.
 
 ### `pnpm dev` Is Not `next dev`
 
-`pnpm dev` → `pnpm dev:docker` → `docker compose up -d && pnpm db:wait && next dev -p 3100` (see `package.json`). Consequences:
+`pnpm dev` → `pnpm dev:docker` → Docker startup, database wait, local-target
+check, migration, schema verification, then `next dev -p 3100` (see
+`package.json`). Consequences:
 
 - Extra args do **not** reach Next. `pnpm dev -- -p 3101` is a no-op; the port is hard-coded in the script.
 - `pnpm dev:manual` is the bare `next dev -p 3100` escape hatch.
 - `pnpm dev:docker:init` is the reset-and-start variant (runs `db:reset` in between).
 - A local "database not running" symptom is usually a stopped container → `pnpm docker:up`, then `pnpm db:wait` (`src/lib/cli/wait-for-db.ts`).
+- A migration or schema-verification failure stops startup before the app can
+  serve pages against an incompatible database. Read the drift the verifier
+  reports, then repair it with a new migration (`pnpm db:generate`). If local
+  migration history is inconsistent, run `pnpm db:reset` and then `pnpm db:seed`.
+  To start the app while the gate still fails (for example straight after a
+  branch switch), run `pnpm dev:manual`, which skips the whole Docker and
+  migration chain.
+- `pnpm db:assert-local` refuses to continue when `DATABASE_URL` is not
+  localhost, so the dev script never migrates staging or production. Set
+  `DB_MIGRATE_ALLOW_REMOTE=true` only for a deliberate remote migration.
 
 ### Port 3100 Already in Use
 
@@ -101,7 +113,21 @@ See [auth.md](./auth.md) for the flow and route protection.
 
 ### Auth Change Didn't Take Effect (role/permission edits)
 
-Sessions live 7 days with a 24h refresh, and Better Auth is configured with a **5-minute cookie cache** (`session.cookieCache.maxAge`, `src/lib/auth/better-auth.ts`). Role or permission changes are therefore invisible for up to 5 minutes unless the user signs out and back in. This is the most common false "auth is broken" report.
+Do not blame the 5-minute Better Auth cookie cache for a stale authorization
+decision. Server guards deliberately re-read authorization state:
+
+- `getUser()` reads `users.role` from the database, so Platform Admin grants and
+  revocations are immediate for `requireAdmin()` /
+  `requireAdminAction()`;
+- `getOrgContext()` reads both `users.role` and the active organization's
+  membership row on every call, so org-role changes and membership revocations
+  are immediate for data access and `requireOrgRole()`.
+
+The cached session can still make session-derived **display/preferences** lag,
+especially `activeOrganizationId` after a switch, for up to five minutes. If
+the UI shows the old organization, switch again or sign out/in; if a protected
+action grants the wrong permission, inspect the DB re-read path rather than
+waiting for the cookie cache.
 
 ### Rate Limits (429 Too Many Requests)
 
@@ -205,7 +231,9 @@ linkedId: emptyToNull.or(z.string().uuid("Invalid selection")).nullable().option
 
 **Root Cause** — Zod v4's `.uuid()` enforces RFC 4122: position 13 must be the version (`1`-`8`) and position 17 the variant (`8`-`b`). Zod v3 only checked the hex shape. Flat sequential IDs like `00000000-0000-0000-0000-000000000160` fail.
 
-**Fix** — `.uuid()` stays in schemas (it is used ~186 times under `src/schemas`); **seed IDs must carry version/variant bits**. Follow the `demoId` helper in `src/db/seed-data.ts` (mirrored in `src/db/seed-certification-evidence.ts`):
+**Fix** — `.uuid()` stays in schemas; **seed IDs must carry version/variant
+bits**. Follow the `demoId` helper in `src/db/seed-data.ts` (mirrored in
+`src/db/seed-certification-evidence.ts`):
 
 ```typescript
 const demoId = (n: number) => `de000000-0000-4000-a000-${n.toString().padStart(12, '0')}`;
@@ -225,7 +253,7 @@ Facts worth pinning because they are frequently misremembered:
 
 - Worker count is **not** fixed: `workers: process.env.CI ? ciWorkers : undefined` — Playwright's default locally. Reason about "parallel workers", never "4 workers".
 - Per-test timeout is `process.env.CI ? 60000 : 90000` (`playwright.config.ts`) — 60s in CI, 90s locally.
-- The worker auth fixture builds storage states via `createSignedAuthStorageState` (`tests/e2e/fixtures/auth-fixtures.ts`). `createDirectAuthContext` is a thin wrapper over it used by a single spec — do not treat it as the entry point.
+- The worker auth fixture builds storage states via `createSignedAuthStorageState` (`tests/e2e/fixtures/auth-fixtures.ts`). `createDirectAuthContext` is a thin wrapper over it used by three specs (`onboarding-first-run`, `org-isolation`, `facility-gate`) — do not treat it as the entry point.
 - `playwright.config` loads **`.env.test`, which is untracked**. Running E2E from a fresh git worktree without copying in both `.env.test` and `.env.local` makes every spec fail on a dead `DATABASE_URL`. This is the highest-frequency agent-facing E2E failure.
 
 ### E2E Schema Drift After Local Schema Changes

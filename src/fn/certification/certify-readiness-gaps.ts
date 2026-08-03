@@ -36,6 +36,7 @@ export function buildEntityReadinessGaps(
 
 export interface EntityReadinessResult {
   gaps: string[];
+  warnings: string[];
   issues: BatchEntityReadinessIssue[];
 }
 
@@ -72,6 +73,7 @@ export function buildEntityReadinessResult(
   requiredTransportCategories: readonly TransportCategory[],
 ): EntityReadinessResult {
   const gaps: string[] = [];
+  const warnings: string[] = [];
   const issues = new Map<string, IssueAccumulator>();
   const addEntityGaps = (
     entityLabel: string,
@@ -86,8 +88,23 @@ export function buildEntityReadinessResult(
     );
     addIssueRecord(issues, issueConfig, { ...record, missing });
   };
+  // Inert until an entity kind produces warnings again. See the warning channel
+  // note in `deriveEntityCertifyReadiness`.
+  const addEntityWarnings = (
+    entityLabel: string,
+    readinessWarnings: ReturnType<
+      typeof deriveEntityCertifyReadiness
+    >["warnings"],
+  ) => {
+    warnings.push(
+      ...readinessWarnings.map(
+        (warning) => `${entityLabel}: ${warning.detail}`,
+      ),
+    );
+  };
 
   for (const run of runs) {
+    const readiness = deriveEntityCertifyReadiness("productionRun", run);
     addEntityGaps(
       `Production run ${run.code}`,
       { id: run.id, code: run.code, missing: [] },
@@ -96,25 +113,28 @@ export function buildEntityReadinessResult(
         label: "Production-run evidence",
         fixTarget: "productionRuns",
       },
-      deriveEntityCertifyReadiness("productionRun", run).gaps,
+      readiness.gaps,
     );
+    addEntityWarnings(`Production run ${run.code}`, readiness.warnings);
   }
 
   for (const batch of batchesWithSamples) {
     for (const sample of batch.samples) {
+      const readiness = deriveEntityCertifyReadiness("sample", {
+        ...sample,
+        durabilityOption: batch.durabilityOption,
+      });
       addEntityGaps(
         `Sample ${sample.sampleCode}`,
         { id: sample.id, code: sample.sampleCode, missing: [] },
         {
           key: "lab-samples",
-          label: "Lab-sample evidence",
+          label: "Sample evidence",
           fixTarget: "labSamples",
         },
-        deriveEntityCertifyReadiness("sample", {
-          ...sample,
-          durabilityOption: batch.durabilityOption,
-        }).gaps,
+        readiness.gaps,
       );
+      addEntityWarnings(`Sample ${sample.sampleCode}`, readiness.warnings);
     }
   }
 
@@ -122,6 +142,7 @@ export function buildEntityReadinessResult(
     const legs = transportLegs[category];
     legs.forEach((leg, index) => {
       const legCode = `${category} transport ${index + 1}`;
+      const readiness = deriveEntityCertifyReadiness("transportLeg", leg);
       addEntityGaps(
         legCode,
         {
@@ -139,13 +160,15 @@ export function buildEntityReadinessResult(
                 ? "labSamples"
                 : "deliveries",
         },
-        deriveEntityCertifyReadiness("transportLeg", leg).gaps,
+        readiness.gaps,
       );
+      addEntityWarnings(legCode, readiness.warnings);
     });
   }
 
   return {
     gaps: Array.from(new Set(gaps)),
+    warnings: Array.from(new Set(warnings)),
     issues: Array.from(issues.values()).map((issue) => ({
       key: issue.key,
       label: issue.label,

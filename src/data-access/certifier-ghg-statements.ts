@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
+import { isPgUniqueViolation } from "@/db/errors";
 import {
   CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY,
   certifierGhgStatements,
@@ -22,18 +23,27 @@ import { SafeError } from "@/lib/errors";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { decideRemovalMembership } from "@/lib/isometric/utils/ghg-entry-membership";
 import {
+  GHG_STATEMENT_ENTITY_TYPE,
+  GHG_STATEMENT_SUBMISSION_TYPE,
+} from "@/lib/isometric/utils/constants";
+import {
   chooseStoredRemotePeriodEnd,
 } from "@/lib/isometric/utils/ghg-statement-local-period";
-import type { Tx } from "./certification";
+import type { CertificationSubmissionRow, Tx } from "./certification";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import type { CertifierRemovalRow } from "./certifier-removals";
 
 export type CertifierGhgStatementRow =
   typeof certifierGhgStatements.$inferSelect;
+type GhgStatementExecutor = Tx | typeof db;
 
 const ISOMETRIC = "isometric" as const;
 const REMOTE_PERIOD_INSERT_RETRY_LIMIT = 10;
+// Per-(organization, facility) registry-identity index (ADR 0023). Matched by
+// name so a 23505 on it is never confused with the period constraint.
+const REMOTE_EXTERNAL_ID_UNIQUE_CONSTRAINT =
+  "certifier_ghg_statements_remote_external_id_unique";
 export const REMOTE_EXTERNAL_ID_METADATA_KEY =
   CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY;
 export const REMOTE_PERIOD_MISSING_METADATA_KEY = "remotePeriodMissing";
@@ -83,9 +93,10 @@ function metadataValue(
 export async function getCertifierGhgStatementById(
   ctx: OrgContext,
   id: string,
+  executor: GhgStatementExecutor = db,
 ): Promise<CertifierGhgStatementRow | null> {
   requireOrgScope(ctx);
-  const [row] = await db
+  const [row] = await executor
     .select()
     .from(certifierGhgStatements)
     .where(and(eq(certifierGhgStatements.id, id), eq(certifierGhgStatements.organizationId, ctx.organizationId)))
@@ -108,10 +119,11 @@ export async function listGhgStatementsForFacility(
 export async function listFacilityIdsForExternalRemovals(
   ctx: OrgContext,
   externalRemovalIds: string[],
+  executor: GhgStatementExecutor = db,
 ): Promise<string[]> {
   requireOrgScope(ctx);
   if (externalRemovalIds.length === 0) return [];
-  const rows = await db
+  const rows = await executor
     .select({ facilityId: certifierRemovals.facilityId })
     .from(certificationSubmissions)
     .innerJoin(
@@ -136,9 +148,10 @@ export async function listFacilityIdsForExternalRemovals(
 export async function listFacilityIdsForExternalProject(
   ctx: OrgContext,
   externalProjectId: string,
+  executor: GhgStatementExecutor = db,
 ): Promise<string[]> {
   requireOrgScope(ctx);
-  const rows = await db
+  const rows = await executor
     .select({ facilityId: certifierProjects.facilityId })
     .from(certifierProjects)
     .where(
@@ -151,12 +164,61 @@ export async function listFacilityIdsForExternalProject(
   return rows.map((row) => row.facilityId);
 }
 
+// The ledger row a *specific* facility holds for a registry statement id.
+//
+// Statement identity is scoped per (organization, facility) since ADR 0023, so
+// the generic `getSubmissionByExternalId` is ambiguous for GHG statements: two
+// facilities sharing one Isometric project each keep their own local row and
+// their own ledger row for the same `remote.id`. Every GHG reconcile path must
+// ask "does THIS facility already hold this remote statement?" rather than
+// "does anyone?".
+export async function getGhgStatementSubmissionForFacility(
+  ctx: OrgContext,
+  args: { facilityId: string; externalId: string },
+  executor: GhgStatementExecutor = db,
+): Promise<CertificationSubmissionRow | null> {
+  requireOrgScope(ctx);
+  const [row] = await executor
+    .select({ submission: certificationSubmissions })
+    .from(certificationSubmissions)
+    .innerJoin(
+      certifierGhgStatements,
+      and(
+        eq(
+          certificationSubmissions.localEntityId,
+          certifierGhgStatements.id,
+        ),
+        eq(certifierGhgStatements.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(certificationSubmissions.provider, ISOMETRIC),
+        eq(
+          certificationSubmissions.submissionType,
+          GHG_STATEMENT_SUBMISSION_TYPE,
+        ),
+        eq(
+          certificationSubmissions.localEntityType,
+          GHG_STATEMENT_ENTITY_TYPE,
+        ),
+        eq(certificationSubmissions.externalId, args.externalId),
+        eq(certifierGhgStatements.facilityId, args.facilityId),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    )
+    .orderBy(desc(certificationSubmissions.version))
+    .limit(1);
+  return row?.submission ?? null;
+}
+
 export async function hasInFlightGhgStatementForFacility(
   ctx: OrgContext,
   facilityId: string,
+  executor: GhgStatementExecutor = db,
 ): Promise<boolean> {
   requireOrgScope(ctx);
-  const [row] = await db
+  const [row] = await executor
     .select({ id: certificationSubmissions.id })
     .from(certificationSubmissions)
     .innerJoin(
@@ -172,8 +234,14 @@ export async function hasInFlightGhgStatementForFacility(
     .where(
       and(
         eq(certificationSubmissions.provider, ISOMETRIC),
-        eq(certificationSubmissions.submissionType, "ghg_statement"),
-        eq(certificationSubmissions.localEntityType, "ghgStatement"),
+        eq(
+          certificationSubmissions.submissionType,
+          GHG_STATEMENT_SUBMISSION_TYPE,
+        ),
+        eq(
+          certificationSubmissions.localEntityType,
+          GHG_STATEMENT_ENTITY_TYPE,
+        ),
         eq(certificationSubmissions.status, "draft"),
         isNotNull(certificationSubmissions.lockedAt),
         gt(
@@ -247,7 +315,7 @@ export async function getOrCreateGhgStatementDraft(
     // statements. There is no soft/hard delete for GHG statements today, so
     // this is effectively unreachable; surface a retryable error rather than
     // returning undefined.
-    throw new SafeError("GHG statement could not be created. Retry.");
+    throw new SafeError("GHG Statement was not created. Try again.");
   }
   return { statement: existing, created: false };
 }
@@ -264,22 +332,28 @@ export async function createGhgStatementForRegistryDiscovery(
     externalId: string;
     reportingPeriodEndOn: string | null;
   },
+  executor: GhgStatementExecutor = db,
 ): Promise<CertifierGhgStatementRow> {
   requireOrgScope(ctx);
   const existing = await findRegistryDiscoveryStatement(
     ctx,
     input.facilityId,
     input.externalId,
+    executor,
   );
   if (existing) return existing;
 
   // A stale operator create may have POSTed successfully before persisting
   // the returned registry id. Once its lock expires, adopt that unbound
   // same-period identity rather than allocating a synthetic duplicate.
-  const adoptable = await findAdoptableOperatorStatement(ctx, input);
+  const adoptable = await findAdoptableOperatorStatement(ctx, input, executor);
   if (adoptable) return adoptable;
 
-  const occupiedEndOns = await listStoredPeriodEnds(ctx, input.facilityId);
+  const occupiedEndOns = await listStoredPeriodEnds(
+    ctx,
+    input.facilityId,
+    executor,
+  );
 
   for (
     let attempt = 0;
@@ -290,38 +364,61 @@ export async function createGhgStatementForRegistryDiscovery(
       input.reportingPeriodEndOn,
       occupiedEndOns,
     );
-    const [inserted] = await db
-      .insert(certifierGhgStatements)
-      .values({
-        organizationId: ctx.organizationId,
-        facilityId: input.facilityId,
-        reportingPeriodEndOn: storedPeriod.endOn,
-        metadata: {
-          [REMOTE_EXTERNAL_ID_METADATA_KEY]: input.externalId,
-          [REMOTE_PERIOD_END_ON_METADATA_KEY]: input.reportingPeriodEndOn,
-          [REMOTE_PERIOD_END_IS_SYNTHETIC_METADATA_KEY]:
-            storedPeriod.synthetic,
-          [REMOTE_PERIOD_MISSING_METADATA_KEY]:
-            input.reportingPeriodEndOn === null,
-        },
-      })
-      // The period constraint means another remote already occupies this
-      // local date; the external-id expression index means this remote won a
-      // concurrent insert. Handle either conflict, then identify which won.
-      .onConflictDoNothing()
-      .returning();
+    // Two unique keys can reject this insert and they mean opposite things,
+    // but Postgres allows only ONE inference target per ON CONFLICT. So the
+    // *period* key (the retryable one — another remote already occupies this
+    // local date, pick another) is the explicit target, and the per-facility
+    // *external-id* key (a concurrent reconcile of this same remote won the
+    // race) is isolated behind a nested transaction/savepoint, caught by name,
+    // and resolved by re-reading. The savepoint keeps a caller transaction
+    // usable after the expected 23505. Nothing untargeted is swallowed: any
+    // other violation propagates.
+    let inserted: CertifierGhgStatementRow | undefined;
+    try {
+      inserted = await executor.transaction(async (insertTx) => {
+        const [row] = await insertTx
+          .insert(certifierGhgStatements)
+          .values({
+            organizationId: ctx.organizationId,
+            facilityId: input.facilityId,
+            reportingPeriodEndOn: storedPeriod.endOn,
+            metadata: {
+              [REMOTE_EXTERNAL_ID_METADATA_KEY]: input.externalId,
+              [REMOTE_PERIOD_END_ON_METADATA_KEY]: input.reportingPeriodEndOn,
+              [REMOTE_PERIOD_END_IS_SYNTHETIC_METADATA_KEY]:
+                storedPeriod.synthetic,
+              [REMOTE_PERIOD_MISSING_METADATA_KEY]:
+                input.reportingPeriodEndOn === null,
+            },
+          })
+          .onConflictDoNothing({
+            target: [
+              certifierGhgStatements.provider,
+              certifierGhgStatements.facilityId,
+              certifierGhgStatements.reportingPeriodEndOn,
+            ],
+          })
+          .returning();
+        return row;
+      });
+    } catch (err) {
+      if (!isPgUniqueViolation(err, REMOTE_EXTERNAL_ID_UNIQUE_CONSTRAINT)) {
+        throw err;
+      }
+    }
     if (inserted) return inserted;
     const concurrentlyInserted = await findRegistryDiscoveryStatement(
       ctx,
       input.facilityId,
       input.externalId,
+      executor,
     );
     if (concurrentlyInserted) return concurrentlyInserted;
     occupiedEndOns.add(storedPeriod.endOn);
   }
 
   throw new SafeError(
-    "Registry statement could not be allocated a local record. Reload and retry.",
+    "The registry GHG Statement could not be synced. Refresh the page and try again.",
   );
 }
 
@@ -332,9 +429,10 @@ async function findAdoptableOperatorStatement(
     externalId: string;
     reportingPeriodEndOn: string | null;
   },
+  executor: GhgStatementExecutor,
 ): Promise<CertifierGhgStatementRow | null> {
   if (input.reportingPeriodEndOn === null) return null;
-  const [candidate] = await db
+  const [candidate] = await executor
     .select()
     .from(certifierGhgStatements)
     .where(
@@ -355,7 +453,7 @@ async function findAdoptableOperatorStatement(
   ) {
     return null;
   }
-  const [latest] = await db
+  const [latest] = await executor
     .select({
       externalId: certificationSubmissions.externalId,
       status: certificationSubmissions.status,
@@ -365,8 +463,14 @@ async function findAdoptableOperatorStatement(
     .where(
       and(
         eq(certificationSubmissions.provider, ISOMETRIC),
-        eq(certificationSubmissions.submissionType, "ghg_statement"),
-        eq(certificationSubmissions.localEntityType, "ghgStatement"),
+        eq(
+          certificationSubmissions.submissionType,
+          GHG_STATEMENT_SUBMISSION_TYPE,
+        ),
+        eq(
+          certificationSubmissions.localEntityType,
+          GHG_STATEMENT_ENTITY_TYPE,
+        ),
         eq(certificationSubmissions.localEntityId, candidate.id),
         eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),
@@ -385,9 +489,10 @@ async function findRegistryDiscoveryStatement(
   ctx: OrgContext,
   facilityId: string,
   externalId: string,
+  executor: GhgStatementExecutor,
 ): Promise<CertifierGhgStatementRow | null> {
   requireOrgScope(ctx);
-  const rows = await db
+  const rows = await executor
     .select()
     .from(certifierGhgStatements)
     .where(
@@ -433,7 +538,7 @@ export async function updateGhgStatementReportingWindow(
     )
     .limit(1);
   if (!statement) {
-    throw new SafeError("GHG statement could not be found.");
+    throw new SafeError("GHG Statement not found.");
   }
 
   const metadataPatch: Record<string, unknown> = {};
@@ -635,7 +740,7 @@ export async function reconcileRemovalMembership(
       .where(and(eq(certifierGhgStatements.id, ghgStatementId), eq(certifierGhgStatements.organizationId, ctx.organizationId)))
       .limit(1);
     if (!target) {
-      throw new SafeError("GHG statement not found for reconciliation.");
+      throw new SafeError("GHG Statement not found. Refresh the page.");
     }
     const targetFacilityId = target.facilityId;
 

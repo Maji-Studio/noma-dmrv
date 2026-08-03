@@ -72,7 +72,10 @@ test.describe("Certification — New-Removal wizard", () => {
         }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(
-        sampleDialog.getByText(batch.code, { exact: true }),
+        sampleDialog.getByText(
+          `Characterises credit batch ${batch.code}`,
+          { exact: true },
+        ),
       ).toBeVisible();
       await expect(page).not.toHaveURL(
         new RegExp(
@@ -102,13 +105,13 @@ test.describe("Certification — New-Removal wizard", () => {
       // The primary CTA (the header one; the empty-state nudge shares the label,
       // so take the first in DOM order).
       await page
-        .getByRole("button", { name: "New removal", exact: true })
+        .getByRole("button", { name: "New Removal", exact: true })
         .first()
         .click();
 
       const dialog = page.getByRole("dialog");
       await expect(
-        dialog.getByRole("heading", { name: "New removal", level: 2 }),
+        dialog.getByRole("heading", { name: "New Removal", level: 2 }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       // Step 1 chrome.
       await expect(
@@ -147,6 +150,7 @@ test.describe("Certification — New-Removal wizard", () => {
           feedstockId: seededData.feedstock.id,
           feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
           biocharStorageLocationId: seededData.biocharStorageLocation.id,
+          productStorageLocationId: seededData.productStorageLocation.id,
           customerId: seededData.customer.id,
           customerLocationId: seededData.customerLocation.id,
           vehicleId: seededData.vehicle.id,
@@ -173,7 +177,7 @@ test.describe("Certification — New-Removal wizard", () => {
       // to the redirect + resume-entry behavior under test here).
       const dialog = page.getByRole("dialog");
       await expect(
-        dialog.getByRole("heading", { name: "New removal", level: 2 }),
+        dialog.getByRole("heading", { name: "New Removal", level: 2 }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(dialog.locator('[aria-current="step"]')).toContainText(
         "Confirm & submit",
@@ -329,16 +333,18 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
       // Surface 2 — the New-Removal wizard's selection card for the SAME batch.
       await page.goto(`/certification/removals?facility=${facilityId}`);
       await page
-        .getByRole("button", { name: "New removal", exact: true })
+        .getByRole("button", { name: "New Removal", exact: true })
         .first()
         .click();
       const dialog = page.getByRole("dialog");
       await expect(
         dialog.getByRole("heading", { name: "Select credit batches" }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-      await expect(dialog.getByText(batch.code)).toBeVisible({
-        timeout: COLD_COMPILE_TIMEOUT_MS,
-      });
+      // `exact` — readiness gap strings quote the batch code too, so a
+      // substring match resolves to both the code chip and the gap sentence.
+      await expect(
+        dialog.getByText(batch.code, { exact: true }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       // The identical requirement string appears in the wizard too.
       await expect(dialog.getByText(PRODUCTION_REQUIREMENT).first()).toBeVisible();
     } finally {
@@ -388,7 +394,7 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
 
       await page.goto(`/certification/removals?facility=${facilityId}`);
       await page
-        .getByRole("button", { name: "New removal", exact: true })
+        .getByRole("button", { name: "New Removal", exact: true })
         .first()
         .click();
 
@@ -407,7 +413,10 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
       await expect(
         dialog.getByText(/Not ready yet \(\d+\)/),
       ).toBeVisible();
-      await expect(dialog.getByText(batch.code)).toBeVisible();
+      // `exact` — the batch's own gap strings quote the code (see above).
+      await expect(
+        dialog.getByText(batch.code, { exact: true }),
+      ).toBeVisible();
 
       // Production lineage and sample completeness are independent: fixing the
       // application path must not reveal a previously hidden lab blocker.

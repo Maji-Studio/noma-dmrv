@@ -7,8 +7,10 @@
  */
 "use client";
 
+// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+
 import { useState } from "react";
-import { TrashIcon } from "@phosphor-icons/react";
+import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   useProductionRunReadings,
   useDeleteAllProductionRunReadings,
@@ -18,7 +20,7 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDateTimeWithOffset } from "@/lib/format-utils";
 
 const TABLE_MAX_HEIGHT_CLASS = "max-h-[420px]";
 const COMPACT_TABLE_MAX_HEIGHT_CLASS = "max-h-[240px]";
@@ -28,7 +30,7 @@ const COMPACT_TABLE_MAX_HEIGHT_CLASS = "max-h-[240px]";
 // ============================================
 
 function formatNum(v: number | null, decimals = 1): string {
-  if (v == null) return "—";
+  if (v == null) return "Not recorded";
   return v.toFixed(decimals);
 }
 
@@ -38,6 +40,7 @@ function formatNum(v: number | null, decimals = 1): string {
 
 interface ProductionRunReadingTableProps {
   productionRunId: string;
+  timeZone: string;
   readOnly?: boolean;
   /** Keep the inline form preview short while preserving access to every row. */
   compact?: boolean;
@@ -45,6 +48,7 @@ interface ProductionRunReadingTableProps {
 
 export function ProductionRunReadingTable({
   productionRunId,
+  timeZone,
   readOnly = false,
   compact = false,
 }: ProductionRunReadingTableProps) {
@@ -75,7 +79,7 @@ export function ProductionRunReadingTable({
       );
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Failed to delete readings"
+        err instanceof Error ? err.message : "The readings were not deleted. Try again."
       );
       setConfirmingDeleteAll(false);
     }
@@ -120,7 +124,9 @@ export function ProductionRunReadingTable({
                 so rows don't bleed through behind it. */}
             <thead className="sticky top-0 z-10 bg-[var(--color-background-white)]">
               <tr className="border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-tertiary)]">
-                <th className="py-8 pr-12 font-medium">Time</th>
+                <th className="py-8 pr-12 font-medium">
+                  Time ({timeZone.replace(/_/g, " ")})
+                </th>
                 <th className="py-8 pr-12 font-medium">Temp (&deg;C)</th>
                 <th className="py-8 pr-12 font-medium">Pressure (bar)</th>
                 <th className="py-8 pr-12 font-medium">Dryer (Hz)</th>
@@ -134,7 +140,7 @@ export function ProductionRunReadingTable({
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 font-medium">
-                    {formatDateTime(r.timestamp)}
+                    {formatFacilityDateTimeWithOffset(r.timestamp, timeZone)}
                   </td>
                   <td className="py-8 pr-12">{formatNum(r.temperatureC, 1)}</td>
                   <td className="py-8 pr-12">{formatNum(r.pressureBar, 2)}</td>

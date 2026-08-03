@@ -13,6 +13,7 @@ import { facilities } from "@/db/schema/facilities";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customerLocations, customers } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
+import { TEST_GIS_BOUNDARY } from "./helpers/application-evidence-fixtures";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
@@ -190,6 +191,17 @@ describe("application mutations", () => {
 
       expect(application.biocharAppliedTons).toBe(2);
       expect(application.biocharAppliedDryTons).toBeCloseTo(1.6);
+
+      const options = await getApplicationDeliveryOptions(
+        makeTestOrgContext(TEST_USER_ID),
+        fixture.facilityId,
+      );
+      expect(
+        options.find((option) => option.id === fixture.deliveryIds[0]),
+      ).toMatchObject({
+        alreadyAppliedWetKg: 2_000,
+        alreadyAppliedDryKg: 1_600,
+      });
     } finally {
       await cleanupMutationFixture(fixture);
     }
@@ -214,7 +226,7 @@ describe("application mutations", () => {
     }
   });
 
-  it("persists boundary evidence method with the GIS boundary reference", async () => {
+  it("persists boundary evidence method with the GIS boundary", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
 
@@ -225,42 +237,38 @@ describe("application mutations", () => {
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
         evidenceMethod: "boundary",
-        gisBoundaryReference: "https://maps.example.test/field-a",
+        gisBoundary: TEST_GIS_BOUNDARY,
       });
       fixture.applicationIds.push(application.id);
 
       expect(application.evidenceMethod).toBe("boundary");
-      expect(application.gisBoundaryReference).toBe(
-        "https://maps.example.test/field-a",
-      );
+      expect(application.gisBoundary).toEqual(TEST_GIS_BOUNDARY);
     } finally {
       await cleanupMutationFixture(fixture);
     }
   });
 
-  it("normalizes blank GIS boundary references to null", async () => {
+  it("clears a GIS boundary to null", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
 
     try {
       const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
-        code: `AP-AM-${runId}-BLANK-GIS`,
+        code: `AP-AM-${runId}-CLEAR-GIS`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
         evidenceMethod: "boundary",
-        gisBoundaryReference: "   ",
+        gisBoundary: TEST_GIS_BOUNDARY,
       });
       fixture.applicationIds.push(application.id);
 
-      expect(application.gisBoundaryReference).toBeNull();
+      expect(application.gisBoundary).toEqual(TEST_GIS_BOUNDARY);
 
       const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
-        gisBoundaryReference: "  https://maps.example.test/field-a  ",
+        gisBoundary: null,
       });
-      expect(updated.gisBoundaryReference).toBe(
-        "https://maps.example.test/field-a",
-      );
+      expect(updated.gisBoundary).toBeNull();
     } finally {
       await cleanupMutationFixture(fixture);
     }
@@ -303,7 +311,7 @@ describe("application mutations", () => {
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 6,
         }),
-      ).rejects.toThrow("Cannot apply");
+      ).rejects.toThrow("Not enough biochar in this delivery");
 
       const [application] = await db
         .select({ id: applications.id })
@@ -311,6 +319,75 @@ describe("application mutations", () => {
         .where(eq(applications.code, code));
 
       expect(application).toBeUndefined();
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("rejects manual dry applied mass above wet applied mass", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+    const code = `AP-AM-${runId}-DRY-OVER-WET`;
+
+    try {
+      await db
+        .update(deliveries)
+        .set({ moistureContentPercent: null })
+        .where(eq(deliveries.id, fixture.deliveryIds[0]));
+
+      await expect(
+        createApplication(makeTestOrgContext(TEST_USER_ID), {
+          code,
+          deliveryId: fixture.deliveryIds[0],
+          applicationDate: new Date("2025-07-08"),
+          biocharAppliedTons: 2,
+          biocharAppliedDryTons: 2.001,
+        }),
+      ).rejects.toThrow(
+        "Dry mass cannot exceed wet mass. Reduce the dry mass.",
+      );
+
+      const [application] = await db
+        .select({ id: applications.id })
+        .from(applications)
+        .where(eq(applications.code, code));
+
+      expect(application).toBeUndefined();
+    } finally {
+      await db.delete(applications).where(eq(applications.code, code));
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("rejects an update that raises manual dry mass above stored wet mass", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      await db
+        .update(deliveries)
+        .set({ moistureContentPercent: null })
+        .where(eq(deliveries.id, fixture.deliveryIds[0]));
+
+      const application = await createApplication(
+        makeTestOrgContext(TEST_USER_ID),
+        {
+          code: `AP-AM-${runId}-DRY-UPDATE`,
+          deliveryId: fixture.deliveryIds[0],
+          applicationDate: new Date("2025-07-08"),
+          biocharAppliedTons: 2,
+          biocharAppliedDryTons: 1.5,
+        },
+      );
+      fixture.applicationIds.push(application.id);
+
+      await expect(
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+          biocharAppliedDryTons: 2.001,
+        }),
+      ).rejects.toThrow(
+        "Dry mass cannot exceed wet mass. Reduce the dry mass.",
+      );
     } finally {
       await cleanupMutationFixture(fixture);
     }
@@ -331,7 +408,9 @@ describe("application mutations", () => {
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
         }),
-      ).rejects.toThrow("has not been delivered yet");
+      ).rejects.toThrow(
+        `Delivery DL-AM-${runId}-UPCOMING is not marked as delivered. Mark it as delivered before recording an application.`,
+      );
 
       const [application] = await db
         .select({ id: applications.id })
@@ -423,7 +502,9 @@ describe("application mutations", () => {
         updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
           deliveryId: upcomingDeliveryId,
         }),
-      ).rejects.toThrow("has not been delivered yet");
+      ).rejects.toThrow(
+        `Delivery DL-AM-${runId}-UPCOMING is not marked as delivered. Mark it as delivered before recording an application.`,
+      );
     } finally {
       await cleanupMutationFixture(fixture);
     }
@@ -512,7 +593,7 @@ describe("application mutations", () => {
         updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
           biocharAppliedTons: 6,
         }),
-      ).rejects.toThrow("Cannot apply");
+      ).rejects.toThrow("Not enough biochar in this delivery");
 
       const [persisted] = await db
         .select({

@@ -1,6 +1,5 @@
 "use client";
 
-import type { FormEventHandler, ReactNode } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -12,7 +11,6 @@ import {
   FormSelect,
   PositionPicker,
   makeCertFieldStatus,
-  resolveCertFieldStatus,
 } from "@/components/forms";
 import {
   transportLegFormSchema,
@@ -24,11 +22,11 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
+import { TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { TransportLeg } from "@/db/schema";
 import { TransportEvidencePanel } from "./transport-evidence-documents";
-import { hasDocumentBackedDistanceProvenance } from "@/lib/certification/transport-evidence";
 
 interface TransportLegFormProps {
   /** When provided, the form edits this leg; otherwise it creates a new one. */
@@ -37,29 +35,6 @@ interface TransportLegFormProps {
   onCancel: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
-  /** Render without a nested form when an owning parent form surrounds this UI. */
-  embedded?: boolean;
-}
-
-interface TransportLegFormContainerProps {
-  embedded: boolean;
-  onSubmit: FormEventHandler<HTMLFormElement>;
-  children: ReactNode;
-}
-
-function TransportLegFormContainer({
-  embedded,
-  onSubmit,
-  children,
-}: TransportLegFormContainerProps) {
-  const className = "flex flex-col gap-20";
-  return embedded ? (
-    <div className={className}>{children}</div>
-  ) : (
-    <form onSubmit={onSubmit} className={className}>
-      {children}
-    </form>
-  );
 }
 
 const transportMethodOptions = selectableTransportMethods.map((m) => ({
@@ -79,6 +54,8 @@ function isSavedTransportLeg(
 
 function legToFormDefaults(
   leg: TransportLeg | TransportLegFormData | null | undefined,
+  /** Organization default, for a leg being created. */
+  defaultTripType: TripTypeValue,
 ) {
   return {
     originGpsLatitude: leg?.originGpsLatitude ?? null,
@@ -94,7 +71,7 @@ function legToFormDefaults(
     vehicleType: leg?.vehicleType ?? "",
     modelYear: leg?.modelYear ?? null,
     loadMassKg: leg?.loadMassKg ?? null,
-    tripType: leg?.tripType ?? DEFAULT_TRIP_TYPE,
+    tripType: leg?.tripType ?? defaultTripType,
     calculationMethodType: "distance_based" as const,
     billOfLading: leg?.billOfLading ?? "",
     weighScaleTicketRef: leg?.weighScaleTicketRef ?? "",
@@ -102,9 +79,8 @@ function legToFormDefaults(
 }
 
 /**
- * Inline transport-leg form (matches the production-run child-entity pattern).
- * The parent editor owns the create/update mutations and renders this in a box;
- * the form just validates and calls `onSubmit`.
+ * Transport-leg form rendered inside the editor's centered dialog. The editor
+ * owns create/update behavior; this form validates and calls `onSubmit`.
  */
 export function TransportLegForm({
   leg,
@@ -112,11 +88,13 @@ export function TransportLegForm({
   onCancel,
   isSubmitting = false,
   errorMessage,
-  embedded = false,
 }: TransportLegFormProps) {
   const isEditMode = !!leg;
   const isPersisted = !!leg && isSavedTransportLeg(leg);
-  const defaultValues = legToFormDefaults(leg);
+  // Organization operating defaults seed create mode only; a saved leg always
+  // wins. Server-seeded in the `(app)` layout, so this is synchronous.
+  const { defaults: orgDefaults } = useOrganizationDefaultValues();
+  const defaultValues = legToFormDefaults(leg, orgDefaults.defaultTripType);
 
   const {
     register,
@@ -131,15 +109,17 @@ export function TransportLegForm({
   const certStatus = makeCertFieldStatus(isPersisted ? defaultValues : undefined);
 
   // Provenance: hand-editing the distance reverts a CALC'd map estimate to
-  // manual — the operator can explicitly re-mark it as document-backed.
+  // manual. A legacy document value stays available only while selected.
   const distanceSource = useWatch({
     control,
     name: "distanceSource",
   }) as DistanceSourceValue;
   const distanceSourceOptions = (
     distanceSource === "map_estimate"
-      ? (["map_estimate", "manual", "document"] as const)
-      : (["manual", "document"] as const)
+      ? (["map_estimate", "manual"] as const)
+      : distanceSource === "document"
+        ? (["document", "manual"] as const)
+        : (["manual"] as const)
   ).map((value) => ({ value, label: DISTANCE_SOURCE_LABELS[value] }));
 
   // CALC endpoints: this leg's own origin/destination pickers.
@@ -161,7 +141,15 @@ export function TransportLegForm({
   });
 
   return (
-    <TransportLegFormContainer embedded={embedded} onSubmit={submit}>
+    <form
+      onSubmit={(event) => {
+        // The dialog portal avoids invalid nested form markup, but React portal
+        // events still bubble through the component tree to an owning form.
+        event.stopPropagation();
+        return submit(event);
+      }}
+      className="flex flex-col gap-20"
+    >
       <FormSection
         title="Route"
         divider={false}
@@ -245,7 +233,7 @@ export function TransportLegForm({
                 shouldValidate: true,
               });
               // CALC always claims map_estimate; a hand edit only degrades a
-              // map estimate — an explicit Document/Manual marking survives.
+              // map estimate — an explicit manual or legacy document value survives.
               if (source === "map_estimate" || distanceSource === "map_estimate") {
                 setValue("distanceSource", source ?? "manual", { shouldDirty: true });
               }
@@ -259,12 +247,8 @@ export function TransportLegForm({
             id="distanceSource"
             label="Distance source"
             error={errors.distanceSource?.message}
-            helperText="Use Document when the distance comes from shipping evidence."
             certifyRequired={isTransportLegCertifyField("distanceSource")}
-            certifyStatus={resolveCertFieldStatus(
-              isPersisted ? true : undefined,
-              hasDocumentBackedDistanceProvenance(defaultValues.distanceSource),
-            )}
+            certifyStatus={certStatus("distanceSource")}
           >
             <FormSelect
               id="distanceSource"
@@ -337,14 +321,12 @@ export function TransportLegForm({
 
       <FormSection title="Documentation">
         <p className="body-small text-[var(--color-text-secondary)]">
-          Classify each supporting file before upload. One accepted transport
-          evidence file is sufficient.
+          Optional. Classify each transport document before upload.
         </p>
         {isEditMode && leg && isSavedTransportLeg(leg) ? (
           <TransportEvidencePanel
             entityType="transport_leg"
             entityId={leg.id}
-            distanceSource={leg.distanceSource}
           />
         ) : (
           <p className="body-small text-[var(--color-text-tertiary)] border border-dashed border-[var(--color-border-secondary)] px-12 py-16">
@@ -360,9 +342,7 @@ export function TransportLegForm({
         isSubmitting={isSubmitting}
         errorMessage={errors.root?.serverError?.message ?? errorMessage}
         submitLabel={isEditMode ? "Save changes" : "Add transport leg"}
-        submitType={embedded ? "button" : "submit"}
-        onSubmitClick={embedded ? () => void submit() : undefined}
       />
-    </TransportLegFormContainer>
+    </form>
   );
 }

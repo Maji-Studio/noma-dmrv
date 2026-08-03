@@ -80,10 +80,10 @@ describe("credit batch production window helper", () => {
 
   it("rejects impossible date-only strings instead of normalizing them", () => {
     expect(getCreditBatchProductionWindowIssue("2026-02-30", "2026-03-01")).toBe(
-      "Invalid date",
+      "Enter a valid date.",
     );
     expect(() =>
       getCreditBatchProductionWindowBounds("2026-02-30", "2026-03-01"),
-    ).toThrow("Invalid date");
+    ).toThrow("Enter a valid date.");
   });
 });

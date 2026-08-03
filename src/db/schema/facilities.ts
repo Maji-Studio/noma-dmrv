@@ -146,6 +146,10 @@ export const storageLocations = pgTable(
   },
   (table) => [
     unique('storage_locations_organization_id_code_unique').on(table.organizationId, table.code),
+    unique('storage_locations_id_organization_id_unique').on(
+      table.id,
+      table.organizationId,
+    ),
     foreignKey({
       columns: [table.facilityId, table.organizationId],
       foreignColumns: [facilities.id, facilities.organizationId],

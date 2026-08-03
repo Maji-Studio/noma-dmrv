@@ -314,7 +314,7 @@ describe("stock-reducing update guards", () => {
       updateOrder(makeTestOrgContext(), order.id, {
         biocharProductId: targetProduct.id,
       }),
-    ).rejects.toThrow("Not enough product in this bin");
+    ).rejects.toThrow(/^Not enough biochar in this bin$/);
 
     const [persisted] = await db
       .select({ biocharProductId: orders.biocharProductId })
@@ -405,9 +405,7 @@ describe("stock-reducing update guards", () => {
       updateBiocharProduct(makeTestOrgContext(), product.id, {
         massKg: SHRINK_PRODUCT_TARGET_MASS_KG,
       }),
-    ).rejects.toThrow(
-      new RegExp(`${productCode}.*800 kg has already been delivered`),
-    );
+    ).rejects.toThrow(/^Not enough biochar in this product$/);
 
     const [persisted] = await db
       .select({ massKg: biocharProducts.massKg })
@@ -416,7 +414,7 @@ describe("stock-reducing update guards", () => {
     expect(persisted.massKg).toBe(SHRINK_PRODUCT_INITIAL_MASS_KG);
   });
 
-  it("rejects raising a formulation ratio above linked biochar stock", async () => {
+  it("does not recalculate source mass from a formulation volume share", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
@@ -498,13 +496,13 @@ describe("stock-reducing update guards", () => {
       updateFormulation(makeTestOrgContext(), formulation.id, {
         biocharRatio: FORMULATION_TARGET_RATIO,
       }),
-    ).rejects.toThrow("Not enough biochar in this bin");
+    ).resolves.toMatchObject({ biocharRatio: FORMULATION_TARGET_RATIO });
 
     const [persisted] = await db
       .select({ biocharRatio: formulations.biocharRatio })
       .from(formulations)
       .where(eq(formulations.id, formulation.id));
-    expect(persisted.biocharRatio).toBe(FORMULATION_INITIAL_RATIO);
+    expect(persisted.biocharRatio).toBe(FORMULATION_TARGET_RATIO);
   });
 
   it("rejects reducing a production run below its allocated biochar mass", async () => {

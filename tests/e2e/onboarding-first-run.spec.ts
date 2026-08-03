@@ -5,9 +5,8 @@
  * The shared seeded org already has facilities, so the wizard would never
  * auto-open there. This spec provisions its own empty org + owner user
  * (mirroring the auth-fixtures seeding idiom), signs in through the auth API,
- * and walks: auto-opened wizard → facility → reactor → registry (fake
- * credentials on the fresh org — never the shared org's row) → guide spine →
- * collapse/expand → supplier CTA round-trip → self-clearing step state.
+ * and walks: auto-opened wizard → facility → reactor → registry → guide spine
+ * → collapse/expand → supplier CTA round-trip → self-clearing step state.
  */
 import { eq } from "drizzle-orm";
 import { hashPassword } from "better-auth/crypto";
@@ -15,10 +14,13 @@ import { expect, test } from "./fixtures";
 import { createDirectAuthContext } from "./fixtures/auth-fixtures";
 import { createDbConnection } from "./fixtures/db";
 import * as schema from "@/db/schema";
+import { encryptSecret } from "@/lib/crypto/secrets";
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const ORG_ID = `e2e-onboarding-org-${RUN_TAG}`;
+const ORG_NAME = `E2E Onboarding Org ${RUN_TAG}`;
 const USER_ID = `e2e-onboarding-owner-${RUN_TAG}`;
+const PROVIDER = "isometric" as const;
 const OWNER = {
   id: USER_ID,
   email: `test-onboarding-owner-${RUN_TAG}@e2e.local`,
@@ -29,6 +31,7 @@ const OWNER = {
 
 test.describe("First-run onboarding", () => {
   test("wizard auto-opens for a fresh org and the guide walks the chain", async ({
+    adminPage,
     browser,
     baseURL,
   }) => {
@@ -39,7 +42,7 @@ test.describe("First-run onboarding", () => {
     await db.transaction(async (tx) => {
       await tx.insert(schema.organizations).values({
         id: ORG_ID,
-        name: `E2E Onboarding Org ${RUN_TAG}`,
+        name: ORG_NAME,
         slug: `e2e-onboarding-${RUN_TAG}`,
       });
       await tx.insert(schema.users).values({
@@ -78,25 +81,44 @@ test.describe("First-run onboarding", () => {
       await expect(wizard).toBeVisible();
       await expect(wizard.getByText("Welcome")).toBeVisible();
 
-      // 2. Facility step — the real facility form. With a single available
-      // tier the durability field renders as read-only 1000-year info (#348).
+      // 2. Facility step — the real facility form shows the active tier and
+      // the locked future pathway.
       await wizard.getByRole("button", { name: "Get started" }).click();
       await expect(wizard.getByLabel(/facility name/i)).toBeVisible();
-      await expect(wizard.getByTestId("durability-tier-info")).toBeVisible();
       await expect(
-        wizard.getByText("1000-year durability"),
-      ).toBeVisible();
+        wizard.getByRole("button", { name: "Skip setup", exact: true }),
+      ).toHaveCount(1);
+      await expect(
+        wizard.getByRole("button", { name: "Cancel", exact: true }),
+      ).toHaveCount(0);
+      const tierGroup = wizard.getByRole("radiogroup", {
+        name: "Durability tier",
+      });
+      await expect(tierGroup).toBeVisible();
+      await expect(
+        tierGroup.getByRole("radio", { name: /1000-year/i }),
+      ).toHaveAttribute("aria-checked", "true");
+      await expect(
+        tierGroup.getByRole("radio", { name: /200-year/i }),
+      ).toHaveAttribute("aria-disabled", "true");
       await wizard.getByLabel(/facility name/i).fill("CU Test Facility");
       await wizard.getByLabel(/country/i).fill("Tanzania");
-      await wizard
-        .getByLabel(/timezone/i)
-        .selectOption({ index: 1 });
+      await wizard.getByLabel(/timezone/i).fill("Nairobi");
+      await page
+        .getByRole("option", { name: "Africa/Nairobi (UTC+3)" })
+        .click();
       await wizard.getByRole("button", { name: "Add facility" }).click();
 
       // 3. Reactor step.
       await expect(
         wizard.getByRole("button", { name: "Register reactor" }),
       ).toBeVisible();
+      await expect(
+        wizard.getByRole("button", { name: "Skip setup", exact: true }),
+      ).toHaveCount(1);
+      await expect(
+        wizard.getByRole("button", { name: "Cancel", exact: true }),
+      ).toHaveCount(0);
       await wizard.getByLabel(/identifier/i).fill("CU-R1");
       await wizard.getByLabel(/reactor type/i).selectOption({ index: 1 });
       await wizard
@@ -108,12 +130,27 @@ test.describe("First-run onboarding", () => {
       await expect(wizard.getByText("Puro.earth")).toBeVisible();
       await expect(wizard.getByText("CSI")).toBeVisible();
       await expect(wizard.getByText(/coming soon/i).first()).toBeVisible();
-      await wizard.getByLabel("Access token").fill("cu-test-access-9999");
-      await wizard.getByLabel("Client secret").fill("cu-test-secret");
-      await wizard
-        .getByRole("button", { name: /Set credentials|Replace credentials/ })
-        .click();
-      await expect(wizard.getByText("Access token …9999")).toBeVisible();
+      await expect(wizard.getByLabel("Access token")).toBeVisible();
+      await expect(wizard.getByLabel("Client secret")).toBeVisible();
+
+      // Credential writes verify against live Isometric. Keep this PR-shard
+      // journey hermetic: seed the encrypted row directly, then exercise the
+      // same status UI through the Platform Admin directory, which never mounts
+      // the facility project picker or calls Isometric.
+      await db.insert(schema.certifierCredentials).values({
+        organizationId: ORG_ID,
+        provider: PROVIDER,
+        accessTokenEncrypted: encryptSecret("e2e-onboarding-access-9999"),
+        clientSecretEncrypted: encryptSecret("e2e-onboarding-client-secret"),
+      });
+      await adminPage.goto("/admin/organizations");
+      const organization = adminPage
+        .getByRole("listitem")
+        .filter({ hasText: ORG_NAME });
+      await expect(organization).toBeVisible();
+      await expect(
+        organization.getByText("Ends 9999", { exact: false }),
+      ).toBeVisible();
 
       // 5. Finish → the guide takes over the dashboard body.
       await wizard.getByRole("button", { name: "Finish" }).click();
@@ -139,36 +176,48 @@ test.describe("First-run onboarding", () => {
       await expect(guide).toBeVisible();
 
       // 7. Supplier round-trip via its upcoming-step link: create sheet
-      // deep-link, then the step self-clears on return (refetchOnMount).
+      // deep-link, then the step self-clears on client-side dashboard return.
       await guide.getByRole("link", { name: "Add supplier" }).click();
       await expect(page).toHaveURL(/\/suppliers/);
-      const sheet = page.getByRole("dialog");
+      const sheet = page.getByRole("dialog", { name: "Create Supplier" });
       await expect(sheet.getByLabel(/supplier name|^name/i)).toBeVisible();
       await sheet.getByLabel(/supplier name|^name/i).fill("CU Test Supplier");
       // Suppliers require at least one committed source location: open the
-      // inline editor, fill its required fields (name, country, GPS position),
-      // and commit it with the editor's own "Add Location" before submitting.
+      // nested dialog, fill its required fields (country and GPS position),
+      // and commit it before returning to the still-open supplier sheet.
       await sheet.getByRole("button", { name: "Add Location" }).click();
-      const locationName = sheet.getByLabel("Name", { exact: true });
+      const locationDialog = page.getByRole("dialog", {
+        name: "Add Location",
+      });
+      await expect(locationDialog).toBeVisible();
+      const locationName = locationDialog.getByLabel("Location name");
       await expect(locationName).toBeVisible();
       await locationName.fill("CU Source Site");
-      await sheet.getByLabel("Country").first().fill("Tanzania");
-      const lat = sheet.getByRole("spinbutton", { name: /GPS Latitude/ });
-      const lng = sheet.getByRole("spinbutton", { name: /GPS Longitude/ });
+      await locationDialog.getByLabel("Country").fill("Tanzania");
+      const lat = locationDialog.getByRole("spinbutton", {
+        name: /^GPS latitude(?: Required)?$/,
+      });
+      const lng = locationDialog.getByRole("spinbutton", {
+        name: /^GPS longitude(?: Required)?$/,
+      });
       await expect(lat).toBeVisible();
       await lat.fill("-6.163");
       await lng.fill("35.7516");
-      await sheet
+      await locationDialog
         .getByRole("button", { name: "Add Location" })
-        .last()
         .click();
-      // Editor committed → exactly one location row, one Add Location button.
+      await expect(locationDialog).not.toBeVisible();
+      await expect(sheet).toBeVisible();
+      // Dialog committed → exactly one pending location row in the supplier sheet.
       await expect(sheet.getByText("CU Source Site")).toBeVisible();
       await sheet.getByRole("button", { name: "Create Supplier" }).click();
       // The sheet closes only after the create mutation succeeds — wait for it
       // so the dashboard return can't race the in-flight write.
       await expect(sheet).not.toBeVisible();
-      await page.goto("/dashboard");
+      await page
+        .getByRole("link", { name: "Dashboard", exact: true })
+        .click();
+      await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
       await expect(guide.getByText("3 of 7 done")).toBeVisible();
 
       // 8. With a facility present the wizard never auto-opens again.

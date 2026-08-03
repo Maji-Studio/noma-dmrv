@@ -3,6 +3,7 @@ import type { components } from "@/lib/isometric/generated/certify";
 import {
   buildCreateDatapointRequest,
   lookupInputMapping,
+  resolveDatapointSource,
 } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import {
@@ -221,7 +222,7 @@ describe("1000-year sequestration input sources", () => {
           ],
         ]),
       }),
-    ).toThrowError(/orchestrator did not post a direct datapoint.*s_fraction/i);
+    ).toThrowError(/A durability field has no submitted value/);
   });
 });
 
@@ -274,6 +275,64 @@ describe("buildCreateDatapointRequest", () => {
     expect(result.source_ids).toEqual([]);
     expect(result.display_name).toBe("product_mass");
     expect(result.description).toContain("pr_1, pr_2");
+  });
+
+  it("maps the Safety margin mass to the removal's biochar dry mass", () => {
+    const result = buildCreateDatapointRequest({
+      groupKey: "miscellaneous",
+      componentBlueprintKey: "mass_based_ci_emissions",
+      componentDisplayName: "Safety margin",
+      rtcInput: rtcInput({ input_key: "mass", quantity_kind: "mass" }),
+      blueprintInput: blueprintInput({
+        input_key: "mass",
+        compatible_unit: "kg",
+        quantity_kind: "mass",
+      }),
+      agg: baseAgg,
+      projectId: PROJECT_ID,
+      supplierRefId: SUPPLIER_REF,
+    });
+
+    expect(result.quantity).toEqual({
+      magnitude: baseAgg.totalBiocharDryMassKg,
+      unit: "kg",
+    });
+    expect(result.type).toBe("REPORTED");
+  });
+
+  it("keeps a renamed Safety margin component behind the PROJECT-scope guard", () => {
+    expect(() =>
+      buildCreateDatapointRequest({
+        groupKey: "miscellaneous",
+        componentBlueprintKey: "mass_based_ci_emissions",
+        componentDisplayName: "Renamed margin",
+        rtcInput: rtcInput({ input_key: "mass", quantity_kind: "mass" }),
+        blueprintInput: blueprintInput({
+          input_key: "mass",
+          compatible_unit: "kg",
+          quantity_kind: "mass",
+        }),
+        agg: baseAgg,
+        projectId: PROJECT_ID,
+        supplierRefId: SUPPLIER_REF,
+      }),
+    ).toThrow(/PROJECT.*safety margin/i);
+  });
+
+  it("does not resolve inherited component-map keys", () => {
+    const mapping = lookupInputMapping(
+      "miscellaneous",
+      "mass_based_ci_emissions",
+      "mass",
+    );
+
+    expect(mapping).toBeDefined();
+    expect(() => resolveDatapointSource(mapping!, "constructor")).toThrow(
+      /not recognized/i,
+    );
+    expect(
+      lookupInputMapping("constructor", "mass_based_ci_emissions", "mass"),
+    ).toBeUndefined();
   });
 
   it("applies the /100 transform for carbon_content (percent → fraction)", () => {
@@ -368,7 +427,7 @@ describe("buildCreateDatapointRequest", () => {
     // double-count or land in the wrong bucket.
     expect(() =>
       buildCreateDatapointRequest(fuelVolumeArgs("Diesel usage")),
-    ).toThrow(/not a recognized pyrolysis diesel component/);
+    ).toThrow(/pyrolysis diesel component is not recognized/);
   });
 
   it("rejects an unknown (group, blueprint, input) tuple with a SafeError pointing to the mapping file", () => {
@@ -385,7 +444,7 @@ describe("buildCreateDatapointRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrowError(/transformers\/datapoint\.ts/);
+    ).toThrowError(/registry mapping before submitting/);
   });
 
   it("rejects when only the group_key differs (same blueprint+input, wrong group)", () => {
@@ -409,7 +468,7 @@ describe("buildCreateDatapointRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrowError(/No INPUT_MAPPING entry for group="nonexistent-group"/);
+    ).toThrowError(/selected template component is not supported/);
   });
 
   it("disambiguates `mass_distance` between feedstock and biochar transport groups", () => {
@@ -473,7 +532,7 @@ describe("buildCreateDatapointRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrowError(/quantity_kind/);
+    ).toThrowError(/unsupported value type/);
   });
 
   it("rejects a unit mismatch (Phase 3 requires exact match — no conversion)", () => {
@@ -494,7 +553,7 @@ describe("buildCreateDatapointRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrowError(/Phase 3 requires exact match/);
+    ).toThrowError(/uses a different unit from the saved mapping/);
   });
 
   it("rejects when the aggregated source value is null (cannot build datapoint)", () => {
@@ -519,7 +578,7 @@ describe("buildCreateDatapointRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrowError(/null/);
+    ).toThrowError(/has no calculated value/);
   });
 
   it("INPUT_MAPPING covers the MVP demo-template (group, blueprint, input) tuples", () => {
@@ -764,9 +823,7 @@ describe("buildCreateGhgEntryRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrowError(
-      /Sequestration blueprint "biochar_sequestration_500_year" has no explicit GHG-entry datapoint binding[\s\S]*Re-author/,
-    );
+    ).toThrowError(/contains an unsupported component/);
   });
 
   it("fails closed when a sequestration SCALAR resolves more than one datapoint", () => {
@@ -789,7 +846,7 @@ describe("buildCreateGhgEntryRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrowError(/input "product_mass" is SCALAR but 2 datapoints/);
+    ).toThrowError(/field has 2 values but accepts one/);
   });
 
   it("throws when a component references a blueprint missing from the catalog (drift detection)", () => {
@@ -805,7 +862,7 @@ describe("buildCreateGhgEntryRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrowError(/missing from catalog/);
+    ).toThrowError(/component in the selected Removal template is no longer available/);
   });
 
   it("throws when an input_key references a blueprint input that doesn't exist", () => {
@@ -827,7 +884,7 @@ describe("buildCreateGhgEntryRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrowError(/missing input "nonexistent"/);
+    ).toThrowError(/missing a required field/);
   });
 
   it("throws when the orchestrator forgot to resolve a datapoint for a component input", () => {
@@ -845,7 +902,7 @@ describe("buildCreateGhgEntryRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrowError(/did not resolve any datapoints for component rtc_A/);
+    ).toThrowError(/registry component has no submitted value/i);
   });
 
   it("formats started_on / completed_on as ISO date (YYYY-MM-DD), stripping time", () => {

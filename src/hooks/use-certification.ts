@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-query";
 import {
   createGhgStatementDraft,
+  approveGhgStatementReport,
   createRemovalWithBatchesAction,
   deleteFacilityCertifierMapping,
   loadBatchHealth,
@@ -24,25 +25,36 @@ import {
   loadFacilityCertifierMapping,
   loadFacilityCertifierSummary,
   loadGhgStatementBreakdown,
+  loadGhgStatementReports,
   loadGhgStatementsForFacility,
   loadGhgStatementState,
   loadIsometricFeedstockTypes,
   loadIsometricProjectTemplates,
   loadOpenRemovalsForFacility,
+  loadRegistryGhgStatements,
   loadRegistrySourceVisibility,
   loadRemovalBreakdown,
+  loadRemovalCompilation,
   loadRemovalCertifyContext,
+  loadRemovalPreflight,
   loadRemovalsForFacility,
   loadSelectableBatchesForFacility,
   refreshGhgStatementStatus,
+  prepareGhgStatementReport,
   reconcileGhgStatementsFromRegistry,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
   saveRegistrySourceVisibility,
-  submitGhgStatementToVerifier,
-  submitRemovalAction,
   type CreditBatchHealthSummary,
 } from "@/fn/certification";
+import type { RemovalSubmissionResult } from "@/fn/certification/submit-removal";
+import type { SubmitGhgStatementResult } from "@/fn/certification/submit-ghg-statement";
+import {
+  isSubmissionStreamStalledError,
+  streamCertificationSubmission,
+} from "@/lib/certification/submission-progress-client";
+import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
+import { invalidateOnboardingProgress } from "./use-onboarding";
 import type {
   CreateGhgStatementInput,
   CreateRemovalWithBatchesInput,
@@ -51,6 +63,8 @@ import type {
   SaveMappingInput,
   SubmitGhgStatementDialogInput,
   SubmitRemovalInput,
+  PrepareGhgStatementReportInput,
+  ApproveGhgStatementReportInput,
 } from "@/schemas/certification";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 
@@ -62,6 +76,20 @@ const DEFAULT_STALE_MS = 30_000;
 const PROJECT_TEMPLATES_STALE_MS = 60_000;
 const LOCKED_REFETCH_INTERVAL_MS = 60_000;
 const BATCH_HEALTH_SUMMARY_CHUNK_SIZE = 50;
+
+type RemovalCertifyPollingData = {
+  latestSubmission?: { lockedAt?: Date | string | null } | null;
+  futureDatedMeasurements?: readonly string[];
+};
+
+export function getRemovalCertifyRefetchInterval(
+  data: RemovalCertifyPollingData | undefined,
+): number | false {
+  return data?.latestSubmission?.lockedAt ||
+    (data?.futureDatedMeasurements?.length ?? 0) > 0
+    ? LOCKED_REFETCH_INTERVAL_MS
+    : false;
+}
 
 export const certificationKeys = {
   all: ["certification"] as const,
@@ -95,11 +123,26 @@ export const certificationKeys = {
       facilityId,
       batchIds,
     ] as const,
-  certifyContextForRemoval: (removalId: string) =>
+  certifyContextForRemoval: (facilityId: string, removalId: string) =>
     [
       ...certificationKeys.all,
       "certify-context",
       "removal",
+      facilityId,
+      removalId,
+    ] as const,
+  removalPreflight: (facilityId: string, removalId: string) =>
+    [
+      ...certificationKeys.all,
+      "removal-preflight",
+      facilityId,
+      removalId,
+    ] as const,
+  removalCompilation: (facilityId: string, removalId: string) =>
+    [
+      ...certificationKeys.all,
+      "removal-compilation",
+      facilityId,
       removalId,
     ] as const,
   removalsForFacility: (facilityId: string) =>
@@ -116,6 +159,12 @@ export const certificationKeys = {
     [
       ...certificationKeys.all,
       "ghg-statement-breakdown",
+      ghgStatementId,
+    ] as const,
+  ghgStatementReports: (ghgStatementId: string) =>
+    [
+      ...certificationKeys.all,
+      "ghg-statement-reports",
       ghgStatementId,
     ] as const,
   openRemovalsForFacility: (facilityId: string) =>
@@ -166,7 +215,43 @@ export function useCertificationOverview(facilityId: string, enabled = true) {
   });
 }
 
-// Carbon-accounting breakdown for one removal — lazy by design: the removal
+export function useRemovalPreflightSummaries(
+  facilityId: string,
+  removalIds: string[],
+) {
+  const results = useQueries({
+    queries: removalIds.map((removalId) => ({
+      queryKey: certificationKeys.removalPreflight(facilityId, removalId),
+      queryFn: async () => {
+        const result = await loadRemovalPreflight(facilityId, removalId);
+        if (!result.success) throw new Error(result.error);
+        return result.data;
+      },
+      enabled: Boolean(facilityId && removalId),
+      staleTime: DEFAULT_STALE_MS,
+    })),
+  });
+
+  return Object.fromEntries(
+    removalIds.map((removalId, index) => {
+      const result = results[index];
+      return [
+        removalId,
+        {
+          status: result?.isError
+            ? ("unavailable" as const)
+            : result?.data
+              ? ("available" as const)
+              : ("loading" as const),
+          data: result?.data ?? null,
+          retry: () => result?.refetch(),
+        },
+      ];
+    }),
+  );
+}
+
+// Read-only Isometric carbon result for one removal — lazy by design: the
 // detail sheet only enables it while open. Reads the registry's GHG entry for
 // submitted removals (its figures don't move once verified), so it leans on the
 // default stale window and is invalidated alongside the rest of `all`.
@@ -300,11 +385,12 @@ export function useSaveFacilityCertifierMapping() {
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      await invalidateOnboardingProgress(queryClient);
     },
   });
 }
@@ -438,22 +524,45 @@ export function useCreditBatchHealthSummaries(
 }
 
 // Removal-keyed Certify context for the guided Review flow. Like the
-// credit-batch variant it refetches while a submission is locked in flight so
-// the pre-flight reflects progress without a manual refresh.
-export function useRemovalCertifyContext(removalId: string, enabled = true) {
+// credit-batch variant it refetches while a submission is locked in flight.
+// It also polls while a clock-derived future-date blocker exists so an open
+// dialog becomes ready when that timestamp passes, without broad idle polling.
+export function useRemovalCertifyContext(
+  facilityId: string,
+  removalId: string,
+  enabled = true,
+) {
   return useQuery({
-    queryKey: certificationKeys.certifyContextForRemoval(removalId),
+    queryKey: certificationKeys.certifyContextForRemoval(
+      facilityId,
+      removalId,
+    ),
     queryFn: async () => {
-      const result = await loadRemovalCertifyContext(removalId);
+      const result = await loadRemovalCertifyContext(facilityId, removalId);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    enabled: enabled && !!removalId,
+    enabled: enabled && !!facilityId && !!removalId,
     staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
-      query.state.data?.latestSubmission?.lockedAt
-        ? LOCKED_REFETCH_INTERVAL_MS
-        : false,
+      getRemovalCertifyRefetchInterval(query.state.data),
+  });
+}
+
+export function useRemovalCompilation(
+  facilityId: string,
+  removalId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.removalCompilation(facilityId, removalId),
+    queryFn: async () => {
+      const result = await loadRemovalCompilation(facilityId, removalId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId && !!removalId,
+    staleTime: DEFAULT_STALE_MS,
   });
 }
 
@@ -493,12 +602,21 @@ export function useSelectableBatches(facilityId: string, enabled = true) {
 export function useSubmitRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: SubmitRemovalInput | string) => {
-      const result = await submitRemovalAction(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: (vars: {
+      input: SubmitRemovalInput;
+      onProgress: (update: SubmissionProgressUpdate) => void;
+    }) =>
+      streamCertificationSubmission<RemovalSubmissionResult>(
+        { kind: "removal", input: vars.input },
+        vars.onProgress,
+      ),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+    onError: () => {
+      // A Removal failure can happen after its draft was claimed. Refresh the
+      // submission state before the operator returns to review so the active
+      // lock, if any, gates the next attempt.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });
@@ -561,16 +679,21 @@ export function useGhgStatementsForFacility(
   });
 }
 
+// Read-only view of the project's registry statements. This is a *query*, so
+// it must not write: it previously called the reconcile action, which meant
+// merely opening the create dialog performed an unannounced sync (advancing
+// `updated_at` and discarding both of the reconcile's counters). Reconciling
+// is an explicit operator action — `useSyncGhgStatementsFromRegistry`.
 export function useRegistryGhgStatementsForFacility(
   facilityId: string,
-  enabled = true,
+  enabled: boolean,
 ) {
   return useQuery({
     queryKey: certificationKeys.registryGhgStatementsForFacility(facilityId),
     queryFn: async () => {
-      const result = await reconcileGhgStatementsFromRegistry(facilityId);
+      const result = await loadRegistryGhgStatements(facilityId);
       if (!result.success) throw new Error(result.error);
-      return result.data.statements;
+      return result.data;
     },
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
@@ -629,6 +752,50 @@ export function useGhgStatementBreakdown(
   });
 }
 
+export function useGhgStatementReports(
+  ghgStatementId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.ghgStatementReports(ghgStatementId),
+    queryFn: async () => {
+      const result = await loadGhgStatementReports(ghgStatementId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!ghgStatementId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+export function usePrepareGhgStatementReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: PrepareGhgStatementReportInput) => {
+      const result = await prepareGhgStatementReport(input);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+  });
+}
+
+export function useApproveGhgStatementReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ApproveGhgStatementReportInput) => {
+      const result = await approveGhgStatementReport(input);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+  });
+}
+
 // Submitted removals not yet absorbed by any statement — the stepper preview.
 export function useOpenRemovalsForFacility(
   facilityId: string,
@@ -668,16 +835,24 @@ export function useSubmitGhgStatementToVerifier() {
     mutationFn: async (vars: {
       ghgStatementId: string;
       input: SubmitGhgStatementDialogInput;
+      onProgress: (update: SubmissionProgressUpdate) => void;
     }) => {
-      const result = await submitGhgStatementToVerifier(
-        vars.ghgStatementId,
-        vars.input,
+      return streamCertificationSubmission<SubmitGhgStatementResult>(
+        {
+          kind: "ghg_statement",
+          ghgStatementId: vars.ghgStatementId,
+          input: vars.input,
+        },
+        vars.onProgress,
       );
-      if (!result.success) throw new Error(result.error);
-      return result.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+    onError: (error) => {
+      if (isSubmissionStreamStalledError(error)) {
+        queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      }
     },
   });
 }

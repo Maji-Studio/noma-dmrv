@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   derivePeriodStart,
   isRemovalInWindow,
+  isSettledPeriodEnd,
+  liveOverlapEnd,
   overlappingEnd,
   partitionByWindow,
 } from "./ghg-reporting-window";
@@ -51,6 +53,61 @@ describe("overlappingEnd", () => {
     expect(
       overlappingEnd("2026-04-15", ["2026-01-31", "2026-06-30"]),
     ).toBe("2026-06-30");
+  });
+});
+
+describe("isSettledPeriodEnd", () => {
+  it("accepts a fully typed period end", () => {
+    expect(isSettledPeriodEnd("2028-01-31")).toBe(true);
+    expect(isSettledPeriodEnd("1000-01-01")).toBe(true);
+  });
+
+  it("rejects the values a date input emits while the year is typed", () => {
+    // Chrome fires a change per keystroke of the year segment: 2 → 20 → 202 →
+    // 2028. Each intermediate is a well-formed date that sorts before every
+    // real period end.
+    expect(isSettledPeriodEnd("0002-01-31")).toBe(false);
+    expect(isSettledPeriodEnd("0020-01-31")).toBe(false);
+    expect(isSettledPeriodEnd("0202-01-31")).toBe(false);
+  });
+
+  it("rejects an empty or malformed value", () => {
+    expect(isSettledPeriodEnd("")).toBe(false);
+    expect(isSettledPeriodEnd("2028-1-31")).toBe(false);
+    expect(isSettledPeriodEnd("2028-01-31T00:00:00Z")).toBe(false);
+  });
+});
+
+describe("liveOverlapEnd", () => {
+  const existingEnds = ["2027-12-31", "2027-09-30"];
+
+  it("flags a genuine overlap", () => {
+    expect(liveOverlapEnd("2027-06-30", existingEnds)).toBe("2027-12-31");
+  });
+
+  it("clears itself once the date is edited past the overlap", () => {
+    // The dialog derives this on every render from the watched value, so the
+    // second call is what the operator sees the instant they fix the date —
+    // no second Next click needed (QA 2026-07-25).
+    expect(liveOverlapEnd("2027-06-30", existingEnds)).toBe("2027-12-31");
+    expect(liveOverlapEnd("2028-01-31", existingEnds)).toBeNull();
+  });
+
+  it("stays silent while the year is still being typed", () => {
+    expect(liveOverlapEnd("0002-01-31", existingEnds)).toBeNull();
+    expect(liveOverlapEnd("0020-01-31", existingEnds)).toBeNull();
+    expect(liveOverlapEnd("0202-01-31", existingEnds)).toBeNull();
+    // …and reports the truth as soon as the year is complete.
+    expect(liveOverlapEnd("2028-01-31", existingEnds)).toBeNull();
+    expect(liveOverlapEnd("2020-01-31", existingEnds)).toBe("2027-12-31");
+  });
+
+  it("stays silent for an empty field", () => {
+    expect(liveOverlapEnd("", existingEnds)).toBeNull();
+  });
+
+  it("finds no overlap against an empty list", () => {
+    expect(liveOverlapEnd("2028-01-31", [])).toBeNull();
   });
 });
 

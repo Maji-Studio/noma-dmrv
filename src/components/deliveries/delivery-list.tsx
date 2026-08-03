@@ -10,11 +10,10 @@ import type { ColumnDef } from "@tanstack/react-table";
 import {
   TruckIcon,
   CalendarIcon,
-  PackageIcon,
-  DropIcon,
+  ScalesIcon,
   PlusIcon,
   XIcon,
-} from "@phosphor-icons/react";
+} from "@phosphor-icons/react/dist/ssr";
 import type { Delivery } from "@/db/schema";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
@@ -22,6 +21,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
+import { MassPair } from "@/components/ui/mass-pair";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { DeliveryForm } from "./delivery-form";
@@ -54,7 +54,18 @@ import type {
 } from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate, formatDistanceKm } from "@/lib/format-utils";
+import {
+  formatDate,
+  formatDateRange,
+  formatDistanceKm,
+  formatMassKg,
+} from "@/lib/format-utils";
+import {
+  formatMoisturePercent,
+  MOISTURE_FIELD_LABEL,
+  WET_MASS_FIELD_LABEL,
+} from "@/lib/mass-moisture";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { parseAsString, useQueryState } from "nuqs";
@@ -68,11 +79,6 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 // ============================================
 // Helper Functions
 // ============================================
-
-function formatMass(value: number | null): string {
-  if (value === null || value === undefined) return "—";
-  return `${value.toLocaleString()} kg`;
-}
 
 function deliveryDetailToRelations(
   delivery: DeliveryDetail,
@@ -117,29 +123,44 @@ function createColumns(
     {
       accessorKey: "orderCode",
       header: "Order",
-      cell: ({ row }) => <span>{row.original.orderCode || "—"}</span>,
+      cell: ({ row }) => <span>{row.original.orderCode || "Not recorded"}</span>,
     },
     {
       accessorKey: "customerName",
       header: "Customer",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.customerName || "—"}
+          {row.original.customerName || "Not recorded"}
         </span>
       ),
     },
+    // Every mass on this surface — these two columns, the KPI strip, the detail
+    // sheet's wet-mass row and its MoistureSplit — goes through `formatMassKg`:
+    // fixed kg, one decimal. Wet and dry sit next to each other and must stay
+    // subtractable, and dry mass is derived (wet × (1 − moisture/100)), so it
+    // routinely lands on a half kilo. `formatMass` would round that away in the
+    // table while the split bar below still showed it.
     {
       accessorKey: "deliveredWetMassKg",
-      header: "Wet Mass",
+      header: "Wet mass",
       cell: ({ row }) => (
-        <span className="font-mono text-right">{formatMass(row.original.deliveredWetMassKg)}</span>
+        <span className="font-mono text-right">{formatMassKg(row.original.deliveredWetMassKg)}</span>
       ),
     },
     {
       accessorKey: "massDryKg",
-      header: "Dry Mass",
+      header: "Dry mass",
       cell: ({ row }) => (
-        <span className="font-mono text-right">{formatMass(row.original.massDryKg)}</span>
+        <span className="font-mono text-right">{formatMassKg(row.original.massDryKg)}</span>
+      ),
+    },
+    {
+      accessorKey: "moistureContentPercent",
+      header: "Moisture",
+      cell: ({ row }) => (
+        <span className="font-mono text-right">
+          {formatMoisturePercent(row.original.moistureContentPercent)}
+        </span>
       ),
     },
     {
@@ -261,7 +282,7 @@ export function DeliveryList() {
     entityNoun: "Delivery",
     executeCreate: async (data: DeliveryFormData) => {
       if (!contextFacilityId) {
-        throw new Error("No facility selected. Please select a facility first.");
+        throw new Error("No facility selected. Select a facility and try again.");
       }
       const createData = {
         ...data,
@@ -285,13 +306,13 @@ export function DeliveryList() {
     setError: setFormError,
     setUpdateError: setFormError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Failed to create delivery",
+      error instanceof Error ? error.message : "Delivery was not created. Check the form.",
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this delivery.",
     openEditOnFailure: (delivery) =>
       setSideSheet({ entity: delivery, mode: "edit" }),
     closeOnSuccess: () => setSideSheet(null),
-    onSuccess: () => toast.success("Delivery created successfully"),
+    onSuccess: () => toast.success("Delivery created."),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
   const deepLinkedSideSheet =
@@ -374,9 +395,9 @@ export function DeliveryList() {
         ...data,
       });
       closeSideSheet();
-      toast.success("Delivery updated successfully");
+      toast.success("Delivery updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to update delivery");
+      setFormError(error instanceof Error ? error.message : "Delivery was not saved. Try again.");
     }
   };
 
@@ -390,9 +411,9 @@ export function DeliveryList() {
     try {
       await deleteDelivery.mutateAsync(deletingDeliveryId);
       setDeletingDeliveryId(null);
-      toast.success("Delivery deleted successfully");
+      toast.success("Delivery deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete delivery");
+      setDeleteError(error instanceof Error ? error.message : "Delivery was not deleted. Try again.");
     }
   };
 
@@ -429,7 +450,7 @@ export function DeliveryList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load deliveries"} />
+        <ServerError message={fetchError.message || "The deliveries could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }
@@ -465,26 +486,23 @@ export function DeliveryList() {
       />
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title="Total Deliveries"
           value={statsData?.totalDeliveries ?? 0}
           icon={<TruckIcon size={24} weight="bold" />}
-          description="All deliveries"
           isLoading={statsLoading}
         />
         <StatCard
-          title="Wet Mass Delivered"
-          value={`${(statsData?.totalDeliveredWetMassKg ?? 0).toLocaleString()} kg`}
-          icon={<PackageIcon size={24} weight="bold" />}
-          description="Total wet mass"
-          isLoading={statsLoading}
-        />
-        <StatCard
-          title="Dry Mass"
-          value={`${(statsData?.totalMassDryKg ?? 0).toLocaleString()} kg`}
-          icon={<DropIcon size={24} weight="bold" />}
-          description="Total dry mass"
+          title="Delivered Mass"
+          value={
+            <MassPair
+              wetKg={statsData?.totalDeliveredWetMassKg ?? 0}
+              dryKg={statsData?.totalMassDryKg ?? 0}
+            />
+          }
+          valueLayout="breakdown"
+          icon={<ScalesIcon size={24} weight="bold" />}
           isLoading={statsLoading}
         />
         <StatCard
@@ -524,13 +542,13 @@ export function DeliveryList() {
             description={
               hasActiveFilters
                 ? "Try adjusting or clearing the search and filters."
-                : "Create your first delivery to get started"
+                : "A delivery tracks biochar leaving the facility for a customer."
             }
             action={
               hasActiveFilters ? undefined : (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
-                  New Delivery
+                  Create your first delivery
                 </Button>
               )
             }
@@ -551,10 +569,10 @@ export function DeliveryList() {
               }}
               aria-label="Filter by credit batch"
             >
-              <option value="">All Credit Batches</option>
+              <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.code}
+                  {formatDateRange(batch.startDate, batch.endDate)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -589,33 +607,35 @@ export function DeliveryList() {
           sideSheetEntity
             ? [
                 {
-                  title: "Delivery Information",
+                  title: "Delivery information",
                   fields: [
-                    { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
+                    { label: "Delivery date", value: formatDate(sideSheetEntity.deliveryDate) },
                     { label: "Status", value: <StatusBadge status={sideSheetEntity.status} /> },
                     { label: "Order", value: sideSheetEntity.orderCode },
                   ],
                 },
                 {
-                  title: "Mass & Moisture",
+                  title: "Mass and moisture",
                   fields: [
                     {
-                      label: "Wet Mass (kg)",
+                      label: WET_MASS_FIELD_LABEL,
                       ...certificationDetailField("delivery", "deliveredWetMassKg"),
-                      value:
-                        sideSheetEntity.deliveredWetMassKg != null
-                          ? `${sideSheetEntity.deliveredWetMassKg.toLocaleString()} kg`
-                          : null,
+                      value: formatMassKg(sideSheetEntity.deliveredWetMassKg),
                     },
-                    { label: "Moisture (%)", value: sideSheetEntity.moistureContentPercent != null ? `${sideSheetEntity.moistureContentPercent}%` : null },
                     {
-                      label: "Dry Mass (derived)",
-                      value:
-                        sideSheetEntity.massDryKg != null
-                          ? `${sideSheetEntity.massDryKg.toLocaleString()} kg`
-                          : null,
+                      label: MOISTURE_FIELD_LABEL,
+                      value: formatMoisturePercent(sideSheetEntity.moistureContentPercent),
                     },
                   ],
+                  content: (
+                    <MoistureSplit
+                      wetMassKg={sideSheetEntity.deliveredWetMassKg}
+                      moisturePercent={sideSheetEntity.moistureContentPercent}
+                      dryMassKg={sideSheetEntity.massDryKg}
+                      wetLabel="Wet biochar product"
+                      dryLabel="Dry biochar"
+                    />
+                  ),
                 },
                 {
                   title: "Transport",
@@ -634,7 +654,7 @@ export function DeliveryList() {
                   ],
                 },
                 {
-                  title: "Transport Evidence",
+                  title: "Transport evidence",
                   fields: [],
                   content: (
                     <TransportEvidencePanel
@@ -642,7 +662,6 @@ export function DeliveryList() {
                       entityId={sideSheetEntity.id}
                       readOnly
                       embedded
-                      distanceSource={sideSheetEntity.effectiveDistanceSource}
                     />
                   ),
                 },

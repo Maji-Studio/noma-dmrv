@@ -7,6 +7,7 @@ import {
   confirmUploadSchema,
   deleteDocumentSchema,
   isAllowedMime,
+  isProductionReadingsCsvFormat,
   maxBytesFor,
   requestUploadSchema,
   setVisibilitySchema,
@@ -14,7 +15,7 @@ import {
   type DocumentType,
 } from "@/schemas/documents";
 import {
-  deleteDocumentRow,
+  deleteDocumentWithCertificationSafety,
   getDocumentById,
   insertDocument,
   listDocumentsForEntity,
@@ -22,9 +23,8 @@ import {
   assertCanManageDocumentEntity,
   type DocumentRow,
 } from "@/data-access/documents";
-import { getDocumentUploadByDocument } from "@/data-access/certifier-document-uploads";
-import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import type { ActionResult } from "@/types/actions";
+import { formatZodActionError } from "./action-errors";
 import { withAction } from "./with-action";
 
 export interface RequestUploadResult {
@@ -93,27 +93,33 @@ export async function requestUpload(
   input: unknown
 ): Promise<ActionResult<RequestUploadResult>> {
   return withAction(async (ctx) => {
-    // Preserve historical "join all issues with ', '" formatting by parsing
-    // explicitly and re-throwing as SafeError — withAction's default ZodError
-    // path prefixes with "Validation error:" which would change the user-facing
-    // copy here.
+    // Parse explicitly so the validation failure remains an intentional,
+    // client-safe error at this upload boundary.
     const parsed = requestUploadSchema.safeParse(input);
     if (!parsed.success) {
-      throw new SafeError(
-        parsed.error.issues.map((i) => i.message).join(", ")
-      );
+      throw new SafeError(formatZodActionError(parsed.error));
     }
 
     const docType = parsed.data.documentType as DocumentType;
+    if (
+      parsed.data.entityType === "production_run" &&
+      docType === "sensor_data" &&
+      !isProductionReadingsCsvFormat({
+        fileName: parsed.data.fileName,
+        contentType: parsed.data.contentType,
+      })
+    ) {
+      throw new SafeError("Readings files must use CSV format.");
+    }
     if (!isAllowedMime(docType, parsed.data.contentType)) {
       throw new SafeError(
-        `Content type ${parsed.data.contentType} not allowed for ${docType}`
+        "This file type is not allowed for this document. Choose another file."
       );
     }
     const cap = maxBytesFor(docType);
     if (parsed.data.sizeBytes > cap) {
       throw new SafeError(
-        `File exceeds ${Math.round(cap / BYTES_PER_MB)} MB limit for ${docType}`
+        `This file is larger than the ${Math.round(cap / BYTES_PER_MB)} MB limit. Choose a smaller file.`
       );
     }
     await assertCanManageDocumentEntity(
@@ -186,16 +192,24 @@ export async function confirmUpload(
     const row = await getDocumentById(ctx, documentId);
     if (!row) throw new SafeError("Document not found");
     await assertCanManageDocumentEntity(ctx, row.entityType, row.entityId);
-    if (!row.storageKey) throw new SafeError("Document has no storage key");
+    if (!row.storageKey) {
+      throw new SafeError(
+        "The document is not available in storage. Upload the file again.",
+      );
+    }
     if (row.uploadStatus !== "pending") {
-      throw new SafeError(`Document already in '${row.uploadStatus}' state`);
+      throw new SafeError(
+        "This file is no longer waiting for confirmation. Upload it again.",
+      );
     }
 
     const provider = getStorageProvider();
     const head = await provider.headObject(row.storageKey);
     if (!head) {
       await updateDocument(ctx, row.id, { uploadStatus: "failed" });
-      throw new SafeError("Uploaded object not found in storage");
+      throw new SafeError(
+        "The uploaded file could not be found. Upload it again.",
+      );
     }
 
     const docType = row.documentType as DocumentType;
@@ -206,7 +220,7 @@ export async function confirmUpload(
         updateDocument(ctx, row.id, { uploadStatus: "failed" }),
       ]);
       throw new SafeError(
-        `Object size ${head.size} exceeds ${cap}-byte cap for ${docType}`
+        `This file is larger than the ${Math.round(cap / BYTES_PER_MB)} MB limit. Choose a smaller file.`,
       );
     }
     if (!isAllowedMime(docType, head.contentType)) {
@@ -215,8 +229,22 @@ export async function confirmUpload(
         updateDocument(ctx, row.id, { uploadStatus: "failed" }),
       ]);
       throw new SafeError(
-        `Object content-type ${head.contentType} not allowed for ${docType}`
+        "The uploaded file type is not allowed for this document. Choose another file.",
       );
+    }
+    if (
+      row.entityType === "production_run" &&
+      docType === "sensor_data" &&
+      !isProductionReadingsCsvFormat({
+        fileName: row.fileName,
+        contentType: head.contentType,
+      })
+    ) {
+      await Promise.allSettled([
+        provider.deleteObject(row.storageKey),
+        updateDocument(ctx, row.id, { uploadStatus: "failed" }),
+      ]);
+      throw new SafeError("Readings files must use CSV format.");
     }
 
     const updated = await updateDocument(ctx, row.id, {
@@ -224,7 +252,11 @@ export async function confirmUpload(
       fileSizeBytes: head.size,
       mimeType: head.contentType,
     });
-    if (!updated) throw new SafeError("Failed to mark document uploaded");
+    if (!updated) {
+      throw new SafeError(
+        "The document upload could not be completed. Upload the file again.",
+      );
+    }
     return updated;
   });
 }
@@ -297,64 +329,8 @@ export async function deleteDocument(
     if (!row) throw new SafeError("Document not found");
     await assertCanManageDocumentEntity(ctx, row.entityType, row.entityId);
 
-    // Fast user-facing path; the FK-backed delete below remains the real race
-    // guard in case a mirror appears after this check.
-    const isometricMirror = await getDocumentUploadByDocument(
-      ctx, ISOMETRIC_PROVIDER,
-      row.id,
-    );
-    if (isometricMirror) {
-      throw new SafeError(
-        "This document is mirrored to Isometric as a Source. Unlink it from the Removal's Sources panel before deleting.",
-      );
-    }
-
-    let deleted: DocumentRow | null;
-    try {
-      deleted = await deleteDocumentRow(ctx, row.id);
-    } catch (err) {
-      const mirror = await getDocumentUploadByDocument(
-        ctx, ISOMETRIC_PROVIDER,
-        row.id,
-      );
-      if (mirror) {
-        throw new SafeError(
-          "This document is mirrored to Isometric as a Source. Unlink it from the Removal's Sources panel before deleting.",
-        );
-      }
-      throw err;
-    }
+    const deleted = await deleteDocumentWithCertificationSafety(ctx, row.id);
     if (!deleted) throw new SafeError("Document not found");
-
-    if (row.storageKey) {
-      const provider = getStorageProvider();
-      try {
-        await provider.deleteObject(row.storageKey);
-      } catch (err) {
-        console.error("Failed to delete storage object", {
-          documentId: row.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        let restored = false;
-        try {
-          await insertDocument(ctx, deleted);
-          restored = true;
-        } catch (restoreErr) {
-          console.error("Failed to restore document row after storage error", {
-            documentId: row.id,
-            error:
-              restoreErr instanceof Error
-                ? restoreErr.message
-                : String(restoreErr),
-          });
-        }
-        throw new SafeError(
-          restored
-            ? "Failed to delete storage object. The document row was restored; try again."
-            : "Failed to delete storage object and restore the document row. Contact support before retrying.",
-        );
-      }
-    }
 
     return { id: row.id };
   });

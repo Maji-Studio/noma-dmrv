@@ -6,7 +6,7 @@
 "use client";
 
 import { useState } from "react";
-import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react";
+import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   useProductionSamples,
   useCreateProductionSample,
@@ -30,7 +30,7 @@ import { formatDateTime } from "@/lib/format-utils";
 // ============================================
 
 function formatNum(v: number | null, unit?: string): string {
-  if (v == null) return "\u2014";
+  if (v == null) return "Not recorded";
   return unit ? `${v}${unit}` : String(v);
 }
 
@@ -61,7 +61,7 @@ export function ProductionSampleTable({
   const [formError, setFormError] = useState<string | null>(null);
   const createWithEvidence = useCreateWithEvidence({
     entityType: "production_sample",
-    entityNoun: "Production sample",
+    entityNoun: "In-process measurement",
     executeCreate: async (data: ProductionSampleFormData) => {
       const sample = await createSample.mutateAsync(data);
       return { entities: [sample], result: sample };
@@ -69,13 +69,13 @@ export function ProductionSampleTable({
     setError: setFormError,
     setUpdateError: setFormError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Failed to save sample",
+      error instanceof Error ? error.message : "In-process measurement was not saved. Try again.",
     unresolvedUpdateMessage:
-      "Resolve or remove the failed attachments before saving this sample.",
+      "Resolve or remove the failed attachments before saving this in-process measurement.",
     openEditOnFailure: (sample) =>
       setFormDialog({ open: true, sample }),
     closeOnSuccess: () => closeForm(),
-    onSuccess: () => toast.success("Sample added"),
+    onSuccess: () => toast.success("In-process measurement added."),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
@@ -136,10 +136,10 @@ export function ProductionSampleTable({
         productionSampleId: formDialog.sample.id,
         ...data,
       });
-      toast.success("Sample updated");
+      toast.success("In-process measurement updated.");
       closeForm();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Failed to save sample");
+      setFormError(err instanceof Error ? err.message : "In-process measurement was not saved. Try again.");
     }
   };
 
@@ -148,9 +148,9 @@ export function ProductionSampleTable({
     try {
       await deleteSample.mutateAsync(deletingId);
       setDeletingId(null);
-      toast.success("Sample deleted");
+      toast.success("In-process measurement deleted.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete sample");
+      toast.error(err instanceof Error ? err.message : "In-process measurement was not deleted. Try again.");
       setDeletingId(null);
     }
   };
@@ -172,12 +172,12 @@ export function ProductionSampleTable({
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Production Samples
+          In-process measurements
         </h3>
         {!readOnly && !formDialog.open && (
           <Button variant="default" size="small" onClick={openCreate}>
             <PlusIcon size={16} weight="bold" />
-            Add Sample
+            Add measurement
           </Button>
         )}
       </div>
@@ -191,8 +191,8 @@ export function ProductionSampleTable({
       ) : !samples?.length && !formDialog.open ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
           {readOnly
-            ? "No samples recorded yet."
-            : "No samples recorded yet. Click \"Add Sample\" to record an in-process measurement."}
+            ? "No in-process measurements recorded."
+            : "Record field measurements taken during the production run."}
         </p>
       ) : samples?.length ? (
         <div className="overflow-x-auto">
@@ -218,14 +218,14 @@ export function ProductionSampleTable({
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 font-medium text-[var(--clr-dark-purple)]">
-                    {s.sampleCode ?? "\u2014"}
+                    {s.sampleCode ?? "Not recorded"}
                   </td>
                   <td className="py-8 pr-12">{formatDateTime(s.timestamp)}</td>
                   <td className="py-8 pr-12">{formatNum(s.temperatureC, "\u00B0C")}</td>
                   <td className="py-8 pr-12">{formatNum(s.weightGrams, "g")}</td>
                   <td className="py-8 pr-12">{formatNum(s.moistureContentPercent, "%")}</td>
                   <td className="py-8 pr-12">{formatNum(s.fixedCarbonPercent, "%")}</td>
-                  <td className="py-8 pr-12">{s.operatorName ?? "\u2014"}</td>
+                  <td className="py-8 pr-12">{s.operatorName ?? "Not recorded"}</td>
                   {!readOnly && (
                     <td className="py-8 text-right">
                       <div className="flex items-center justify-end gap-4">
@@ -233,7 +233,7 @@ export function ProductionSampleTable({
                           variant="noOutline"
                           size="icon"
                           onClick={() => openEdit(s)}
-                          aria-label="Edit sample"
+                          aria-label="Edit in-process measurement"
                           disabled={formDialog.open}
                         >
                           <PencilIcon size={16} />
@@ -242,7 +242,7 @@ export function ProductionSampleTable({
                           variant="destructive"
                           size="icon"
                           onClick={() => setDeletingId(s.id)}
-                          aria-label="Delete sample"
+                          aria-label="Delete in-process measurement"
                           disabled={formDialog.open}
                         >
                           <TrashIcon size={16} />
@@ -263,8 +263,8 @@ export function ProductionSampleTable({
           onClose={closeDialog}
           title={
             formDialog.open && formDialog.sample
-              ? "Edit Production Sample"
-              : "Add Production Sample"
+              ? "Edit in-process measurement"
+              : "Add in-process measurement"
           }
           width="lg"
           testId="production-sample-dialog"
@@ -290,8 +290,8 @@ export function ProductionSampleTable({
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
-          title="Delete Production Sample"
-          message="Are you sure you want to delete this sample? This action cannot be undone."
+          title="Delete in-process measurement"
+          message="Delete this in-process measurement? This action cannot be undone."
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeletingId(null)}
           isPending={deleteSample.isPending}

@@ -21,13 +21,13 @@ const ORDERS_URL = "/orders";
 const DELIVERIES_URL = "/deliveries";
 
 /**
- * Select a biochar product in the order form.
- * The product field is a searchable EntitySelect (custom dropdown showing live
- * "kg in bin" stock), not a native <select>, so it is driven via its trigger
- * button and per-option testids rather than selectOption().
+ * Select a product bin in the order form.
+ * The bin field is a searchable EntitySelect (custom dropdown showing live
+ * stock and the traceability batch), not a native <select>, so it is driven via
+ * its trigger button and per-option testids rather than selectOption().
  */
-async function selectBiocharProduct(page: Page, productId: string) {
-  await selectEntity(page, "Biochar Product", productId);
+async function selectProductBin(page: Page, productId: string) {
+  await selectEntity(page, "Product bin", productId);
 }
 
 async function createOrderViaUi(
@@ -71,7 +71,7 @@ async function createOrderViaUi(
 
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', quantityKg);
-  await selectBiocharProduct(page, seededData.biocharProduct.id);
+  await selectProductBin(page, seededData.biocharProduct.id);
   await page.click('button[type="submit"]:has-text("Create Order")');
   await page.waitForSelector('[role="dialog"]', {
     state: "hidden",
@@ -80,7 +80,7 @@ async function createOrderViaUi(
 }
 
 async function createDeliveryViaUi(page: Page, seededData: SeededChainData) {
-  await createOrderViaUi(page, seededData, "50");
+  await createOrderViaUi(page, seededData, "100");
 
   const deliveriesUrl = `${DELIVERIES_URL}?facility=${seededData.facility.id}`;
   await page.goto(deliveriesUrl);

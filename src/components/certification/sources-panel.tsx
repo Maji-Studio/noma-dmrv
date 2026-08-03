@@ -2,10 +2,9 @@
  * SourcesPanel — Phase 3.5
  *
  * Lists candidate noma documents discovered along the Removal's chain-of-
- * custody. The operator mirrors selected docs to Isometric Sources via a
- * server-side proxy; once mirrored, `source_ids` ride into Datapoint payloads
- * at submit time and are hash-covered (a sources change supersedes the
- * Removal version).
+ * custody. Submission mirrors managed documents to Isometric Sources
+ * automatically; each Source is then bound only to its code-owned intended
+ * Datapoint target.
  *
  * Mounted in `RemovalDetailSheet` (the Removals-tab quick view, opened via
  * `?removal=<id>`), the single place the candidate set is consumed. The
@@ -22,16 +21,10 @@ import {
   FileIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { Button, EmptyState } from "@/components/ui";
-import { useToast } from "@/components/ui/toast";
-import {
-  useCandidateDocumentsForRemoval,
-  useMirrorDocumentToSource,
-  useUnlinkDocumentSource,
-} from "@/hooks/use-certification-sources";
+import { EmptyState } from "@/components/ui";
+import { useCandidateDocumentsForRemoval } from "@/hooks/use-certification-sources";
 import { Section } from "./panel-layout";
 
-const ICON_SIZE = 14;
 const STATE_ICON_SIZE = 16;
 const PDF_MIME_TYPE = "application/pdf";
 
@@ -39,52 +32,77 @@ interface SourcesPanelProps {
   // Null while the credit batch is not yet grouped into a removal — render
   // an inactive panel rather than fetching.
   removalId: string | null;
+  isEditable: boolean;
 }
 
-export function SourcesPanel({ removalId }: SourcesPanelProps) {
+export function SourcesPanel({ removalId, isEditable }: SourcesPanelProps) {
   return (
     <Section>
       <div className="flex flex-col gap-12">
         <header className="flex items-center justify-between gap-12">
-          <h3 className="title-chapter-title">Supporting sources</h3>
-          <PanelCounter removalId={removalId} />
+          <h3 className="title-chapter-title">Registry value sources</h3>
+          <PanelCounter removalId={removalId} isEditable={isEditable} />
         </header>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Documents you mirror here attach to every Datapoint in this
-          Removal. Mirror once per document — re-submitting the Removal
-          with a different set of sources creates a new version.
+          Files that support registry values are mirrored automatically when
+          you submit. GIS boundaries and photos remain on the Application.
         </p>
-        <PanelBody removalId={removalId} />
+        <PanelBody removalId={removalId} isEditable={isEditable} />
       </div>
     </Section>
   );
 }
 
-function PanelCounter({ removalId }: { removalId: string | null }) {
+function PanelCounter({
+  removalId,
+  isEditable,
+}: {
+  removalId: string | null;
+  isEditable: boolean;
+}) {
   const query = useCandidateDocumentsForRemoval(removalId);
   if (!removalId || !query.data) return null;
   const total = query.data.candidates.length;
-  const mirrored = query.data.candidates.filter((c) => c.mirror).length;
+  const ready = query.data.candidates.filter((c) => c.mirror).length;
   return (
     <span className="body-caption text-[var(--color-text-tertiary)]">
-      {mirrored} of {total} mirrored
+      {isEditable
+        ? `${total} ${total === 1 ? "file" : "files"} linked`
+        : `${ready} of ${total} ${total === 1 ? "file" : "files"} attached`}
     </span>
   );
 }
 
-function PanelBody({ removalId }: { removalId: string | null }) {
+function PanelBody({
+  removalId,
+  isEditable,
+}: {
+  removalId: string | null;
+  isEditable: boolean;
+}) {
   if (!removalId) {
     return (
       <p className="body-small text-[var(--color-text-tertiary)]">
-        A removal will be created on first submit. You can mirror sources
-        from the Removals hub once it exists.
+        A Removal will be created on first submit. Its registry value sources
+        will be mirrored automatically.
       </p>
     );
   }
-  return <PanelBodyForRemoval removalId={removalId} />;
+  return (
+    <PanelBodyForRemoval
+      removalId={removalId}
+      isEditable={isEditable}
+    />
+  );
 }
 
-function PanelBodyForRemoval({ removalId }: { removalId: string }) {
+function PanelBodyForRemoval({
+  removalId,
+  isEditable,
+}: {
+  removalId: string;
+  isEditable: boolean;
+}) {
   const query = useCandidateDocumentsForRemoval(removalId);
 
   if (query.isLoading) {
@@ -94,10 +112,11 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
       </p>
     );
   }
-  if (query.error || !query.data) {
+  if (query.isError || !query.data) {
     return (
       <p className="body-small text-[var(--clr-red)]">
-        Unable to load supporting sources. Try refreshing.
+        Registry value sources could not be loaded. Refresh the page and try
+        again.
       </p>
     );
   }
@@ -105,7 +124,7 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
     return (
       <p className="body-small text-[var(--color-text-secondary)]">
         Link this facility to an Isometric project in facility settings
-        before mirroring sources.
+        before submitting sources.
       </p>
     );
   }
@@ -113,8 +132,8 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
     return (
       <EmptyState
         icon={<FileIcon size={32} />}
-        title="No supporting documents found"
-        description="Attach lab reports, weighbridge tickets, BoLs, or PDDs to the entities in this Removal's chain to make them available here."
+        title="No registry value sources found"
+        description="Add a logbook or bill of lading when it supports a registry mass or transport value. GIS boundaries remain on the Application and are not attached to those values."
         padding="sm"
       />
     );
@@ -131,7 +150,10 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
               : ""
           }
         >
-          <CandidateRow removalId={removalId} candidate={candidate} />
+          <CandidateRow
+            candidate={candidate}
+            isEditable={isEditable}
+          />
         </li>
       ))}
     </ul>
@@ -139,63 +161,24 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
 }
 
 interface CandidateRowProps {
-  removalId: string;
+  isEditable: boolean;
   candidate: NonNullable<
     ReturnType<typeof useCandidateDocumentsForRemoval>["data"]
   >["candidates"][number];
 }
 
-function CandidateRow({ removalId, candidate }: CandidateRowProps) {
-  const { document, lineageEntity, mirror } = candidate;
+function CandidateRow({
+  candidate,
+  isEditable,
+}: CandidateRowProps) {
+  const { document, lineageEntity, binding, mirror } = candidate;
   const isMirrored = !!mirror;
   const isMirrorable = !!document.storageKey;
   const isPdf = isPdfCandidate(document.mimeType, document.fileName);
-  const mirrorMutation = useMirrorDocumentToSource();
-  const unlinkMutation = useUnlinkDocumentSource(removalId);
-  const toast = useToast();
-
-  const pending = mirrorMutation.isPending || unlinkMutation.isPending;
-
   const description = [
-    document.documentType.replace(/_/g, " "),
+    binding.nomaRoleLabel,
     lineageEntity.entityLabel,
   ].join(" · ");
-
-  const handleMirror = () => {
-    mirrorMutation.mutate(
-      { removalId, documentId: document.id },
-      {
-        onSuccess: (result) => {
-          if (result.recovered) {
-            toast.success(
-              `Reconciled existing Isometric Source for ${document.fileName}.`,
-            );
-          } else {
-            toast.success(`Mirrored ${document.fileName} to Isometric.`);
-          }
-        },
-        onError: (err) =>
-          toast.error(
-            err instanceof Error ? err.message : "Mirror failed.",
-          ),
-      },
-    );
-  };
-
-  const handleUnlink = () => {
-    unlinkMutation.mutate(
-      { documentId: document.id },
-      {
-        onSuccess: (result) => {
-          if (result.unlinked) {
-            toast.success("Unlinked. The Source remains on Isometric.");
-          }
-        },
-        onError: (err) =>
-          toast.error(err instanceof Error ? err.message : "Unlink failed."),
-      },
-    );
-  };
 
   return (
     <div className="flex items-center justify-between gap-12 px-12 py-12">
@@ -224,51 +207,40 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
           <span className="body-caption truncate text-[var(--color-text-tertiary)]">
             {description}
           </span>
-          {isMirrored && mirror && (
-            <span className="body-caption font-mono text-[var(--color-text-tertiary)] truncate">
-              {mirror.externalDocumentId}
-            </span>
-          )}
         </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-8">
         {isMirrored ? (
-          <>
+          <div className="flex flex-col items-end gap-2">
             <span
-              className="flex items-center gap-4 text-[var(--color-signal-green)]"
-              title="Mirrored to Isometric"
+              className="flex items-center gap-4 body-caption text-[var(--st-ok)]"
+              title="Ready in Isometric"
             >
               <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
+              Ready
             </span>
-            <Button
-              variant="default"
-              size="small"
-              onClick={handleUnlink}
-              disabled={pending}
-              title="Remove the local Source mapping from future Removal submissions. The Isometric registry copy and audit history remain."
+            <span
+              className="body-caption max-w-[180px] truncate font-mono text-[var(--color-text-tertiary)]"
+              title={`Isometric document ${mirror.externalDocumentId}`}
             >
-              Unlink locally
-            </Button>
-          </>
-        ) : isMirrorable ? (
-          <Button
-            variant="primary"
-            size="small"
-            onClick={handleMirror}
-            disabled={pending}
-            busy={mirrorMutation.isPending}
+              {mirror.externalDocumentId}
+            </span>
+          </div>
+        ) : isMirrorable && isEditable ? (
+          <span
+            className="flex items-center gap-4 body-caption text-[var(--color-text-tertiary)]"
+            role="status"
+            title="This file is sent to Isometric automatically when you submit the Removal."
           >
-            {!mirrorMutation.isPending && (
-              <CloudIcon size={ICON_SIZE} weight="bold" />
-            )}
-            Mirror
-          </Button>
-        ) : (
+            <CloudIcon size={STATE_ICON_SIZE} weight="bold" />
+            On submit
+          </span>
+        ) : !isMirrorable ? (
           <span
             className="flex max-w-[180px] items-center gap-6 body-caption text-[var(--color-text-tertiary)]"
             role="status"
-            title="Legacy URL-only document: noma has no managed file bytes to copy to Isometric. Upload a new managed document to mirror it."
+            title="Legacy URL-only document: noma has no managed file bytes to copy to Isometric. Upload a managed replacement before submitting."
           >
             <WarningCircleIcon
               size={STATE_ICON_SIZE}
@@ -276,6 +248,13 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
               className="shrink-0"
             />
             No managed file bytes
+          </span>
+        ) : (
+          <span
+            className="body-caption text-[var(--color-text-tertiary)]"
+            role="status"
+          >
+            Not mirrored
           </span>
         )}
       </div>

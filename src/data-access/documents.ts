@@ -21,12 +21,22 @@ import {
   transportLegs,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
-import { getStorageProvider } from "@/lib/storage";
+import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
+import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import {
   DOCUMENT_ENTITY_TYPES,
   type DocumentEntityType,
 } from "@/schemas/documents";
 import { requireOrgScope } from "./utils";
+import {
+  deleteDocumentUploadByDocument,
+  getDocumentUploadByDocument,
+  isExternalSourceReferencedInSnapshots,
+} from "./certifier-document-uploads";
+import {
+  enqueueStorageObjectDeletion,
+  processPendingStorageObjectDeletions,
+} from "./storage-object-deletions";
 
 /**
  * Hard cap on documents returned for a single entity. This is a guardrail
@@ -54,7 +64,7 @@ const DOCUMENT_ENTITY_LABELS: Record<DocumentEntityType, string> = {
   delivery: "Delivery",
   production_run: "Production run",
   production_incident: "Production incident",
-  production_sample: "Production sample",
+  production_sample: "In-process measurement",
   biochar_product: "Biochar product",
   feedstock: "Feedstock",
   feedstock_delivery: "Feedstock delivery",
@@ -100,7 +110,7 @@ export async function assertCanManageDocumentEntity(
   requireOrgScope(ctx);
 
   if (!isDocumentEntityType(entityType)) {
-    throw new SafeError("Unsupported document entity type");
+    throw new SafeError("Documents cannot be added to this record.");
   }
 
   switch (entityType) {
@@ -430,14 +440,133 @@ export async function deleteDocumentRow(
 }
 
 /**
+ * Delete one owning-record document while preserving certification history.
+ *
+ * The per-document advisory lock is shared with mirror and Removal submit.
+ * Under that lock an unreferenced Isometric mapping may be retired locally;
+ * the remote Source is deliberately untouched. Any persisted snapshot
+ * reference blocks the whole transaction.
+ */
+export async function deleteDocumentWithCertificationSafety(
+  ctx: OrgContext,
+  id: string,
+): Promise<DocumentRow | null> {
+  requireOrgScope(ctx);
+  const result = await db.transaction(async (tx) => {
+    await acquireMirrorLock(tx, id);
+
+    const [row] = await tx
+      .select()
+      .from(documents)
+      .where(
+        and(
+          eq(documents.id, id),
+          eq(documents.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update");
+    if (!row) return { deleted: null, queued: false };
+
+    const isometricMapping = await getDocumentUploadByDocument(
+      ctx,
+      ISOMETRIC_PROVIDER,
+      id,
+      tx,
+    );
+    if (isometricMapping) {
+      const referenced = await isExternalSourceReferencedInSnapshots(
+        ctx,
+        ISOMETRIC_PROVIDER,
+        isometricMapping.externalDocumentId,
+        tx,
+      );
+      if (referenced) {
+        throw new SafeError(
+          "This document belongs to submitted certification history and cannot be deleted or replaced. The Isometric Source and audit history remain unchanged.",
+        );
+      }
+
+      await deleteDocumentUploadByDocument(
+        ctx,
+        ISOMETRIC_PROVIDER,
+        id,
+        tx,
+      );
+
+      const referencedAfterDelete =
+        await isExternalSourceReferencedInSnapshots(
+          ctx,
+          ISOMETRIC_PROVIDER,
+          isometricMapping.externalDocumentId,
+          tx,
+        );
+      if (referencedAfterDelete) {
+        throw new SafeError(
+          "A Removal submission committed concurrently and now references this document. Deletion was aborted; retry once submission completes.",
+        );
+      }
+    }
+
+    // Isometric is the only provider whose local mapping may be retired by
+    // this owning-record flow. Preserve the FK backstop for every other
+    // certification provider, with a clear error before storage is touched.
+    const [remainingMapping] = await tx
+      .select({ id: certifierDocumentUploads.id })
+      .from(certifierDocumentUploads)
+      .where(
+        and(
+          eq(certifierDocumentUploads.documentId, id),
+          eq(
+            certifierDocumentUploads.organizationId,
+            ctx.organizationId,
+          ),
+        ),
+      )
+      .limit(1);
+    if (remainingMapping) {
+      throw new SafeError(
+        "This document is mirrored to a certification provider and cannot be deleted.",
+      );
+    }
+
+    if (row.storageKey) {
+      if (!row.storageProvider || !row.storageBucket) {
+        throw new Error("Stored document is missing its provider or bucket");
+      }
+      await enqueueStorageObjectDeletion(ctx, tx, {
+        storageProvider: row.storageProvider,
+        storageBucket: row.storageBucket,
+        storageKey: row.storageKey,
+      });
+    }
+
+    const [deleted] = await tx
+      .delete(documents)
+      .where(
+        and(
+          eq(documents.id, id),
+          eq(documents.organizationId, ctx.organizationId),
+        ),
+      )
+      .returning();
+    return { deleted: deleted ?? null, queued: row.storageKey !== null };
+  });
+
+  if (result.queued) {
+    await processPendingStorageObjectDeletions(ctx);
+  }
+  return result.deleted;
+}
+
+/**
  * Retire documents owned by entities that are about to be hard-deleted.
  *
  * Call this as the final operation inside the parent's delete transaction,
  * after every FK-constrained database delete has succeeded. Document rows are
  * locked before the mirror check, which makes the FK from
- * certifier_document_uploads the race backstop while storage cleanup runs. A
- * storage failure aborts the transaction, preserving both the parent and
- * document rows for an idempotent retry.
+ * certifier_document_uploads the race backstop. Managed storage objects are
+ * queued durably in this transaction; callers drain that queue only after the
+ * outer parent transaction commits.
  */
 export async function retireDocumentsForEntities(
   ctx: OrgContext,
@@ -489,29 +618,20 @@ export async function retireDocumentsForEntities(
 
   if (mirror) {
     throw new SafeError(
-      "Cannot delete this record while one of its documents is mirrored to a certification provider. Unlink the document from its certification source first.",
+      "Cannot delete this record while one of its documents is mirrored to a certification provider. Remove or replace that document from this record first; submitted certification history cannot be deleted.",
     );
   }
 
-  const managedDocuments = ownedDocuments.filter(
-    (document): document is DocumentRow & { storageKey: string } =>
-      document.storageKey !== null,
-  );
-  if (managedDocuments.length > 0) {
-    const provider = getStorageProvider();
-    for (const document of managedDocuments) {
-      try {
-        await provider.deleteObject(document.storageKey);
-      } catch (error) {
-        console.error("Failed to retire parent-owned storage object", {
-          documentId: document.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw new SafeError(
-          "Failed to delete an attached storage object. Earlier objects may already have been deleted; the record and document metadata were kept. Retry deletion to finish storage cleanup.",
-        );
-      }
+  for (const document of ownedDocuments) {
+    if (!document.storageKey) continue;
+    if (!document.storageProvider || !document.storageBucket) {
+      throw new Error("Stored document is missing its provider or bucket");
     }
+    await enqueueStorageObjectDeletion(ctx, tx, {
+      storageProvider: document.storageProvider,
+      storageBucket: document.storageBucket,
+      storageKey: document.storageKey,
+    });
   }
 
   await tx

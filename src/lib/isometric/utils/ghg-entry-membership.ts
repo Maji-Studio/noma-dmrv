@@ -57,7 +57,7 @@ export function decideRemovalMembership(
     if (localId === undefined) {
       // No local ledger row → drift.
       warnings.push(
-        `Isometric linked removal ${externalId}, which has no local record.`,
+        `Isometric linked Removal ${externalId}, but it is not saved in noma. Sync the GHG Statement again.`,
       );
       continue;
     }
@@ -88,7 +88,7 @@ export function decideRemovalMembership(
     } else {
       // Owned by a different statement — never steal it.
       warnings.push(
-        `Removal ${removalId} is already linked to a different GHG statement; left unchanged.`,
+        `Removal ${removalId} is already linked to a different GHG Statement; left unchanged.`,
       );
     }
   }
@@ -123,6 +123,6 @@ export function expectedButExcludedWarnings(
     .filter((removal) => !linked.has(removal.localId))
     .map(
       (removal) =>
-        `Removal ${removal.externalId} was expected in this period but Isometric linked it elsewhere — likely a prior reporting period. Open it to check its completion date.`,
+        `Removal ${removal.externalId} was expected in this period, but Isometric linked it to another period. Open the Removal and check its completion date.`,
     );
 }

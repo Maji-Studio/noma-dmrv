@@ -17,6 +17,7 @@ import {
   sql,
   SQL,
   count,
+  getTableColumns,
   sum,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -24,7 +25,6 @@ import { db } from "@/db";
 import { formatLocalDate } from "@/lib/date-utils";
 import {
   productionRuns,
-  productionRunReadings,
   productionRunFeedstocks,
   facilities,
   reactors,
@@ -53,6 +53,7 @@ import {
   CANCELLED_PRODUCTION_RUN_STATUS,
   COMPLETED_PRODUCTION_RUN_STATUS,
 } from "@/lib/production-runs/lifecycle";
+import { hasUploadedProductionReadingsFile } from "./readings-evidence";
 
 /**
  * Get all production runs with pagination and filtering
@@ -178,6 +179,10 @@ export async function getProductionRuns(
       feedstockWetMassKg: productionRuns.feedstockWetMassKg,
       feedstockMoisturePercent: productionRuns.feedstockMoisturePercent,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
+      hasReadingsFile: hasUploadedProductionReadingsFile(
+        ctx,
+        productionRuns.id,
+      ),
       createdAt: productionRuns.createdAt,
       updatedAt: productionRuns.updatedAt,
       facilityCode: facilities.code,
@@ -186,7 +191,9 @@ export async function getProductionRuns(
       reactorIdentifier: reactors.identifier,
       operatorName: operators.name,
       biocharStorageLocationCode: biocharStorage.code,
+      biocharStorageLocationName: biocharStorage.name,
       feedstockStorageLocationCode: feedstockStorage.code,
+      feedstockStorageLocationName: feedstockStorage.name,
     })
     .from(productionRuns)
     .leftJoin(facilities, and(eq(productionRuns.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
@@ -216,17 +223,6 @@ export async function getProductionRuns(
         .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
         .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
     : [];
-  const readingCountRows = runIds.length > 0
-    ? await db
-        .select({
-          productionRunId: productionRunReadings.productionRunId,
-          readingCount: count(),
-        })
-        .from(productionRunReadings)
-        .where(and(inArray(productionRunReadings.productionRunId, runIds), eq(productionRunReadings.organizationId, ctx.organizationId)))
-        .groupBy(productionRunReadings.productionRunId)
-    : [];
-
   // Group feedstocks by production run ID
   const feedstocksByRunId = new Map<string, ProductionRunFeedstockWithDetails[]>();
   for (const f of allFeedstocks) {
@@ -234,22 +230,16 @@ export async function getProductionRuns(
     existing.push(f);
     feedstocksByRunId.set(f.productionRunId, existing);
   }
-  const readingCountByRunId = new Map(
-    readingCountRows.map((row) => [
-      row.productionRunId,
-      Number(row.readingCount),
-    ]),
-  );
-
   const items: ProductionRunWithRelations[] = runList.map((run) => {
     const runFeedstocks = feedstocksByRunId.get(run.id) ?? [];
     return {
       ...run,
       biocharStorageLocationCode: run.biocharStorageLocationCode ?? null,
+      biocharStorageLocationName: run.biocharStorageLocationName ?? null,
       feedstockStorageLocationCode: run.feedstockStorageLocationCode ?? null,
+      feedstockStorageLocationName: run.feedstockStorageLocationName ?? null,
       feedstocks: runFeedstocks,
       totalFeedstockMassKg: runFeedstocks.reduce((s, f) => s + f.massUsedKg, 0),
-      readingsCount: readingCountByRunId.get(run.id) ?? 0,
     };
   });
 
@@ -321,6 +311,10 @@ export async function getProductionRunById(
       feedstockWetMassKg: productionRuns.feedstockWetMassKg,
       feedstockMoisturePercent: productionRuns.feedstockMoisturePercent,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
+      hasReadingsFile: hasUploadedProductionReadingsFile(
+        ctx,
+        productionRuns.id,
+      ),
       createdAt: productionRuns.createdAt,
       updatedAt: productionRuns.updatedAt,
       facilityCode: facilities.code,
@@ -349,38 +343,41 @@ export async function getProductionRunById(
     runFeedstocks,
     biocharStorageLocation,
     feedstockStorageLocation,
-    readingsCount,
   ] =
     await Promise.all([
       getProductionRunFeedstocks(ctx, productionRunId),
       run.biocharStorageLocationId
         ? db
-            .select({ code: storageLocations.code })
+            .select({
+              code: storageLocations.code,
+              name: storageLocations.name,
+            })
             .from(storageLocations)
             .where(and(eq(storageLocations.id, run.biocharStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
-            .then(([loc]) => loc?.code ?? null)
+            .then(([loc]) => loc ?? null)
         : null,
       run.feedstockStorageLocationId
         ? db
-            .select({ code: storageLocations.code })
+            .select({
+              code: storageLocations.code,
+              name: storageLocations.name,
+            })
             .from(storageLocations)
             .where(and(eq(storageLocations.id, run.feedstockStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
-            .then(([loc]) => loc?.code ?? null)
+            .then(([loc]) => loc ?? null)
         : null,
-      db
-        .select({ readingCount: count() })
-        .from(productionRunReadings)
-        .where(and(eq(productionRunReadings.productionRunId, productionRunId), eq(productionRunReadings.organizationId, ctx.organizationId)))
-        .then(([row]) => Number(row?.readingCount) || 0),
     ]);
 
   return {
     ...run,
-    biocharStorageLocationCode: biocharStorageLocation,
-    feedstockStorageLocationCode: feedstockStorageLocation,
+    biocharStorageLocationCode: biocharStorageLocation?.code ?? null,
+    biocharStorageLocationName: biocharStorageLocation?.name ?? null,
+    feedstockStorageLocationCode:
+      feedstockStorageLocation?.code ?? null,
+    feedstockStorageLocationName:
+      feedstockStorageLocation?.name ?? null,
     feedstocks: runFeedstocks,
     totalFeedstockMassKg: runFeedstocks.reduce((sum, f) => sum + f.massUsedKg, 0),
-    readingsCount,
   };
 }
 
@@ -413,6 +410,13 @@ export async function getProductionRunStats(
   const [stats] = await db
     .select({
       totalBiocharKg: sum(productionRuns.biocharOutputKg),
+      totalBiocharDryKg: sum(productionRuns.biocharDryMassKg),
+      unresolvedBiocharDryCount: sql<number>`
+        COUNT(*) FILTER (
+          WHERE COALESCE(${productionRuns.biocharOutputKg}, 0) > 0
+            AND ${productionRuns.biocharDryMassKg} IS NULL
+        )
+      `,
     })
     .from(productionRuns)
     .where(completedWhereClause);
@@ -444,6 +448,10 @@ export async function getProductionRunStats(
   return {
     totalRuns: statusCounts.reduce((total, row) => total + Number(row.count), 0),
     totalBiocharKg: Number(stats.totalBiocharKg) || 0,
+    totalBiocharDryKg:
+      Number(stats.unresolvedBiocharDryCount) > 0
+        ? null
+        : Number(stats.totalBiocharDryKg) || 0,
     totalFeedstockKg: Number(feedstockStats.totalFeedstockKg) || 0,
     runningCount: statusMap["running"] ?? 0,
     completedCount: statusMap["complete"] ?? 0,
@@ -529,7 +537,13 @@ export async function getProductionRunsWithSamples(
   if (runIds.length === 0) return [];
 
   const runs = await db
-    .select()
+    .select({
+      ...getTableColumns(productionRuns),
+      hasReadingsFile: hasUploadedProductionReadingsFile(
+        ctx,
+        productionRuns.id,
+      ),
+    })
     .from(productionRuns)
     .where(and(inArray(productionRuns.id, runIds), eq(productionRuns.organizationId, ctx.organizationId)));
   if (runs.length === 0) return [];
@@ -544,20 +558,6 @@ export async function getProductionRunsWithSamples(
       )
     );
 
-  const readingCountRows = await db
-    .select({
-      productionRunId: productionRunReadings.productionRunId,
-      readingCount: count(),
-    })
-    .from(productionRunReadings)
-    .where(
-      and(
-        inArray(productionRunReadings.productionRunId, runs.map((r) => r.id)),
-        eq(productionRunReadings.organizationId, ctx.organizationId),
-      ),
-    )
-    .groupBy(productionRunReadings.productionRunId);
-
   const samplesByRun = new Map<string, Sample[]>();
   for (const s of sampleRows) {
     // productionRunId is nullable since ADR 0016 (provenance, not the primary
@@ -568,17 +568,9 @@ export async function getProductionRunsWithSamples(
     list.push(s);
     samplesByRun.set(s.productionRunId, list);
   }
-  const readingCountByRun = new Map(
-    readingCountRows.map((row) => [
-      row.productionRunId,
-      Number(row.readingCount),
-    ]),
-  );
-
   return runs.map((r) => ({
     ...r,
     samples: samplesByRun.get(r.id) ?? [],
-    readingsCount: readingCountByRun.get(r.id) ?? 0,
   }));
 }
 

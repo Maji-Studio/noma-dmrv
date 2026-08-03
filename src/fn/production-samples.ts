@@ -23,12 +23,9 @@ import {
   deleteProductionSampleSchema,
 } from "@/schemas/production-samples";
 import type { ActionResult } from "@/types/actions";
+import { formatZodActionError } from "./action-errors";
 
 const productionRunIdSchema = z.string().uuid("Production run is required");
-
-function formatZodError(error: z.ZodError): string {
-  return `Validation error: ${error.issues.map((issue) => issue.message).join(", ")}`;
-}
 
 function logServerError(context: string, error: unknown): void {
   console.error(`[production-samples] ${context}`, error);
@@ -58,7 +55,8 @@ export async function getProductionSamplesFn(
     logServerError("getProductionSamplesFn failed", error);
     return {
       success: false,
-      error: "Failed to load production samples",
+      error:
+        "In-process measurements could not be loaded. Refresh the page and try again.",
     };
   }
 }
@@ -108,13 +106,14 @@ export async function createProductionSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: formatZodError(error),
+        error: formatZodActionError(error),
       };
     }
     logServerError("createProductionSampleFn failed", error);
     return {
       success: false,
-      error: "Failed to create production sample",
+      error:
+        "In-process measurement was not created. Check the form.",
     };
   }
 }
@@ -157,13 +156,13 @@ export async function updateProductionSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: formatZodError(error),
+        error: formatZodActionError(error),
       };
     }
     logServerError("updateProductionSampleFn failed", error);
     return {
       success: false,
-      error: "Failed to update production sample",
+      error: "In-process measurement was not saved. Try again.",
     };
   }
 }
@@ -189,13 +188,16 @@ export async function deleteProductionSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: formatZodError(error),
+        error: formatZodActionError(error),
       };
     }
     logServerError("deleteProductionSampleFn failed", error);
     return {
       success: false,
-      error: toActionError(error, "Failed to delete production sample"),
+      error: toActionError(
+        error,
+        "In-process measurement was not deleted. Try again.",
+      ),
     };
   }
 }

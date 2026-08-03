@@ -329,8 +329,8 @@ describe("credit batch automatic production-run membership", () => {
       code: `CB-CBAM-${tag}`,
       facilityId,
       feedstockTypeId,
-      startDate: new Date("2027-02-01T00:00:00.000Z"),
-      endDate: new Date("2027-02-28T00:00:00.000Z"),
+      startDate: new Date("2024-02-01T00:00:00.000Z"),
+      endDate: new Date("2024-02-28T00:00:00.000Z"),
       productionRunIds: [],
       currency: "TZS",
     });
@@ -342,7 +342,7 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId,
       status: "running",
-      startTime: new Date("2027-02-15T08:00:00.000Z"),
+      startTime: new Date("2024-02-15T08:00:00.000Z"),
       endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
@@ -355,8 +355,8 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId: cohortGuardReactorId,
       status: "draft",
-      startTime: new Date("2027-02-16T08:00:00.000Z"),
-      endTime: new Date("2027-02-16T12:00:00.000Z"),
+      startTime: new Date("2024-02-16T08:00:00.000Z"),
+      endTime: new Date("2024-02-16T12:00:00.000Z"),
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
       feedstockStorageLocationId: storageLocationId,
@@ -365,8 +365,8 @@ describe("credit batch automatic production-run membership", () => {
 
     const previewRuns = await getCreditBatchProductionRunOptions(ctx, {
       facilityId,
-      startDate: new Date("2027-02-01T00:00:00.000Z"),
-      endDate: new Date("2027-02-28T00:00:00.000Z"),
+      startDate: new Date("2024-02-01T00:00:00.000Z"),
+      endDate: new Date("2024-02-28T00:00:00.000Z"),
       includeCreditBatchId: batch.id,
     });
     expect(
@@ -384,7 +384,7 @@ describe("credit batch automatic production-run membership", () => {
 
     await updateProductionRun(ctx, running.id, {
       status: "complete",
-      endTime: new Date("2027-02-15T12:00:00.000Z"),
+      endTime: new Date("2024-02-15T12:00:00.000Z"),
       biocharOutputKg: 30,
       biocharMoisturePercent: 20,
     });
@@ -413,8 +413,8 @@ describe("credit batch automatic production-run membership", () => {
       code: `CB-CBAM-EDIT-GUARD-${tag}`,
       facilityId,
       feedstockTypeId,
-      startDate: new Date("2028-01-01T00:00:00.000Z"),
-      endDate: new Date("2028-01-31T00:00:00.000Z"),
+      startDate: new Date("2025-01-01T00:00:00.000Z"),
+      endDate: new Date("2025-01-31T00:00:00.000Z"),
       productionRunIds: [],
       currency: "TZS",
     });
@@ -425,7 +425,7 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId: cohortGuardReactorId,
       status: "running",
-      startTime: new Date("2028-01-15T08:00:00.000Z"),
+      startTime: new Date("2025-01-15T08:00:00.000Z"),
       endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
@@ -439,7 +439,7 @@ describe("credit batch automatic production-run membership", () => {
         organizationId: TEST_ORG_ID,
         productionRunId: run.id,
         sampleCode: `S-CBAM-EDIT-GUARD-${tag}`,
-        samplingTime: new Date("2028-01-15T10:00:00.000Z"),
+        samplingTime: new Date("2025-01-15T10:00:00.000Z"),
         totalCarbonPercent: 80,
         organicCarbonPercent: 78,
       })
@@ -448,7 +448,7 @@ describe("credit batch automatic production-run membership", () => {
 
     await updateProductionRun(ctx, run.id, {
       status: "complete",
-      endTime: new Date("2028-01-15T12:00:00.000Z"),
+      endTime: new Date("2025-01-15T12:00:00.000Z"),
       biocharOutputKg: 30,
       biocharMoisturePercent: 20,
     });
@@ -509,8 +509,8 @@ describe("credit batch automatic production-run membership", () => {
 
     await expect(
       updateProductionRun(ctx, run.id, {
-        startTime: new Date("2028-02-15T08:00:00.000Z"),
-        endTime: new Date("2028-02-15T12:00:00.000Z"),
+        startTime: new Date("2025-02-15T08:00:00.000Z"),
+        endTime: new Date("2025-02-15T12:00:00.000Z"),
       }),
     ).rejects.toThrow(/cannot be edited outside its declared cohort/i);
     await expectLinksAndCohortInputsUnchanged();
@@ -538,7 +538,7 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId,
       status: "running",
-      startTime: new Date("2027-03-15T08:00:00.000Z"),
+      startTime: new Date("2024-03-15T08:00:00.000Z"),
       endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
@@ -547,7 +547,7 @@ describe("credit batch automatic production-run membership", () => {
     productionRunIds.push(running.id);
     await updateProductionRun(ctx, running.id, {
       status: "complete",
-      endTime: new Date("2027-03-15T12:00:00.000Z"),
+      endTime: new Date("2024-03-15T12:00:00.000Z"),
       biocharOutputKg: 30,
       biocharMoisturePercent: 20,
     });
@@ -556,8 +556,8 @@ describe("credit batch automatic production-run membership", () => {
       code: `CB-CBAM-EXISTING-${tag}`,
       facilityId,
       feedstockTypeId,
-      startDate: new Date("2027-03-01T00:00:00.000Z"),
-      endDate: new Date("2027-03-31T00:00:00.000Z"),
+      startDate: new Date("2024-03-01T00:00:00.000Z"),
+      endDate: new Date("2024-03-31T00:00:00.000Z"),
       productionRunIds: [],
       currency: "TZS",
     });
@@ -572,7 +572,7 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId,
       status: "running",
-      startTime: new Date("2027-05-10T08:00:00.000Z"),
+      startTime: new Date("2024-05-10T08:00:00.000Z"),
       endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
@@ -581,7 +581,7 @@ describe("credit batch automatic production-run membership", () => {
     productionRunIds.push(first.id);
     await updateProductionRun(ctx, first.id, {
       status: "complete",
-      endTime: new Date("2027-05-10T12:00:00.000Z"),
+      endTime: new Date("2024-05-10T12:00:00.000Z"),
       biocharOutputKg: 30,
       biocharMoisturePercent: 20,
     });
@@ -591,7 +591,7 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId,
       status: "running",
-      startTime: new Date("2027-05-11T08:00:00.000Z"),
+      startTime: new Date("2024-05-11T08:00:00.000Z"),
       endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
@@ -600,7 +600,7 @@ describe("credit batch automatic production-run membership", () => {
     productionRunIds.push(second.id);
     await updateProductionRun(ctx, second.id, {
       status: "complete",
-      endTime: new Date("2027-05-11T12:00:00.000Z"),
+      endTime: new Date("2024-05-11T12:00:00.000Z"),
       biocharOutputKg: 30,
       biocharMoisturePercent: 20,
     });
@@ -609,8 +609,8 @@ describe("credit batch automatic production-run membership", () => {
       code: `CB-CBAM-SUBSET-${tag}`,
       facilityId,
       feedstockTypeId,
-      startDate: new Date("2027-05-01T00:00:00.000Z"),
-      endDate: new Date("2027-05-31T00:00:00.000Z"),
+      startDate: new Date("2024-05-01T00:00:00.000Z"),
+      endDate: new Date("2024-05-31T00:00:00.000Z"),
       productionRunIds: [first.id],
       currency: "TZS",
     });
@@ -624,8 +624,8 @@ describe("credit batch automatic production-run membership", () => {
       code: `CB-CBAM-UPDATE-DISCOVERY-${tag}`,
       facilityId,
       feedstockTypeId,
-      startDate: new Date("2028-02-01T00:00:00.000Z"),
-      endDate: new Date("2028-02-28T00:00:00.000Z"),
+      startDate: new Date("2025-02-01T00:00:00.000Z"),
+      endDate: new Date("2025-02-28T00:00:00.000Z"),
       productionRunIds: [],
       currency: "TZS",
     });
@@ -636,7 +636,7 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId: cohortGuardReactorId,
       status: "running",
-      startTime: new Date("2028-03-15T08:00:00.000Z"),
+      startTime: new Date("2025-03-15T08:00:00.000Z"),
       endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
@@ -645,7 +645,7 @@ describe("credit batch automatic production-run membership", () => {
     productionRunIds.push(run.id);
     await updateProductionRun(ctx, run.id, {
       status: "complete",
-      endTime: new Date("2028-03-15T12:00:00.000Z"),
+      endTime: new Date("2025-03-15T12:00:00.000Z"),
       biocharOutputKg: 30,
       biocharMoisturePercent: 20,
     });
@@ -656,7 +656,7 @@ describe("credit batch automatic production-run membership", () => {
         organizationId: TEST_ORG_ID,
         productionRunId: run.id,
         sampleCode: `S-CBAM-UPDATE-DISCOVERY-${tag}`,
-        samplingTime: new Date("2028-03-15T10:00:00.000Z"),
+        samplingTime: new Date("2025-03-15T10:00:00.000Z"),
         totalCarbonPercent: 80,
         organicCarbonPercent: 78,
       })
@@ -664,8 +664,8 @@ describe("credit batch automatic production-run membership", () => {
     sampleIds.push(sample.id);
 
     const updated = await updateCreditBatch(ctx, batch.id, {
-      startDate: new Date("2028-03-01T00:00:00.000Z"),
-      endDate: new Date("2028-03-31T00:00:00.000Z"),
+      startDate: new Date("2025-03-01T00:00:00.000Z"),
+      endDate: new Date("2025-03-31T00:00:00.000Z"),
     });
 
     expect(updated.productionRunIds).toEqual([run.id]);
@@ -681,8 +681,8 @@ describe("credit batch automatic production-run membership", () => {
       code: `CB-CBAM-EMPTY-${tag}`,
       facilityId,
       feedstockTypeId,
-      startDate: new Date("2027-04-01T00:00:00.000Z"),
-      endDate: new Date("2027-04-30T00:00:00.000Z"),
+      startDate: new Date("2024-04-01T00:00:00.000Z"),
+      endDate: new Date("2024-04-30T00:00:00.000Z"),
       productionRunIds: [],
       currency: "TZS",
     });
@@ -703,7 +703,7 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId,
       status: "running",
-      startTime: new Date("2027-07-10T08:00:00.000Z"),
+      startTime: new Date("2024-07-10T08:00:00.000Z"),
       endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
@@ -712,7 +712,7 @@ describe("credit batch automatic production-run membership", () => {
     productionRunIds.push(emptyFeedstockRun.id);
     await updateProductionRun(ctx, emptyFeedstockRun.id, {
       status: "complete",
-      endTime: new Date("2027-07-10T12:00:00.000Z"),
+      endTime: new Date("2024-07-10T12:00:00.000Z"),
       biocharOutputKg: 30,
       biocharMoisturePercent: 20,
     });
@@ -722,7 +722,7 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId,
       status: "running",
-      startTime: new Date("2027-07-11T08:00:00.000Z"),
+      startTime: new Date("2024-07-11T08:00:00.000Z"),
       endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
@@ -731,7 +731,7 @@ describe("credit batch automatic production-run membership", () => {
     productionRunIds.push(mixedFeedstockRun.id);
     await updateProductionRun(ctx, mixedFeedstockRun.id, {
       status: "complete",
-      endTime: new Date("2027-07-11T12:00:00.000Z"),
+      endTime: new Date("2024-07-11T12:00:00.000Z"),
       biocharOutputKg: 30,
       biocharMoisturePercent: 20,
     });
@@ -771,8 +771,8 @@ describe("credit batch automatic production-run membership", () => {
       code: `CB-CBAM-OVERLAP-A-${tag}`,
       facilityId,
       feedstockTypeId,
-      startDate: new Date("2027-08-01T00:00:00.000Z"),
-      endDate: new Date("2027-08-10T00:00:00.000Z"),
+      startDate: new Date("2024-08-01T00:00:00.000Z"),
+      endDate: new Date("2024-08-10T00:00:00.000Z"),
       productionRunIds: [],
       currency: "TZS",
     });
@@ -780,8 +780,8 @@ describe("credit batch automatic production-run membership", () => {
       code: `CB-CBAM-OVERLAP-B-${tag}`,
       facilityId,
       feedstockTypeId,
-      startDate: new Date("2027-08-20T00:00:00.000Z"),
-      endDate: new Date("2027-08-31T00:00:00.000Z"),
+      startDate: new Date("2024-08-20T00:00:00.000Z"),
+      endDate: new Date("2024-08-31T00:00:00.000Z"),
       productionRunIds: [],
       currency: "TZS",
     });
@@ -792,18 +792,22 @@ describe("credit batch automatic production-run membership", () => {
         code: `CB-CBAM-OVERLAP-C-${tag}`,
         facilityId,
         feedstockTypeId,
-        startDate: new Date("2027-08-05T00:00:00.000Z"),
-        endDate: new Date("2027-08-15T00:00:00.000Z"),
+        startDate: new Date("2024-08-05T00:00:00.000Z"),
+        endDate: new Date("2024-08-15T00:00:00.000Z"),
         productionRunIds: [],
         currency: "TZS",
       }),
-    ).rejects.toThrow(/overlaps Credit batch/);
+    ).rejects.toThrow(
+      `This production cohort overlaps credit batch ${first.code}. Use a non-overlapping window for the same facility and feedstock.`,
+    );
 
     await expect(
       updateCreditBatch(ctx, second.id, {
-        startDate: new Date("2027-08-10T00:00:00.000Z"),
+        startDate: new Date("2024-08-10T00:00:00.000Z"),
       }),
-    ).rejects.toThrow(/overlaps Credit batch/);
+    ).rejects.toThrow(
+      `This production cohort overlaps credit batch ${first.code}. Use a non-overlapping window for the same facility and feedstock.`,
+    );
   });
 
   it("auto-attaches to a mutable Removal's credit batch", async () => {
@@ -811,8 +815,8 @@ describe("credit batch automatic production-run membership", () => {
       code: `CB-CBAM-REMOVAL-${tag}`,
       facilityId,
       feedstockTypeId,
-      startDate: new Date("2027-09-01T00:00:00.000Z"),
-      endDate: new Date("2027-09-30T00:00:00.000Z"),
+      startDate: new Date("2024-09-01T00:00:00.000Z"),
+      endDate: new Date("2024-09-30T00:00:00.000Z"),
       productionRunIds: [],
       currency: "TZS",
     });
@@ -835,7 +839,7 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId,
       status: "running",
-      startTime: new Date("2027-09-15T08:00:00.000Z"),
+      startTime: new Date("2024-09-15T08:00:00.000Z"),
       endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
@@ -846,7 +850,7 @@ describe("credit batch automatic production-run membership", () => {
     await expect(
       updateProductionRun(ctx, run.id, {
         status: "complete",
-        endTime: new Date("2027-09-15T12:00:00.000Z"),
+        endTime: new Date("2024-09-15T12:00:00.000Z"),
         biocharOutputKg: 30,
         biocharMoisturePercent: 20,
       }),
@@ -865,7 +869,7 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId,
       status: "running",
-      startTime: new Date("2027-10-15T08:00:00.000Z"),
+      startTime: new Date("2024-10-15T08:00:00.000Z"),
       endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
@@ -903,7 +907,7 @@ describe("credit batch automatic production-run membership", () => {
       await scopeLockReady;
       completionPromise = updateProductionRun(ctx, running.id, {
         status: "complete",
-        endTime: new Date("2027-10-15T12:00:00.000Z"),
+        endTime: new Date("2024-10-15T12:00:00.000Z"),
         biocharOutputKg: 30,
         biocharMoisturePercent: 20,
       });
@@ -933,8 +937,8 @@ describe("credit batch automatic production-run membership", () => {
         code: batchCode,
         facilityId,
         feedstockTypeId,
-        startDate: new Date("2027-10-01T00:00:00.000Z"),
-        endDate: new Date("2027-10-31T00:00:00.000Z"),
+        startDate: new Date("2024-10-01T00:00:00.000Z"),
+        endDate: new Date("2024-10-31T00:00:00.000Z"),
         productionRunIds: [],
         currency: "TZS",
       });

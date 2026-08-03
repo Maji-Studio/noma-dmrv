@@ -7,8 +7,9 @@
  *    cross-facility link hints from the Isometric API).
  *  - read-only: a DB-only summary (no management payload on the wire) with no
  *    controls — for viewers who can read the current link but not change it.
- * Mounts in /certification/settings (passing `canManage={isAdmin}`). The
- * facility side-sheet shows the lighter `FacilityCertifierSummary` instead.
+ * Mounts in /certification/settings, which passes the server-computed
+ * `viewerCanManage`. The facility side-sheet shows the lighter
+ * `FacilityCertifierSummary` instead.
  */
 "use client";
 
@@ -25,6 +26,7 @@ import { formatDate } from "@/lib/format-utils";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import {
   FacilityCertifierDialog,
+  FacilityCertifierForm,
   UnlinkConfirmDialog,
 } from "./facility-certifier-dialog";
 import { Field, Section } from "./panel-layout";
@@ -36,31 +38,44 @@ interface FacilityCertifierSectionProps {
    * and the heavier management loader — when false, only the read-only summary
    * is fetched (the available-project list, template options, and link hints
    * never reach a non-managing viewer). Required: every caller makes the
-   * read-vs-manage choice explicitly (Settings passes `isAdmin`).
+   * read-vs-manage choice explicitly (Settings passes `viewerCanManage`).
    */
   canManage: boolean;
   /**
    * Drop the section's own border-top wrapper and "Certification" title when
-   * the host already provides a titled card (e.g. the Settings "Registry
-   * connection — Isometric" card). Management actions still render.
+   * the host already provides a titled block (the Certifier settings pane, the
+   * onboarding wizard's registry step). Management actions still render, below
+   * the content rather than in the header the host owns.
    */
   embedded?: boolean;
+  /**
+   * Show project linking directly in the host instead of opening a dialog.
+   * Use inside an existing modal, such as the onboarding wizard.
+   */
+  linkPresentation?: "dialog" | "inline";
 }
 
 export function FacilityCertifierSection({
   facilityId,
   canManage,
   embedded = false,
+  linkPresentation = "dialog",
 }: FacilityCertifierSectionProps) {
   return canManage ? (
-    <FacilityCertifierManage facilityId={facilityId} embedded={embedded} />
+    <FacilityCertifierManage
+      facilityId={facilityId}
+      embedded={embedded}
+      linkPresentation={linkPresentation}
+    />
   ) : (
     <FacilityCertifierReadOnly facilityId={facilityId} embedded={embedded} />
   );
 }
 
 // `<Section>` (border-top divider) standalone; a plain block when embedded in a
-// host card that already supplies its own header + padding.
+// host card that already supplies its own header + padding. The shell owns the
+// rhythm between header, fields, and actions so no child carries its own top
+// margin — an embedded mount has no header for such a margin to sit under.
 function Shell({
   embedded,
   children,
@@ -68,8 +83,8 @@ function Shell({
   embedded: boolean;
   children: ReactNode;
 }) {
-  if (embedded) return <div className="flex flex-col">{children}</div>;
-  return <Section>{children}</Section>;
+  const stack = <div className="flex flex-col gap-16">{children}</div>;
+  return embedded ? stack : <Section>{stack}</Section>;
 }
 
 function CertifierHeader({
@@ -81,11 +96,11 @@ function CertifierHeader({
   actions?: ReactNode;
   embedded: boolean;
 }) {
-  if (embedded) {
-    return actions ? (
-      <div className="flex justify-end gap-12">{actions}</div>
-    ) : null;
-  }
+  // Embedded, the host card already carries the title, so there is no header
+  // row for actions to sit in. They render below the content instead (see
+  // `CertifierActions`) — a right-aligned button floating above the sentence
+  // that explains what it does read as chrome belonging to something else.
+  if (embedded) return null;
   return (
     <header className="flex items-center justify-between gap-12">
       <div className="flex flex-col gap-4">
@@ -97,6 +112,14 @@ function CertifierHeader({
       {actions}
     </header>
   );
+}
+
+/**
+ * The manage controls when the section is embedded in a host card: a left-
+ * aligned row below the content, in the same reading order as a form's actions.
+ */
+function CertifierActions({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap gap-12">{children}</div>;
 }
 
 /**
@@ -118,10 +141,10 @@ function CertifierMappingFields({
   const resolvesNames = projectName !== undefined;
 
   return (
-    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-12 mt-16">
+    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-12">
       <Field label="Project">
         {resolvesNames && (
-          <span className="body-small">{projectName ?? "—"}</span>
+          <span className="body-small">{projectName ?? "Not available"}</span>
         )}
         <span
           className={
@@ -144,12 +167,12 @@ function CertifierMappingFields({
           View on Isometric ↗
         </a>
       </Field>
-      <Field label="Default removal template">
+      <Field label="Default Removal template">
         {resolvesNames ? (
           <>
             <span className="body-small">
               {templateName ??
-                (mapping.defaultRemovalTemplateId ? "—" : "Not set")}
+                (mapping.defaultRemovalTemplateId ? "Not available" : "Not set")}
             </span>
             {mapping.defaultRemovalTemplateId && (
               <span className="body-caption text-[var(--color-text-tertiary)]">
@@ -181,7 +204,7 @@ function CertifierMappingFields({
           </span>
         ) : (
           <span className="body-small text-[var(--color-text-tertiary)]">
-            Not set — telemetry submission disabled
+            Not set. Telemetry submission is disabled.
           </span>
         )}
       </Field>
@@ -213,8 +236,8 @@ function FacilityCertifierReadOnly({
     return (
       <Shell embedded={embedded}>
         <p className="body-small text-[var(--color-signal-red)]">
-          Failed to load certifier mapping
-          {error instanceof Error ? `: ${error.message}` : "."}
+          The certifier mapping could not be loaded. Refresh the page and try
+          again.
         </p>
       </Shell>
     );
@@ -228,9 +251,9 @@ function FacilityCertifierReadOnly({
       {mapping ? (
         <CertifierMappingFields mapping={mapping} isProduction={isProduction} />
       ) : (
-        <p className="body-small text-[var(--color-text-secondary)] mt-16">
-          This facility has no Isometric project link yet. Ask an admin to link
-          one — submissions from this facility are blocked until it is.
+        <p className="body-small text-[var(--color-text-secondary)]">
+          This facility has no Isometric project link. Ask an Admin to link one
+          before submitting from this facility.
         </p>
       )}
     </Shell>
@@ -241,9 +264,11 @@ function FacilityCertifierReadOnly({
 function FacilityCertifierManage({
   facilityId,
   embedded,
+  linkPresentation,
 }: {
   facilityId: string;
   embedded: boolean;
+  linkPresentation: "dialog" | "inline";
 }) {
   const { data, isLoading, error } = useFacilityCertifierMapping(facilityId);
   const [editOpen, setEditOpen] = useState(false);
@@ -272,7 +297,11 @@ function FacilityCertifierManage({
       toast.success("Certifier mapping removed");
       setUnlinkOpen(false);
     } catch (err) {
-      setUnlinkError(err instanceof Error ? err.message : "Failed to unlink");
+      setUnlinkError(
+        err instanceof Error
+          ? err.message
+          : "The registry project was not unlinked. Try again.",
+      );
     }
   };
 
@@ -290,14 +319,44 @@ function FacilityCertifierManage({
     return (
       <Shell embedded={embedded}>
         <p className="body-small text-[var(--color-signal-red)]">
-          Failed to load certifier mapping
-          {error instanceof Error ? `: ${error.message}` : "."}
+          The certifier mapping could not be loaded. Refresh the page and try
+          again.
         </p>
       </Shell>
     );
   }
 
   const { mapping, isProduction } = data;
+  const canOpenEdit =
+    linkPresentation === "dialog" || data.isConfigured;
+
+  const actions = mapping ? (
+    <>
+      {canOpenEdit && (
+        <Button variant="default" size="small" onClick={() => setEditOpen(true)}>
+          Edit
+        </Button>
+      )}
+      {linkPresentation === "dialog" && (
+        <Button
+          variant="default"
+          size="small"
+          onClick={() => setUnlinkOpen(true)}
+        >
+          Unlink
+        </Button>
+      )}
+    </>
+  ) : linkPresentation === "dialog" ? (
+    <Button variant="primary" size="small" onClick={() => setEditOpen(true)}>
+      Link Isometric project
+    </Button>
+  ) : null;
+
+  const showInlineForm =
+    linkPresentation === "inline" &&
+    data.isConfigured &&
+    (!mapping || editOpen);
 
   return (
     <>
@@ -306,51 +365,44 @@ function FacilityCertifierManage({
           isProduction={isProduction}
           embedded={embedded}
           actions={
-            mapping ? (
-              <div className="flex gap-12">
-                <Button
-                  variant="default"
-                  size="small"
-                  onClick={() => setEditOpen(true)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="default"
-                  size="small"
-                  onClick={() => setUnlinkOpen(true)}
-                >
-                  Unlink
-                </Button>
-              </div>
-            ) : (
-              <Button
-                variant="primary"
-                size="small"
-                onClick={() => setEditOpen(true)}
-              >
-                Link Isometric project
-              </Button>
+            embedded ? undefined : (
+              <div className="flex gap-12">{actions}</div>
             )
           }
         />
 
-        {mapping ? (
+        {showInlineForm ? (
+          <FacilityCertifierForm
+            facilityId={facilityId}
+            loaderData={data}
+            onSaved={() => setEditOpen(false)}
+            onCancel={mapping ? () => setEditOpen(false) : undefined}
+            presentation="inline"
+          />
+        ) : mapping ? (
           <CertifierMappingFields
             mapping={mapping}
             isProduction={isProduction}
             projectName={projectName}
             templateName={templateName}
           />
-        ) : (
-          <p className="body-small text-[var(--color-text-secondary)] mt-16">
+        ) : data.isConfigured ? (
+          <p className="body-small text-[var(--color-text-secondary)]">
             This facility has no Isometric project link yet. Submissions from
             this facility will be blocked until you link one.
           </p>
+        ) : (
+          <p className="body-small text-[var(--color-text-secondary)]">
+            Save valid Isometric keys above to load projects.
+          </p>
+        )}
+
+        {!showInlineForm && embedded && actions && (
+          <CertifierActions>{actions}</CertifierActions>
         )}
       </Shell>
 
-      {editOpen && (
+      {linkPresentation === "dialog" && editOpen && (
         <FacilityCertifierDialog
           isOpen={editOpen}
           onClose={() => setEditOpen(false)}

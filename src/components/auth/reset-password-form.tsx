@@ -11,7 +11,12 @@ import {
   resetPasswordSchema,
   type ResetPasswordFormData,
 } from "@/schemas/auth";
-import { FormField, FormInput, ServerError } from "@/components/forms";
+import {
+  FormField,
+  FormInput,
+  ResolvedErrorRevalidator,
+  ServerError,
+} from "@/components/forms";
 
 function ResetPasswordFormContent() {
   const [success, setSuccess] = useState(false);
@@ -26,6 +31,8 @@ function ResetPasswordFormContent() {
   const {
     register,
     handleSubmit,
+    control,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<ResetPasswordFormData>({
     resolver: zodResolver(resetPasswordSchema),
@@ -40,7 +47,7 @@ function ResetPasswordFormContent() {
 
     // Validate token exists
     if (!token) {
-      setServerError("Invalid reset link. Please request a new password reset.");
+      setServerError("This reset link is invalid. Request a new password reset.");
       return;
     }
 
@@ -53,7 +60,10 @@ function ResetPasswordFormContent() {
         router.push("/login");
       }, 2000);
     } else {
-      setServerError(result.error || "Failed to reset password");
+      setServerError(
+        result.error ||
+          "The password was not reset. Check the form and try again.",
+      );
     }
   }
 
@@ -65,10 +75,10 @@ function ResetPasswordFormContent() {
           className="p-24 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
           role="alert"
         >
-          <h3 className="body-bold mb-16">Invalid Reset Link</h3>
+          <h3 className="body-bold mb-16">Invalid reset link</h3>
           <p className="body-small">
-            This password reset link is invalid or has expired. Please request a
-            new password reset.
+            This password reset link is invalid or has expired. Request a new
+            password reset.
           </p>
         </div>
 
@@ -86,6 +96,7 @@ function ResetPasswordFormContent() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-24">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {success ? (
         <div className="space-y-24">
           <div
@@ -105,7 +116,7 @@ function ResetPasswordFormContent() {
         <>
           <FormField
             id="newPassword"
-            label="New Password"
+            label="New password"
             helperText="Minimum 8 characters"
             error={errors.newPassword?.message}
           >
@@ -122,7 +133,7 @@ function ResetPasswordFormContent() {
 
           <FormField
             id="confirmPassword"
-            label="Confirm Password"
+            label="Confirm password"
             error={errors.confirmPassword?.message}
           >
             <FormInput

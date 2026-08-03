@@ -1,8 +1,15 @@
 # The submission ledger is an internal data-access seam tested against real Postgres
 
-> **Status: Accepted, design-only** (2026-06-10). Records a seam-placement
+> **Current status: Accepted and implemented** (reviewed 2026-07-29).
+> `claimSubmissionDraft` lives in
+> `src/data-access/certification-submissions.ts`, and its lock, concurrency,
+> resume, and in-lock re-resolution behavior is covered by the DB-backed
+> `tests/certification-submissions.test.ts` suite. The seam remains internal to
+> data access; no port or in-memory adapter was added.
+>
+> **Historical status (2026-06-10): Accepted, design-only.** Records a seam-placement
 > and test-strategy decision from the certification reliability track
-> (`docs/plans/2026-06-10-certification-reliability-track.md`, Phase 1).
+> ([archived plan](../archive/plans/2026-06-10-certification-reliability-track.md), Phase 1).
 > Deliberately narrow: it fixes *where the seam lives and how it is tested*
 > for the submission-ledger claim module — not the module's interface
 > details, which live in the plan.
@@ -56,10 +63,10 @@ in-memory adapter is structurally blind to exactly the parts that matter:
 - **Deadlock semantics** — Postgres detects ABBA and kills a victim with
   `40P01`; an in-memory mutex just hangs the test.
 - **Cross-module lock interleaving** — the mapping and mirror locks
-  interlock with `mirrorDocumentToSource`, `unlinkDocumentSource`, and admin
-  repoint flows that live *outside* any ledger port. This is the exact race
-  the in-lock re-decision exists for, and a fake cannot see those code paths
-  at all.
+  interlock with `mirrorDocumentToSource`, owning-document mapping retirement,
+  and admin repoint flows that live *outside* any ledger port. This is the
+  exact race the in-lock re-decision exists for, and a fake cannot see those
+  code paths at all.
 
 A green in-memory suite would therefore read as confidence about locking
 that it cannot supply. And with only one production adapter, the port is

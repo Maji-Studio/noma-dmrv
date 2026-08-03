@@ -122,7 +122,7 @@ export const feedstockTypeFormSchema = z.object({
 export const createFeedstockTypeSchema = feedstockTypeFormSchema;
 
 export const updateFeedstockTypeSchema = z.object({
-  feedstockTypeId: z.uuid("Invalid feedstock type ID"),
+  feedstockTypeId: z.uuid("Choose a valid feedstock type."),
   name: z.string().trim().min(1).max(255).optional(),
   category: z.enum(feedstockCategories).optional(),
   usage: z.enum(feedstockTypeUsages).optional(),
@@ -132,7 +132,7 @@ export const updateFeedstockTypeSchema = z.object({
 }).superRefine(validateCategoryUsage);
 
 export const deleteFeedstockTypeSchema = z.object({
-  feedstockTypeId: z.uuid("Invalid feedstock type ID"),
+  feedstockTypeId: z.uuid("Choose a valid feedstock type."),
 });
 
 export const importIsometricFeedstockTypeSchema = z.object({

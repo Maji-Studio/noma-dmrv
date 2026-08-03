@@ -21,6 +21,7 @@ import {
 import { facilityKeys } from "@/hooks/use-facilities";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { invalidateOnboardingProgress } from "./use-onboarding";
 
 // ============================================
 // Query Keys
@@ -180,6 +181,7 @@ export function useCreateReactor(
       queryClient.invalidateQueries({
         queryKey: facilityKeys.lists(),
       });
+      await invalidateOnboardingProgress(queryClient);
 
       // Pre-populate the detail cache with the new reactor
       queryClient.setQueryData(reactorKeys.detail(data.id), data);

@@ -217,15 +217,14 @@ async function openCertificationSettings(
   page: import("@playwright/test").Page,
   facilityId: string,
 ) {
+  // Certifier is the console's default pane, so no `?section=` is needed —
+  // and asserting the default here keeps that contract covered.
   await page.goto(`/certification/settings?facility=${facilityId}`);
   await expect(
     page.getByRole("heading", { name: "Settings", level: 1 }),
   ).toBeVisible({ timeout: 15000 });
   await expect(
-    page.getByRole("heading", {
-      name: "Registry connection — Isometric",
-      level: 2,
-    }),
+    page.getByRole("heading", { name: "Certifier", level: 2 }),
   ).toBeVisible();
 }
 

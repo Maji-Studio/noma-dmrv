@@ -89,6 +89,11 @@ export interface SankeyLineage {
     massUsedKg: number | null;
     eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
   }[];
+  /** Multi-run product provenance; absent on legacy one-run payloads. */
+  sources?: {
+    productionRun: NonNullable<SankeyLineage["productionRun"]>;
+    feedstocks: SankeyLineage["feedstocks"];
+  }[];
 }
 
 /** Residuals smaller than this are rounding noise, not a labeled exit. */
@@ -123,6 +128,7 @@ export function buildBatchSankey(
   const runById = new Map<string, NonNullable<SankeyLineage["productionRun"]>>();
   const lotById = new Map<string, NonNullable<SankeyLineage["biocharProduct"]>>();
   const feedstockIds = new Set<string>();
+  const applicationIds = new Set<string>();
   // Feedstock allocations keyed per run so a shared run's allocations count once.
   const allocationsByRunId = new Map<string, number>();
   // Ineligible slice of each run's allocations (issue #285): derived from the
@@ -131,31 +137,45 @@ export function buildBatchSankey(
 
   let appliedKg = 0;
   for (const lineage of lineages) {
+    applicationIds.add(lineage.application.id);
     appliedKg += tonnesToKg(lineage.application.biocharAppliedDryTons ?? 0);
-    if (lineage.productionRun) {
-      runById.set(lineage.productionRun.id, lineage.productionRun);
-      if (!allocationsByRunId.has(lineage.productionRun.id)) {
+    const sources =
+      lineage.sources && lineage.sources.length > 0
+        ? lineage.sources
+        : lineage.productionRun
+          ? [{
+              productionRun: lineage.productionRun,
+              feedstocks: lineage.feedstocks,
+            }]
+          : [];
+    for (const source of sources) {
+      const productionRun = source.productionRun;
+      runById.set(productionRun.id, productionRun);
+      if (!allocationsByRunId.has(productionRun.id)) {
         allocationsByRunId.set(
-          lineage.productionRun.id,
-          lineage.feedstocks.reduce((sum, f) => sum + (f.massUsedKg ?? 0), 0),
+          productionRun.id,
+          source.feedstocks.reduce(
+            (sum, feedstock) => sum + (feedstock.massUsedKg ?? 0),
+            0,
+          ),
         );
         ineligibleAllocationsByRunId.set(
-          lineage.productionRun.id,
-          lineage.feedstocks.reduce(
-            (sum, f) =>
-              f.eligibilityStatus === "ineligible"
-                ? sum + (f.massUsedKg ?? 0)
+          productionRun.id,
+          source.feedstocks.reduce(
+            (sum, feedstock) =>
+              feedstock.eligibilityStatus === "ineligible"
+                ? sum + (feedstock.massUsedKg ?? 0)
                 : sum,
             0,
           ),
         );
       }
+      for (const feedstock of source.feedstocks) {
+        feedstockIds.add(feedstock.id);
+      }
     }
     if (lineage.biocharProduct) {
       lotById.set(lineage.biocharProduct.id, lineage.biocharProduct);
-    }
-    for (const feedstock of lineage.feedstocks) {
-      feedstockIds.add(feedstock.id);
     }
   }
 
@@ -279,7 +299,7 @@ export function buildBatchSankey(
         key: "applied",
         label: "Applied",
         massKg: appliedKg,
-        count: lineages.length,
+        count: applicationIds.size,
       },
     ],
     exits,

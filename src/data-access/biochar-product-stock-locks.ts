@@ -2,17 +2,19 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
   biocharProducts,
-  formulations,
   productionRuns,
   type BiocharProduct,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import {
+  SOURCE_BIOCHAR_MASS_ERROR,
+} from "@/lib/biochar-composition";
 import { SafeError } from "@/lib/errors";
+import { productStockOverdrawMessage } from "@/lib/stock-overdraw";
 import {
   assertBiocharDrawWithinStock,
   deriveBiocharProductDeliveredKg,
   deriveProductAvailableKg,
-  formatKg,
   isOverdraw,
   overdrawError,
 } from "./bin-stock-guards";
@@ -20,6 +22,11 @@ import {
   assertStockLockSnapshot,
   lockBinStocks,
 } from "./lock-bin-stocks";
+import {
+  compositionAllocationChanged,
+  deriveCompositionSourceBiocharMassKg,
+  getCompositionIngredientDraws,
+} from "./biochar-product-composition";
 
 interface BiocharProductStockUpdate {
   facilityId?: string;
@@ -27,6 +34,7 @@ interface BiocharProductStockUpdate {
   linkedProductionRunId?: string | null;
   storageLocationId?: string | null;
   massKg?: number | null;
+  waterAddedKg?: number | null;
   composition?: Record<string, unknown>;
 }
 
@@ -34,10 +42,11 @@ type LockedBiocharProduct = Pick<
   BiocharProduct,
   | "facilityId"
   | "formulationId"
-  | "biocharRatio"
+  | "sourceBiocharStorageLocationId"
   | "linkedProductionRunId"
   | "storageLocationId"
   | "massKg"
+  | "waterAddedKg"
   | "composition"
 >;
 
@@ -58,21 +67,54 @@ export interface BiocharProductStockState {
   transactionStorageId: string | null;
   transactionMassKg: number | null;
   transactionComposition: Record<string, unknown> | null;
-  /**
-   * The product's snapshotted biochar ratio for this transaction. `null` when
-   * unknown (formulation being reassigned, or a legacy pre-snapshot row) — the
-   * draw check then falls back to the live formulation ratio, matching the
-   * roll-ups' COALESCE(product snapshot, live formulation ratio, 1).
-   */
-  transactionBiocharRatio: number | null;
 }
 
-/** Wet product mass scaled to the source bin's biochar-equivalent draw. */
-export function biocharEquivalentKg(
-  massKg: number | null,
-  biocharRatio: number | null,
-): number {
-  return (massKg ?? 0) * (biocharRatio ?? 1);
+export function biocharProductBinStockChanged(
+  product: Pick<
+    BiocharProduct,
+    "massKg" | "waterAddedKg" | "storageLocationId"
+  >,
+  data: Pick<
+    BiocharProductStockUpdate,
+    "massKg" | "waterAddedKg" | "storageLocationId"
+  >,
+): boolean {
+  return (
+    (data.massKg !== undefined && data.massKg !== product.massKg) ||
+    (data.waterAddedKg !== undefined &&
+      data.waterAddedKg !== product.waterAddedKg) ||
+    (data.storageLocationId !== undefined &&
+      data.storageLocationId !== product.storageLocationId)
+  );
+}
+
+export function deriveBiocharProductTotalMassChange(
+  locked: Pick<BiocharProduct, "massKg" | "waterAddedKg">,
+  data: Pick<BiocharProductStockUpdate, "massKg" | "waterAddedKg">,
+): {
+  previousTotalMassKg: number;
+  transactionTotalMassKg: number;
+  massFieldsChanged: boolean;
+  isReduction: boolean;
+} {
+  const previousTotalMassKg =
+    (locked.massKg ?? 0) + (locked.waterAddedKg ?? 0);
+  // `undefined` means the field is untouched, so the locked value carries
+  // forward. An explicitly cleared field is a reduction to zero, not a reason
+  // to fall back to the old value and skip the guard.
+  const transactionTotalMassKg =
+    (data.massKg !== undefined ? (data.massKg ?? 0) : (locked.massKg ?? 0)) +
+    (data.waterAddedKg !== undefined
+      ? (data.waterAddedKg ?? 0)
+      : (locked.waterAddedKg ?? 0));
+  const massFieldsChanged =
+    data.massKg !== undefined || data.waterAddedKg !== undefined;
+  return {
+    previousTotalMassKg,
+    transactionTotalMassKg,
+    massFieldsChanged,
+    isReduction: transactionTotalMassKg < previousTotalMassKg,
+  };
 }
 
 function deriveBiocharProductStockState(
@@ -99,11 +141,6 @@ function deriveBiocharProductStockState(
       data.composition !== undefined
         ? data.composition
         : (product.composition as Record<string, unknown> | null),
-    transactionBiocharRatio:
-      data.formulationId !== undefined &&
-      data.formulationId !== product.formulationId
-        ? null
-        : product.biocharRatio,
   };
 }
 
@@ -118,16 +155,23 @@ export async function lockBiocharProductUpdateStock(
   data: BiocharProductStockUpdate,
 ): Promise<BiocharProductUpdateLockPreparation> {
   const state = deriveBiocharProductStockState(product, data);
+  const existingIngredientDraws = data.composition !== undefined
+    ? getCompositionIngredientDraws(
+        product.composition as Record<string, unknown> | null,
+      )
+    : [];
+  const transactionIngredientDraws = data.composition !== undefined
+    ? getCompositionIngredientDraws(state.transactionComposition)
+    : [];
   const productBinStockChanged =
-    (data.massKg !== undefined && data.massKg !== product.massKg) ||
-    (data.storageLocationId !== undefined &&
-      data.storageLocationId !== product.storageLocationId);
+    biocharProductBinStockChanged(product, data);
   // Mirror the defined-ness condition in assertBiocharProductUpdateDraw. Any
   // source-bin advisory lock that assert can take must already be in this batch.
   const biocharAllocationInputsPresent =
     data.massKg !== undefined ||
     data.formulationId !== undefined ||
-    data.linkedProductionRunId !== undefined;
+    data.linkedProductionRunId !== undefined ||
+    data.composition !== undefined;
   const sourceRunIds = [...new Set(
     [product.linkedProductionRunId, state.transactionLinkedRunId].filter(
       (id): id is string => id != null,
@@ -152,6 +196,8 @@ export async function lockBiocharProductUpdateStock(
       ? [product.storageLocationId, state.transactionStorageId]
       : []),
     ...sourceBins.map((row) => row.storageLocationId),
+    ...existingIngredientDraws.map((draw) => draw.storageLocationId),
+    ...transactionIngredientDraws.map((draw) => draw.storageLocationId),
   ]);
   return { product, sourceRuns: sourceBins };
 }
@@ -166,7 +212,12 @@ export async function lockBiocharProductUpdateRows(
 ): Promise<BiocharProductStockState> {
   assertStockLockSnapshot(
     locked.storageLocationId === preparation.product.storageLocationId &&
-      locked.linkedProductionRunId === preparation.product.linkedProductionRunId,
+      locked.linkedProductionRunId === preparation.product.linkedProductionRunId &&
+      (data.composition === undefined ||
+        !compositionAllocationChanged(
+          locked.composition as Record<string, unknown> | null,
+          preparation.product.composition as Record<string, unknown> | null,
+        )),
   );
 
   const sourceRunIds = preparation.sourceRuns.map((run) => run.id);
@@ -209,7 +260,8 @@ export async function assertBiocharProductUpdateDraw(
   if (
     (data.massKg === undefined &&
       data.formulationId === undefined &&
-      data.linkedProductionRunId === undefined) ||
+      data.linkedProductionRunId === undefined &&
+      data.composition === undefined) ||
     !state.transactionLinkedRunId ||
     state.transactionMassKg == null
   ) {
@@ -227,26 +279,13 @@ export async function assertBiocharProductUpdateDraw(
     ));
   if (!effectiveRun?.biocharStorageLocationId) return;
 
-  // Snapshot-first: the product's own biochar ratio governs its draw. Fall
-  // back to the live formulation ratio only when the snapshot is unresolved
-  // (formulation reassignment in flight, or a legacy pre-snapshot row) —
-  // mirroring the stock roll-ups' COALESCE chain so overdraw checks and
-  // derived stock can never disagree.
-  let biocharRatio = state.transactionBiocharRatio;
-  if (biocharRatio == null && state.transactionFormulationId) {
-    const [ratioRow] = await tx
-      .select({ biocharRatio: formulations.biocharRatio })
-      .from(formulations)
-      .where(and(
-        eq(formulations.id, state.transactionFormulationId),
-        eq(formulations.organizationId, ctx.organizationId),
-      ));
-    biocharRatio = ratioRow?.biocharRatio ?? null;
-  }
-  const requestedBiocharKg = biocharEquivalentKg(
+  const requestedBiocharKg = deriveCompositionSourceBiocharMassKg(
     state.transactionMassKg,
-    biocharRatio,
+    state.transactionComposition,
   );
+  if (requestedBiocharKg === null || requestedBiocharKg < 0) {
+    throw new SafeError(SOURCE_BIOCHAR_MASS_ERROR);
+  }
   await assertBiocharDrawWithinStock(ctx, tx, {
     biocharStorageLocationId: effectiveRun.biocharStorageLocationId,
     requestedBiocharKg,
@@ -260,15 +299,22 @@ export async function assertBiocharProductMassReductionWithinStock(
   ctx: OrgContext,
   tx: DbTransaction,
   productId: string,
-  locked: Pick<BiocharProduct, "code" | "massKg" | "storageLocationId">,
-  data: Pick<BiocharProductStockUpdate, "massKg">,
+  locked: Pick<
+    BiocharProduct,
+    "code" | "massKg" | "waterAddedKg" | "storageLocationId"
+  >,
+  data: Pick<
+    BiocharProductStockUpdate,
+    "massKg" | "waterAddedKg"
+  >,
 ): Promise<void> {
-  const previousMassKg = locked.massKg ?? 0;
-  const transactionMassKg = data.massKg ?? 0;
-  if (
-    data.massKg === undefined ||
-    transactionMassKg >= previousMassKg
-  ) {
+  const {
+    previousTotalMassKg,
+    transactionTotalMassKg,
+    massFieldsChanged,
+    isReduction,
+  } = deriveBiocharProductTotalMassChange(locked, data);
+  if (!massFieldsChanged || !isReduction) {
     return;
   }
 
@@ -277,12 +323,8 @@ export async function assertBiocharProductMassReductionWithinStock(
     tx,
     productId,
   );
-  if (isOverdraw(deliveredKg, transactionMassKg)) {
-    throw new SafeError(
-      `Cannot reduce product ${locked.code} to ${formatKg(
-        transactionMassKg,
-      )}: ${formatKg(deliveredKg)} has already been delivered. Correct the deliveries before lowering the product mass.`,
-    );
+  if (isOverdraw(deliveredKg, transactionTotalMassKg)) {
+    throw new SafeError(productStockOverdrawMessage());
   }
 
   if (!locked.storageLocationId) return;
@@ -292,9 +334,10 @@ export async function assertBiocharProductMassReductionWithinStock(
     tx,
     locked.storageLocationId,
   );
-  const reductionKg = previousMassKg - transactionMassKg;
+  const reductionKg =
+    previousTotalMassKg - transactionTotalMassKg;
   if (isOverdraw(reductionKg, availableKg)) {
-    throw overdrawError("product", availableKg, reductionKg);
+    throw overdrawError("product");
   }
 }
 
@@ -328,12 +371,17 @@ export async function lockDeleteBiocharProductStock(
         ))
     : [];
 
-  if ((snapshot.massKg ?? 0) > 0) {
-    await lockBinStocks(ctx, tx, [
+  const ingredientDraws = getCompositionIngredientDraws(
+    snapshot.composition as Record<string, unknown> | null,
+  );
+  await lockBinStocks(ctx, tx, [
+    ...ingredientDraws.map((draw) => draw.storageLocationId),
+    ...((snapshot.massKg ?? 0) > 0 ? [
       snapshot.storageLocationId,
+      snapshot.sourceBiocharStorageLocationId,
       sourceRunSnapshot?.storageLocationId,
-    ]);
-  }
+    ] : []),
+  ]);
 
   const [locked] = await tx
     .select()
@@ -350,7 +398,10 @@ export async function lockDeleteBiocharProductStock(
   assertStockLockSnapshot(
     locked.massKg === snapshot.massKg &&
       locked.storageLocationId === snapshot.storageLocationId &&
-      locked.linkedProductionRunId === snapshot.linkedProductionRunId,
+      locked.sourceBiocharStorageLocationId ===
+        snapshot.sourceBiocharStorageLocationId &&
+      locked.linkedProductionRunId === snapshot.linkedProductionRunId &&
+      JSON.stringify(locked.composition) === JSON.stringify(snapshot.composition),
   );
 
   const [lockedSourceRun] = locked.linkedProductionRunId

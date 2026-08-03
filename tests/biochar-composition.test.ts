@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   reconcileComposition,
   deriveSuggestedIngredientMassKg,
+  deriveSourceBiocharMassKg,
   deriveMassDeviationPercent,
   fromCompositionJsonb,
-  shouldPrefillSuggestedMasses,
   toCompositionJsonb,
 } from "@/lib/biochar-composition";
 import type { IngredientBin } from "@/lib/biochar-composition";
@@ -40,6 +40,8 @@ describe("reconcileComposition", () => {
         feedstockTypeCategory: "compost",
         ratio: 0.8,
         massKg: 80,
+        massDryKg: 72,
+        moistureContentPercent: 10,
         storageLocationId: BIN_A,
       },
       {
@@ -55,7 +57,13 @@ describe("reconcileComposition", () => {
 
     const next = reconcileComposition(formulation, existing);
     expect(next).toHaveLength(2);
-    expect(next[0]).toMatchObject({ formulationIngredientId: ING_A, storageLocationId: BIN_A, massKg: 80 });
+    expect(next[0]).toMatchObject({
+      formulationIngredientId: ING_A,
+      storageLocationId: BIN_A,
+      massKg: 80,
+      massDryKg: 72,
+      moistureContentPercent: 10,
+    });
     expect(next[1]).toMatchObject({ formulationIngredientId: ING_B, storageLocationId: BIN_B, massKg: 20 });
   });
 
@@ -175,6 +183,8 @@ describe("reconcileComposition", () => {
         feedstockTypeCategory: "compost",
         ratio: 1,
         massKg: null,
+        massDryKg: null,
+        moistureContentPercent: null,
         storageLocationId: null,
       },
     ]);
@@ -200,50 +210,49 @@ describe("deriveSuggestedIngredientMassKg", () => {
   });
 });
 
-describe("shouldPrefillSuggestedMasses", () => {
-  it("allows suggestions while creating a new product composition", () => {
+describe("deriveSourceBiocharMassKg", () => {
+  it("subtracts actual recorded ingredient masses from pre-water blend mass", () => {
     expect(
-      shouldPrefillSuggestedMasses({
-        isEditMode: false,
-        initialFormulationId: null,
-        selectedFormulationId: ING_A,
-      }),
-    ).toBe(true);
+      deriveSourceBiocharMassKg(100, [
+        { massKg: 12 },
+        { massKg: 8 },
+      ]),
+    ).toBe(80);
   });
 
-  it("does not fabricate a null saved mass during an unrelated edit", () => {
-    const savedWithNullMass: IngredientBin[] = [
-      {
-        formulationIngredientId: ING_A,
-        feedstockTypeId: FT_A,
-        feedstockTypeName: "Compost",
-        feedstockTypeCategory: "compost",
-        ratio: 0.2,
-        massKg: null,
-        storageLocationId: BIN_A,
-      },
-    ];
-
+  it("uses exact persisted gram arithmetic", () => {
     expect(
-      shouldPrefillSuggestedMasses({
-        isEditMode: true,
-        initialFormulationId: ING_C,
-        selectedFormulationId: ING_C,
-      }),
-    ).toBe(false);
-    expect(toCompositionJsonb(savedWithNullMass, { mode: "update" })).toEqual({
-      ingredients: [expect.objectContaining({ massKg: null })],
-    });
+      deriveSourceBiocharMassKg(0.3, [
+        { massKg: 0.1 },
+        { massKg: 0.2 },
+      ]),
+    ).toBe(0);
   });
 
-  it("allows suggestions after an explicit formulation reassignment", () => {
+  it("does not infer mass from formulation volume shares", () => {
+    const ingredient = { massKg: 20, ratio: 0.4 };
     expect(
-      shouldPrefillSuggestedMasses({
-        isEditMode: true,
-        initialFormulationId: ING_A,
-        selectedFormulationId: ING_B,
-      }),
-    ).toBe(true);
+      deriveSourceBiocharMassKg(100, [ingredient]),
+    ).toBe(80);
+  });
+
+  it("returns null without a finite blend mass", () => {
+    expect(deriveSourceBiocharMassKg(null, [{ massKg: 20 }])).toBeNull();
+    expect(
+      deriveSourceBiocharMassKg(Number.NaN, [{ massKg: 20 }]),
+    ).toBeNull();
+  });
+
+  it("intentionally ignores missing, non-finite, and non-positive ingredient masses", () => {
+    expect(
+      deriveSourceBiocharMassKg(1, [
+        {},
+        { massKg: Number.NaN },
+        { massKg: Number.POSITIVE_INFINITY },
+        { massKg: 0 },
+        { massKg: -1 },
+      ]),
+    ).toBe(1);
   });
 });
 
@@ -291,6 +300,8 @@ describe("fromCompositionJsonb", () => {
           feedstockTypeCategory: "compost",
           ratio: 1,
           massKg: 100,
+          massDryKg: 90,
+          moistureContentPercent: 10,
           storageLocationId: BIN_A,
         },
       ],

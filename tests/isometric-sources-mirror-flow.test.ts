@@ -32,13 +32,12 @@ vi.mock("@/lib/auth/server", () => ({
   })),
 }));
 vi.mock("@/data-access/certification");
+vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");
-vi.mock("@/data-access/credit-batches");
-vi.mock("@/data-access/credit-batch-production-runs");
+vi.mock("@/data-access/credit-batch-accounting");
 vi.mock("@/data-access/credit-batch-samples", () => ({
   getSamplesByCreditBatchIds: vi.fn(),
 }));
-vi.mock("@/data-access/chain-of-custody");
 vi.mock("@/data-access/documents");
 vi.mock("@/data-access/certifier-document-uploads");
 vi.mock("@/data-access/certifier-organization-settings");
@@ -99,27 +98,30 @@ const EXISTING_SOURCE_ID = "src_recovered";
 
 const DOCUMENT_FIXTURE = {
   id: DOCUMENT_ID,
-  fileName: "lab-report.pdf",
-  documentType: "lab_report" as const,
+  fileName: "application-inventory.pdf",
+  documentType: "pdf" as const,
   mimeType: "application/pdf",
   fileSizeBytes: 12345,
-  storageKey: "documents/lab-report.pdf",
+  storageKey: "documents/application-inventory.pdf",
   capturedAt: new Date("2026-01-05T00:00:00Z"),
   createdAt: new Date("2026-01-05T00:00:00Z"),
   checksumSha256: null,
+  metadata: { logbookEvidenceType: "inventory" },
 };
 
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as ledgerDA from "@/data-access/certification";
-import * as creditBatchesDA from "@/data-access/credit-batches";
-import * as creditBatchProductionRunsDA from "@/data-access/credit-batch-production-runs";
+import * as submissionsDA from "@/data-access/certification-submissions";
+import * as creditBatchAccountingDA from "@/data-access/credit-batch-accounting";
 import * as creditBatchSamplesDA from "@/data-access/credit-batch-samples";
-import * as chainDA from "@/data-access/chain-of-custody";
 import * as documentsDA from "@/data-access/documents";
 import * as uploadsDA from "@/data-access/certifier-document-uploads";
 import * as organizationSettingsDA from "@/data-access/certifier-organization-settings";
 import * as isometric from "@/lib/isometric";
-import { mirrorDocumentToSource } from "@/fn/certification/sources";
+import {
+  mirrorCandidateSourcesForSubmission,
+  mirrorDocumentToSource,
+} from "@/fn/certification/sources";
 import { buildSourceSupplierRef } from "@/lib/isometric/utils/source-ref";
 
 const SUPPLIER_REF = buildSourceSupplierRef(DOCUMENT_ID);
@@ -137,38 +139,41 @@ beforeEach(() => {
     externalProjectId: PROJECT_ID,
     provider: "isometric",
   } as never);
+  vi.mocked(
+    submissionsDA.getLatestSubmissionWithExecutor,
+  ).mockResolvedValue(null);
   vi.mocked(removalsDA.getCreditBatchesByRemovalId).mockResolvedValue([
     {
       id: CREDIT_BATCH_ID,
       code: "CB-001",
     },
   ] as never);
-  vi.mocked(creditBatchesDA.getCreditBatchById).mockResolvedValue({
-    id: CREDIT_BATCH_ID,
-    code: "CB-001",
-    productionRunIds: [PRODUCTION_RUN_ID],
+  vi.mocked(creditBatchAccountingDA.loadCreditBatchRollups).mockResolvedValue({
+    [CREDIT_BATCH_ID]: {
+      batch: {
+        id: CREDIT_BATCH_ID,
+        code: "CB-001",
+      },
+      lineageFacts: {
+        applications: [
+          {
+            id: APPLICATION_ID,
+            code: "APP-001",
+            delivery: { id: DELIVERY_ID, code: "DEL-001" },
+          },
+        ],
+        runs: [
+          {
+            id: PRODUCTION_RUN_ID,
+            feedstocks: [],
+          },
+        ],
+      },
+    },
   } as never);
   vi.mocked(creditBatchSamplesDA.getSamplesByCreditBatchIds).mockResolvedValue(
     [],
   );
-  vi.mocked(creditBatchProductionRunsDA.getApplicationsForRuns).mockResolvedValue(
-    [
-      {
-        applicationId: APPLICATION_ID,
-        productionRunId: PRODUCTION_RUN_ID,
-        biocharAppliedTons: 1,
-      },
-    ],
-  );
-  vi.mocked(chainDA.getChainOfCustodyData).mockResolvedValue({
-    application: { id: APPLICATION_ID, code: "APP-001" },
-    delivery: { id: DELIVERY_ID, code: "DEL-001" },
-    order: null,
-    biocharProduct: null,
-    productionRun: null,
-    reactor: null,
-    feedstocks: [],
-  } as never);
   vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
     async (_userId, entityType, entityId) => {
       // The document lives on the application — every other entity in the
@@ -211,6 +216,78 @@ beforeEach(() => {
 });
 
 describe("mirrorDocumentToSource — orphan recovery", () => {
+  it("mirrors a pending candidate when submission prepares its sources", async () => {
+    vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue({
+      id: EXISTING_SOURCE_ID,
+      is_public: false,
+    } as never);
+    vi.mocked(isometric.requestSignedUploadUrl).mockResolvedValue({
+      kind: "already_uploaded",
+    });
+
+    await mirrorCandidateSourcesForSubmission(
+      makeTestOrgContext(USER_ID),
+      {
+        removalId: REMOVAL_ID,
+        candidateDocumentIds: [DOCUMENT_ID],
+      },
+    );
+
+    expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      expect.objectContaining({
+        documentId: DOCUMENT_ID,
+        externalDocumentId: EXISTING_SOURCE_ID,
+      }),
+      expect.anything(),
+    );
+  });
+
+  it.each(["submitted", "accepted", "superseded"] as const)(
+    "rejects public mirroring when the latest Removal submission is %s",
+    async (status) => {
+      vi.mocked(
+        submissionsDA.getLatestSubmissionWithExecutor,
+      ).mockResolvedValue({
+        status,
+        lockedAt: null,
+      } as never);
+
+      const result = await mirrorDocumentToSource({
+        removalId: REMOVAL_ID,
+        documentId: DOCUMENT_ID,
+      });
+
+      expect(result.success).toBe(false);
+      if (result.success) return;
+      expect(result.error).toMatch(/registry value sources are read-only/i);
+      expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+      expect(isometric.findSourceBySupplierRef).not.toHaveBeenCalled();
+      expect(isometric.createSource).not.toHaveBeenCalled();
+      expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects public mirroring while Removal submission is in flight", async () => {
+    vi.mocked(
+      submissionsDA.getLatestSubmissionWithExecutor,
+    ).mockResolvedValue({
+      status: "draft",
+      lockedAt: new Date(),
+    } as never);
+
+    const result = await mirrorDocumentToSource({
+      removalId: REMOVAL_ID,
+      documentId: DOCUMENT_ID,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/submission is in progress/i);
+    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(isometric.createSource).not.toHaveBeenCalled();
+  });
+
   it("GET found → signed_upload_url 200 → PUT → insert", async () => {
     // Remote Source already exists from a previous attempt.
     vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue({
@@ -409,7 +486,11 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       );
       expect(isometric.createSource).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ is_public: true }),
+        expect.objectContaining({
+          is_public: true,
+          description:
+            "Noma role: Inventory. Lineage: Application APP-001.",
+        }),
       );
       expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
         makeTestOrgContext(USER_ID),
@@ -436,7 +517,9 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
 
     expect(result.success).toBe(false);
     if (result.success) return;
-    expect(result.error).toMatch(/not a candidate/i);
+    expect(result.error).toBe(
+      "This document is not available for this Removal. Reload the panel and try again.",
+    );
     expect(isometric.findSourceBySupplierRef).not.toHaveBeenCalled();
     expect(isometric.createSource).not.toHaveBeenCalled();
     expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalled();

@@ -63,11 +63,11 @@ describe("mass input caps", () => {
         expect.arrayContaining([
           expect.objectContaining({
             path: ["deliveredWetMassKg"],
-            message: "Wet mass must be >= 0",
+            message: "Wet mass must be 0 or more",
           }),
           expect.objectContaining({
             path: ["massDryKg"],
-            message: "Dry mass must be >= 0",
+            message: "Dry mass must be 0 or more",
           }),
         ]),
       );

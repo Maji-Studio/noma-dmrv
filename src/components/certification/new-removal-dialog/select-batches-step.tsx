@@ -65,27 +65,27 @@ export function setupGapCopy(gap: FacilitySetupGap): {
     case "credentials":
       return {
         message:
-          "The organization's Isometric API credentials aren't configured, so the registry can't be reached. An organization owner or admin needs to set them up before this facility can be linked.",
+          "The organization's registry connection credentials are not set, so the registry cannot be reached. Ask an Owner or Admin to add them before linking this facility.",
         action: null,
       };
     case "default_template":
       return {
         message:
-          "This facility is linked, but no default removal template is set for it.",
+          "This facility is linked, but no default Removal template is set for it.",
         action: { label: "Choose a template in certification settings", toSettings: true },
       };
     case "template_resolution":
       return {
-        message: `The configured removal template (${gap.templateId}) no longer resolves on the registry. Re-select a template.`,
+        message: `The configured Removal template (${gap.templateId}) is no longer available in the registry. Select another template.`,
         action: { label: "Re-select template in certification settings", toSettings: true },
       };
     case "blueprint_keys": {
       const labels = gap.keys.map(facilityBlueprintLabel);
       return {
         message:
-          `The facility's project and template are linked, but the template references ` +
-          `${gap.keys.length} component blueprint${gap.keys.length === 1 ? "" : "s"} the registry doesn't expose: ` +
-          `${labels.join(", ")}. Review the facility's certification setup or ask an administrator to resolve the mapping with Isometric.`,
+          `The selected Removal template uses ${gap.keys.length} ` +
+          `${gap.keys.length === 1 ? "component" : "components"} the registry cannot load: ` +
+          `${labels.join(", ")}. Choose another template or ask an Admin to update the Isometric project.`,
         action: { label: "Review certification settings", toSettings: true },
       };
     }
@@ -124,36 +124,28 @@ function ReadyCard({
       }`}
     >
       <div className="flex items-start justify-between gap-12">
-        <span className="body-small font-mono text-[var(--color-text-primary)]">
-          {batch.code}
+        <span className="body-small text-[var(--color-text-primary)]">
+          {formatDateRange(batch.startDate, batch.endDate)}
         </span>
         <input
           type="checkbox"
           className="mt-px size-16 shrink-0 accent-[var(--color-interaction)]"
           checked={selected}
           onChange={() => onToggle(batch.id)}
-          aria-label={`Select credit batch ${batch.code}`}
+          aria-label={`Select credit batch for ${formatDateRange(batch.startDate, batch.endDate)}, ${batch.code}`}
         />
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        {formatDateRange(batch.startDate, batch.endDate)}
+        Credit batch
       </span>
-      <div className="grid grid-cols-3 gap-8">
+      <div className="grid grid-cols-2 gap-8">
         <Metric label="Weight" value={formatTonnes(batch.appliedWeightTons)} />
-        <Metric
-          label="CO₂e preview"
-          value={
-            batch.co2eStoredTonnes == null
-              ? "Unavailable"
-              : formatTonnes(batch.co2eStoredTonnes)
-          }
-        />
         <Metric
           label="Durability"
           value={formatDurabilityOption(batch.durabilityOption)}
         />
       </div>
-      <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-signal-green)]">
+      <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--st-ok)]">
         <CheckCircleIcon size={14} weight="fill" aria-hidden />
         {CREDIT_BATCH_READY_LABEL}
       </span>
@@ -176,8 +168,8 @@ function IncompleteCard({
   return (
     <div className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16">
       <div className="flex items-start justify-between gap-12">
-        <span className="body-small font-mono text-[var(--color-text-secondary)]">
-          {batch.code}
+        <span className="body-small text-[var(--color-text-secondary)]">
+          {formatDateRange(batch.startDate, batch.endDate)}
         </span>
         <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-signal-orange-strong)]">
           <WarningIcon size={14} weight="fill" aria-hidden />
@@ -186,13 +178,14 @@ function IncompleteCard({
         </span>
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        {formatDateRange(batch.startDate, batch.endDate)}
+        Credit batch
       </span>
       <ul className="flex flex-col gap-10">
         {gaps.map((check, index) => {
           // The exact fix workflow for this gap — the same target map the batch
-          // page's health strip uses (batch→samples, run→readings, application→
-          // deliveries), so a gap resolves identically wherever it's shown.
+          // page's health strip uses (batch→samples, run→production data,
+          // application→deliveries), so a gap resolves identically wherever
+          // it's shown.
           const fix = batchHealthFixLinkFor(check, facilityId, batch.id);
           return (
             <li
@@ -262,7 +255,7 @@ export function SelectBatchesStep({
       <h3 className="title-heading-3 flex items-center gap-6">
         Select credit batches
         <InfoHint>
-          Only batches whose data is complete can be grouped into a removal.
+          Only batches whose data is complete can be grouped into a Removal.
         </InfoHint>
       </h3>
 

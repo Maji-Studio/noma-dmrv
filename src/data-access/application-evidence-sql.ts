@@ -26,28 +26,6 @@ function documentMatcherSql(
         and ${documents.metadata}->>${matcher.geotagStatusMetadataKey} = ${matcher.geotagStatus}
         and ${documents.metadata}->>${matcher.evidenceRoleMetadataKey} = ${matcher.role}
       )`;
-    case "unconditional-logbook-document-type":
-      return sql`(
-        ${uploadedDocumentSql(matcher.uploaded)}
-        and ${documents.documentType} in (${sql.join(
-          matcher.documentTypes.map((type) => sql`${type}`),
-          sql`, `,
-        )})
-      )`;
-    case "conditional-logbook-document-type":
-      return sql`(
-        ${uploadedDocumentSql(matcher.uploaded)}
-        and ${documents.documentType} = ${matcher.documentType}
-        and ${documents.metadata}->>${matcher.evidenceTypeMetadataKey} in (${sql.join(
-          matcher.evidenceTypes.map((type) => sql`${type}`),
-          sql`, `,
-        )})
-      )`;
-    case "any-document-matcher":
-      return sql`(${sql.join(
-        matcher.matchers.map(documentMatcherSql),
-        sql` or `,
-      )})`;
   }
 }
 
@@ -70,11 +48,11 @@ function missingRequirementSql(
   switch (requirement.kind) {
     case "document":
       return missingDocumentSql(requirement.matcher);
-    case "non-blank-application-field":
-      return sql`(
-        ${applications[requirement.field]} is null
-        or trim(${applications[requirement.field]}::text) = ''
-      )`;
+    case "non-null-application-field":
+      // Literal qualified name, not `applications[requirement.field]`: this
+      // fragment is spliced into correlated subqueries where an unqualified
+      // Drizzle column reference resolves against the wrong relation.
+      return sql`"applications"."gis_boundary" is null`;
   }
 }
 
@@ -93,8 +71,9 @@ function evidenceGapCountSql(
 /**
  * Correlated evidence-gap count for the current `applications` row.
  *
- * Visual evidence needs all three geotagged photo roles. Boundary evidence
- * needs both a non-blank GIS reference and a qualifying logbook document.
+ * Visual evidence health tracks all three geotagged photo roles. Boundary
+ * evidence health tracks the GIS reference only; typed logbook attachments are
+ * retained records, not Application readiness requirements.
  * Legacy null evidence methods render as visual in the application UI, so the
  * CASE deliberately treats every non-boundary value as visual too.
  */

@@ -43,16 +43,10 @@ litres via a per-facility conversion yield.
 _Avoid_: generator power, backup power.
 
 **Readings file**:
-The telemetry export operators upload per reactor — a CSV with a
-canonical **UTC** timestamp on every row (required: timestamp,
-temperature, pressure; optional: dryer/reactor frequency), matched
-directly by header name, so one file can span multiple days. A
-production run's readings are the slice of one or more readings files
-inside the run's window. Replaces the older reactor-day format
-(filename-encoded date, local time-of-day rows, and a per-reactor
-**channel mapping** step declaring which column fed which reading) —
-the canonical header does that job now, so no per-reactor mapping is
-declared or stored.
+The original telemetry CSV an operator attaches to a production run.
+noma stores the file unchanged as production-run sensor-data evidence
+and does not inspect its headers, timestamps, run window, sensor values,
+or other contents.
 _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
 **Emission estimate**:
@@ -110,9 +104,11 @@ credit batch**, recorded against it directly — the batch's biochar is
 attributable (a run link survives only on legacy rows as provenance).
 The Sample inherits the **durability tier** (200- vs 1000-year) its
 **facility** declares, carried through its credit batch, and the ≥3 must
-be **independent samples distributed across
-the batch** (distinct sampling points/days — protocol §8.3.1), never
-aliquots of a single grab. The lab's certificate of analysis is attached
+be **representative of the full range of physical characteristics**
+(particle size, colour) present in the batch — protocol §8.3.1. They need
+**not** come from distinct production runs or distinct days; §8.3.1's
+distinct-days language governs Method B's random-sampling cadence *across*
+batches, not within one. The lab's certificate of analysis is attached
 as a `lab_report` **document**, not a separate record. Distinct from the
 in-process spot-checks logged against a **production run** (the
 ~2-hourly field measurements) — those are internal-only and never
@@ -125,11 +121,13 @@ with reactor **readings** (telemetry).
 The role a **Sample** plays within its **credit batch**'s set — each
 lab-analysed Sample is one replicate, and a sampled credit batch carries
 ≥3 so a mean, standard deviation and outliers can be derived. Per
-protocol §8.3.1 the ≥3 are **independent samples taken from distinct
-points (production runs / days) across the batch** and analysed
-individually — *not* three aliquots of one grab — and the count is
-judged **per credit batch**, never per production run. _Avoid_: replicate
-as a lab aliquot; counting the ≥3 at the production-run grain.
+protocol §8.3.1 the ≥3 must be **representative of the full range of
+physical characteristics available in the batch** and analysed
+individually; they are **not** required to span distinct production runs
+or days. The count is judged **per credit batch**, never per production
+run. _Avoid_: replicate as a lab aliquot; counting the ≥3 at the
+production-run grain; reading a within-batch distinct-runs/days
+requirement into §8.3.1.
 
 **Production process**:
 A campaign of biochar production sharing **one feedstock under
@@ -312,6 +310,21 @@ Verification failed*, read from `latestSubmission.metadata.remoteStatus`.
 _Avoid_: equating a GHG Statement with one credit batch; attributing a
 verifier status to a Removal.
 
+**GHG Statement report**:
+The supplier-generated, versioned PDF that explains one **GHG Statement** and
+its authoritative Isometric GHG Entry totals to the verifier. noma prepares a
+frozen version from live registry facts, an Owner/Admin reviews and approves
+it, and Statement submission supplies its URL to Isometric. Versions progress
+*prepared → approved → submitted*; their frozen content is never overwritten,
+while lifecycle metadata and the revocable token digest advance in place.
+Changed live facts require a new version. The verifier URL is a bearer capability whose
+random per-report token is stored only as a digest and may be rotated to revoke
+the previous link. Distinct from Isometric's **GHG Statement** record and from
+the Submission ledger. An explicit external report URL remains a separate
+submission fallback and has no generated report version. _Avoid_: public
+document (the storage object remains private); reusing a prior version after
+live inputs changed; verifier login link.
+
 **Reporting period**:
 The time window a **GHG Statement** covers — the supplier chooses the
 end date, Isometric derives the start. Distinct from the LCA window
@@ -341,6 +354,16 @@ Deliberately distinct from a noma **Sample**: ≥3 Samples in, **one**
 measurement-sample submission out. _Avoid_: calling it a "sample"
 unqualified (collides with the lab Sample); submitting raw replicates in
 place of the mean + std-dev.
+
+**Noma evidence role**:
+The per-source classification that maps an evidence document or generated
+ledger to one or more intended registry inputs. Application-boundary logbooks
+use `inventory`; bills of lading use `feedstock_bill_of_lading` or
+`delivery_bill_of_lading` according to their lineage; generated ledgers use
+`transport_evidence_ledger` or `durability_evidence_ledger`. One role can target
+several inputs, and different evidence roles can support the same input. For
+example, `inventory` and `durability_evidence_ledger` can both support
+`product_mass` with different Source documents.
 
 **Monitored input**:
 An Isometric removal-template input whose value comes from the
@@ -399,6 +422,10 @@ acceptable proofs of biochar spreading the record satisfies — *visual*
 incorporation) or *boundary* (a GIS field-boundary reference plus
 logbook records). Exactly one method is declared per application;
 what counts as missing evidence follows from the declared method.
+The domain, schema, readiness logic, and document model support both paths.
+The current creation UI is deliberately GIS-first: it defaults to *boundary*
+and shows *visual* as unavailable, while missing boundary/logbook evidence is
+an advisory readiness gap rather than a blocker on creating the application.
 _Avoid_: proof type, documentation mode.
 
 **Geotag flag**:
@@ -473,8 +500,10 @@ An advisory that recorded values are valid but fall outside an expected
 range or relationship. The record may be saved only with an acknowledgement
 that preserves the justification, observed values, actor, and time; this is
 distinct from both a validation error and a certification-readiness gap.
-Disabling a plausibility rule suppresses only that advisory and never relaxes
-a data invariant, such as the prohibition on overdrawing a storage bin.
+Rules have versioned system defaults and may carry an Admin-managed
+Organization override. Disabling a plausibility rule suppresses only that
+advisory and never relaxes a data invariant, such as the prohibition on
+overdrawing a storage bin.
 _Avoid_: validation error, readiness gap, override.
 
 ### Tenancy

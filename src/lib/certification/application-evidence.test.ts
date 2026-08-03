@@ -62,7 +62,7 @@ function lineageFor(fixture: ContractFixture): ChainOfCustodyData {
       applicationDate: new Date("2025-06-15"),
       fieldIdentifier: null,
       evidenceMethod: fixture.evidenceMethod,
-      gisBoundaryReference: fixture.gisBoundaryReference,
+      gisBoundary: fixture.gisBoundary,
       biocharAppliedDryTons: 4.5,
       soilTemperatureC: null,
       href: `/applications/${APPLICATION_ID}`,
@@ -96,7 +96,7 @@ describe("application evidence adapter contract", () => {
       const pureGaps = getMissingApplicationEvidenceRequirements(
         {
           evidenceMethod: fixture.evidenceMethod,
-          gisBoundaryReference: fixture.gisBoundaryReference,
+          gisBoundary: fixture.gisBoundary,
         },
         documents,
       );

@@ -1,11 +1,11 @@
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { formatCount } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
 import { roundTripDistanceFactor } from "@/schemas/trip-type";
 import type { ProductionRun, Sample, TransportLeg } from "@/db/schema";
 
 export type ProductionRunWithSamples = ProductionRun & {
   samples: Sample[];
-  readingsCount: number;
 };
 
 export interface AggregatedProductionData {
@@ -148,13 +148,18 @@ export function aggregateTransportMassDistance(
 
   // Every leg needs a load mass to contribute distⱼ × massⱼ. A leg without it
   // would silently drop its tonne·km, under-counting transport emissions.
-  const missingMassLegIds = legs
-    .filter((leg) => leg.loadMassKg == null || leg.loadMassKg <= 0)
-    .map((leg) => leg.id);
-  if (missingMassLegIds.length > 0) {
+  const missingMassLegs = legs.filter(
+    (leg) => leg.loadMassKg == null || leg.loadMassKg <= 0,
+  );
+  if (missingMassLegs.length > 0) {
+    const missingMassLegLabels = missingMassLegs.map((leg) =>
+      leg.originName && leg.destinationName
+        ? `${leg.originName} to ${leg.destinationName}`
+        : leg.id,
+    );
     return {
       massDistanceTonneKm: null,
-      warning: `${categoryLabel} transport legs missing load_mass_kg (${missingMassLegIds.join(", ")}) - required for per-leg accounting`,
+      warning: `${categoryLabel} transport has ${formatCount(missingMassLegs.length, "leg")} without a load mass (${missingMassLegLabels.join(", ")}). Record a load mass for each leg before submitting.`,
     };
   }
 
@@ -228,7 +233,7 @@ export function aggregateProductionRuns(
     // here; fail loudly naming the run rather than substitute a time (#259).
     if (run.endTime == null) {
       throw new SafeError(
-        `Run ${run.code} has no end time yet — complete the run before it can be certified`,
+        `Production run ${run.code} has no end time. Complete the run before certification.`,
       );
     }
     const runEndTime = run.endTime;
@@ -262,7 +267,9 @@ export function aggregateProductionRuns(
   // iteration either throws on a null end or sets latestEndTime — but it narrows
   // the type for the `latestEndTime: Date` field below.
   if (latestEndTime == null) {
-    throw new SafeError("aggregateProductionRuns: no closed runs to aggregate");
+    throw new SafeError(
+      "No complete production runs are available. Complete a production run before certification.",
+    );
   }
 
   return {
@@ -439,7 +446,7 @@ export function validateForTemplate(
         groupKey: input.groupKey,
         removalTemplateComponentId: input.removalTemplateComponentId,
         inputKey: input.inputKey,
-        reason: `No INPUT_MAPPING entry for group="${input.groupKey}" blueprint="${input.componentBlueprintKey}" input="${input.inputKey}"`,
+        reason: `Registry field "${input.inputKey}" in "${input.componentBlueprintKey}" is not supported. Ask the support team to update the registry mapping.`,
       });
       continue;
     }
