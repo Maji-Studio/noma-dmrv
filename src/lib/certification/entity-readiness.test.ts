@@ -11,7 +11,6 @@ describe("deriveEntityCertifyReadiness", () => {
     (status) => {
       const readiness = deriveEntityCertifyReadiness("productionRun", {
         status,
-        readingsCount: 0,
       });
 
       expect(readiness.state).toBe("incomplete");
@@ -23,6 +22,7 @@ describe("deriveEntityCertifyReadiness", () => {
   it("marks a complete production run ready", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
+      hasReadingsFile: true,
       feedstockWetMassKg: 5000,
       feedstockMoisturePercent: 25,
       biocharOutputKg: 1500,
@@ -31,15 +31,15 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 12,
       preprocessingFuelLiters: 3,
       electricityKwh: 50,
-      readingsCount: 1,
     });
 
-    expect(readiness).toEqual({ state: "ready", gaps: [] });
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("reports missing telemetry when a complete production run has no readings", () => {
+  it("uses the uploaded readings-file fact instead of legacy telemetry rows", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
+      hasReadingsFile: true,
       feedstockWetMassKg: 5000,
       feedstockMoisturePercent: 25,
       biocharOutputKg: 1500,
@@ -48,45 +48,46 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 12,
       preprocessingFuelLiters: 3,
       electricityKwh: 50,
+      // Legacy telemetry key: the removed gate must stay gone, so a zero count
+      // must not produce a gap.
       readingsCount: 0,
     });
 
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      {
-        kind: "field",
-        key: "telemetryReadings",
-        label: "Telemetry readings",
-      },
-    ]);
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("reports missing telemetry when the reading count is omitted", () => {
-    const readiness = deriveEntityCertifyReadiness("productionRun", {
-      status: "complete",
-      feedstockWetMassKg: 5000,
-      feedstockMoisturePercent: 25,
-      biocharOutputKg: 1500,
-      biocharMoisturePercent: 10,
-      dieselOperationLiters: 0,
-      dieselGensetLiters: 12,
-      preprocessingFuelLiters: 3,
-      electricityKwh: 50,
-    });
+  it.each([false, undefined])(
+    "requires saved uploaded readings evidence when hasReadingsFile is %s",
+    (hasReadingsFile) => {
+      const readiness = deriveEntityCertifyReadiness("productionRun", {
+        status: "complete",
+        hasReadingsFile,
+        feedstockWetMassKg: 5000,
+        feedstockMoisturePercent: 25,
+        biocharOutputKg: 1500,
+        biocharMoisturePercent: 10,
+        dieselOperationLiters: 0,
+        dieselGensetLiters: 12,
+        preprocessingFuelLiters: 3,
+        electricityKwh: 50,
+      });
 
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      {
-        kind: "field",
-        key: "telemetryReadings",
-        label: "Telemetry readings",
-      },
-    ]);
-  });
+      expect(readiness.state).toBe("incomplete");
+      expect(readiness.gaps).toMatchObject([
+        {
+          kind: "field",
+          key: "hasReadingsFile",
+          label: "Readings CSV file",
+          fields: ["hasReadingsFile"],
+        },
+      ]);
+    },
+  );
 
   it("reports missing entered fields", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
+      hasReadingsFile: true,
       feedstockWetMassKg: 5000,
       feedstockMoisturePercent: 25,
       biocharOutputKg: 1500,
@@ -95,7 +96,6 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 12,
       preprocessingFuelLiters: 3,
       electricityKwh: null,
-      readingsCount: 1,
     });
 
     expect(readiness.state).toBe("incomplete");
@@ -111,6 +111,7 @@ describe("deriveEntityCertifyReadiness", () => {
   it("treats zero as present", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
+      hasReadingsFile: true,
       feedstockWetMassKg: 5000,
       feedstockMoisturePercent: 0,
       biocharOutputKg: 1500,
@@ -119,15 +120,15 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 0,
       preprocessingFuelLiters: 0,
       electricityKwh: 0,
-      readingsCount: 1,
     });
 
-    expect(readiness).toEqual({ state: "ready", gaps: [] });
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
   it("requires terminal lifecycle state where configured", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "running",
+      hasReadingsFile: true,
       feedstockWetMassKg: 5000,
       feedstockMoisturePercent: 25,
       biocharOutputKg: 1500,
@@ -136,7 +137,6 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 12,
       preprocessingFuelLiters: 3,
       electricityKwh: 50,
-      readingsCount: 1,
     });
 
     expect(readiness.state).toBe("incomplete");
@@ -153,19 +153,50 @@ describe("deriveEntityCertifyReadiness", () => {
       durabilityOption: "200_year",
       organicCarbonPercent: 80,
       hToCOrgRatio: 0.4,
+      oToCOrgRatio: 0.15,
       randomReflectanceR0Percent: null,
       reactiveCarbonPercent: null,
       residualCarbonPercent: null,
     });
 
-    expect(readiness).toEqual({ state: "ready", gaps: [] });
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
+
+  // Both eligibility ratios are universal (§3.3 Table 2), so a sample carrying
+  // only H:Corg must not badge complete — it never counts toward the §8.3.1
+  // usable-replicate minimum (QA 2026-07-25 F-6).
+  it.each(["200_year", "1000_year"])(
+    "reports the O:Corg gap for a %s sample missing the oxygen ratio",
+    (durabilityOption) => {
+      const readiness = deriveEntityCertifyReadiness("sample", {
+        durabilityOption,
+        organicCarbonPercent: 80,
+        hToCOrgRatio: 0.4,
+        oToCOrgRatio: null,
+        randomReflectanceR0Percent: 1.2,
+        sReflectanceFraction: 0.85,
+        reactiveCarbonPercent: null,
+        residualCarbonPercent: 85,
+      });
+
+      expect(readiness.state).toBe("incomplete");
+      expect(readiness.gaps).toMatchObject([
+        {
+          kind: "field",
+          key: "oToCOrgRatio",
+          label: "O:Corg ratio",
+          fields: ["oToCOrgRatio"],
+        },
+      ]);
+    },
+  );
 
   it("requires 1000-year durability fields when the condition applies", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
       durabilityOption: "1000_year",
       organicCarbonPercent: 80,
       hToCOrgRatio: 0.4,
+      oToCOrgRatio: 0.15,
       randomReflectanceR0Percent: null,
       reactiveCarbonPercent: null,
       residualCarbonPercent: null,
@@ -184,13 +215,14 @@ describe("deriveEntityCertifyReadiness", () => {
       durabilityOption: "1000_year",
       organicCarbonPercent: 80,
       hToCOrgRatio: 0.4,
+      oToCOrgRatio: 0.15,
       randomReflectanceR0Percent: 1.2,
       sReflectanceFraction: 0.85,
       reactiveCarbonPercent: null,
       residualCarbonPercent: 85,
     });
 
-    expect(readiness).toEqual({ state: "ready", gaps: [] });
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
   it("marks a complete feedstock with wet mass ready", () => {
@@ -202,7 +234,7 @@ describe("deriveEntityCertifyReadiness", () => {
       transportEvidenceDocumentCount: 1,
     });
 
-    expect(readiness).toEqual({ state: "ready", gaps: [] });
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
   it("reports a feedstock missing wet mass via the entity column", () => {
@@ -220,7 +252,7 @@ describe("deriveEntityCertifyReadiness", () => {
     ]);
   });
 
-  it("reports document provenance separately from a present feedstock distance", () => {
+  it("accepts manual provenance when feedstock evidence is present", () => {
     const readiness = deriveEntityCertifyReadiness("feedstock", {
       status: "complete",
       massWetKg: 1500,
@@ -229,17 +261,10 @@ describe("deriveEntityCertifyReadiness", () => {
       transportEvidenceDocumentCount: 1,
     });
 
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      {
-        kind: "field",
-        key: "transportEvidence",
-      },
-    ]);
-    expect(readiness.gaps.some((gap) => gap.key === "transportLeg")).toBe(false);
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("marks a document-backed transport leg with an accepted upload ready", () => {
+  it("marks a document-backed transport leg ready", () => {
     const readiness = deriveEntityCertifyReadiness("transportLeg", {
       distanceKm: 25,
       loadMassKg: 900,
@@ -247,10 +272,10 @@ describe("deriveEntityCertifyReadiness", () => {
       transportEvidenceDocumentCount: 1,
     });
 
-    expect(readiness).toEqual({ state: "ready", gaps: [] });
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("reports a transport leg with Document provenance but no upload", () => {
+  it("keeps a transport leg ready without an accepted upload", () => {
     const readiness = deriveEntityCertifyReadiness("transportLeg", {
       distanceKm: 25,
       loadMassKg: 900,
@@ -258,26 +283,20 @@ describe("deriveEntityCertifyReadiness", () => {
       transportEvidenceDocumentCount: 0,
     });
 
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      { kind: "field", key: "transportEvidence" },
-    ]);
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("fails closed when a transport leg row omits its evidence count", () => {
+  it("keeps a transport leg ready when its evidence count is omitted", () => {
     const readiness = deriveEntityCertifyReadiness("transportLeg", {
       distanceKm: 25,
       loadMassKg: 900,
       distanceSource: "document",
     });
 
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      { kind: "field", key: "transportEvidence" },
-    ]);
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("reports a manual-provenance transport leg as missing evidence", () => {
+  it("accepts manual-provenance transport evidence", () => {
     const readiness = deriveEntityCertifyReadiness("transportLeg", {
       distanceKm: 25,
       loadMassKg: 900,
@@ -285,10 +304,16 @@ describe("deriveEntityCertifyReadiness", () => {
       transportEvidenceDocumentCount: 2,
     });
 
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      { kind: "field", key: "transportEvidence" },
-    ]);
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
+  });
+
+  it("keeps a transport leg ready without a recorded distance source", () => {
+    const readiness = deriveEntityCertifyReadiness("transportLeg", {
+      distanceKm: 25,
+      loadMassKg: 900,
+    });
+
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
   it("reports an upcoming delivery as a lifecycle gap", () => {
@@ -313,32 +338,59 @@ describe("deriveEntityCertifyReadiness", () => {
       transportEvidenceDocumentCount: 1,
     });
 
-    expect(readiness).toEqual({ state: "ready", gaps: [] });
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it.each([
-    {
-      label: "provenance only",
-      effectiveDistanceSource: "document",
-      transportEvidenceDocumentCount: 0,
-    },
-    {
-      label: "document only",
-      effectiveDistanceSource: "manual",
-      transportEvidenceDocumentCount: 1,
-    },
-  ])("keeps a delivered delivery incomplete with $label", (input) => {
+  it("keeps a delivered delivery ready without evidence", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "delivered",
       deliveredWetMassKg: 400,
-      ...input,
+      effectiveDistanceSource: "manual",
+      transportEvidenceDocumentCount: 0,
     });
 
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      { kind: "field", key: "transportEvidence" },
-    ]);
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
+
+  it.each([
+    [
+      "feedstock",
+      {
+        status: "complete",
+        massWetKg: 1500,
+        transportDistanceKm: 25,
+        transportDistanceSource: "manual",
+        transportEvidenceDocumentCount: 0,
+      },
+    ],
+    [
+      "delivery",
+      {
+        status: "delivered",
+        deliveredWetMassKg: 400,
+        effectiveDistanceSource: "manual",
+        transportEvidenceDocumentCount: 0,
+      },
+    ],
+    [
+      "transportLeg",
+      {
+        distanceKm: 25,
+        loadMassKg: 900,
+        distanceSource: "manual",
+        transportEvidenceDocumentCount: 0,
+      },
+    ],
+  ] as const)(
+    "does not create a transport gap for a complete %s with no documents",
+    (entityKind, entity) => {
+      expect(deriveEntityCertifyReadiness(entityKind, entity)).toEqual({
+        state: "ready",
+        gaps: [],
+        warnings: [],
+      });
+    },
+  );
 
   it("marks an application with complete visual evidence ready", () => {
     const readiness = deriveEntityCertifyReadiness("application", {
@@ -349,10 +401,10 @@ describe("deriveEntityCertifyReadiness", () => {
       evidenceGapCount: 0,
     });
 
-    expect(readiness).toEqual({ state: "ready", gaps: [] });
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("reports missing visual evidence roles for an application", () => {
+  it("does not treat application evidence health as certification readiness", () => {
     const readiness = deriveEntityCertifyReadiness("application", {
       biocharAppliedTons: 10,
       biocharAppliedDryTons: 8,
@@ -361,17 +413,10 @@ describe("deriveEntityCertifyReadiness", () => {
       evidenceGapCount: 3,
     });
 
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      {
-        kind: "field",
-        key: "applicationEvidence",
-        label: "Application evidence",
-      },
-    ]);
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("fails closed when an application row omits its evidence gap count", () => {
+  it("does not require an application evidence count for certification", () => {
     const readiness = deriveEntityCertifyReadiness("application", {
       biocharAppliedTons: 10,
       biocharAppliedDryTons: 8,
@@ -379,14 +424,7 @@ describe("deriveEntityCertifyReadiness", () => {
       soilTemperatureC: 15,
     });
 
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      {
-        kind: "field",
-        key: "applicationEvidence",
-        label: "Application evidence",
-      },
-    ]);
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 });
 
@@ -395,6 +433,19 @@ describe("isCertifyFormField", () => {
     expect(isCertifyFormField("delivery", "deliveredWetMassKg")).toBe(true);
     expect(isCertifyFormField("application", "soilTemperatureC")).toBe(true);
     expect(isCertifyFormField("customerLocation", "distanceFromFacilityKm")).toBe(true);
+  });
+
+  it.each([
+    "totalHydrogenPercent",
+    "organicCarbonPercent",
+    "hToCOrgRatio",
+  ])("badges sample H:Corg form field %s", (field) => {
+    expect(isCertifyFormField("sample", field)).toBe(true);
+  });
+
+  it("badges the readings upload through its form field name", () => {
+    expect(isCertifyFormField("productionRun", "readingsCsv")).toBe(true);
+    expect(isCertifyEntityField("productionRun", "hasReadingsFile")).toBe(true);
   });
 
   it("badges via formFields when the form name differs from the column", () => {

@@ -90,13 +90,13 @@ export {
 // ============================================
 
 const FORMULATION_PRODUCT_BIN_MESSAGE =
-  "formulationId is only allowed for type 'product_bin'";
+  "A formulation can only be assigned to a product bin";
 
 const FEEDSTOCK_TYPE_REQUIRED_MESSAGE =
   "Feedstock bins must be restricted to one feedstock type";
 
 const FEEDSTOCK_TYPE_FEEDSTOCK_BIN_MESSAGE =
-  "feedstockTypeId is only allowed for feedstock bins";
+  "A feedstock type can only be assigned to a feedstock bin";
 
 export const storageLocationQuickAddSchema = z.object({
   name: z
@@ -107,14 +107,14 @@ export const storageLocationQuickAddSchema = z.object({
   type: z.enum(storageLocationTypes, { message: "Bin type is required" }),
   facilityId: z
     .string()
-    .uuid("Invalid facility ID"),
+    .uuid("Choose a valid facility."),
   capacityKg: positiveMassKgSchema("Capacity must be positive")
     .optional()
     .nullable(),
   // Feedstock bins only — restricts the bin to one feedstock type
-  feedstockTypeId: emptyToNull.or(z.string().uuid("Invalid feedstock type")).nullable().optional(),
+  feedstockTypeId: emptyToNull.or(z.string().uuid("Choose a valid feedstock type.")).nullable().optional(),
   // Product bins only — restricts the bin to one formulation (empty = pure biochar)
-  formulationId: emptyToNull.or(z.string().uuid("Invalid formulation")).nullable().optional(),
+  formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.formulationId && data.type !== "product_bin") {
     ctx.addIssue({

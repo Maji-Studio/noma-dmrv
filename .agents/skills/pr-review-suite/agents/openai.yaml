@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Review Suite"
+  short_description: "Run Codex and Opus PR review practices"
+  default_prompt: "Use $pr-review-suite to submit the current changes as a draft PR, run the Codex and Opus review practices, and publish the report."

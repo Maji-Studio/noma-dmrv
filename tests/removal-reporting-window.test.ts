@@ -8,12 +8,24 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  assertRemovalDatesNotFuture,
   assertReportingWindowNotInverted,
+  resolveRemovalReportingWindow,
   resolveLatestApplicationTime,
 } from "@/fn/certification/removal-reporting-window";
 
 const RUN_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const RUN_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const EN_OR_EM_DASH = /[\u2013\u2014]/;
+
+function thrownMessage(action: () => void): string {
+  try {
+    action();
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error("Expected action to throw");
+}
 
 function lineage(
   applicationDate: string,
@@ -108,7 +120,94 @@ describe("resolveLatestApplicationTime", () => {
 
   it("fails closed on an empty lineage list", () => {
     expect(() => resolveLatestApplicationTime([])).toThrow(
-      /no applications in the lineage/,
+      /This Removal has no applications/,
     );
+  });
+});
+
+describe("resolveRemovalReportingWindow", () => {
+  it("uses the latest run end as the same-day application time floor", () => {
+    const window = resolveRemovalReportingWindow({
+      earliestProductionStartTime: new Date("2026-07-29T06:00:00Z"),
+      latestProductionEndTime: new Date("2026-07-29T15:30:00Z"),
+      latestApplicationTime: new Date("2026-07-29T00:00:00Z"),
+    });
+
+    expect(window.startedOn.toISOString()).toBe(
+      "2026-07-29T06:00:00.000Z",
+    );
+    expect(window.completedOn.toISOString()).toBe(
+      "2026-07-29T15:30:00.000Z",
+    );
+  });
+
+  it("rejects an application day before an overnight production run ends", () => {
+    expect(() =>
+      resolveRemovalReportingWindow({
+        earliestProductionStartTime: new Date("2026-07-29T23:00:00Z"),
+        latestProductionEndTime: new Date("2026-07-30T01:00:00Z"),
+        latestApplicationTime: new Date("2026-07-29T00:00:00Z"),
+      }),
+    ).toThrow(
+      /Latest application date 2026-07-29 precedes latest production end date 2026-07-30/,
+    );
+  });
+
+  it("keeps a later application date as the reporting end", () => {
+    const window = resolveRemovalReportingWindow({
+      earliestProductionStartTime: new Date("2026-07-29T06:00:00Z"),
+      latestProductionEndTime: new Date("2026-07-29T15:30:00Z"),
+      latestApplicationTime: new Date("2026-07-30T00:00:00Z"),
+    });
+
+    expect(window.completedOn.toISOString()).toBe(
+      "2026-07-30T00:00:00.000Z",
+    );
+  });
+});
+
+describe("assertRemovalDatesNotFuture", () => {
+  const now = new Date("2026-07-25T12:00:00.000Z");
+
+  it("allows production and application dates exactly at the current instant", () => {
+    expect(() =>
+      assertRemovalDatesNotFuture({
+        productionEndTime: now,
+        latestApplicationTime: now,
+        now,
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects a future production end with an actionable error", () => {
+    const message = thrownMessage(() =>
+      assertRemovalDatesNotFuture({
+        productionEndTime: new Date("2026-07-25T12:00:00.001Z"),
+        latestApplicationTime: now,
+        now,
+      }),
+    );
+
+    expect(message).toBe(
+      "Latest production run ends at 2026-07-25T12:00:00.001Z. " +
+        "Change the end time or wait until the run ends.",
+    );
+    expect(message).not.toMatch(EN_OR_EM_DASH);
+  });
+
+  it("rejects a future latest application with an actionable error", () => {
+    const message = thrownMessage(() =>
+      assertRemovalDatesNotFuture({
+        productionEndTime: now,
+        latestApplicationTime: new Date("2026-07-26T00:00:00.000Z"),
+        now,
+      }),
+    );
+
+    expect(message).toBe(
+      "Latest application is dated 2026-07-26T00:00:00.000Z. " +
+        "Change the application date or wait until then.",
+    );
+    expect(message).not.toMatch(EN_OR_EM_DASH);
   });
 });

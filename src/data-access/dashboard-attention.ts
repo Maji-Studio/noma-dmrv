@@ -38,7 +38,7 @@ export function runsMissingMassWhere(
   );
 }
 
-/** Biochar products not yet linked back to the production run that made them. */
+/** Biochar products with neither a source bin nor a legacy production-run link. */
 export function productsUnlinkedWhere(
   organizationId: string,
   facilityId: string,
@@ -47,6 +47,7 @@ export function productsUnlinkedWhere(
     eq(biocharProducts.organizationId, organizationId),
     eq(biocharProducts.facilityId, facilityId),
     isNull(biocharProducts.archivedAt),
+    isNull(biocharProducts.sourceBiocharStorageLocationId),
     isNull(biocharProducts.linkedProductionRunId),
   );
 }

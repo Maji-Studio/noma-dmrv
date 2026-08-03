@@ -44,7 +44,8 @@ vi.mock("@/data-access/organizations", () => ({
   updateMemberRoleAsPlatformAdmin: vi.fn(),
 }));
 
-vi.mock("@/fn/action-errors", () => ({
+vi.mock("@/fn/action-errors", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/fn/action-errors")>()),
   logActionError: vi.fn(),
 }));
 
@@ -149,7 +150,7 @@ describe("createOrganizationAction", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Failed to create organization.",
+      error: "Organization was not created. Try again.",
     });
   });
 });
@@ -222,7 +223,7 @@ describe("setActiveOrganizationAction", () => {
 
   it("does not persist when the plugin rejects the switch", async () => {
     mockSetActiveOrganization.mockRejectedValue(
-      new SafeError("You are not a member of this organization."),
+      new SafeError("You are not a member of this Organization."),
     );
 
     const result = await setActiveOrganizationAction({
@@ -232,7 +233,7 @@ describe("setActiveOrganizationAction", () => {
     expect(mockPersistLastActiveOrganization).not.toHaveBeenCalled();
     expect(result).toEqual({
       success: false,
-      error: "You are not a member of this organization.",
+      error: "You are not a member of this Organization.",
     });
   });
 });

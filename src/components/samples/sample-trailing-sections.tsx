@@ -52,7 +52,7 @@ export function SampleEvidenceSection({
 }: SampleTrailingSectionProps) {
   return (
     <FormSection
-      title="Evidence & Documents"
+      title="Evidence & documents"
       icon={<PaperclipIcon size={14} weight="bold" />}
       __spine={__spine}
     >
@@ -110,7 +110,7 @@ export function SampleTransportSection({
           activeTarget={focusTarget}
           actionLabel={
             focusTarget === "transport-evidence"
-              ? "Edit the leg, select Document provenance, and upload one classified transport-evidence file"
+              ? "Edit the leg to attach a transport document (optional)"
               : "Complete the saved transport route information"
           }
           className="flex flex-col gap-12"
@@ -119,7 +119,9 @@ export function SampleTransportSection({
             <div className="flex flex-col gap-10 border border-[var(--color-status-error)] p-12">
               <div className="flex flex-wrap items-center justify-between gap-8">
                 <p className="body-small font-medium text-[var(--color-status-error)]">
-                  {deferredLegs.length} transport {deferredLegs.length === 1 ? "leg" : "legs"} failed to save
+                  {deferredLegs.length} transport{" "}
+                  {deferredLegs.length === 1 ? "leg was" : "legs were"} not
+                  saved
                 </p>
                 <Button
                   type="button"

@@ -10,6 +10,15 @@ import { cn } from "@/lib/utils";
 
 const PAGINATION_NAV_BUTTON_CLASS = "h-44 w-44 sm:h-32 sm:w-32";
 
+/**
+ * First/last page jumps are hidden below `sm`. The row must stay on one line at
+ * every width (stacking put the arrows a scroll away from the list they page),
+ * and four 44px touch targets plus the page label and the rows selector do not
+ * fit a 320px viewport. Previous/next still reach every page; the touch targets
+ * do not shrink to make room.
+ */
+const PAGINATION_EDGE_BUTTON_CLASS = "hidden sm:inline-flex";
+
 interface ListPaginationProps {
   page: number;
   pageCount: number;
@@ -45,17 +54,21 @@ function ListPagination({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-16 flex-wrap",
+        // One row at every width. Stacking put the page arrows a scroll away
+        // from the list they page, so the label shortens on narrow screens
+        // instead of the row breaking.
+        "flex items-center justify-between gap-8 sm:gap-16",
         "md:px-16 md:py-10 md:[border-top:var(--panel-head-border)]",
         className,
       )}
     >
-      <div className="flex items-center gap-16">
+      <div className="flex min-w-0 items-center gap-8 sm:gap-16">
         {leadingContent}
         {showRowsPerPage && (
           <label className="flex items-center gap-8">
             <span className="body-small text-[var(--color-text-secondary)]">
-              Rows per page:
+              <span className="sm:hidden">Rows</span>
+              <span className="hidden sm:inline">Rows per page:</span>
             </span>
             <select
               value={pageSize}
@@ -73,8 +86,8 @@ function ListPagination({
         )}
       </div>
 
-      <div className="flex items-center gap-8">
-        <span className="body-small text-[var(--color-text-secondary)]">
+      <div className="flex shrink-0 items-center gap-8">
+        <span className="whitespace-nowrap body-small text-[var(--color-text-secondary)]">
           Page {safePage} of {safePageCount}
         </span>
         <div className="flex items-center gap-4">
@@ -83,7 +96,7 @@ function ListPagination({
             size="icon"
             onClick={() => onPageChange(1)}
             disabled={!canGoBack}
-            className={PAGINATION_NAV_BUTTON_CLASS}
+            className={cn(PAGINATION_NAV_BUTTON_CLASS, PAGINATION_EDGE_BUTTON_CLASS)}
             aria-label="Go to first page"
           >
             <CaretLeftIcon size={14} weight="bold" className="pointer-events-none" />
@@ -114,7 +127,7 @@ function ListPagination({
             size="icon"
             onClick={() => onPageChange(safePageCount)}
             disabled={!canGoForward}
-            className={PAGINATION_NAV_BUTTON_CLASS}
+            className={cn(PAGINATION_NAV_BUTTON_CLASS, PAGINATION_EDGE_BUTTON_CLASS)}
             aria-label="Go to last page"
           >
             <CaretRightIcon size={14} weight="bold" className="pointer-events-none" />

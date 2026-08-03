@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { entityKeys } from "./entity-query-keys";
 import {
   archiveFeedstockTypeFn,
   createFeedstockTypeFn,
@@ -37,7 +38,9 @@ function useInvalidateFeedstockTypes() {
   const queryClient = useQueryClient();
   return () => {
     void queryClient.invalidateQueries({ queryKey: feedstockTypeKeys.all });
-    void queryClient.invalidateQueries({ queryKey: ["entities", "feedstockType"] });
+    void queryClient.invalidateQueries({
+      queryKey: entityKeys.listPrefix("feedstockType"),
+    });
   };
 }
 

@@ -12,7 +12,7 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import type { ColumnDef } from "@tanstack/react-table";
-import { LightningIcon, FlaskIcon, PlusIcon } from "@phosphor-icons/react";
+import { LightningIcon, FlaskIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -64,7 +64,7 @@ function createColumns(
       header: "Facility",
       cell: ({ row }) => (
         <div className="flex flex-col">
-          <span>{row.original.facilityName || "—"}</span>
+          <span>{row.original.facilityName || "Not available"}</span>
           {row.original.facilityCode && (
             <span className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
               {row.original.facilityCode}
@@ -167,9 +167,9 @@ export function ReactorList() {
     try {
       await createReactor.mutateAsync(data);
       setSideSheet(null);
-      toast.success("Reactor created successfully");
+      toast.success("Reactor created.");
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Failed to create reactor");
+      setCreateError(error instanceof Error ? error.message : "Reactor was not created. Check the form.");
     }
   };
 
@@ -179,9 +179,9 @@ export function ReactorList() {
     try {
       await updateReactor.mutateAsync({ reactorId: sideSheet.entity.id, ...data });
       setSideSheet(null);
-      toast.success("Reactor updated successfully");
+      toast.success("Reactor updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Failed to update reactor");
+      setUpdateError(error instanceof Error ? error.message : "Reactor was not saved. Try again.");
     }
   };
 
@@ -195,9 +195,9 @@ export function ReactorList() {
     try {
       await deleteReactor.mutateAsync(deletingReactorId);
       setDeletingReactorId(null);
-      toast.success("Reactor deleted successfully");
+      toast.success("Reactor deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete reactor");
+      setDeleteError(error instanceof Error ? error.message : "Reactor was not deleted. Try again.");
     }
   };
 
@@ -231,7 +231,7 @@ export function ReactorList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load reactors"} />
+        <ServerError message={fetchError.message || "The reactors could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }
@@ -304,16 +304,12 @@ export function ReactorList() {
             padding="md"
             icon={<LightningIcon size={48} />}
             title={hasActiveSearch ? "No matching reactors" : "No reactors yet"}
-            description={
-              hasActiveSearch
-                ? "Try clearing your search."
-                : "Create your first reactor to get started"
-            }
+            description={hasActiveSearch ? "Try clearing your search." : undefined}
             action={
               !hasActiveSearch ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
-                  New Reactor
+                  Create your first reactor
                 </Button>
               ) : undefined
             }
@@ -359,16 +355,16 @@ export function ReactorList() {
         editLabel="Edit Reactor"
         sections={sideSheetEntity ? [
           {
-            title: "Required Information",
+            title: "Required information",
             fields: [
               { label: "Identifier", value: sideSheetEntity.identifier },
             ],
           },
           {
-            title: "Reactor Configuration",
+            title: "Reactor configuration",
             fields: [
-              { label: "Reactor Type", value: formatReactorType(sideSheetEntity.reactorType) },
-              { label: "Nominal Throughput (tph)", value: sideSheetEntity.nominalThroughputTph },
+              { label: "Reactor type", value: formatReactorType(sideSheetEntity.reactorType) },
+              { label: "Nominal throughput (tph)", value: sideSheetEntity.nominalThroughputTph },
             ],
           },
         ] : undefined}

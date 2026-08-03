@@ -59,9 +59,10 @@ describe("deriveRemovalReadiness — precedence", () => {
     expect(r.reasons).toEqual([]);
   });
 
-  it("reports submitted for a superseded removal", () => {
+  it("re-evaluates a retired superseded draft for a fresh version", () => {
     const r = deriveRemovalReadiness(ready({ local: "superseded" }));
-    expect(r.state).toBe("submitted");
+    expect(r.state).toBe("ready");
+    expect(r.reasons).toEqual([]);
   });
 
   it("treats accepted defensively as submitted (unreachable for removals)", () => {
@@ -127,7 +128,7 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
     const r = deriveRemovalReadiness(ready({ hasDefaultTemplate: false }));
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain(
-      "No default removal template selected for this facility",
+      "No default Removal template selected for this facility",
     );
   });
 
@@ -211,7 +212,7 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     const r = deriveRemovalReadiness(ready({ hasSubmittableRuns: false }));
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain(
-      "No production data linked yet — nothing to submit",
+      "No production data is linked. Link a production run before submitting.",
     );
   });
 
@@ -229,7 +230,7 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain("No applications linked to this batch");
     expect(r.reasons).not.toContain(
-      "No production data linked yet — nothing to submit",
+      "No production data is linked. Link a production run before submitting.",
     );
   });
 
@@ -245,7 +246,7 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
 
   it("blocks (verbatim) on durability sampling/eligibility gate blockers", () => {
     const blocker =
-      "Run PR-1 (Method A) has no samples — every Method A run must be sampled before submission (§8.3).";
+      "Credit batch CB-1 is marked as sampled but has no Samples. Add at least 3 Samples before submitting.";
     const r = deriveRemovalReadiness(
       ready({ durabilityGateBlockers: [blocker] }),
     );
@@ -259,7 +260,7 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     expect(r.state).toBe("blocked");
     // First three verbatim, then a rollup for the remaining two.
     expect(r.reasons).toContain("Run PR-0 blocked.");
-    expect(r.reasons).toContain("+2 more sampling/eligibility issue(s)");
+    expect(r.reasons).toContain("+2 more sampling or eligibility issues");
     expect(r.reasons).not.toContain("Run PR-4 blocked.");
   });
 
@@ -275,13 +276,27 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain("Missing feedstock transport legs");
     expect(r.reasons).toContain(
-      "No production data linked yet — nothing to submit",
+      "No production data is linked. Link a production run before submitting.",
     );
   });
 });
 
 describe("evidence mirroring advisory", () => {
-  it("shows 0 of M as a warning without blocking readiness", () => {
+  it("does not block before generated evidence ledgers materialize", () => {
+    const facts = ready({
+      local: "draft",
+      supportingDocumentCount: 0,
+      mirroredDocumentCount: 0,
+    });
+
+    expect(deriveRemovalReadiness(facts)).toMatchObject({
+      state: "ready",
+      reasons: [],
+      advisories: [],
+    });
+  });
+
+  it("shows pending automatic mirroring without blocking readiness", () => {
     const facts = ready({
       supportingDocumentCount: 4,
       mirroredDocumentCount: 0,
@@ -291,11 +306,11 @@ describe("evidence mirroring advisory", () => {
     expect(readiness.state).toBe("ready");
     expect(readiness.reasons).toEqual([]);
     expect(readiness.advisories).toEqual([
-      "0 of 4 supporting documents mirrored",
+      "4 files are sent automatically when you submit",
     ]);
     expect(checkFor(buildRemovalPreflightChecklist(facts), "evidence")).toMatchObject({
       status: "warning",
-      detail: "0 of 4 supporting documents mirrored",
+      detail: "4 files are sent automatically when you submit",
     });
   });
 
@@ -307,18 +322,18 @@ describe("evidence mirroring advisory", () => {
 
     expect(deriveRemovalReadiness(facts)).toMatchObject({
       state: "ready",
-      advisories: ["3 of 9 supporting documents mirrored"],
+      advisories: ["6 of 9 files are sent automatically when you submit"],
     });
     const wizardEvidence = buildRemovalRequirementsChecklist(facts).find(
       (check) => check.key === "evidence",
     );
     expect(wizardEvidence).toMatchObject({
       status: "warning",
-      detail: "3 of 9 supporting documents mirrored",
+      detail: "6 of 9 files are sent automatically when you submit",
     });
   });
 
-  it("marks N of M met when every supporting document is mirrored", () => {
+  it("marks N of M met when every evidence file is ready", () => {
     const facts = ready({
       supportingDocumentCount: 3,
       mirroredDocumentCount: 3,
@@ -327,7 +342,7 @@ describe("evidence mirroring advisory", () => {
     expect(deriveRemovalReadiness(facts).advisories).toEqual([]);
     expect(checkFor(buildRemovalPreflightChecklist(facts), "evidence")).toMatchObject({
       status: "met",
-      detail: "3 of 3 supporting documents mirrored",
+      detail: "3 of 3 files ready",
     });
   });
 
@@ -364,16 +379,16 @@ describe("evidence mirroring advisory", () => {
 
     expect(readiness.state).toBe("blocked");
     expect(readiness.reasons).not.toContain(
-      "0 of 2 supporting documents mirrored",
+      "2 files are sent automatically when you submit",
     );
     expect(readiness.advisories).toContain(
-      "0 of 2 supporting documents mirrored",
+      "2 files are sent automatically when you submit",
     );
   });
 });
 
 describe("buildRemovalPreflightChecklist", () => {
-  it("returns the seven checks in a stable order", () => {
+  it("returns the checks in a stable order", () => {
     const checks = buildRemovalPreflightChecklist(ready());
     expect(checks.map((c) => c.key)).toEqual([
       "mapping",
@@ -381,6 +396,7 @@ describe("buildRemovalPreflightChecklist", () => {
       "template",
       "transport",
       "production",
+      "measurementDates",
       "entityReadiness",
       "durability",
     ]);
@@ -466,7 +482,9 @@ describe("buildRemovalPreflightChecklist", () => {
       ready({ hasSubmittableRuns: false }),
     );
     expect(checkFor(checks, "production").status).toBe("unmet");
-    expect(checkFor(checks, "production").detail).toContain("nothing to submit");
+    expect(checkFor(checks, "production").detail).toContain(
+      "Link a production run before submitting",
+    );
   });
 
   it("shows the specific production-lineage blocker in preflight", () => {
@@ -504,10 +522,12 @@ describe("buildRemovalPreflightChecklist", () => {
 
   it("flags durability sampling/eligibility blockers", () => {
     const checks = buildRemovalPreflightChecklist(
-      ready({ durabilityGateBlockers: ["Run PR-1 has 2 replicate(s); ≥ 3 required."] }),
+      ready({ durabilityGateBlockers: ["Run PR-1 has 2 replicates. Record at least 3."] }),
     );
     expect(checkFor(checks, "durability").status).toBe("unmet");
-    expect(checkFor(checks, "durability").detail).toContain("≥ 3 required");
+    expect(checkFor(checks, "durability").detail).toContain(
+      "Record at least 3",
+    );
   });
 
   it("skips durability when there is nothing to submit", () => {
@@ -542,6 +562,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
       "transport",
       "transportUniformity",
       "production",
+      "measurementDates",
       "entityReadiness",
       "durability",
     ]);
@@ -621,6 +642,114 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     const production = reqFor(checks, "production");
     expect(production.status).toBe("unmet");
     expect(production.detail).toContain("No applications");
+  });
+});
+
+describe("future-dated measurement dates", () => {
+  const FUTURE_RUN =
+    "Production run PR-0007 ends on 2099-01-31. " +
+    "Change the end time or wait until the run ends.";
+  const FUTURE_APPLICATION =
+    "Application APP-0003 is dated 2099-02-14. " +
+    "Change the application date or wait until then.";
+
+  it("blocks submission instead of failing only at submit time", () => {
+    const readiness = deriveRemovalReadiness(
+      ready({ futureDatedMeasurements: [FUTURE_RUN] }),
+    );
+
+    expect(readiness.state).toBe("blocked");
+    expect(readiness.reasons).toContain(FUTURE_RUN);
+  });
+
+  it("rolls up beyond the preview limit rather than flooding the verdict", () => {
+    const measurements = [
+      FUTURE_RUN,
+      FUTURE_APPLICATION,
+      "Application APP-0004 is dated 2099-02-15. " +
+        "Change the application date or wait until then.",
+      "Application APP-0005 is dated 2099-02-16. " +
+        "Change the application date or wait until then.",
+    ];
+
+    const readiness = deriveRemovalReadiness(
+      ready({ futureDatedMeasurements: measurements }),
+    );
+
+    expect(readiness.state).toBe("blocked");
+    expect(readiness.reasons).toContain("+1 more future date");
+
+    const pluralReadiness = deriveRemovalReadiness(
+      ready({
+        futureDatedMeasurements: [
+          ...measurements,
+          "Application APP-0006 is dated 2099-02-17. " +
+            "Change the application date or wait until then.",
+        ],
+      }),
+    );
+    expect(pluralReadiness.reasons).toContain("+2 more future dates");
+  });
+
+  it("renders red in the requirements checklist naming the offending record", () => {
+    const check = buildRemovalRequirementsChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_RUN, FUTURE_APPLICATION] }),
+    ).find((c) => c.key === "measurementDates");
+
+    expect(check).toMatchObject({ status: "unmet" });
+    expect(check?.detail).toContain("PR-0007");
+    expect(check?.detail).toContain("APP-0003");
+    expect(check?.detail).not.toContain("Change the end time");
+    expect(check?.detail).not.toContain("Change the application date");
+    expect(check?.fixTarget).toBe("productionRunsAndApplications");
+  });
+
+  it("targets the matching record list for a single-kind future-date blocker", () => {
+    const runCheck = buildRemovalRequirementsChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_RUN] }),
+    ).find((c) => c.key === "measurementDates");
+    const applicationCheck = buildRemovalRequirementsChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_APPLICATION] }),
+    ).find((c) => c.key === "measurementDates");
+
+    expect(runCheck?.fixTarget).toBe("productionRuns");
+    expect(applicationCheck?.fixTarget).toBe("applications");
+  });
+
+  it("renders red in the pre-flight checklist too", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_APPLICATION] }),
+    );
+    expect(checkFor(checks, "measurementDates")).toMatchObject({
+      status: "unmet",
+    });
+  });
+
+  it("is met — and never a blocker — once every date has happened", () => {
+    const facts = ready();
+    expect(deriveRemovalReadiness(facts).state).toBe("ready");
+    expect(
+      buildRemovalRequirementsChecklist(facts).find(
+        (c) => c.key === "measurementDates",
+      )?.status,
+    ).toBe("met");
+  });
+
+  it("skips rather than reads met when there is nothing to submit", () => {
+    const check = buildRemovalRequirementsChecklist(
+      ready({ hasSubmittableRuns: false }),
+    ).find((c) => c.key === "measurementDates");
+    expect(check?.status).toBe("skipped");
+  });
+
+  it("still flags a future date when production lineage is incomplete", () => {
+    const check = buildRemovalRequirementsChecklist(
+      ready({
+        hasSubmittableRuns: false,
+        futureDatedMeasurements: [FUTURE_APPLICATION],
+      }),
+    ).find((c) => c.key === "measurementDates");
+    expect(check?.status).toBe("unmet");
   });
 });
 

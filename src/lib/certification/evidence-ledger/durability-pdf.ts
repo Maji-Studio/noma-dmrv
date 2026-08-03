@@ -20,7 +20,7 @@
  */
 import { createElement as h, type ReactElement } from "react";
 import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
-import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
+import { formatCount, pluralize } from "@/lib/copy-utils";
 import { C, MONO, SANS, Text_, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
 import type {
   DurabilityLedgerModel,
@@ -43,7 +43,7 @@ const nfi = (n: number): string =>
 
 // "mean ± s.d." for a column, at the given precision; mean alone when s.d. null.
 function stat(value: LedgerStat | null, fmt: (n: number) => string): string {
-  if (value == null) return "—";
+  if (value == null) return "Not available";
   return value.stdDev == null
     ? fmt(value.mean)
     : `${fmt(value.mean)} ± ${fmt(value.stdDev)}`;
@@ -164,10 +164,13 @@ function masthead(model: DurabilityLedgerModel): ReactElement {
   const pair = (label: string, val: string) =>
     v(styles.metaPair, {}, t(styles.metaLabel, label), t(styles.metaVal, val));
   const right = v(styles.metaCol, {},
-    pair("Member batches", model.memberBatchCodes ?? "—"),
-    pair("Facility", model.facilityName ?? "—"),
-    pair("Registry project", model.externalProjectId ?? "—"),
-    pair("Batches reconciled", `${model.batches.length} · ${model.totalReplicates} replicates`),
+    pair("Member batches", model.memberBatchCodes ?? "None"),
+    pair("Facility", model.facilityName ?? "Not available"),
+    pair("Registry project", model.externalProjectId ?? "Not set"),
+    pair(
+      "Batches reconciled",
+      `${model.batches.length} · ${formatCount(model.totalReplicates, "replicate")}`,
+    ),
   );
   return v(styles.masthead, {}, left, right);
 }
@@ -182,7 +185,7 @@ function ratioCell(
 ): ReactElement {
   const color = within === true ? C.green : within === false ? C.burnt : C.amber;
   return v({ width }, {},
-    t([styles.ratioVal, { color }], mean == null ? "—" : nf3(mean)),
+    t([styles.ratioVal, { color }], mean == null ? "Not available" : nf3(mean)),
     t(styles.ratioRule, `< ${ceiling}`),
   );
 }
@@ -203,7 +206,7 @@ function verdictRow(batch: LedgerBatch, isLast: boolean): ReactElement {
 
 function eligibilityBand(model: DurabilityLedgerModel): ReactElement {
   const head = v(styles.claimHead, {},
-    t(styles.claimHeadLabel, "Submitted to registry — durability eligibility"),
+    t(styles.claimHeadLabel, "Prepared for submission: durability eligibility"),
     t(styles.claimHeadEq, "judged on the pooled replicate mean · §3 Table 2"),
   );
   const colHead = v(styles.verdictColHead, {},
@@ -218,11 +221,11 @@ function eligibilityBand(model: DurabilityLedgerModel): ReactElement {
   const allEligible = model.eligibleBatchCount === model.batches.length;
   const foot = v(styles.claimFoot, {},
     t(styles.claimFootText,
-      `${model.eligibleBatchCount} / ${model.batches.length} batches eligible`),
+      `${model.eligibleBatchCount} of ${formatCount(model.batches.length, "batch", "batches")} eligible`),
     t(styles.claimFootSub,
       allEligible
         ? `all clear H/C_org < 0.5 AND O/C_org < 0.2`
-        : `review the flagged batch(es) before submission`),
+        : `review the flagged ${pluralize(model.batches.length - model.eligibleBatchCount, "batch", "batches")} before submission`),
   );
   return v(styles.claim, {}, head, colHead, ...rows, foot);
 }
@@ -240,7 +243,7 @@ function cell(
   return h(Text_, {
     style: [styles.qty, { width, paddingLeft: GAP }, value == null && styles.qtyMissing, extra],
   },
-    value == null ? "—" : fmt(value));
+    value == null ? "Not recorded" : fmt(value));
 }
 
 function replicateRow(
@@ -253,7 +256,7 @@ function replicateRow(
       t(styles.repCode, rep.sampleCode),
       rep.labName ? t(styles.repLab, rep.labName) : null,
     ),
-    h(Text, { style: [styles.day, { width: COL.day, paddingLeft: GAP }] }, rep.samplingDay ?? "—"),
+    h(Text, { style: [styles.day, { width: COL.day, paddingLeft: GAP }] }, rep.samplingDay ?? "Not recorded"),
     cell(COL.hc, rep.hToCorg, nf3),
     cell(COL.oc, rep.oToCorg, nf3),
     cell(COL.totc, rep.totalCarbonPercent, nf1),
@@ -263,15 +266,11 @@ function replicateRow(
 }
 
 function batchSection(batch: LedgerBatch): ReactElement {
-  const distrib =
-    batch.distinctRunDayCount >= MINIMUM_REPLICATES_PER_BATCH
-      ? `${batch.distinctRunDayCount} distinct run/day sources`
-      : `${batch.distinctRunDayCount} distinct run/day source(s) — review distribution`;
   const header = v(styles.sectionHead, { minPresenceAhead: 80 },
     v(styles.rule, {}),
     t(styles.sectionName, `Credit batch ${batch.creditBatchCode}`),
-    t(styles.sectionTag, `${batch.replicateCount} replicates`),
-    t(styles.sectionEqn, `${distrib} · ${nfi(batch.productMassKg)} kg product`),
+    t(styles.sectionTag, formatCount(batch.replicateCount, "replicate")),
+    t(styles.sectionEqn, `${nfi(batch.productMassKg)} kg product`),
   );
   const th = v(styles.th, {},
     t([styles.thText, { width: COL.ref }], "#"),
@@ -289,14 +288,14 @@ function batchSection(batch: LedgerBatch): ReactElement {
   const foot = v(styles.tfoot, {},
     v({ width: COL.ref + 4 }, {}),
     v({ flex: 1 }, {},
-      t(styles.subLabel, "Submitted"),
+      t(styles.subLabel, "Prepared"),
       t(styles.subN, `mean ± s.d. · n=${batch.replicateCount}`),
     ),
     h(Text, { style: [styles.subVal, { width: COL.day, paddingLeft: GAP, color: C.ink40 }] }, ""),
     h(Text, { style: [styles.subVal, { width: COL.hc, paddingLeft: GAP }] }, stat(batch.hToCorg, nf3)),
     h(Text, { style: [styles.subVal, { width: COL.oc, paddingLeft: GAP, color: C.ink55 }] }, stat(batch.oToCorg, nf3)),
     h(Text, { style: [styles.subVal, { width: COL.totc, paddingLeft: GAP }] }, stat(batch.totalCarbonPercent, nf1)),
-    h(Text, { style: [styles.subVal, { width: COL.orgc, paddingLeft: GAP, color: C.ink40 }] }, "—"),
+    h(Text, { style: [styles.subVal, { width: COL.orgc, paddingLeft: GAP, color: C.ink40 }] }, "Not included"),
     h(Text, { style: [styles.subVal, { width: COL.inorg, paddingLeft: GAP }] }, stat(batch.inorganicCarbonPercent, nf1)),
   );
   return v(styles.section, {}, header, v(styles.table, {}, th, ...rows, foot));
@@ -306,9 +305,9 @@ function soilBlock(model: DurabilityLedgerModel): ReactElement {
   const s = model.soil;
   const floorLine = s.temperatureFloored
     ? `Declared ${nf1(s.declaredSoilTemperatureC)} °C raised to the 7 °C floor (§5.1.1.3.1).`
-    : `Declared value is at or above the 7 °C floor — submitted as declared.`;
+    : "The declared value is at or above the 7 °C floor. It is prepared as declared.";
   const left = v(styles.soilCell, {},
-    t(styles.soilLabel, "Effective — submitted"),
+    t(styles.soilLabel, "Effective value prepared"),
     h(Text, { style: styles.soilBig }, nf1(s.effectiveSoilTemperatureC), h(Text, { style: styles.soilUnit }, " °C")),
     t(styles.soilLine, `Declared ${nf1(s.declaredSoilTemperatureC)} °C`),
   );
@@ -329,12 +328,13 @@ function apparatus(): ReactElement {
   const note = v(styles.noteCol, {},
     t(styles.noteH, "Method note"),
     t(styles.noteBody,
-      "Protocol §8.3.1 calls for at least 3 independent lab replicates distributed across distinct " +
-      "production runs/days. This sheet reports the recorded replicate count and distribution, and reconciles the raw values " +
-      "into the per-batch mean ± standard deviation submitted as the batch's measurement sample, " +
+      "Protocol §8.3.1 calls for at least 3 lab replicates per measured production batch, " +
+      "representative of the full range of physical characteristics present in that batch. " +
+      "This sheet reports the recorded replicate count, and reconciles the raw values " +
+      "into the per-batch mean ± standard deviation prepared for the batch's measurement-sample submission, " +
       "and records the §3 Table 2 permanence verdict (molar H/C_org < 0.5 AND O/C_org < 0.2) judged " +
       "on the pooled mean. The lab's own certificate of analysis remains attached as a Source on the " +
-      "Removal; this is noma's working showing how the submitted figures derive from it. The registry " +
+      "Removal; this is noma's working showing how the prepared figures derive from it. The registry " +
       "computes the durable fraction from these inputs and the soil-temperature reference.",
     ),
   );
@@ -346,7 +346,7 @@ function apparatus(): ReactElement {
     legendRow("O/C_org < 0.2", "Molar oxygen-to-organic-carbon permanence ceiling."),
     legendRow("mean ± s.d.", "Pooled replicate mean and sample standard deviation."),
     legendRow("Inorg C (plum)", "Derived as Total − Organic carbon (Eq.2) when not measured."),
-    legendRow("Submitted", "H/C_org, total + inorganic carbon, product mass · the measurement sample."),
+    legendRow("Prepared", "H/C_org, total and inorganic carbon, and product mass included in the measurement-sample submission."),
   );
   return v(styles.apparatus, {}, note, legend);
 }
@@ -354,7 +354,10 @@ function apparatus(): ReactElement {
 function footer(model: DurabilityLedgerModel): ReactElement {
   const date = model.generatedAtIso.slice(0, 10);
   return v(styles.footer, { fixed: true },
-    t(styles.footerText, `NOMA DMRV · DURABILITY EVIDENCE LEDGER · ${model.batches.length} BATCHES`),
+    t(
+      styles.footerText,
+      `NOMA DMRV · DURABILITY EVIDENCE LEDGER · ${formatCount(model.batches.length, "batch", "batches").toUpperCase()}`,
+    ),
     h(Text, {
       style: styles.footerText,
       render: ({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
@@ -365,9 +368,9 @@ function footer(model: DurabilityLedgerModel): ReactElement {
 
 function buildDocument(model: DurabilityLedgerModel): ReactElement {
   return h(Document, {
-    title: `200-Year Durability Evidence Ledger${model.memberBatchCodes ? ` — ${model.memberBatchCodes}` : ""}`,
+    title: `200-Year Durability Evidence Ledger${model.memberBatchCodes ? `: ${model.memberBatchCodes}` : ""}`,
     author: "noma dMRV",
-    subject: "Per-batch raw-replicate to submitted durability figures + eligibility verdicts",
+    subject: "Sample values and prepared durability results by credit batch",
   },
     h(Page, { size: "A4", style: styles.page },
       masthead(model),

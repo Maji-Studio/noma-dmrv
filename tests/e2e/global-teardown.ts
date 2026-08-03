@@ -429,6 +429,15 @@ export default async function globalTeardown() {
       // ─── Customers ───
       await client.query(`DELETE FROM customers WHERE code LIKE 'E2E-%'`);
 
+      // ─── Supplier locations (references suppliers) ───
+      await client.query(`
+        DELETE FROM supplier_locations
+        WHERE supplier_id IN (
+          SELECT id FROM suppliers WHERE code LIKE 'E2E-%'
+        )
+        OR name LIKE 'E2E %'
+      `);
+
       // ─── Suppliers ───
       await client.query(`DELETE FROM suppliers WHERE code LIKE 'E2E-%'`);
 

@@ -2,7 +2,8 @@
 
 > **Status: Accepted** (2026-06-11). Reverses the application-first anchor
 > recorded in `docs/traceability.md` (itself a deliberate redesign).
-> Feature shape lives in `docs/plans/2026-06-11-chain-of-custody-views.md`;
+> Historical feature shape lives in the
+> [archived plan](../archive/plans/2026-06-11-chain-of-custody-views.md);
 > this ADR fixes only *what the page is anchored on and why*.
 
 ## Context

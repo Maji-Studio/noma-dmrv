@@ -3,23 +3,34 @@
 /**
  * Read-only details panel for the order form's selected delivery location
  * (issue #196): address, stored facility distance with provenance, and a
- * mini map (facility + destination + straight connector).
+ * mini map (facility + destination + cached road route when available).
  *
  * Graceful degradation: no MapTiler key or missing GPS on either endpoint →
- * info rows only, no map. Route geometry is explicitly out of scope.
+ * info rows only, no map. Unresolved or unavailable route geometry keeps an
+ * honest straight dashed connector.
  */
 
 import dynamic from "next/dynamic";
+import { useRouteGeometries } from "@/hooks/use-geo";
+import { formatDistanceKm } from "@/lib/format-utils";
 import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
+import { resolveCustomerLocationRoutePreview } from "./customer-location-route-preview";
 
 // Inlined at build time — public, domain-locked key (browser-safe).
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 
 // Same fixed height as the PositionPicker preview so map surfaces read alike.
 const MINI_MAP_HEIGHT_CLASS = "h-[260px]";
+const ORDER_LOCATION_ROUTE_PREVIEW_ID = "order-location-route-preview";
+
+const ROUTE_PREVIEW_LABELS = {
+  loading: "Destination · loading road route, straight line shown",
+  road: "Destination · road route preview",
+  fallback: "Destination · straight-line fallback",
+} as const;
 
 // maplibre-gl is ~250 kB gzipped — keep it out of the route bundle and only
 // fetch it when a location with plottable endpoints is actually selected.
@@ -64,10 +75,6 @@ interface CustomerLocationDetailsProps {
   facility: CustomerLocationDetailsFacility | undefined;
 }
 
-function formatDistanceKm(km: number): string {
-  return `${Number.isInteger(km) ? km : km.toFixed(1)} km`;
-}
-
 export function CustomerLocationDetails({
   location,
   facility,
@@ -88,6 +95,29 @@ export function CustomerLocationDetails({
           destination: { lat: location.gpsLatitude, lng: location.gpsLongitude },
         }
       : null;
+
+  const routeRequest = mapPoints
+    ? {
+        legs: [
+          {
+            id: ORDER_LOCATION_ROUTE_PREVIEW_ID,
+            origin: mapPoints.facility,
+            destination: mapPoints.destination,
+          },
+        ],
+      }
+    : null;
+  const routeQuery = useRouteGeometries(routeRequest);
+  const routeGeometry = routeQuery.isPending
+    ? undefined
+    : (routeQuery.data?.[ORDER_LOCATION_ROUTE_PREVIEW_ID] ?? null);
+  const routePreviewState = mapPoints
+    ? resolveCustomerLocationRoutePreview(
+        mapPoints.facility,
+        mapPoints.destination,
+        routeGeometry
+      ).state
+    : "fallback";
 
   return (
     <div
@@ -140,6 +170,7 @@ export function CustomerLocationDetails({
               <CustomerLocationMiniMap
                 facility={mapPoints.facility}
                 destination={mapPoints.destination}
+                routeGeometry={routeGeometry}
               />
             </div>
             {/* Swatches mirror the Carbon Viewer legend (viewer-rails.tsx). */}
@@ -155,7 +186,7 @@ export function CustomerLocationDetails({
                 style={{ background: "var(--clr-pink)" }}
                 aria-hidden="true"
               />
-              Destination · straight-line preview
+              {ROUTE_PREVIEW_LABELS[routePreviewState]}
             </p>
           </div>
         )}

@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { MapPinIcon, PlusIcon, LeafIcon, XIcon } from "@phosphor-icons/react";
+import { MapPinIcon, PlusIcon, LeafIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -31,10 +31,11 @@ import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import {
   formatApplicationKgFromTons,
+  formatFieldSizeHa,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 import type { ApplicationListItem } from "@/data-access/applications";
-import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
+import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import {
   useApplications,
@@ -60,12 +61,20 @@ import {
 } from "@/schemas/applications";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
 // Column Definitions
 // ============================================
+
+function formatFieldPosition(
+  latitude: number | null,
+  longitude: number | null,
+): string | null {
+  if (latitude == null || longitude == null) return null;
+  return `${latitude}, ${longitude}`;
+}
 
 function createColumns(
   onEdit: (application: ApplicationListItem) => void,
@@ -88,13 +97,13 @@ function createColumns(
     },
     {
       id: "customer",
-      header: "Customer / Location",
+      header: "Customer / location",
       accessorFn: (row) => `${row.customerName ?? ""} ${row.locationName ?? ""}`.trim(),
       cell: ({ row }) => {
         const { customerName, locationName } = row.original;
         return (
           <div className="flex flex-col">
-            <span className="text-[var(--color-text-primary)]">{customerName ?? "—"}</span>
+            <span className="text-[var(--color-text-primary)]">{customerName ?? "Not available"}</span>
             {locationName && (
               <span className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">{locationName}</span>
             )}
@@ -104,7 +113,7 @@ function createColumns(
     },
     {
       accessorKey: "biocharAppliedTons",
-      header: "Biochar Applied (kg)",
+      header: "Biochar applied, wet (kg)",
       cell: ({ row }) => (
         <span className="font-mono">
           {formatApplicationKgFromTons(row.original.biocharAppliedTons)}
@@ -113,7 +122,7 @@ function createColumns(
     },
     {
       accessorKey: "biocharAppliedDryTons",
-      header: "Dry Biochar (kg)",
+      header: "Biochar applied, dry (kg)",
       cell: ({ row }) => (
         <span className="font-mono">
           {formatApplicationKgFromTons(row.original.biocharAppliedDryTons)}
@@ -122,11 +131,9 @@ function createColumns(
     },
     {
       accessorKey: "fieldSizeHa",
-      header: "Field Size",
+      header: "Field size",
       cell: ({ row }) => (
-        <span className="font-mono">
-          {row.original.fieldSizeHa?.toFixed(2) ?? "—"} ha
-        </span>
+        <span className="font-mono">{formatFieldSizeHa(row.original.fieldSizeHa)}</span>
       ),
     },
     {
@@ -136,7 +143,7 @@ function createColumns(
         <span>
           {row.original.applicationMethodType
             ? formatApplicationMethod(row.original.applicationMethodType as ApplicationMethod)
-            : "—"}
+            : "Not recorded"}
         </span>
       ),
     },
@@ -288,7 +295,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     executeCreate: async (data: ApplicationFormData) => {
       const result = await createApplication.mutateAsync(data);
       if (result.success === false) {
-        throw new Error(result.error || "Failed to create application");
+        throw new Error(result.error || "Application was not created. Check the form.");
       }
       const createdApplication: ApplicationListItem = {
         ...result.data,
@@ -296,16 +303,18 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         customerName: null,
         locationName: null,
         durabilityOption,
-        // Fail closed until the authoritative list query recounts uploaded
-        // evidence after this create flow completes.
-        evidenceGapCount: APPLICATION_VISUAL_EVIDENCE_ROLES.length,
+        // Optimistic placeholder only, replaced when the list query returns the
+        // authoritative count. The count is informational evidence health and
+        // does not block certification, so a stale value here is harmless.
+        evidenceGapCount:
+          APPLICATION_EVIDENCE_RULE_SPEC.paths.boundary.length,
       };
       return { entities: [createdApplication], result };
     },
     setError: setCreateError,
     setUpdateError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Failed to create application",
+      error instanceof Error ? error.message : "Application was not created. Check the form.",
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this application.",
     openEditOnFailure: (application) =>
@@ -316,7 +325,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       // the flush so readiness reflects the uploaded evidence.
       void queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
     },
-    onSuccess: () => toast.success("Application created successfully"),
+    onSuccess: () => toast.success("Application created."),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
@@ -325,22 +334,45 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
   const handleUpdate = async (data: ApplicationFormData) => {
     if (!sideSheet?.entity) return;
+    const applicationId = sideSheet.entity.id;
     setUpdateError(null);
+    // Still guards on failed or in-flight attachments, as every other list
+    // does. It does not block held files, which the flush below sends: an
+    // edited boundary arrives as a held .geojson with no entity to attach to
+    // until the update has run.
     if (createWithEvidence.guardUpdate()) return;
     try {
       const result = await updateApplication.mutateAsync({
-        applicationId: sideSheet.entity.id,
+        applicationId,
         ...data,
       });
       if (result.success) {
+        if (deferredAttachments.hasHeld) {
+          const flushResult = await createWithEvidence.runWhileFlushing(() =>
+            deferredAttachments.flush("application", applicationId),
+          );
+          if (!flushResult.ok) {
+            setUpdateError(
+              `Application updated, but ${flushResult.failed.length} ${
+                flushResult.failed.length === 1
+                  ? "attachment"
+                  : "attachments"
+              } failed to upload.`,
+            );
+            return;
+          }
+          void queryClient.invalidateQueries({
+            queryKey: applicationKeys.lists(),
+          });
+        }
         createWithEvidence.reset();
         setSideSheet(null);
-        toast.success("Application updated successfully");
+        toast.success("Application updated.");
       } else {
-        setUpdateError(result.error || "Failed to update application");
+        setUpdateError(result.error || "Application was not saved. Try again.");
       }
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Failed to update application");
+      setUpdateError(error instanceof Error ? error.message : "Application was not saved. Try again.");
     }
   };
 
@@ -355,12 +387,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       const result = await deleteApplication.mutateAsync(deletingApplicationId);
       if (result.success) {
         setDeletingApplicationId(null);
-        toast.success("Application deleted successfully");
+        toast.success("Application deleted.");
       } else {
-        setDeleteError(result.error || "Failed to delete application");
+        setDeleteError(result.error || "Application was not deleted. Try again.");
       }
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete application");
+      setDeleteError(error instanceof Error ? error.message : "Application was not deleted. Try again.");
     }
   };
 
@@ -431,7 +463,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   if (error) {
     return (
       <div className="container-max py-32">
-        <ServerError message={error.message || "Failed to load applications"} />
+        <ServerError message={error.message || "The applications could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }
@@ -529,13 +561,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 ? "No applications trace to this batch. Create one or review the batch period and linked production runs."
                 : hasActiveFilters
                 ? "Try adjusting or clearing the filters."
-                : "Create your first field application to get started"
+                : "A field application records where and when biochar was spread."
             }
             action={
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
-                  New Application
+                  Create your first field application
                 </Button>
               ) : undefined
             }
@@ -564,10 +596,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               }}
               aria-label="Filter by credit batch"
             >
-              <option value="">All Credit Batches</option>
+              <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.code}
+                  {formatDateRange(batch.startDate, batch.endDate)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -579,7 +611,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               }}
               aria-label="Filter by status"
             >
-              <option value="">All Statuses</option>
+              <option value="">All statuses</option>
               {applicationStatuses.map((status) => (
                 <option key={status} value={status}>
                   {formatApplicationStatus(status)}
@@ -596,7 +628,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               }}
               aria-label="Filter by evidence method"
             >
-              <option value="">All Evidence</option>
+              <option value="">All evidence</option>
               {applicationEvidenceMethods.map((method) => (
                 <option key={method} value={method}>
                   {formatApplicationEvidenceMethod(method)}
@@ -645,19 +677,28 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         size="wide"
         sections={sideSheetEntity ? [
           {
-            title: "Application Details",
+            title: "Application details",
             fields: [
-              { label: "Application Date", value: formatDate(sideSheetEntity.applicationDate) },
-              { label: "Delivery", value: sideSheetEntity.deliveryCode || sideSheetDelivery?.code || null },
+              { label: "Application date", value: formatDate(sideSheetEntity.applicationDate) },
               {
-                label: "Biochar Applied, Wet (kg)",
+                label: "Delivery source",
+                value: sideSheetDelivery
+                  ? `${
+                      sideSheetDelivery.productBinName ??
+                      sideSheetDelivery.formulationName ??
+                      "Biochar delivery"
+                    } · ${formatDate(sideSheetDelivery.deliveryDate)}`
+                  : null,
+              },
+              {
+                label: "Biochar applied, wet (kg)",
                 ...certificationDetailField("application", "biocharAppliedTons"),
                 value: sideSheetEntity.biocharAppliedTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedTons)
                   : null,
               },
               {
-                label: "Biochar Applied Dry (kg)",
+                label: "Biochar applied, dry (kg)",
                 ...certificationDetailField("application", "biocharAppliedDryTons"),
                 value: sideSheetEntity.biocharAppliedDryTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)
@@ -666,53 +707,56 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ],
           },
           {
-            title: "Field Details",
+            title: "Field details",
             fields: [
-              { label: "Field Size (Ha)", value: sideSheetEntity.fieldSizeHa },
-              { label: "Field Identifier", value: sideSheetEntity.fieldIdentifier },
-              { label: "Crop Type", value: sideSheetEntity.cropType },
+              { label: "Field size", value: formatFieldSizeHa(sideSheetEntity.fieldSizeHa) },
+              { label: "Field identifier", value: sideSheetEntity.fieldIdentifier },
+              { label: "Crop type", value: sideSheetEntity.cropType },
               {
-                label: "Application Method",
+                label: "Application method",
                 value: sideSheetEntity.applicationMethodType
                   ? formatApplicationMethod(sideSheetEntity.applicationMethodType as ApplicationMethod)
                   : null,
               },
-              { label: "Field position latitude", value: sideSheetEntity.gpsLatitude },
-              { label: "Field position longitude", value: sideSheetEntity.gpsLongitude },
+              {
+                label: "Field position",
+                value: formatFieldPosition(
+                  sideSheetEntity.gpsLatitude,
+                  sideSheetEntity.gpsLongitude,
+                ),
+              },
             ],
           },
           {
-            title: "Evidence Method",
+            title: "Evidence",
             fields: [
               {
-                label: "Evidence Method",
+                label: "Evidence method",
                 value: formatApplicationEvidenceMethod(
                   (sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod,
                 ),
               },
-              ...((sideSheetEntity.evidenceMethod ?? "visual") === "boundary"
-                ? [{ label: "GIS Boundary Reference", value: sideSheetEntity.gisBoundaryReference }]
-                : []),
             ],
             content: (
               <ApplicationEvidencePanel
                 applicationId={sideSheetEntity.id}
                 mode={(sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod}
+                boundary={sideSheetEntity.gisBoundary ?? null}
                 readOnly
               />
             ),
           },
           ...((sideSheetEntity.durabilityOption ?? durabilityOption) === "1000_year" ? [] : [{
-            title: "Soil Temperature",
+            title: "Soil temperature",
             fields: [
               {
-                label: "Temperature Source",
+                label: "Temperature source",
                 value: sideSheetEntity.soilTemperatureSource
                   ? formatSoilTemperatureSource(sideSheetEntity.soilTemperatureSource as SoilTemperatureSource)
                   : null,
               },
               {
-                label: "Soil Temperature (°C)",
+                label: "Soil temperature (°C)",
                 ...certificationDetailField("application", "soilTemperatureC"),
                 value: sideSheetEntity.soilTemperatureC != null
                   ? `${sideSheetEntity.soilTemperatureC} °C`

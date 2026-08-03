@@ -22,6 +22,22 @@
   transform: translateX(0);
 }
 
+[data-overlay-layer="sheet-backdrop"] {
+  z-index: var(--z-layer-sheet-backdrop);
+}
+
+[data-overlay-layer="sheet"] {
+  z-index: var(--z-layer-sheet);
+}
+
+[data-overlay-layer="dialog-backdrop"] {
+  z-index: var(--z-layer-dialog-backdrop);
+}
+
+[data-overlay-layer="dialog"] {
+  z-index: var(--z-layer-dialog);
+}
+
 :root {
   /* ===== BRAND COLORS ===== */
   --clr-dark-purple: rgba(15, 2, 26, 1);
@@ -152,6 +168,18 @@
   --row-hover-bg: var(--sea);
   --row-stripe-bg: rgba(15, 2, 26, 0.02);
 
+  /* ===== OVERLAY LAYERS =====
+     Centered dialogs can open from inside a side sheet. Their backdrop must
+     therefore sit above the sheet surface so the whole underlying context is
+     dimmed, while the dialog itself remains above that backdrop. */
+  --z-layer-sheet-backdrop: 40;
+  --z-layer-sheet: 50;
+  --z-layer-dialog-backdrop: 60;
+  --z-layer-dialog: 70;
+  --z-layer-toast: 80;
+  /* Active menus/tooltips must remain operable when a toast overlaps them. */
+  --z-layer-popover: 90;
+
   /* ===== GRAYSCALE PALETTE ===== */
   --color-gray-50: #fafafaff;
   --color-gray-100: #f5f5f5ff;
@@ -169,9 +197,6 @@
   --color-signal-orange: #f59723ff;
   --color-signal-orange-strong: #f59723ff;
   --color-signal-orange-light: #f5972326;
-  /* DEPRECATED: use --st-ok (signal-green now aliases the status ramp) */
-  --color-signal-green: var(--st-ok);
-  --color-signal-green-light: rgba(23, 116, 74, 0.15);
 
   /* ===== STATUS COLORS ===== */
   --color-status-success: var(--st-ok);
@@ -367,6 +392,10 @@
   --spacing-32: 32px;
   --spacing-36: 36px;
   --spacing-40: 40px;
+  /* Minimum touch target. Load-bearing for a11y, not a rhythm step: six
+     controls already wrote size-44 / min-h-44 / h-44 and got no rule at all,
+     because this scale is an allow-list. Keep it. */
+  --spacing-44: 44px;
   --spacing-48: 48px;
   --spacing-56: 56px;
   --spacing-64: 64px;
@@ -391,6 +420,20 @@
   --radius-32: 32px;
   --radius-48: 48px;
   --radius-full: 9999px;
+}
+
+/* ===== MOISTURE SPLIT =====
+   The water share of a wet mass, drawn as a hatched void against the solid
+   dry-matter block (see components/ui/moisture-split). Hatching rather than a
+   second fill is deliberate: water is the part of the load that carries no
+   carbon, and a void reads that way without spending an accent colour. The
+   pattern is plum-alpha like every other neutral, never a grey. */
+.moisture-water-hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--clr-dark-purple-20) 0 1.5px,
+    transparent 1.5px 6px
+  );
 }
 
 /* ===== BASE STYLES ===== */

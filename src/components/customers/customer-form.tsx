@@ -8,34 +8,34 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PlusIcon, TrashIcon, MapPinIcon } from "@phosphor-icons/react";
+import {
+  MapPinIcon,
+  PencilIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, FormActions, FormSection } from "@/components/forms";
-import { customerFormSchema, type CustomerFormData } from "@/schemas/customers";
+import {
+  customerFormSchema,
+  type CustomerFormData,
+  type CustomerLocationFormData,
+} from "@/schemas/customers";
 import type { Customer } from "@/db/schema/parties";
 import { useCustomerLocations, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
-import { InfoHint } from "@/components/ui/tooltip";
-import { CustomerLocationQuickAddDialog } from "./customer-location-quick-add-dialog";
+import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
+import { CustomerLocationDialog } from "./customer-location-dialog";
+import {
+  CustomerLocationForm,
+  type EditableCustomerLocation,
+} from "./customer-location-form";
 
 // ============================================
 // Types
 // ============================================
 
-export interface PendingLocation {
-  name: string;
-  country: string;
-  stateRegion?: string | null;
-  city?: string | null;
-  address: string;
-  gpsLatitude: number;
-  gpsLongitude: number;
-  // Road distance (km) facility → site. Feeds the auto-derived biochar
-  // distribution transport leg on delivery save.
-  distanceFromFacilityKm: number | null;
-  // Marks this as the customer's default destination.
-  isDefault: boolean;
-}
+export type PendingLocation = CustomerLocationFormData;
 
 function formatPendingLocationSummary({
   city,
@@ -121,9 +121,9 @@ export function CustomerForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Required Fields Section */}
-      <FormSection title="Required Information" divider={false}>
+      <FormSection title="Required information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="name" label="Customer Name" error={errors.name?.message} required>
+          <FormField id="name" label="Customer name" error={errors.name?.message} required>
             <FormInput
               id="name"
               type="text"
@@ -149,9 +149,9 @@ export function CustomerForm({
       )}
 
       {/* Contact Information Section */}
-      <FormSection title="Contact Information">
+      <FormSection title="Contact information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="contactEmail" label="Contact Email" error={errors.contactEmail?.message}>
+          <FormField id="contactEmail" label="Contact email" error={errors.contactEmail?.message}>
             <FormInput
               id="contactEmail"
               type="email"
@@ -164,7 +164,7 @@ export function CustomerForm({
 
           <FormField
             id="contactPhone"
-            label="Contact Phone"
+            label="Contact phone"
             error={errors.contactPhone?.message}
             helperText="International format supported"
           >
@@ -181,11 +181,11 @@ export function CustomerForm({
       </FormSection>
 
       {/* Business Information Section */}
-      <FormSection title="Business Information">
+      <FormSection title="Business information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="cropType"
-            label="Crop Type"
+            label="Crop type"
             error={errors.cropType?.message}
             helperText="Primary crop or land use for this biochar application site"
           >
@@ -239,7 +239,7 @@ function CreateModeLocationsSection({
   onRemove: (index: number) => void;
   error: string | null;
 }) {
-  const [showForm, setShowForm] = useState(false);
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
 
   return (
     <FormSection
@@ -252,7 +252,7 @@ function CreateModeLocationsSection({
         <Button
           variant="noOutline"
           size="small"
-          onClick={() => setShowForm(true)}
+          onClick={() => setIsLocationDialogOpen(true)}
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
@@ -266,7 +266,7 @@ function CreateModeLocationsSection({
         </p>
       )}
 
-      {locations.length === 0 && !showForm ? (
+      {locations.length === 0 ? (
         <p className="body-small text-[var(--color-text-tertiary)]">
           No locations yet. Add at least one location for this customer.
         </p>
@@ -291,7 +291,7 @@ function CreateModeLocationsSection({
                     ) : null}
                     <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
                       {loc.address}
-                      {` — ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`}
+                      {`, ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`}
                     </p>
                   </div>
                 </div>
@@ -310,281 +310,23 @@ function CreateModeLocationsSection({
         </div>
       )}
 
-      {showForm && (
-        <InlineLocationForm
-          onAdd={(loc) => {
-            onAdd(loc);
-            setShowForm(false);
+      <QuickAddDialogShell
+        isOpen={isLocationDialogOpen}
+        onClose={() => setIsLocationDialogOpen(false)}
+        title="Add Location"
+        width="lg"
+        testId="location-quick-add-dialog"
+      >
+        <CustomerLocationForm
+          idPrefix="pending-loc"
+          onSubmit={(location) => {
+            onAdd(location);
+            setIsLocationDialogOpen(false);
           }}
-          onCancel={() => setShowForm(false)}
+          onCancel={() => setIsLocationDialogOpen(false)}
         />
-      )}
+      </QuickAddDialogShell>
     </FormSection>
-  );
-}
-
-// ============================================
-// Inline Location Form (for create mode)
-// ============================================
-
-const INPUT_CLASS =
-  "flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
-
-function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation) => void; onCancel: () => void }) {
-  const [formData, setFormData] = useState({
-    name: "",
-    country: "",
-    stateRegion: "",
-    city: "",
-    address: "",
-    gpsLatitude: "",
-    gpsLongitude: "",
-    distanceFromFacilityKm: "",
-    isDefault: false,
-  });
-  const [formError, setFormError] = useState<string | null>(null);
-
-  const handleAdd = () => {
-    setFormError(null);
-
-    if (!formData.name.trim()) {
-      setFormError("Location name is required");
-      return;
-    }
-    if (!formData.country.trim()) {
-      setFormError("Country is required");
-      return;
-    }
-    if (!formData.address.trim()) {
-      setFormError("Address / description is required");
-      return;
-    }
-    if (formData.gpsLatitude.trim() === "" || formData.gpsLongitude.trim() === "") {
-      setFormError("GPS latitude and longitude are required");
-      return;
-    }
-
-    const lat = Number(formData.gpsLatitude);
-    const lng = Number(formData.gpsLongitude);
-    const distance =
-      formData.distanceFromFacilityKm.trim() === ""
-        ? null
-        : Number(formData.distanceFromFacilityKm);
-
-    if (Number.isNaN(lat) || lat < -90 || lat > 90) {
-      setFormError("Latitude must be between -90 and 90");
-      return;
-    }
-    if (Number.isNaN(lng) || lng < -180 || lng > 180) {
-      setFormError("Longitude must be between -180 and 180");
-      return;
-    }
-    if (distance !== null && (!Number.isFinite(distance) || distance < 0)) {
-      setFormError("Distance from facility must be 0 or greater");
-      return;
-    }
-
-    onAdd({
-      name: formData.name.trim(),
-      country: formData.country.trim(),
-      stateRegion: formData.stateRegion.trim() || null,
-      city: formData.city.trim() || null,
-      address: formData.address.trim(),
-      gpsLatitude: lat,
-      gpsLongitude: lng,
-      distanceFromFacilityKm: distance,
-      isDefault: formData.isDefault,
-    });
-  };
-
-  return (
-    <div
-      className="p-16 border border-[var(--color-border-primary)] bg-[var(--color-surface-light)] flex flex-col gap-16"
-      onKeyDown={(e) => {
-        if (
-          e.key === "Enter" &&
-          e.target instanceof HTMLInputElement &&
-          ["text", "number", "search", "email", "tel", "url"].includes(e.target.type)
-        ) {
-          e.preventDefault();
-        }
-      }}
-    >
-      {formError && (
-        <p className="text-[var(--text-s)] text-[var(--color-signal-red)]" role="alert">
-          {formError}
-        </p>
-      )}
-
-      <div className="flex flex-col gap-6">
-        <label htmlFor="pending-loc-name" className="body-small font-medium text-[var(--color-text-secondary)]">
-          Name <span className="text-[var(--color-signal-red)]">*</span>
-        </label>
-        <input
-          id="pending-loc-name"
-          type="text"
-          value={formData.name}
-          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-          placeholder="e.g., Demonstration Plot A"
-          className={INPUT_CLASS}
-          autoFocus
-        />
-      </div>
-
-      <div className="flex flex-col gap-6">
-        <label htmlFor="pending-loc-country" className="body-small font-medium text-[var(--color-text-secondary)]">
-          Country <span className="text-[var(--color-signal-red)]">*</span>
-        </label>
-        <input
-          id="pending-loc-country"
-          type="text"
-          value={formData.country}
-          onChange={(e) => setFormData((prev) => ({ ...prev, country: e.target.value }))}
-          placeholder="e.g., Tanzania"
-          className={INPUT_CLASS}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-        <div className="flex flex-col gap-6">
-          <label htmlFor="pending-loc-state" className="body-small font-medium text-[var(--color-text-secondary)]">
-            State / Region
-          </label>
-          <input
-            id="pending-loc-state"
-            type="text"
-            value={formData.stateRegion}
-            onChange={(e) => setFormData((prev) => ({ ...prev, stateRegion: e.target.value }))}
-            placeholder="e.g., Kilimanjaro"
-            className={INPUT_CLASS}
-          />
-        </div>
-        <div className="flex flex-col gap-6">
-          <label htmlFor="pending-loc-city" className="body-small font-medium text-[var(--color-text-secondary)]">
-            City
-          </label>
-          <input
-            id="pending-loc-city"
-            type="text"
-            value={formData.city}
-            onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
-            placeholder="e.g., Moshi"
-            className={INPUT_CLASS}
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-6">
-        <label htmlFor="pending-loc-address" className="body-small font-medium text-[var(--color-text-secondary)]">
-          Address <span className="text-[var(--color-signal-red)]">*</span>
-        </label>
-        <input
-          id="pending-loc-address"
-          type="text"
-          value={formData.address}
-          onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
-          placeholder="e.g., Moshi Rural District, Kilimanjaro Region"
-          className={INPUT_CLASS}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-        <div className="flex flex-col gap-6">
-          <label htmlFor="pending-loc-lat" className="body-small font-medium text-[var(--color-text-secondary)]">
-            GPS Latitude <span className="text-[var(--color-signal-red)]">*</span>
-          </label>
-          <input
-            id="pending-loc-lat"
-            type="number"
-            step="any"
-            min="-90"
-            max="90"
-            value={formData.gpsLatitude}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                gpsLatitude: e.target.value,
-              }))
-            }
-            placeholder="e.g., -3.3349"
-            className={INPUT_CLASS}
-          />
-        </div>
-        <div className="flex flex-col gap-6">
-          <label htmlFor="pending-loc-lng" className="body-small font-medium text-[var(--color-text-secondary)]">
-            GPS Longitude <span className="text-[var(--color-signal-red)]">*</span>
-          </label>
-          <input
-            id="pending-loc-lng"
-            type="number"
-            step="any"
-            min="-180"
-            max="180"
-            value={formData.gpsLongitude}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                gpsLongitude: e.target.value,
-              }))
-            }
-            placeholder="e.g., 37.3404"
-            className={INPUT_CLASS}
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-6">
-          <label htmlFor="pending-loc-distance" className="body-small font-medium text-[var(--color-text-secondary)]">
-            One-way distance from facility (per leg, km)
-          </label>
-          <InfoHint side="top" label="More about distance from facility">
-            One-way road distance from the facility to the site. Used for the
-            biochar distribution transport leg in certification; return trips are
-            doubled at emissions time (set the trip type on each delivery).
-          </InfoHint>
-        </div>
-        <input
-          id="pending-loc-distance"
-          type="number"
-          step="any"
-          min="0"
-          value={formData.distanceFromFacilityKm}
-          onChange={(e) =>
-            setFormData((prev) => ({
-              ...prev,
-              distanceFromFacilityKm: e.target.value,
-            }))
-          }
-          placeholder="e.g., 120"
-          className={INPUT_CLASS}
-        />
-      </div>
-
-      <label htmlFor="pending-loc-default" className="flex items-center gap-12 cursor-pointer">
-        <input
-          type="checkbox"
-          id="pending-loc-default"
-          className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
-          checked={formData.isDefault}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, isDefault: e.target.checked }))
-          }
-        />
-        <span className="body-medium text-[var(--color-text-primary)]">
-          Set as default destination
-        </span>
-      </label>
-
-      <div className="flex gap-12 justify-start pt-8">
-        <Button variant="primary" size="small" onClick={handleAdd}>
-          Add Location
-        </Button>
-        <Button variant="default" size="small" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </div>
   );
 }
 
@@ -593,7 +335,13 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
 // ============================================
 
 function LocationsSection({ customerId }: { customerId: string }) {
-  const [showAddDialog, setShowAddDialog] = useState(false);
+  // `editingLocation` is deliberately not cleared on close: the modal keeps its
+  // subtree mounted for the exit transition, so clearing it there would flip the
+  // dialog title and submit label to the "Add" wording mid-fade. Opening the add
+  // dialog clears it instead.
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  const [editingLocation, setEditingLocation] =
+    useState<EditableCustomerLocation | null>(null);
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
 
   const { data: locations, isLoading, isError } = useCustomerLocations(customerId);
@@ -616,7 +364,10 @@ function LocationsSection({ customerId }: { customerId: string }) {
         <Button
           variant="noOutline"
           size="small"
-          onClick={() => setShowAddDialog(true)}
+          onClick={() => {
+            setEditingLocation(null);
+            setIsLocationDialogOpen(true);
+          }}
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
@@ -628,7 +379,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
         <p className="body-small text-[var(--color-text-tertiary)]">Loading locations...</p>
       ) : isError ? (
         <p className="body-small text-[var(--color-signal-red)]" role="alert" aria-live="assertive" aria-atomic="true">
-          Failed to load locations. Please try refreshing.
+          Locations could not be loaded. Refresh the page and try again.
         </p>
       ) : !locations || locations.length === 0 ? (
         <p className="body-small text-[var(--color-text-tertiary)]">
@@ -648,29 +399,42 @@ function LocationsSection({ customerId }: { customerId: string }) {
                   <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
                     {loc.address || "Location not set"}
                     {loc.gpsLatitude !== null && loc.gpsLongitude !== null
-                      ? ` — ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`
+                      ? `, ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`
                       : ""}
                   </p>
                 </div>
               </div>
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={() => setDeletingLocationId(loc.id)}
-                className="shrink-0"
-                aria-label={`Delete ${loc.name}`}
-              >
-                <TrashIcon size={16} />
-              </Button>
+              <div className="flex shrink-0 items-center gap-8">
+                <Button
+                  variant="noOutline"
+                  size="icon"
+                  onClick={() => {
+                    setEditingLocation(loc);
+                    setIsLocationDialogOpen(true);
+                  }}
+                  aria-label={`Edit ${loc.name || loc.country}`}
+                >
+                  <PencilIcon size={16} />
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => setDeletingLocationId(loc.id)}
+                  aria-label={`Delete ${loc.name || loc.country}`}
+                >
+                  <TrashIcon size={16} />
+                </Button>
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      <CustomerLocationQuickAddDialog
-        isOpen={showAddDialog}
-        onClose={() => setShowAddDialog(false)}
+      <CustomerLocationDialog
+        isOpen={isLocationDialogOpen}
+        onClose={() => setIsLocationDialogOpen(false)}
         customerId={customerId}
+        location={editingLocation ?? undefined}
       />
 
       <DeleteConfirmDialog

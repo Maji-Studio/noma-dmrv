@@ -205,7 +205,7 @@ export async function getOrgContext(): Promise<OrgContext | null> {
 export async function requireOrgContext(): Promise<OrgContext> {
   const ctx = await getOrgContext();
   if (!ctx) {
-    throw new SafeError("Select an organization to continue.");
+    throw new SafeError("Select an Organization to continue.");
   }
   return ctx;
 }

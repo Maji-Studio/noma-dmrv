@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isSettledPeriodEnd } from "@/lib/isometric/utils/ghg-reporting-window";
 import {
   defaultSoilTemperatureSchema,
   emptyToNull,
@@ -51,7 +52,7 @@ export const saveMappingSchema = z.object({
         .string()
         .startsWith("fcl_", {
           error:
-            "Isometric facility ID must start with 'fcl_' — copy it from the Certify UI.",
+            "Isometric facility ID must start with 'fcl_'. Copy it from Certify.",
         })
         .min(5),
     )
@@ -116,6 +117,9 @@ export type FacilityEmissionConfigFormData = z.infer<
 export const submitRemovalSchema = z.object({
   removalId: z.string().uuid(),
   confirmProduction: z.boolean().optional(),
+  compilationHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/i, "Recompile the Removal before submitting."),
 });
 
 export type SubmitRemovalInput = z.infer<typeof submitRemovalSchema>;
@@ -136,7 +140,10 @@ export type CreateRemovalWithBatchesInput = z.infer<
 >;
 
 export const submitGhgStatementDialogSchema = z.object({
-  reportUrl: httpsUrlSchema,
+  reportId: z.string().uuid().optional(),
+  externalReportUrl: httpsUrlSchema.optional(),
+  // Compatibility alias for existing callers. New UI uses externalReportUrl.
+  reportUrl: httpsUrlSchema.optional(),
   summaryOfChanges: z
     .string()
     .max(
@@ -145,6 +152,25 @@ export const submitGhgStatementDialogSchema = z.object({
     )
     .optional(),
   confirmProduction: z.boolean().optional(),
+}).check((ctx) => {
+  const value = ctx.value;
+  const externalUrl = value.externalReportUrl ?? value.reportUrl;
+  if (!value.reportId && !externalUrl) {
+    ctx.issues.push({
+      code: "custom",
+      input: value,
+      path: ["reportId"],
+      message: "Approve a generated report or enter an external report URL",
+    });
+  }
+  if (value.reportId && externalUrl) {
+    ctx.issues.push({
+      code: "custom",
+      input: value,
+      path: ["reportId"],
+      message: "Choose either the generated report or the external fallback",
+    });
+  }
 });
 
 export type SubmitGhgStatementDialogInput = z.infer<
@@ -176,14 +202,39 @@ export function buildSubmitGhgStatementDialogSchema(args: {
   });
 }
 
+export const prepareGhgStatementReportSchema = z.object({
+  ghgStatementId: z.uuid(),
+  preparationKey: z.uuid(),
+  ensureFirst: z.boolean().optional(),
+});
+
+export type PrepareGhgStatementReportInput = z.infer<
+  typeof prepareGhgStatementReportSchema
+>;
+
+export const approveGhgStatementReportSchema = z.object({
+  ghgStatementId: z.uuid(),
+  reportId: z.uuid(),
+  version: z.number().int().positive(),
+});
+
+export type ApproveGhgStatementReportInput = z.infer<
+  typeof approveGhgStatementReportSchema
+>;
+
 // Period-first GHG-statement creation. Isometric creates a statement from
 // only { project_id, end_on }; the user picks the period end and the server
 // reconciles the linked removals afterward.
 export const createGhgStatementSchema = z.object({
   facilityId: z.string().uuid(),
+  // `isSettledPeriodEnd` rejects the intermediate values an `<input type="date">`
+  // emits while the year is being typed ("0202-01-31"), which are real calendar
+  // dates the round-trip check happily accepts. Without it a half-typed year can
+  // reach the create action.
   reportingPeriodEndOn: z
     .string()
-    .refine(isValidCalendarDate, "Pick a valid period end date"),
+    .refine(isValidCalendarDate, "Pick a valid period end date")
+    .refine(isSettledPeriodEnd, "Enter the full four-digit year"),
   confirmProduction: z.boolean().optional(),
 });
 

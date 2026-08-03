@@ -5,13 +5,12 @@ import {
 } from "@/schemas/biochar-products";
 
 // productionDate is intentionally absent: a biochar product's production date is
-// the linked run's date (when the biochar was produced), derived server-side in
-// data-access — not entered on this form. The #46 local-midnight guarantee for
-// that derivation is covered in `date-utils.test.ts` (parseLocalDateString).
+// the selected source bin's oldest allocated run date, derived server-side.
 const validBiocharProductInput = {
   facilityId: "11111111-1111-4111-8111-111111111111",
   formulationId: "22222222-2222-4222-8222-222222222222",
-  linkedProductionRunId: "33333333-3333-4333-8333-333333333333",
+  sourceBiocharStorageLocationId:
+    "33333333-3333-4333-8333-333333333333",
   storageLocationId: "44444444-4444-4444-8444-444444444444",
   status: "testing",
   massKg: 500,
@@ -24,7 +23,7 @@ describe("biocharProductFormSchema", () => {
   it("requires transfer source, measurements, water added, and destination bin", () => {
     const result = biocharProductFormSchema.safeParse({
       ...validBiocharProductInput,
-      linkedProductionRunId: "",
+      sourceBiocharStorageLocationId: "",
       storageLocationId: "",
       massKg: null,
       moistureContentPercent: null,
@@ -40,12 +39,12 @@ describe("biocharProductFormSchema", () => {
           issue.message,
         ]),
       );
-      expect(issuePaths).toContain("linkedProductionRunId");
+      expect(issuePaths).toContain("sourceBiocharStorageLocationId");
       expect(issuePaths).toContain("storageLocationId");
       expect(issuePaths).toContain("massKg");
       expect(issuePaths).toContain("moistureContentPercent");
       expect(issuePaths).toContain("waterAddedKg");
-      expect(issueMessages.get("massKg")).toBe("Required");
+      expect(issueMessages.get("massKg")).toBe("Wet mass is required");
       expect(issueMessages.get("moistureContentPercent")).toBe("Required");
       expect(issueMessages.get("waterAddedKg")).toBe("Required");
     }
@@ -57,7 +56,35 @@ describe("biocharProductFormSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("ignores a productionDate field — it is derived from the run, not the form", () => {
+  it("rejects precision that exact numeric storage would round", () => {
+    const result = biocharProductFormSchema.safeParse({
+      ...validBiocharProductInput,
+      massKg: 1041.6667,
+      moistureContentPercent: 1.1234567,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ["massKg"] }),
+          expect.objectContaining({ path: ["moistureContentPercent"] }),
+        ]),
+      );
+    }
+  });
+
+  it("accepts values at the persisted mass and percent scales", () => {
+    expect(
+      biocharProductFormSchema.safeParse({
+        ...validBiocharProductInput,
+        massKg: 1041.667,
+        moistureContentPercent: 1.123456,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("ignores a productionDate field because source allocation derives it", () => {
     const result = biocharProductFormSchema.safeParse({
       ...validBiocharProductInput,
       productionDate: "2026-01-18",

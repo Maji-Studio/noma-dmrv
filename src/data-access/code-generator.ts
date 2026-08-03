@@ -25,7 +25,7 @@ export const CODE_CONFLICT_MESSAGES = {
   order: "An order with this code already exists",
   productionRun: "A production run with this code already exists",
   reactor: "A reactor with this code already exists",
-  storageLocation: "A storage location with this code already exists",
+  storageLocation: "A storage bin with this code already exists",
   supplier: "A supplier with this code already exists",
   vehicle: "A vehicle with this code already exists",
 } as const;
@@ -154,7 +154,7 @@ function isCodeUniqueViolation(
 
 function duplicateCodeError(code: string, message?: string): SafeError {
   return new SafeError(
-    message ?? `Code "${code}" already exists. Please use a different code.`,
+    message ?? `Code "${code}" already exists. Use a different code.`,
   );
 }
 
@@ -236,6 +236,6 @@ export async function withAutoCode<T>(
 
   // Should never reach here, but TypeScript needs it
   throw new SafeError(
-    `Failed to generate unique code after ${MAX_RETRIES} attempts`,
+    `A unique code could not be generated after ${MAX_RETRIES} attempts. Enter a code manually.`,
   );
 }

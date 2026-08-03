@@ -69,8 +69,8 @@ const MICRO_ICON_SIZE = 13;
 const ALERT_ICON_SIZE = 20;
 
 const TONE_CLASS: Record<Tone, string> = {
-  stored: "bg-[var(--color-signal-green)]",
-  net: "bg-[var(--color-signal-green)]",
+  stored: "bg-[var(--st-ok)]",
+  net: "bg-[var(--st-ok)]",
   activity: "bg-[var(--color-signal-orange)]",
   counterfactual: "bg-[var(--color-signal-orange-light)]",
   uncertainty: "",
@@ -225,7 +225,7 @@ function Eyebrow({
         {verified
           ? "Registry-verified"
           : registryDraft
-            ? "Registry draft — unverified"
+            ? "Registry draft: unverified"
             : "Estimate"}
       </span>
     </div>
@@ -275,15 +275,15 @@ function Hero({
 const HINT_SEQUESTRATION =
   "Gross CO₂e durably stored in the applied biochar, before any deductions.";
 const HINT_ACTIVITIES =
-  "Project emissions from the removal activity — pyrolysis energy, transport and handling.";
+  "Project emissions from the Removal activity, including pyrolysis energy, transport, and handling.";
 const HINT_COUNTERFACTUAL =
-  "Baseline emissions that would have occurred without the removal.";
+  "Baseline emissions that would have occurred without the Removal.";
 const HINT_UNCERTAINTY =
   "A statistical haircut Isometric applies to account for measurement uncertainty.";
 
 const ANOMALY_COPY: Record<RemovalBreakdownAnomaly, string> = {
   "net-negative":
-    "Registry reports net emissions — sequestration inputs may be missing.",
+    "The registry reports net emissions. Sequestration inputs may be missing.",
   "net-exceeds-before-discount":
     "Registry net exceeds the amount before uncertainty discount.",
   "sequestration-missing-or-zero":
@@ -541,7 +541,7 @@ function CarbonBreakdownBody({
           <span>
             Your inputs (Sequestrations {formatSignedCo2e(sequestrationKg)},
             Activities {formatDeductionCo2e(activitiesKg)}) differ from the
-            registry&apos;s {registryVerified ? "verified" : "draft"} figures —
+            registry&apos;s {registryVerified ? "verified" : "draft"} figures.
             the registry net is authoritative.
           </span>
         </p>

@@ -1,27 +1,55 @@
 /**
- * Biochar-product options for searchable entity selection.
+ * Product-bin options for the order form's searchable entity selection.
  *
- * The subtitle shows physically-remaining stock per product batch: the produced
- * wet mass (massKg) minus the wet mass already delivered out of the bin. Only
- * deliveries with status 'delivered' are subtracted — an 'upcoming' delivery has
- * not physically left storage yet. The biocharStorageInventory table is not yet
- * wired into delivery flows, so delivered wet mass is the reliable signal for
- * what has left the bin.
+ * The selected id remains the exact biochar-product batch id required by order
+ * traceability and delivery stock guards, while the operator-facing identity is
+ * the product bin that physically holds that batch. The subtitle disambiguates
+ * multiple batches in one bin and shows physically remaining stock.
  */
 
 import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { numericAggregate, sumNumeric } from "@/db/aggregate";
-import { biocharProducts, deliveries, formulations, orders } from "@/db/schema";
+import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
+import {
+  biocharProducts,
+  deliveries,
+  formulations,
+  orders,
+  storageLocations,
+} from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
+import {
+  deriveEffectiveMoisturePercent,
+  formatWetDryMass,
+  splitWetMass,
+} from "@/lib/mass-moisture";
 
-
-function formatStockSubtitle(massKg: number | null, deliveredKg: number): string {
-  const remaining = Math.max(0, (massKg ?? 0) - deliveredKg);
-  return `${Math.round(remaining).toLocaleString()} kg in bin`;
+function formatStockSubtitle(
+  massKg: number | null,
+  waterAddedKg: number | null,
+  moisturePercent: number | null,
+  deliveredWetKg: number,
+  deliveredDryKg: number,
+  unresolvedDeliveredDryCount: number,
+): string {
+  const remainingWetKg =
+    (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg;
+  const productDryKg = splitWetMass(massKg, moisturePercent)?.dryKg;
+  const remainingDryKg =
+    productDryKg == null || unresolvedDeliveredDryCount > 0
+      ? null
+      : productDryKg - deliveredDryKg;
+  return `${formatWetDryMass({
+    wetKg: remainingWetKg,
+    dryKg: remainingDryKg,
+    wetLabel: "Wet biochar product",
+    dryLabel: "Dry biochar",
+    separator: " | ",
+    unitSpacing: "compact",
+  })} available`;
 }
 
 // Total delivered wet mass per product batch. A delivery's product is its own
@@ -37,6 +65,15 @@ function buildDeliveredMassAggregate(ctx: OrgContext) {
     totalDeliveredKg: sumNumeric(deliveries.deliveredWetMassKg).as(
       "total_delivered_kg",
     ),
+    totalDeliveredDryKg: sumNumeric(deliveries.massDryKg).as(
+      "total_delivered_dry_kg",
+    ),
+    unresolvedDeliveredDryCount: countRows(
+      and(
+        sql`${deliveries.deliveredWetMassKg} > 0`,
+        isNull(deliveries.massDryKg),
+      ),
+    ).as("unresolved_delivered_dry_count"),
   })
   .from(deliveries)
   .innerJoin(
@@ -61,27 +98,70 @@ function buildSelection(
 ) {
   return {
     id: biocharProducts.id,
-    code: biocharProducts.code,
+    code: storageLocations.code,
+    name: storageLocations.name,
+    productCode: biocharProducts.code,
     formulationName: formulations.name,
     massKg: biocharProducts.massKg,
+    waterAddedKg: biocharProducts.waterAddedKg,
+    moisturePercent: biocharProducts.moistureContentPercent,
     totalDeliveredKg: numericAggregate(
       sql<number>`COALESCE(${deliveredMassAggregate.totalDeliveredKg}, 0)`,
+    ),
+    totalDeliveredDryKg: numericAggregate(
+      sql<number>`COALESCE(${deliveredMassAggregate.totalDeliveredDryKg}, 0)`,
+    ),
+    unresolvedDeliveredDryCount: numericAggregate(
+      sql<number>`COALESCE(${deliveredMassAggregate.unresolvedDeliveredDryCount}, 0)`,
     ),
   };
 }
 
-function toEntityOption(r: {
+export function toBiocharProductEntityOption(r: {
   id: string;
-  code: string;
+  code: string | null;
+  name: string | null;
+  productCode: string;
   formulationName: string | null;
   massKg: number | null;
+  waterAddedKg: number | null;
+  moisturePercent: number | null;
   totalDeliveredKg: number;
+  totalDeliveredDryKg: number;
+  unresolvedDeliveredDryCount: number;
 }): EntityOption {
+  const productLabel = r.formulationName ?? PURE_BIOCHAR_LABEL;
+  const remainingWetKg =
+    (r.massKg ?? 0) + (r.waterAddedKg ?? 0) - r.totalDeliveredKg;
+  const productDryKg = splitWetMass(r.massKg, r.moisturePercent)?.dryKg;
+  const remainingDryKg =
+    productDryKg == null || r.unresolvedDeliveredDryCount > 0
+      ? null
+      : productDryKg - r.totalDeliveredDryKg;
+
   return {
     id: r.id,
-    code: r.code,
-    name: r.formulationName ?? PURE_BIOCHAR_LABEL,
-    subtitle: formatStockSubtitle(r.massKg, r.totalDeliveredKg),
+    code: r.code ?? r.productCode,
+    name: r.name ? `${r.name} • ${productLabel}` : productLabel,
+    mass: {
+      moisturePercent: deriveEffectiveMoisturePercent(
+        r.massKg,
+        r.moisturePercent,
+        r.waterAddedKg,
+      ),
+    },
+    remainingMass: {
+      wetKg: remainingWetKg,
+      dryKg: remainingDryKg,
+    },
+    subtitle: formatStockSubtitle(
+      r.massKg,
+      r.waterAddedKg,
+      r.moisturePercent,
+      r.totalDeliveredKg,
+      r.totalDeliveredDryKg,
+      r.unresolvedDeliveredDryCount,
+    ),
   };
 }
 
@@ -96,7 +176,19 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
   const { search, facilityId, limit } = params;
   requireOrgScope(ctx);
 
-  const conditions: SQL[] = [isNull(biocharProducts.archivedAt)];
+  const conditions: SQL[] = [
+    isNull(biocharProducts.archivedAt),
+    // Bin-less (legacy/partial) products stay orderable via their
+    // product-code fallback; products whose bin is archived or not a
+    // product bin stay hidden.
+    or(
+      isNull(biocharProducts.storageLocationId),
+      and(
+        eq(storageLocations.type, "product_bin"),
+        isNull(storageLocations.archivedAt),
+      ),
+    )!,
+  ];
 
   if (facilityId) {
     conditions.push(eq(biocharProducts.facilityId, facilityId));
@@ -107,7 +199,9 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
     conditions.push(
       or(
         ilike(biocharProducts.code, searchPattern),
-        ilike(formulations.name, searchPattern)
+        ilike(formulations.name, searchPattern),
+        ilike(storageLocations.code, searchPattern),
+        ilike(storageLocations.name, searchPattern),
       )!
     );
   }
@@ -117,6 +211,13 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
   const results = await db
     .select(selection)
     .from(biocharProducts)
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(biocharProducts.storageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(
       formulations,
       and(
@@ -132,7 +233,7 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
     .orderBy(desc(biocharProducts.productionDate))
     .limit(limit);
 
-  return results.map(toEntityOption);
+  return results.map(toBiocharProductEntityOption);
 }
 
 export async function getBiocharProductEntityById(
@@ -145,6 +246,13 @@ export async function getBiocharProductEntityById(
   const [result] = await db
     .select(selection)
     .from(biocharProducts)
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(biocharProducts.storageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(
       formulations,
       and(
@@ -161,5 +269,5 @@ export async function getBiocharProductEntityById(
 
   if (!result) return null;
 
-  return toEntityOption(result);
+  return toBiocharProductEntityOption(result);
 }

@@ -8,6 +8,7 @@ in the components' own TSDoc. Neither is duplicated here.
 
 Related: [forms.md](./forms.md) (form/schema work) ·
 [code-style.md](./code-style.md) (naming, React Compiler rules, a11y) ·
+[ux-writing.md](./ux-writing.md) (all user-facing copy) ·
 [architecture.md](./architecture.md) (layers, ActionResult, facility context) ·
 [traceability.md](./traceability.md) (DAG / Map / Sankey surfaces) ·
 [troubleshooting.md](./troubleshooting.md) ·
@@ -24,8 +25,14 @@ Read these first. Each one fails quietly rather than loudly.
 - **`@theme inline` sets `--spacing-*: initial` and `--radius-*: initial`**
   (`src/app/globals.css`). Default Tailwind spacing and radius classes are
   **deleted, not remapped** — `rounded-md` resolves to nothing at all and is
-  dropped without any visible error. Only scale values that exist in the theme
-  block work.
+  dropped without any visible error. The spacing scale is an **allow-list**:
+  only the `--spacing-<n>` values declared in that block generate utilities, so
+  `gap-3` or `w-120` produces no rule and the element simply has no size.
+  `pnpm check:spacing-scale` (CI, `scripts/check-spacing-scale.ts`) is what
+  catches this — nothing else does, not Tailwind, not `tsc`, not ESLint. Write
+  an arbitrary value (`w-[120px]`) when a real off-scale number is intended.
+  **44px is on the scale** because it is the minimum touch target; six controls
+  had written `size-44` / `min-h-44` / `h-44` and were rendering at icon size.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
@@ -42,6 +49,17 @@ Read these first. Each one fails quietly rather than loudly.
   reintroduce `--color-gray-*` in component code.
 - **Never re-apply a page background.** The body sits on the warm `--bg`;
   panels and cards are pure `--paper`.
+- **On desktop, `main` is the scrollport — not the window.** The `(app)` shell
+  wrapper is `md:h-screen md:overflow-hidden` and `main` carries `overflow-auto`
+  (`src/app/(app)/layout.tsx`), so at `md`+ the scrollbar lives inside `main`.
+  Two things follow. **Sticky works**: `position: sticky` resolves against the
+  nearest scrolling ancestor, so a `lg:sticky lg:top-24` in-page rail now pins —
+  before the wrapper had a bounded height, `main` grew with its content, never
+  scrolled, and every sticky descendant failed with no error. And **`window`
+  scroll APIs do not**: `window.scrollY` / `window.scrollTo` read and move a
+  document that no longer scrolls. Use `scrollIntoView` (it walks every scroll
+  ancestor) or address `main` directly. Below `md` the window scrolls as before,
+  so anything you write has to hold in both frames.
 
 ---
 
@@ -63,10 +81,19 @@ sidebar). Don't invent the missing tokens.
 
 **Status ramp** — `--st-ok` / `--st-run` / `--st-wait` / `--st-off` /
 `--st-bad` is the canonical palette for status badges, dots, and state text.
+Each has a solid (icon, text, rule, bar fill), a `-bg` 10% tint fill and a
+`-border` 40% tint fill. `/styleguide` renders all five × three.
 
-`--color-signal-green` / `--color-signal-green-light` are **DEPRECATED** in
-favour of `--st-ok` and an `--st-ok` tint, but still have ~22 live call sites
-in `src/components`. Don't propagate them by copying a neighbouring component.
+`--color-signal-green` / `--color-signal-green-light` are **retired** and
+resolve to nothing. Translate them as follows:
+
+| retired | use |
+| --- | --- |
+| `--color-signal-green` | `--st-ok` |
+| `--color-signal-green-light` | `--st-ok-bg` |
+
+`--color-signal-orange` / `-strong` / `-light` remain supported. Don't convert
+them to `--st-wait` component by component; any migration must be app-wide.
 
 **Hairlines & the panel recipe.** Structure is drawn with borders, never drop
 shadows — elevation is border + paper. Three steps: `--hair` (structural /
@@ -120,6 +147,67 @@ Class definitions live in `src/app/globals.css`. Size → class ladder:
 Use the design-system classes, never inline `text-4xl`. In-page section
 headings on rollup/detail pages are `title-heading-3`, sentence case.
 
+### Label casing
+
+**Sentence case** — capitalise the first word only — for field labels, table
+column headers, `FormSection` / `DetailSection` titles, `DetailPanelField`
+labels, and filter control option text (the `<option>`s inside a
+`DataTable.FilterSelect` and any equivalent dropdown or listbox), which sits
+beside a sentence-case search placeholder and sentence-case column headers and
+has to read as part of the same row.
+
+| ❌ | ✅ |
+| --- | --- |
+| `Contact Phone` | `Contact phone` |
+| `All Credit Batches` | `All credit batches` |
+| `Ash Content (%)` | `Ash content (%)` |
+| `Field Size (Ha)` | `Field size (ha)` |
+| `Startup / Plant Diesel (L)` | `Startup / plant diesel (L)` |
+| `1000-Year Durability · R₀ Reflectance` | `1000-year durability · R₀ reflectance` |
+
+Four things keep their capitals: proper nouns and product/registry names
+(Isometric, Certify), acronyms (GPS, CSV, UTC, GHG, TGA), unit and element
+symbols (`mL`, `ha`, `kg/m³`, `H:C`, `R₀`), and any term whose canonical form in
+[CONTEXT.md](../CONTEXT.md) is capitalised — check the glossary before you
+rename a domain term.
+
+Page titles (`PageHeader`), `StatCard` titles, button text, dialog titles and
+side-sheet titles are **outside** this rule and keep their existing casing. One
+exception: where a dialog title or button **names an entity the operator just
+saw on a select**, the noun follows the select's label rather than the chrome's
+casing — "Feedstock type" on the select, "New feedstock type" as the quick-add
+title, "Create feedstock type" on its submit button. One action, one name,
+through the whole flow. Those nouns live in `ENTITY_TYPE_LABELS`
+(`components/forms/entity-select/entity-labels.ts`) — the single source shared by
+the select and the quick-add dialog — stored lowercase because they are always
+read mid-sentence. Follow the glossary: a bin is a **storage bin**, never a
+"storage location", on every operator-facing surface.
+
+**A label and its mirror must match.** An edit form's `FormField` label and the
+same field's `DetailPanelField` in the read sheet are one label — rename both
+together or neither. Someone who fills a field and then reads it back must see
+the same words.
+
+A `DataTable` column header is held to a weaker rule, because the table's own
+subject already supplies the context a form field has to state: the Applications
+table may head a column `Date` where the form says `Application date`, and drop
+a unit the cell carries (`Wet mass` / `1,000 kg`) where the form label must keep
+it, since an empty input has nowhere else to put it. What a header may **not**
+do is pick a *different* word — `Share (%)` on the form against `Biochar ratio`
+in the table is two names for one field, and that is a mirror break.
+
+**Renaming a label is a test change.** Playwright specs in `tests/e2e/` locate
+elements by these exact strings, and the matchers split two ways:
+
+| case-**insensitive** substring (a pure case flip survives) | case-**sensitive** (a pure case flip breaks) |
+| --- | --- |
+| `getByText/getByRole/getByLabel(name)` with the default `exact: false` · `filter({ hasText: "…" })` · CSS `:has-text("…")` · `/…/i` regex | the same locators with `{ exact: true }` · a regex without `/i` · `toHaveText` / `toContainText` |
+
+Changing a label's *words* (not just its case) breaks **both** columns. Before
+committing a rename, `grep -rF "<old string>" tests/e2e/` and fix the hits —
+and check that the new string does not now collide with a second control on the
+same screen, which turns a passing locator into a strict-mode violation.
+
 ---
 
 ## Date and time display
@@ -150,10 +238,43 @@ Do not use shadcn or its theming system.
 
 **Phosphor icons** — always the `*Icon`-suffixed export names (`TrashIcon`,
 `PlusIcon`); the bare names are deprecated and appear nowhere in this codebase.
-Both `@phosphor-icons/react` and `@phosphor-icons/react/dist/ssr` are in live
-use, so match whichever the file you're editing already imports. Sizes: 16
-(small) · 20 (in buttons) · 24 (standalone / StatCard) · 32 (large). Prefer
-`weight="bold"`. Icon-only controls always need an `aria-label`.
+Sizes: 16 (small) · 20 (in buttons) · 24 (standalone / StatCard) · 32 (large).
+Prefer `weight="bold"`. Icon-only controls always need an `aria-label`.
+
+**The two Phosphor entry points are not interchangeable.** One rule, and ESLint
+enforces it (`no-restricted-imports` in `eslint.config.mjs`):
+
+```ts
+// Components: always /dist/ssr.
+import { CubeIcon, LeafIcon } from "@phosphor-icons/react/dist/ssr";
+// Types: only the root exports them, and only as a type-only import.
+import type { Icon } from "@phosphor-icons/react";
+```
+
+Why each half is load-bearing:
+
+- The root entry's icons are built on `IconBase`, which calls
+  `useContext(IconContext)`, and the module it pulls in calls `createContext` at
+  module scope. That makes the whole entry client-only, and it fails at **import**
+  time, not at render — under the `react-server` condition it throws
+  `SyntaxError: The requested module 'react' does not provide an export named
+  'createContext'`, which names React rather than the icon you imported. The
+  `/dist/ssr` icons use `SSRBase`, which takes no hooks and imports cleanly in
+  both environments (verified 2026-07-28 with `node --conditions=react-server`).
+  Their prop defaults are identical (`currentColor`, `1em`, `regular`), so the
+  only thing given up is an `IconContext` provider — which this codebase has
+  never used. The root entry also re-exports the *entire* `/dist/ssr` barrel on
+  top of its own, so it is strictly the more expensive import.
+- The `Icon` type (and `IconProps` / `IconWeight`) is **not** exported from
+  `/dist/ssr`. Asking for it there fails with `TS2724: has no exported member
+  named 'Icon'. Did you mean 'XIcon'?`. Take it from the root under
+  `import type`, which erases at compile time and so pulls in no runtime module.
+
+Use `Icon` — never a loose `ElementType` — for a prop or lookup table that
+holds an icon component (`Record<Kind, Icon>`, `{ icon: Icon }`). `ElementType`
+accepts `"div"` and any unrelated component, so it silently permits values that
+will not take `size` / `weight`. `src/components/storage-locations/bin-display.ts`
+is the reference.
 
 ---
 
@@ -163,7 +284,7 @@ All live in `src/components/ui/<name>` (lowercase paths — capitalised paths
 only resolve on macOS and break CI). Most re-export from the barrel:
 
 ```tsx
-import { Button, EmptyState, Modal, PageHeader, StatCard } from "@/components/ui";
+import { Button, EmptyState, MassPair, Modal, PageHeader, StatCard } from "@/components/ui";
 ```
 
 The barrel is **incomplete** — `Accordion`, `CertificationFieldTag`,
@@ -199,11 +320,18 @@ speaks one dialog library. Compose it for every centered dialog — you get the
 built-in close button, ESC dismissal, focus trap, scroll lock, and focus
 restore for free.
 
+- Centered dialogs sit one overlay tier above side sheets. This lets a dialog
+  opened from a sheet dim the sheet as part of its underlying context. Keep
+  this ordering in the shared `--z-layer-sheet-*` and `--z-layer-dialog-*`
+  tokens; feature components must not set their own competing layers.
 - Width tokens: `sm` 400px (confirmations) · `md` 560px (default: forms,
   wizards) · `lg` 720px (dense forms) · `xl` 880px (rich content). All are
   full-width below `sm`.
 - **`dismissOnClickOutside={false}`** for multi-step workflows where a stray
   backdrop click would discard in-progress work. Close button and ESC stay live.
+- **`dismissible={false}`** only while an irreversible request is active. It
+  disables the close button, Escape, and backdrop dismissal until the request
+  settles. Do not use it to trap operators during ordinary form editing.
 - **Accessibility is enforced, not suggested:** Modal dev-warns at runtime when
   neither `ariaLabelledBy` (preferred — id of a visible heading) nor
   `ariaLabel` is passed.
@@ -217,7 +345,15 @@ restore for free.
 
 - **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
   filtered-empty state uses it; **never a bare `<p>`**. Icon sizing is
-  caller-owned.
+  caller-owned. Two copy rules, both load-bearing:
+  - **The zero-state CTA is `Create your first <entity>`, never a copy of the
+    `PageHeader` button.** Both buttons render at once on an empty list, and two
+    controls with the same accessible name break `getByRole("button", { name })`
+    in Playwright — the header keeps `New <entity>`, the card invites.
+  - **`description` is for the filtered-empty branch**, where it says how to get
+    back ("Try clearing your search."). On the zero state, pass a line that says
+    what the entity *is* or omit it — "Create your first X to get started" only
+    repeats the button.
 - **`SelectFacilityEmptyState`** (`src/components/navigation`) — the *no
   facility chosen* state. Do not branch `EmptyState` copy on `facilityId`;
   this component exists so every first-run screen speaks with one voice.
@@ -228,7 +364,17 @@ restore for free.
   **StepFlow never validates**; the parent owns the active index and gates
   forward progress by disabling its own Next button.
 - **`StatCard`** — the one KPI card. **Always carries a 24px Phosphor icon.**
+  `value` accepts a `ReactNode`: use the default `valueLayout="headline"` for a
+  single scalar or short text value, and `valueLayout="breakdown"` for a
+  structured comparison such as `MassPair`. Breakdown layout gives the value
+  the full card width and does not apply headline typography to its children.
   Optional `sparkline` slot takes any node.
+- **`MassPair`** — the shared wet/dry comparison for KPI cards and dense table
+  cells. It keeps both labels visible, renders missing values as "Not recorded",
+  and keeps both figures in kg with up to one decimal. Use the default summary
+  variant in `StatCard valueLayout="breakdown"`; use `variant="compact"` with
+  `layout="stacked"` in table cells. Its figures own their mono numeric style;
+  do not wrap them in a body typography class.
 - **`ListPagination`** — same rows-per-page + first/previous/next/last contract
   as `DataTable.Pagination`. Facilities and Credit Batches are the sanctioned
   KPI-rich card-list hubs; ordinary entity lists stay data tables.
@@ -248,6 +394,44 @@ restore for free.
   `.Icon` / …) — a general-purpose panel with the shared recipe, used on the
   admin page. `Card.Root` defaults to `padding="none"` and `radius="none"`.
   For entity lists, use the Entity Card pattern below instead.
+
+### Wet mass, moisture, dry mass
+
+One vocabulary, one arithmetic, one visual — all from `@/lib/mass-moisture`
+(`splitWetMass`, `formatMoisturePercent`, `formatSplitMass`, the
+`*_FIELD_LABEL` constants), `MoistureSplit`
+(`@/components/ui/moisture-split`), and `MassPair`
+(`@/components/ui/mass-pair`). **Never retype a moisture label, re-derive the
+split inline, or format a percentage by hand.**
+
+- **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
+  ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
+  `MoistureField` attaches to every moisture input.
+- **`MoistureSplit` variants:** `detail` (figures + bar + footnote — forms and
+  read side sheets) · `compact` (bar + one line) · `inline` (text only — table
+  cells, option labels). Missing moisture renders an explicit *unresolved*
+  state (hatched dashed bar, "Moisture not recorded"), never nothing — dry mass
+  drives certification readiness, so its absence has to be visible.
+- **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter,
+  the `.moisture-water-hatch` void for water. It does **not** take the
+  production/infrastructure/distribution accent — moisture means the same thing
+  in every area, and that is what lets one component appear across five.
+- **Split figures are always kg** (`formatSplitMass` and `MassPair`), never the
+  auto-tonne `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in
+  tonnes both round to "1.5 t", claiming no water was removed. The rule also
+  applies to large KPI pairs: never switch wet and dry independently, because
+  mixed units and collapsed precision break direct comparison.
+- Read side-sheet sections mirror the form: wet-mass and moisture stay
+  `DetailPanelField`s; the split goes in the section's `content` slot and
+  carries the dry mass. Do **not** add a separate "Dry Mass (derived)" row.
+
+Mass formatting more broadly: `formatMass` (auto-tonne, for a lone mass in a
+table or KPI) · `formatMassKg` (fixed kg, for related figures that must stay
+comparable) · `formatPercent` — all in `@/lib/format-utils`. The local `formatMass`/`formatKg`
+copies that shadowed them were removed; don't reintroduce one by copying a
+neighbouring component. A local helper is only acceptable when it formats a
+different quantity and is **named apart** so it cannot shadow the shared one —
+`formatSharePercent` in `formulations/formulation-form.tsx` is the one example.
 
 ### EntitySideSheet mounting rule
 
@@ -314,7 +498,10 @@ redirect into the list's side sheet (`production-runs/[id]/page.tsx`,
 - Tables/panels never sit flush on the warm field — use the `--panel-*` recipe.
 - Side sheets: header title = entity code (or `Create X` in create mode — **no
   filler subtitle in create mode**); view/edit subtitle = the identifying
-  secondary. Edit sections use `FormSection`; read sections use `DetailSection`
+  secondary. **Storage bins invert this**: the name is the title and the code
+  the subtitle, because a bin's code is a lookup key for evidence and exports
+  while its name ("North hopper") is what operators say and search for. Follow
+  the code-first default everywhere else. Edit sections use `FormSection`; read sections use `DetailSection`
   through the shared `DetailSpine`, with matching titles, order, and grouping.
   The read rail is numbered only when the paired edit form uses `FormSpine` —
   see [forms.md](./forms.md). The panel is `w-full` below `sm`, then
@@ -356,9 +543,13 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   `isCreateOpen`/`editingX`/`viewingX` flags, which don't compose with
   `onModeChange`. Plus `searchQuery`, per-column filters, `currentPage`/
   `pageSize`, `hasActiveFilters`, `clearFilters`.
-- **Loading is prop-driven.** There are **zero** route `loading.tsx` files —
-  pass `isLoading` to `DataTable` and each `StatCard`; nested tables use
-  `LoadingSkeleton`. A page-level spinner flashes the whole shell.
+- **Entity-data loading is prop-driven.** Continue to pass `isLoading` to
+  `DataTable` and each `StatCard`; nested tables use `LoadingSkeleton`. Do not
+  add a shared `(app)/loading.tsx`: a parent Suspense fallback can replace a
+  detail route's canonical `not-found.tsx` response. If server-render latency
+  needs a route fallback, add the narrowest leaf `loading.tsx` and verify that
+  malformed, absent, and foreign-organization detail IDs still return the
+  designed 404.
 - **Mutations:** `toast.success(...)` on success; **failures go to local error
   state rendered as `<ServerError>` inside the sheet**, which stays open.
   `toast.error` is for non-form actions only — a form error in a toast lands
@@ -378,8 +569,11 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
 
 ## Entity Card pattern
 
-All biochar entity cards (Facility, Credit Batch, Storage Location,
-Application) are hand-rolled to this shape:
+All biochar entity cards (Facility, Credit Batch, Application) are hand-rolled
+to this shape. **Storage bins are the one exception**: the storage board draws
+each bin as a silo tile (`storage-bin-tile.tsx`) with a fill gauge on its left
+edge, so a wall of tiles reads as a bar chart of the facility. It keeps the
+`<article>` + `RowActionsMenu` + no-radius contract and drops the rest.
 
 ```tsx
 <article

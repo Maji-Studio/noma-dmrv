@@ -18,7 +18,7 @@ import {
   LeafIcon,
   PlusIcon,
   WarningIcon,
-} from "@phosphor-icons/react";
+} from "@phosphor-icons/react/dist/ssr";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import {
   EntitySideSheet,
@@ -72,7 +72,7 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 
 const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
 export const CREDIT_BATCH_DELETE_MESSAGE =
-  "Delete this credit batch? This removes the grouping, releases its production runs so they can be grouped again, and clears direct membership from its lab samples. This can't be undone.";
+  "Delete this credit batch? This removes the grouping, releases its production runs so they can be grouped again, and clears direct membership from its lab Samples. This cannot be undone.";
 
 export function closeCreditBatchCreate(
   clearCreateIntent: () => void,
@@ -80,6 +80,21 @@ export function closeCreditBatchCreate(
 ) {
   clearCreateIntent();
   closeSideSheet();
+}
+
+/**
+ * Re-attach the live CO₂e-stored preview to a batch snapshot. Cards read from
+ * the hydrated list, but the side sheet holds whichever object it was opened
+ * with — a click-captured row, or a single-batch fetch (which never carries a
+ * preview) for a `?batch=` deep link.
+ */
+export function hydrateCo2ePreview(
+  batch: CreditBatchWithRelations | null,
+  previews: Record<string, CreditBatchWithRelations["co2eStoredPreview"]>,
+): CreditBatchWithRelations | null {
+  if (!batch) return null;
+  const preview = previews[batch.id];
+  return preview ? { ...batch, co2eStoredPreview: preview } : batch;
 }
 
 // ============================================
@@ -255,15 +270,18 @@ export function CreditBatchList({
       const result = await createCreditBatch.mutateAsync(data);
       if (result.success) {
         closeCreditBatchCreate(createIntent.clear, () => setSideSheet(null));
-        toast.success("Credit batch created successfully");
+        toast.success("Credit batch created.");
       } else {
-        setCreateError(result.error || "Failed to create credit batch");
+        setCreateError(
+          result.error ||
+            "Credit batch was not created. Check the form.",
+        );
       }
     } catch (err) {
       const message =
         err instanceof Error
           ? err.message
-          : "An error occurred while creating the credit batch";
+          : "Credit batch was not created. Check the form.";
       console.error("Credit batch create error:", err);
       setCreateError(message);
     }
@@ -281,15 +299,17 @@ export function CreditBatchList({
       });
       if (result.success) {
         setSideSheet(null);
-        toast.success("Credit batch updated successfully");
+        toast.success("Credit batch updated.");
       } else {
-        setUpdateError(result.error || "Failed to update credit batch");
+        setUpdateError(
+          result.error || "Credit batch was not saved. Try again.",
+        );
       }
     } catch (err) {
       const message =
         err instanceof Error
           ? err.message
-          : "An error occurred while updating the credit batch";
+          : "Credit batch was not saved. Try again.";
       console.error("Credit batch update error:", err);
       setUpdateError(message);
     }
@@ -306,12 +326,12 @@ export function CreditBatchList({
           void setFocusedBatchId(null);
           setSideSheet(null);
         }
-        toast.success("Credit batch deleted successfully");
+        toast.success("Credit batch deleted.");
       } else {
-        toast.error(result.error || "Failed to delete credit batch");
+        toast.error(result.error || "Credit batch was not deleted. Try again.");
       }
     } catch {
-      toast.error("An error occurred while deleting the credit batch");
+      toast.error("Credit batch was not deleted. Try again.");
     }
     setDeletingBatchId(null);
   };
@@ -399,7 +419,14 @@ export function CreditBatchList({
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
 
   // Member production runs for the view sheet's "Production runs" section.
-  const viewEntity = displaySideSheet?.entity ?? null;
+  // The sheet's entity is a snapshot (click-captured, or fetched by deep link),
+  // so its CO₂e preview is re-attached from the live preview query here —
+  // otherwise a preview arriving after the sheet opened never reaches it and the
+  // field reads as though the figure were unobtainable.
+  const viewEntity = hydrateCo2ePreview(
+    displaySideSheet?.entity ?? null,
+    co2eStoredPreviews,
+  );
   const runOptionsQuery = useCreditBatchProductionRunOptions({
     facilityId: viewEntity?.facilityId,
     startDate: viewEntity?.startDate,
@@ -461,7 +488,7 @@ export function CreditBatchList({
     return (
       <div className="container-max py-32">
         <ServerError
-          message={error.message || "Failed to load credit batches"}
+          message={error.message || "The credit batches could not be loaded. Refresh the page and try again."}
         />
       </div>
     );
@@ -475,7 +502,7 @@ export function CreditBatchList({
   // Derived values for the side sheet
   const sideSheetOpen = !!displaySideSheet || createIntent.isOpen;
   const sideSheetMode = displaySideSheet?.mode ?? "create";
-  const sideSheetEntity = displaySideSheet?.entity ?? null;
+  const sideSheetEntity = viewEntity;
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create Credit Batch" : sideSheetEntity?.code ?? "";
@@ -622,15 +649,13 @@ export function CreditBatchList({
               : "No credit batches yet"
           }
           description={
-            hasActiveFilters
-              ? "Try adjusting or clearing the filters."
-              : "Create your first credit batch to get started."
+            hasActiveFilters ? "Try adjusting or clearing the filters." : undefined
           }
           action={
             !hasActiveFilters ? (
               <Button variant="primary" onClick={openCreate}>
                 <PlusIcon size={18} weight="bold" />
-                New Credit Batch
+                Create your first credit batch
               </Button>
             ) : undefined
           }
@@ -695,6 +720,8 @@ export function CreditBatchList({
                   ? undefined
                   : batchHealthSummaries[sideSheetEntity.id],
                 isHealthLoading: healthLoading && !healthError,
+                isCo2ePreviewLoading: previewsLoading || previewsFetching,
+                co2ePreviewFailed: !!previewsError,
               })
             : undefined
         }

@@ -1,19 +1,16 @@
 /**
- * 200-year durability evidence-ledger generation, storage, and Source mirroring.
+ * Durability evidence-ledger generation, storage, and Source mirroring.
  *
  * Thin wrapper over the shared ledger core (`evidence-ledger-core.ts`): builds
- * the pure `DurabilityLedgerModel` from the removal's credit-batch durability
- * data (the same `buildPerBatchDurabilityData` figures the measurement-sample
- * POST submits, so the ledger reconciles to what's submitted), hashes it, and
- * hands a `LedgerArtifactSpec` to `ensureLedgerSource`.
+ * the tier-specific ledger from the same credit-batch data as the
+ * measurement-sample POST, hashes it, and hands a `LedgerArtifactSpec` to
+ * `ensureLedgerSource`.
  *
- * Unlike the gated measurement-sample POST, this PDF is benign evidence — it
- * shows noma's working in noma's native units (dimensionless H/C, carbon %, kg,
- * °C), independent of the sandbox-gated wire-unit transforms — so it is NOT
- * behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE`. It generates whenever a removal
- * has sampled credit batches and a facility soil reference; the document attaches
- * to a member credit batch so the candidate-document walk mirrors its Source into
- * the removal's `source_ids`. Best-effort at the submit call site.
+ * The 200-year PDF reconciles H/C, carbon, product mass, and the facility soil
+ * reference. The 1000-year PDF records the exact per-replicate carbon and R0
+ * fractions plus attributed product mass that the active sandbox path sends.
+ * The document attaches to a member credit batch so candidate discovery binds
+ * its Source to the matching measurement-sample Datapoints.
  *
  * Server-internal core (no "use server" — takes an explicit `orgCtx`, called from
  * the submit pipeline which already resolved the caller).
@@ -21,10 +18,14 @@
 import type { OrgContext } from "@/lib/auth/server";
 import { getFacilityById } from "@/data-access/facilities";
 import { buildDurabilityLedgerModel } from "@/lib/certification/evidence-ledger/durability-build-model";
+import { buildThousandYearDurabilityLedgerModel } from "@/lib/certification/evidence-ledger/durability-1000-build-model";
 import { renderDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-pdf";
+import { renderThousandYearDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-1000-pdf";
 import {
   DURABILITY_EVIDENCE_LEDGER_KIND,
+  type DurabilityLedgerModel,
   type DurabilityEvidenceLedgerDocMetadata,
+  type ThousandYearDurabilityLedgerModel,
 } from "@/lib/certification/evidence-ledger/durability-types";
 import { logger } from "@/lib/log";
 import {
@@ -82,22 +83,24 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
       log,
     });
   }
+  const durabilityOption = ctx.batchesWithSamples[0]?.durabilityOption;
   if (
+    !durabilityOption ||
     ctx.batchesWithSamples.some(
-      (batch) => batch.durabilityOption !== "200_year",
+      (batch) => batch.durabilityOption !== durabilityOption,
     )
   ) {
-    // This artifact explains the H/C_org + soil-temperature 200-year method.
-    // A facility has one inherited tier (ADR 0021), so any non-200-year member
-    // means the artifact does not apply and any prior 200-year Source is stale.
     return retireLedgerSources(orgCtx, {
       kind: DURABILITY_EVIDENCE_LEDGER_KIND,
       removalId,
-      reason: "not-200-year",
+      reason: "mixed-or-missing-tier",
       log,
     });
   }
-  if (!ctx.facilityReferenceSoilTemperature) {
+  if (
+    durabilityOption === "200_year" &&
+    !ctx.facilityReferenceSoilTemperature
+  ) {
     // A 200-year durability ledger needs the facility soil reference (the gate
     // blocks submission when it's unset). Retire any previously valid ledger so
     // the stale Source cannot re-enter a later submission.
@@ -113,20 +116,41 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
   const memberBatchCodes =
     ctx.memberBatches.map((b) => b.code).join(" · ") || null;
 
-  const model = buildDurabilityLedgerModel({
+  const commonModelArgs = {
     batches: ctx.batchesWithSamples,
     attributionByRunId: ctx.attributionByRunId,
-    facilityReferenceSoilTemperature: ctx.facilityReferenceSoilTemperature,
     memberBatchCodes,
     facilityName: facility?.name ?? null,
     externalProjectId: ctx.mapping.externalProjectId,
     generatedAtIso: new Date().toISOString(),
-  });
+  };
+  let model: DurabilityLedgerModel | ThousandYearDurabilityLedgerModel;
+  let render: () => Promise<Buffer>;
+  if (durabilityOption === "1000_year") {
+    const thousandYearModel =
+      buildThousandYearDurabilityLedgerModel(commonModelArgs);
+    model = thousandYearModel;
+    render = () =>
+      renderThousandYearDurabilityLedgerPdf(thousandYearModel);
+  } else {
+    const twoHundredYearModel = buildDurabilityLedgerModel({
+      ...commonModelArgs,
+      facilityReferenceSoilTemperature:
+        ctx.facilityReferenceSoilTemperature!,
+    });
+    model = twoHundredYearModel;
+    render = () => renderDurabilityLedgerPdf(twoHundredYearModel);
+  }
 
+  const contentHash = stableLedgerContentHash({
+    ...model,
+    durabilityOption,
+  });
   const metadata: DurabilityEvidenceLedgerDocMetadata = {
     kind: DURABILITY_EVIDENCE_LEDGER_KIND,
     removalId,
-    contentHash: stableLedgerContentHash(model),
+    durabilityOption,
+    contentHash,
   };
 
   return ensureLedgerSource(orgCtx, {
@@ -142,7 +166,7 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
     storageKeyPrefix: "durability-evidence",
     fileName: `durability-evidence-ledger-${model.memberBatchCodes ?? removalId}.pdf`,
     buildMetadata: () => metadata as unknown as Record<string, unknown>,
-    render: () => renderDurabilityLedgerPdf(model),
+    render,
     log,
   });
 }

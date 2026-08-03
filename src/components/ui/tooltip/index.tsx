@@ -13,7 +13,7 @@
 
 import * as React from "react";
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
-import { InfoIcon } from "@phosphor-icons/react";
+import { InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 
 // Open/close delays (ms) — snappy enough to feel responsive, slow enough to
@@ -48,10 +48,12 @@ function Tooltip({ content, children, side = "top", className }: TooltipProps) {
           }
         />
         <BaseTooltip.Portal>
-          {/* z-60 keeps tooltips above modals/slide-overs (z-50), which portal
-              to the same <body> stacking context. Without it the popup opens
-              on hover but paints behind the dialog and is never visible. */}
-          <BaseTooltip.Positioner side={side} sideOffset={SIDE_OFFSET_PX} className="z-[60]">
+          {/* Portaled transient controls must stay above sheets and dialogs. */}
+          <BaseTooltip.Positioner
+            side={side}
+            sideOffset={SIDE_OFFSET_PX}
+            className="z-[var(--z-layer-popover)]"
+          >
             <BaseTooltip.Popup
               className={cn(
                 "max-w-[280px] px-12 py-8",

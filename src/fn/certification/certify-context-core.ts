@@ -21,10 +21,9 @@ import {
   type ChainOfCustodyData,
 } from "@/data-access/chain-of-custody";
 import {
-  loadCreditBatchAccounting,
   loadCreditBatchRollups,
-  type CreditBatchAccounting,
-  type CreditBatchAccountingByBatch,
+  type CreditBatchRollup,
+  type CreditBatchRollupsByBatch,
 } from "@/data-access/credit-batch-accounting";
 import { getCreditBatchRemovalId } from "@/data-access/credit-batches";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
@@ -71,6 +70,7 @@ import {
 } from "./shared";
 import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
+import { collectFutureDatedMeasurements } from "./future-dated-measurements";
 import { buildSubmissionWarnings } from "./submission-warnings";
 import { loadEvidenceMirrorSummaryForScope, type EvidenceMirrorSummary } from "./evidence-mirror-summary";
 import {
@@ -160,6 +160,12 @@ export interface RemovalCertifyContext {
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];
+  // Production-run end times / biochar application dates that still lie in the
+  // future, phrased as blocker sentences. The SAME verdict the submit-time
+  // guard `assertRemovalDatesNotFuture` reaches, computed here against the
+  // server clock so the readiness classifier can stay pure and clock-free.
+  // [] ⇒ every measurement date has already happened.
+  futureDatedMeasurements: string[];
   // Non-blocking submission advisories — e.g. recorded startup/plant diesel the
   // active template has no component to carry (ADR 0015). Unlike
   // durabilityGateBlockers / entityReadinessGaps, these do NOT gate submission;
@@ -326,7 +332,7 @@ async function resolveScopeForCreditBatch(
   }
 
   const accounting = (
-    await loadCreditBatchAccounting(orgCtx, [creditBatchId])
+    await loadCreditBatchRollups(orgCtx, [creditBatchId])
   )[creditBatchId];
   if (!accounting) throw new SafeError("Credit batch not found");
 
@@ -338,7 +344,7 @@ async function resolveScopeForCreditBatch(
 }
 
 function resolveSingleBatchScope(
-  accounting: CreditBatchAccounting,
+  accounting: CreditBatchRollup,
 ): RemovalScope {
   const { batch, lineageFacts } = accounting;
   const runById = new Map(
@@ -371,16 +377,13 @@ function resolveSingleBatchScope(
 export async function resolveScopeForRemoval(
   orgCtx: OrgContext,
   removalId: string,
-  options?: { skipPreview?: boolean },
 ): Promise<RemovalScope> {
   const removal = await getCertifierRemovalById(orgCtx, removalId);
   if (!removal) throw new SafeError("Removal not found");
 
   const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
   const batchIds = batches.map((batch) => batch.id);
-  const accountingByBatch = options?.skipPreview
-    ? await loadCreditBatchRollups(orgCtx, batchIds)
-    : await loadCreditBatchAccounting(orgCtx, batchIds);
+  const accountingByBatch = await loadCreditBatchRollups(orgCtx, batchIds);
   const memberBatches = batches.map((batch) => {
       const accounting = accountingByBatch[batch.id];
       if (!accounting) {
@@ -413,7 +416,14 @@ export async function resolveScopeForRemoval(
     removalId,
     removal,
     memberBatches,
-    lineages: Array.from(new Map(lineages.map((lineage) => [lineage.application.id, lineage])).values()),
+    lineages: [
+      ...new Map(
+        lineages.map((lineage) => [
+          `${lineage.application.id}:${lineage.productionRun?.id ?? "missing"}`,
+          lineage,
+        ]),
+      ).values(),
+    ],
   };
 }
 
@@ -462,6 +472,15 @@ export async function loadFacilityCertifierFacts(
   if (!hasOrgCredentials) {
     return { hasOrgCredentials: false, mapping, project: null, ...UNRESOLVED_FACILITY_FACTS };
   }
+  // Avoid remote registry dependency until a template id exists to resolve.
+  if (!mapping.defaultRemovalTemplateId) {
+    return {
+      hasOrgCredentials,
+      mapping,
+      project: null,
+      ...UNRESOLVED_FACILITY_FACTS,
+    };
+  }
 
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
@@ -471,10 +490,6 @@ export async function loadFacilityCertifierFacts(
   ]);
   const project =
     projects.find((p) => p.id === mapping.externalProjectId) ?? null;
-
-  if (!mapping.defaultRemovalTemplateId) {
-    return { hasOrgCredentials, mapping, project, ...UNRESOLVED_FACILITY_FACTS };
-  }
 
   const defaultTemplate =
     templates.find((t) => t.id === mapping.defaultRemovalTemplateId) ?? null;
@@ -671,7 +686,7 @@ export async function buildRemovalContext(
     const productionReadinessGap: ProductionReadinessGap = {
       kind: "noApplications",
       detail: scope.removalId
-        ? "No applications linked to this removal"
+        ? "No applications linked to this Removal"
         : "No applications fall within this batch period.",
       fixTarget: "applications",
     };
@@ -685,6 +700,8 @@ export async function buildRemovalContext(
       productionReadinessGap,
       entityReadinessGaps: [],
       durabilityGateBlockers,
+      // No applications and no runs resolved ⇒ no date to be in the future.
+      futureDatedMeasurements: [],
       submissionWarnings: [
         ...durabilityWarnings,
         ...soilTemperatureGate.warnings,
@@ -722,8 +739,6 @@ export async function buildRemovalContext(
   const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
   const transportCoverage = buildCoverage(transportLegs, entityIds);
   const entityReadiness = await buildCertifyEntityReadiness({
-    orgCtx,
-    lineages,
     runs,
     batchesWithSamples,
     transportLegs,
@@ -742,6 +757,7 @@ export async function buildRemovalContext(
       runs,
       lineages,
     }),
+    ...entityReadiness.warnings,
     ...durabilityWarnings,
     ...soilTemperatureGate.warnings,
   ];
@@ -757,6 +773,7 @@ export async function buildRemovalContext(
     entityReadinessGaps: entityReadiness.gaps,
     entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
+    futureDatedMeasurements: collectFutureDatedMeasurements({ runs, lineages }),
     submissionWarnings,
     supportingDocuments,
     runSummary,
@@ -810,6 +827,7 @@ function projectUiContext(
     entityReadinessGaps: ctx.entityReadinessGaps,
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     durabilityGateBlockers: ctx.durabilityGateBlockers,
+    futureDatedMeasurements: ctx.futureDatedMeasurements,
     submissionWarnings: ctx.submissionWarnings,
     supportingDocuments: ctx.supportingDocuments,
     runSummary: ctx.runSummary,
@@ -823,11 +841,19 @@ function projectUiContext(
 // `deriveRemovalReadiness` classifier against it). Mirrors
 // `loadCertifyContextForCreditBatch` but resolves the scope from the removal.
 export async function loadRemovalCertifyContext(
+  facilityId: string,
   removalId: string,
 ): Promise<ActionResult<RemovalCertifyContext>> {
-  return withAction(async (orgCtx) =>
-    projectUiContext(await loadRemovalSubmissionContext(orgCtx, removalId)),
-  );
+  return withAction(async (orgCtx) => {
+    await requireOrgFacility(orgCtx, facilityId);
+    const removal = await getCertifierRemovalById(orgCtx, removalId);
+    if (!removal || removal.facilityId !== facilityId) {
+      throw new SafeError("Removal does not belong to requested facility");
+    }
+    return projectUiContext(
+      await loadRemovalSubmissionContext(orgCtx, removalId),
+    );
+  });
 }
 
 export async function loadCertifyContextForCreditBatchForUser(
@@ -852,7 +878,7 @@ export async function loadCertifyContextForCreditBatch(
   );
 }
 export interface CreditBatchContextSet {
-  accountingByBatch: CreditBatchAccountingByBatch;
+  accountingByBatch: CreditBatchRollupsByBatch;
   contextsByBatch: Record<string, RemovalCertifyContext>;
 }
 
@@ -863,7 +889,7 @@ export async function buildCreditBatchContexts(
   creditBatchIds: string[],
   facilityFacts: FacilityCertifierFacts,
 ): Promise<CreditBatchContextSet> {
-  const accountingByBatch = await loadCreditBatchAccounting(
+  const accountingByBatch = await loadCreditBatchRollups(
     orgCtx,
     creditBatchIds,
   );

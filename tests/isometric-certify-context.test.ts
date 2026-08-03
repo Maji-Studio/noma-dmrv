@@ -6,12 +6,11 @@ import {
 } from "@/data-access/certification";
 import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { loadCreditBatchAccounting } from "@/data-access/credit-batch-accounting";
+import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import {
   getCreditBatchById,
   getCreditBatchRemovalId,
 } from "@/data-access/credit-batches";
-import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
 import {
   listDocumentsForEntityIds,
 } from "@/data-access/documents";
@@ -39,10 +38,6 @@ vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchRemovalId: vi.fn(),
 }));
 
-vi.mock("@/data-access/credit-batch-production-runs", () => ({
-  getApplicationsForRuns: vi.fn(),
-}));
-
 vi.mock("@/data-access/certification", () => ({
   getCertifierProjectByFacility: vi.fn(),
 }));
@@ -59,7 +54,7 @@ vi.mock("@/data-access/chain-of-custody", async () => {
 });
 
 vi.mock("@/data-access/credit-batch-accounting", () => ({
-  loadCreditBatchAccounting: vi.fn(),
+  loadCreditBatchRollups: vi.fn(),
 }));
 
 vi.mock("@/data-access/production-runs", () => ({
@@ -92,11 +87,10 @@ vi.mock("@/lib/isometric", async () => {
 
 const mockedGetCreditBatch = vi.mocked(getCreditBatchById);
 const mockedGetCreditBatchRemovalId = vi.mocked(getCreditBatchRemovalId);
-const mockedGetApplicationsForRuns = vi.mocked(getApplicationsForRuns);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
-const mockedLoadAccounting = vi.mocked(loadCreditBatchAccounting);
+const mockedLoadAccounting = vi.mocked(loadCreditBatchRollups);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
 const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
@@ -109,12 +103,6 @@ const USER_ID = "user-1";
 const CREDIT_BATCH_ID = "cb-1";
 const FACILITY_ID = "fac-1";
 const EXTERNAL_PROJECT_ID = "prj_test";
-const APPLICATION_FOR_PR_1 = {
-  applicationId: "app-1",
-  productionRunId: "pr-1",
-  biocharAppliedTons: 1,
-};
-
 function mockNormalizedLineageFacts(): void {
   mockedLoadAccounting.mockImplementation(async (ctx, batchIds) => {
     const entries = await Promise.all(
@@ -123,13 +111,12 @@ function mockNormalizedLineageFacts(): void {
           skipPreview: true,
         });
         const productionRunIds = batch?.productionRunIds ?? [];
-        const applicationRows = await mockedGetApplicationsForRuns(
-          ctx,
-          productionRunIds,
-        );
+        const applicationIds = productionRunIds.includes("pr-1")
+          ? ["app-1"]
+          : [];
         const lineages = await Promise.all(
-          applicationRows.map((application) =>
-            mockedGetLineage(ctx, application.applicationId),
+          applicationIds.map((applicationId) =>
+            mockedGetLineage(ctx, applicationId),
           ),
         );
         const lineageFacts = factsFromMockedLineages(
@@ -152,7 +139,6 @@ function mockNormalizedLineageFacts(): void {
             },
             lineageFacts,
             appliedWeightTons: lineageFacts.appliedWeightTons,
-            co2ePreview: {},
           },
         ] as const;
       }),
@@ -228,9 +214,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       productionRunIds: [],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
-    mockedGetApplicationsForRuns.mockImplementation(async (_userId, runIds) =>
-      runIds.includes("pr-1") ? [APPLICATION_FOR_PR_1] : [],
-    );
     mockedGetLineage.mockResolvedValue(
       undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
     );
@@ -298,11 +281,11 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 
     expect(result.productionReadinessGap?.kind).toBe("noApplications");
     expect(result.durabilityGateBlockers).toEqual([
-      "Credit batch CB-1 is marked sampled but has no samples (§8.3).",
-      "Set this facility's reference soil temperature (admin → Emission estimates) before submitting a 200-year removal.",
+      "Credit batch CB-1 is marked as sampled but has no Samples. Add at least 3 Samples before submitting.",
+      "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
     ]);
     expect(result.memberBatches[0]?.facilityEmissionsGateBlockers).toEqual([
-      "Set this facility's reference soil temperature (admin → Emission estimates) before submitting a 200-year removal.",
+      "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
     ]);
     expect(result.submissionWarnings).toEqual([]);
     expect(mockedGetBatchesWithSamples).toHaveBeenCalledWith(
@@ -331,7 +314,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 
-  it("returns linked-no-default shape when defaultRemovalTemplateId is null", async () => {
+  it("returns linked-no-default shape without remote calls when defaultRemovalTemplateId is null", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: null }),
     );
@@ -344,10 +327,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
 
     expect(result.mapping?.externalProjectId).toBe(EXTERNAL_PROJECT_ID);
-    expect(result.project?.id).toBe(EXTERNAL_PROJECT_ID);
+    expect(result.project).toBeNull();
     expect(result.defaultTemplate).toBeNull();
     expect(result.missingDefaultTemplateId).toBeNull();
     expect(result.blueprintsForTemplate).toEqual([]);
+    expect(mockedListProjects).not.toHaveBeenCalled();
+    expect(mockedListTemplates).not.toHaveBeenCalled();
     expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 
@@ -390,11 +375,11 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        hasReadingsFile: true,
         // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
         startTime: new Date("2026-01-05T00:00:00Z"),
         biocharDryMassKg: 1000,
         samples: [],
-        readingsCount: 1,
       } as never,
     ]);
 
@@ -410,7 +395,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedGetLineage).toHaveBeenCalledWith(makeTestOrgContext(USER_ID), "app-1");
   });
 
-  it("flags resolved production runs that have no telemetry readings", async () => {
+  it("uses uploaded readings evidence without requiring row-level telemetry", async () => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
@@ -449,11 +434,11 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        hasReadingsFile: true,
         // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
         startTime: new Date("2026-01-05T00:00:00Z"),
         biocharDryMassKg: 1000,
         samples: [],
-        readingsCount: 0,
       } as never,
     ]);
 
@@ -462,11 +447,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.entityReadinessGaps).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining("Production run PR-1: Telemetry readings"),
-      ]),
-    );
+    expect(result.productionReadinessGap).toBeNull();
+    expect(result.entityReadinessGaps).toEqual([
+      "Production run PR-1: Feedstock wet mass · Feedstock moisture · Biochar wet mass · Biochar moisture · Startup / plant diesel · Preprocess fuel · Genset diesel · Electricity",
+    ]);
   });
 
   it("flags missingDefaultTemplateId when the saved template is not in the list (drift)", async () => {
@@ -605,6 +589,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        hasReadingsFile: true,
         // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
         startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,
@@ -616,7 +601,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         dieselGensetLiters: 0,
         electricityKwh: 0,
         samples: [],
-        readingsCount: 1,
       } as never,
     ]);
     mockedGetBatchesWithSamples.mockResolvedValue([
@@ -718,9 +702,6 @@ describe("requiredTransportCategories", () => {
       productionRunIds: [],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
-    mockedGetApplicationsForRuns.mockImplementation(async (_userId, runIds) =>
-      runIds.includes("pr-1") ? [APPLICATION_FOR_PR_1] : [],
-    );
     mockedGetLegs.mockResolvedValue([]);
     mockedGetLineage.mockResolvedValue(
       undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
@@ -803,6 +784,7 @@ describe("requiredTransportCategories", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        hasReadingsFile: true,
         // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
         startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,
@@ -814,7 +796,6 @@ describe("requiredTransportCategories", () => {
         preprocessingFuelLiters: 0,
         dieselGensetLiters: 0,
         electricityKwh: 0,
-        readingsCount: 1,
         samples: [
           {
             id: "s-1",
@@ -832,9 +813,7 @@ describe("requiredTransportCategories", () => {
       }
       return [];
     });
-    mockedListDocuments.mockResolvedValue(
-      satisfiedVisualEvidenceDocuments("app-1"),
-    );
+    mockedListDocuments.mockResolvedValue([]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
       makeTestOrgContext(USER_ID),
@@ -843,6 +822,11 @@ describe("requiredTransportCategories", () => {
 
     expect(result.requiredTransportCategories).toEqual(["feedstock", "biochar"]);
     expect(result.entityReadinessGaps).toEqual([]);
+    expect(result.submissionWarnings).not.toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Application APP-1"),
+      ]),
+    );
     expect(result.transportCoverage.sample.aggregationWarning).toContain("tl-s1");
   });
 
@@ -878,6 +862,7 @@ describe("requiredTransportCategories", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        hasReadingsFile: true,
         // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
         startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,
@@ -889,7 +874,6 @@ describe("requiredTransportCategories", () => {
         preprocessingFuelLiters: 0,
         dieselGensetLiters: 0,
         electricityKwh: 0,
-        readingsCount: 1,
         samples: [],
       } as never,
     ]);
@@ -908,6 +892,10 @@ describe("requiredTransportCategories", () => {
             sampleCode: "S-1",
             organicCarbonPercent: 70,
             hToCOrgRatio: 0.4,
+            // Both eligibility ratios are unconditional sample descriptors, so
+            // supply O:Corg too — otherwise this 1000-year test also trips the
+            // universal chemistry gap and stops testing what it names.
+            oToCOrgRatio: 0.1,
             randomReflectanceR0Percent: null,
             reactiveCarbonPercent: null,
             residualCarbonPercent: null,

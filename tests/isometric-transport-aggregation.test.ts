@@ -70,13 +70,30 @@ describe("aggregateTransportMassDistance", () => {
     expect(result.warning).toBeNull();
   });
 
+  it("keeps kilometre inputs unchanged for the four-lane outbound example", () => {
+    const result = aggregateTransportMassDistance(
+      [
+        { ...leg(7, 250), tripType: "return" },
+        { ...leg(7.015, 250), tripType: "return" },
+        { ...leg(7, 250), tripType: "return" },
+        { ...leg(7.015, 250), tripType: "return" },
+      ],
+      "Biochar",
+    );
+
+    expect(result.massDistanceTonneKm).toBe(14.015);
+    expect(result.warning).toBeNull();
+  });
+
   it("warns when a leg is missing load_mass_kg (per-leg accounting requires it)", () => {
     const result = aggregateTransportMassDistance(
       [leg(50, 1000), leg(100, null)],
       "Sample",
     );
     expect(result.massDistanceTonneKm).toBeNull();
-    expect(result.warning).toMatch(/missing load_mass_kg/);
+    expect(result.warning).toBe(
+      "Sample transport has 1 leg without a load mass (tl_100_null). Record a load mass for each leg before submitting.",
+    );
   });
 
   it("warns when legs mix transport-factor fields (different method)", () => {

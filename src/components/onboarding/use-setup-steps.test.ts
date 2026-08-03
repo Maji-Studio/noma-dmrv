@@ -107,8 +107,11 @@ describe("resolveMode", () => {
     });
   }
 
-  it("stays out of the way while loading and once setup is complete", () => {
-    expect(mode(undefined, { isLoading: true })).toBe("none");
+  it("keeps the dashboard behind an onboarding loading state until status resolves", () => {
+    expect(mode(undefined, { isLoading: true })).toBe("loading");
+  });
+
+  it("stays out of the way once setup is complete", () => {
     expect(mode(makeStatus())).toBe("none");
   });
 

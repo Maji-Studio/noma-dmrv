@@ -14,6 +14,7 @@ import {
   feedstockTypes,
   productionRuns,
   biocharProducts,
+  biocharProductSourceAllocations,
   biocharStorageInventory,
   binMovements,
   formulations,
@@ -21,11 +22,14 @@ import {
   orders,
   type StorageLocation,
 } from "@/db/schema";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   isFeedstockBinType,
   type StorageLocationFilterData,
+  type StorageLocationSortKey,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
+import { storageLocationLastActivityAt } from "./storage-location-activity";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardStorageLocationName } from "./unique-name-guards";
@@ -49,6 +53,20 @@ export type {
   StorageLocationWithFacility,
   PaginatedStorageLocations,
   StorageLocationLastActivity,
+};
+
+/**
+ * Non-null columns the list can sort by, ordered with Drizzle's `asc`/`desc`.
+ * The two nullable keys are absent on purpose: `lastActivityAt` is derived, and
+ * `capacityKg` needs an explicit NULLS LAST. Both are handled in
+ * `getStorageLocations`.
+ */
+const SORT_COLUMNS: Partial<Record<StorageLocationSortKey, AnyPgColumn>> = {
+  code: storageLocations.code,
+  name: storageLocations.name,
+  type: storageLocations.type,
+  createdAt: storageLocations.createdAt,
+  updatedAt: storageLocations.updatedAt,
 };
 
 async function getStorageLocationLaneSummary(
@@ -169,7 +187,7 @@ async function getStorageLocationLaneSummary(
 // ============================================
 
 /**
- * Get all storage locations with pagination and filtering
+ * Get all storage bins with pagination and filtering
  * Supports search, facility filter, type filter, sorting, and pagination
  */
 export async function getStorageLocations(
@@ -217,17 +235,25 @@ export async function getStorageLocations(
 
   const whereClause = and(...conditions);
 
-  // Build sort clause
-  const sortColumn = {
-    code: storageLocations.code,
-    name: storageLocations.name,
-    type: storageLocations.type,
-    capacityKg: storageLocations.capacityKg,
-    createdAt: storageLocations.createdAt,
-    updatedAt: storageLocations.updatedAt,
-  }[sortBy] ?? storageLocations.code;
-
-  const orderFn = sortOrder === "desc" ? desc : asc;
+  // Build sort clause. Two of the sort keys are nullable, and for both of them a
+  // missing value means "not applicable", never "smallest" — so both pin their
+  // nulls to the end in *either* direction rather than taking Postgres's
+  // default (NULLS LAST on ASC, NULLS FIRST on DESC, which would lead the
+  // "Largest capacity" board with every uncapped bin).
+  const direction = sortOrder === "desc" ? sql`DESC` : sql`ASC`;
+  const primaryOrder =
+    sortBy === "lastActivityAt"
+      ? sql`${storageLocationLastActivityAt(ctx.organizationId)} ${direction} NULLS LAST`
+      : sortBy === "capacityKg"
+        ? sql`${storageLocations.capacityKg} ${direction} NULLS LAST`
+        : (sortOrder === "desc" ? desc : asc)(
+            SORT_COLUMNS[sortBy] ?? storageLocations.code,
+          );
+  // Code breaks every tie. Without it, rows sharing a sort value (every bin of
+  // one type, every bin with no activity) come back in whatever order the plan
+  // produced, and a row can repeat on page 2 after appearing on page 1.
+  const orderBy =
+    sortBy === "code" ? [primaryOrder] : [primaryOrder, asc(storageLocations.code)];
 
   // Count total for pagination
   // org-scope-ok: whereClause includes the active organization predicate.
@@ -240,7 +266,7 @@ export async function getStorageLocations(
   const totalPages = Math.ceil(total / pageSize);
   const offset = (page - 1) * pageSize;
 
-  // Get storage locations with facility info
+  // Get storage bins with facility info
   const storageLocationList = await db
     .select({
       id: storageLocations.id,
@@ -286,7 +312,7 @@ export async function getStorageLocations(
       ),
     )
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(...orderBy)
     .limit(pageSize)
     .offset(offset);
 
@@ -307,8 +333,8 @@ export async function getStorageLocations(
 }
 
 /**
- * Get a single storage location by ID
- * Returns storage location data without relations
+ * Get a single storage bin by ID
+ * Returns storage bin data without relations
  */
 export async function getStorageLocationById(
   ctx: OrgContext,
@@ -322,14 +348,14 @@ export async function getStorageLocationById(
     .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!storageLocation) {
-    throw new SafeError("Storage location not found");
+    throw new SafeError("Storage bin not found");
   }
 
   return storageLocation;
 }
 
 /**
- * Get a single storage location by ID with facility info
+ * Get a single storage bin by ID with facility info
  */
 export async function getStorageLocationWithFacility(
   ctx: OrgContext,
@@ -384,7 +410,7 @@ export async function getStorageLocationWithFacility(
     .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!result) {
-    throw new SafeError("Storage location not found");
+    throw new SafeError("Storage bin not found");
   }
 
   const [enriched] = await enrichStorageLocationRows(ctx, [result]);
@@ -393,7 +419,7 @@ export async function getStorageLocationWithFacility(
 }
 
 /**
- * Get storage locations by facility ID
+ * Get storage bins by facility ID
  */
 export async function getStorageLocationsByFacility(
   ctx: OrgContext,
@@ -423,7 +449,7 @@ export async function getStorageLocationsByFacility(
 // ============================================
 
 /**
- * Create a new storage location
+ * Create a new storage bin
  */
 export async function createStorageLocation(
   ctx: OrgContext,
@@ -515,7 +541,7 @@ export async function createStorageLocation(
 // ============================================
 
 /**
- * Update an existing storage location
+ * Update an existing storage bin
  */
 export async function updateStorageLocation(
   ctx: OrgContext,
@@ -535,18 +561,18 @@ export async function updateStorageLocation(
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
-  // Verify storage location exists
+  // Verify storage bin exists
   const [existing] = await db
     .select()
     .from(storageLocations)
     .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!existing) {
-    throw new SafeError("Storage location not found");
+    throw new SafeError("Storage bin not found");
   }
   if (existing.archivedAt) {
     throw new SafeError(
-      "Restore this storage location before editing it",
+      "Restore this storage bin before editing it",
     );
   }
 
@@ -558,7 +584,7 @@ export async function updateStorageLocation(
       .where(and(eq(storageLocations.code, data.code), eq(storageLocations.organizationId, ctx.organizationId)));
 
     if (duplicate) {
-      throw new SafeError("A storage location with this code already exists");
+      throw new SafeError("A storage bin with this code already exists");
     }
   }
 
@@ -648,7 +674,7 @@ export async function updateStorageLocation(
 
     if (conflicting) {
       throw new SafeError(
-        "This bin already holds product with a different formulation — move or remove it before changing the bin's formulation."
+        "This storage bin holds a product with a different formulation. Move or remove the product before changing the bin's formulation."
       );
     }
   }
@@ -681,7 +707,7 @@ export async function updateStorageLocation(
 
   if (!updated) {
     throw new SafeError(
-      "Restore this storage location before editing it",
+      "Restore this storage bin before editing it",
     );
   }
 
@@ -693,7 +719,7 @@ export async function updateStorageLocation(
 // ============================================
 
 /**
- * Archive one storage location without disturbing its operational history.
+ * Archive one storage bin without disturbing its operational history.
  */
 export async function archiveStorageLocation(
   ctx: OrgContext,
@@ -718,10 +744,10 @@ export async function archiveStorageLocation(
       );
 
     if (!existing) {
-      throw new SafeError("Storage location not found");
+      throw new SafeError("Storage bin not found");
     }
     if (existing.archivedAt) {
-      throw new SafeError("Storage location is already archived");
+      throw new SafeError("Storage bin is already archived");
     }
 
     const lane = laneForStorageType(existing.type);
@@ -733,7 +759,7 @@ export async function archiveStorageLocation(
     );
     if (hasNonZeroStock(availableKg)) {
       throw new SafeError(
-        `Cannot archive this storage location while it has ${formatKg(availableKg)} on hand. Reconcile or draw the bin down to zero first.`,
+        `Cannot archive this storage bin while it has ${formatKg(availableKg)} on hand. Reconcile or draw the bin down to zero first.`,
       );
     }
 
@@ -751,7 +777,7 @@ export async function archiveStorageLocation(
       .returning();
 
     if (!archived) {
-      throw new SafeError("Storage location is already archived");
+      throw new SafeError("Storage bin is already archived");
     }
 
     return archived;
@@ -759,7 +785,7 @@ export async function archiveStorageLocation(
 }
 
 /**
- * Restore one archived storage location. Its facility must be active first.
+ * Restore one archived storage bin. Its facility must be active first.
  */
 export async function restoreStorageLocation(
   ctx: OrgContext,
@@ -791,14 +817,14 @@ export async function restoreStorageLocation(
       .for("update");
 
     if (!existing) {
-      throw new SafeError("Storage location not found");
+      throw new SafeError("Storage bin not found");
     }
     if (!existing.archivedAt) {
-      throw new SafeError("Storage location is not archived");
+      throw new SafeError("Storage bin is not archived");
     }
     if (existing.facilityArchivedAt) {
       throw new SafeError(
-        "Restore the facility before restoring this storage location",
+        "Restore the facility before restoring this storage bin",
       );
     }
 
@@ -815,7 +841,7 @@ export async function restoreStorageLocation(
       .returning();
 
     if (!restored) {
-      throw new SafeError("Storage location is not archived");
+      throw new SafeError("Storage bin is not archived");
     }
 
     return restored;
@@ -827,7 +853,7 @@ export async function restoreStorageLocation(
 // ============================================
 
 /**
- * Delete a storage location
+ * Delete a storage bin
  * Permanent deletion is reserved for bins with no operational history.
  */
 export async function deleteStorageLocation(
@@ -836,14 +862,14 @@ export async function deleteStorageLocation(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  // Verify storage location exists
+  // Verify storage bin exists
   const [existing] = await db
     .select({ id: storageLocations.id })
     .from(storageLocations)
     .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!existing) {
-    throw new SafeError("Storage location not found");
+    throw new SafeError("Storage bin not found");
   }
 
   const [
@@ -851,6 +877,8 @@ export async function deleteStorageLocation(
     [{ value: feedstockRunCount }],
     [{ value: biocharRunCount }],
     [{ value: productCount }],
+    [{ value: sourcedProductCount }],
+    [{ value: sourceAllocationCount }],
     [{ value: deliveryCount }],
     [{ value: inventoryCount }],
     [{ value: movementCount }],
@@ -873,6 +901,14 @@ export async function deleteStorageLocation(
       .where(and(eq(biocharProducts.storageLocationId, storageLocationId), eq(biocharProducts.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
+      .from(biocharProducts)
+      .where(and(eq(biocharProducts.sourceBiocharStorageLocationId, storageLocationId), eq(biocharProducts.organizationId, ctx.organizationId))),
+    db
+      .select({ value: count() })
+      .from(biocharProductSourceAllocations)
+      .where(and(eq(biocharProductSourceAllocations.sourceStorageLocationId, storageLocationId), eq(biocharProductSourceAllocations.organizationId, ctx.organizationId))),
+    db
+      .select({ value: count() })
       .from(deliveries)
       .where(and(eq(deliveries.storageLocationId, storageLocationId), eq(deliveries.organizationId, ctx.organizationId))),
     db
@@ -890,6 +926,8 @@ export async function deleteStorageLocation(
     Number(feedstockRunCount) > 0 ? "production runs using it as a feedstock bin" : null,
     Number(biocharRunCount) > 0 ? "production runs using it as a biochar bin" : null,
     Number(productCount) > 0 ? "biochar products stored in it" : null,
+    Number(sourcedProductCount) > 0 ? "biochar products sourced from it" : null,
+    Number(sourceAllocationCount) > 0 ? "product source allocations drawing from it" : null,
     Number(deliveryCount) > 0 ? "deliveries drawing from it" : null,
     Number(inventoryCount) > 0 ? "storage inventory records" : null,
     Number(movementCount) > 0 ? "reconciliation or movement history" : null,
@@ -897,7 +935,7 @@ export async function deleteStorageLocation(
 
   if (blockers.length > 0) {
     throw new SafeError(
-      `Cannot delete this storage location while it has ${blockers.join(", ")}. Move or remove those records first.`
+      `Cannot delete this storage bin while it has ${blockers.join(", ")}. Move or remove those records first.`
     );
   }
 
@@ -911,7 +949,7 @@ export async function deleteStorageLocation(
 // ============================================
 
 /**
- * Check if a storage location code is available
+ * Check if a storage bin code is available
  */
 export async function isStorageLocationCodeAvailable(
   ctx: OrgContext,

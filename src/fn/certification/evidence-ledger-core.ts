@@ -15,9 +15,10 @@
  *     RETIRE every prior ledger of the same kind for the removal so only the
  *     current one resolves into `source_ids`.
  * A retired ledger's registry Source is deliberately left on Isometric: it stays
- * immutable evidence for any already-submitted snapshot that referenced it. This
- * is why retirement is a direct local delete, not `unlinkDocumentSource` (whose
- * snapshot-reference guard would refuse). See docs/isometric/changes.md.
+ * immutable evidence for any already-submitted snapshot that referenced it.
+ * Generated-ledger retirement is therefore an internal direct local delete,
+ * distinct from owning-document deletion and never exposed on the Removal UI.
+ * See docs/isometric/changes.md.
  *
  * Server-internal (no "use server" — takes an explicit `orgCtx`, called from the
  * submit pipeline which already resolved the caller).
@@ -105,7 +106,7 @@ export class EvidenceLedgerRetirementError extends SafeError {
 
   constructor(kind: string, cause: unknown, generationCause?: unknown) {
     super(
-      "Unable to retire stale certification evidence. Please retry the submission.",
+      "Old certification evidence could not be replaced. Retry the submission.",
     );
     this.name = "EvidenceLedgerRetirementError";
     this.ledgerKind = kind;
@@ -219,9 +220,8 @@ async function getLedgerUpload(
 /**
  * Generate (or reuse) one ledger artifact and mirror it to an Isometric Source.
  * Idempotent on `spec.contentHash`; supersedes any prior ledger of the same kind
- * for the removal. Throws on render/storage/mirror failure — the caller decides
- * whether a ledger hiccup should block submission (both current callers treat it
- * best-effort).
+ * for the removal. Throws on render/storage/mirror failure. The submit
+ * orchestrator treats that as a blocking evidence-preparation failure.
  */
 export async function ensureLedgerSource(
   orgCtx: OrgContext,

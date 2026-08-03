@@ -30,6 +30,8 @@ export const DURABILITY_EVIDENCE_LEDGER_KIND = "durability_evidence_ledger";
 export interface DurabilityEvidenceLedgerDocMetadata {
   kind: typeof DURABILITY_EVIDENCE_LEDGER_KIND;
   removalId: string;
+  /** Facility-scoped tier determines the registry inputs this Source evidences. */
+  durabilityOption: "200_year" | "1000_year";
   /** Semantic fingerprint of the ledger (batches/figures, excluding render time). */
   contentHash: string;
 }
@@ -78,15 +80,6 @@ export interface LedgerBatch {
   replicates: LedgerReplicate[];
   /** Usable H/C_org replicate count (also the §8.3.1 ≥3 gate input). */
   replicateCount: number;
-  /**
-   * Distinct (run, day) provenance count — evidences §8.3.1 distribution.
-   * Counts distinct run/day keys, NOT distinct calendar days: a sample with a
-   * known run but an unknown or post-window (normalized-null) day adds a
-   * run-level key only when that run has no known-day sample; otherwise it is
-   * suppressed as redundant with the run's existing key. So this can exceed
-   * the number of distinct days, but not by double-counting a single run.
-   */
-  distinctRunDayCount: number;
   /** Submitted H/C_org mean ± std-dev (dimensionless molar). */
   hToCorg: LedgerStat;
   /** Submitted total carbon % mean ± std-dev. */
@@ -124,5 +117,34 @@ export interface DurabilityLedgerModel {
   soil: LedgerSoilReference;
   /** Count of batches passing the eligibility gate (of `batches.length`). */
   eligibleBatchCount: number;
+  totalReplicates: number;
+}
+
+export interface ThousandYearLedgerReplicate {
+  ref: string;
+  sampleCode: string;
+  samplingDay: string | null;
+  labName: string | null;
+  /** Registry wire value: total carbon dry-basis fraction in the 0 to 1 range. */
+  carbonContentFraction: number;
+  /** Registry wire value: fraction of R0 readings at or above 2%. */
+  sFraction: number;
+}
+
+export interface ThousandYearLedgerBatch {
+  creditBatchId: string;
+  creditBatchCode: string;
+  replicates: ThousandYearLedgerReplicate[];
+  replicateCount: number;
+  /** Attribution-scaled dry biochar mass submitted for this credit batch. */
+  productMassKg: number;
+}
+
+export interface ThousandYearDurabilityLedgerModel {
+  memberBatchCodes: string | null;
+  facilityName: string | null;
+  externalProjectId: string | null;
+  generatedAtIso: string;
+  batches: ThousandYearLedgerBatch[];
   totalReplicates: number;
 }

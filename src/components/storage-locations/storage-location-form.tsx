@@ -5,7 +5,13 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
+import {
+  FormEntitySelect,
+  FormField,
+  FormInput,
+  FormTextarea,
+  ResolvedErrorRevalidator,
+} from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { FormActions } from "@/components/forms/form-actions";
 import {
@@ -71,6 +77,7 @@ export function StorageLocationForm({
     register,
     handleSubmit,
     control,
+    trigger,
     formState: { errors },
   } = useForm<StorageLocationFormData>({
     resolver: zodResolver(storageLocationFormSchema),
@@ -116,10 +123,11 @@ export function StorageLocationForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField
           id="type"
-          label="Storage Type"
+          label="Storage type"
           error={errors.type?.message}
           helperText={typeDescription}
           required
@@ -134,7 +142,7 @@ export function StorageLocationForm({
           />
         </FormField>
 
-        <FormField id="name" label="Bin Name" error={errors.name?.message} required>
+        <FormField id="name" label="Bin name" error={errors.name?.message} required>
           <FormInput
             id="name"
             type="text"
@@ -165,7 +173,7 @@ export function StorageLocationForm({
 
         <FormField
           id="storageMethod"
-          label="Storage Method"
+          label="Storage method"
           error={errors.storageMethod?.message}
         >
           <FormInput
@@ -184,7 +192,7 @@ export function StorageLocationForm({
           <FormEntitySelect
             control={control}
             name="feedstockTypeId"
-            label="Feedstock Type"
+            label="Feedstock type"
             entityType="feedstockType"
             placeholder="Select feedstock type..."
             disabled={isSubmitting || lockFeedstockType}
@@ -206,7 +214,9 @@ export function StorageLocationForm({
             entityType="formulation"
             placeholder="Pure biochar (no formulation)"
             disabled={isSubmitting}
-            helperText="Keeps this bin clean — restricts it to one formulation. Leave empty for pure biochar."
+            helperText="Restricts this bin to one formulation. Leave it empty for a pure biochar bin, which the first formulated product stored here will claim."
+            allowCreate
+            createLabel="Add new formulation"
           />
         </div>
       )}

@@ -11,8 +11,10 @@
  *     AND O/C_org < 0.2 on the pooled paired mean) + per-replicate outlier flags.
  *   - `evaluateReplicateCount` → the §8.3.1 ≥3 gate (on usable paired replicates,
  *     mirroring the submission gate — incomplete-chemistry rows don't count).
- *   - `countDistinctProvenance` → the §8.3.1 distribution (distinct run/day)
- *     evidence; the cluster warning fires exactly as the submission gate's does.
+ *
+ * §8.3.1 does NOT require the 3 replicates to span distinct production runs or
+ * days (only that they represent the batch's full range of physical
+ * characteristics), so no run/day distribution figure is derived here.
  *
  * Unlike `durability-build-model.ts` (which builds the evidence-ledger PDF and so
  * drops unsampled / sub-3 batches), this summary describes a batch at ANY stage —
@@ -37,7 +39,6 @@ import {
   type CreditBatchDurabilityInput,
   type ValueWithStdDev,
 } from "@/lib/isometric/utils/durability-aggregation";
-import { countDistinctProvenance } from "./durability-submission-gates";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 
 // ISO calendar day (YYYY-MM-DD) of a sampling timestamp, resolved in the
@@ -163,10 +164,6 @@ export interface DurabilityBatchSummary {
   minimumReplicates: number;
   /** usableReplicateCount ≥ minimumReplicates. */
   meetsMinimum: boolean;
-  /** Distinct (run, day) provenance keys among the samples (§8.3.1 distribution). */
-  distinctRunDayCount: number;
-  /** ≥3 met but all replicates cluster on a single run/day (§8.3.1 advisory). */
-  distributionWarning: boolean;
   eligibility: DurabilitySummaryEligibility;
   submitted: DurabilitySummarySubmitted;
   /** Per-replicate display rows (raw lab chemistry), in pooled order. */
@@ -216,28 +213,6 @@ export function buildDurabilityBatchSummaries(
     );
     const outlierIndexes = new Set(eligibility.outlierReplicateIndexes);
 
-    // The distribution count must judge only the USABLE (complete paired-
-    // chemistry) replicates — the same set the ≥3 gate counts — so this readiness
-    // surface can never disagree with the submission gate's cluster check
-    // (mirrors `usableProvenance` in durability-submission-gates.ts). An
-    // incomplete sample on a different run/day must not add a phantom distinct
-    // key that masks a clustered usable set.
-    const provenance = batch.samples
-      .filter(
-        (s) =>
-          isUsableNumber(s.hToCOrgRatio) && isUsableNumber(s.oToCOrgRatio),
-      )
-      .map((s) => ({
-        sampleCode: s.sampleCode,
-        productionRunId: s.productionRunId,
-        samplingDay: (() => {
-          const day = samplingDayOf(s.samplingTime, batch.facilityTimezone);
-          return day != null && batch.endDate != null && day > batch.endDate
-            ? null
-            : day;
-        })(),
-      }));
-    const distinctRunDayCount = countDistinctProvenance(provenance);
     const replicateCheck = evaluateReplicateCount(
       eligibility.usableReplicateCount,
     );
@@ -278,10 +253,6 @@ export function buildDurabilityBatchSummaries(
       usableReplicateCount: eligibility.usableReplicateCount,
       minimumReplicates: MINIMUM_REPLICATES_PER_BATCH,
       meetsMinimum: replicateCheck.meetsMinimum,
-      distinctRunDayCount,
-      // A clustered set (≤1 distinct run/day) only matters once ≥3 are met —
-      // below the minimum the ≥3 gap is the headline, not the distribution.
-      distributionWarning: replicateCheck.meetsMinimum && distinctRunDayCount <= 1,
       eligibility: {
         eligible: eligibility.eligible,
         hToCorgMean: eligibility.meanHToCOrgRatio,

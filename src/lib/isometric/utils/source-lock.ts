@@ -2,11 +2,10 @@ import { sql } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { ISOMETRIC_PROVIDER } from "./constants";
 
-// Advisory-lock key for a (provider, documentId) pair. mirror, unlink, and
-// submit (per-document) all use this same key so the three operations
-// interlock — closing the unlink↔submit window where submit could read a
-// source, unlink could delete the mapping, and submit would then write a
-// snapshot referencing an orphaned externalDocumentId.
+// Advisory-lock key for a (provider, documentId) pair. Mirroring, owning-record
+// document deletion, and submit (per-document) all use this same key so the
+// operations interlock. Submit cannot read a Source mapping while a concurrent
+// owning-record edit retires it, then persist an orphaned externalDocumentId.
 export function mirrorLockKey(documentId: string): string {
   return `mirror:${ISOMETRIC_PROVIDER}:${documentId}`;
 }

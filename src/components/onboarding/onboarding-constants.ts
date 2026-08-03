@@ -86,7 +86,7 @@ export const SETUP_STEPS: readonly SetupStepMeta[] = [
     id: "credit",
     label: "Create a credit batch",
     shortLabel: "Credit batch",
-    description: "Package verified removals for the registry.",
+    description: "Package verified Removals for the registry.",
     ctaLabel: "Create batch",
   },
 ] as const;

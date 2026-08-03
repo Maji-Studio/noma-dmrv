@@ -1,28 +1,38 @@
 # Testing
 
-Two test layers: **vitest** specs in `tests/*.test.ts` (`pnpm test`) and **Playwright**
-E2E in `tests/e2e/` (`pnpm test:e2e`). Read this before writing either — it carries the
-naming contract, env layout, and safety guards that are invisible from the spec files
+Two test layers: **Vitest** specs in both root `tests/` and colocated
+`src/**/*.test.{ts,tsx}` (`pnpm test`), plus **Playwright** E2E in `tests/e2e/`
+(`pnpm test:e2e`). Read this before writing either — it carries the naming
+contract, env layout, and safety guards that are invisible from the spec files
 themselves. Related: [security.md](./security.md) (env inventory),
 [database.md](./database.md), [troubleshooting.md](./troubleshooting.md),
 [isometric/README.md](./isometric/README.md).
 
 ## Which runner picks up which file
 
-`vitest.config.ts` excludes `**/e2e/**`. A Playwright spec outside `tests/e2e/`, or a
-vitest spec inside it, is **silently never run**. Put it in the right directory.
+`vitest.config.ts` uses Vitest's normal discovery and excludes `**/e2e/**` and
+copied `.claude/worktrees/**`. A Playwright spec outside `tests/e2e/`, or a
+Vitest spec inside it, is **silently never run**. Put it in the right
+directory.
 
-- `pnpm test` — vitest, `tests/*.test.ts`. CI gate in `.github/workflows/ci.yml`.
+- `pnpm test` — Vitest, both `tests/**/*.test.{ts,tsx}` and colocated
+  `src/**/*.test.{ts,tsx}`. Put cross-module/database contracts in `tests/`;
+  put pure module, component, schema, hook, and route-handler tests beside the
+  implementation when locality helps (for example
+  `src/lib/geojson/normalize.test.ts` and
+  `src/app/api/ghg-statement-reports/[reportId]/route.test.ts`).
 - `pnpm test:integration` — `RUN_ISOMETRIC_SANDBOX_TESTS=1`, `tests/**/*.integration.test.ts`.
 - `pnpm test:e2e` — Playwright. CI gate in `e2e.yml`; nightly `@live` in `e2e-live.yml`.
 
 ## vitest specs are not all unit tests
 
-Many require a **running Postgres** (facilities-durability-guard, credit-batch-validation,
-sample-code-unique, production-claim-write, registry-boundary-\*). `tests/setup.ts` loads
-`.env.test` and defaults `DATABASE_URL`. Without `pnpm docker:up` these fail with a raw
-connection error that looks nothing like "you forgot the database". CI runs
-`pnpm drizzle-kit push --force` before `vitest run` for exactly this reason.
+Many root specs require a **running Postgres** (facilities-durability-guard,
+credit-batch-validation, sample-code-unique, production-claim-write,
+registry-boundary-\*). Colocation does not imply purity; read the test setup and
+imports. `tests/setup.ts` applies to every Vitest spec, loads `.env.test`, and
+defaults `DATABASE_URL`. Without `pnpm docker:up` database-backed specs fail
+with a raw connection error that looks nothing like "you forgot the database".
+CI prepares the schema before `vitest run` for exactly this reason.
 
 ## E2E data naming is a hard contract
 
@@ -58,8 +68,20 @@ copy both `.env.test` and `.env.local` in first.
 - `DISABLE_RATE_LIMIT=true` is an **app-server** var (read by `src/lib/auth/better-auth.ts`),
   so locally it lives in `.env.local` where `pnpm dev:manual` sees it; CI sets it as a
   workflow env. See [security.md](./security.md).
-- `GEO_PROVIDER=stub` in `.env.test` — position-picker and carbon-viewer specs depend on
-  the stub geo actions (`.env.tpl` notes stub is rejected in prod). See
+- `GEO_PROVIDER=stub` is an **app-server** var too (read via `src/config/env.ts` by
+  `src/lib/geo/index.ts`). It is in `.env.test`, but **`.env.test` only reaches
+  the server when Playwright spawns the `webServer` itself**.
+  `reuseExistingServer` adopts a hand-started `pnpm dev`, which reads
+  `.env.local`; set `GEO_PROVIDER=stub` there for fixture-based geo assertions,
+  or start the manual server as:
+
+  ```bash
+  DISABLE_RATE_LIMIT=true GEO_PROVIDER=stub pnpm dev
+  ```
+
+  Without the stub, geo uses OpenRouteService when configured or is disabled
+  when no ORS key exists, so the fixture-exact assertions in
+  `position-picker.spec.ts` fail. CI sets the provider in the workflow. See
   [adr/0009-provider-agnostic-server-proxied-geo.md](./adr/0009-provider-agnostic-server-proxied-geo.md).
 
 ## Fixtures and conventions
@@ -94,6 +116,22 @@ retry**. Specs must not assume ordering across files, workers, or shards.
 - A side sheet is `[role="dialog"]`; assert on the sheet **closing** as the success signal.
 - A DataTable `<tr>` becomes `role="button"` when `onRowClick` is set — select with
   `getByRole("button")`, not `getByRole("row")`.
+- **Wait for hydration before touching a control on a server-rendered form.** Forms are
+  server-rendered, so the inputs exist in the HTML before React attaches to them, and
+  react-hook-form only records a value once its `onChange` listener is live. A `fill()` or
+  `selectOption()` that lands in that window is visible in the DOM but absent from form
+  state, so submitting stores the *old* value — and the success toast still fires, so the
+  spec fails somewhere later with no hint of the cause. Element visibility is not a
+  hydration signal. Gate on something only the hydrated client can render; the usual choice
+  is the sidebar facility name, which `FacilityProvider` resolves client-side:
+  ```ts
+  await expect(
+    page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+  ).toBeVisible();
+  ```
+  A form that sits behind a loading skeleton until a query resolves hides this by accident.
+  Do not rely on that — a later change that seeds the query (server-side `initialData`, say)
+  removes the skeleton and the spec starts failing for reasons that look unrelated.
 
 ## `@live` split (Isometric sandbox)
 
@@ -106,5 +144,5 @@ comment-only `// @live` marker will **not** be excluded by `--grep-invert`.
   `facility-certifier-mapping.spec.ts`) to pick up `ISOMETRIC_DEMO_PROJECT_ID` without
   duplicating it into `.env.test`. This is the usual cause of a failing local `@live` run.
 - **Convention:** whenever a live half exists, keep a hermetic UI+DB counterpart in PR CI
-  (`durability-readiness.spec.ts`, `production-processes.spec.ts` document themselves as
-  deliberately not `@live`). Don't push all new certification coverage behind the nightly.
+  (`durability-readiness.spec.ts` documents itself as deliberately not `@live`).
+  Don't push all new certification coverage behind the nightly.

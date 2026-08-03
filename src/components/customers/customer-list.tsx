@@ -7,7 +7,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
-import { UsersIcon, PlusIcon, MapTrifoldIcon } from "@phosphor-icons/react";
+import { UsersIcon, PlusIcon, MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Customer } from "@/db/schema";
 import {
   useCreateCustomer,
@@ -63,10 +63,10 @@ function createColumns(
     },
     {
       accessorKey: "cropType",
-      header: "Crop Type",
+      header: "Crop type",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.cropType || "\u2014"}
+          {row.original.cropType || "Not recorded"}
         </span>
       ),
     },
@@ -190,9 +190,9 @@ export function CustomerList() {
         }
       }
       setSideSheet(null);
-      toast.success("Customer created successfully");
+      toast.success("Customer created.");
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Failed to create customer");
+      setCreateError(error instanceof Error ? error.message : "Customer was not created. Check the form.");
     }
   };
 
@@ -202,9 +202,9 @@ export function CustomerList() {
     try {
       await updateCustomer.mutateAsync({ customerId: sideSheet.entity.id, ...data });
       setSideSheet(null);
-      toast.success("Customer updated successfully");
+      toast.success("Customer updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Failed to update customer");
+      setUpdateError(error instanceof Error ? error.message : "Customer was not saved. Try again.");
     }
   };
 
@@ -216,9 +216,9 @@ export function CustomerList() {
     try {
       await deleteCustomer.mutateAsync(deletingCustomerId);
       setDeletingCustomerId(null);
-      toast.success("Customer deleted successfully");
+      toast.success("Customer deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete customer");
+      setDeleteError(error instanceof Error ? error.message : "Customer was not deleted. Try again.");
     }
   };
 
@@ -228,7 +228,9 @@ export function CustomerList() {
     return (
       <div className="container-max py-32">
         <div className="border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10 p-16 flex items-center gap-12" role="alert">
-          <span className="text-[var(--color-signal-red)] body-small font-medium">Failed to load customers</span>
+          <span className="text-[var(--color-signal-red)] body-small font-medium">
+            Customers could not be loaded. Refresh the page and try again.
+          </span>
         </div>
       </div>
     );
@@ -302,16 +304,12 @@ export function CustomerList() {
             padding="md"
             icon={<UsersIcon size={48} />}
             title={hasActiveSearch ? "No matching customers" : "No customers yet"}
-            description={
-              hasActiveSearch
-                ? "Try clearing your search."
-                : "Create your first customer to get started."
-            }
+            description={hasActiveSearch ? "Try clearing your search." : undefined}
             action={
               !hasActiveSearch ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create Customer
+                  Create your first customer
                 </Button>
               ) : undefined
             }
@@ -357,9 +355,9 @@ export function CustomerList() {
           sideSheetEntity
             ? [
                 {
-                  title: "Required Information",
+                  title: "Required information",
                   fields: [
-                    { label: "Customer Name", value: sideSheetEntity.name },
+                    { label: "Customer name", value: sideSheetEntity.name },
                   ],
                 },
                 {
@@ -372,16 +370,16 @@ export function CustomerList() {
                   }),
                 },
                 {
-                  title: "Contact Information",
+                  title: "Contact information",
                   fields: [
-                    { label: "Contact Email", value: sideSheetEntity.contactEmail },
-                    { label: "Contact Phone", value: sideSheetEntity.contactPhone },
+                    { label: "Contact email", value: sideSheetEntity.contactEmail },
+                    { label: "Contact phone", value: sideSheetEntity.contactPhone },
                   ],
                 },
                 {
-                  title: "Business Information",
+                  title: "Business information",
                   fields: [
-                    { label: "Crop Type", value: sideSheetEntity.cropType },
+                    { label: "Crop type", value: sideSheetEntity.cropType },
                     { label: "Address", value: sideSheetEntity.address },
                   ],
                 },

@@ -1,225 +1,172 @@
-# Simple Implementation Guide (P0/P1)
+# Isometric Implementation Guide
 
-> Purpose: explain what each compliance topic means, what to store, what to derive, and why.
-> Scope: current `biochar` + `biochar-storage-soil-environments` implementation planning.
+> **Non-authoritative.** This guide explains the implementation currently in
+> the repository for the version set in [`versions.json`](./versions.json).
+> It is not a proposal for fields that do not exist.
 
-## Design Principles
+## Status vocabulary
 
-1. Store only what cannot be safely derived.
-2. Keep one canonical table per concept.
-3. Use documents as evidence links, not as a substitute for structured fields.
-4. Enforce cross-row/cross-period rules in DB triggers for bypass-proof integrity.
-5. Prefer simple status enums and dates over workflow-heavy state machines.
+- **Implemented:** the end-to-end code path exists at the stated boundary.
+- **Schema-implemented:** storage and constraints exist, but workflow or gating
+  is incomplete.
+- **Partial:** useful inputs or logic exist, but the requirement is not
+  enforceable end to end.
+- **Missing:** no dedicated structure exists.
+- **Registry-owned:** configured or calculated in Isometric, not duplicated in
+  noma.
 
-## Topic 1: Ineligible Biomass by Reporting Period
+## Feedstock eligibility
 
-### What it means
-The compliance decision is at Reporting Period (RP) level, not at single-feedstock-row level. A project can include some ineligible material, but if ineligible mass exceeds the threshold, removals are not creditable for that period.
+Feedstock attributes and eligibility labels exist, and credit-batch lineage is
+loaded set-wise through
+`src/data-access/credit-batch-accounting.ts`. That module is the canonical
+place for credit-batch roll-ups; old stored summary columns must not be
+reintroduced.
 
-### Minimal data model
-- Add to `credit_batches`:
-  - `total_feedstock_mass_kg`
-  - `ineligible_feedstock_mass_kg`
-- Add to `feedstocks`:
-  - `eligibility_status` (`unknown`, `eligible`, `ineligible`)
-  - `ineligibility_reason`
+What is still missing is the decision record: one valid EC1-EC12 path, one of
+EC13-EC14, EC15, and the Reporting-Period >25% cap. Counterfactual quantities
+exist, but their dated validity and reassessment lifecycle do not.
 
-### Derive, do not store
-- `ineligible_fraction_pct = ineligible_feedstock_mass_kg / total_feedstock_mass_kg * 100`
-- `ineligible_threshold_exceeded = ineligible_fraction_pct > 25`
+Implementation rule: store the evidence and facts that cannot be derived;
+derive mass fractions and pass/fail outcomes from current lineage. Do not store
+an unversioned boolean as the only compliance record.
 
-### Why this is simple and sufficient
-- Feedstock row stores local classification.
-- Credit batch stores RP summary masses.
-- Compliance outcome is deterministic from two numbers.
+## Production batches and sampling
 
-## Topic 2: Stockpiling Controls
+A credit batch is the protocol production batch. Lab samples attach at
+credit-batch grain. A production process holds the current epoch and all-or-none
+Method-B prerequisites. Each credit batch stores an immutable `sampled` or
+`unsampled` choice.
 
-### What it means
-Stored biochar must have time-bounded storage and periodic controls (condition/risk checks). Long storage windows require exception evidence.
+Creating an unsampled batch checks the organization connection, facility
+project mapping, prerequisites, and eligible sample history. The registry
+representation for an unsampled durability claim is still unconfirmed, so this
+is not a production-live Method-B submission claim.
 
-### Minimal data model
-- New table: `stockpile_events`
-  - `facility_id`
-  - `material_type` (biochar, feedstock)
-  - `material_id`
-  - `started_at`
-  - `ended_at`
-  - `last_control_at`
-  - `risk_level` (`low`, `medium`, `high`)
-  - `mitigation_notes`
-  - `exception_ref`
-  - `document_ref` (optional, nullable text — free-form reference to evidence document)
+At least three usable replicates are required for a sampled durability batch.
+In-process `production_samples` are operational observations, not the submitted
+lab-characterization grain.
 
-### Derive, do not store
-- `duration_days = ended_at - started_at` (or `now - started_at` if open)
-- `over_12_month_limit = duration_days > 365` (or policy-specific month logic)
+## Durability paths
 
-### Why this is simple and sufficient
-One row per stockpile window provides both duration and evidence linkage without extra lifecycle tables.
+The facility declares one durability tier. Submission checks that the selected
+template uses a compatible sequestration blueprint.
 
-## Topic 3: Low-Carbon Power Evidence (EC1-EC5)
+### 1,000-year
 
-### What it means
-If low-carbon electricity is claimed, auditable procurement evidence is needed (contract, retirement, timing/matching, region/COD constraints).
+The sampled 1,000-year path is implemented and verified against the sandbox.
+For each member credit batch, noma sends:
 
-### Minimal data model
-- New table: `power_procurement_evidence`
-  - `facility_id`
-  - `period_start`
-  - `period_end`
-  - `contract_type`
-  - `generator_cod_date`
-  - `grid_region`
-  - `matching_type` (`hourly`, `annual`, etc.)
-  - `eac_registry`
-  - `eac_retirement_id`
-  - `retired_at`
-  - `document_ref` (nullable text — free-form reference to evidence document)
-  - `notes`
+- total-carbon replicate values,
+- product mass,
+- `s_fraction` replicate values, where each value is the fraction of R0
+  readings meeting the threshold.
 
-### Derive, do not store
-- EC1-EC5 individual pass/fail outcomes — computed by app logic from the stored evidence fields (contract type, COD date, matching type, retirement ID, etc.)
-- `ec_overall_pass` — derived from individual EC assessments
+The exact component-input binding lives in
+`src/lib/isometric/transformers/sequestration-binding.ts`. The registry
+computes the credited result. Production remains blocked, and the difference
+between the live blueprint and module Eq.6 remains an explicit open question.
 
-### Why this is simple and sufficient
-This keeps legal/evidence artifacts structured without implementing full contract/accounting subsystems.
+### 200-year
 
-## Topic 4: BCU Retirement and Anti-Double-Counting
+Aggregation and measurement-sample builders exist. Submission remains
+fail-closed because the H/C unit conversion and explicit component-input table
+have not been confirmed. Do not describe the 200-year path as live.
 
-### What it means
-Book-and-Claim Unit (BCU) usage needs retirement proof and an attestation that the same claim is not counted elsewhere.
+Generated durability evidence ledgers cover both tier formats, but evidence
+generation does not make an unavailable registry path available.
 
-### Minimal data model
-- Extend `transport_legs`:
-  - `bcu_registry`
-  - `bcu_retirement_tx_id`
-  - `bcu_retired_at`
-  - `bcu_claim_id`
-  - `bcu_no_double_count_attested` (boolean)
-  - `bcu_attestation_document_id`
+## Stockpiles, custody, and materiality
 
-### Derive, do not store
-- No extra derived metrics needed for baseline enforcement.
+`stockpile_events` exists with dates, risk/control fields, and a database check
+requiring an exception reference beyond 12 months. No operator workflow or
+submission gate currently consumes it.
 
-### Why this is simple and sufficient
-Leg-level fields keep BCU evidence attached exactly where transport emissions are claimed.
+There is no `custody_handoffs` table. The Chain-of-Custody Trail reconstructs
+movement and evidence from domain lineage. That is useful traceability, but it
+must not be described as a canonical handoff ledger.
 
-## Topic 5: Amortization Review Schedule
+There is no `ghg_materiality_assessments` table and no BCU model. Both are
+missing, not partially implemented.
 
-### What it means
-Some emissions are allocated across time and must be reviewed at fixed checkpoints (year 1, 3, 5, renewal).
+## Energy
 
-### Minimal data model
-- Add to `credit_batches`:
-  - `amortization_rule`
-  - `amortization_basis`
-  - `amortized_establishment_tco2e`
-  - `amortized_end_of_life_tco2e`
-- New table: `amortization_review_events`
-  - `credit_batch_id`
-  - `milestone` (`y1`, `y3`, `y5`, `renewal`)
-  - `completed_at`
-  - `status`
-  - `notes`
-  - `document_id`
+Run data records electricity, reactor-startup/plant diesel, generator diesel,
+and preprocessing fuel.
 
-### Derive, do not store
-- `due_date` can be derived from batch anchor date + milestone offset.
+Submission uses:
 
-### Why this is simple and sufficient
-Store only completed/relevant review events; compute schedule dates in query/API logic.
+- one `pyrolysis / grid_electricity_use / electricity_use` value;
+- a `Generator diesel usage` component carrying generator plus preprocessing
+  litres;
+- a `Startup diesel usage` component carrying reactor-startup/plant litres.
 
-## Topic 6: Embodied Emissions Inventory
+Both diesel components use
+`pyrolysis / fuel_usage_by_volume / volume_of_fuel`. Their fixed lifecycle
+factor is bound in the registry template. noma neither converts diesel to kWh
+nor stores that factor.
 
-### What it means
-Embodied emissions must be reproducible from explicit materials/equipment inventory and factor sources.
+The component names are currently the discriminator because Certify exposes no
+stable component-instance key. Unknown names fail closed.
 
-### Minimal data model
-- New table: `embodied_inventory_items`
-  - `credit_batch_id`
-  - `category` (`equipment`, `material`)
-  - `item_name`
-  - `quantity`
-  - `unit`
-  - `factor_value`
-  - `factor_unit`
-  - `factor_source_ref`
-  - `verification_status`
-  - `document_id`
+`power_procurement_evidence` exists, but the EC1-EC5 criteria are conjunctive
+and are not yet evaluated or gated. Run-level kWh is not an hourly,
+calibration-backed electricity meter stream.
 
-### Derive, do not store
-- `item_emissions_tco2e = quantity * factor_value` (unit-normalized in calc layer)
-- Batch total from sum of item emissions.
+## Transportation and evidence
 
-### Why this is simple and sufficient
-One normalized table supports reproducibility, verification, and audit trails without over-modeling suppliers/products.
+Transport legs carry method, trip type, distance/mass, factor, and evidence
+references. Aggregation submits mass-distance by transport category.
 
-## Topic 7: Cross-Row Guardrails
+Current gaps include:
 
-### What it means
-Some rules depend on aggregate history or state transitions and cannot be guaranteed by single-row checks.
+- proof that the energy-usage method was unavailable;
+- onward-trip evidence for one-way treatment;
+- mandatory record types rather than “any one document”;
+- gross/tare and scale calibration support;
+- vehicle class/year and factor source/vintage.
 
-### Required guardrails
-1. Unsampled credit-batch creation requires the live Method-B eligibility check
-   from ADR 0022. This is an app-layer decision because eligibility is computed,
-   not stored.
-2. The sampled/unsampled choice is immutable after credit-batch creation.
-3. Durability field immutability once `credit_batches.status` is `verified` or
-   `issued`.
+Removal evidence is not attached wholesale to every Datapoint. The immutable
+Source plan maps each document or generated ledger to exact intended inputs in
+`src/lib/certification/removal-source-bindings.ts`, and the post-submit verifier
+walks GHG-entry component attributions back to the targeted Datapoints.
 
-### Why timestamps are not enough
-- `last_edit_date` only records change; it does not block invalid writes.
-- Use DB constraints or triggers only for rules expressible from stored state;
-  keep live registry- and count-dependent decisions in the transaction that
-  performs the guarded write.
+## Safety margin
 
-## LCA Export Alignment (From Project PDF)
+The active template's `Safety margin` is a named Removal-scope exception to the
+normal PROJECT-scope miscellaneous-emissions rule. noma submits the same dry
+biochar mass used by the storage claim. The fixed carbon intensity and its
+justification are registry-owned. Renaming the component fails closed.
 
-The shared LCA export indicates:
-- explicit report metadata (`project`, `status`, `export_generated_at`),
-- amortization language (establishment and end-of-life allocated by selected rule),
-- component-level factor/source references.
+## GHG Statement report
 
-### Minimal support model
-- New table: `lca_reports`
-  - `credit_batch_id`
-  - `external_report_id`
-  - `status`
-  - `export_generated_at`
-  - `protocol_slug`
-  - `protocol_version`
-  - `source_file_url`
+An Admin can prepare a PDF data summary from the live Isometric GHG Statement
+and its GHG Entries, review it, and approve an immutable version. Submission
+rebuilds the source fingerprint and rejects a stale approved report.
 
-This keeps LCA evidence linked without duplicating all report content in internal tables.
+At submission time, noma mints a verifier URL for the approved generated report
+and records the report as submitted after the registry call succeeds or is
+reconciled. An external report URL remains supported when qualitative project,
+methodology, monitoring, exception, or human-review content is required.
 
-## Abbreviations and Terms
+## Idempotency and reconciliation
 
-| Term | Meaning |
-|---|---|
-| `RP` | Reporting Period |
-| `PDD` | Project Design Document |
-| `GHG` | Greenhouse Gas |
-| `CO2e` | Carbon-dioxide equivalent |
-| `LCA` | Life Cycle Assessment |
-| `BCU` | Book-and-Claim Unit |
-| `EAC` | Energy Attribute Certificate |
-| `PPA` | Power Purchase Agreement |
-| `COD` | Commercial Operation Date (generator start date) |
-| `EC1..EC5` | Eligibility criteria set for low-carbon power procurement evidence |
-| `SSR` | Source/Stream/Scope of emissions (materiality context in GHG accounting) |
-| `EPD` | Environmental Product Declaration |
-| `CI` | Carbon Intensity |
-| `Method A / Method B` | Biochar sampling pathways in protocol requirements |
-| `Durability` | Fraction of carbon counted as durably stored (e.g., 200-year or 1000-year pathway) |
+Removal, Datapoint, Source, measurement-sample, and GHG Statement creation use
+stable references where the API supports them. A local
+`certification_submissions` row locks the attempt and stores immutable payload
+snapshots and hashes. Same-hash retries reuse or reconcile; changed reviewed
+inputs create a superseding version.
 
-## Suggested Implementation Order (Least Risk)
+Telemetry is the exception documented by ADR 0006: FileUpload and
+DataUploadSubmission do not expose a supplier-reference recovery path, so noma
+journals returned step IDs into the submission snapshot.
 
-1. Ineligible biomass RP summary fields.
-2. Stockpile events table.
-3. DB trigger guardrails for Method B and durability immutability.
-4. BCU leg-level retirement/attestation fields.
-5. Power procurement evidence table.
-6. Amortization fields and review events.
-7. Embodied inventory items.
-8. LCA report linkage table.
+## What to verify before changing a claim
+
+1. Confirm the pin in `versions.json`.
+2. Read the relevant current schema, transformer, orchestration, and tests.
+3. Distinguish sandbox-enabled from production-enabled code.
+4. Check whether a value is noma-submitted, registry-fixed, or
+   registry-computed.
+5. Update the shortlist, schema mapping, checklist, and open question together
+   when the boundary changes.

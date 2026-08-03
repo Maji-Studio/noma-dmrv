@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { PackageIcon, ScalesIcon, DropIcon, CheckCircleIcon, WarningIcon } from "@phosphor-icons/react";
+import { PackageIcon, ScalesIcon, DropIcon, CheckCircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatMass } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -51,7 +51,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
 
       <StatCard
         title="Avg. Moisture"
-        value={stats?.avgMoisturePercent != null ? `${stats.avgMoisturePercent.toFixed(1)}%` : "—"}
+        value={stats?.avgMoisturePercent != null ? `${stats.avgMoisturePercent.toFixed(1)}%` : "Not available"}
         icon={<DropIcon size={20} />}
         isLoading={isLoading}
         description="Average moisture content"

@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { BuildingsIcon } from "@phosphor-icons/react";
+import { BuildingsIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
@@ -49,7 +49,7 @@ export function OrganizationsAdmin() {
       reset({ name: "", slug: "", ownerEmail: "" });
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to create organization."
+        error instanceof Error ? error.message : "Organization was not created. Check the form."
       );
     }
   }

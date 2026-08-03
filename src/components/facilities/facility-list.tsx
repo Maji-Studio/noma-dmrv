@@ -13,7 +13,7 @@ import {
   PackageIcon,
   PlusIcon,
   XIcon,
-} from "@phosphor-icons/react";
+} from "@phosphor-icons/react/dist/ssr";
 import type { Facility } from "@/db/schema";
 import {
   useArchiveFacility,
@@ -24,6 +24,7 @@ import {
   useUpdateFacility,
 } from "@/hooks/use-facilities";
 import { formatMass } from "@/lib/format-utils";
+import { formatCount } from "@/lib/copy-utils";
 import { ServerError } from "@/components/forms";
 import {
   EntitySideSheet,
@@ -57,6 +58,10 @@ import type { FacilityWithRelations } from "@/data-access/facilities";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { CardSkeleton } from "@/components/ui/loading-skeleton";
+
+/** Placeholder cards shown while the first page of facilities loads. */
+const LOADING_CARD_COUNT = 3;
 
 export function FacilityList() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -139,7 +144,7 @@ export function FacilityList() {
       const facility = await createFacility.mutateAsync(data);
       setFacilityId(facility.id);
       setSideSheet(null);
-      toast.success("Facility created successfully");
+      toast.success("Facility created.");
       // Offer the optional certifier link for the new facility. Admin-only
       // (saving the mapping is admin-gated); non-admins create unlinked and an
       // admin links later in Settings.
@@ -147,7 +152,7 @@ export function FacilityList() {
         setLinkCertifierFacilityId(facility.id);
       }
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Failed to create facility");
+      setCreateError(error instanceof Error ? error.message : "Facility was not created. Check the form.");
     }
   };
 
@@ -157,9 +162,9 @@ export function FacilityList() {
     try {
       await updateFacility.mutateAsync({ facilityId: sideSheet.entity.id, ...data });
       setSideSheet(null);
-      toast.success("Facility updated successfully");
+      toast.success("Facility updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Failed to update facility");
+      setUpdateError(error instanceof Error ? error.message : "Facility was not saved. Try again.");
     }
   };
 
@@ -178,9 +183,9 @@ export function FacilityList() {
     try {
       await archiveFacility.mutateAsync(archivingFacility.id);
       setArchivingFacility(null);
-      toast.success("Facility archived — restore it any time from the archived view");
+      toast.success("Facility archived. Restore it from the archived view.");
     } catch (error) {
-      setArchiveError(error instanceof Error ? error.message : "Failed to archive facility");
+      setArchiveError(error instanceof Error ? error.message : "The facility was not archived. Try again.");
     }
   };
 
@@ -190,7 +195,7 @@ export function FacilityList() {
       await restoreFacility.mutateAsync(facilityId);
       toast.success("Facility restored");
     } catch (error) {
-      setArchiveError(error instanceof Error ? error.message : "Failed to restore facility");
+      setArchiveError(error instanceof Error ? error.message : "The facility was not restored. Try again.");
     }
   };
 
@@ -236,7 +241,7 @@ export function FacilityList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load facilities"} />
+        <ServerError message={fetchError.message || "The facilities could not be loaded. Refresh the page and try again."} />
       </div>
     );
   }
@@ -255,57 +260,69 @@ export function FacilityList() {
   const sideSheetSections = sideSheetEntity
     ? [
         {
-          title: "Facility Information",
+          title: "Facility information",
           fields: [
-            { label: "Facility Name", value: sideSheetEntity.name },
+            { label: "Facility name", value: sideSheetEntity.name },
             { label: "Country", value: sideSheetEntity.country },
             { label: "Timezone", value: formatTimezoneLabel(sideSheetEntity.timezone) },
             { label: "Location", value: sideSheetEntity.location },
             { label: "Address", value: sideSheetEntity.address },
             { label: "Facility position latitude", value: sideSheetEntity.gpsLatitude },
             { label: "Facility position longitude", value: sideSheetEntity.gpsLongitude },
-            { label: "Contact Email", value: sideSheetEntity.contactEmail },
-            { label: "Contact Phone", value: sideSheetEntity.contactPhone },
-            { label: "Durability Tier", value: formatDurabilityOption(sideSheetEntity.durabilityOption) },
+            { label: "Contact email", value: sideSheetEntity.contactEmail },
+            { label: "Contact phone", value: sideSheetEntity.contactPhone },
+            { label: "Durability tier", value: formatDurabilityOption(sideSheetEntity.durabilityOption) },
           ],
         },
         {
           title: "Infrastructure",
           fields: [
-            { label: "Reactors", value: `${sideSheetEntity.reactorCount} reactors` },
             {
-              label: "Feedstock Bins",
-              value: `${sideSheetEntity.storageSummary.feedstockBinCount} bins`,
+              label: "Reactors",
+              value: formatCount(sideSheetEntity.reactorCount, "reactor"),
             },
             {
-              label: "Biochar Bins",
-              value: `${sideSheetEntity.storageSummary.biocharBinCount} bins`,
+              label: "Feedstock bins",
+              value: formatCount(
+                sideSheetEntity.storageSummary.feedstockBinCount,
+                "bin",
+              ),
             },
             {
-              label: "Product Bins",
-              value: `${sideSheetEntity.storageSummary.productBinCount} bins`,
+              label: "Biochar bins",
+              value: formatCount(
+                sideSheetEntity.storageSummary.biocharBinCount,
+                "bin",
+              ),
+            },
+            {
+              label: "Product bins",
+              value: formatCount(
+                sideSheetEntity.storageSummary.productBinCount,
+                "bin",
+              ),
             },
           ],
         },
         {
-          title: "Inventory Snapshot",
+          title: "Inventory snapshot",
           fields: [
             {
-              label: "Feedstock On Hand",
+              label: "Feedstock on hand",
               value: formatMass(sideSheetEntity.inventorySummary.feedstockDryKg),
             },
             {
-              label: "Biochar On Hand",
+              label: "Biochar on hand",
               value: formatMass(sideSheetEntity.inventorySummary.biocharKg),
             },
             {
-              label: "Product Mass",
+              label: "Product mass",
               value: formatMass(sideSheetEntity.inventorySummary.productKg),
             },
           ],
         },
         {
-          title: "Registry Connection",
+          title: "Registry connection",
           fields: [],
           content: <FacilityCertifierSummary facilityId={sideSheetEntity.id} />,
         },
@@ -345,7 +362,7 @@ export function FacilityList() {
           title="Feedstock On Hand"
           value={formatMass(feedstockOnHandKg)}
           icon={<PackageIcon size={24} weight="bold" />}
-          description={`${totalStorageBins} storage bins on this page`}
+          description={`${formatCount(totalStorageBins, "storage bin")} on this page`}
           isLoading={isLoading}
         />
       </div>
@@ -380,7 +397,7 @@ export function FacilityList() {
               }}
               className="h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small"
             >
-              <option value="">All Countries</option>
+              <option value="">All countries</option>
               {countries?.map((country) => (
                 <option key={country} value={country}>
                   {country}
@@ -410,7 +427,17 @@ export function FacilityList() {
         </div>
       </section>
 
-      {facilities.length === 0 ? (
+      {isLoading ? (
+        <div
+          className="grid grid-cols-1 gap-24 xl:grid-cols-2 2xl:grid-cols-3"
+          aria-busy="true"
+        >
+          <span className="sr-only">Loading facilities…</span>
+          {Array.from({ length: LOADING_CARD_COUNT }).map((_, index) => (
+            <CardSkeleton key={index} lines={3} />
+          ))}
+        </div>
+      ) : facilities.length === 0 ? (
         <EmptyState
           padding="lg"
           icon={<FactoryIcon size={48} />}
@@ -428,13 +455,13 @@ export function FacilityList() {
               ? "Try adjusting your search or filters."
               : showArchived
                 ? "Facilities you archive will appear here and can be restored."
-                : "Create your first facility to start organising reactors and storage bins."
+                : "A facility is a production site, with its own reactors and storage bins."
           }
           action={
             !hasActiveFilters && !showArchived ? (
               <Button variant="primary" onClick={openCreate}>
                 <PlusIcon size={20} weight="bold" />
-                Create Facility
+                Create your first facility
               </Button>
             ) : undefined
           }

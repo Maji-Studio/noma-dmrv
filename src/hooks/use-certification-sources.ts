@@ -7,10 +7,13 @@
  * version.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import {
   loadCandidateDocumentsForRemoval,
   mirrorDocumentToSource,
   unlinkDocumentSource,
+  type CandidateDocumentsForRemoval,
+  type MirrorResult,
 } from "@/fn/certification";
 import type {
   MirrorDocumentToSourceInput,
@@ -24,6 +27,47 @@ export const certificationSourcesKeys = {
   candidatesForRemoval: (removalId: string) =>
     [...certificationKeys.all, "sources", "candidates", removalId] as const,
 };
+
+export function applyConfirmedSourceMapping(
+  current: CandidateDocumentsForRemoval | null | undefined,
+  documentId: string,
+  result: MirrorResult,
+): CandidateDocumentsForRemoval | null | undefined {
+  if (!current) return current;
+  return {
+    ...current,
+    candidates: current.candidates.map((candidate) =>
+      candidate.document.id === documentId
+        ? {
+            ...candidate,
+            mirror: {
+              externalDocumentId: result.externalDocumentId,
+              isPublic: result.isPublic,
+              mirroredAt: new Date(),
+            },
+          }
+        : candidate,
+    ),
+    mirroredExternalIds: Array.from(
+      new Set([...current.mirroredExternalIds, result.externalDocumentId]),
+    ).sort(),
+  };
+}
+
+export async function reconcileCandidateSourcesAfterFailure(
+  queryClient: QueryClient,
+  removalId: string,
+): Promise<void> {
+  try {
+    await queryClient.refetchQueries({
+      queryKey: certificationSourcesKeys.candidatesForRemoval(removalId),
+      type: "active",
+    });
+  } catch {
+    // A failed reconciliation is still settled. Preserve the original mirror
+    // error and expose Retry only after this read attempt has completed.
+  }
+}
 
 export function useCandidateDocumentsForRemoval(
   removalId: string | null,
@@ -42,27 +86,6 @@ export function useCandidateDocumentsForRemoval(
   });
 }
 
-export function useMirrorDocumentToSource() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: MirrorDocumentToSourceInput) => {
-      const result = await mirrorDocumentToSource(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    onSuccess: (_data, vars) => {
-      queryClient.invalidateQueries({
-        queryKey: certificationSourcesKeys.candidatesForRemoval(vars.removalId),
-      });
-      // The Sources change also shifts the removal's submit-readiness display.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
-  });
-}
-
-// `removalId` is part of the action input now — the hook stamps it onto
-// every variant so callers can't accidentally omit it and slip through
-// the schema check.
 export function useUnlinkDocumentSource(removalId: string) {
   const queryClient = useQueryClient();
   return useMutation({

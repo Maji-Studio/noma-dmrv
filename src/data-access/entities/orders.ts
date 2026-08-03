@@ -12,18 +12,23 @@
 
 import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { numericAggregate, sumNumeric } from "@/db/aggregate";
-import { biocharProducts, customers, deliveries, orders } from "@/db/schema";
+import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
+import {
+  biocharProducts,
+  customers,
+  deliveries,
+  orders,
+  storageLocations,
+} from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatDate } from "@/lib/format-utils";
+import {
+  deriveEffectiveMoisturePercent,
+  formatWetDryMass,
+  splitWetMass,
+} from "@/lib/mass-moisture";
 import { requireOrgScope } from "../utils";
-
-// Deterministic integer formatting — pin the locale so the label can't vary
-// with the server's locale (same rationale as production-runs.ts).
-const INTEGER_FORMATTER = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 0,
-});
 
 // Total wet mass already allocated to each order by its (non-archived)
 // deliveries, whatever their status.
@@ -34,6 +39,12 @@ function buildAllocatedMassAggregate(ctx: OrgContext) {
     totalDeliveredKg: sumNumeric(deliveries.deliveredWetMassKg).as(
       "total_delivered_kg",
     ),
+    totalDeliveredDryKg: sumNumeric(deliveries.massDryKg).as(
+      "total_delivered_dry_kg",
+    ),
+    unresolvedDeliveredDryCount: countRows(
+      isNull(deliveries.massDryKg),
+    ).as("unresolved_delivered_dry_count"),
   })
   .from(deliveries)
   .where(
@@ -55,35 +66,74 @@ function buildSelection(
     orderDate: orders.orderDate,
     quantityKg: orders.quantityKg,
     customerName: customers.name,
-    biocharProductCode: biocharProducts.code,
+    productBinName: storageLocations.name,
+    productMassKg: biocharProducts.massKg,
+    productWaterAddedKg: biocharProducts.waterAddedKg,
+    productMoisturePercent: biocharProducts.moistureContentPercent,
     totalDeliveredKg: numericAggregate(
       sql<number>`COALESCE(${allocatedMassAggregate.totalDeliveredKg}, 0)`,
+    ),
+    totalDeliveredDryKg: numericAggregate(
+      sql<number>`COALESCE(${allocatedMassAggregate.totalDeliveredDryKg}, 0)`,
+    ),
+    unresolvedDeliveredDryCount: numericAggregate(
+      sql<number>`COALESCE(${allocatedMassAggregate.unresolvedDeliveredDryCount}, 0)`,
     ),
   };
 }
 
-function toEntityOption(r: {
+export function toOrderEntityOption(r: {
   id: string;
   code: string;
   orderDate: Date;
   quantityKg: number;
   customerName: string | null;
-  biocharProductCode: string | null;
+  productBinName: string | null;
+  productMassKg: number | null;
+  productWaterAddedKg: number | null;
+  productMoisturePercent: number | null;
   totalDeliveredKg: number;
+  totalDeliveredDryKg: number;
+  unresolvedDeliveredDryCount: number;
 }): EntityOption {
-  const remainingKg = Math.max(0, r.quantityKg - r.totalDeliveredKg);
+  const remainingWetKg = Math.max(
+    0,
+    r.quantityKg - r.totalDeliveredKg,
+  );
+  const orderedDryKg = splitWetMass(
+    r.quantityKg,
+    deriveEffectiveMoisturePercent(
+      r.productMassKg,
+      r.productMoisturePercent,
+      r.productWaterAddedKg,
+    ),
+  )?.dryKg;
+  const remainingDryKg =
+    orderedDryKg == null || r.unresolvedDeliveredDryCount > 0
+      ? null
+      : Math.max(0, orderedDryKg - r.totalDeliveredDryKg);
   return {
     id: r.id,
     code: r.code,
-    name: r.code,
-    subtitle: [
+    name: [
       r.customerName,
-      r.biocharProductCode,
+      r.productBinName,
       formatDate(r.orderDate),
-      `${INTEGER_FORMATTER.format(Math.round(remainingKg))} kg remaining`,
     ]
       .filter(Boolean)
       .join(" · "),
+    remainingMass: {
+      wetKg: remainingWetKg,
+      dryKg: remainingDryKg,
+    },
+    subtitle: `${formatWetDryMass({
+      wetKg: remainingWetKg,
+      dryKg: remainingDryKg,
+      wetLabel: "Wet biochar product",
+      dryLabel: "Dry biochar",
+      separator: " | ",
+      unitSpacing: "compact",
+    })} remaining`,
   };
 }
 
@@ -110,7 +160,8 @@ export async function getOrdersEntity(ctx: OrgContext, params: {
       or(
         ilike(orders.code, searchPattern),
         ilike(customers.name, searchPattern),
-        ilike(biocharProducts.code, searchPattern)
+        ilike(biocharProducts.code, searchPattern),
+        ilike(storageLocations.name, searchPattern),
       )!
     );
   }
@@ -134,12 +185,19 @@ export async function getOrdersEntity(ctx: OrgContext, params: {
         eq(biocharProducts.organizationId, ctx.organizationId),
       ),
     )
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(biocharProducts.storageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(allocatedMassAggregate, eq(allocatedMassAggregate.orderId, orders.id))
     .where(and(eq(orders.organizationId, ctx.organizationId), whereClause))
     .orderBy(desc(orders.orderDate))
     .limit(limit);
 
-  return results.map(toEntityOption);
+  return results.map(toOrderEntityOption);
 }
 
 export async function getOrderEntityById(
@@ -166,11 +224,18 @@ export async function getOrderEntityById(
         eq(biocharProducts.organizationId, ctx.organizationId),
       ),
     )
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(biocharProducts.storageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(allocatedMassAggregate, eq(allocatedMassAggregate.orderId, orders.id))
     .where(and(eq(orders.id, id), eq(orders.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;
 
-  return toEntityOption(result);
+  return toOrderEntityOption(result);
 }

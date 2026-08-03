@@ -7,14 +7,11 @@ import {
   getCertifierGhgStatementById,
   getRemovalsByGhgStatementId,
 } from "@/data-access/certifier-ghg-statements";
-import { getCreditBatchesByRemovalId } from "@/data-access/certifier-removals";
-import { getCo2eStoredPreviews } from "@/data-access/credit-batches";
 import {
-  computeGhgStatementBreakdown,
   hasExactGhgEntryMembership,
-  type GhgStatementEntryFigures,
 } from "@/lib/certification/ghg-statement-breakdown";
-import type { RemovalCarbonBreakdown } from "@/lib/certification/removal-breakdown";
+import type { RegistryCarbonResult } from "@/lib/certification/registry-carbon-result";
+import type { RegistryObservation } from "@/lib/certification/registry-observation";
 import { SafeError } from "@/lib/errors";
 import {
   getGhgEntry,
@@ -31,10 +28,10 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 
-// The breakdown card payload: the reconciled carbon accounting plus the
-// identity bits the card chrome needs (the statement's registry id, the
+// The exact registry roll-up plus the identity bits the card chrome needs
+// (the statement's registry id, the
 // reporting window, the member count, the environment for the registry link).
-export interface GhgStatementBreakdownData extends RemovalCarbonBreakdown {
+export interface GhgStatementBreakdownData extends RegistryCarbonResult {
   ghgStatementId: string;
   externalId: string | null;
   reportingPeriodStartOn: string | null;
@@ -43,55 +40,26 @@ export interface GhgStatementBreakdownData extends RemovalCarbonBreakdown {
   isProduction: boolean;
 }
 
-function unique(values: string[]): string[] {
-  return Array.from(new Set(values));
-}
-
 /**
- * Carbon-accounting breakdown for a GHG statement, on demand for the statement
- * detail sheet. A statement is a period roll-up of its member removals, so the
- * breakdown is the sum across them:
- *
- *  - **Local estimate** (always available): the per-batch certify previews
- *    (`getCo2eStoredPreviews`, no chain-of-custody walk) for Sequestrations and
- *    the emissions/counterfactual columns, flattened across every member
- *    removal's credit batches — the same shape a single removal computes, just
- *    over the union of batches.
- *  - **Registry roll-up** (once members are submitted): each member removal's
- *    GHG entry read back for the authoritative per-entry net, summed; the
- *    buffer-pool split is read from the statement's `credit_allocation`.
- *
- * The registry reads are best-effort. The roll-up is used only when *every*
- * member removal's entry is readable — a partial sum would understate the
- * total, so a missing or unconfigured entry degrades the whole card to the
- * local estimate rather than showing a number that doesn't add up. None of the
- * registry reads can fail the sheet.
+ * Read-only exact registry roll-up. A carbon total is exposed only when every
+ * local member has a readable GHG Entry and the registry statement membership
+ * is exactly the same set. There is no local or partial fallback.
  */
 export async function loadGhgStatementBreakdown(
   ghgStatementId: string,
-): Promise<ActionResult<GhgStatementBreakdownData>> {
+): Promise<ActionResult<RegistryObservation<GhgStatementBreakdownData>>> {
   return withAction(async (orgCtx) => {
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
     const statement = await getCertifierGhgStatementById(
       orgCtx,
       ghgStatementId,
     );
-    if (!statement) throw new SafeError("GHG statement not found.");
+    if (!statement) throw new SafeError("GHG Statement not found.");
 
     const removals = await getRemovalsByGhgStatementId(orgCtx, ghgStatementId);
     const removalIds = removals.map((removal) => removal.id);
 
-    // Member credit batches across every removal, flattened — the local
-    // estimate sums the union, identical to the single-removal case.
-    const batchLists = await Promise.all(
-      removalIds.map((id) => getCreditBatchesByRemovalId(orgCtx, id)),
-    );
-    const batches = batchLists.flat();
-    const batchIds = batches.map((batch) => batch.id);
-
-    const [previews, removalSubmissions, statementSubmission] =
+    const [removalSubmissions, statementSubmission] =
       await Promise.all([
-        getCo2eStoredPreviews(orgCtx, batchIds),
         getLatestSubmissionsForEntities(orgCtx, {
           provider: ISOMETRIC_PROVIDER,
           submissionType: REMOVAL_SUBMISSION_TYPE,
@@ -106,21 +74,38 @@ export async function loadGhgStatementBreakdown(
         }),
       ]);
 
-    // Each member removal's rmv_… external id is its GHG-entry id. Read them
-    // back best-effort; only roll up the registry figures when we have an
-    // entry for every member (else degrade to the local estimate).
     const entryExternalIds = removalIds
       .map((id) => removalSubmissions.get(id)?.externalId)
       .filter((value): value is string => Boolean(value));
     const externalId = statementSubmission?.externalId ?? null;
-    const [fetchedEntries, remote] = await Promise.all([
-      Promise.all(
-        entryExternalIds.map((id) => getGhgEntry(client, id).catch(() => null)),
-      ),
-      externalId
-        ? getGhgStatement(client, externalId).catch(() => null)
-        : Promise.resolve(null),
-    ]);
+    if (
+      !externalId ||
+      removalIds.length === 0 ||
+      entryExternalIds.length !== removalIds.length
+    ) {
+      return {
+        status: "pending",
+        value: null,
+        message:
+          "Registry totals appear after every linked Removal has a submitted GHG Entry.",
+      };
+    }
+
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    let fetchedEntries: Array<Awaited<ReturnType<typeof getGhgEntry>>>;
+    let remote: Awaited<ReturnType<typeof getGhgStatement>>;
+    try {
+      [fetchedEntries, remote] = await Promise.all([
+        Promise.all(entryExternalIds.map((id) => getGhgEntry(client, id))),
+        getGhgStatement(client, externalId),
+      ]);
+    } catch {
+      return {
+        status: "unavailable",
+        value: null,
+        message: "The registry roll-up could not be loaded. Try again.",
+      };
+    }
     const presentEntries = fetchedEntries.filter(
       (entry): entry is NonNullable<typeof entry> => entry !== null,
     );
@@ -132,51 +117,52 @@ export async function loadGhgStatementBreakdown(
         presentEntries.map((entry) => entry.id),
         remote.ghg_entry_ids,
       );
-    const entries: GhgStatementEntryFigures[] = allEntriesPresent
-      ? presentEntries.map((entry) => ({
-          netRemovedKg: entry.co2e_net_removed_kg,
-          netBeforeDiscountKg: entry.co2e_net_removed_without_discount_kg,
-          standardDeviationKg: entry.co2e_net_removed_standard_deviation_kg,
-        }))
-      : [];
-
-    // The buffer/supplier split lives only on the statement (it's null until
-    // every entry's risk-of-reversal is set), so read it from the remote
-    // statement rather than summing per-entry allocations.
-    const creditAllocation = remote?.credit_allocation
-      ? {
-          bufferCreditsKg: remote.credit_allocation.buffer_pool_contribution_kg,
-          supplierCreditsKg: remote.credit_allocation.supplier_allocation_kg,
-        }
-      : null;
-
-    const breakdown = computeGhgStatementBreakdown({
-      sequestrationTonnesByBatch: batches.map(
-        (batch) => previews[batch.id]?.co2eStoredTonnes ?? null,
-      ),
-      // Project emissions and counterfactual are registry-owned (ADR 0018) —
-      // there is no local copy (issue #285). All-null renders "not recorded";
-      // the registry entries above supply the authoritative net when readable.
-      emissionsTonnesByBatch: batches.map(() => null),
-      counterfactualTonnesByBatch: batches.map(() => null),
-      missingInputs: unique(
-        batches.flatMap((batch) => previews[batch.id]?.missingInputs ?? []),
-      ),
-      memberBatchCount: batches.length,
-      entries,
-      creditAllocation,
-      ghgStatementId: externalId,
-      ghgStatementStatus: remote?.status ?? null,
-    });
-
+    if (
+      !allEntriesPresent ||
+      presentEntries.some(
+        (entry) =>
+          !Number.isFinite(entry.co2e_net_removed_kg) ||
+          !Number.isFinite(entry.co2e_net_removed_without_discount_kg),
+      )
+    ) {
+      return {
+        status: "pending",
+        value: null,
+        message:
+          "Registry totals appear after Isometric finishes calculating the linked GHG Entries.",
+      };
+    }
     return {
-      ...breakdown,
-      ghgStatementId,
-      externalId,
-      reportingPeriodStartOn: statement.reportingPeriodStartOn ?? null,
-      reportingPeriodEndOn: statement.reportingPeriodEndOn,
-      memberRemovalCount: removals.length,
-      isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
+      status: "available",
+      value: {
+        // Exact-member registry roll-up: linear sums of Isometric's entry
+        // results. No local batch estimate, partial sum, uncertainty
+        // propagation, or reconciliation is produced here.
+        netRemovedKg: presentEntries.reduce(
+          (sum, entry) => sum + entry.co2e_net_removed_kg,
+          0,
+        ),
+        netBeforeDiscountKg: presentEntries.reduce(
+          (sum, entry) =>
+            sum + entry.co2e_net_removed_without_discount_kg,
+          0,
+        ),
+        standardDeviationKg: null,
+        riskOfReversalPercent: null,
+        bufferCreditsKg:
+          remote.credit_allocation?.buffer_pool_contribution_kg ?? null,
+        supplierCreditsKg:
+          remote.credit_allocation?.supplier_allocation_kg ?? null,
+        registryStatementId: externalId,
+        registryStatementStatus: remote.status ?? null,
+        ghgStatementId,
+        externalId,
+        reportingPeriodStartOn: statement.reportingPeriodStartOn ?? null,
+        reportingPeriodEndOn: statement.reportingPeriodEndOn,
+        memberRemovalCount: removals.length,
+        isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
+      },
+      message: "Exact registry roll-up available.",
     };
   });
 }

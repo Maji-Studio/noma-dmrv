@@ -19,8 +19,6 @@ function summary(): DurabilityBatchSummary {
     usableReplicateCount: 1,
     minimumReplicates: 3,
     meetsMinimum: false,
-    distinctRunDayCount: 1,
-    distributionWarning: false,
     eligibility: {
       eligible: true,
       hToCorgMean: 0.4,
@@ -50,7 +48,7 @@ describe("DurabilityReadinessSignals", () => {
     );
 
     expect(html.indexOf("Chemistry eligible")).toBeLessThan(
-      html.indexOf("1 of 3 usable samples"),
+      html.indexOf("1 of 3 usable Samples"),
     );
     expect(html.match(/data-icon="check"/g)).toHaveLength(1);
     expect(html).not.toContain('data-icon="error"');

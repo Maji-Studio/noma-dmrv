@@ -3,9 +3,17 @@ import {
   gpsPairSuperRefine,
   latitudeSchema,
   longitudeSchema,
+  MASS_INPUT_MAX_KG,
   MASS_INPUT_MAX_TONNES,
+  MASS_MAX_KG_MESSAGE,
   MASS_MAX_TONNES_MESSAGE,
 } from "./helpers";
+import { gisBoundarySchema } from "./gis-boundary";
+import {
+  DRY_MASS_EXCEEDS_WET_MESSAGE,
+  exceedsMassWithTolerance,
+} from "@/lib/calculations/mass-dry";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
 // ============================================
 // Constants and Enums
@@ -55,15 +63,15 @@ export type ApplicationEvidenceMethod = (typeof applicationEvidenceMethods)[numb
 const applicationFormBaseSchema = z.object({
   // === Section 1: Application Details ===
   applicationDate: z.coerce.date({ error: "Application date is required" }),
-  deliveryId: z.string().min(1, "Please select a delivery").uuid("Invalid delivery"),
+  deliveryId: z.string().min(1, "Select a delivery.").uuid("Choose a valid delivery."),
   biocharAppliedTons: z
     .number({ error: "Biochar applied (kg) is required" })
     .min(0, "Must be a positive number")
-    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE),
+    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE),
   biocharAppliedDryTons: z
     .number()
     .min(0, "Must be a positive number")
-    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE)
+    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
     .optional()
     .nullable(),
 
@@ -89,12 +97,8 @@ const applicationFormBaseSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z.enum(applicationMethods).optional().nullable()
   ),
-  evidenceMethod: z.enum(applicationEvidenceMethods).default("visual"),
-  gisBoundaryReference: z
-    .string()
-    .max(255, "GIS boundary reference must be less than 255 characters")
-    .optional()
-    .or(z.literal("")),
+  evidenceMethod: z.enum(applicationEvidenceMethods).default("boundary"),
+  gisBoundary: gisBoundarySchema.nullable().default(null),
 
   // === Section 3: Soil Temperature ===
   soilTemperatureSource: z.preprocess(
@@ -110,8 +114,56 @@ const applicationFormBaseSchema = z.object({
 
 });
 
-export const applicationFormSchema =
-  applicationFormBaseSchema.superRefine(gpsPairSuperRefine);
+type ApplicationMassFields = {
+  biocharAppliedTons?: number;
+  biocharAppliedDryTons?: number | null;
+};
+
+function addDryMassIssue(
+  data: ApplicationMassFields,
+  ctx: z.RefinementCtx,
+  unit: "kg" | "tonnes",
+): void {
+  if (
+    data.biocharAppliedTons == null ||
+    data.biocharAppliedDryTons == null
+  ) {
+    return;
+  }
+  const wetKg = unit === "tonnes"
+    ? tonnesToKg(data.biocharAppliedTons)
+    : data.biocharAppliedTons;
+  const dryKg = unit === "tonnes"
+    ? tonnesToKg(data.biocharAppliedDryTons)
+    : data.biocharAppliedDryTons;
+  if (!exceedsMassWithTolerance(dryKg, wetKg)) return;
+
+  ctx.addIssue({
+    code: "custom",
+    path: ["biocharAppliedDryTons"],
+    message: DRY_MASS_EXCEEDS_WET_MESSAGE,
+  });
+}
+
+export const applicationFormSchema = applicationFormBaseSchema.superRefine(
+  (data, ctx) => {
+    gpsPairSuperRefine(data, ctx);
+    addDryMassIssue(data, ctx, "kg");
+  },
+);
+
+const applicationCreateBaseSchema = applicationFormBaseSchema.extend({
+  biocharAppliedTons: z
+    .number({ error: "Biochar applied mass is required" })
+    .min(0, "Must be a positive number")
+    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE),
+  biocharAppliedDryTons: z
+    .number()
+    .min(0, "Must be a positive number")
+    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE)
+    .optional()
+    .nullable(),
+});
 
 // ============================================
 // Server Action Schemas
@@ -120,13 +172,18 @@ export const applicationFormSchema =
 /**
  * Schema for creating an application (server action)
  */
-export const createApplicationSchema = applicationFormSchema;
+export const createApplicationSchema = applicationCreateBaseSchema.superRefine(
+  (data, ctx) => {
+    gpsPairSuperRefine(data, ctx);
+    addDryMassIssue(data, ctx, "tonnes");
+  },
+);
 
 /**
  * Schema for updating an application (server action)
  */
 export const updateApplicationSchema = z.object({
-  applicationId: z.string().uuid("Invalid application ID"),
+  applicationId: z.string().uuid("Choose a valid application."),
   code: z
     .string()
     .min(1)
@@ -144,16 +201,19 @@ export const updateApplicationSchema = z.object({
   gpsLongitude: longitudeSchema,
   applicationMethodType: z.enum(applicationMethods).optional().nullable(),
   evidenceMethod: z.enum(applicationEvidenceMethods).optional(),
-  gisBoundaryReference: z.string().max(255).optional().nullable(),
+  gisBoundary: gisBoundarySchema.optional().nullable(),
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
-}).superRefine(gpsPairSuperRefine);
+}).superRefine((data, ctx) => {
+  gpsPairSuperRefine(data, ctx);
+  addDryMassIssue(data, ctx, "tonnes");
+});
 
 /**
  * Schema for deleting an application
  */
 export const deleteApplicationSchema = z.object({
-  applicationId: z.string().uuid("Invalid application ID"),
+  applicationId: z.string().uuid("Choose a valid application."),
 });
 
 // ============================================
@@ -196,8 +256,8 @@ export function formatApplicationMethod(method: ApplicationMethod): string {
 
 export function formatApplicationEvidenceMethod(method: ApplicationEvidenceMethod): string {
   const labels: Record<ApplicationEvidenceMethod, string> = {
-    visual: "Visual proof",
-    boundary: "Boundary records",
+    visual: "Visual evidence",
+    boundary: "GIS reference",
   };
   return labels[method];
 }

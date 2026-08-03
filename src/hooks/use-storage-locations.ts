@@ -4,7 +4,12 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { StorageLocation } from "@/db/schema";
 import type {
   StorageLocationFilterData,
@@ -72,6 +77,11 @@ export function useStorageLocations(
     },
     staleTime: 30000, // 30 seconds
     enabled: options?.enabled,
+    // The board's filter rail is part of this payload, so without this every
+    // filter, sort or page change blanks the grid to skeletons *and* drops the
+    // rail's on-hand figures to zero for the length of the round trip. Keeping
+    // the previous page means the control the operator just used stays put.
+    placeholderData: keepPreviousData,
   });
 }
 

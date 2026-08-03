@@ -8,7 +8,8 @@
  * rollback" to drill into that member's lineage.
  */
 
-import { type ElementType, useState } from "react";
+import { useState } from "react";
+import type { Icon } from "@phosphor-icons/react";
 import { ArrowUpRightIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
@@ -21,7 +22,7 @@ export interface ChainNodeSheetNode {
   /** Entity type label ("Feedstock", "Order", …). */
   label: string;
   code: string;
-  icon: ElementType;
+  icon: Icon;
   /** Ink-variant accent — passes contrast on the light sheet. */
   accentInk: string;
   status?: string | null;

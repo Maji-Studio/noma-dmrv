@@ -1,3 +1,7 @@
+// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+
+import { pluralize } from "@/lib/copy-utils";
+
 /**
  * Canonical production-readings CSV parser (issue #207).
  *
@@ -180,7 +184,7 @@ function resolveColumns(headers: string[]): ResolvedColumns {
   if (pressure < 0) missing.push("pressure_bar");
   if (missing.length > 0) {
     throw new Error(
-      `CSV is missing required column(s): ${missing.join(", ")}. Found: ${
+      `The readings CSV is missing required ${pluralize(missing.length, "column")}: ${missing.join(", ")}. Found: ${
         headers.join(", ") || "(none)"
       }.`,
     );

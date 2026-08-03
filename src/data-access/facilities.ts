@@ -16,7 +16,6 @@ import {
   productionRuns,
   productionRunFeedstocks,
   biocharProducts,
-  formulations,
   orders,
   deliveries,
   applications,
@@ -29,6 +28,7 @@ import {
 import { hasBlockingFacilitySubmission } from "./certification";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 
 // Individual entity archives originate from JavaScript Date values and are
 // stored at whole-millisecond precision. Facility cascades use a database
@@ -197,6 +197,7 @@ export async function getFacilities(
     storageCountsByType,
     feedstockInventoryRows,
     feedstockConsumptionRows,
+    ingredientConsumptionRows,
     biocharOutputRows,
     biocharAllocationRows,
     productInventoryRows,
@@ -248,6 +249,46 @@ export async function getFacilities(
           .groupBy(productionRuns.facilityId),
         db
           .select({
+            facilityId: storageLocations.facilityId,
+            totalConsumedKg: numericAggregate(sql<number>`
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN jsonb_typeof(ingredient.value -> 'massDryKg') = 'number'
+                      AND (ingredient.value ->> 'massDryKg')::numeric > 0
+                    THEN (ingredient.value ->> 'massDryKg')::numeric
+                    ELSE 0
+                  END
+                ),
+                0
+              )
+            `),
+          })
+          .from(biocharProducts)
+          .innerJoin(
+            sql`LATERAL jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(${biocharProducts.composition} -> 'ingredients') = 'array'
+                THEN ${biocharProducts.composition} -> 'ingredients'
+                ELSE '[]'::jsonb
+              END
+            ) AS ingredient(value)`,
+            sql`true`,
+          )
+          .innerJoin(
+            storageLocations,
+            and(
+              sql`${storageLocations.id}::text = ingredient.value ->> 'storageLocationId'`,
+              eq(storageLocations.organizationId, ctx.organizationId),
+            ),
+          )
+          .where(and(
+            inArray(storageLocations.facilityId, facilityIds),
+            eq(biocharProducts.organizationId, ctx.organizationId),
+          ))
+          .groupBy(storageLocations.facilityId),
+        db
+          .select({
             facilityId: productionRuns.facilityId,
             totalProducedKg: sumNumeric(productionRuns.biocharOutputKg),
           })
@@ -264,14 +305,16 @@ export async function getFacilities(
             totalAllocatedKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
-                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
+                  ${sourceBiocharMassKgSql(
+                    biocharProducts.massKg,
+                    biocharProducts.composition,
+                  )}
                 ),
                 0
               )
             `),
           })
           .from(biocharProducts)
-          .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
           .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId)))
           .groupBy(biocharProducts.facilityId),
         db
@@ -283,7 +326,7 @@ export async function getFacilities(
           .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId)))
           .groupBy(biocharProducts.facilityId),
       ])
-    : [[], [], [], [], [], [], []];
+    : [[], [], [], [], [], [], [], []];
 
   // Derive reactor counts and preview (max 4) from preview rows
   const reactorCountMap = new Map<string, number>();
@@ -333,6 +376,9 @@ export async function getFacilities(
   const feedstockConsumptionMap = new Map(
     feedstockConsumptionRows.map((row) => [row.facilityId, row.totalConsumedKg])
   );
+  const ingredientConsumptionMap = new Map(
+    ingredientConsumptionRows.map((row) => [row.facilityId, row.totalConsumedKg])
+  );
   const biocharOutputMap = new Map(
     biocharOutputRows.map((row) => [row.facilityId, row.totalProducedKg])
   );
@@ -361,7 +407,8 @@ export async function getFacilities(
       feedstockDryKg: Math.max(
         0,
         (feedstockInventoryMap.get(f.id) ?? 0) -
-          (feedstockConsumptionMap.get(f.id) ?? 0)
+          (feedstockConsumptionMap.get(f.id) ?? 0) -
+          (ingredientConsumptionMap.get(f.id) ?? 0)
       ),
       biocharKg: Math.max(
         0,

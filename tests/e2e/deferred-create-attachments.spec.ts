@@ -1,5 +1,5 @@
 /**
- * Deferred create attachments (docs/plans/2026-07-16-deferred-create-attachments.md)
+ * Deferred create attachments (docs/archive/plans/2026-07-16-deferred-create-attachments.md)
  *
  * Create forms hold real files client-side and flush them against the fresh
  * entity ID after create — one Save, no "save first, then reopen to attach".
@@ -20,12 +20,45 @@ import { seedCreditBatch } from "./fixtures/seed-chain-data";
 import type { Page } from "@playwright/test";
 
 const FUTURE_DATE = "2026-08-01";
+const ACTION_LABEL_PREFIX = "Actions for ";
 
 const pdf = (name: string) => ({
   name,
   mimeType: "application/pdf",
   buffer: Buffer.from("%PDF-1.4\n% e2e deferred attachment probe\n"),
 });
+
+async function getListedFeedstockCodes(page: Page): Promise<Set<string>> {
+  const labels = await page
+    .locator(`tbody button[aria-label^="${ACTION_LABEL_PREFIX}"]`)
+    .evaluateAll(
+      (buttons, prefixLength) =>
+        buttons
+          .map((button) => button.getAttribute("aria-label"))
+          .filter((label): label is string => label !== null)
+          .map((label) => label.slice(prefixLength)),
+      ACTION_LABEL_PREFIX.length,
+    );
+  return new Set(labels);
+}
+
+async function getCreatedFeedstockCode(
+  page: Page,
+  existingCodes: Set<string>,
+): Promise<string> {
+  let createdCodes: string[] = [];
+  await expect
+    .poll(async () => {
+      createdCodes = [...(await getListedFeedstockCodes(page))].filter(
+        (code) => !existingCodes.has(code),
+      );
+      return createdCodes.length;
+    })
+    .toBe(1);
+  const createdCode = createdCodes[0];
+  if (!createdCode) throw new Error("Created feedstock code was not rendered");
+  return createdCode;
+}
 
 async function fillMinimalFeedstock(
   page: Page,
@@ -63,6 +96,11 @@ test.describe("Deferred create attachments", () => {
     void cleanupTestData;
     await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("table", { name: "Feedstocks" })).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
+    const existingFeedstockCodes = await getListedFeedstockCodes(page);
 
     await page.click('button:has-text("New Feedstock")');
     await waitForSideSheet(page);
@@ -81,9 +119,22 @@ test.describe("Deferred create attachments", () => {
     await dialog.locator('button:has-text("Create Feedstock")').click();
     await waitForSideSheetClose(page);
 
-    // Reopen the newest feedstock: view mode lists the document read-only.
+    // Reopen the feedstock created by this test. Delivery-date sorting can put
+    // a newer seeded row ahead of it, so row position is not an identity.
     await page.waitForLoadState("networkidle");
-    await page.locator("table tbody tr").first().click();
+    const createdFeedstockCode = await getCreatedFeedstockCode(
+      page,
+      existingFeedstockCodes,
+    );
+    await page
+      .locator("table tbody tr")
+      .filter({
+        has: page.getByRole("button", {
+          name: `${ACTION_LABEL_PREFIX}${createdFeedstockCode}`,
+          exact: true,
+        }),
+      })
+      .click();
     await waitForSideSheet(page);
     await expect(dialog.getByText("bol-deferred.pdf")).toBeVisible({
       timeout: 15000,
@@ -112,38 +163,47 @@ test.describe("Deferred create attachments", () => {
 
     await page.click('button:has-text("New Sample")');
     await waitForSideSheet(page);
-    const dialog = page.locator('[role="dialog"]');
+    const parentDialog = page.getByRole("dialog", { name: "Create Sample" });
 
     await selectFirstEntity(page, "Credit Batch");
     await page.fill('input[name="totalCarbonPercent"]', "75");
     await page.fill('input[name="organicCarbonPercent"]', "70");
 
     // Deferred lab report.
-    await dialog
+    await parentDialog
       .locator("#sample-deferred-documents-upload")
       .setInputFiles(pdf("lab-report-deferred.pdf"));
-    await expect(dialog.getByText("lab-report-deferred.pdf")).toBeVisible();
+    await expect(parentDialog.getByText("lab-report-deferred.pdf")).toBeVisible();
 
-    // Deferred transport leg via the inline editor (no sample exists yet).
-    await dialog.locator('button:has-text("Add leg")').click();
-    await dialog.locator("#distanceKm").fill("12");
-    await dialog.locator('input[name="loadMassKg"]').fill("5");
-    await dialog.locator('button:has-text("Add transport leg")').click();
-    await expect(dialog.getByText("12 km")).toBeVisible();
+    // Deferred transport leg via the nested dialog (no sample exists yet).
+    await parentDialog.getByRole("button", { name: "Add leg" }).click();
+    const transportDialog = page.getByRole("dialog", {
+      name: "Add transport leg",
+    });
+    await expect(transportDialog).toBeVisible();
+    await transportDialog.locator("#distanceKm").fill("12");
+    await transportDialog.locator('input[name="loadMassKg"]').fill("5");
+    await transportDialog
+      .getByRole("button", { name: "Add transport leg" })
+      .click();
+    await expect(transportDialog).toBeHidden();
+    await expect(parentDialog).toBeVisible();
+    await expect(parentDialog.getByText("12 km")).toBeVisible();
 
-    await dialog.locator('button:has-text("Create Sample")').click();
+    await parentDialog.getByRole("button", { name: "Create Sample" }).click();
     await waitForSideSheetClose(page);
 
     // Reopen: view mode shows both the document and the leg, read-only.
     await page.waitForLoadState("networkidle");
     await page.locator("table tbody tr").first().click();
     await waitForSideSheet(page);
-    await expect(dialog.getByText("lab-report-deferred.pdf")).toBeVisible({
+    const sampleDialog = page.getByRole("dialog");
+    await expect(sampleDialog.getByText("lab-report-deferred.pdf")).toBeVisible({
       timeout: 15000,
     });
-    await expect(dialog.getByText("12 km")).toBeVisible();
+    await expect(sampleDialog.getByText("12 km")).toBeVisible();
     await expect(
-      dialog.getByLabel("Delete lab-report-deferred.pdf"),
+      sampleDialog.getByLabel("Delete lab-report-deferred.pdf"),
     ).toHaveCount(0);
   });
 
@@ -182,10 +242,10 @@ test.describe("Deferred create attachments", () => {
     // Entity created, flush failed → sheet stays open in edit mode with the
     // failed item and an explanatory error.
     await expect(
-      dialog.getByText(/created, but .* failed to upload/i),
+      dialog.getByText(/created, but .* (was|were) not uploaded/i),
     ).toBeVisible({ timeout: 20000 });
     await expect(
-      dialog.getByText(/attachment(s)? failed to upload/i).first(),
+      dialog.getByText(/attachments? (was|were) not uploaded/i).first(),
     ).toBeVisible();
     await expect(dialog.getByText("ticket-deferred.pdf")).toBeVisible();
 

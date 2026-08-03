@@ -34,7 +34,10 @@ import {
   sampleFilterSchema,
 } from "@/schemas/samples";
 import type { ActionResult } from "@/types/actions";
-import { toLoggedActionError } from "./action-errors";
+import {
+  formatZodActionError,
+  toLoggedActionError,
+} from "./action-errors";
 
 function sampleActionError(
   error: unknown,
@@ -61,7 +64,7 @@ async function assertSampleNotBeforeBatchWindow(
   const samplingDay = formatFacilityDate(samplingTime, facility.timezone);
   if (samplingDay < batch.startDate) {
     throw new SafeError(
-      `Sampling date ${samplingDay} cannot be before credit batch ${batch.code}'s production window ${batch.startDate}–${batch.endDate}.`,
+      `Sample date ${samplingDay} is before credit batch ${batch.code}'s production window, ${batch.startDate} to ${batch.endDate}. Choose a date within or after the production window.`,
     );
   }
 }
@@ -92,7 +95,7 @@ export async function getSamplesFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Invalid filter parameters: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error, "Invalid filter parameters"),
       };
     }
     return {
@@ -305,7 +308,7 @@ export async function createSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -415,7 +418,7 @@ export async function updateSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {
@@ -450,7 +453,7 @@ export async function deleteSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     return {

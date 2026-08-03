@@ -21,7 +21,7 @@ import { onboardingGuideCollapsedKey } from "@/components/onboarding/onboarding-
 import {
   facilities,
   feedstocks,
-  documents,
+  storageLocations,
   supplierLocations,
   suppliers,
   transportLegs,
@@ -63,7 +63,7 @@ test.describe("Dashboard (Flow Hero)", () => {
     // Traceability hero with the smart-view segmented control
     const hero = page.getByTestId("flow-hero");
     await expect(hero).toBeVisible();
-    await expect(hero.getByText("Traceability — supplier to soil")).toBeVisible();
+    await expect(hero.getByText("Traceability: supplier to soil")).toBeVisible();
     const attentionView = hero.getByRole("button", { name: "Needs attention" });
     await attentionView.click();
     await expect(attentionView).toHaveAttribute("aria-pressed", "true");
@@ -72,7 +72,7 @@ test.describe("Dashboard (Flow Hero)", () => {
     // Supporting row
     await expect(page.getByText("Needs attention", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Recent activity")).toBeVisible();
-    await expect(page.getByText("Certification — credit batches")).toBeVisible();
+    await expect(page.getByText("Certification: credit batches")).toBeVisible();
 
     // Period toggle switches the active segment
     const week = page.getByRole("button", { name: "Week" });
@@ -93,9 +93,9 @@ test.describe("Dashboard (Flow Hero)", () => {
     const facilityId = crypto.randomUUID();
     const supplierId = crypto.randomUUID();
     const supplierLocationId = crypto.randomUUID();
+    const storageLocationId = crypto.randomUUID();
     const feedstockId = crypto.randomUUID();
     const transportLegId = crypto.randomUUID();
-    const evidenceDocumentId = crypto.randomUUID();
     const tag = crypto.randomUUID().slice(0, 8);
 
     try {
@@ -121,7 +121,18 @@ test.describe("Dashboard (Flow Hero)", () => {
           name: "Incomplete source location",
           country: "TZ",
           gpsLatitude: -6.8,
+          distanceFromFacilityKm: 25,
+          distanceSource: "manual",
           isDefault: true,
+        });
+        await tx.insert(storageLocations).values({
+          id: storageLocationId,
+          organizationId: DEC_ORG_ID,
+          code: `E2E-DASH-SL-${tag}`,
+          name: `E2E Dashboard Feedstock Bin ${tag}`,
+          type: "feedstock_bin",
+          facilityId,
+          feedstockTypeId: seededData.feedstockType.id,
         });
         await tx.insert(feedstocks).values({
           id: feedstockId,
@@ -129,11 +140,13 @@ test.describe("Dashboard (Flow Hero)", () => {
           code: `E2E-DASH-FS-${tag}`,
           facilityId,
           status: "complete",
+          deliveryDate: new Date("2026-07-25T12:00:00.000Z"),
           supplierId,
           feedstockTypeId: seededData.feedstockType.id,
           massWetKg: 100,
           massDryKg: 90,
           moistureContentPercent: 10,
+          storageLocationId,
         });
         await tx.insert(transportLegs).values({
           id: transportLegId,
@@ -148,6 +161,7 @@ test.describe("Dashboard (Flow Hero)", () => {
           distanceSource: "manual",
           transportMethodType: "road",
           loadMassKg: 100,
+          isDerived: true,
         });
       });
 
@@ -174,63 +188,15 @@ test.describe("Dashboard (Flow Hero)", () => {
         structuralGaps.getByText("Transport endpoint GPS missing"),
       ).toBeVisible();
       await expect(
-        structuralGaps.getByText("Transport distance lacks document evidence"),
-      ).toBeVisible();
-      await expect(
         structuralGaps.getByText("Supplier form · Location · 1 affected"),
       ).toBeVisible();
       await expect(
         structuralGaps.getByText("Feedstock form · Transport route · 1 affected"),
       ).toBeVisible();
       await expect(
-        structuralGaps.getByText(
-          "Feedstock form · Transport evidence · 1 affected",
-        ),
+        page.getByText("2 open", { exact: true }).first(),
       ).toBeVisible();
-      await expect(page.getByText("3 open", { exact: true }).first()).toBeVisible();
       await expect(page.getByText("All clear")).toHaveCount(0);
-
-      const evidenceLink = structuralGaps.getByRole("link", {
-        name: /Transport distance lacks document evidence/,
-      });
-      await expect(evidenceLink).toHaveAttribute(
-        "href",
-        `/feedstocks?facility=${facilityId}&feedstock=${feedstockId}&mode=edit&focus=transport-evidence`,
-      );
-      await evidenceLink.click();
-      const feedstockSheet = page.getByRole("dialog");
-      await expect(feedstockSheet.getByText("Save Changes")).toBeVisible();
-      await expect(
-        feedstockSheet.getByText(
-          "Mark the saved distance source as Document and attach supporting evidence",
-        ),
-      ).toBeVisible();
-      await expect(
-        feedstockSheet.getByRole("radio", { name: "Bill of lading" }),
-      ).toBeChecked();
-      await expect(
-        feedstockSheet.getByRole("radio", { name: "Weigh-scale ticket" }),
-      ).toBeVisible();
-      await expect(
-        feedstockSheet.getByRole("radio", { name: "Other transport evidence" }),
-      ).toBeVisible();
-      await expect(
-        feedstockSheet.getByText("Drop files here or click to upload"),
-      ).toHaveCount(1);
-      await feedstockSheet
-        .getByRole("button", { name: "Use Document provenance" })
-        .click();
-      await expect(feedstockSheet.getByText(/Draft: Document/)).toBeVisible();
-      await feedstockSheet
-        .getByRole("button", { name: "About transport evidence" })
-        .hover();
-      await expect(
-        page.getByText(
-          "Transport evidence requires saved Document provenance plus at least one uploaded bill of lading, weigh-scale ticket, or other transport evidence file. One accepted file is enough. Uploading does not change the saved provenance.",
-        ),
-      ).toBeVisible();
-
-      await page.goto(`/dashboard?facility=${facilityId}`);
 
       await db.transaction(async (tx) => {
         await tx
@@ -242,19 +208,8 @@ test.describe("Dashboard (Flow Hero)", () => {
           .set({
             originGpsLatitude: -6.8,
             originGpsLongitude: 39.28,
-            distanceSource: "document",
           })
           .where(eq(transportLegs.id, transportLegId));
-        await tx.insert(documents).values({
-          id: evidenceDocumentId,
-          organizationId: DEC_ORG_ID,
-          entityType: "feedstock",
-          entityId: feedstockId,
-          documentType: "bill_of_lading",
-          fileName: "transport-evidence.pdf",
-          fileUrl: "https://example.invalid/transport-evidence.pdf",
-          uploadStatus: "uploaded",
-        });
       });
 
       await page.reload();
@@ -262,13 +217,15 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(page.getByText("All clear")).toBeVisible();
       await expect(page.getByText("Every blocking check passes.")).toBeVisible();
     } finally {
-      await db.delete(documents).where(eq(documents.id, evidenceDocumentId));
       await db.delete(transportLegs).where(eq(transportLegs.id, transportLegId));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
       await db
         .delete(supplierLocations)
         .where(eq(supplierLocations.id, supplierLocationId));
       await db.delete(suppliers).where(eq(suppliers.id, supplierId));
+      await db
+        .delete(storageLocations)
+        .where(eq(storageLocations.id, storageLocationId));
       await db.delete(facilities).where(eq(facilities.id, facilityId));
       await pool.end();
     }
@@ -297,7 +254,9 @@ test.describe("Credit batch view sheet (Phase 5)", () => {
     await expect(
       sheet.getByText("Certification progress", { exact: true }),
     ).toBeVisible();
-    await expect(sheet.getByText("Feedstock Type", { exact: true })).toBeVisible();
+    // Sentence case (docs/design-system.md › Label casing); `exact: true` is
+    // case-sensitive, so this string must match the UI's casing exactly.
+    await expect(sheet.getByText("Feedstock type", { exact: true })).toBeVisible();
     await expect(sheet.getByText("CO₂e stored", { exact: true })).toBeVisible();
     await expect(sheet.getByText("Durability", { exact: true })).toBeVisible();
     await expect(
@@ -307,7 +266,7 @@ test.describe("Credit batch view sheet (Phase 5)", () => {
     // Readiness and lab samples render below the sections.
     await expect(sheet.getByTestId("batch-health-strip")).toBeVisible();
     await expect(sheet.getByText("Certification requirements")).toBeVisible();
-    await expect(sheet.getByText("Lab samples", { exact: true })).toBeVisible();
+    await expect(sheet.getByText("Lab Samples", { exact: true })).toBeVisible();
 
     // Registry/accounting fields are deliberately absent; the form mounts only
     // after the footer edit action is used.

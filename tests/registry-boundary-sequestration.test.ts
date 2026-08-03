@@ -13,6 +13,10 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
   return createFakeClientModule(actual);
 });
 
+vi.mock("@/data-access/certification", () => ({
+  appendSubmissionJournal: vi.fn(),
+}));
+
 vi.mock("@/fn/certification/registry-create", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/fn/certification/registry-create")>();
@@ -45,6 +49,7 @@ import {
   assertSequestrationTemplateBindings,
   bindSequestrationDatapointsToTemplate,
   buildDirectSequestrationDatapoints,
+  RegistryMappingError,
 } from "@/lib/isometric/transformers/sequestration-binding";
 import {
   createDatapoint,
@@ -63,6 +68,27 @@ const TEMPLATE_ID = "rvt_boundary_1000";
 const RTC_ID = "rtc_boundary_1000";
 const PROJECT_ID = "prj_boundary_1000";
 const SAMPLE_REF = "nm-mts-boundary-pb-batch-v1";
+const SOURCE_BINDING_PLAN = [
+  {
+    documentId: "document-boundary-inventory",
+    sourceId: "source-boundary-inventory",
+    nomaRole: "inventory",
+    lineage: {
+      entityType: "application",
+      entityId: "application-boundary",
+      entityLabel: "Application APP-BOUNDARY",
+    },
+    intendedTarget: {
+      kind: "sequestration",
+      groupKey: "co2-stored",
+      componentId: RTC_ID,
+      componentBlueprintKey: "biochar_sequestration_1000_year",
+      inputKey: "product_mass",
+      creditBatchIds: ["batch-boundary"],
+    },
+    mappingRevision: "source-binding-boundary-revision",
+  },
+] as const;
 
 const log = {
   info: vi.fn(),
@@ -130,29 +156,38 @@ describe("1000-year sequestration registry boundary", () => {
       structuredClone(duplicate.groups[0].components[0]),
     );
     expect(() => assertSequestrationTemplateBindings(duplicate)).toThrow(
-      /exactly one supported sequestration component; found 2/,
+      /must contain one supported storage component.*contains 2/,
     );
 
     const emissionsOnly = structuredClone(valid);
     emissionsOnly.groups[0].components[0].blueprint_key =
       "pyrolyzer_direct";
     expect(() => assertSequestrationTemplateBindings(emissionsOnly)).toThrow(
-      /exactly one supported sequestration component; found 0/,
+      /must contain one supported storage component.*contains 0/,
     );
 
     const renamedInput = structuredClone(valid);
     renamedInput.groups[0].components[0].inputs[0].input_key =
       "renamed_carbon_contents";
     expect(() => assertSequestrationTemplateBindings(renamedInput)).toThrow(
-      /has no explicit datapoint-source binding/,
+      /unsupported durability field/,
     );
+    try {
+      assertSequestrationTemplateBindings(renamedInput);
+    } catch (error) {
+      expect(error).toBeInstanceOf(RegistryMappingError);
+      expect(error).toMatchObject({
+        blueprintKey: "biochar_sequestration_1000_year",
+        inputKey: "renamed_carbon_contents",
+      });
+    }
 
     const wrongQuantityKind = structuredClone(valid);
     wrongQuantityKind.groups[0].components[0].inputs[2].quantity_kind =
       "dimensionless_ratio";
     expect(() =>
       assertSequestrationTemplateBindings(wrongQuantityKind),
-    ).toThrow(/requires quantity kind "dimensionless"/);
+    ).toThrow(/uses the wrong measurement type/);
   });
 
   it("captures POSTed measurement value IDs and binds them into the GHG entry variants", async () => {
@@ -208,7 +243,10 @@ describe("1000-year sequestration registry boundary", () => {
     const submitted = await submitDurabilityMeasurementSamples({
       orgCtx: makeTestOrgContext("user-boundary-sequestration"),
       removalId: "rem-boundary-sequestration",
-      submissionRowId: "sub-boundary-sequestration",
+      submissionRow: {
+        id: "sub-boundary-sequestration",
+        payloadSnapshot: { journaled: {} },
+      },
       resumed: false,
       submissions: [
         {
@@ -218,6 +256,7 @@ describe("1000-year sequestration registry boundary", () => {
           label: "production batch CB-BOUNDARY",
         },
       ],
+      sourceBindingPlan: SOURCE_BINDING_PLAN as never,
       log,
     });
 
@@ -228,7 +267,20 @@ describe("1000-year sequestration registry boundary", () => {
     const resumed = await submitDurabilityMeasurementSamples({
       orgCtx: makeTestOrgContext("user-boundary-sequestration"),
       removalId: "rem-boundary-sequestration",
-      submissionRowId: "sub-boundary-sequestration",
+      submissionRow: {
+        id: "sub-boundary-sequestration",
+        payloadSnapshot: {
+          journaled: {
+            measurementSamples: [
+              {
+                supplierReferenceId: SAMPLE_REF,
+                measurementSampleId:
+                  submitted.samples[0].measurementSampleId,
+              },
+            ],
+          },
+        },
+      },
       resumed: true,
       submissions: [
         {
@@ -238,10 +290,21 @@ describe("1000-year sequestration registry boundary", () => {
           label: "production batch CB-BOUNDARY",
         },
       ],
+      sourceBindingPlan: SOURCE_BINDING_PLAN as never,
       log,
     });
     expect(registry.requestCount("POST", "/measurement_samples")).toBe(1);
+    expect(
+      registry.requestCount(
+        "GET",
+        `/measurement_samples/${submitted.samples[0].measurementSampleId}`,
+      ),
+    ).toBe(0);
+    expect(registry.requestCount("GET", "/measurement_samples")).toBe(1);
     expect(resumed.samples).toHaveLength(1);
+    expect(resumed.samples[0].measurementSampleId).toBe(
+      submitted.samples[0].measurementSampleId,
+    );
     expect(resumed.datapointIdsByMeasurementProperty).toEqual(
       submitted.datapointIdsByMeasurementProperty,
     );

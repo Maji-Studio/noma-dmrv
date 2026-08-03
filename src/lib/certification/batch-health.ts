@@ -9,7 +9,7 @@
  *
  * Strictly client-safe: depends only on the `TransportCategory` type from
  * `./readiness` and plain primitives. A server loader gathers the facts (from
- * the batch's CO2e-stored preview + its single-batch certify context) and feeds
+ * raw durability gates + its single-batch certify context) and feeds
  * them in; this module only makes the verdict. The split mirrors
  * readiness.ts / readiness-facts.ts so the wizard, the detail page, and any
  * overview hint can never disagree on whether a batch is "ready".
@@ -107,9 +107,9 @@ export interface BatchTransportFact {
 
 export interface BatchHealthFacts {
   /**
-   * Carbon & durability lab inputs, derived from the batch's CO2e-stored
-   * preview. These are human-readable labels of what the preview could not
-   * resolve (sample carbon content, durability lab inputs, …); empty ⇒ complete.
+   * Raw carbon and durability lab-input blockers (sample carbon content,
+   * H/C_org, O/C_org, total carbon, s_fraction, and replicate coverage).
+   * No local CO₂e preview is involved; empty means the raw gates are complete.
    */
   carbonMissingInputs: string[];
   /**

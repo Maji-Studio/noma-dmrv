@@ -6,7 +6,7 @@
 
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { PackageIcon, PlusIcon, XIcon, TruckIcon } from "@phosphor-icons/react";
+import { PackageIcon, PlusIcon, XIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Order } from "@/db/schema";
 import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
 import { useCustomers } from "@/hooks/use-customers";
@@ -25,6 +25,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { pluralize } from "@/lib/copy-utils";
 import { OrderForm } from "./order-form";
 import type { OrderFormData, OrderFilterData } from "@/schemas/orders";
 import type { OrderWithRelations } from "@/data-access/orders";
@@ -33,7 +34,7 @@ import {
   orderFulfillmentStatuses,
   type OrderFulfillmentStatus,
 } from "@/lib/orders/fulfillment";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
@@ -59,13 +60,13 @@ function createColumns(
       id: "customer",
       header: "Customer",
       accessorFn: (row) => row.customerName ?? "",
-      cell: ({ row }) => row.original.customerName || "\u2014",
+      cell: ({ row }) => row.original.customerName || "Not recorded",
     },
     {
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{row.original.facilityName || "\u2014"}</span>,
+      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{row.original.facilityName || "Not available"}</span>,
     },
     {
       accessorKey: "quantityKg",
@@ -82,11 +83,11 @@ function createColumns(
             className="inline-flex items-center justify-center min-w-[40px] px-8 py-2 bg-[var(--color-surface-light)] border border-[var(--color-border-tertiary)] text-[var(--text-s)] font-medium font-mono"
             title={
               deliveryCount > 0
-                ? `${deliveredCount} of ${deliveryCount} deliveries delivered`
+                ? `${deliveredCount} of ${deliveryCount} ${pluralize(deliveryCount, "delivery", "deliveries")} delivered`
                 : "No deliveries scheduled"
             }
           >
-            {deliveryCount > 0 ? `${deliveredCount}/${deliveryCount}` : "—"}
+            {deliveryCount > 0 ? `${deliveredCount}/${deliveryCount}` : "None"}
           </span>
         );
       },
@@ -212,9 +213,9 @@ export function OrderList() {
     try {
       await createOrder.mutateAsync(data);
       closeSideSheet();
-      toast.success("Order created successfully");
+      toast.success("Order created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to create order");
+      setFormError(error instanceof Error ? error.message : "Order was not created. Check the form.");
     }
   };
 
@@ -224,9 +225,9 @@ export function OrderList() {
     try {
       await updateOrder.mutateAsync({ orderId: sideSheet.entity.id, ...data });
       closeSideSheet();
-      toast.success("Order updated successfully");
+      toast.success("Order updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to update order");
+      setFormError(error instanceof Error ? error.message : "Order was not saved. Try again.");
     }
   };
 
@@ -238,9 +239,9 @@ export function OrderList() {
     try {
       await deleteOrder.mutateAsync(deletingOrderId);
       setDeletingOrderId(null);
-      toast.success("Order deleted successfully");
+      toast.success("Order deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete order");
+      setDeleteError(error instanceof Error ? error.message : "Order was not deleted. Try again.");
     }
   };
 
@@ -268,7 +269,7 @@ export function OrderList() {
   }
 
   if (fetchError) {
-    return <div className="container-max py-32"><ServerError message={fetchError.message || "Failed to load orders"} /></div>;
+    return <div className="container-max py-32"><ServerError message={fetchError.message || "The orders could not be loaded. Refresh the page and try again."} /></div>;
   }
 
   // Derived values for the side sheet
@@ -325,8 +326,8 @@ export function OrderList() {
             padding="md"
             icon={<PackageIcon size={48} />}
             title={hasActiveFilters ? "No orders found" : "No orders yet"}
-            description={hasActiveFilters ? "Try adjusting your search or filters." : "Create your first order to get started."}
-            action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />Create Order</Button> : undefined}
+            description={hasActiveFilters ? "Try adjusting your search or filters." : undefined}
+            action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />Create your first order</Button> : undefined}
           />
         }
       >
@@ -341,7 +342,7 @@ export function OrderList() {
               onChange={(e) => { setStatusFilter(e.target.value as OrderFulfillmentStatus | ""); setCurrentPage(1); }}
               aria-label="Filter by fulfillment status"
             >
-              <option value="">All Statuses</option>
+              <option value="">All statuses</option>
               {orderFulfillmentStatuses.map((s) => (
                 <option key={s} value={s}>{ORDER_FULFILLMENT_DISPLAY[s].label}</option>
               ))}
@@ -352,7 +353,7 @@ export function OrderList() {
               className="sm:max-w-[200px]"
               aria-label="Filter by customer"
             >
-              <option value="">All Customers</option>
+              <option value="">All customers</option>
               {customerOptions.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -378,24 +379,24 @@ export function OrderList() {
           sideSheetEntity
             ? [
                 {
-                  title: "Order Information",
+                  title: "Order information",
                   fields: [
-                    { label: "Order Date", value: formatDate(sideSheetEntity.orderDate) },
+                    { label: "Order date", value: formatDate(sideSheetEntity.orderDate) },
                   ],
                 },
                 {
-                  title: "Customer Details",
+                  title: "Customer details",
                   fields: [
                     { label: "Customer", value: sideSheetEntity.customerName },
                     { label: "Customer location", value: sideSheetEntity.customerLocationName },
                   ],
                 },
                 {
-                  title: "Product Details",
+                  title: "Product details",
                   fields: [
-                    { label: "Biochar Product", value: sideSheetEntity.biocharProductCode },
+                    { label: "Product bin", value: sideSheetEntity.productBinName },
                     { label: "Packaging", value: <span className="capitalize">{sideSheetEntity.packaging}</span> },
-                    { label: "Quantity (kg)", value: `${sideSheetEntity.quantityKg.toLocaleString()} kg` },
+                    { label: "Quantity (kg)", value: formatMassKg(sideSheetEntity.quantityKg) },
                     { label: "Value", value: sideSheetEntity.value },
                     { label: "Currency", value: sideSheetEntity.currency },
                   ],

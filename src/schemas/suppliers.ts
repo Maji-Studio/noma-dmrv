@@ -48,7 +48,7 @@ export const supplierFormSchema = z.object({
     .or(z.literal("")),
   contactEmail: z
     .string()
-    .email("Please enter a valid email address")
+    .email("Enter a valid email address.")
     .max(255, "Email must be less than 255 characters")
     .optional()
     .or(z.literal("")),
@@ -86,7 +86,7 @@ export const createSupplierSchema = supplierFormSchema;
  * All fields optional except supplierId
  */
 export const updateSupplierSchema = z.object({
-  supplierId: z.string().uuid("Invalid supplier ID"),
+  supplierId: z.string().uuid("Choose a valid supplier."),
   code: z
     .string()
     .min(1)
@@ -110,7 +110,7 @@ export const updateSupplierSchema = z.object({
  * Schema for deleting a supplier
  */
 export const deleteSupplierSchema = z.object({
-  supplierId: z.string().uuid("Invalid supplier ID"),
+  supplierId: z.string().uuid("Choose a valid supplier."),
 });
 
 // ============================================
@@ -178,7 +178,7 @@ export const supplierLocationFormSchema = z.object({
  * Schema for creating a supplier location (server action)
  */
 export const createSupplierLocationSchema = supplierLocationFormSchema.extend({
-  supplierId: z.string().uuid("Invalid supplier ID"),
+  supplierId: z.string().uuid("Choose a valid supplier."),
 });
 
 export const createSupplierWithLocationsSchema = z.object({
@@ -192,7 +192,7 @@ export const createSupplierWithLocationsSchema = z.object({
  * Schema for updating a supplier location (server action)
  */
 export const updateSupplierLocationSchema = z.object({
-  locationId: z.string().uuid("Invalid location ID"),
+  locationId: z.string().uuid("Choose a valid location."),
   name: z.string().max(255).optional().nullable().or(z.literal("")),
   country: z.string().min(1).max(100).optional(),
   stateRegion: z.string().max(100).optional().nullable().or(z.literal("")),
@@ -209,7 +209,7 @@ export const updateSupplierLocationSchema = z.object({
  * Schema for deleting a supplier location
  */
 export const deleteSupplierLocationSchema = z.object({
-  locationId: z.string().uuid("Invalid location ID"),
+  locationId: z.string().uuid("Choose a valid location."),
 });
 
 // ============================================

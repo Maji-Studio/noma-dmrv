@@ -18,5 +18,6 @@ export * from "./storage-inventory";
 export * from "./bin-movements";
 export * from "./documentation";
 export * from "./certification";
+export * from "./settings";
 export * from "./compliance";
 export * from "./geo";

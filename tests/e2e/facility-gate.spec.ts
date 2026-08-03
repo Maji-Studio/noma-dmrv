@@ -153,8 +153,10 @@ test.describe("Deep-linked facility resolves on direct navigation (#473)", () =>
 
     // The resolved list surface renders (its create affordance only exists once
     // a facility is selected) — never the "Select a facility" gate.
+    // "New Reactor" is now unique on the page: the empty-state CTA says
+    // "Create your first reactor", so this stays strict (no `.first()`).
     await expect(
-      page.getByRole("button", { name: "New Reactor", exact: true }).first(),
+      page.getByRole("button", { name: "New Reactor", exact: true }),
     ).toBeVisible({ timeout: 20000 });
     await expect(
       page.getByRole("heading", { name: "Select a facility", exact: true }),

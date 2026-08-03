@@ -173,9 +173,8 @@ export function PositionPicker({
           </div>
           {!routingConfigured && (
             <InfoHint side="top">
-              Address search needs the geocoding service. Add
-              OPENROUTESERVICE_API_KEY to the environment to enable it — map
-              click and manual coordinates still work.
+              Address search is not configured. Ask an Admin to configure the
+              geocoding service. You can still click the map or enter coordinates.
             </InfoHint>
           )}
         </div>
@@ -210,7 +209,7 @@ export function PositionPicker({
         <div className="grid grid-cols-1 gap-x-16 gap-y-12 md:grid-cols-2">
           <FormField
             id={`${idPrefix}-latitude`}
-            label="GPS Latitude"
+            label="GPS latitude"
             error={latitudeError}
             helperText="-90 to 90"
             required={required}
@@ -229,7 +228,7 @@ export function PositionPicker({
 
           <FormField
             id={`${idPrefix}-longitude`}
-            label="GPS Longitude"
+            label="GPS longitude"
             error={longitudeError}
             helperText="-180 to 180"
             required={required}

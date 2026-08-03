@@ -59,7 +59,7 @@ export function DriverForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField
           id="licenseNumber"
-          label="License Number"
+          label="License number"
           error={errors.licenseNumber?.message}
         >
           <FormInput
@@ -74,7 +74,7 @@ export function DriverForm({
 
         <FormField
           id="contactPhone"
-          label="Contact Phone"
+          label="Contact phone"
           error={errors.contactPhone?.message}
         >
           <FormInput

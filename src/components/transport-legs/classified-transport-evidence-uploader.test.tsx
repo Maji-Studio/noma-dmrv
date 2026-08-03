@@ -33,6 +33,7 @@ describe("ClassifiedTransportEvidenceUploader", () => {
     expect(html).toContain("Bill of lading");
     expect(html).toContain("Weigh-scale ticket");
     expect(html).toContain("Other transport evidence");
+    expect(html).not.toContain("Distance provenance");
     expect(html.match(/type="radio"/g)).toHaveLength(3);
     expect(html).toMatch(
       /<input type="radio"[^>]*checked=""[^>]*value="bill_of_lading"/,

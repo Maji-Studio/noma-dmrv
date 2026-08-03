@@ -1,6 +1,16 @@
 # noma submits raw durability inputs; the registry computes the durable fraction
 
-Status: accepted (2026-06-18); amended 2026-07-03 (issue #142)
+> **Current status: Accepted; partially implemented** (reviewed 2026-07-29).
+> The governing boundary is implemented: noma submits raw durability inputs and
+> does not submit an authoritative durable fraction. The sampled 1,000-year
+> component/input path is implemented and sandbox-verified in
+> `durability-measurement-samples.ts` and `sequestration-binding.ts`.
+> Production remains blocked. The 200-year H/C unit and explicit binding remain
+> unconfirmed and fail closed. Historical statements below that “no 1000-year
+> submission path exists” describe the pre-2026-07-10 state and are
+> superseded by this metadata and the later amendments.
+
+Historical status: accepted (2026-06-18); amended 2026-07-03 (issue #142)
 
 > **Amendment (2026-07-03, issue #142):** the "Scope is 200-year" deferral below is
 > partly lifted — `computeFDurable1000` (Eq.4–6, bounded `min(0.95, max(0, …))`) now

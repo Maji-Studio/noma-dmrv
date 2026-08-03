@@ -12,7 +12,10 @@
  */
 import { test, expect } from "./fixtures";
 import {
+  ACTION_LABEL_PREFIX,
   dismissCertifierLinkDialog,
+  getCreatedActionCode,
+  getListedActionCodes,
   waitForSideSheet,
   waitForSideSheetClose,
   selectEntity as selectEntityById,
@@ -383,6 +386,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     };
 
     const today = new Date().toISOString().split("T")[0];
+    const productionRunDate = "2025-06-15";
 
     try {
     // ─── 1. FACILITY ───────────────────────────────────────
@@ -398,7 +402,12 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.fill('input[name="name"]', `Chain Facility ${runId}`);
       await page.fill('input[name="country"]', "Tanzania");
-      await page.selectOption('select[name="timezone"]', "Africa/Dar_es_Salaam");
+      await facilityDialog
+        .getByRole("combobox", { name: "Timezone" })
+        .fill("Dar es Salaam");
+      await page
+        .getByRole("option", { name: "Africa/Dar es Salaam (UTC+3)" })
+        .click();
 
       await facilityDialog
         .getByRole("button", { name: "Create Facility" })
@@ -450,6 +459,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     await test.step("Create Production Run", async () => {
       await page.goto(`/production-runs?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
+      const existingRunCodes = await getListedActionCodes(page);
 
       await page.click('button:has-text("New Production Run")');
       await waitForSideSheet(page);
@@ -464,7 +474,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       );
 
       // Fill start date
-      await page.fill('input[name="startDate"]', today);
+      await page.fill('input[name="startDate"]', productionRunDate);
       await page.fill('input[name="startTime"]', "08:00");
 
       await selectEntityById(
@@ -485,15 +495,25 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
       await waitForSideSheetClose(page);
+      const createdRunCode = await getCreatedActionCode(
+        page,
+        existingRunCodes,
+      );
 
-      await page
-        .locator("tbody tr")
-        .first()
-        .getByRole("button", { name: /Actions for/ })
-        .click();
-      await page.getByRole("menuitem", { name: "Edit" }).click();
+      await expect(async () => {
+        await page
+          .locator("tbody")
+          .getByRole("button", {
+            name: `${ACTION_LABEL_PREFIX}${createdRunCode}`,
+            exact: true,
+          })
+          .click({ timeout: 5000 });
+        await page
+          .getByRole("menuitem", { name: "Edit" })
+          .click({ timeout: 5000 });
+      }).toPass({ timeout: 30000 });
       await waitForSideSheet(page);
-      await page.fill('input[name="endDate"]', today);
+      await page.fill('input[name="endDate"]', productionRunDate);
       await page.fill('input[name="endTime"]', "12:00");
       await page.selectOption('select[name="status"]', "complete");
       await page
@@ -529,10 +549,10 @@ test.describe("Full Chain UI Smoke Test", () => {
         seededData.customerLocation.id
       );
 
-      // Biochar Product is a FormEntitySelect (custom dropdown), not a native <select>
+      // Product bin is a FormEntitySelect (custom dropdown), not a native <select>
       await selectEntityById(
         page,
-        "Biochar Product",
+        "Product bin",
         seededData.biocharProduct.id
       );
       await page.selectOption('select[name="packaging"]', "loose");
@@ -616,8 +636,8 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.click('button:has-text("New Credit Batch")');
       await waitForSideSheet(page);
 
-      await page.fill('input[name="startDate"]', today);
-      await page.fill('input[name="endDate"]', today);
+      await page.fill('input[name="startDate"]', productionRunDate);
+      await page.fill('input[name="endDate"]', productionRunDate);
 
       await selectFirstCreditBatchProductionRun(page, seededData.feedstockType);
 

@@ -67,6 +67,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Documentation references
+        run: pnpm docs:check
+
       - name: Lint
         run: pnpm lint
 
@@ -75,6 +78,17 @@ jobs:
 
       - name: Org-scoping check
         run: pnpm check:org-scoping
+
+      # Tailwind's spacing scale is an allow-list here (`--spacing-*: initial`),
+      # so an off-scale utility compiles to nothing and fails silently at
+      # runtime rather than at build time. Nothing else catches it.
+      - name: Spacing-scale check
+        run: pnpm check:spacing-scale
+
+      # docs/ux-writing.md bans en and em dashes in user-facing copy; this
+      # parses string literals and JSX text (never comments) to enforce it.
+      - name: UX-copy dash check
+        run: pnpm check:ux-copy
 
       - name: Apply schema
         run: pnpm drizzle-kit push --force
@@ -93,7 +107,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_build
       NEXT_PUBLIC_APP_URL: http://localhost:3100
+      NOMA_HERMETIC_CI: "true"
       BETTER_AUTH_SECRET: ci-build-placeholder-secret-not-a-real-key
+      ISOMETRIC_ENVIRONMENT: sandbox
       STORAGE_PROVIDER: s3-compatible
       STORAGE_BUCKET: ci-build
       STORAGE_REGION: us-east-1

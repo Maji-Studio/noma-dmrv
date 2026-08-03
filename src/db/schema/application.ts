@@ -1,5 +1,6 @@
-import { check, doublePrecision, foreignKey, index, pgTable, text, timestamp, unique, uuid, real, date } from "drizzle-orm/pg-core";
+import { check, doublePrecision, foreignKey, index, jsonb, pgTable, text, timestamp, unique, uuid, real, date } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
+import type { GisBoundary } from "@/lib/geojson/types";
 import {
   applicationEvidenceMethod,
   applicationStatus,
@@ -52,7 +53,7 @@ export const applications = pgTable(
     evidenceMethod: applicationEvidenceMethod("evidence_method")
       .default("visual")
       .notNull(),
-    gisBoundaryReference: text("gis_boundary_reference"), // Link to GIS layer data
+    gisBoundary: jsonb("gis_boundary").$type<GisBoundary>(),
 
     // --- Soil Temperature (Isometric: Soil Storage Module §5.1.1.3.1) ---
     // Used in 200-year durability equation: F_durable,200 = min(0.95, 1 - [c + (a + b·ln(T_soil))·H/C_org])

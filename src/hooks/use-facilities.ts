@@ -22,8 +22,10 @@ import {
   archiveFacilityFn,
   restoreFacilityFn,
 } from "@/fn/facilities";
+import { missingRecordMessage } from "@/lib/errors";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { invalidateOnboardingProgress } from "./use-onboarding";
 
 // ============================================
 // Query Keys
@@ -53,7 +55,7 @@ export const facilityKeys = {
 // Exact message thrown by the facility data-access reads
 // (src/data-access/facilities.ts) for a missing or foreign facility.
 // Deterministic — retrying it only prolongs a stale selection window.
-const FACILITY_NOT_FOUND_MESSAGE = "Facility not found";
+const FACILITY_NOT_FOUND_MESSAGE = missingRecordMessage("Facility");
 const FACILITY_LOOKUP_MAX_RETRIES = 2;
 
 // ============================================
@@ -241,6 +243,7 @@ export function useCreateFacility(
       await queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
       // Invalidate countries in case a new country was added
       await queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() });
+      await invalidateOnboardingProgress(queryClient);
 
       // Pre-populate the detail cache with the new facility
       queryClient.setQueryData(facilityKeys.detail(data.id), data);

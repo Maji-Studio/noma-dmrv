@@ -2,9 +2,10 @@
  * Bin over-draw hard block (issue #116)
  *
  * Exercises all six guarded write paths through the UI. Feedstock draws use
- * dry mass (wet × (1 − moisture%/100)); product draws use formulation-scaled
- * biochar-equivalent mass; delivery draws use the product batch's own wet-mass
- * pool. Every path proves both the hard rejection and a legitimate save.
+ * dry mass (wet × (1 − moisture%/100)); product draws use blend mass less the
+ * actual recorded ingredient masses; delivery draws use the product batch's
+ * own wet-mass pool. Every path proves both the hard rejection and a legitimate
+ * save.
  */
 import type { Page } from "@playwright/test";
 import {
@@ -16,6 +17,9 @@ import {
   type TestStorageLocation,
 } from "./fixtures";
 import {
+  ACTION_LABEL_PREFIX,
+  getCreatedActionCode,
+  getListedActionCodes,
   selectEntity,
   selectEntityByText,
   waitForSideSheet,
@@ -27,17 +31,19 @@ const BIOCHAR_PRODUCTS_URL = "/biochar-products";
 const ORDERS_URL = "/orders";
 const DELIVERIES_URL = "/deliveries";
 
-const RUN_DATE = "2027-06-15";
+const RUN_DATE = "2025-06-15";
 const RUN_START_TIME = "08:00";
 const RUN_END_TIME = "12:00";
 const DELIVERY_DATE = "2027-06-16";
 
 const BIOCHAR_BIN_STOCK_KG = "100";
 const ORDER_QUANTITY_KG = "200000";
-const feedstockOverdrawText = /not enough feedstock in this bin/i;
-const biocharOverdrawText = /not enough biochar in this bin/i;
+const feedstockOverdrawText =
+  /^Only .+ of dry feedstock is available\. At .+% moisture, enter at most .+ wet mass\.$/;
+const biocharOverdrawText =
+  /^Only .+ of biochar is available\. Reduce the mass\.$/;
 const deliveryOverdrawText =
-  /cannot deliver .* only .* remain undelivered/i;
+  /^Only .+ of biochar is available\. Reduce the delivered mass\.$/;
 
 /** Open the existing draft run form against the seeded 100 kg-dry source bin. */
 async function openRunFormWithSource(
@@ -83,6 +89,7 @@ async function openCompleteRunForm(
     feedstockWetMassKg?: string;
     feedstockMoisturePercent?: string;
     biocharOutputKg?: string;
+    biocharMoisturePercent?: string;
   },
 ) {
   await page.goto(
@@ -91,6 +98,7 @@ async function openCompleteRunForm(
   await expect(
     page.getByRole("button", { name: "New Production Run" }),
   ).toBeVisible();
+  const existingRunCodes = await getListedActionCodes(page);
   await page.getByRole("button", { name: "New Production Run" }).click();
   await waitForSideSheet(page);
 
@@ -128,6 +136,11 @@ async function openCompleteRunForm(
     'input[name="biocharOutputKg"]',
     values.biocharOutputKg ?? "1",
   );
+  await page.fill(
+    'input[name="biocharMoisturePercent"]',
+    values.biocharMoisturePercent ?? "0",
+  );
+  return existingRunCodes;
 }
 
 /** Submit the create-production-run side sheet. */
@@ -144,25 +157,68 @@ async function createCompleteRun(
   seededData: SeededChainData,
   values: Parameters<typeof openCompleteRunForm>[2],
 ) {
-  await openCompleteRunForm(page, seededData, values);
+  const existingRunCodes = await openCompleteRunForm(page, seededData, values);
   await submitRunCreate(page);
   await waitForSideSheetClose(page);
-  const actionButton = page
-    .locator("tbody tr")
-    .getByRole("button", { name: /Actions for/ })
-    .first();
-  await expect(actionButton).toBeVisible({ timeout: 10000 });
-  const actionLabel = await actionButton.getAttribute("aria-label");
-  const runCode = actionLabel?.replace(/^Actions for /, "").trim();
-  if (!runCode) throw new Error("Created production run code was not rendered");
+  const runCode = await getCreatedActionCode(page, existingRunCodes);
 
-  await editFirstRow(page, "endTime");
+  await editRunByCode(page, runCode, "endTime");
   await page.fill('input[name="endDate"]', RUN_DATE);
   await page.fill('input[name="endTime"]', RUN_END_TIME);
   await page.selectOption('select[name="status"]', "complete");
   await saveEdit(page);
   await waitForSideSheetClose(page);
   return runCode;
+}
+
+/** Open a specific production run through its stable run-code action label. */
+async function editRunByCode(
+  page: Page,
+  runCode: string,
+  readyInputName: string,
+) {
+  const actionName = `${ACTION_LABEL_PREFIX}${runCode}`;
+  await expect(
+    page.locator("tbody").getByRole("button", {
+      name: actionName,
+      exact: true,
+    }),
+  ).toBeVisible({ timeout: 10000 });
+  await expect(async () => {
+    await page
+      .locator("tbody")
+      .getByRole("button", { name: actionName, exact: true })
+      .click({ timeout: 5000 });
+    await page
+      .getByRole("menuitem", { name: "Edit" })
+      .click({ timeout: 5000 });
+  }).toPass({ timeout: 30000 });
+  await waitForSideSheet(page);
+  await expect(
+    page.locator(`[role="dialog"] input[name="${readyInputName}"]`),
+  ).toBeVisible();
+}
+
+/** Open the row containing unique entity text through its Edit action. */
+async function editRowByText(
+  page: Page,
+  uniqueText: string,
+  readyInputName: string,
+) {
+  const matchingRow = page.locator("tbody tr").filter({ hasText: uniqueText });
+  await expect(matchingRow).toHaveCount(1, { timeout: 10000 });
+  await expect(async () => {
+    await matchingRow
+      .getByRole("button", { name: /Actions for/ })
+      .click({ timeout: 5000 });
+    await page
+      .getByRole("menuitem", { name: "Edit" })
+      .click({ timeout: 5000 });
+  }).toPass({ timeout: 30000 });
+  await waitForSideSheet(page);
+  await expect(
+    page.locator(`[role="dialog"] input[name="${readyInputName}"]`),
+  ).toBeVisible();
 }
 
 /** Open the first list row through its overflow-menu Edit action. */
@@ -208,7 +264,6 @@ async function openLinkedProductForm(
   page: Page,
   seededData: SeededChainData,
   productBin: TestStorageLocation,
-  runCode: string,
   massKg: string,
 ) {
   await page.goto(
@@ -218,9 +273,11 @@ async function openLinkedProductForm(
   await page.getByRole("button", { name: "New Product" }).click();
   await waitForSideSheet(page);
 
-  await selectEntityByText(page, "Production Run", runCode);
-  await expect(page.locator('input[name="massKg"]')).toHaveValue(
-    BIOCHAR_BIN_STOCK_KG,
+  await selectEntity(
+    page,
+    "Biochar bin",
+    seededData.biocharStorageLocation.id,
+    seededData.biocharStorageLocation.name,
   );
   await selectEntity(
     page,
@@ -248,14 +305,12 @@ async function createLinkedProduct(
   page: Page,
   seededData: SeededChainData,
   productBin: TestStorageLocation,
-  runCode: string,
   massKg: string,
 ) {
   await openLinkedProductForm(
     page,
     seededData,
     productBin,
-    runCode,
     massKg,
   );
   await submitProductCreate(page);
@@ -263,13 +318,17 @@ async function createLinkedProduct(
 }
 
 /** Delete the UI-created product so its directly-seeded product bin can follow. */
-async function deleteCreatedProduct(page: Page, seededData: SeededChainData) {
+async function deleteCreatedProduct(
+  page: Page,
+  seededData: SeededChainData,
+  productBin: TestStorageLocation,
+) {
   await page.goto(
     `${BIOCHAR_PRODUCTS_URL}?facility=${seededData.facility.id}`,
   );
   const actionButton = page
     .locator("tbody tr")
-    .first()
+    .filter({ hasText: productBin.name })
     .getByRole("button", { name: /Actions for/ });
   await expect(actionButton).toBeVisible({ timeout: 10000 });
   await actionButton.click();
@@ -291,7 +350,9 @@ async function cleanupProductScenario(
   productBin: TestStorageLocation,
   productCreated: boolean,
 ) {
-  if (productCreated) await deleteCreatedProduct(page, seededData);
+  if (productCreated) {
+    await deleteCreatedProduct(page, seededData, productBin);
+  }
   await deleteTestStorageLocation(productBin.id);
 }
 
@@ -321,7 +382,7 @@ async function createOrder(page: Page, seededData: SeededChainData) {
   await page.fill('input[name="quantityKg"]', ORDER_QUANTITY_KG);
   await selectEntity(
     page,
-    "Biochar Product",
+    "Product bin",
     seededData.biocharProduct.id,
     seededData.biocharProduct.code,
   );
@@ -380,15 +441,24 @@ test.describe("createProductionRun feedstock guard", () => {
       wetMassKg: "200",
       moisturePercent: "10",
     });
-    await submitRunCreate(page);
 
-    const error = page
-      .locator('[role="dialog"]')
-      .getByText(feedstockOverdrawText);
+    const error = page.locator("#feedstockWetMassKg-error");
     await expect(error).toBeVisible({
       timeout: 10000,
     });
-    await expect(error).toContainText(/available/i);
+    await expect(
+      page.locator('input[name="feedstockWetMassKg"]'),
+    ).toHaveAttribute("aria-describedby", /feedstockWetMassKg-error/);
+    await expect(error).toHaveText(feedstockOverdrawText);
+
+    // Correcting the draw must clear the inline error without a submit.
+    await page.fill('input[name="feedstockWetMassKg"]', "50");
+    await expect(error).toBeHidden();
+
+    // Re-entering the overdraw still blocks the write.
+    await page.fill('input[name="feedstockWetMassKg"]', "200");
+    await submitRunCreate(page);
+    await expect(error).toBeVisible({ timeout: 10000 });
   });
 
   test("accepts a feedstock draw within the bin's on-hand stock", async ({
@@ -416,11 +486,11 @@ test.describe("updateProductionRun feedstock guard", () => {
     seededData,
   }) => {
     // The run owns 80 kg; replacing it with 110 kg still exceeds total stock.
-    await createCompleteRun(page, seededData, {
+    const runCode = await createCompleteRun(page, seededData, {
       feedstockWetMassKg: "80",
       feedstockMoisturePercent: "0",
     });
-    await editFirstRow(page, "feedstockWetMassKg");
+    await editRunByCode(page, runCode, "feedstockWetMassKg");
     await page.fill('input[name="feedstockWetMassKg"]', "110");
     await saveEdit(page);
 
@@ -430,7 +500,7 @@ test.describe("updateProductionRun feedstock guard", () => {
     await expect(error).toBeVisible({
       timeout: 10000,
     });
-    await expect(error).toContainText(/available/i);
+    await expect(error).toHaveText(feedstockOverdrawText);
   });
 
   test("accepts an increased draw when the run's old draw is excluded", async ({
@@ -438,11 +508,11 @@ test.describe("updateProductionRun feedstock guard", () => {
     seededData,
   }) => {
     // 80 → 90 kg is valid against 100 kg total, but 80 + 90 would falsely fail.
-    await createCompleteRun(page, seededData, {
+    const runCode = await createCompleteRun(page, seededData, {
       feedstockWetMassKg: "80",
       feedstockMoisturePercent: "0",
     });
-    await editFirstRow(page, "feedstockWetMassKg");
+    await editRunByCode(page, runCode, "feedstockWetMassKg");
     await page.fill('input[name="feedstockWetMassKg"]', "90");
     await saveEdit(page);
 
@@ -450,54 +520,60 @@ test.describe("updateProductionRun feedstock guard", () => {
   });
 });
 
-/** Path 3: createBiocharProduct scales wet mass by formulation ratio 0.7. */
+/** Path 3: createBiocharProduct subtracts the recorded ingredient draw. */
 test.describe("createBiocharProduct biochar-bin guard", () => {
-  test("rejects a formulation-scaled draw exceeding biochar stock", async ({
+  test("rejects a recorded source draw exceeding biochar stock", async ({
     adminPage: page,
     seededData,
   }) => {
-    // A 150 kg product × 0.7 = 105 kg biochar from a 100 kg-output run.
+    // This formulation has no ingredient lines, so 101 kg requires 101 kg from
+    // the 100 kg-output run and must be rejected.
     const productBin = await createProductBin(seededData);
     try {
-      const runCode = await createCompleteRun(page, seededData, {
+      await createCompleteRun(page, seededData, {
+        feedstockWetMassKg: BIOCHAR_BIN_STOCK_KG,
         biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
       });
       await openLinkedProductForm(
         page,
         seededData,
         productBin,
-        runCode,
-        "150",
+        "101",
       );
-      await submitProductCreate(page);
 
-      const error = page
-        .locator('[role="dialog"]')
-        .getByText(biocharOverdrawText);
+      const error = page.locator("#massKg-error");
       await expect(error).toBeVisible({ timeout: 10000 });
-      await expect(error).toContainText(/available/i);
+      await expect(error).toHaveText(biocharOverdrawText);
+
+      await page.fill('input[name="massKg"]', "100");
+      await expect(error).toBeHidden();
+
+      await page.fill('input[name="massKg"]', "101");
+      await submitProductCreate(page);
+      await expect(error).toBeVisible({ timeout: 10000 });
     } finally {
       await cleanupProductScenario(page, seededData, productBin, false);
     }
   });
 
-  test("accepts a formulation-scaled draw within biochar stock", async ({
+  test("accepts a recorded source draw within biochar stock", async ({
     adminPage: page,
     seededData,
   }) => {
-    // A 140 kg product × 0.7 = 98 kg, within the run's 100 kg output.
+    // This formulation has no ingredient lines, so 100 kg draws exactly the
+    // 100 kg available from the run.
     const productBin = await createProductBin(seededData);
     let productCreated = false;
     try {
-      const runCode = await createCompleteRun(page, seededData, {
+      await createCompleteRun(page, seededData, {
+        feedstockWetMassKg: BIOCHAR_BIN_STOCK_KG,
         biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
       });
       await openLinkedProductForm(
         page,
         seededData,
         productBin,
-        runCode,
-        "140",
+        "100",
       );
       await submitProductCreate(page);
       await waitForSideSheetClose(page);
@@ -513,67 +589,40 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
   });
 });
 
-/** Path 4: updateBiocharProduct excludes its own prior scaled allocation. */
-test.describe("updateBiocharProduct biochar-bin guard", () => {
-  test("rejects an edited scaled draw exceeding total biochar stock", async ({
+/** Path 4: source allocations stay fixed while measurements remain editable. */
+test.describe("updateBiocharProduct source allocation", () => {
+  test("keeps source mass fixed while allowing moisture correction", async ({
     adminPage: page,
     seededData,
   }) => {
-    // Initial draw is 70 kg; replacing it with 105 kg still exceeds 100 kg.
     const productBin = await createProductBin(seededData);
     let productCreated = false;
     try {
-      const runCode = await createCompleteRun(page, seededData, {
+      await createCompleteRun(page, seededData, {
+        feedstockWetMassKg: BIOCHAR_BIN_STOCK_KG,
         biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
       });
       await createLinkedProduct(
         page,
         seededData,
         productBin,
-        runCode,
         "100",
       );
       productCreated = true;
-      await editFirstRow(page, "massKg");
-      await page.fill('input[name="massKg"]', "150");
-      await saveEdit(page);
-
-      const error = page
-        .locator('[role="dialog"]')
-        .getByText(biocharOverdrawText);
-      await expect(error).toBeVisible({ timeout: 10000 });
-      await expect(error).toContainText(/available/i);
-    } finally {
-      await cleanupProductScenario(
+      await editRowByText(
         page,
-        seededData,
-        productBin,
-        productCreated,
+        productBin.name,
+        "moistureContentPercent",
       );
-    }
-  });
-
-  test("accepts an increased scaled draw when the product is excluded", async ({
-    adminPage: page,
-    seededData,
-  }) => {
-    // 70 → 98 kg is valid, but counting old + replacement gives a false 168 kg.
-    const productBin = await createProductBin(seededData);
-    let productCreated = false;
-    try {
-      const runCode = await createCompleteRun(page, seededData, {
-        biocharOutputKg: BIOCHAR_BIN_STOCK_KG,
-      });
-      await createLinkedProduct(
-        page,
-        seededData,
-        productBin,
-        runCode,
-        "100",
+      const dialog = page.locator('[role="dialog"]');
+      await expect(
+        dialog.locator('input[name="massKg"]'),
+      ).toBeDisabled();
+      const moistureInput = dialog.locator(
+        'input[name="moistureContentPercent"]',
       );
-      productCreated = true;
-      await editFirstRow(page, "massKg");
-      await page.fill('input[name="massKg"]', "140");
+      await expect(moistureInput).toBeEnabled();
+      await moistureInput.fill("5");
       await saveEdit(page);
       await waitForSideSheetClose(page);
     } finally {
@@ -596,11 +645,16 @@ test.describe("createDelivery product-batch guard", () => {
     // The seeded batch holds 100,000 kg; 100,001 kg cannot be delivered.
     await createOrder(page, seededData);
     await openDeliveredDeliveryForm(page, seededData, "100001");
-    await submitDeliveryCreate(page);
 
-    await expect(
-      page.locator('[role="dialog"]').getByText(deliveryOverdrawText),
-    ).toBeVisible({ timeout: 10000 });
+    const error = page.locator("#deliveredWetMassKg-error");
+    await expect(error).toBeVisible({ timeout: 10000 });
+
+    await page.fill('input[name="deliveredWetMassKg"]', "90000");
+    await expect(error).toBeHidden();
+
+    await page.fill('input[name="deliveredWetMassKg"]', "100001");
+    await submitDeliveryCreate(page);
+    await expect(error).toBeVisible({ timeout: 10000 });
   });
 
   test("accepts a delivered mass within the product batch", async ({
@@ -613,6 +667,43 @@ test.describe("createDelivery product-batch guard", () => {
     await submitDeliveryCreate(page);
 
     await waitForSideSheetClose(page);
+  });
+});
+
+/** Upcoming deliveries allocate order quantity without drawing physical stock. */
+test.describe("createDelivery order-balance guard", () => {
+  test("shows and blocks an order over-allocation while typing", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await createOrder(page, seededData);
+    await page.goto(`${DELIVERIES_URL}?facility=${seededData.facility.id}`);
+    await expect(
+      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+    ).toBeVisible({ timeout: 15000 });
+    const newDeliveryButton = page
+      .locator("header")
+      .getByRole("button", { name: "New Delivery" });
+    await expect(newDeliveryButton).toBeVisible();
+    await newDeliveryButton.click();
+    await waitForSideSheet(page);
+
+    await page.fill('input[name="deliveryDate"]', DELIVERY_DATE);
+    await page.selectOption('select[name="status"]', "upcoming");
+    await selectEntityByText(page, "Order", seededData.customer.name);
+    await page.fill('input[name="deliveredWetMassKg"]', "200001");
+
+    const error = page.locator("#deliveredWetMassKg-error");
+    await expect(error).toHaveText(
+      "Only 200,000 kg remains on this order. Reduce the delivered mass.",
+      { timeout: 10000 },
+    );
+    await submitDeliveryCreate(page);
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
+    await expect(error).toBeVisible();
+
+    await page.fill('input[name="deliveredWetMassKg"]', "190000");
+    await expect(error).toBeHidden();
   });
 });
 

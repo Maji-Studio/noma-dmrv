@@ -153,7 +153,7 @@ describe("CarbonBreakdownCard", () => {
   });
 
   it.each([
-    ["net-negative", "Registry reports net emissions"],
+    ["net-negative", "The registry reports net emissions"],
     [
       "net-exceeds-before-discount",
       "Registry net exceeds the amount before uncertainty discount",
@@ -204,7 +204,7 @@ describe("CarbonBreakdownCard", () => {
         }),
       );
 
-      expect(html).toContain("Registry draft — unverified");
+      expect(html).toContain("Registry draft: unverified");
       expect(html).not.toContain("Registry-verified");
     },
   );

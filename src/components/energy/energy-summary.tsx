@@ -17,7 +17,7 @@
  */
 "use client";
 
-import { FireIcon, GasPumpIcon, LightningIcon } from "@phosphor-icons/react";
+import { FireIcon, GasPumpIcon, LightningIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { PageHeader } from "@/components/ui";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -75,7 +75,7 @@ export function EnergySummary() {
           message={
             totalsError instanceof Error
               ? totalsError.message
-              : "Failed to load energy totals"
+              : "The energy totals could not be loaded. Refresh the page and try again."
           }
         />
       </div>
@@ -95,7 +95,7 @@ export function EnergySummary() {
           message={
             totalsError instanceof Error
               ? totalsError.message
-              : "Failed to refresh energy totals — showing the last loaded figures."
+              : "Energy totals were not refreshed. The last loaded figures remain visible."
           }
         />
       )}
@@ -134,12 +134,12 @@ export function EnergySummary() {
       <div className="content-measure-preview flex flex-col gap-12">
         <h2 className="title-heading-3">Submission preview</h2>
         <p className="body-small text-[var(--color-text-secondary)]">
-          Energy submits as a single combined measurement point — one grid
-          electricity datapoint (kWh) and one diesel fuel datapoint (genset +
-          startup litres, submitted by volume). The diesel emission factor is
+          Energy is submitted as one combined measurement point: one grid
+          electricity value (kWh) and one diesel fuel value (genset plus
+          startup litres by volume). The diesel emission factor is
           bound on the Isometric template. There is no per-stage split. Each
-          value is submitted only if the active removal template declares the
-          matching component — if it cannot carry the diesel litres, they are
+          value is submitted only if the active Removal template declares the
+          matching component. If it cannot carry the diesel litres, they are
           omitted and submission readiness shows an advisory.
         </p>
         {mappingLoading && (
@@ -152,7 +152,7 @@ export function EnergySummary() {
             message={
               mappingError instanceof Error
                 ? mappingError.message
-                : "Failed to load registry link"
+                : "The registry link could not be loaded. Refresh the page and try again."
             }
           />
         )}

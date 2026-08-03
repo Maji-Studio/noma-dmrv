@@ -41,22 +41,92 @@ export const createOrganizationSchema = z.object({
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 
+/**
+ * First-time credential entry: both halves have to be typed, because there is
+ * nothing stored to fall back on.
+ */
+const MASK_CHARACTER = "\u2022";
+export const CERTIFIER_CREDENTIAL_MASK = MASK_CHARACTER.repeat(16);
+const MASK_CONTAMINATION_MESSAGE =
+  "Remove the masked placeholder before entering a key.";
+
+function credentialFormValueSchema(requiredMessage: string) {
+  return z
+    .string()
+    .trim()
+    .min(1, requiredMessage)
+    .refine((value) => !value.includes(MASK_CHARACTER), {
+      message: MASK_CONTAMINATION_MESSAGE,
+    });
+}
+
 export const certifierCredentialsFormSchema = z.object({
-  accessToken: z.string().trim().min(1, "Access token is required."),
-  clientSecret: z.string().trim().min(1, "Client secret is required."),
+  accessToken: credentialFormValueSchema("Access token is required."),
+  clientSecret: credentialFormValueSchema("Client secret is required."),
 });
 export type CertifierCredentialsFormInput = z.infer<
   typeof certifierCredentialsFormSchema
 >;
 
+/**
+ * Rotation: the settings form keeps both inputs on screen once credentials
+ * exist, seeded with a masked stand-in. A field left at its mask (or cleared
+ * and not retyped) means "leave this one alone", so neither is required here.
+ * Infers the same shape as the create schema, so one form type serves both.
+ */
+export const certifierCredentialsRotationSchema = z.object({
+  accessToken: z
+    .string()
+    .trim()
+    .refine(
+      (value) =>
+        value === CERTIFIER_CREDENTIAL_MASK ||
+        !value.includes(MASK_CHARACTER),
+      { message: MASK_CONTAMINATION_MESSAGE },
+    ),
+  clientSecret: z
+    .string()
+    .trim()
+    .refine(
+      (value) =>
+        value === CERTIFIER_CREDENTIAL_MASK ||
+        !value.includes(MASK_CHARACTER),
+      { message: MASK_CONTAMINATION_MESSAGE },
+    ),
+});
+
 const organizationIdSchema = z
   .string()
   .trim()
-  .min(1, "Organization id is required.");
+  .min(1, "Choose an Organization.");
 
-export const setOrgCertifierCredentialsSchema =
-  certifierCredentialsFormSchema.extend({
+/**
+ * The settings form seeds a stored field with a run of bullets and drops any
+ * field still holding it. Rejecting that shape here too means a hand-rolled
+ * request, or a future caller that forgets to strip it, cannot store the mask
+ * as a real key — a credential made only of `\u2022` is never a real one.
+ */
+const secretSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => !value.includes(MASK_CHARACTER), {
+    message: "That is the placeholder for a stored key, not a key.",
+  });
+
+/**
+ * The action payload. Both secrets are optional so a rotation can carry only
+ * the half that changed; the data-access layer keeps the stored value for an
+ * omitted field and rejects a first save that omits either.
+ */
+export const setOrgCertifierCredentialsSchema = z
+  .object({
     organizationId: organizationIdSchema,
+    accessToken: secretSchema.optional(),
+    clientSecret: secretSchema.optional(),
+  })
+  .refine((values) => values.accessToken || values.clientSecret, {
+    message: "Enter an access token or a client secret to save.",
   });
 
 export const orgCertifierCredentialsTargetSchema = z.object({

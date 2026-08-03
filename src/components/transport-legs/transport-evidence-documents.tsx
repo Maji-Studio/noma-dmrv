@@ -17,12 +17,9 @@ import {
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
 import type { DocumentEntityType } from "@/schemas/documents";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
-import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { InfoHint } from "@/components/ui/tooltip";
 import {
   isAcceptedTransportEvidenceDocument,
-  deriveTransportEvidenceCertStatus,
   isTransportEvidenceDocumentType,
   TRANSPORT_EVIDENCE_DOCUMENT_LABELS,
 } from "@/lib/certification/transport-evidence";
@@ -70,7 +67,7 @@ export function TransportEvidenceDocuments({
       setDeletingId(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Failed to delete document",
+        err instanceof Error ? err.message : "Document was not deleted. Try again.",
       );
     }
   };
@@ -84,7 +81,7 @@ export function TransportEvidenceDocuments({
       {error && (
         <ServerError
           message={
-            error instanceof Error ? error.message : "Failed to load documents"
+            error instanceof Error ? error.message : "The documents could not be loaded. Refresh the page and try again."
           }
         />
       )}
@@ -178,10 +175,6 @@ interface TransportEvidencePanelProps {
   entityType: TransportEvidenceEntityType;
   entityId: string;
   readOnly?: boolean;
-  /** Effective saved provenance of the distance represented by this surface. */
-  distanceSource?: DistanceSourceValue | null;
-  /** Undefined while saved provenance is still loading. */
-  persisted?: boolean;
   /** Omits repeated visible chrome when a parent section already supplies the heading. */
   embedded?: boolean;
 }
@@ -194,20 +187,8 @@ export function TransportEvidencePanel({
   entityType,
   entityId,
   readOnly = false,
-  distanceSource,
-  persisted = true,
   embedded = false,
 }: TransportEvidencePanelProps) {
-  const { data: documents } = useDocumentsForEntity(entityType, entityId);
-  const acceptedDocumentCount = documents?.filter(
-    isAcceptedTransportEvidenceDocument,
-  ).length;
-  const evidenceStatus = deriveTransportEvidenceCertStatus({
-    persisted,
-    documentsLoaded: documents !== undefined,
-    source: distanceSource,
-    acceptedDocumentCount,
-  });
   return (
     <section
       className={
@@ -223,15 +204,9 @@ export function TransportEvidencePanel({
             Transport evidence
           </h3>
         )}
-        <CertificationFieldTag
-          status={evidenceStatus}
-          description="Satisfied when saved provenance is Document and at least one classified file is uploaded"
-        />
         <InfoHint label="About transport evidence">
-          Transport evidence requires saved Document provenance plus at least
-          one uploaded bill of lading, weigh-scale ticket, or other transport
-          evidence file. One accepted file is enough. Uploading does not change
-          the saved provenance.
+          Optional. Attach a bill of lading, weigh-scale ticket, or other
+          transport record if you have one.
         </InfoHint>
       </div>
       <TransportEvidenceDocuments

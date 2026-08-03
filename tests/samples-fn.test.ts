@@ -122,7 +122,7 @@ describe("createSampleFn", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toContain("2026-01-01–2026-01-31");
+      expect(result.error).toContain("2026-01-01 to 2026-01-31");
     }
     expect(mockCreateSample).not.toHaveBeenCalled();
   });
@@ -222,7 +222,9 @@ describe("getSampleByIdFn", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toBe("Failed to load sample");
+      expect(result.error).toBe(
+        "Sample could not be loaded. Refresh the page and try again.",
+      );
       expect(result.error).not.toMatch(/select/);
       expect(result.error).not.toMatch(/params:/);
     }

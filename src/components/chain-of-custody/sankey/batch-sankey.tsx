@@ -26,6 +26,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
+import { formatMassKg } from "@/lib/format-utils";
 import type {
   CreditBatchSankeyData,
   SankeyColumn,
@@ -90,7 +91,7 @@ const EXIT_NOTES: Record<SankeyExitKey, string> = {
   ineligible_feedstock:
     "Feedstock mass excluded from the eligible balance for this batch.",
   conversion_loss:
-    "Pyrolysis gas and heat — the expected mass loss of conversion.",
+    "Pyrolysis gas and heat, which are the expected conversion loss.",
   unallocated_output:
     "Run output not allocated to any biochar lot in this batch.",
   in_storage: "Biochar produced for this batch but not yet applied.",
@@ -100,10 +101,6 @@ const TOOLTIP_W = 248;
 // Keeps the tooltip anchor far enough above the wrapper's bottom edge that
 // an estimated-height tooltip never clips outside the diagram.
 const TOOLTIP_BOTTOM_CLEARANCE = 120;
-
-function formatMassKg(value: number): string {
-  return `${Math.round(value).toLocaleString()} kg`;
-}
 
 function exitTone(exit: SankeyExit): string {
   return exit.tone === "alert" ? "var(--st-bad)" : "var(--color-text-tertiary)";

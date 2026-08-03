@@ -32,6 +32,7 @@ export function toRemovalReadinessFacts(
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
     durabilityGateBlockers: ctx.durabilityGateBlockers ?? [],
+    futureDatedMeasurements: ctx.futureDatedMeasurements ?? [],
     supportingDocumentCount: ctx.supportingDocuments.total,
     mirroredDocumentCount: ctx.supportingDocuments.mirrored,
     requiredTransport: ctx.requiredTransportCategories.map((category) => {

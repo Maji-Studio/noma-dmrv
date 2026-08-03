@@ -14,18 +14,62 @@ describe("RemovalDetailSheet sync history contract", () => {
     );
   });
 
-  it("shows submitted-state advisories without the submission availability note", () => {
+  it("uses the centralized workflow status instead of separate lifecycle and readiness blocks", () => {
     const source = readFileSync(
       new URL("./removal-detail-sheet.tsx", import.meta.url),
       "utf8",
     );
 
-    expect(source).toContain(
-      "<AdvisoryRows advisories={advisories} showSubmissionNote={false} />",
+    expect(source).toContain("deriveRemovalWorkflowStatus");
+    expect(source).toContain("Submission status");
+    expect(source).not.toContain("ReadinessBlock");
+    expect(source).not.toContain("all preconditions met");
+  });
+
+  it("keeps a failed-enrichment row inspectable with retry and Source repair routes", () => {
+    const source = readFileSync(
+      new URL("./removal-detail-sheet.tsx", import.meta.url),
+      "utf8",
     );
-    expect(source).toContain("showSubmissionNote = true");
+
+    expect(source).toContain("status.canRetry");
+    expect(source).toMatch(/<Button[\s\S]*?>\s*Retry\s*<\/Button>/);
+    expect(source).toMatch(
+      /<SourcesPanel[\s\S]*?removalId=\{summary\.removalId\}[\s\S]*?\/>/,
+    );
+  });
+
+  it("does not show a registry-result placeholder before the first submission", () => {
+    const source = readFileSync(
+      new URL("./removal-detail-sheet.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toMatch(
+      /\{summary\.externalId && \(\s*<RemovalCarbonBreakdown/,
+    );
+  });
+
+  it("omits empty submission history", () => {
+    const source = readFileSync(
+      new URL("./removal-detail-sheet.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain("summary.recentSyncEvents.length > 0");
+    expect(source).toContain("Submission history");
+  });
+
+  it("renders post-submit attachment health separately from files ready", () => {
+    const source = readFileSync(
+      new URL("./removal-detail-sheet.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain('<Field label="Evidence attachments">');
+    expect(source).toContain("summary.evidenceHealth.label");
     expect(source).toContain(
-      "Advisory — {advisory}. Submission remains available.",
+      "<SourcesPanel",
     );
   });
 });

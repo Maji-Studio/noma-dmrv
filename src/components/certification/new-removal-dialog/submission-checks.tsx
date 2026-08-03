@@ -1,117 +1,147 @@
+/**
+ * SubmissionChecks — the readiness checks that still need attention, in a
+ * disclosure that is open by default.
+ *
+ * The caller decides whether this renders at all: when every check passes the
+ * verdict line in `submission-summary.tsx` carries the count and this list is
+ * not shown. Warning-status checks describe automatic submit-time work, not
+ * operator work, so they never appear here (see `actionableSubmissionChecks`).
+ */
 import Link from "next/link";
-import {
-  CheckCircleIcon,
-  CircleIcon,
-  WarningIcon,
-} from "@phosphor-icons/react/dist/ssr";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Accordion } from "@/components/ui/accordion";
 import { InfoHint } from "@/components/ui/tooltip";
-import {
-  type RemovalRequirementCheck,
-  type RemovalRequirementKey,
-} from "@/lib/certification/readiness";
+import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { certificationSettingsHref } from "@/lib/certification/links";
+import { actionableSubmissionChecks } from "./submission-facts";
+
+const CHECKS_ITEM = "submission-checks";
+const CHECK_ICON_SIZE = 14;
+const ACCORDION_ITEM =
+  "rounded-none border-[var(--color-border-secondary)] bg-[var(--color-background-white)]";
+const ACCORDION_TRIGGER =
+  "bg-[var(--color-background-white)] px-16 py-10 hover:bg-[var(--color-surface-light)]";
+/** Readiness details pack several records into one string. */
+const DETAIL_SEPARATOR = " · ";
 
 interface SubmissionChecksProps {
   checks: RemovalRequirementCheck[];
   facilityId: string;
 }
 
-function fixLinkFor(
-  key: RemovalRequirementKey,
+function fixLinksFor(
+  check: Pick<RemovalRequirementCheck, "key" | "fixTarget">,
   facilityId: string,
-): { label: string; href: string } | null {
-  switch (key) {
+): { label: string; href: string }[] {
+  const productionRuns = {
+    label: "Review production runs",
+    href: `/production-runs?facility=${facilityId}`,
+  };
+  const applications = {
+    label: "Review applications",
+    href: `/applications?facility=${facilityId}`,
+  };
+
+  switch (check.key) {
     case "mapping":
     case "template":
-      return {
-        label: "Open settings",
-        href: certificationSettingsHref(facilityId),
-      };
-    case "credentials":
-    case "production":
-    case "entityReadiness":
-    case "evidence":
-      return null;
+      return [
+        { label: "Open settings", href: certificationSettingsHref(facilityId) },
+      ];
+    case "measurementDates":
+      if (check.fixTarget === "productionRuns") return [productionRuns];
+      if (check.fixTarget === "applications") return [applications];
+      if (check.fixTarget === "productionRunsAndApplications") {
+        return [productionRuns, applications];
+      }
+      return [];
     case "transportUniformity":
     case "transport":
-      return {
-        label: "Review transport",
-        href: `/deliveries?facility=${facilityId}`,
-      };
+      return [
+        { label: "Open deliveries", href: `/deliveries?facility=${facilityId}` },
+      ];
     case "durability":
-      return {
-        label: "Review samples",
-        href: `/samples?facility=${facilityId}`,
-      };
+      return [
+        { label: "Review Samples", href: `/samples?facility=${facilityId}` },
+      ];
+    default:
+      return [];
   }
 }
 
-function CheckIcon({ status }: Pick<RemovalRequirementCheck, "status">) {
-  if (status === "met") {
-    return (
-      <CheckCircleIcon
-        size={14}
-        weight="fill"
-        aria-hidden
-        className="shrink-0 text-[var(--st-ok)]"
-      />
-    );
-  }
-  if (status === "unmet" || status === "warning") {
-    return (
-      <WarningIcon
-        size={14}
-        weight="fill"
-        aria-hidden
-        className="shrink-0 text-[var(--color-signal-orange-strong)]"
-      />
-    );
-  }
-  return (
-    <CircleIcon
-      size={14}
-      aria-hidden
-      className="shrink-0 text-[var(--color-text-tertiary)]"
-    />
-  );
+function checkHeading(check: RemovalRequirementCheck): string {
+  return check.key === "measurementDates"
+    ? "Future dates"
+    : check.requirementLabel;
 }
 
-function CompactCheckRow({
+function dateGuidance(dateCount: number): string {
+  if (dateCount === 1) {
+    return "Correct this date, or wait until it has passed.";
+  }
+  if (dateCount === 2) {
+    return "Correct these dates, or wait until both dates have passed.";
+  }
+  return `Correct these dates, or wait until all ${dateCount} dates have passed.`;
+}
+
+/** One unmet check per row: what is wrong, on which record, and where to fix it. */
+function CheckRow({
   check,
   facilityId,
 }: {
   check: RemovalRequirementCheck;
   facilityId: string;
 }) {
-  const fix =
-    check.status === "unmet" ? fixLinkFor(check.key, facilityId) : null;
+  const fixes = fixLinksFor(check, facilityId);
+  const detailLines = check.detail?.split(DETAIL_SEPARATOR) ?? [];
+
   return (
-    <li className="flex items-start gap-8 border-t border-[var(--color-border-tertiary)] px-12 py-4 first:border-t-0">
+    <li className="flex items-start gap-8 border-t border-[var(--color-border-tertiary)] px-16 py-8 first:border-t-0">
       <span className="mt-2">
-        <CheckIcon status={check.status} />
+        <WarningIcon
+          size={CHECK_ICON_SIZE}
+          weight="fill"
+          aria-hidden
+          className="shrink-0 text-[var(--st-bad)]"
+        />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <span className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-text-secondary)]">
-          {check.requirementLabel}
+        <span className="inline-flex items-center gap-4 body-caption text-[var(--color-text-secondary)]">
+          {checkHeading(check)}
           {check.whyDetail && (
-            <InfoHint label="Why is this required?">
-              {check.whyDetail}
-            </InfoHint>
+            <InfoHint label="Why is this required?">{check.whyDetail}</InfoHint>
           )}
         </span>
-        {check.detail && check.status !== "met" && (
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            {check.detail}
+        {detailLines.length === 1 && (
+          <span className="body-caption text-[var(--color-text-primary)]">
+            {detailLines[0]}
           </span>
         )}
-        {fix && (
-          <Link
-            href={fix.href}
-            className="self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
-          >
-            {fix.label}
-          </Link>
+        {detailLines.length > 1 && (
+          <ul className="list-disc pl-16 body-caption text-[var(--color-text-primary)]">
+            {detailLines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        )}
+        {check.key === "measurementDates" && detailLines.length > 0 && (
+          <span className="body-caption font-medium text-[var(--color-text-primary)]">
+            {dateGuidance(detailLines.length)}
+          </span>
+        )}
+        {fixes.length > 0 && (
+          <span className="flex flex-wrap gap-x-12 gap-y-4">
+            {fixes.map((fix) => (
+              <Link
+                key={fix.href}
+                href={fix.href}
+                className="body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+              >
+                {fix.label}
+              </Link>
+            ))}
+          </span>
         )}
       </div>
     </li>
@@ -122,44 +152,42 @@ export function SubmissionChecks({
   checks,
   facilityId,
 }: SubmissionChecksProps) {
-  const passedCount = checks.filter((check) => check.status === "met").length;
-  const unmetCount = checks.filter((check) => check.status === "unmet").length;
-  const warningCount = checks.filter(
-    (check) => check.status === "warning",
+  const actionChecks = actionableSubmissionChecks(checks);
+  const passedCount = actionChecks.filter(
+    (check) => check.status === "met",
   ).length;
-  const attentionCount = unmetCount + warningCount;
-  const summary =
-    attentionCount === 0
-      ? `${passedCount} of ${checks.length} checks passed`
-      : `${passedCount} of ${checks.length} checks passed · ${attentionCount} need attention`;
+  const attentionChecks = actionChecks.filter(
+    (check) => check.status === "unmet",
+  );
 
   return (
-    <Accordion.Root
-      className="gap-0"
-      defaultValue={attentionCount > 0 ? ["submission-checks"] : []}
-    >
-      <Accordion.Item
-        value="submission-checks"
-        className="rounded-none border-[var(--color-border-secondary)]"
-      >
+    <Accordion.Root className="gap-0" defaultValue={[CHECKS_ITEM]}>
+      <Accordion.Item value={CHECKS_ITEM} className={ACCORDION_ITEM}>
         <Accordion.Header>
           <Accordion.Trigger
-            className="bg-[var(--color-background-white)] px-12 py-8 hover:bg-[var(--color-surface-light)]"
-            labelClassName="body-caption normal-case tracking-normal"
+            className={ACCORDION_TRIGGER}
+            labelClassName="body-small normal-case tracking-normal text-[var(--color-text-primary)]"
           >
-            Submission checks · {summary}
+            <span className="flex w-full items-center justify-between gap-12">
+              <span>What to fix</span>
+              <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
+                {passedCount} {passedCount === 1 ? "check" : "checks"} passed
+              </span>
+            </span>
           </Accordion.Trigger>
         </Accordion.Header>
         <Accordion.Panel className="[&>div]:p-0">
-          <ul>
-            {checks.map((check) => (
-              <CompactCheckRow
-                key={check.key}
-                check={check}
-                facilityId={facilityId}
-              />
-            ))}
-          </ul>
+          <div className="border-t border-[var(--color-border-tertiary)]">
+            <ul>
+              {attentionChecks.map((check) => (
+                <CheckRow
+                  key={check.key}
+                  check={check}
+                  facilityId={facilityId}
+                />
+              ))}
+            </ul>
+          </div>
         </Accordion.Panel>
       </Accordion.Item>
     </Accordion.Root>

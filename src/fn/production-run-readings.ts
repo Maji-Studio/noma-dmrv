@@ -15,7 +15,10 @@ import {
 } from "@/data-access/production-run-readings";
 import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgContext } from "@/lib/auth/server";
-import { toLoggedActionError } from "./action-errors";
+import {
+  formatZodActionError,
+  toLoggedActionError,
+} from "./action-errors";
 import {
   deleteAllProductionRunReadingsSchema,
   productionRunReadingListFiltersSchema,
@@ -43,7 +46,7 @@ export async function getProductionRunReadingsListFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
 
@@ -71,7 +74,7 @@ export async function deleteAllProductionRunReadingsFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
 

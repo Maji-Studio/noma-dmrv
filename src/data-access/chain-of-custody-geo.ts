@@ -22,6 +22,7 @@ import {
 } from "@/db/schema";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { requireOrgScope } from "./utils";
 import {
   getChainOfCustodyData,
@@ -95,6 +96,13 @@ export interface ChainGeoLeg {
   outerHref: string | null;
   /** Record code of the outer party (feedstock code / application code). */
   outerCode: string | null;
+  /**
+   * DAG/geo node id of that outer party (`feedstock:…` inbound,
+   * `application:…` outbound). A batch roll-up carries one outbound leg per
+   * member application, so this is what keeps each leg on its own record
+   * instead of collapsing them onto the shared biochar product.
+   */
+  outerNodeId: string | null;
 }
 
 export interface ChainOfCustodyGeoData {
@@ -172,7 +180,7 @@ export async function projectChainOfCustodyGeoData(
   );
   if (chain.feedstocks.length > 0 && unplottableFeedstocks.length === chain.feedstocks.length) {
     warnings.push(
-      "Feedstock origins are not geolocated — upstream transport legs cannot be plotted."
+      "Feedstock origins have no coordinates, so inbound transport legs cannot be plotted. Add coordinates to the supplier locations."
     );
   }
 
@@ -210,6 +218,9 @@ function enrichLegs(
         materialLabel: feedstock?.feedstockTypeName ?? null,
         outerHref: feedstock?.href ?? null,
         outerCode: feedstock?.code ?? null,
+        outerNodeId: feedstock
+          ? `${idPrefix("feedstock")}:${feedstock.id}`
+          : null,
       };
     }
     return {
@@ -217,6 +228,7 @@ function enrichLegs(
       materialLabel: chain.biocharProduct?.formulationName ?? "Biochar",
       outerHref: chain.application.href,
       outerCode: chain.application.code,
+      outerNodeId: `${idPrefix("application")}:${chain.application.id}`,
     };
   });
 }
@@ -234,6 +246,7 @@ function buildGeoNodes(
 ): ChainGeoNode[] {
   const { facilityGps, applicationGps, feedstockGpsById, legs } = inputs;
   const nodes: ChainGeoNode[] = [];
+  const sources = resolveChainSources(chain);
 
   const resolve = (
     kind: ChainGeoNodeKind,
@@ -271,10 +284,12 @@ function buildGeoNodes(
     };
   };
 
-  if (chain.reactor) {
-    nodes.push(
-      resolve("reactor", chain.reactor.id, chain.reactor.code, chain.reactor.identifier)
-    );
+  for (const reactor of new Map(
+    sources.flatMap((source) =>
+      source.reactor ? [[source.reactor.id, source.reactor] as const] : [],
+    ),
+  ).values()) {
+    nodes.push(resolve("reactor", reactor.id, reactor.code, reactor.identifier));
   }
 
   for (const feedstock of chain.feedstocks) {
@@ -293,9 +308,10 @@ function buildGeoNodes(
     );
   }
 
-  if (chain.productionRun) {
+  for (const source of sources) {
+    const productionRun = source.productionRun;
     nodes.push(
-      resolve("productionRun", chain.productionRun.id, chain.productionRun.code, null)
+      resolve("productionRun", productionRun.id, productionRun.code, null)
     );
   }
   if (chain.biocharProduct) {
@@ -409,11 +425,12 @@ async function getFeedstockLegs(
   return rows.map((row) => ({
     ...row,
     kind: row.entityType === "feedstock" ? ("inbound" as const) : ("outbound" as const),
-    // Material / link / code are enriched from the lineage by the caller.
+    // Material / link / code / anchor are enriched from the lineage by the caller.
     appliedWetMassKg: null,
     materialLabel: null,
     outerHref: null,
     outerCode: null,
+    outerNodeId: null,
   }));
 }
 
@@ -492,6 +509,7 @@ async function getApplicationBiocharLeg({
       materialLabel: null,
       outerHref: null,
       outerCode: null,
+      outerNodeId: null,
     },
   ];
 }

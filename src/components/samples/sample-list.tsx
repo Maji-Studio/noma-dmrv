@@ -39,7 +39,13 @@ import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate, formatDateTime } from "@/lib/format-utils";
+import {
+  formatDate,
+  formatDateRange,
+  formatDateTime,
+  formatPercent,
+} from "@/lib/format-utils";
+import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -61,16 +67,18 @@ import {
 } from "@/lib/sample-create-intent";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
+const LAB_PERCENT_FRACTION_DIGITS = 2;
+
+function formatLabPercent(value: number | null | undefined): string {
+  return formatPercent(value, { digits: LAB_PERCENT_FRACTION_DIGITS });
+}
+
 /** One template for the create-failure banner so its two call sites (post-flush
  * failure and inline retry recount) can never drift apart. Null when resolved. */
 function buildAttachmentFailureBanner(total: number): string | null {
   return total > 0
     ? `Sample created, but ${total} ${total === 1 ? "attachment" : "attachments"} failed to save.`
     : null;
-}
-
-function formatPercent(value: number | null, digits = 2) {
-  return value == null ? null : `${value.toFixed(digits)}%`;
 }
 
 // ============================================
@@ -114,33 +122,33 @@ function createColumns(
     },
     {
       accessorKey: "samplingTime",
-      header: "Sampling Time",
+      header: "Sampling time",
       cell: ({ row }) => formatDateTime(row.original.samplingTime),
     },
     {
       id: "creditBatch",
-      header: "Credit Batch",
+      header: "Credit batch",
       accessorFn: (row) => row.creditBatchCode ?? "",
       cell: ({ row }) => (
         <span className="text-[var(--clr-dark-purple)]">
-          {row.original.creditBatchCode ?? "\u2014"}
+          {row.original.creditBatchCode ?? "Not set"}
         </span>
       ),
     },
     {
       accessorKey: "totalCarbonPercent",
       header: "Total C (%)",
-      cell: ({ row }) => row.original.totalCarbonPercent?.toFixed(1) ?? "\u2014",
+      cell: ({ row }) => row.original.totalCarbonPercent?.toFixed(1) ?? "Not recorded",
     },
     {
       accessorKey: "organicCarbonPercent",
       header: "Organic C (%)",
-      cell: ({ row }) => row.original.organicCarbonPercent?.toFixed(1) ?? "\u2014",
+      cell: ({ row }) => row.original.organicCarbonPercent?.toFixed(1) ?? "Not recorded",
     },
     {
       accessorKey: "hToCOrgRatio",
-      header: "H:C Ratio",
-      cell: ({ row }) => row.original.hToCOrgRatio?.toFixed(3) ?? "\u2014",
+      header: "H:C org ratio",
+      cell: ({ row }) => row.original.hToCOrgRatio?.toFixed(3) ?? "Not recorded",
     },
     {
       accessorKey: "durabilityOption",
@@ -154,7 +162,7 @@ function createColumns(
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("sample", row.original)}
           readyLabel="Chemistry complete"
-          readinessNoun="sample chemistry"
+          readinessNoun="Sample chemistry"
         />
       ),
     },
@@ -274,7 +282,7 @@ export function SampleList({
     if (!focusedSampleId) return;
     if (focusedSample.error || (focusedSample.isSuccess && !focusedSample.data)) {
       setFocusedSampleId(null);
-      toast.error("Linked sample could not be opened");
+      toast.error("The linked Sample could not be opened.");
     }
   }, [
     focusedSample.data,
@@ -311,9 +319,9 @@ export function SampleList({
     setError: setFormError,
     setUpdateError: setFormError,
     getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Failed to create sample",
+      error instanceof Error ? error.message : "Sample was not created. Check the form.",
     unresolvedUpdateMessage:
-      "Resolve or remove the failed attachments and transport legs before saving this sample.",
+      "Resolve or remove the failed attachments and transport legs before saving this Sample.",
     openEditOnFailure: (sample) =>
       leaveSampleCreateIntent(createIntent.clear, () =>
         setSideSheet({ mode: "edit", entity: sample }),
@@ -343,7 +351,7 @@ export function SampleList({
       };
     },
     onSuccess: () =>
-      toast.success("Sample created successfully"),
+      toast.success("Sample created."),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
@@ -438,9 +446,9 @@ export function SampleList({
       createWithEvidence.reset();
       setDeferredLegs([]);
       setSideSheet(null);
-      toast.success("Sample updated successfully");
+      toast.success("Sample updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to update sample");
+      setFormError(error instanceof Error ? error.message : "Sample was not saved. Try again.");
     }
   };
 
@@ -454,9 +462,9 @@ export function SampleList({
     try {
       await deleteSample.mutateAsync(deletingSampleId);
       setDeletingSampleId(null);
-      toast.success("Sample deleted successfully");
+      toast.success("Sample deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete sample");
+      setDeleteError(error instanceof Error ? error.message : "Sample was not deleted. Try again.");
     }
   };
 
@@ -545,21 +553,21 @@ export function SampleList({
         <PageHeader
           area="verification"
           title="Lab Samples"
-          subtitle="Lab analysis of biochar samples and carbon permanence"
+          subtitle="Lab analysis of biochar Samples and carbon permanence"
         />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its lab samples." />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its lab Samples." />
       </div>
     );
   }
 
   if (fetchError) {
-    return <div className="container-max py-32"><ServerError message={fetchError.message || "Failed to load samples"} /></div>;
+    return <div className="container-max py-32"><ServerError message={fetchError.message || "The Samples could not be loaded. Refresh the page and try again."} /></div>;
   }
 
   const viewingEntity =
     displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
   const viewSubtitle = viewingEntity
-    ? [viewingEntity.creditBatchCode, viewingEntity.facilityName].filter(Boolean).join(" \u2014 ") || undefined
+    ? [viewingEntity.creditBatchCode, viewingEntity.facilityName].filter(Boolean).join(" · ") || undefined
     : undefined;
 
   return (
@@ -567,7 +575,7 @@ export function SampleList({
       <PageHeader
         area="verification"
         title="Lab Samples"
-        subtitle="Lab analysis of biochar samples and carbon permanence"
+        subtitle="Lab analysis of biochar Samples and carbon permanence"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -577,8 +585,8 @@ export function SampleList({
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} description="All lab samples" isLoading={statsLoading} />
-        <StatCard title="Avg Carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? "-"} icon={<LeafIcon size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
+        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} description="All lab Samples" isLoading={statsLoading} />
+        <StatCard title="Avg Carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? "Not available"} icon={<LeafIcon size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
         <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<FireIcon size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
         <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<CertificateIcon size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
       </div>
@@ -606,17 +614,17 @@ export function SampleList({
           <EmptyState
             padding="md"
             icon={<FlaskIcon size={48} />}
-            title={hasActiveFilters ? "No samples found" : "No samples yet"}
+            title={hasActiveFilters ? "No Samples found" : "No Samples yet"}
             description={
               hasActiveFilters
                 ? "Try adjusting your search or filters."
-                : "Create your first lab sample to start tracking biochar quality."
+                : "Lab Samples carry the analysis behind biochar quality and durability."
             }
             action={
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create Sample
+                  Create your first Sample
                 </Button>
               ) : undefined
             }
@@ -625,8 +633,8 @@ export function SampleList({
       >
         <DataTable.Toolbar>
           <DataTable.Search
-            placeholder="Search by sample code..."
-            aria-label="Search samples by code"
+            placeholder="Search by Sample code..."
+            aria-label="Search Samples by code"
           />
           <DataTable.Controls>
             <DataTable.FilterSelect
@@ -634,10 +642,10 @@ export function SampleList({
               onChange={(e) => { setCreditBatchFilter(e.target.value || null); setCurrentPage(1); }}
               aria-label="Filter by credit batch"
             >
-              <option value="">All Credit Batches</option>
+              <option value="">All credit batches</option>
               {creditBatchesData?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.code}
+                  {formatDateRange(batch.startDate, batch.endDate)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -657,7 +665,7 @@ export function SampleList({
       <DeleteConfirmDialog
         isOpen={!!deletingSampleId}
         title="Delete Sample"
-        message="Are you sure you want to delete this sample? This action cannot be undone. Note: Samples linked to credit batches cannot be deleted."
+        message="Delete this Sample? Samples linked to credit batches cannot be deleted. This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingSampleId(null); setDeleteError(null); }}
         isPending={deleteSample.isPending}
@@ -675,91 +683,91 @@ export function SampleList({
         editLabel="Edit Sample"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
           {
-            title: "Sample Information",
+            title: "Sample information",
             fields: [
-              { label: "Credit Batch", value: displaySideSheet.entity.creditBatchCode },
-              { label: "Sampling Time", value: formatDateTime(displaySideSheet.entity.samplingTime) },
-              { label: "Analysis Date", value: formatDate(displaySideSheet.entity.analysisDate) },
-              { label: "Lab Name", value: displaySideSheet.entity.labName },
-              { label: "Lab Accreditation", value: displaySideSheet.entity.labAccreditation },
-              { label: "Sample Weight (g)", value: displaySideSheet.entity.weightGrams },
-              { label: "Sample Volume (mL)", value: displaySideSheet.entity.volumeMl },
+              { label: "Credit batch", value: displaySideSheet.entity.creditBatchCode },
+              { label: "Sampling time", value: formatDateTime(displaySideSheet.entity.samplingTime) },
+              { label: "Analysis date", value: formatDate(displaySideSheet.entity.analysisDate) },
+              { label: "Lab name", value: displaySideSheet.entity.labName },
+              { label: "Lab accreditation", value: displaySideSheet.entity.labAccreditation },
+              { label: "Sample weight (g)", value: displaySideSheet.entity.weightGrams },
+              { label: "Sample volume (mL)", value: displaySideSheet.entity.volumeMl },
             ],
           },
           {
-            title: "Carbon Analysis",
+            title: "Carbon analysis",
             fields: [
-              { label: "Total Carbon (%)", value: formatPercent(displaySideSheet.entity.totalCarbonPercent) },
-              { label: "Organic Carbon (%)", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatPercent(displaySideSheet.entity.organicCarbonPercent) },
-              { label: "Inorganic Carbon (%)", value: formatPercent(displaySideSheet.entity.inorganicCarbonPercent) },
+              { label: "Total carbon (%)", value: formatLabPercent(displaySideSheet.entity.totalCarbonPercent) },
+              { label: "Organic carbon (%)", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatLabPercent(displaySideSheet.entity.organicCarbonPercent) },
+              { label: "Inorganic carbon (%)", value: formatLabPercent(displaySideSheet.entity.inorganicCarbonPercent) },
             ],
           },
           {
-            title: "Elemental Analysis",
+            title: "Elemental analysis",
             fields: [
-              { label: "Hydrogen (%)", value: formatPercent(displaySideSheet.entity.totalHydrogenPercent) },
-              { label: "Nitrogen (%)", value: formatPercent(displaySideSheet.entity.totalNitrogenPercent) },
-              { label: "Oxygen (%)", value: formatPercent(displaySideSheet.entity.totalOxygenPercent) },
-              { label: "Sulfur (%)", value: formatPercent(displaySideSheet.entity.totalSulfurPercent) },
+              { label: "Hydrogen (%)", value: formatLabPercent(displaySideSheet.entity.totalHydrogenPercent) },
+              { label: "Nitrogen (%)", value: formatLabPercent(displaySideSheet.entity.totalNitrogenPercent) },
+              { label: "Oxygen (%)", value: formatLabPercent(displaySideSheet.entity.totalOxygenPercent) },
+              { label: "Sulfur (%)", value: formatLabPercent(displaySideSheet.entity.totalSulfurPercent) },
             ],
           },
           {
-            title: "Proximate Analysis",
+            title: "Proximate analysis",
             fields: [
-              { label: "Ash Content (%)", value: formatPercent(displaySideSheet.entity.ashContentPercent) },
-              { label: "Moisture Content (%)", value: formatPercent(displaySideSheet.entity.moistureContentPercent) },
+              { label: "Ash content (%)", value: formatLabPercent(displaySideSheet.entity.ashContentPercent) },
+              { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
             ],
           },
           {
-            title: "Physical Properties",
+            title: "Physical properties",
             fields: [
-              { label: "Bulk Density (kg/m³)", value: displaySideSheet.entity.bulkDensityKgPerM3 },
+              { label: "Bulk density (kg/m³)", value: displaySideSheet.entity.bulkDensityKgPerM3 },
               { label: "pH", value: displaySideSheet.entity.ph != null ? String(displaySideSheet.entity.ph) : null },
-              { label: "Salt Content (g/kg)", value: displaySideSheet.entity.saltContentGPerKg },
+              { label: "Salt content (g/kg)", value: displaySideSheet.entity.saltContentGPerKg },
             ],
           },
           {
-            title: "Stability Ratios",
+            title: "Stability ratios",
             fields: [
-              { label: "Inherited Durability", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
-              { label: "H:C org Ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: displaySideSheet.entity.hToCOrgRatio?.toFixed(4) ?? null },
-              { label: "O:C org Ratio", value: displaySideSheet.entity.oToCOrgRatio?.toFixed(4) ?? null },
+              { label: "Inherited durability", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
+              { label: "H:C org ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: displaySideSheet.entity.hToCOrgRatio?.toFixed(4) ?? null },
+              { label: "O:C org ratio", ...certificationDetailField("sample", "oToCOrgRatio"), value: displaySideSheet.entity.oToCOrgRatio?.toFixed(4) ?? null },
             ],
           },
           ...(displaySideSheet.entity.durabilityOption === "1000_year" ? [
             {
-              title: "1000-Year Durability · R₀ Reflectance",
+              title: "1000-year durability · R₀ reflectance",
               fields: [
-                { label: "Mean Random Reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatPercent(displaySideSheet.entity.randomReflectanceR0Percent) },
-                { label: "R₀ Readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: displaySideSheet.entity.sReflectanceFraction == null ? null : formatPercent(displaySideSheet.entity.sReflectanceFraction * 100) },
-                { label: "Measurement Count", value: displaySideSheet.entity.r0MeasurementCount },
-                { label: "R₀ Analysis Date", value: formatDate(displaySideSheet.entity.r0AnalysisDate) },
+                { label: "Mean random reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatLabPercent(displaySideSheet.entity.randomReflectanceR0Percent) },
+                { label: "R₀ readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: displaySideSheet.entity.sReflectanceFraction == null ? null : formatLabPercent(displaySideSheet.entity.sReflectanceFraction * 100) },
+                { label: "Measurement count", value: displaySideSheet.entity.r0MeasurementCount },
+                { label: "R₀ analysis date", value: formatDate(displaySideSheet.entity.r0AnalysisDate) },
               ],
             },
             {
-              title: "TGA Non-Reactive Carbon",
+              title: "TGA non-reactive carbon",
               fields: [
-                { label: "Reactive Carbon (%)", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatPercent(displaySideSheet.entity.reactiveCarbonPercent) },
-                { label: "Residual (Non-Reactive) Carbon (%)", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatPercent(displaySideSheet.entity.residualCarbonPercent) },
-                { label: "TGA Analysis Date", value: formatDate(displaySideSheet.entity.tgaAnalysisDate) },
+                { label: "Reactive carbon (%)", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatLabPercent(displaySideSheet.entity.reactiveCarbonPercent) },
+                { label: "Residual (non-reactive) carbon (%)", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatLabPercent(displaySideSheet.entity.residualCarbonPercent) },
+                { label: "TGA analysis date", value: formatDate(displaySideSheet.entity.tgaAnalysisDate) },
               ],
             },
           ] : []),
           {
-            title: "Nutrient Claims",
+            title: "Nutrient claims",
             fields: [
               { label: "Enable nutrient claims", value: displaySideSheet.entity.nutrientClaimEnabled ? "Yes" : "No" },
               ...(displaySideSheet.entity.nutrientClaimEnabled ? [
-                { label: "Phosphorus (%)", value: formatPercent(displaySideSheet.entity.phosphorusPercent) },
-                { label: "Potassium (%)", value: formatPercent(displaySideSheet.entity.potassiumPercent) },
-                { label: "Magnesium (%)", value: formatPercent(displaySideSheet.entity.magnesiumPercent) },
-                { label: "Calcium (%)", value: formatPercent(displaySideSheet.entity.calciumPercent) },
-                { label: "Iron (%)", value: formatPercent(displaySideSheet.entity.ironPercent) },
+                { label: "Phosphorus (%)", value: formatLabPercent(displaySideSheet.entity.phosphorusPercent) },
+                { label: "Potassium (%)", value: formatLabPercent(displaySideSheet.entity.potassiumPercent) },
+                { label: "Magnesium (%)", value: formatLabPercent(displaySideSheet.entity.magnesiumPercent) },
+                { label: "Calcium (%)", value: formatLabPercent(displaySideSheet.entity.calciumPercent) },
+                { label: "Iron (%)", value: formatLabPercent(displaySideSheet.entity.ironPercent) },
               ] : []),
             ],
           },
           {
-            title: "Evidence & Documents",
+            title: "Evidence & documents",
             fields: [],
             content: <SampleDocumentsPanel sampleId={displaySideSheet.entity.id} readOnly />,
           },

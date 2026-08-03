@@ -35,7 +35,7 @@ export function AcceptInvitation({
     } catch {
       // Rejected request (network/server): don't leave the button stuck.
       setStatus("error");
-      setError("Something went wrong accepting the invitation. Try again.");
+      setError("The invitation was not accepted. Check your connection and try again.");
     }
   }
 

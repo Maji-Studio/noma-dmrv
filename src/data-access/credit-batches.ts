@@ -16,7 +16,7 @@ import {
   creditBatchProductionRuns,
   type CreditBatch,
 } from "@/db/schema/credits";
-import { facilities } from "@/db/schema/facilities";
+import { facilities, storageLocations } from "@/db/schema/facilities";
 import {
   productionRuns,
   productionRunFeedstocks,
@@ -64,6 +64,7 @@ import {
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { assertRemovalAllowsCreditBatchMutation } from "./credit-batch-certification-lock";
 
 const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
@@ -72,8 +73,6 @@ const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
   COMPLETED_PRODUCTION_RUN_STATUS,
 ] as const;
 
-export { getApplicationsForRuns } from "./credit-batch-production-runs";
-export type { ApplicationForRun } from "./credit-batch-production-runs";
 export {
   getCo2eStoredPreviews,
   getFacilityCertifier,
@@ -125,6 +124,8 @@ export interface CreditBatchProductionRunOption {
   code: string;
   date: string;
   status: ProductionRunStatus;
+  biocharStorageName: string | null;
+  biocharOutputKg: number | null;
   biocharDryMassKg: number | null;
   /**
    * Run-local production-emission inputs, surfaced so the credit-batch form can
@@ -627,7 +628,7 @@ export async function updateCreditBatch(
         existingBatch.endDate !== declarationSnapshot.endDate
       ) {
         throw new SafeError(
-          "The Credit batch cohort changed while this update was being prepared. Refresh and retry.",
+          "The credit batch cohort changed while this update was being prepared. Refresh and retry.",
         );
       }
       const lockedCurrentMembership = await tx
@@ -771,7 +772,9 @@ export async function updateCreditBatch(
   // Fetch full details
   const result = await getCreditBatchById(ctx, id);
   if (!result) {
-    throw new SafeError("Failed to fetch updated credit batch");
+    throw new SafeError(
+      "The updated credit batch could not be loaded. Refresh the page.",
+    );
   }
   return result;
 }
@@ -814,6 +817,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
       { entityType: "credit_batch", entityId: id },
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 /**
@@ -893,6 +897,8 @@ export async function getCreditBatchProductionRunOptions(
       code: productionRuns.code,
       date: productionRunDateExpr(),
       status: productionRuns.status,
+      biocharStorageName: storageLocations.name,
+      biocharOutputKg: productionRuns.biocharOutputKg,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
       dieselOperationLiters: productionRuns.dieselOperationLiters,
@@ -903,6 +909,13 @@ export async function getCreditBatchProductionRunOptions(
       assignedCreditBatchCode: creditBatches.code,
     })
     .from(productionRuns)
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(productionRuns.biocharStorageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(
       creditBatchProductionRuns,
       and(eq(creditBatchProductionRuns.productionRunId, productionRuns.id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)),

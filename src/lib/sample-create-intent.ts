@@ -22,6 +22,22 @@ export function sampleCreateHref(
   return `/samples?${params.toString()}`;
 }
 
+/**
+ * Open one saved lab Sample in the samples list's view sheet. The list reads the
+ * focused id from `?sample=` (see `sample-list.tsx`), so this is the canonical
+ * way any other surface links to a sample record.
+ */
+export function sampleDetailHref(
+  facilityId: string,
+  sampleId: string,
+): string {
+  const params = new URLSearchParams({
+    facility: facilityId,
+    sample: sampleId,
+  });
+  return `/samples?${params.toString()}`;
+}
+
 export function resolveSampleCreateCreditBatchId(
   requestedId: string | null | undefined,
   activeFacilityBatches: ReadonlyArray<{ id: string }> | undefined,

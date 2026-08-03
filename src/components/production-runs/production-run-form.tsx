@@ -6,20 +6,24 @@
 "use client";
 
 import { nullableNumericValue, integerValue } from "@/lib/form-utils";
-import { formatLocalDate, formatLocalTime, combineDateAndTime } from "@/lib/date-utils";
+import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
+import {
+  buildProductionRunResolver,
+  buildProductionRunWindow,
+  productionRunTimezoneHelperText,
+  productionRunTimingDefaults,
+  type ProductionRunResolver,
+} from "./production-run-timing";
+import { useProductionRunTimingZoneSync } from "./use-production-run-timing-zone-sync";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useForm, useWatch, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
-import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
-import { ProductionRunReadingTable } from "@/components/production-run-readings";
-import { productionRunTelemetryCertification } from "./production-run-detail-fields";
-import { ProductionReadingsDocuments } from "./production-readings-documents";
+import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
+import { FormField, FormInput, FormTextarea, MassMoistureFields, FormActions, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, StockReconciliationLink, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { ProductionReadingsField } from "./production-readings-field";
 import { FormSelect } from "@/components/forms/form-select";
 import {
   EntitySelect,
@@ -29,11 +33,15 @@ import {
 import { useEntityById } from "@/hooks/use-entities";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
-  productionRunFormSchema,
   formatProductionRunStatus,
   type ProductionRunFormData,
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
+import { ProcessFlowPreview } from "./production-run-process-flow-preview";
+import {
+  feedstockDryStockOverdrawMessage,
+  productionRunMassBalanceFeedback,
+} from "./production-run-mass-balance";
 import {
   allowedProductionRunStatusesFrom,
   shouldClearProductionRunEndTime,
@@ -42,6 +50,12 @@ import {
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
+import { useStockAvailability } from "@/hooks/use-stock-availability";
+import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
+import {
+  binStockOverdrawMessage,
+  isStockOverdraw,
+} from "@/lib/stock-overdraw";
 
 // ============================================
 // Constants for select options
@@ -54,168 +68,6 @@ const isProductionRunCertifyField = (field: string) =>
 // output lands here), mirroring how the biochar-product form scopes its bin.
 const BIOCHAR_BIN_QUICK_ADD_TYPES = ["biochar_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
-
-// ============================================
-// Process Flow Visual
-// ============================================
-
-function ProcessFlowPreview({
-  sourceBinName,
-  feedstockKg,
-  feedstockDryKg,
-  reactorName,
-  biocharKg,
-  biocharDryKg,
-  destinationBinName,
-}: {
-  sourceBinName: string | null;
-  feedstockKg: number | null;
-  feedstockDryKg: number | null;
-  reactorName: string | null;
-  biocharKg: number | null;
-  biocharDryKg: number | null;
-  destinationBinName: string | null;
-}) {
-  const hasSource = !!sourceBinName;
-  const hasFeedstock = feedstockKg !== null && feedstockKg > 0;
-  const hasReactor = !!reactorName;
-  const hasBiochar = biocharKg !== null && biocharKg > 0;
-  const hasDestination = !!destinationBinName;
-
-  if (!hasSource && !hasReactor && !hasDestination) return null;
-
-  const useDry = feedstockDryKg !== null && biocharDryKg !== null;
-  const yieldPercent =
-    hasFeedstock && hasBiochar
-      ? useDry
-        ? feedstockDryKg > 0
-          ? ((biocharDryKg! / feedstockDryKg!) * 100).toFixed(1)
-          : null
-        : feedstockKg > 0
-          ? ((biocharKg / feedstockKg) * 100).toFixed(1)
-          : null
-      : null;
-
-  return (
-    <div className="flex items-stretch gap-0 text-center">
-      {/* Source bin */}
-      <div
-        className={`flex-1 border px-12 py-10 flex flex-col justify-center transition-colors ${
-          hasSource
-            ? "border-[var(--color-border-primary)] bg-[var(--color-background-medium)]"
-            : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
-        }`}
-      >
-        <span className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-[0.06em]">
-          Input
-        </span>
-        {hasSource ? (
-          <>
-            <span className="body-small font-medium text-[var(--color-text-primary)] mt-2">
-              {sourceBinName}
-            </span>
-            {hasFeedstock && (
-              <>
-                <span className="body-caption text-[var(--color-text-secondary)] mt-1">
-                  {feedstockKg.toLocaleString()} kg wet
-                </span>
-                {feedstockDryKg !== null && (
-                  <span className="body-caption text-[var(--color-text-tertiary)]">
-                    {feedstockDryKg.toLocaleString()} kg dry
-                  </span>
-                )}
-              </>
-            )}
-          </>
-        ) : (
-          <span className="body-small text-[var(--color-text-tertiary)] mt-2">
-            Select bin
-          </span>
-        )}
-      </div>
-
-      {/* Arrow to reactor */}
-      <div className="flex items-center justify-center px-4">
-        <svg width="24" height="16" viewBox="0 0 24 16" fill="none" className="text-[var(--color-text-tertiary)]">
-          <path d="M0 8H18M18 8L13 3M18 8L13 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-
-      {/* Reactor / machine */}
-      <div
-        className={`flex-1 border px-12 py-10 flex flex-col items-center justify-center transition-colors ${
-          hasReactor
-            ? "border-[var(--color-border-primary)] bg-[var(--color-background-medium)]"
-            : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
-        }`}
-      >
-        {/* Reactor icon */}
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-[var(--color-text-tertiary)] mb-2">
-          <rect x="3" y="4" width="14" height="12" rx="1" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M7 1v3M13 1v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          <path d="M6 10h8M6 13h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.5" />
-        </svg>
-        {hasReactor ? (
-          <span className="body-small font-medium text-[var(--color-text-primary)]">
-            {reactorName}
-          </span>
-        ) : (
-          <span className="body-small text-[var(--color-text-tertiary)]">
-            Select reactor
-          </span>
-        )}
-        {yieldPercent && (
-          <span className="body-caption text-[var(--color-text-secondary)] mt-1">
-            {yieldPercent}% yield{useDry ? " (dry)" : " (wet)"}
-          </span>
-        )}
-      </div>
-
-      {/* Arrow to output */}
-      <div className="flex items-center justify-center px-4">
-        <svg width="24" height="16" viewBox="0 0 24 16" fill="none" className="text-[var(--color-text-tertiary)]">
-          <path d="M0 8H18M18 8L13 3M18 8L13 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-
-      {/* Destination bin */}
-      <div
-        className={`flex-1 border px-12 py-10 flex flex-col justify-center transition-colors ${
-          hasDestination
-            ? "border-[var(--color-border-primary)] bg-[var(--color-background-medium)]"
-            : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
-        }`}
-      >
-        <span className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-[0.06em]">
-          Output
-        </span>
-        {hasDestination ? (
-          <>
-            <span className="body-small font-medium text-[var(--color-text-primary)] mt-2">
-              {destinationBinName}
-            </span>
-            {hasBiochar && (
-              <>
-                <span className="body-caption text-[var(--color-text-secondary)] mt-1">
-                  {biocharKg.toLocaleString()} kg wet
-                </span>
-                {biocharDryKg !== null && (
-                  <span className="body-caption text-[var(--color-text-tertiary)]">
-                    {biocharDryKg.toLocaleString()} kg dry
-                  </span>
-                )}
-              </>
-            )}
-          </>
-        ) : (
-          <span className="body-small text-[var(--color-text-tertiary)] mt-2">
-            Select bin
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ============================================
 // Component
@@ -247,7 +99,6 @@ interface ProductionRunFormProps {
   children?: React.ReactNode;
   deferredAttachments?: UseDeferredAttachmentsResult;
 }
-
 export function ProductionRunForm({
   productionRun,
   onSubmit,
@@ -264,23 +115,19 @@ export function ProductionRunForm({
   const statusOptions = allowedProductionRunStatusesFrom(transitionFrom).map(
     (status) => ({ value: status, label: formatProductionRunStatus(status) }),
   );
-  const { facilityId: contextFacilityId } = useFacilityContext();
+  const { facilityId: contextFacilityId, facilities } = useFacilityContext();
 
+  // Start/end are read back in the FACILITY's zone, never the browser's — see
+  // ./production-run-timing.ts for the QA F-2 data loss this prevents.
   const defaultValues = {
     facilityId: productionRun?.facilityId || contextFacilityId || "",
     reactorId: productionRun?.reactorId ?? "",
     status: (productionRun?.status as ProductionRunStatus) ?? "draft",
     cancellationReason: productionRun?.cancellationReason ?? "",
-    // Start and end are explicit date + time pairs (issue #259). The end pair is
-    // blank for an unfinished run; an overnight run gets an end date one day on.
-    startDate: productionRun?.startTime
-      ? formatLocalDate(new Date(productionRun.startTime))
-      : formatLocalDate(new Date()),
-    startTime: productionRun?.startTime
-      ? formatLocalTime(new Date(productionRun.startTime))
-      : formatLocalTime(new Date()),
-    endDate: productionRun?.endTime ? formatLocalDate(new Date(productionRun.endTime)) : "",
-    endTime: productionRun?.endTime ? formatLocalTime(new Date(productionRun.endTime)) : "",
+    ...productionRunTimingDefaults(
+      productionRun,
+      resolveFacilityTimezone(facilities, productionRun?.facilityId ?? contextFacilityId),
+    ),
     operatorId: productionRun?.operatorId ?? "",
     feedstockStorageLocationId: productionRun?.feedstockStorageLocationId ?? "",
     feedstockWetMassKg: productionRun?.feedstockWetMassKg ?? undefined,
@@ -295,17 +142,25 @@ export function ProductionRunForm({
     biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? undefined,
     biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
   };
-
   const {
     register,
     handleSubmit,
     control,
+    trigger,
     setValue,
+    resetField,
     setError,
     clearErrors,
     formState: { errors, dirtyFields },
   } = useForm({
-    resolver: zodResolver(productionRunFormSchema),
+    // The timing cross-field checks must resolve start/end in the same zone the
+    // submit path writes them in, so the schema is rebuilt per validation from
+    // the facility currently chosen in the form (the facility select can differ
+    // from the context facility). RHF refreshes `resolver` on every render.
+    resolver: ((values, context, options) =>
+      buildProductionRunResolver(
+        resolveFacilityTimezone(facilities, values.facilityId),
+      )(values, context, options)) as ProductionRunResolver,
     // onTouched so the spine markers can turn red on blur, not just on submit.
     mode: "onTouched",
     defaultValues,
@@ -323,15 +178,14 @@ export function ProductionRunForm({
     : productionRun?.status === "complete"
       ? "satisfied"
       : "missing";
-  const readingsCertification = productionRunTelemetryCertification(
-    productionRun?.status ?? "draft",
-    productionRun?.readingsCount ?? 0,
-    isEditMode,
-  );
-
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedStatus = useWatch({ control, name: "status" });
+
+  // The zone the entered start/end are interpreted in — the facility picked in
+  // the form, which can differ from the context facility.
+  const formTimezone = resolveFacilityTimezone(facilities, watchedFacilityId);
+  const timezoneHelperText = productionRunTimezoneHelperText(facilities, watchedFacilityId);
 
   // Watch fields for flow preview
   const watchedReactorId = useWatch({ control, name: "reactorId" });
@@ -345,7 +199,7 @@ export function ProductionRunForm({
   const { data: selectedSourceBin } = useEntityById("storageLocation", watchedSourceBinId || undefined);
   const { data: selectedDestBin } = useEntityById("storageLocation", watchedDestBinId || undefined);
 
-  // Inline "Add New Bin" quick-add for the Biochar Storage select.
+  // Inline quick-add for the Biochar Storage select.
   const biocharBinDialog = useQuickAddDialog();
 
   // Watch wet mass + moisture for dry mass preview
@@ -361,6 +215,41 @@ export function ProductionRunForm({
       ? deriveMassDryKg(watchWetMass, watchMoisture)
       : null;
 
+  const { data: feedstockAvailability } = useStockAvailability(
+    watchedSourceBinId
+      ? {
+          kind: "productionRunFeedstock",
+          storageLocationId: watchedSourceBinId,
+          productionRunId: productionRun?.id,
+        }
+      : null,
+  );
+  const feedstockStockError =
+    previewDryMass !== null &&
+    typeof watchMoisture === "number" &&
+    feedstockAvailability &&
+    feedstockAvailability.availableKg !== null &&
+    isStockOverdraw(previewDryMass, feedstockAvailability.availableKg)
+      ? feedstockDryStockOverdrawMessage(
+          feedstockAvailability.availableKg,
+          watchMoisture,
+        )
+      : undefined;
+  const feedstockFieldFingerprint = [
+    watchedSourceBinId,
+    watchWetMass,
+    watchMoisture,
+  ].join(":");
+  const routedServerError = useInlineStockServerError(
+    errorMessage,
+    feedstockFieldFingerprint,
+    (message) => message === binStockOverdrawMessage("feedstock"),
+  );
+  const feedstockWetMassError =
+    errors.feedstockWetMassKg?.message ??
+    feedstockStockError ??
+    routedServerError.inlineError;
+
   const previewBiocharDryMass =
     typeof watchedBiocharKg === "number" &&
     typeof watchedBiocharMoisture === "number" &&
@@ -369,6 +258,14 @@ export function ProductionRunForm({
     watchedBiocharMoisture <= 100
       ? deriveMassDryKg(watchedBiocharKg, watchedBiocharMoisture)
       : null;
+  const massBalanceFeedback = productionRunMassBalanceFeedback({
+    feedstockWetMassKg: watchWetMass,
+    feedstockMoisturePercent: watchMoisture,
+    biocharOutputKg: watchedBiocharKg,
+    biocharMoisturePercent: watchedBiocharMoisture,
+  });
+  const biocharOutputError =
+    errors.biocharOutputKg?.message ?? massBalanceFeedback.dryError;
 
   // Track previous facility to detect real changes
   const prevFacilityRef = useRef(watchedFacilityId);
@@ -389,6 +286,12 @@ export function ProductionRunForm({
     }
     prevFacilityRef.current = watchedFacilityId;
   }, [watchedFacilityId, setValue, productionRun]);
+  useProductionRunTimingZoneSync({
+    timeZone: formTimezone,
+    productionRun,
+    dirtyFields,
+    resetField,
+  });
 
   const defaultSubmitLabel = isEditMode ? "Update Production Run" : "Create Production Run";
 
@@ -416,16 +319,24 @@ export function ProductionRunForm({
       to: data.status,
       existingEndTime: productionRun?.endTime,
     });
+    const runWindow = buildProductionRunWindow({
+      startDateStr,
+      startTimeStr: data.startTime as string,
+      endDateStr,
+      endTimeStr: data.endTime as string | undefined,
+      includeEndTime,
+      clearEndTime,
+      timeZone: formTimezone,
+    });
+    if (!runWindow.ok) {
+      setError(runWindow.field, { type: "validate", message: runWindow.message });
+      return;
+    }
     const combined: ProductionRunSubmitData = {
       ...data,
       expectedUpdatedAt: productionRun?.updatedAt,
-      startTime: combineDateAndTime(startDateStr, data.startTime as string),
-      endTime:
-        clearEndTime
-          ? null
-          : data.endTime && includeEndTime
-          ? combineDateAndTime(endDateStr, data.endTime as string)
-          : undefined,
+      startTime: runWindow.startTime,
+      endTime: runWindow.endTime,
     };
 
     // Clear any prior overlap state before re-submitting.
@@ -450,10 +361,11 @@ export function ProductionRunForm({
   return (
     <div className="space-y-20">
       <form id={formId} onSubmit={handleFormSubmit}>
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSpine control={control}>
-      {/* ── Run Setup ── */}
+      {/* ── Run setup ── */}
       <FormSection
-        title="Run Setup"
+        title="Run setup"
         icon={<FactoryIcon size={14} weight="bold" />}
         fields={["reactorId", "status", "cancellationReason", "startDate", "startTime", "endDate", "endTime", "operatorId"]}
       >
@@ -515,11 +427,17 @@ export function ProductionRunForm({
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField id="startDate" label="Start Date" error={errors.startDate?.message} required>
+          <FormField
+            id="startDate"
+            label="Start date"
+            error={errors.startDate?.message}
+            helperText={timezoneHelperText}
+            required
+          >
             <FormInput id="startDate" type="date" disabled={isSubmitting} error={!!errors.startDate} {...register("startDate")} />
           </FormField>
 
-          <FormField id="startTime" label="Start Time" error={errors.startTime?.message} required>
+          <FormField id="startTime" label="Start time" error={errors.startTime?.message} required>
             <FormInput
               id="startTime"
               type="time"
@@ -545,7 +463,7 @@ export function ProductionRunForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="endDate"
-            label="End Date"
+            label="End date"
             error={errors.endDate?.message}
             helperText="Leave the end blank until the run finishes. For an overnight run, set the next day."
           >
@@ -558,7 +476,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="endTime" label="End Time" error={errors.endTime?.message}>
+          <FormField id="endTime" label="End time" error={errors.endTime?.message}>
             <FormInput
               id="endTime"
               type="time"
@@ -589,9 +507,9 @@ export function ProductionRunForm({
         </div>
       </FormSection>
 
-      {/* ── Feedstock & Processing ── */}
+      {/* ── Feedstock & processing ── */}
       <FormSection
-        title="Feedstock & Processing"
+        title="Feedstock & processing"
         icon={<PlantIcon size={14} weight="bold" />}
         fields={[
           "feedstockStorageLocationId",
@@ -609,7 +527,7 @@ export function ProductionRunForm({
         )}
         <FormField
           id="feedstockStorageLocationId"
-          label="Source Bin"
+          label="Source bin"
           error={errors.feedstockStorageLocationId?.message}
         >
           <Controller
@@ -629,56 +547,38 @@ export function ProductionRunForm({
           />
         </FormField>
 
+        <MassMoistureFields
+          materialLabel="Feedstock"
+          wetMassKg={watchWetMass}
+          moisturePercent={watchMoisture}
+          wet={{
+            id: "feedstockWetMassKg",
+            error: feedstockWetMassError,
+            disabled: isSubmitting,
+            placeholder: "e.g. 500",
+            certifyRequired: isProductionRunCertifyField("feedstockWetMassKg"),
+            certifyStatus: certStatus("feedstockWetMassKg"),
+            registration: register("feedstockWetMassKg", { setValueAs: nullableNumericValue }),
+          }}
+          moisture={{
+            id: "feedstockMoisturePercent",
+            error: errors.feedstockMoisturePercent?.message,
+            disabled: isSubmitting,
+            placeholder: "e.g. 15",
+            certifyRequired: isProductionRunCertifyField("feedstockMoisturePercent"),
+            certifyStatus: certStatus("feedstockMoisturePercent"),
+            registration: register("feedstockMoisturePercent", { setValueAs: nullableNumericValue }),
+          }}
+          splitFooter={(feedstockStockError || routedServerError.inlineError) && (
+            <StockReconciliationLink facilityId={watchedFacilityId} />
+          )}
+        />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
-            id="feedstockWetMassKg"
-            label="Wet Mass (kg)"
-            error={errors.feedstockWetMassKg?.message}
-            certifyRequired={isProductionRunCertifyField("feedstockWetMassKg")}
-            certifyStatus={certStatus("feedstockWetMassKg")}
-          >
-            <DryMassInput
-              id="feedstockWetMassKg"
-              type="number"
-              step="0.1"
-              placeholder="e.g. 500"
-              disabled={isSubmitting}
-              error={!!errors.feedstockWetMassKg}
-              wetMassKg={watchWetMass}
-              moisturePercent={watchMoisture}
-              {...register("feedstockWetMassKg", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-
-          <FormField
-            id="feedstockMoisturePercent"
-            label="Moisture Content (%)"
-            error={errors.feedstockMoisturePercent?.message}
-            certifyRequired={isProductionRunCertifyField("feedstockMoisturePercent")}
-            certifyStatus={certStatus("feedstockMoisturePercent")}
-          >
-            <FormInput
-              id="feedstockMoisturePercent"
-              type="number"
-              step="0.1"
-              placeholder="e.g. 15"
-              disabled={isSubmitting}
-              error={!!errors.feedstockMoisturePercent}
-              {...register("feedstockMoisturePercent", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField id="feedingRateKgHr" label="Feed Rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
+          <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
               id="feedingRateKgHr"
               type="number"
-              step="0.1"
+              step="any"
               placeholder="e.g. 420"
               disabled={isSubmitting}
               error={!!errors.feedingRateKgHr}
@@ -688,7 +588,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="residenceTimeMinutes" label="Residence Time (min)" error={errors.residenceTimeMinutes?.message}>
+          <FormField id="residenceTimeMinutes" label="Residence time (min)" error={errors.residenceTimeMinutes?.message}>
             <FormInput
               id="residenceTimeMinutes"
               type="number"
@@ -717,7 +617,7 @@ export function ProductionRunForm({
 
         <FormField
           id="biocharStorageLocationId"
-          label="Biochar Storage"
+          label="Biochar storage bin"
           error={errors.biocharStorageLocationId?.message}
         >
           <Controller
@@ -728,60 +628,40 @@ export function ProductionRunForm({
                 entityType="storageLocation"
                 value={field.value || undefined}
                 onChange={field.onChange}
-                placeholder="Select storage..."
                 disabled={isSubmitting || !watchedFacilityId}
                 error={!!errors.biocharStorageLocationId}
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
                 allowCreate={!!watchedFacilityId}
-                createLabel="Add New Bin"
                 onCreateNew={() => biocharBinDialog.open()}
               />
             )}
           />
         </FormField>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
-            id="biocharOutputKg"
-            label="Biochar Wet Mass (kg)"
-            error={errors.biocharOutputKg?.message}
-            certifyRequired={isProductionRunCertifyField("biocharOutputKg")}
-            certifyStatus={certStatus("biocharOutputKg")}
-          >
-            <DryMassInput
-              id="biocharOutputKg"
-              type="number"
-              step="0.1"
-              placeholder="e.g. 150"
-              disabled={isSubmitting}
-              error={!!errors.biocharOutputKg}
-              wetMassKg={watchedBiocharKg}
-              moisturePercent={watchedBiocharMoisture}
-              {...register("biocharOutputKg", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-          <FormField
-            id="biocharMoisturePercent"
-            label="Biochar Moisture (%)"
-            error={errors.biocharMoisturePercent?.message}
-            certifyRequired={isProductionRunCertifyField("biocharMoisturePercent")}
-            certifyStatus={certStatus("biocharMoisturePercent")}
-          >
-            <FormInput
-              id="biocharMoisturePercent"
-              type="number"
-              step="0.1"
-              placeholder="e.g. 1.5"
-              disabled={isSubmitting}
-              error={!!errors.biocharMoisturePercent}
-              {...register("biocharMoisturePercent", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-        </div>
+        <MassMoistureFields
+          materialLabel="Biochar"
+          wetMassKg={watchedBiocharKg}
+          moisturePercent={watchedBiocharMoisture}
+          wet={{
+            id: "biocharOutputKg",
+            error: biocharOutputError,
+            warning: massBalanceFeedback.wetWarning,
+            disabled: isSubmitting,
+            placeholder: "e.g. 150",
+            certifyRequired: isProductionRunCertifyField("biocharOutputKg"),
+            certifyStatus: certStatus("biocharOutputKg"),
+            registration: register("biocharOutputKg", { setValueAs: nullableNumericValue }),
+          }}
+          moisture={{
+            id: "biocharMoisturePercent",
+            error: errors.biocharMoisturePercent?.message,
+            disabled: isSubmitting,
+            placeholder: "e.g. 1.5",
+            certifyRequired: isProductionRunCertifyField("biocharMoisturePercent"),
+            certifyStatus: certStatus("biocharMoisturePercent"),
+            registration: register("biocharMoisturePercent", { setValueAs: nullableNumericValue }),
+          }}
+        />
       </FormSection>
 
       {/* ── Energy ── */}
@@ -798,8 +678,8 @@ export function ProductionRunForm({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="dieselOperationLiters"
-            label="Startup / Plant Diesel (L)"
-            hint="Diesel for reactor startup and running on-site plant equipment during this run — not the generator. Shown as “Startup / Plant Diesel” on the Energy page."
+            label="Startup / plant diesel (L)"
+            hint="Diesel used for reactor startup and on-site plant equipment during this run. Do not include generator diesel."
             error={errors.dieselOperationLiters?.message}
             certifyRequired={isProductionRunCertifyField("dieselOperationLiters")}
             certifyStatus={certStatus("dieselOperationLiters")}
@@ -807,7 +687,7 @@ export function ProductionRunForm({
             <FormInput
               id="dieselOperationLiters"
               type="number"
-              step="0.1"
+              step="any"
               placeholder="e.g. 50"
               disabled={isSubmitting}
               error={!!errors.dieselOperationLiters}
@@ -819,7 +699,7 @@ export function ProductionRunForm({
 
           <FormField
             id="dieselGensetLiters"
-            label="Genset Diesel (L)"
+            label="Genset diesel (L)"
             hint="Diesel burned by the generator that supplied this run's electricity."
             error={errors.dieselGensetLiters?.message}
             certifyRequired={isProductionRunCertifyField("dieselGensetLiters")}
@@ -828,7 +708,7 @@ export function ProductionRunForm({
             <FormInput
               id="dieselGensetLiters"
               type="number"
-              step="0.1"
+              step="any"
               placeholder="e.g. 25"
               disabled={isSubmitting}
               error={!!errors.dieselGensetLiters}
@@ -840,7 +720,7 @@ export function ProductionRunForm({
 
           <FormField
             id="preprocessingFuelLiters"
-            label="Preprocess Fuel (L)"
+            label="Preprocess fuel (L)"
             hint="Fuel used to dry, chip, or otherwise prepare the feedstock before pyrolysis."
             error={errors.preprocessingFuelLiters?.message}
             certifyRequired={isProductionRunCertifyField("preprocessingFuelLiters")}
@@ -849,7 +729,7 @@ export function ProductionRunForm({
             <FormInput
               id="preprocessingFuelLiters"
               type="number"
-              step="0.1"
+              step="any"
               placeholder="e.g. 10"
               disabled={isSubmitting}
               error={!!errors.preprocessingFuelLiters}
@@ -870,7 +750,7 @@ export function ProductionRunForm({
             <FormInput
               id="electricityKwh"
               type="number"
-              step="0.1"
+              step="any"
               placeholder="e.g. 100"
               disabled={isSubmitting}
               error={!!errors.electricityKwh}
@@ -883,31 +763,11 @@ export function ProductionRunForm({
 
       </FormSection>
 
-      {/* ── Readings CSV Import ── */}
-      <FormSection title="Readings CSV Import" icon={<FileCsvIcon size={14} weight="bold" />}>
-
-        <FormField
-          id="readingsCsv"
-          label="Readings CSV"
-          helperText="Upload a readings CSV (timestamp_utc, temperature_c, pressure_bar, plus optional dryer/reactor frequency). A file may span multiple UTC days; rows inside the run's time window populate the readings table below."
-          certifyRequired={readingsCertification.certifyRequired}
-          certifyStatus={readingsCertification.certifyStatus}
-        >
-          <div className="space-y-12">
-            <ProductionReadingsDocuments
-              productionRunId={productionRun?.id}
-              deferredAttachments={deferredAttachments}
-              disabled={isSubmitting}
-            />
-            {productionRun?.id && (
-              <ProductionRunReadingTable
-                productionRunId={productionRun.id}
-                compact
-              />
-            )}
-          </div>
-        </FormField>
-      </FormSection>
+      <ProductionReadingsField
+        productionRunId={productionRun?.id}
+        deferredAttachments={deferredAttachments}
+        disabled={isSubmitting}
+      />
       </FormSpine>
 
       {/* Process Flow — a derived recap of the run, not a data-entry step, so
@@ -952,7 +812,7 @@ export function ProductionRunForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={errorMessage}
+        errorMessage={routedServerError.footerError}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

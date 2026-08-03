@@ -1,0 +1,5 @@
+ALTER TABLE "certification_submissions" DROP CONSTRAINT "cert_submissions_external_unique";--> statement-breakpoint
+DROP INDEX "certifier_ghg_statements_remote_external_id_unique";--> statement-breakpoint
+CREATE UNIQUE INDEX "cert_submissions_external_unique" ON "certification_submissions" USING btree ("provider","submission_type","external_id") WHERE "certification_submissions"."submission_type" <> 'ghg_statement';--> statement-breakpoint
+CREATE UNIQUE INDEX "cert_submissions_ghg_statement_external_unique" ON "certification_submissions" USING btree ("provider","organization_id","local_entity_id","external_id") WHERE "certification_submissions"."submission_type" = 'ghg_statement';--> statement-breakpoint
+CREATE UNIQUE INDEX "certifier_ghg_statements_remote_external_id_unique" ON "certifier_ghg_statements" USING btree ("provider","organization_id","facility_id",("metadata"->>'remoteExternalId')) WHERE "certifier_ghg_statements"."metadata"->>'remoteExternalId' is not null;

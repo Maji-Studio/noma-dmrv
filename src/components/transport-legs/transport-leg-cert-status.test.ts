@@ -7,28 +7,36 @@ describe("transport leg header CERT status", () => {
       deriveTransportLegCertStatuses(
         [{ distanceKm: 25, distanceSource: "manual", loadMassKg: 100 }],
         false,
+        "feedstock",
       ),
     ).toEqual({
       distance: "neutral",
-      provenance: "neutral",
+      provenance: {
+        label: "Transport distance provenance",
+        status: "neutral",
+      },
       load: "neutral",
     });
   });
 
-  it("keeps distance green while non-document provenance is separately orange", () => {
+  it("accepts manual distance provenance", () => {
     expect(
       deriveTransportLegCertStatuses(
         [{ distanceKm: 25, distanceSource: "manual", loadMassKg: 100 }],
         true,
+        "feedstock",
       ),
     ).toEqual({
       distance: "satisfied",
-      provenance: "missing",
+      provenance: {
+        label: "Transport distance provenance",
+        status: "satisfied",
+      },
       load: "satisfied",
     });
   });
 
-  it("marks all persisted requirements green when document-backed with an upload", () => {
+  it("marks all persisted requirements green with recorded provenance", () => {
     expect(
       deriveTransportLegCertStatuses(
         [
@@ -36,44 +44,35 @@ describe("transport leg header CERT status", () => {
             distanceKm: 25,
             distanceSource: "document",
             loadMassKg: 100,
-            transportEvidenceDocumentCount: 1,
           },
         ],
         true,
+        "feedstock",
       ),
     ).toEqual({
       distance: "satisfied",
-      provenance: "satisfied",
+      provenance: {
+        label: "Transport distance provenance",
+        status: "satisfied",
+      },
       load: "satisfied",
     });
   });
 
-  it("keeps provenance orange when Document is marked but no file is uploaded", () => {
-    expect(
-      deriveTransportLegCertStatuses(
-        [
-          {
-            distanceKm: 25,
-            distanceSource: "document",
-            loadMassKg: 100,
-            transportEvidenceDocumentCount: 0,
-          },
-        ],
-        true,
-      ),
-    ).toEqual({
-      distance: "satisfied",
-      provenance: "missing",
-      load: "satisfied",
-    });
-  });
-
-  it("fails closed when a saved row omits its evidence count", () => {
-    expect(
-      deriveTransportLegCertStatuses(
-        [{ distanceKm: 25, distanceSource: "document", loadMassKg: 100 }],
-        true,
-      ).provenance,
-    ).toBe("missing");
-  });
+  it.each(["sample", "biochar"] as const)(
+    "does not show stale provenance certification for %s legs",
+    (entityType) => {
+      expect(
+        deriveTransportLegCertStatuses(
+          [{ distanceKm: 25, distanceSource: "manual", loadMassKg: 100 }],
+          true,
+          entityType,
+        ),
+      ).toEqual({
+        distance: "satisfied",
+        provenance: undefined,
+        load: "satisfied",
+      });
+    },
+  );
 });

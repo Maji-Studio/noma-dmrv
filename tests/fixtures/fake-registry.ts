@@ -84,8 +84,14 @@ export interface LoggedRequest {
   body?: unknown;
 }
 
+export interface DeferredRegistryResponse {
+  started: Promise<void>;
+  release: () => void;
+}
+
 const DEFAULT_REJECT_STATUS = 422;
 const DEFAULT_PAGE_SIZE = 50;
+const FAKE_SUBMITTED_AT = "2026-04-01T00:00:00.000Z";
 
 interface Page<T> {
   nodes: T[];
@@ -100,9 +106,17 @@ export class FakeIsometricRegistry {
   readonly ghgStatements: FakeGhgStatementRecord[] = [];
   readonly requests: LoggedRequest[] = [];
 
+  private readonly listedGhgStatementOverrides = new Map<
+    string,
+    Partial<FakeGhgStatementRecord>
+  >();
   private readonly failures = new Map<
     string,
     Array<FailureInjection | null>
+  >();
+  private readonly deferredResponses = new Map<
+    string,
+    Array<{ signalStarted: () => void; released: Promise<void> }>
   >();
   // External ids are unique table-wide per (provider, submissionType) in the
   // local ledger (`cert_submissions_external_unique`), and boundary-test rows
@@ -131,6 +145,28 @@ export class FakeIsometricRegistry {
     this.failures.set(route, queue);
   }
 
+  /**
+   * Capture the next response for a route, then hold it until released.
+   * Capturing before the wait models an authoritative detail snapshot that
+   * can become stale while another registry request observes fresher state.
+   */
+  deferNextResponse(
+    route: `${"GET" | "POST" | "PATCH" | "DELETE"} /${string}`,
+  ): DeferredRegistryResponse {
+    let signalStarted = () => {};
+    const started = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const queue = this.deferredResponses.get(route) ?? [];
+    queue.push({ signalStarted, released });
+    this.deferredResponses.set(route, queue);
+    return { started, release };
+  }
+
   /** Injects a draft statement directly (e.g. the second draft of an ambiguous period). */
   seedGhgStatement(args: {
     projectId: string;
@@ -156,6 +192,17 @@ export class FakeIsometricRegistry {
     };
     this.ghgStatements.push(statement);
     return statement;
+  }
+
+  /**
+   * Model a project-list summary that lags the authoritative statement detail.
+   * The real sync must reconcile membership from GET /ghg_statements/{id}.
+   */
+  overrideListedGhgStatement(
+    id: string,
+    override: Partial<FakeGhgStatementRecord>,
+  ): void {
+    this.listedGhgStatementOverrides.set(id, override);
   }
 
   requestCount(method: string, path: string): number {
@@ -194,6 +241,13 @@ export class FakeIsometricRegistry {
         "network",
       );
     }
+    const deferred = this.deferredResponses.get(`${method} ${path}`)?.shift();
+    if (deferred) {
+      const snapshot = structuredClone(result);
+      deferred.signalStarted();
+      await deferred.released;
+      return snapshot;
+    }
     return result;
   }
 
@@ -223,8 +277,30 @@ export class FakeIsometricRegistry {
       // "multiple" arm exists for — so no uniqueness is enforced here.
       return this.seedGhgStatement({ projectId: project_id, endOn: end_on });
     }
+    const patchedDatapoint = path.match(/^\/datapoints\/([^/]+)$/);
+    if (method === "PATCH" && patchedDatapoint) {
+      const record = this.findById(
+        this.datapoints,
+        decodeURIComponent(patchedDatapoint[1]),
+        method,
+        path,
+        ApiError,
+      );
+      Object.assign(record, body as Record<string, unknown>);
+      return record;
+    }
     if (method === "GET" && path === "/datapoints") {
       return paginateSlice(this.filterRecords(this.datapoints, query), query);
+    }
+    const datapointById = path.match(/^\/datapoints\/([^/]+)$/);
+    if (method === "GET" && datapointById) {
+      return this.findById(
+        this.datapoints,
+        decodeURIComponent(datapointById[1]),
+        method,
+        path,
+        ApiError,
+      );
     }
     if (method === "GET" && path === "/measurement_samples") {
       return paginateSlice(
@@ -232,13 +308,93 @@ export class FakeIsometricRegistry {
         query,
       );
     }
+    const measurementSampleById = path.match(
+      /^\/measurement_samples\/([^/]+)$/,
+    );
+    if (method === "GET" && measurementSampleById) {
+      return this.findById(
+        this.measurementSamples,
+        decodeURIComponent(measurementSampleById[1]),
+        method,
+        path,
+        ApiError,
+      );
+    }
     if (method === "GET" && path === "/ghg_entries") {
       return paginateSlice(this.filterRecords(this.ghgEntries, query), query);
+    }
+    const componentAttributions = path.match(
+      /^\/ghg_entries\/([^/]+)\/component_attributions$/,
+    );
+    if (method === "GET" && componentAttributions) {
+      const ghgEntry = this.findById(
+        this.ghgEntries,
+        decodeURIComponent(componentAttributions[1]),
+        method,
+        path,
+        ApiError,
+      );
+      const components = Array.isArray(
+        ghgEntry.ghg_entry_template_components,
+      )
+        ? ghgEntry.ghg_entry_template_components
+        : [];
+      return paginateSlice(
+        components.map((component) => {
+          const value = component as Record<string, unknown>;
+          const templateComponentId = String(
+            value.ghg_entry_template_component_id,
+          );
+          return {
+            component_id: `${ghgEntry.id}::${templateComponentId}`,
+            component_group_key: "co2-stored",
+            ghg_entry_template_component_id: templateComponentId,
+          };
+        }),
+        query,
+      );
+    }
+    const componentById = path.match(/^\/components\/([^/]+)$/);
+    if (method === "GET" && componentById) {
+      return this.componentForId(
+        decodeURIComponent(componentById[1]),
+        method,
+        path,
+        ApiError,
+      );
     }
     if (method === "GET" && path === "/ghg_statements") {
       // No server-side filter: findDraftGhgStatementsByPeriod filters
       // client-side over the paged list.
-      return paginateSlice(this.ghgStatements, query);
+      return paginateSlice(
+        this.ghgStatements.map((statement) => ({
+          ...statement,
+          ...this.listedGhgStatementOverrides.get(statement.id),
+        })),
+        query,
+      );
+    }
+    const submittedStatement = path.match(
+      /^\/ghg_statements\/([^/]+)\/submit$/,
+    );
+    if (method === "POST" && submittedStatement) {
+      const statement = this.ghgStatements.find(
+        (candidate) =>
+          candidate.id === decodeURIComponent(submittedStatement[1]),
+      );
+      if (!statement) {
+        throw new ApiError(
+          `Isometric ${method} ${path} → 404`,
+          404,
+          { errors: [{ detail: "not found" }] },
+          "http",
+        );
+      }
+      const payload = body as { ghg_statement_report_url: string };
+      statement.status = "AWAITING_VERIFICATION";
+      statement.ghg_statement_report_url = payload.ghg_statement_report_url;
+      statement.submitted_at = FAKE_SUBMITTED_AT;
+      return statement;
     }
     const statementById = path.match(/^\/ghg_statements\/([^/]+)$/);
     if (method === "GET" && statementById) {
@@ -301,18 +457,90 @@ export class FakeIsometricRegistry {
   ): FakeRegistryRecord {
     const payload = (body ?? {}) as Record<string, unknown>;
     const values = Array.isArray(payload.values) ? payload.values : [];
+    const responseValues = values.map((value) => ({
+      ...(value as Record<string, unknown>),
+      datapoint_id: this.nextId("dtp"),
+    }));
+    for (const value of responseValues) {
+      this.datapoints.push({
+        id: value.datapoint_id,
+        source_ids: [],
+      });
+    }
     const response = {
       ...payload,
-      values: values.map((value) => ({
-        ...(value as Record<string, unknown>),
-        datapoint_id: this.nextId("dtp"),
-      })),
+      values: responseValues,
     };
     return this.create(
       this.measurementSamples,
       "mts",
       response,
       ApiError,
+    );
+  }
+
+  private findById(
+    collection: FakeRegistryRecord[],
+    id: string,
+    method: string,
+    path: string,
+    ApiError: ApiErrorCtor,
+  ): FakeRegistryRecord {
+    const record = collection.find((candidate) => candidate.id === id);
+    if (record) return record;
+    throw new ApiError(
+      `Isometric ${method} ${path} → 404`,
+      404,
+      { errors: [{ detail: "not found" }] },
+      "http",
+    );
+  }
+
+  private componentForId(
+    componentId: string,
+    method: string,
+    path: string,
+    ApiError: ApiErrorCtor,
+  ): FakeRegistryRecord {
+    for (const ghgEntry of this.ghgEntries) {
+      const prefix = `${ghgEntry.id}::`;
+      if (!componentId.startsWith(prefix)) continue;
+      const templateComponentId = componentId.slice(prefix.length);
+      const components = Array.isArray(
+        ghgEntry.ghg_entry_template_components,
+      )
+        ? ghgEntry.ghg_entry_template_components
+        : [];
+      const component = components.find(
+        (candidate) =>
+          (candidate as Record<string, unknown>)
+            .ghg_entry_template_component_id === templateComponentId,
+      ) as Record<string, unknown> | undefined;
+      if (!component) break;
+      const inputs = Array.isArray(component.inputs) ? component.inputs : [];
+      return {
+        id: componentId,
+        inputs: inputs.map((input) => {
+          const value = input as Record<string, unknown>;
+          return "datapoint_ids" in value
+            ? {
+                __typename: "ComponentListInput",
+                input_key: value.input_key,
+                datapoint_ids: value.datapoint_ids,
+              }
+            : {
+                __typename: "ComponentScalarInput",
+                input_key: value.input_key,
+                datapoint_id: value.datapoint_id,
+              };
+        }),
+      };
+    }
+    throw new ApiError(
+      `Isometric ${method} ${path} → 404`,
+      404,
+      { errors: [{ detail: "not found" }] },
+      "http",
     );
   }
 

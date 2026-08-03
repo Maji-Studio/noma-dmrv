@@ -21,12 +21,9 @@ import {
   deleteProductionIncidentSchema,
 } from "@/schemas/production-incidents";
 import type { ActionResult } from "@/types/actions";
+import { formatZodActionError } from "./action-errors";
 
 const productionRunIdSchema = z.string().uuid("Production run is required");
-
-function formatZodError(error: z.ZodError): string {
-  return `Validation error: ${error.issues.map((issue) => issue.message).join(", ")}`;
-}
 
 function logServerError(context: string, error: unknown): void {
   console.error(`[production-incidents] ${context}`, error);
@@ -49,7 +46,8 @@ export async function getProductionIncidentsFn(
     logServerError("getProductionIncidentsFn failed", error);
     return {
       success: false,
-      error: "Failed to load production incidents",
+      error:
+        "Production incidents could not be loaded. Refresh the page and try again.",
     };
   }
 }
@@ -81,13 +79,14 @@ export async function createProductionIncidentFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: formatZodError(error),
+        error: formatZodActionError(error),
       };
     }
     logServerError("createProductionIncidentFn failed", error);
     return {
       success: false,
-      error: "Failed to create production incident",
+      error:
+        "Production incident was not created. Check the form.",
     };
   }
 }
@@ -122,13 +121,13 @@ export async function updateProductionIncidentFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: formatZodError(error),
+        error: formatZodActionError(error),
       };
     }
     logServerError("updateProductionIncidentFn failed", error);
     return {
       success: false,
-      error: "Failed to update production incident",
+      error: "Production incident was not saved. Try again.",
     };
   }
 }
@@ -147,7 +146,7 @@ export async function deleteProductionIncidentFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: formatZodError(error),
+        error: formatZodActionError(error),
       };
     }
     logServerError("deleteProductionIncidentFn failed", error);

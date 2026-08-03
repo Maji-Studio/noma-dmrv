@@ -14,7 +14,11 @@
  *                 actually reconciled (+ any drift warnings).
  *
  * Reporting periods are consecutive and non-overlapping: the operator can't pick
- * an end on or before an existing statement's end (mirrored server-side).
+ * an end on or before an existing statement's end (mirrored server-side). That
+ * rule is *derived* from the watched date on every render, never pushed in with
+ * `setError` — an imperative error outlived the edit that fixed it and only
+ * cleared on the next Next click, which read as "first click says no, second
+ * advances" (QA 2026-07-25).
  *
  * Modal unmounts its children while closed, so the RHF form and mutation start
  * fresh each time.
@@ -23,20 +27,17 @@
 
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  useForm,
-  type UseFormRegister,
-  type UseFormRegisterReturn,
-} from "react-hook-form";
+import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import {
   CheckCircleIcon,
   ClipboardTextIcon,
+  InfoIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Button, EmptyState, Modal } from "@/components/ui";
+import { Accordion } from "@/components/ui/accordion";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { InfoHint } from "@/components/ui/tooltip";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -46,12 +47,14 @@ import {
   useRegistryGhgStatementsForFacility,
 } from "@/hooks/use-certification";
 import type { RegistryGhgStatementView } from "@/fn/certification";
+import type { GhgStatementCreateOutcome } from "@/fn/certification/ghg-statements";
 import {
   derivePeriodStart,
-  overlappingEnd,
+  liveOverlapEnd,
   partitionByWindow,
 } from "@/lib/isometric/utils/ghg-reporting-window";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { formatCount } from "@/lib/copy-utils";
 import {
   createGhgStatementSchema,
   type CreateGhgStatementInput,
@@ -59,6 +62,11 @@ import {
 import { EnvBanner } from "./env-banner";
 import { ProductionConfirmation } from "./production-confirmation";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
+import {
+  CERTIFICATION_ACCORDION_ITEM,
+  CERTIFICATION_ACCORDION_LABEL,
+  CERTIFICATION_ACCORDION_TRIGGER,
+} from "./certification-accordion-styles";
 
 interface GhgStatementCreateDialogProps {
   facilityId: string;
@@ -69,12 +77,13 @@ interface GhgStatementCreateDialogProps {
 
 const STEPS: StepFlowStep[] = [
   { key: "period", label: "Period", description: "Choose the end" },
-  { key: "preview", label: "Contents", description: "Preview removals" },
+  { key: "preview", label: "Contents", description: "Preview Removals" },
   { key: "confirm", label: "Confirm", description: "Review and create" },
 ];
 
 const DIALOG_TITLE_ID = "ghg-statement-create-title";
 const DIALOG_DESCRIPTION_ID = "ghg-statement-create-description";
+const REGISTRY_STATEMENTS_ITEM = "registry-statements";
 
 // Period-derivation + window logic is shared with the server empty-statement
 // guard (`ghg-reporting-window.ts`) so the operator's preview and the registry
@@ -116,11 +125,16 @@ function DialogBody({
 }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [furthest, setFurthest] = useState(0);
+  const [registryStatementsExpanded, setRegistryStatementsExpanded] =
+    useState(false);
   const toast = useToast();
   const mutation = useCreateGhgStatement();
   const statementsQuery = useGhgStatementsForFacility(facilityId);
   const registryStatementsQuery =
-    useRegistryGhgStatementsForFacility(facilityId);
+    useRegistryGhgStatementsForFacility(
+      facilityId,
+      registryStatementsExpanded,
+    );
 
   const {
     register,
@@ -128,6 +142,7 @@ function DialogBody({
     watch,
     trigger,
     setError,
+    clearErrors,
     formState: { errors },
   } = useForm<CreateGhgStatementInput>({
     resolver: zodResolver(createGhgStatementSchema),
@@ -139,10 +154,22 @@ function DialogBody({
   });
 
   const endOn = watch("reportingPeriodEndOn");
+  // The overlap rule is only as good as the list it is judged against, so step 0
+  // holds until the local statements have actually loaded: a pending or failed
+  // query would wave any period through against an empty list.
+  const statementsLoaded = statementsQuery.isSuccess;
   const existingEnds = (statementsQuery.data ?? [])
     .filter((item) => !item.remotePeriodMissing)
     .map((item) => item.effectiveReportingPeriodEndOn);
   const derivedStart = endOn ? derivePeriodStart(endOn, existingEnds) : null;
+  // Derived, so editing the date clears it; `liveOverlapEnd` also ignores the
+  // half-typed years an `<input type="date">` emits mid-keystroke.
+  const overlap = statementsLoaded ? liveOverlapEnd(endOn, existingEnds) : null;
+  const periodError =
+    errors.reportingPeriodEndOn?.message ??
+    (overlap
+      ? `A statement already ends ${overlap}. Choose a later date.`
+      : undefined);
   // The preview query only runs once the operator reaches the Preview step.
   const openQuery = useOpenRemovalsForFacility(facilityId, stepIndex >= 1);
 
@@ -157,14 +184,11 @@ function DialogBody({
 
   const goTo = async (index: number) => {
     if (index > stepIndex && stepIndex === 0) {
+      // Both guards are mirrored on the Next button's `disabled`, so neither
+      // can present as a click that does nothing.
+      if (!statementsLoaded) return;
       if (!(await trigger("reportingPeriodEndOn"))) return;
-      const overlap = overlappingEnd(endOn, existingEnds);
-      if (overlap) {
-        setError("reportingPeriodEndOn", {
-          message: `A statement already ends ${overlap}. Choose a later date.`,
-        });
-        return;
-      }
+      if (overlap) return;
     }
     setStepIndex(index);
     setFurthest((f) => Math.max(f, index));
@@ -183,18 +207,26 @@ function DialogBody({
     }
     try {
       const result = await mutation.mutateAsync(data);
-      if (result.warnings.length > 0) {
+      const linked = `${result.linkedRemovalIds.length} linked ${
+        result.linkedRemovalIds.length === 1 ? "Removal" : "Removals"
+      }`;
+      if (result.outcome === "existing") {
+        // ADR 0004: the create is idempotent per period, so this is a normal
+        // success — but nothing was created and saying so would be a lie.
+        toast.info(`A GHG Statement already exists for this period with ${linked}.`);
+      } else if (result.warnings.length > 0) {
         toast.warning(
           `Created with ${result.warnings.length} warning${result.warnings.length === 1 ? "" : "s"}.`,
         );
       } else {
-        toast.success(
-          `Created with ${result.linkedRemovalIds.length} linked removal${result.linkedRemovalIds.length === 1 ? "" : "s"}.`,
-        );
+        toast.success(`Created with ${linked}.`);
       }
     } catch (err) {
       setError("root.serverError", {
-        message: err instanceof Error ? err.message : "Create failed",
+        message:
+          err instanceof Error
+            ? err.message
+            : "The GHG Statement was not created. Check the period and try again.",
       });
     }
   });
@@ -213,14 +245,17 @@ function DialogBody({
           className="body-small text-[var(--color-text-secondary)]"
         >
           {result
-            ? "Created in Isometric."
-            : "Choose a period, preview removals, then create."}
+            ? result.outcome === "existing"
+              ? "Already in Isometric."
+              : "Created in Isometric."
+            : "Choose a period, preview Removals, then create."}
         </p>
       </header>
 
       <div className="flex flex-col gap-24">
         {result ? (
           <ResultPanel
+            outcome={result.outcome}
             externalId={result.externalId}
             linkedCount={result.linkedRemovalIds.length}
             warnings={result.warnings}
@@ -235,11 +270,22 @@ function DialogBody({
           >
             {stepIndex === 0 && (
               <StepPeriod
-                register={register}
-                error={errors.reportingPeriodEndOn?.message}
+                // RHF only auto-revalidates a field after a *submit*, and this
+                // wizard advances with `trigger()`. Without this the schema
+                // error would also sit there until the next Next click, long
+                // after the operator fixed the date.
+                registerProps={register("reportingPeriodEndOn", {
+                  onChange: () => clearErrors("reportingPeriodEndOn"),
+                })}
+                error={periodError}
                 endOn={endOn}
                 derivedStart={derivedStart}
+                statementsQuery={statementsQuery}
                 registryStatementsQuery={registryStatementsQuery}
+                registryStatementsExpanded={registryStatementsExpanded}
+                onRegistryStatementsExpandedChange={
+                  setRegistryStatementsExpanded
+                }
               />
             )}
             {stepIndex === 1 && (
@@ -304,10 +350,17 @@ function DialogBody({
               <Button
                 variant="primary"
                 onClick={advance}
-                // On the Contents step, block advancing an empty period (#245):
-                // a statement with no removals in-window would be a dead-end
-                // registry record. Also wait for the preview to settle.
-                disabled={stepIndex === 1 && (!previewLoaded || isEmptyPeriod)}
+                // On the Period step, wait for the existing statements the
+                // overlap rule is judged against, and stay blocked while the
+                // chosen end overlaps one. On the Contents step, block
+                // advancing an empty period (#245): a statement with no
+                // removals in-window would be a dead-end registry record. Also
+                // wait for the preview to settle.
+                disabled={
+                  stepIndex === 0
+                    ? !statementsLoaded || Boolean(overlap)
+                    : stepIndex === 1 && (!previewLoaded || isEmptyPeriod)
+                }
               >
                 Next
               </Button>
@@ -351,37 +404,36 @@ export function PeriodWindow({
 }
 
 function StepPeriod({
-  register,
+  registerProps,
   error,
   endOn,
   derivedStart,
+  statementsQuery,
   registryStatementsQuery,
+  registryStatementsExpanded,
+  onRegistryStatementsExpandedChange,
 }: {
-  register: UseFormRegister<CreateGhgStatementInput>;
+  registerProps: UseFormRegisterReturn;
   error?: string;
   endOn: string;
   derivedStart: string | null;
+  statementsQuery: ReturnType<typeof useGhgStatementsForFacility>;
   registryStatementsQuery: ReturnType<
     typeof useRegistryGhgStatementsForFacility
   >;
+  registryStatementsExpanded: boolean;
+  onRegistryStatementsExpandedChange: (expanded: boolean) => void;
 }) {
   return (
     <div className="flex flex-col gap-12">
-      <h3 className="title-heading-4 flex items-center gap-6">
-        Reporting period
-        <InfoHint>
-          Only the end date is sent. Isometric links submitted Removals
-          completed within the period.
-        </InfoHint>
-      </h3>
       <p className="body-small text-[var(--color-text-secondary)]">
-        A GHG statement bundles the removals you&apos;ve already submitted this
-        period so a verifier can review them. Pick the period end — we&apos;ll
-        show you exactly which removals fall inside.
+        A GHG Statement bundles the Removals you&apos;ve already submitted this
+        period so a verifier can review them.
       </p>
       <FormField
         id="reportingPeriodEndOn"
         label="Reporting period end"
+        hint="Only the end date is sent. Isometric links submitted Removals completed within the period."
         required
         error={error}
       >
@@ -389,10 +441,11 @@ function StepPeriod({
           id="reportingPeriodEndOn"
           type="date"
           error={!!error}
-          {...register("reportingPeriodEndOn")}
+          {...registerProps}
         />
       </FormField>
-      {endOn && !error && (
+      <ExistingPeriodsStatus query={statementsQuery} />
+      {endOn && !error && statementsQuery.isSuccess && (
         <div className="flex flex-col gap-8 border-l-2 border-[var(--color-border-secondary)] pl-12">
           <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
             Reporting period
@@ -400,55 +453,141 @@ function StepPeriod({
           <PeriodWindow derivedStart={derivedStart} endOn={endOn} />
         </div>
       )}
-      <RegistryStatementsPanel query={registryStatementsQuery} />
+      <RegistryStatementsPanel
+        query={registryStatementsQuery}
+        expanded={registryStatementsExpanded}
+        onExpandedChange={onRegistryStatementsExpandedChange}
+      />
     </div>
   );
 }
 
-function RegistryStatementsPanel({
+/**
+ * Says out loud why Next can be unavailable on the Period step: the overlap
+ * check and the derived start both need this facility's existing statements,
+ * and neither a pending nor a failed load is an answer.
+ */
+function ExistingPeriodsStatus({
+  query,
+}: {
+  query: ReturnType<typeof useGhgStatementsForFacility>;
+}) {
+  if (query.isSuccess) return null;
+  if (query.isError) {
+    return (
+      <div className="flex flex-col items-start gap-8">
+        <ServerError message="This facility's reporting periods could not be loaded, so the end date cannot be checked for overlap. Refresh the page and try again." />
+        <Button
+          variant="default"
+          size="small"
+          onClick={() => void query.refetch()}
+        >
+          Try again
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <p
+      aria-busy="true"
+      className="body-caption text-[var(--color-text-tertiary)]"
+    >
+      Checking existing reporting periods…
+    </p>
+  );
+}
+
+export function RegistryStatementsPanel({
+  query,
+  expanded,
+  onExpandedChange,
+}: {
+  query: ReturnType<typeof useRegistryGhgStatementsForFacility>;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+}) {
+  const statementCount = query.data?.length;
+
+  return (
+    <Accordion.Root
+      className="gap-0"
+      value={expanded ? [REGISTRY_STATEMENTS_ITEM] : []}
+      onValueChange={(value) =>
+        onExpandedChange(value.includes(REGISTRY_STATEMENTS_ITEM))
+      }
+    >
+      <Accordion.Item
+        value={REGISTRY_STATEMENTS_ITEM}
+        className={CERTIFICATION_ACCORDION_ITEM}
+      >
+        <Accordion.Header>
+          <Accordion.Trigger
+            className={CERTIFICATION_ACCORDION_TRIGGER}
+            labelClassName={CERTIFICATION_ACCORDION_LABEL}
+          >
+            <span className="flex w-full items-center justify-between gap-12">
+              <span>Already in the registry</span>
+              <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
+                {query.isError
+                  ? "Unavailable"
+                  : statementCount === undefined
+                    ? "Registry statements"
+                  : formatCount(statementCount, "statement")}
+              </span>
+            </span>
+          </Accordion.Trigger>
+        </Accordion.Header>
+        <Accordion.Panel className="[&>div]:p-0">
+          <RegistryStatementsPanelContent query={query} />
+        </Accordion.Panel>
+      </Accordion.Item>
+    </Accordion.Root>
+  );
+}
+
+function RegistryStatementsPanelContent({
   query,
 }: {
   query: ReturnType<typeof useRegistryGhgStatementsForFacility>;
 }) {
   if (query.isLoading) {
     return (
-      <div
-        aria-busy="true"
-        className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16"
-      >
+      <div aria-busy="true" className="p-16">
         <p className="body-small text-[var(--color-text-tertiary)]">
           Loading registry statements…
         </p>
       </div>
     );
   }
-  if (query.error || !query.data) {
-    return <ServerError message="Unable to load registry statements." />;
+  if (query.isError) {
+    return (
+      <div className="p-16">
+        <ServerError message="Registry statements could not be loaded. Refresh the page and try again." />
+      </div>
+    );
   }
+  if (!query.data) return null;
   if (query.data.length === 0) {
     return (
       <EmptyState
         icon={<ClipboardTextIcon size={32} />}
         title="No registry statements"
-        description="This project has no GHG statements in the registry."
+        description="This project has no GHG Statements in the registry."
         padding="sm"
       />
     );
   }
   return (
-    <section className="flex flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <h4 className="title-heading-4">Already in the registry</h4>
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          Review these before choosing a new reporting period.
-        </p>
-      </div>
-      <div className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
+    <>
+      <p className="body-caption border-b border-[var(--color-border-tertiary)] px-16 py-10 text-[var(--color-text-tertiary)]">
+        Review these before choosing a new reporting period.
+      </p>
+      <div className="flex flex-col">
         {query.data.map((statement) => (
           <RegistryStatementRow key={statement.id} statement={statement} />
         ))}
       </div>
-    </section>
+    </>
   );
 }
 
@@ -469,8 +608,7 @@ function RegistryStatementRow({
       </div>
       <div className="flex items-center gap-12">
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          {statement.removalCount} removal
-          {statement.removalCount === 1 ? "" : "s"}
+          {formatCount(statement.removalCount, "Removal")}
         </span>
         <StatusBadge status={registryStatusBadgeValue(statement.status)} />
       </div>
@@ -520,14 +658,14 @@ function StepPreview({
         aria-busy="true"
         className="body-small text-[var(--color-text-tertiary)]"
       >
-        Loading open removals…
+        Loading open Removals…
       </p>
     );
   }
   if (query.error || !query.data) {
     return (
       <p className="body-small text-[var(--clr-red)]" role="alert">
-        Unable to load removals. Go back and try again.
+        Removals could not be loaded. Go back and try again.
       </p>
     );
   }
@@ -545,14 +683,6 @@ function StepPreview({
 
   return (
     <div className="flex flex-col gap-16">
-      <h3 className="title-heading-4 flex items-center gap-6">
-        Expected contents
-        <InfoHint>
-          Isometric confirms membership after creation from each Removal&apos;s
-          completion date. Expand a Removal to view its credit batches.
-        </InfoHint>
-      </h3>
-
       <PeriodWindow derivedStart={derivedStart} endOn={endOn} />
 
       <div className="flex flex-col gap-8">
@@ -590,26 +720,39 @@ function StepPreview({
         )}
       </div>
 
-      <div className="flex flex-col gap-8 opacity-60">
-        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Other open removals ({outside.length})
-        </span>
-        {outside.length === 0 ? (
-          <p className="body-caption text-[var(--color-text-tertiary)]">
-            No other open removals.
-          </p>
-        ) : (
-          <RemovalBatchesAccordion
-            facilityId={facilityId}
-            entries={outside.map((removal) => ({
-              removalId: removal.removalId,
-              label: removal.externalId,
-              completedOn: removal.completedOn,
-              creditBatches: removal.creditBatches,
-            }))}
-          />
-        )}
-      </div>
+      {outside.length > 0 && (
+        <Accordion.Root className="gap-0">
+          <Accordion.Item
+            value="other-open-removals"
+            className={CERTIFICATION_ACCORDION_ITEM}
+          >
+            <Accordion.Header>
+              <Accordion.Trigger
+                className={CERTIFICATION_ACCORDION_TRIGGER}
+                labelClassName={CERTIFICATION_ACCORDION_LABEL}
+              >
+                <span className="flex w-full items-center justify-between gap-12">
+                  <span>Other open Removals</span>
+                  <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
+                    {formatCount(outside.length, "Removal")}
+                  </span>
+                </span>
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Panel className="[&>div]:p-12">
+              <RemovalBatchesAccordion
+                facilityId={facilityId}
+                entries={outside.map((removal) => ({
+                  removalId: removal.removalId,
+                  label: removal.externalId,
+                  completedOn: removal.completedOn,
+                  creditBatches: removal.creditBatches,
+                }))}
+              />
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion.Root>
+      )}
     </div>
   );
 }
@@ -629,7 +772,6 @@ function StepConfirm({
 }) {
   return (
     <div className="flex flex-col gap-16">
-      <h3 className="title-heading-4">Confirm &amp; create</h3>
       <p className="body-small text-[var(--color-text-secondary)]">
         Isometric will create this period and link matching Removals.
       </p>
@@ -648,32 +790,58 @@ function StepConfirm({
 }
 
 function ResultPanel({
+  outcome,
   externalId,
   linkedCount,
   warnings,
 }: {
+  outcome: GhgStatementCreateOutcome;
   externalId: string;
   linkedCount: number;
   warnings: string[];
 }) {
+  // "existing" is the ADR 0004 idempotent path: a statement for this period was
+  // already created in Isometric and this attempt resolved to it. Say that,
+  // rather than claiming a creation that did not happen.
+  const alreadyExisted = outcome === "existing";
+  const OutcomeIcon = alreadyExisted ? InfoIcon : CheckCircleIcon;
+  // Resolving to an existing statement is informational, not a success, so it
+  // takes the status ramp's in-progress step rather than the success one. The
+  // ramp is the semantic layer for feedback accents; `--clr-*` is the raw
+  // palette and must not be reached for from a component.
   return (
     <div className="flex flex-col gap-16">
-      <div className="flex items-start gap-8 border-l-2 border-[var(--color-signal-green)] pl-12 py-4">
-        <CheckCircleIcon
+      <div
+        className={`flex items-start gap-8 border-l-2 pl-12 py-4 ${
+          alreadyExisted
+            ? "border-[var(--st-run)]"
+            : "border-[var(--st-ok)]"
+        }`}
+      >
+        <OutcomeIcon
           size={18}
           weight="fill"
           aria-hidden
-          className="mt-px shrink-0 text-[var(--color-signal-green)]"
+          className={`mt-px shrink-0 ${
+            alreadyExisted
+              ? "text-[var(--st-run)]"
+              : "text-[var(--st-ok)]"
+          }`}
         />
         <p className="body-small text-[var(--color-text-primary)]">
-          <span className="font-mono">{externalId}</span> created with{" "}
-          <strong className="body-small-bold">{linkedCount}</strong>{" "}
-          removal{linkedCount === 1 ? "" : "s"}.
+          <span className="font-mono">{externalId}</span>{" "}
+          {alreadyExisted
+            ? "already exists for this period, with"
+            : "created with"}{" "}
+          <strong className="font-medium">
+            {formatCount(linkedCount, "Removal")}
+          </strong>
+          .
         </p>
       </div>
       {warnings.length > 0 && (
         <div className="flex flex-col gap-8 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-          <span className="inline-flex items-center gap-6 title-chapter-title text-[var(--color-signal-orange)]">
+          <span className="inline-flex items-center gap-6 body-caption uppercase tracking-wide text-[var(--color-signal-orange)]">
             <WarningIcon size={14} weight="fill" aria-hidden />
             {warnings.length} {warnings.length === 1 ? "warning" : "warnings"}
           </span>

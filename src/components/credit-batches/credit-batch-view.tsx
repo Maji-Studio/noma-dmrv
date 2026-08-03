@@ -7,10 +7,11 @@
  * runs, and notes. The interactive certification checklist and lab-sample
  * panels mount below via `viewModeChildren` because they fetch their own data.
  */
-import Link from "next/link";
-import { ArrowRightIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { InfoHint } from "@/components/ui/tooltip";
+import { carbonGapLabels } from "@/lib/certification/batch-health-facts";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type {
@@ -18,7 +19,9 @@ import type {
   CreditBatchWithRelations,
 } from "@/data-access/credit-batches";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
+import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
 function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {
@@ -33,39 +36,27 @@ function ProductionRunLink({
   facilityId: string;
 }) {
   return (
-    <Link
+    <SheetLinkRow
       href={`/production-runs?facility=${facilityId}&run=${run.id}`}
-      className="group flex min-w-0 items-center justify-between gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-background-white)] px-12 py-10 hover:border-[var(--color-border-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-    >
-      <span className="flex min-w-0 flex-col gap-2">
-        <span className="body-small font-medium text-[var(--color-text-primary)]">
-          {run.code}
-        </span>
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          {formatDate(run.date)}
-        </span>
-      </span>
-      <span className="flex shrink-0 items-center gap-10">
-        {run.status !== COMPLETED_PRODUCTION_RUN_STATUS && (
-          <StatusBadge status={run.status} size="small" />
-        )}
-        <span className="text-right">
-          <span className="block label-micro text-[var(--color-text-tertiary)]">
-            Dry output
+      ariaLabel={`Open production run from ${formatDate(run.date)}${
+        run.biocharStorageName ? ` in ${run.biocharStorageName}` : ""
+      }`}
+      primary={formatDate(run.date)}
+      secondary={run.biocharStorageName}
+      meta={
+        <>
+          {run.status !== COMPLETED_PRODUCTION_RUN_STATUS && (
+            <StatusBadge status={run.status} size="small" />
+          )}
+          <span className="body-caption tabular-nums text-[var(--color-text-tertiary)]">
+            {formatWetDryMass({
+              wetKg: run.biocharOutputKg,
+              dryKg: run.biocharDryMassKg,
+            })}
           </span>
-          <span className="block body-small tabular-nums text-[var(--color-text-secondary)]">
-            {run.biocharDryMassKg == null
-              ? "—"
-              : formatTonnes(run.biocharDryMassKg / 1000)}
-          </span>
-        </span>
-        <ArrowRightIcon
-          size={14}
-          className="text-[var(--color-text-tertiary)] group-hover:text-[var(--color-text-secondary)]"
-          aria-hidden
-        />
-      </span>
-    </Link>
+        </>
+      }
+    />
   );
 }
 
@@ -141,13 +132,15 @@ function CreditBatchRunsContent({
           ? ` · ${previewCount} ${previewCount === 1 ? "preview" : "previews"}`
           : ""}
       </span>
-      {productionRuns.map((run) => (
-        <ProductionRunLink
-          key={run.id}
-          run={run}
-          facilityId={creditBatch.facilityId}
-        />
-      ))}
+      <SheetLinkRows>
+        {productionRuns.map((run) => (
+          <ProductionRunLink
+            key={run.id}
+            run={run}
+            facilityId={creditBatch.facilityId}
+          />
+        ))}
+      </SheetLinkRows>
     </div>
   );
 }
@@ -156,6 +149,59 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   /** Removal/GHG lifecycle summary; undefined while loading or unavailable. */
   healthSummary?: CreditBatchHealthSummary;
   isHealthLoading: boolean;
+  /** The CO₂e-stored preview query is still in flight. */
+  isCo2ePreviewLoading?: boolean;
+  /** The CO₂e-stored preview query failed — the figure is unknown, not absent. */
+  co2ePreviewFailed?: boolean;
+}
+
+/**
+ * The "CO₂e stored" cell. The figure comes from a separate preview query, so an
+ * absent value has three very different meanings — still loading, failed to
+ * load, or genuinely not computable yet — and the old blanket "Needs inputs"
+ * covered all three while naming none of them (and read as a contradiction next
+ * to a batch whose checks all passed).
+ */
+function co2eStoredValue({
+  creditBatch,
+  isCo2ePreviewLoading,
+  co2ePreviewFailed,
+}: {
+  creditBatch: CreditBatchWithRelations;
+  isCo2ePreviewLoading?: boolean;
+  co2ePreviewFailed?: boolean;
+}): React.ReactNode {
+  const preview = creditBatch.co2eStoredPreview;
+
+  if (preview?.co2eStoredTonnes != null) {
+    return formatTonnes(preview.co2eStoredTonnes, { unit: "t CO₂e" });
+  }
+  if (!preview) {
+    if (isCo2ePreviewLoading) return "Calculating…";
+    if (co2ePreviewFailed) return "Not available";
+    return "Not available";
+  }
+
+  const gaps = carbonGapLabels(preview.missingInputs);
+  return (
+    <span className="inline-flex items-center gap-6">
+      Not calculable yet
+      <InfoHint label="Why there is no CO₂e figure">
+        {gaps.length > 0
+          ? `This figure needs ${formatList(gaps)}. Fix it under Certification requirements below.`
+          : "This figure is waiting on data that hasn't been recorded yet. Certification requirements below lists what is outstanding."}
+      </InfoHint>
+    </span>
+  );
+}
+
+/** "A", "A and B", "A, B and C" — for reading a gap list inside a sentence. */
+function formatList(items: string[]): string {
+  const lower = items.map(
+    (item) => item.charAt(0).toLowerCase() + item.slice(1),
+  );
+  if (lower.length <= 1) return lower[0] ?? "";
+  return `${lower.slice(0, -1).join(", ")} and ${lower[lower.length - 1]}`;
 }
 
 export function creditBatchSheetSections({
@@ -167,9 +213,9 @@ export function creditBatchSheetSections({
   onRetryRuns,
   healthSummary,
   isHealthLoading,
+  isCo2ePreviewLoading,
+  co2ePreviewFailed,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
-  const co2eStored = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
-
   return [
     {
       title: "Certification progress",
@@ -199,20 +245,21 @@ export function creditBatchSheetSections({
       // Mirrors the edit form's "Batch definition" section.
       title: "Batch definition",
       fields: [
-        { label: "Feedstock Type", value: creditBatch.feedstockTypeName },
+        { label: "Feedstock type", value: creditBatch.feedstockTypeName },
         { label: "Durability", value: durabilityLabel(creditBatch.durabilityOption) },
-        { label: "Start Date", value: formatDate(creditBatch.startDate) },
-        { label: "End Date", value: formatDate(creditBatch.endDate) },
+        { label: "Start date", value: formatDate(creditBatch.startDate) },
+        { label: "End date", value: formatDate(creditBatch.endDate) },
         {
           label: "Applied biochar",
           value: formatTonnes(creditBatch.appliedWeightTons),
         },
         {
           label: "CO₂e stored",
-          value:
-            co2eStored == null
-              ? "Needs inputs"
-              : formatTonnes(co2eStored, { unit: "t CO₂e" }),
+          value: co2eStoredValue({
+            creditBatch,
+            isCo2ePreviewLoading,
+            co2ePreviewFailed,
+          }),
         },
       ],
     },

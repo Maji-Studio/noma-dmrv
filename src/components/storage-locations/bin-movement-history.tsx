@@ -10,25 +10,26 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useBinMovements } from "@/hooks/use-bin-movements";
 import type { BinMovementWithActor } from "@/data-access/bin-movements";
-import { formatDateTime, formatMass } from "@/lib/format-utils";
+import { formatDateTime, formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
 import {
   BIN_MOVEMENT_LANE_LABELS,
   type BinMovementLane,
 } from "@/schemas/bin-movements";
 
+/** Stored moisture is a 0–1 ratio; display is a 0–100 percentage. */
+const PERCENT_SCALE = 100;
+
 interface BinMovementHistoryProps {
   storageLocationId: string;
 }
 
+// Fixed kg throughout: the delta is the difference between the counted and
+// derived masses printed alongside it, so all three must share one unit.
 function signedMass(deltaKg: number): string {
-  if (deltaKg === 0) return formatMass(0);
+  if (deltaKg === 0) return formatMassKg(0);
   const sign = deltaKg > 0 ? "+" : "−";
-  return `${sign}${formatMass(Math.abs(deltaKg))}`;
-}
-
-function formatRecordedMoisture(ratio: number): string {
-  const percent = ratio * 100;
-  return `${percent.toFixed(1).replace(/\.0$/, "")}%`;
+  return `${sign}${formatMassKg(Math.abs(deltaKg))}`;
 }
 
 function MovementRow({ movement }: { movement: BinMovementWithActor }) {
@@ -74,24 +75,24 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
         movement.derivedMassKgAtTime != null &&
         movement.countedMassKg != null && (
           <p className="body-caption text-[var(--color-text-tertiary)]">
-            Counted {formatMass(Number(movement.countedMassKg))}
+            Counted {formatMassKg(Number(movement.countedMassKg))}
             {movement.countedWetMassKg != null && (
               <>
                 {" "}
-                (from {formatMass(Number(movement.countedWetMassKg))} wet)
+                (from {formatMassKg(Number(movement.countedWetMassKg))} wet)
               </>
             )}
             {movement.moistureRatioUsed != null && (
               <>
                 {" "}
                 at{" "}
-                {formatRecordedMoisture(
-                  Number(movement.moistureRatioUsed),
+                {formatMoisturePercent(
+                  Number(movement.moistureRatioUsed) * PERCENT_SCALE,
                 )}{" "}
                 moisture
               </>
             )}{" "}
-            vs derived {formatMass(Number(movement.derivedMassKgAtTime))}
+            vs derived {formatMassKg(Number(movement.derivedMassKgAtTime))}
           </p>
         )}
 
@@ -130,7 +131,7 @@ export function BinMovementHistory({
           <EmptyState
             icon={<WarningCircleIcon size={32} />}
             title="Reconciliation history unavailable"
-            description="Failed to load reconciliation history."
+            description="The reconciliation history could not be loaded. Refresh the page and try again."
             padding="sm"
           />
         </div>

@@ -24,7 +24,7 @@ import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
 // data-access ledger/sync-event writes, which data-access must not import.
 // Sources mirroring (signed-URL refresh shape) and telemetry (ADR 0006
 // journaled-step recovery) stay on their own shapes by decision — see
-// docs/plans/2026-06-10-certification-reliability-track.md, Phase 2.
+// docs/archive/plans/2026-06-10-certification-reliability-track.md, Phase 2.
 
 // Registry lookup outcome. "multiple" covers lookups that are not
 // guaranteed unique server-side (a GHG Statement period can hold several
@@ -99,6 +99,10 @@ export interface PerformRegistryCreateArgs {
   failureMessagePrefix: string;
   /** Attempt-scoped logger (e.g. carrying submissionAttemptId). */
   log?: Logger;
+  /** Reports only the external GHG Entry mutation state to the submit wrapper. */
+  onExternalMutation?: (state: "possible" | "confirmed") => void;
+  /** Persists confirmed external identity before any success audit/follow-up. */
+  onConfirmed?: (externalId: string) => Promise<void>;
 }
 
 const AMBIGUOUS_FALLBACK_MESSAGE =
@@ -115,29 +119,13 @@ export async function performRegistryCreate(
     if (reconciled) return reconciled;
   }
 
+  let externalId: string;
   try {
-    const externalId = await args.create();
-    await appendSyncEventBestEffort(
-      args.orgCtx,
-      {
-        provider: ISOMETRIC_PROVIDER,
-        entityType: args.entityType,
-        entityId: args.entityId,
-        operation: args.operation,
-        status: "succeeded",
-        requestPayload: args.requestPayload,
-        responsePayload: {
-          id: externalId,
-          ...(args.supplierRefId
-            ? { supplier_reference_id: args.supplierRefId }
-            : {}),
-          mapping_revision: MAPPING_REVISION,
-        },
-      },
-      { submissionId: args.submissionRowId },
-    );
-    return { externalId, source: "create" };
+    externalId = await args.create();
   } catch (err) {
+    if (externalMutationMayHaveOccurred(err)) {
+      args.onExternalMutation?.("possible");
+    }
     log.warn(
       {
         op: args.operation,
@@ -185,6 +173,29 @@ export async function performRegistryCreate(
     });
     throw new SafeError(`${args.failureMessagePrefix}: ${message}`);
   }
+
+  args.onExternalMutation?.("confirmed");
+  await args.onConfirmed?.(externalId);
+  await appendSyncEventBestEffort(
+    args.orgCtx,
+    {
+      provider: ISOMETRIC_PROVIDER,
+      entityType: args.entityType,
+      entityId: args.entityId,
+      operation: args.operation,
+      status: "succeeded",
+      requestPayload: args.requestPayload,
+      responsePayload: {
+        id: externalId,
+        ...(args.supplierRefId
+          ? { supplier_reference_id: args.supplierRefId }
+          : {}),
+        mapping_revision: MAPPING_REVISION,
+      },
+    },
+    { submissionId: args.submissionRowId },
+  );
+  return { externalId, source: "create" };
 }
 
 // Runs the lookup and translates it: "single" claims the orphan (recording
@@ -211,6 +222,8 @@ async function reconcileToResult(
     throw new SafeError(message);
   }
 
+  args.onExternalMutation?.("confirmed");
+  await args.onConfirmed?.(lookup.externalId);
   await appendSyncEventBestEffort(
     args.orgCtx,
     {
@@ -234,4 +247,16 @@ async function reconcileToResult(
     { submissionId: args.submissionRowId },
   );
   return { externalId: lookup.externalId, source: "reconciliation" };
+}
+
+function externalMutationMayHaveOccurred(error: unknown): boolean {
+  if (!(error instanceof IsometricApiError)) return true;
+  if (error.code === "network") return true;
+  return (
+    error.status === undefined ||
+    error.status === 408 ||
+    error.status === 425 ||
+    error.status === 429 ||
+    error.status >= 500
+  );
 }

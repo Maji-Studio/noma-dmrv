@@ -42,20 +42,23 @@ export { loadCreditBatchDurabilitySummary } from "./durability-batch-summary";
 export {
   loadCertificationOverview,
   loadCreditBatchHealthSummaries,
+  loadRemovalPreflight,
   type CertificationOverviewData,
   type CreditBatchHealthSummary,
   type RemovalPreflightSummary,
 } from "./overview";
 export { submitRemovalAction } from "./removal-grouping";
-// On-demand carbon-accounting breakdown for the removal detail sheet — local
-// certify-preview figures reconciled with the registry's verified GHG entry.
+export {
+  loadRemovalCompilation,
+  type RemovalCompilationView,
+} from "./removal-compilation";
+// On-demand read-only registry observation for the removal detail sheet.
 export {
   loadRemovalBreakdown,
   type RemovalBreakdownData,
 } from "./removal-breakdown";
-// Statement-level roll-up of the same breakdown — the sum across a GHG
-// statement's member removals (local estimate, or the registry GHG entries
-// aggregated once every member is submitted).
+// Statement-level read-only registry observation. Carbon renders only when the
+// exact member set is readable from Isometric.
 export {
   loadGhgStatementBreakdown,
   type GhgStatementBreakdownData,
@@ -75,10 +78,19 @@ export {
   submitGhgStatementToVerifier,
 } from "./ghg-statements";
 export {
+  approveGhgStatementReport,
+  loadGhgStatementReports,
+  prepareGhgStatementReport,
+  type GhgStatementReportView,
+} from "./ghg-statement-reports";
+export {
   type ReconcileRegistryGhgStatementsResult,
   type RegistryGhgStatementView,
 } from "./ghg-statement-reconciliation";
-export { reconcileGhgStatementsFromRegistry } from "./ghg-statement-sync";
+export {
+  loadRegistryGhgStatements,
+  reconcileGhgStatementsFromRegistry,
+} from "./ghg-statement-sync";
 // Phase 3.5 — mirror noma documents to Isometric Sources + attach
 // source_ids to Datapoint payloads. Server-side proxy, no client blob
 // handling.

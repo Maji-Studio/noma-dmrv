@@ -99,7 +99,7 @@ function putWithProgress(
     xhr.onerror = () =>
       reject(
         new Error(
-          `Upload network error — could not reach ${safeHost(url)}. Check your connection and retry.`,
+          `The file could not be uploaded to ${safeHost(url)}. Check your connection and try again.`,
         ),
       );
     xhr.ontimeout = () =>

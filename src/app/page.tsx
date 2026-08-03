@@ -16,7 +16,8 @@ export default function Home() {
              Build with purpose.
            </h1>
            <p className="body-lead max-w-2xl text-[var(--color-text-secondary)]">
-             Production-ready template with authentication, database, and a brutalist design system.
+             Track biochar production, custody, application, and certification
+             in one place.
            </p>
         </div>
 

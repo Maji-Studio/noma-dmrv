@@ -10,19 +10,20 @@ import { submitRemoval, type RemovalSubmissionResult } from "./submit-removal";
 import { submitRateLimit } from "./shared";
 import { requireOrgRole } from "@/lib/auth/server";
 
-// Hub-facing action — submit an existing removal directly by id.
+// Compatibility/fallback action for direct server consumers. The current UI
+// uses the streaming API route; keep this admin guard and rate-limit key in
+// sync with src/app/api/certification/submissions/route.ts.
 export async function submitRemovalAction(
-  input: SubmitRemovalInput | string,
+  input: SubmitRemovalInput,
 ): Promise<ActionResult<RemovalSubmissionResult>> {
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
-    const parsed = submitRemovalSchema.parse(
-      typeof input === "string" ? { removalId: input } : input,
-    );
+    const parsed = submitRemovalSchema.parse(input);
     return submitRemoval({
       orgCtx,
       removalId: parsed.removalId,
       confirmProduction: parsed.confirmProduction,
+      expectedCompilationHash: parsed.compilationHash,
     });
   }, { rateLimit: submitRateLimit("cert:submit-removal") });
 }

@@ -1,7 +1,7 @@
 /**
  * SupplierDetail component
  * Supplier detail view with nested locations management
- * Includes inline create/edit forms for locations and delete confirmation
+ * Includes create/edit dialogs for locations and delete confirmation
  */
 "use client";
 
@@ -11,16 +11,13 @@ import type { SupplierLocation } from "@/db/schema";
 import {
   useSupplier,
   useSupplierLocationsBySupplier,
-  useCreateSupplierLocation,
-  useUpdateSupplierLocation,
   useDeleteSupplierLocation,
 } from "@/hooks/use-suppliers";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { SupplierLocationForm } from "./supplier-location-form";
-import type { SupplierLocationFormData } from "@/schemas/suppliers";
+import { SupplierLocationDialog } from "./supplier-location-dialog";
 import { resolveSupplierLocationDisplay } from "@/lib/supplier-location-display";
 
 interface SupplierDetailProps {
@@ -28,50 +25,14 @@ interface SupplierDetailProps {
 }
 
 export function SupplierDetail({ supplierId }: SupplierDetailProps) {
-  const [isAddingLocation, setIsAddingLocation] = useState(false);
-  const [editingLocation, setEditingLocation] = useState<SupplierLocation | null>(null);
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  const [editingLocation, setEditingLocation] = useState<SupplierLocation>();
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: supplier, isLoading: supplierLoading, error: supplierError } = useSupplier(supplierId);
   const { data: locations = [], isLoading: locationsLoading } = useSupplierLocationsBySupplier(supplierId);
-  const createLocation = useCreateSupplierLocation();
-  const updateLocation = useUpdateSupplierLocation(supplierId);
   const deleteLocation = useDeleteSupplierLocation(supplierId);
-
-  const handleCreateLocation = async (data: SupplierLocationFormData) => {
-    setCreateError(null);
-    try {
-      await createLocation.mutateAsync({
-        supplierId,
-        ...data,
-      });
-      setIsAddingLocation(false);
-    } catch (error) {
-      setCreateError(
-        error instanceof Error ? error.message : "Failed to create location"
-      );
-    }
-  };
-
-  const handleUpdateLocation = async (data: SupplierLocationFormData) => {
-    if (!editingLocation) return;
-
-    setUpdateError(null);
-    try {
-      await updateLocation.mutateAsync({
-        locationId: editingLocation.id,
-        ...data,
-      });
-      setEditingLocation(null);
-    } catch (error) {
-      setUpdateError(
-        error instanceof Error ? error.message : "Failed to update location"
-      );
-    }
-  };
 
   const handleDeleteConfirm = async () => {
     if (!deletingLocationId) return;
@@ -81,7 +42,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
       setDeletingLocationId(null);
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : "Failed to delete location"
+        error instanceof Error ? error.message : "Location was not deleted. Try again."
       );
     }
   };
@@ -96,7 +57,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
     return (
       <div className="p-32 border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10">
         <p className="body-medium text-[var(--color-signal-red)]">
-          {supplierError instanceof Error ? supplierError.message : "Failed to load supplier"}
+          {supplierError instanceof Error ? supplierError.message : "The supplier could not be loaded. Refresh the page and try again."}
         </p>
       </div>
     );
@@ -130,33 +91,33 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-32 mt-32 pt-32 border-t border-[var(--color-border-secondary)]">
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Contact Email
+              Contact email
             </dt>
-            <dd className="body-medium mt-16">{supplier.contactEmail || "—"}</dd>
+            <dd className="body-medium mt-16">{supplier.contactEmail || "Not recorded"}</dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Contact Phone
+              Contact phone
             </dt>
-            <dd className="body-medium mt-16">{supplier.contactPhone || "—"}</dd>
+            <dd className="body-medium mt-16">{supplier.contactPhone || "Not recorded"}</dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Location
             </dt>
             <dd className="body-medium mt-16">
-              {resolveSupplierLocationDisplay(supplier.location, locations) || "—"}
+              {resolveSupplierLocationDisplay(supplier.location, locations) || "Not recorded"}
             </dd>
           </div>
           <div>
             <dt className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Distance to Facility
+              Distance to facility
               <CertificationFieldTag />
             </dt>
             <dd className="body-medium mt-16">
               {supplier.distanceToFacilityKm != null
                 ? `${supplier.distanceToFacilityKm} km`
-                : "—"}
+                : "Not set"}
             </dd>
           </div>
         </div>
@@ -168,51 +129,19 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
           <h2 className="title-heading-3">
             Locations ({locations.length})
           </h2>
-          {!isAddingLocation && !editingLocation && (
+          {!isLocationDialogOpen && (
             <Button
               size="large"
               variant="primary"
-              onClick={() => setIsAddingLocation(true)}
+              onClick={() => {
+                setEditingLocation(undefined);
+                setIsLocationDialogOpen(true);
+              }}
             >
               Add Location
             </Button>
           )}
         </div>
-
-        {/* Add Location Form */}
-        {isAddingLocation && (
-          <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
-            <h3 className="title-heading-4 mb-24">Add New Location</h3>
-            <SupplierLocationForm
-              onSubmit={handleCreateLocation}
-              onCancel={() => {
-                setIsAddingLocation(false);
-                setCreateError(null);
-              }}
-              isSubmitting={createLocation.isPending}
-              errorMessage={createError ?? undefined}
-              submitLabel="Add Location"
-            />
-          </div>
-        )}
-
-        {/* Edit Location Form */}
-        {editingLocation && (
-          <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
-            <h3 className="title-heading-4 mb-24">Edit Location</h3>
-            <SupplierLocationForm
-              location={editingLocation}
-              onSubmit={handleUpdateLocation}
-              onCancel={() => {
-                setEditingLocation(null);
-                setUpdateError(null);
-              }}
-              isSubmitting={updateLocation.isPending}
-              errorMessage={updateError ?? undefined}
-              submitLabel="Save Changes"
-            />
-          </div>
-        )}
 
         {/* Locations List */}
         {locations.length === 0 ? (
@@ -268,29 +197,29 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                     className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-surface-light)]"
                   >
                     <td className="px-16 py-12 body-medium">
-                      {location.name || "—"}
+                      {location.name || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.country}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.stateRegion || "—"}
+                      {location.stateRegion || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.city || "—"}
+                      {location.city || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.address || "—"}
+                      {location.address || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
                       {location.gpsLatitude !== null && location.gpsLongitude !== null
                         ? `${location.gpsLatitude.toFixed(4)}, ${location.gpsLongitude.toFixed(4)}`
-                        : "—"}
+                        : "Not set"}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.distanceFromFacilityKm != null
                         ? `${location.distanceFromFacilityKm} km`
-                        : "—"}
+                        : "Not set"}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.isDefault ? "Yes" : "No"}
@@ -300,7 +229,10 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                         <Button
                           variant="default"
                           size="small"
-                          onClick={() => setEditingLocation(location)}
+                          onClick={() => {
+                            setEditingLocation(location);
+                            setIsLocationDialogOpen(true);
+                          }}
                         >
                           Edit
                         </Button>
@@ -322,6 +254,13 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
       </div>
 
       {deleteError && <ServerError message={deleteError} />}
+
+      <SupplierLocationDialog
+        isOpen={isLocationDialogOpen}
+        onClose={() => setIsLocationDialogOpen(false)}
+        supplierId={supplierId}
+        location={editingLocation}
+      />
 
       <DeleteConfirmDialog
         isOpen={!!deletingLocationId}

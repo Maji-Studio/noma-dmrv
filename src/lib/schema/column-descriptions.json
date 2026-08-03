@@ -502,7 +502,7 @@
     "crop_type": "Crop grown at the application site",
     "application_method_type": "Method of biochar application (top_dressing, etc.)",
     "field_identifier": "Internal field plot reference",
-    "gis_boundary_reference": "GIS/KML boundary file reference",
+    "gis_boundary": "Normalized WGS 84 GeoJSON boundary envelope with source, statistics, and normalization notes",
     "soil_temperature_source": "Source of soil temperature data (baseline, measured)",
     "soil_temperature_c": "Soil temperature at application in Celsius",
     "co2e_stored_tonnes": "Calculated CO2e stored from this application in tonnes",

@@ -33,19 +33,19 @@ export default function CertificationErrorBoundary({
     <div className="flex min-h-[60vh] items-center justify-center p-24">
       <div className="max-w-md border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24">
         <p className="title-chapter-title text-[var(--color-text-secondary)]">
-          Certification error
+          Certification unavailable
         </p>
         <h1 className="title-heading-2 mt-8">
-          This certification step hit an unexpected error.
+          This certification step could not be displayed.
         </h1>
         <p className="body-medium mt-16 text-[var(--color-text-secondary)]">
-          Try again, or navigate away and come back — submissions are
-          idempotent, so retrying resumes safely rather than double-posting.
-          If it keeps happening, share the digest below with the team.
+          Try again. Retrying resumes the submission without creating a
+          duplicate. If the step still does not load, share the reference below
+          with the support team.
         </p>
         {error.digest && (
           <p className="body-small mt-12 font-mono text-[var(--color-text-tertiary)]">
-            digest: {error.digest}
+            Reference: {error.digest}
           </p>
         )}
         <div className="mt-24 flex gap-12">

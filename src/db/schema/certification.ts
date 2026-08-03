@@ -22,7 +22,7 @@ import {
 } from './common';
 import { facilities, reactors } from './facilities';
 import { documents } from './documentation';
-import { organizations } from './auth';
+import { organizations, users } from './auth';
 
 export const certifierCredentials = pgTable(
   'certifier_credentials',
@@ -244,6 +244,10 @@ export const certifierGhgStatements = pgTable(
   },
   (table) => [
     index('certifier_ghg_statements_organization_id_idx').on(table.organizationId),
+    unique('certifier_ghg_statements_id_organization_id_unique').on(
+      table.id,
+      table.organizationId
+    ),
     foreignKey({
       columns: [table.facilityId, table.organizationId],
       foreignColumns: [facilities.id, facilities.organizationId],
@@ -261,15 +265,106 @@ export const certifierGhgStatements = pgTable(
     ),
     // Registry discovery is keyed by the remote statement id, not its period:
     // Isometric permits duplicate and null periods. This expression index
-    // makes concurrent list/manual reconciles converge on one local identity.
+    // makes concurrent list/manual reconciles converge on one local identity —
+    // per (organization, facility), NOT globally (ADR 0023). One Isometric
+    // project may be shared by several noma facilities (see
+    // `certifier_projects_facility_provider_unique` above), so a registry
+    // statement can legitimately need one local mirror row per facility; a
+    // global key also made a registry id collide across tenants.
     uniqueIndex('certifier_ghg_statements_remote_external_id_unique')
       .on(
         table.provider,
+        table.organizationId,
+        table.facilityId,
         sql`(${table.metadata}->>${sql.raw(`'${CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY}'`)})`
       )
       .where(
         sql`${table.metadata}->>${sql.raw(`'${CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY}'`)} is not null`
       ),
+  ]
+);
+
+// Immutable, supplier-generated written report supporting one GHG Statement.
+// Each deliberate preparation allocates a new version and private document;
+// prior rows and bytes are never replaced or retired.
+export const certifierGhgStatementReports = pgTable(
+  'certifier_ghg_statement_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    ghgStatementId: uuid('ghg_statement_id').notNull(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id),
+    version: integer('version').notNull(),
+    lifecycle: text('lifecycle').notNull().default('prepared'),
+    sourceFingerprint: text('source_fingerprint').notNull(),
+    contentChecksumSha256: text('content_checksum_sha256').notNull(),
+    frozenInput: jsonb('frozen_input').notNull(),
+    reportModel: jsonb('report_model').notNull(),
+    reviewedNarratives: jsonb('reviewed_narratives').notNull(),
+    preparationIdempotencyKey: uuid('preparation_idempotency_key').notNull(),
+    verifierTokenHash: text('verifier_token_hash').notNull(),
+    pendingVerifierTokenHash: text('pending_verifier_token_hash'),
+    preparedBy: text('prepared_by')
+      .notNull()
+      .references(() => users.id),
+    preparedAt: timestamp('prepared_at').notNull(),
+    approvedBy: text('approved_by').references(() => users.id),
+    approvedAt: timestamp('approved_at'),
+    submittedBy: text('submitted_by').references(() => users.id),
+    submittedAt: timestamp('submitted_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('certifier_ghg_statement_reports_organization_id_idx').on(
+      table.organizationId
+    ),
+    foreignKey({
+      columns: [table.ghgStatementId, table.organizationId],
+      foreignColumns: [
+        certifierGhgStatements.id,
+        certifierGhgStatements.organizationId,
+      ],
+    }),
+    unique('certifier_ghg_statement_reports_statement_version_unique').on(
+      table.ghgStatementId,
+      table.version
+    ),
+    unique('certifier_ghg_statement_reports_statement_preparation_key_unique').on(
+      table.ghgStatementId,
+      table.preparationIdempotencyKey
+    ),
+    unique('certifier_ghg_statement_reports_document_id_unique').on(
+      table.documentId
+    ),
+    check(
+      'certifier_ghg_statement_reports_version_positive',
+      sql`${table.version} > 0`
+    ),
+    check(
+      'certifier_ghg_statement_reports_lifecycle_check',
+      sql`${table.lifecycle} in ('prepared', 'approved', 'submitted')`
+    ),
+    check(
+      'certifier_ghg_statement_reports_approval_coheres',
+      sql`(${table.approvedBy} is null) = (${table.approvedAt} is null)`
+    ),
+    check(
+      'certifier_ghg_statement_reports_submission_coheres',
+      sql`(${table.submittedBy} is null) = (${table.submittedAt} is null)`
+    ),
+    check(
+      'certifier_ghg_statement_reports_lifecycle_timestamps_check',
+      sql`(
+        (${table.lifecycle} = 'prepared' and ${table.approvedAt} is null and ${table.submittedAt} is null)
+        or (${table.lifecycle} = 'approved' and ${table.approvedAt} is not null and ${table.submittedAt} is null)
+        or (${table.lifecycle} = 'submitted' and ${table.approvedAt} is not null and ${table.submittedAt} is not null)
+      )`
+    ),
   ]
 );
 
@@ -325,6 +420,13 @@ export const certifierRemovals = pgTable(
   ]
 );
 
+// The ledger `submission_type` a GHG Statement is filed under. Duplicated as a
+// literal here — the schema layer is the bottom of the import graph and must
+// not pull in `@/lib/isometric/utils/constants` (which client bundles import) —
+// and asserted equal to `GHG_STATEMENT_SUBMISSION_TYPE` in
+// tests/ghg-statement-facility-identity.test.ts.
+export const GHG_STATEMENT_LEDGER_SUBMISSION_TYPE = 'ghg_statement';
+
 // Generic, provider-agnostic submission history with immutable payload snapshots.
 export const certificationSubmissions = pgTable(
   'certification_submissions',
@@ -358,11 +460,33 @@ export const certificationSubmissions = pgTable(
       table.localEntityId,
       table.version
     ),
-    unique('cert_submissions_external_unique').on(
-      table.provider,
-      table.submissionType,
-      table.externalId
-    ),
+    // Remote-id uniqueness, split by submission type (ADR 0023).
+    //
+    // Every type except `ghg_statement` keeps the original global rule: one
+    // local entity per remote artifact id. A Removal belongs to exactly one
+    // facility, so nothing legitimate collides here.
+    //
+    // A GHG Statement is different. One Isometric project may be shared by
+    // several noma facilities, and statement identity is now scoped per
+    // (organization, facility) — so the SAME registry statement legitimately
+    // gets one local mirror row (and one ledger row) per facility. The
+    // narrower index below keeps the invariant that still matters: a single
+    // local statement never carries the same remote id on two ledger rows.
+    uniqueIndex('cert_submissions_external_unique')
+      .on(table.provider, table.submissionType, table.externalId)
+      .where(
+        sql`${table.submissionType} <> ${sql.raw(`'${GHG_STATEMENT_LEDGER_SUBMISSION_TYPE}'`)}`
+      ),
+    uniqueIndex('cert_submissions_ghg_statement_external_unique')
+      .on(
+        table.provider,
+        table.organizationId,
+        table.localEntityId,
+        table.externalId
+      )
+      .where(
+        sql`${table.submissionType} = ${sql.raw(`'${GHG_STATEMENT_LEDGER_SUBMISSION_TYPE}'`)}`
+      ),
   ]
 );
 

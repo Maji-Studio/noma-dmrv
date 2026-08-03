@@ -51,7 +51,7 @@ vi.mock("@/hooks/use-feedstock-types", () => ({
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn() }),
 }));
-vi.mock("@phosphor-icons/react", () => ({
+vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   ArchiveIcon: () => <span />,
   DatabaseIcon: () => <span />,
   LeafIcon: () => <span />,

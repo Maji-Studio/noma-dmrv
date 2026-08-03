@@ -21,8 +21,15 @@ export function buildSourceRequestBody(args: {
   document: DocumentRow;
   supplierRefId: string;
   isPublic: boolean;
+  sourceDescription: string;
 }): CreateDocumentSourceRequest {
-  const { externalProjectId, document, supplierRefId, isPublic } = args;
+  const {
+    externalProjectId,
+    document,
+    supplierRefId,
+    isPublic,
+    sourceDescription,
+  } = args;
   // Isometric requires non-null content_length / content_type / file_name. The
   // pre-flight check enforces this; the `!` here is post-validation.
   const contentLength = document.fileSizeBytes!;
@@ -34,6 +41,7 @@ export function buildSourceRequestBody(args: {
     __typename: "CreateDocumentSourceRequest",
     content_length: contentLength,
     content_type: contentType,
+    description: sourceDescription,
     display_name: document.fileName,
     file_name: document.fileName,
     is_public: isPublic,
@@ -48,7 +56,7 @@ export async function downloadDocumentBlob(
 ): Promise<{ blob: Blob; contentType: string }> {
   if (!document.storageKey) {
     throw new SafeError(
-      "This document has no managed storage (legacy URL-only). Re-upload through noma before mirroring to Isometric.",
+      "This document has no managed storage (legacy URL-only). Re-upload it through noma before sending it to Isometric.",
     );
   }
   const provider = getStorageProvider();
@@ -56,7 +64,7 @@ export async function downloadDocumentBlob(
   const response = await fetchSignedUploadWithTimeout(url, {});
   if (!response.ok) {
     throw new SafeError(
-      `Failed to read document from storage (${response.status}).`,
+      "The supporting document could not be read. Upload the file again and retry the submission.",
     );
   }
   const contentType = document.mimeType ?? "application/octet-stream";
@@ -85,7 +93,7 @@ export async function putBlobToSignedUrl(
     // certifier_sync_events. Status code alone is enough to diagnose;
     // detailed body inspection belongs in non-persistent debug logs only.
     throw new SafeError(
-      `Isometric PUT upload failed (status ${response.status}).`,
+      `Isometric did not accept the file (status ${response.status}). Try again.`,
     );
   }
 }

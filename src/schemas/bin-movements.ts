@@ -9,10 +9,12 @@
 
 import { z } from "zod";
 import {
+  massKgSchema,
+  optionalCanonicalizableMassKgInputSchema,
   optionalPercent,
+  requiredCanonicalizableMassKgSchema,
   requiredMassKgSchema,
   requiredPositiveMassKgSchema,
-  optionalMassKgInputSchema,
   toNumberOrNull,
 } from "./helpers";
 import { type StorageLocationType } from "./storage-locations";
@@ -79,7 +81,7 @@ const reasonSchema = z
 export const stockTakeFormSchema = z
   .object({
     lane: z.enum(binMovementLanes),
-    counted: requiredMassKgSchema("Counted stock is required"),
+    counted: requiredCanonicalizableMassKgSchema("Counted stock is required"),
     moisturePercent: optionalPercent,
     reason: reasonSchema,
   })
@@ -90,6 +92,17 @@ export const stockTakeFormSchema = z
         path: ["moisturePercent"],
         message: "Moisture content is required",
       });
+    }
+
+    if (data.lane !== "feedstock") {
+      const persistedMass = massKgSchema().safeParse(data.counted);
+      if (!persistedMass.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["counted"],
+          message: persistedMass.error.issues[0]?.message ?? "Enter a valid mass.",
+        });
+      }
     }
   });
 export type StockTakeFormData = z.infer<typeof stockTakeFormSchema>;
@@ -111,14 +124,14 @@ export type RecordLossFormData = z.infer<typeof recordLossFormSchema>;
 
 export const recordStockTakeSchema = z
   .object({
-    storageLocationId: z.uuid("Invalid storage location ID"),
+    storageLocationId: z.uuid("Choose a valid storage bin."),
     lane: z.enum(binMovementLanes),
     reason: reasonSchema,
     // Preview value from the client. The data-access boundary recomputes this
     // from the wet snapshot for feedstock stock-takes.
     countedMassKg: requiredMassKgSchema("Counted stock is required"),
     // Feedstock-only provenance for the authoritative dry conversion.
-    countedWetMassKg: optionalMassKgInputSchema(),
+    countedWetMassKg: optionalCanonicalizableMassKgInputSchema(),
     moistureRatioUsed: z.preprocess(
       toNumberOrNull,
       z.number().min(0).max(1).nullable().optional()
@@ -147,14 +160,14 @@ export const recordStockTakeSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["countedWetMassKg"],
-        message: "Wet-mass moisture snapshots are only valid for feedstock bins",
+        message: "Wet stock and moisture are only valid for feedstock bins",
       });
     }
   });
 export type RecordStockTakeData = z.infer<typeof recordStockTakeSchema>;
 
 export const recordLossSchema = z.object({
-  storageLocationId: z.uuid("Invalid storage location ID"),
+  storageLocationId: z.uuid("Choose a valid storage bin."),
   lane: z.enum(binMovementLanes),
   reason: reasonSchema,
   lossMassKg: requiredPositiveMassKgSchema(

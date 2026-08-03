@@ -17,11 +17,27 @@ import {
   feedstockTypes,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
+import { formatCount } from "@/lib/copy-utils";
+import { DUPLICATE_FORMULATION_INGREDIENT_MESSAGE } from "@/schemas/biochar-products";
+import {
+  deriveSourceBiocharMassKg,
+  GRAMS_PER_KILOGRAM,
+  toPersistedMassGrams,
+} from "@/lib/biochar-composition";
+import type { DbTransaction } from "@/db";
+import { assertFeedstockDrawWithinStock } from "./bin-stock-guards";
+import { deriveLaneStock } from "./lane-stock-derivation";
+import { requireOrgScope } from "./utils";
 
 interface CompositionIngredientRef {
   formulationIngredientId: string;
   feedstockTypeId: string;
   storageLocationId: string | null;
+  /** Wet/as-received mass recorded by the operator. */
+  massKg: number;
+  /** Server-derived dry-mass allocation snapshot. */
+  massDryKg: number | null;
+  moistureContentPercent: number | null;
 }
 
 function getCompositionIngredientRefs(
@@ -50,11 +66,328 @@ function getCompositionIngredientRefs(
           typeof ingredient.storageLocationId === "string"
             ? ingredient.storageLocationId
             : null,
+        massKg:
+          "massKg" in ingredient &&
+          typeof ingredient.massKg === "number" &&
+          Number.isFinite(ingredient.massKg)
+            ? ingredient.massKg
+            : 0,
+        massDryKg:
+          "massDryKg" in ingredient &&
+          typeof ingredient.massDryKg === "number" &&
+          Number.isFinite(ingredient.massDryKg)
+            ? ingredient.massDryKg
+            : null,
+        moistureContentPercent:
+          "moistureContentPercent" in ingredient &&
+          typeof ingredient.moistureContentPercent === "number" &&
+          Number.isFinite(ingredient.moistureContentPercent)
+            ? ingredient.moistureContentPercent
+            : null,
       };
     })
     .filter((ref): ref is CompositionIngredientRef =>
       Boolean(ref?.formulationIngredientId && ref.feedstockTypeId),
     );
+}
+
+const PERCENT_PRECISION_FACTOR = 1_000_000;
+
+function massSnapshotKey(ingredient: Record<string, unknown>): string {
+  const massGrams =
+    typeof ingredient.massKg === "number" &&
+    Number.isFinite(ingredient.massKg)
+      ? toPersistedMassGrams(ingredient.massKg)
+      : null;
+  return JSON.stringify([
+    ingredient.formulationIngredientId ?? null,
+    ingredient.feedstockTypeId ?? null,
+    ingredient.storageLocationId ?? null,
+    massGrams,
+  ]);
+}
+
+function persistedIngredientMassSnapshot(
+  ingredient: Record<string, unknown> | undefined,
+): { massDryKg: number; moistureContentPercent: number } | null {
+  if (
+    !ingredient ||
+    typeof ingredient.massDryKg !== "number" ||
+    !Number.isFinite(ingredient.massDryKg) ||
+    ingredient.massDryKg < 0 ||
+    typeof ingredient.moistureContentPercent !== "number" ||
+    !Number.isFinite(ingredient.moistureContentPercent) ||
+    ingredient.moistureContentPercent < 0 ||
+    ingredient.moistureContentPercent > 100
+  ) {
+    return null;
+  }
+  return {
+    massDryKg: ingredient.massDryKg,
+    moistureContentPercent: ingredient.moistureContentPercent,
+  };
+}
+
+function getCompositionIngredientObjects(
+  composition: Record<string, unknown> | null | undefined,
+): Record<string, unknown>[] {
+  return Array.isArray(composition?.ingredients)
+    ? composition.ingredients.filter(
+        (ingredient): ingredient is Record<string, unknown> =>
+          typeof ingredient === "object" && ingredient !== null,
+      )
+    : [];
+}
+
+function canonicalAllocationIngredients(
+  composition: Record<string, unknown> | null | undefined,
+) {
+  return getCompositionIngredientObjects(composition)
+    .map((ingredient) => ({
+      formulationIngredientId:
+        typeof ingredient.formulationIngredientId === "string"
+          ? ingredient.formulationIngredientId
+          : null,
+      feedstockTypeId:
+        typeof ingredient.feedstockTypeId === "string"
+          ? ingredient.feedstockTypeId
+          : null,
+      storageLocationId:
+        typeof ingredient.storageLocationId === "string"
+          ? ingredient.storageLocationId
+          : null,
+      massGrams:
+        typeof ingredient.massKg === "number" &&
+        Number.isFinite(ingredient.massKg)
+          ? toPersistedMassGrams(ingredient.massKg)
+          : null,
+      massDryGrams:
+        typeof ingredient.massDryKg === "number" &&
+        Number.isFinite(ingredient.massDryKg)
+          ? toPersistedMassGrams(ingredient.massDryKg)
+          : null,
+      moistureBasis:
+        typeof ingredient.moistureContentPercent === "number" &&
+        Number.isFinite(ingredient.moistureContentPercent)
+          ? Math.round(
+              ingredient.moistureContentPercent *
+                PERCENT_PRECISION_FACTOR,
+            )
+          : null,
+    }))
+    .sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    );
+}
+
+/** Compare only persisted composition facts that affect physical allocations. */
+export function compositionAllocationChanged(
+  previous: Record<string, unknown> | null | undefined,
+  next: Record<string, unknown> | null | undefined,
+): boolean {
+  return JSON.stringify(canonicalAllocationIngredients(previous)) !==
+    JSON.stringify(canonicalAllocationIngredients(next));
+}
+
+/** Derive source mass without requiring legacy ingredient rows to name a bin. */
+export function deriveCompositionSourceBiocharMassKg(
+  blendMassKg: number | null | undefined,
+  composition: Record<string, unknown> | null | undefined,
+): number | null {
+  return deriveSourceBiocharMassKg(
+    blendMassKg,
+    getCompositionIngredientObjects(composition),
+  );
+}
+
+export interface CompositionIngredientDraw {
+  storageLocationId: string;
+  /** Wet/as-received mass used to derive source biochar in the blend. */
+  massKg: number;
+  /** Dry mass deducted from the feedstock bin. */
+  massDryKg: number | null;
+}
+
+export function getCompositionIngredientDraws(
+  composition: Record<string, unknown> | null | undefined,
+): CompositionIngredientDraw[] {
+  const byStorageLocation = new Map<
+    string,
+    { massKg: number; massDryKg: number | null }
+  >();
+  for (const ref of getCompositionIngredientRefs(composition)) {
+    if (ref.massKg <= 0) continue;
+    if (!ref.storageLocationId) {
+      throw new SafeError(
+        "Choose a feedstock bin for every ingredient with a positive mass",
+      );
+    }
+    const existing = byStorageLocation.get(ref.storageLocationId);
+    byStorageLocation.set(ref.storageLocationId, {
+      massKg: (existing?.massKg ?? 0) + ref.massKg,
+      massDryKg:
+        existing?.massDryKg === null || ref.massDryKg === null
+          ? null
+          : (existing?.massDryKg ?? 0) + ref.massDryKg,
+    });
+  }
+  return [...byStorageLocation.entries()].map(
+    ([storageLocationId, mass]) => ({ storageLocationId, ...mass }),
+  );
+}
+
+const INGREDIENT_MOISTURE_BASIS_ERROR =
+  "This ingredient bin has no complete wet-mass and moisture basis. Complete its feedstock intake before using it in a blend.";
+
+function roundMassKg(value: number): number {
+  return toPersistedMassGrams(value) / GRAMS_PER_KILOGRAM;
+}
+
+function roundPercent(value: number): number {
+  return Math.round(value * PERCENT_PRECISION_FACTOR) /
+    PERCENT_PRECISION_FACTOR;
+}
+
+interface FeedstockMassBasis {
+  remainingWetKg: number | null;
+  remainingDryKg: number;
+}
+
+function deriveIngredientMassSnapshot(
+  wetMassKg: number,
+  basis: FeedstockMassBasis | undefined,
+): { massDryKg: number; moistureContentPercent: number } {
+  if (
+    !basis ||
+    basis.remainingWetKg === null ||
+    basis.remainingWetKg <= 0 ||
+    basis.remainingDryKg <= 0 ||
+    basis.remainingDryKg > basis.remainingWetKg
+  ) {
+    throw new SafeError(INGREDIENT_MOISTURE_BASIS_ERROR);
+  }
+
+  const dryRatio = basis.remainingDryKg / basis.remainingWetKg;
+  return {
+    massDryKg: roundMassKg(wetMassKg * dryRatio),
+    moistureContentPercent: roundPercent((1 - dryRatio) * 100),
+  };
+}
+
+/**
+ * Freeze each ingredient's dry-mass withdrawal from the selected bin's
+ * current remaining wet/dry stock. `massKg` stays the operator's wet/as-received mass;
+ * the derived fields are server-owned allocation facts persisted in JSONB.
+ * Call only while the caller holds every ingredient bin's stock lock.
+ */
+export async function resolveCompositionIngredientMassBasis(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  composition: Record<string, unknown> | null | undefined,
+  previousComposition?: Record<string, unknown> | null,
+  excludeProductId?: string,
+): Promise<Record<string, unknown>> {
+  requireOrgScope(ctx);
+  const ingredients = getCompositionIngredientObjects(composition);
+  if (ingredients.length === 0) return composition ?? {};
+  const previousIngredientsByKey = new Map(
+    getCompositionIngredientObjects(previousComposition).map((ingredient) => [
+      massSnapshotKey(ingredient),
+      ingredient,
+    ]),
+  );
+  const positiveRefs = getCompositionIngredientRefs(composition).filter(
+    (ref) => ref.massKg > 0,
+  );
+  const storageLocationIds = [
+    ...new Set(
+      positiveRefs.map((ref) => {
+        if (!ref.storageLocationId) {
+          throw new SafeError(
+            "Choose a feedstock bin for every ingredient with a positive mass",
+          );
+        }
+        return ref.storageLocationId;
+      }),
+    ),
+  ];
+
+  const basisRows = await deriveLaneStock(ctx, tx, {
+    storageLocationIds,
+    excludeProductId,
+  });
+  const basisByStorageLocation = new Map(
+    basisRows.map((row) => [
+      row.storageLocationId,
+      {
+        remainingWetKg: row.feedstockStockWetKg,
+        remainingDryKg: row.feedstockStockDryKg,
+      },
+    ]),
+  );
+
+  return {
+    ...(composition ?? {}),
+    ingredients: ingredients.map((ingredient) => {
+      const wetMassKg =
+        typeof ingredient.massKg === "number" &&
+        Number.isFinite(ingredient.massKg)
+          ? ingredient.massKg
+          : 0;
+      if (wetMassKg < 0) {
+        throw new SafeError("Ingredient wet mass must be 0 or greater");
+      }
+      if (wetMassKg === 0) {
+        return {
+          ...ingredient,
+          massDryKg: 0,
+          moistureContentPercent: null,
+        };
+      }
+      const previousSnapshot = persistedIngredientMassSnapshot(
+        previousIngredientsByKey.get(massSnapshotKey(ingredient)),
+      );
+      if (previousSnapshot) {
+        return { ...ingredient, ...previousSnapshot };
+      }
+      const storageLocationId =
+        typeof ingredient.storageLocationId === "string"
+          ? ingredient.storageLocationId
+          : null;
+      if (!storageLocationId) {
+        throw new SafeError(
+          "Choose a feedstock bin for every ingredient with a positive mass",
+        );
+      }
+      return {
+        ...ingredient,
+        ...deriveIngredientMassSnapshot(
+          wetMassKg,
+          basisByStorageLocation.get(storageLocationId),
+        ),
+      };
+    }),
+  };
+}
+
+export async function assertCompositionIngredientDrawsWithinStock(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  composition: Record<string, unknown> | null | undefined,
+  excludeProductId?: string,
+): Promise<void> {
+  requireOrgScope(ctx);
+  for (const draw of getCompositionIngredientDraws(composition)) {
+    if (draw.massDryKg === null) {
+      throw new SafeError(INGREDIENT_MOISTURE_BASIS_ERROR);
+    }
+    await assertFeedstockDrawWithinStock(ctx, tx, {
+      storageLocationId: draw.storageLocationId,
+      requestedDryKg: draw.massDryKg,
+      excludeProductId,
+      binLockAlreadyHeld: true,
+    });
+  }
 }
 
 export async function validateCompositionIngredientBins(
@@ -65,6 +398,12 @@ export async function validateCompositionIngredientBins(
   facilityId: string,
 ) {
   const ingredientRefs = getCompositionIngredientRefs(composition);
+  const uniqueIngredientIds = new Set(
+    ingredientRefs.map((ref) => ref.formulationIngredientId),
+  );
+  if (uniqueIngredientIds.size !== ingredientRefs.length) {
+    throw new SafeError(DUPLICATE_FORMULATION_INGREDIENT_MESSAGE);
+  }
   if (ingredientRefs.length > 0) {
     if (!formulationId) {
       throw new SafeError("Formulation is required for ingredient composition");
@@ -92,7 +431,7 @@ export async function validateCompositionIngredientBins(
     );
     if (missingIngredientIds.length > 0) {
       throw new SafeError(
-        `Composition ingredient line(s) not found: ${missingIngredientIds.join(", ")}`,
+        `${formatCount(missingIngredientIds.length, "Formulation line")} ${missingIngredientIds.length === 1 ? "was" : "were"} not found. Refresh the product and choose its feedstock bins again.`,
       );
     }
     const wrongFormulationIds = ingredientRefs
@@ -104,7 +443,7 @@ export async function validateCompositionIngredientBins(
       .map((ref) => ref.formulationIngredientId);
     if (wrongFormulationIds.length > 0) {
       throw new SafeError(
-        `Composition ingredient line(s) must belong to the selected formulation: ${wrongFormulationIds.join(", ")}`,
+        `${formatCount(wrongFormulationIds.length, "Formulation line")} ${wrongFormulationIds.length === 1 ? "does" : "do"} not belong to the selected formulation. Refresh the product and choose its feedstock bins again.`,
       );
     }
     const mismatchedIngredientIds = ingredientRefs
@@ -116,7 +455,7 @@ export async function validateCompositionIngredientBins(
       .map((ref) => ref.formulationIngredientId);
     if (mismatchedIngredientIds.length > 0) {
       throw new SafeError(
-        `Composition ingredient line(s) must match the selected formulation material: ${mismatchedIngredientIds.join(", ")}`,
+        `${formatCount(mismatchedIngredientIds.length, "Formulation line")} ${mismatchedIngredientIds.length === 1 ? "does" : "do"} not match the selected feedstock type. Refresh the product and choose its feedstock bins again.`,
       );
     }
   }

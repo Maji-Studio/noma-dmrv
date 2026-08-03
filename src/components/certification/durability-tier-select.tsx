@@ -1,6 +1,6 @@
 "use client";
 
-import { LockIcon, SealCheckIcon } from "@phosphor-icons/react";
+import { LockIcon, SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { type DurabilityOption } from "@/schemas/credit-batches";
 
@@ -8,12 +8,11 @@ import { type DurabilityOption } from "@/schemas/credit-batches";
 // (ADR 0021). 1000-year is the go-forward tier; the 200-year pathway stays
 // fully wired but is not yet generally available — re-enabling it is just
 // flipping `available` below, at which point the facility form turns back into
-// a genuine two-option choice with no caller change. Until then a single-tier
-// deployment (and every read-only surface) shows the tier as plain info, never
-// a radio with one locked "Available later" option that reads as a choice the
-// operator is failing to make (#348). Non-authoritative copy — verify tier
-// method descriptions against the Biochar Storage in Soil Environments module
-// before relying on them for a credit claim.
+// a genuine two-option choice with no caller change. Editable forms surface the
+// unavailable tier as a locked card so operators can see the supported pathway;
+// read-only surfaces show only the facility's active tier. Non-authoritative
+// copy — verify tier method descriptions against the Biochar Storage in Soil
+// Environments module before relying on them for a credit claim.
 
 interface TierMeta {
   value: DurabilityOption;
@@ -43,11 +42,9 @@ const TIERS: readonly TierMeta[] = [
   },
 ];
 
-const AVAILABLE_TIER_COUNT = TIERS.filter((tier) => tier.available).length;
-
 interface DurabilityTierSelectProps {
   value: DurabilityOption;
-  /** Provide to make the tiers selectable when more than one tier is available. */
+  /** Provide to show the tier options and select an available tier. */
   onChange?: (value: DurabilityOption) => void;
   /** Form-submitting: interaction disabled without the display-only framing. */
   disabled?: boolean;
@@ -63,13 +60,12 @@ export function DurabilityTierSelect({
   readOnly = false,
   "aria-label": ariaLabel = "Durability tier",
 }: DurabilityTierSelectProps) {
-  // A real choice exists only when the caller can change the value AND there is
-  // more than one tier to change it to. On a single-tier deployment (or any
-  // read-only surface) the tier is information, not an input — so it renders as
-  // plain info rather than a radio group with a lone locked option (#348).
-  const isChoice = !readOnly && !!onChange && AVAILABLE_TIER_COUNT > 1;
+  // Editable forms show the full tier catalogue, including pathways that are
+  // not selectable yet. Read-only surfaces keep the active tier as compact
+  // information rather than presenting controls that cannot be changed.
+  const showsTierOptions = !readOnly && !!onChange;
 
-  if (!isChoice) {
+  if (!showsTierOptions) {
     const activeTier = TIERS.find((tier) => tier.value === value) ?? TIERS[0];
     return (
       <div
@@ -96,9 +92,9 @@ export function DurabilityTierSelect({
     );
   }
 
-  // Genuine choice: more than one tier is available. A not-yet-available tier
-  // still renders as a disabled (locked) radio so the group keeps every option
-  // visible; the form-submitting `disabled` flag locks the available ones too.
+  // A not-yet-available tier renders as a disabled, locked radio so the group
+  // keeps every supported option visible. The form-submitting `disabled` flag
+  // locks the available options too.
   return (
     <div
       className="grid grid-cols-1 md:grid-cols-2 gap-12"
@@ -134,7 +130,10 @@ export function DurabilityTierSelect({
                 )}
               </span>
               <span className="body-small text-[var(--color-text-secondary)]">
-                {tier.method}
+                {tier.plain}
+              </span>
+              <span className="body-small text-[var(--color-text-tertiary)]">
+                Measured by {tier.method}.
               </span>
             </span>
           </div>

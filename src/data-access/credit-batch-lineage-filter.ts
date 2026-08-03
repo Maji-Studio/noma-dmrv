@@ -2,12 +2,15 @@ import {
   and,
   eq,
   exists,
+  isNull,
+  or,
   sql,
   type SQL,
   type SQLWrapper,
 } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  biocharProductSourceAllocations,
   biocharProducts,
   creditBatchProductionRuns,
 } from "@/db/schema";
@@ -31,14 +34,37 @@ export function inCreditBatchLineage(
     db
       .select({ value: sql`1` })
       .from(creditBatchProductionRuns)
+      .leftJoin(
+        biocharProductSourceAllocations,
+        and(
+          eq(
+            biocharProductSourceAllocations.productionRunId,
+            creditBatchProductionRuns.productionRunId,
+          ),
+          eq(
+            biocharProductSourceAllocations.organizationId,
+            ctx.organizationId,
+          ),
+        ),
+      )
       .innerJoin(
         biocharProducts,
         and(
-          eq(
-            biocharProducts.linkedProductionRunId,
-            creditBatchProductionRuns.productionRunId,
-          ),
+          or(
+            eq(
+              biocharProducts.id,
+              biocharProductSourceAllocations.biocharProductId,
+            ),
+            and(
+              isNull(biocharProducts.sourceBiocharStorageLocationId),
+              eq(
+                biocharProducts.linkedProductionRunId,
+                creditBatchProductionRuns.productionRunId,
+              ),
+            ),
+          )!,
           eq(biocharProducts.organizationId, ctx.organizationId),
+          eq(biocharProducts.id, biocharProductId),
         ),
       )
       .where(
@@ -48,7 +74,6 @@ export function inCreditBatchLineage(
             creditBatchProductionRuns.organizationId,
             ctx.organizationId,
           ),
-          eq(biocharProducts.id, biocharProductId),
         ),
       ),
   );

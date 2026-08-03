@@ -11,12 +11,10 @@ import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-at
 import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine";
 import {
   ClassifiedTransportEvidenceUploader,
-  TransportDocumentProvenanceControl,
   TransportEvidencePanel,
 } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
@@ -25,11 +23,7 @@ interface DeliveryEvidenceSectionProps {
   isEditMode: boolean;
   deferredAttachments?: UseDeferredAttachmentsResult;
   isSubmitting?: boolean;
-  distanceSource?: DistanceSourceValue | null;
-  provenanceLoaded?: boolean;
   focusTarget?: EntityFocusTarget | null;
-  draftDistanceSource?: DistanceSourceValue | null;
-  onSelectDocumentProvenance?: () => void;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -39,58 +33,47 @@ export function DeliveryEvidenceSection({
   isEditMode,
   deferredAttachments,
   isSubmitting = false,
-  distanceSource,
-  provenanceLoaded,
   focusTarget,
-  draftDistanceSource,
-  onSelectDocumentProvenance,
   __spine,
 }: DeliveryEvidenceSectionProps) {
   return (
     <FormSection
-      title="Transport Evidence"
+      title="Transport evidence"
       icon={<PaperclipIcon size={14} weight="bold" />}
       __spine={__spine}
     >
-      {isEditMode && delivery ? (
-        <ActionableFocusTarget
-          target="transport-evidence"
-          activeTarget={focusTarget}
-          actionLabel="Mark the saved distance source as Document and attach supporting evidence"
-          className="flex flex-col gap-12"
-        >
-          {deferredAttachments && (
-            <FailedDeferredAttachments
-              attachments={deferredAttachments.attachments}
-              onRetry={(key) =>
-                deferredAttachments.retry("delivery", [delivery.id], key)
-              }
-              onRemove={deferredAttachments.remove}
-              disabled={isSubmitting}
+      <ActionableFocusTarget
+        target="transport-evidence"
+        activeTarget={focusTarget}
+        actionLabel="Attach a transport document (optional)"
+      >
+        {isEditMode && delivery ? (
+          <div className="flex flex-col gap-12">
+            {deferredAttachments && (
+              <FailedDeferredAttachments
+                attachments={deferredAttachments.attachments}
+                onRetry={(key) =>
+                  deferredAttachments.retry("delivery", [delivery.id], key)
+                }
+                onRemove={deferredAttachments.remove}
+                disabled={isSubmitting}
+              />
+            )}
+            <TransportEvidencePanel
+              entityType="delivery"
+              entityId={delivery.id}
+              embedded
             />
-          )}
-          <TransportDocumentProvenanceControl
-            savedSource={distanceSource}
-            draftSource={draftDistanceSource}
-            onSelectDocument={() => onSelectDocumentProvenance?.()}
+          </div>
+        ) : (
+          <ClassifiedTransportEvidenceUploader
+            id="delivery-deferred-transport-evidence"
+            entityType="delivery"
+            deferredAttachments={deferredAttachments}
             disabled={isSubmitting}
           />
-          <TransportEvidencePanel
-            entityType="delivery"
-            entityId={delivery.id}
-            embedded
-            distanceSource={distanceSource}
-            persisted={provenanceLoaded ?? false}
-          />
-        </ActionableFocusTarget>
-      ) : (
-        <ClassifiedTransportEvidenceUploader
-          id="delivery-deferred-transport-evidence"
-          entityType="delivery"
-          deferredAttachments={deferredAttachments}
-          disabled={isSubmitting}
-        />
-      )}
+        )}
+      </ActionableFocusTarget>
     </FormSection>
   );
 }

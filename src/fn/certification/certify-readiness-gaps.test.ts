@@ -1,9 +1,36 @@
 import { describe, expect, it } from "vitest";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportLeg } from "@/db/schema";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { buildEntityReadinessResult } from "./certify-readiness-gaps";
 
-const TRANSPORT_LEG_ID = "00000000-0000-4000-a000-000000000001";
+/** A lab sample whose chemistry is complete for the 200-year tier. */
+function labSample(
+  id: string,
+  sampleCode: string,
+  overrides: Record<string, number | null> = {},
+) {
+  return {
+    id,
+    sampleCode,
+    organicCarbonPercent: 78,
+    hToCOrgRatio: 0.32,
+    oToCOrgRatio: 0.14,
+    ...overrides,
+  };
+}
+
+function batchWithSamples(
+  samples: ReturnType<typeof labSample>[],
+): CreditBatchWithSamples {
+  return {
+    id: "00000000-0000-4000-a000-0000000000b1",
+    code: "CB-001",
+    durabilityOption: "200_year",
+    samples,
+  } as unknown as CreditBatchWithSamples;
+}
 
 function productionRun(
   id: string,
@@ -14,6 +41,7 @@ function productionRun(
     id,
     code,
     status: "complete",
+    hasReadingsFile: true,
     feedstockWetMassKg: 5_000,
     feedstockMoisturePercent: 25,
     biocharOutputKg: 1_500,
@@ -22,12 +50,33 @@ function productionRun(
     dieselGensetLiters: 12,
     preprocessingFuelLiters: 3,
     electricityKwh,
-    readingsCount: 1,
     samples: [],
   } as unknown as ProductionRunWithSamples;
 }
 
 describe("buildEntityReadinessResult", () => {
+  it("keeps the ready-batch fixture ready when Application evidence is absent", () => {
+    const fixtureRun = productionRun("fixture-run", "PR-FIXTURE", 50);
+
+    expect(
+      deriveEntityCertifyReadiness("application", {
+        biocharAppliedTons: 0.1,
+        biocharAppliedDryTons: 0.098,
+        durabilityOption: "200_year",
+        soilTemperatureC: 25,
+      }),
+    ).toMatchObject({ state: "ready", gaps: [] });
+
+    expect(
+      buildEntityReadinessResult(
+        [fixtureRun],
+        [],
+        { feedstock: [], biochar: [], sample: [] },
+        [],
+      ).gaps,
+    ).toEqual([]);
+  });
+
   it("lists only production runs that are affected by the issue", () => {
     const result = buildEntityReadinessResult(
       [
@@ -57,9 +106,39 @@ describe("buildEntityReadinessResult", () => {
     expect(result.gaps.join(" ")).not.toContain("run-affected");
   });
 
-  it("uses a friendly transport label in flat readiness gaps", () => {
+  it("blocks Removal preflight when a completed run lacks readings evidence", () => {
+    const run = {
+      ...productionRun("run-missing-csv", "PR-NO-CSV", 50),
+      hasReadingsFile: false,
+    };
+
+    const result = buildEntityReadinessResult(
+      [run],
+      [],
+      { feedstock: [], biochar: [], sample: [] },
+      [],
+    );
+
+    expect(result.gaps).toEqual([
+      "Production run PR-NO-CSV: Readings CSV file",
+    ]);
+    expect(result.issues).toMatchObject([
+      {
+        key: "production-runs",
+        affectedRecords: [
+          {
+            id: "run-missing-csv",
+            code: "PR-NO-CSV",
+            missing: ["Readings CSV file"],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("does not block a required transport category without evidence", () => {
     const transportLeg = {
-      id: TRANSPORT_LEG_ID,
+      id: "00000000-0000-4000-a000-000000000001",
       entityId: "00000000-0000-4000-a000-000000000002",
       distanceKm: 25,
       loadMassKg: 900,
@@ -74,19 +153,49 @@ describe("buildEntityReadinessResult", () => {
       ["feedstock"],
     );
 
-    expect(result.gaps.join(" ")).toContain("feedstock transport 1");
-    expect(result.gaps.join(" ")).not.toContain(TRANSPORT_LEG_ID);
-    expect(result.issues[0]?.affectedRecords[0]).toMatchObject({
-      id: "00000000-0000-4000-a000-000000000002",
-      code: "feedstock transport 1",
-    });
+    expect(result.gaps).toEqual([]);
+    expect(result.issues).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  // O:Corg is an UNCONDITIONAL sample descriptor, deliberately symmetric with
+  // H:Corg (Soil Module §3.3 Table 2 checks pooled H/C_org AND O/C_org for every
+  // tier). Readiness walks every sample of every member batch, so one extra
+  // sample without oxygen blocks the batch even when three usable replicates
+  // already satisfy the §8.3.1 minimum. That is the intended fail-closed
+  // behaviour on a registry path, not an accident — this test pins it.
+  it("blocks a batch that already has three usable replicates when an extra sample is missing O:Corg", () => {
+    const result = buildEntityReadinessResult(
+      [],
+      [
+        batchWithSamples([
+          labSample("sample-1", "S-001"),
+          labSample("sample-2", "S-002"),
+          labSample("sample-3", "S-003"),
+          labSample("sample-4", "S-004", { oToCOrgRatio: null }),
+          labSample("sample-5", "S-005", { oToCOrgRatio: null }),
+        ]),
+      ],
+      { feedstock: [], biochar: [], sample: [] },
+      [],
+    );
+
+    expect(result.gaps).toEqual([
+      "Sample S-004: O:Corg ratio",
+      "Sample S-005: O:Corg ratio",
+    ]);
+    expect(result.issues).toHaveLength(1);
     expect(result.issues[0]).toMatchObject({
-      key: "feedstock-transport-evidence",
-      fixTarget: "feedstocks",
+      key: "lab-samples",
+      fixTarget: "labSamples",
+      affectedRecords: [
+        { id: "sample-4", code: "S-004", missing: ["O:Corg ratio"] },
+        { id: "sample-5", code: "S-005", missing: ["O:Corg ratio"] },
+      ],
     });
   });
 
-  it("keeps feedstock and biochar evidence in their separate workflows", () => {
+  it("does not create evidence blockers for feedstock or biochar legs", () => {
     const feedstockLeg = {
       id: "00000000-0000-4000-a000-000000000003",
       entityId: "00000000-0000-4000-a000-000000000004",
@@ -111,15 +220,8 @@ describe("buildEntityReadinessResult", () => {
       ["feedstock", "biochar"],
     );
 
-    expect(result.issues).toMatchObject([
-      {
-        key: "feedstock-transport-evidence",
-        fixTarget: "feedstocks",
-      },
-      {
-        key: "biochar-transport-evidence",
-        fixTarget: "deliveries",
-      },
-    ]);
+    expect(result.gaps).toEqual([]);
+    expect(result.issues).toEqual([]);
+    expect(result.warnings).toEqual([]);
   });
 });

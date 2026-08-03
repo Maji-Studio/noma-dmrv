@@ -12,7 +12,7 @@ export type SubmitArtifact = "removal" | "ghgStatement";
 
 const ARTIFACT_LABEL: Record<SubmitArtifact, string> = {
   removal: "removal",
-  ghgStatement: "GHG statement",
+  ghgStatement: "GHG Statement",
 };
 
 interface SubmitConfirmDialogProps {

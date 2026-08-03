@@ -20,9 +20,13 @@ import {
 } from "@/schemas/orders";
 import type { Order } from "@/db/schema";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { useCustomers, useCustomerLocations } from "@/hooks/use-customers";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import { useEntityById } from "@/hooks/use-entities";
 import { CustomerLocationDetails } from "./customer-location-details";
+import { OrderMassPreview } from "./order-mass-preview";
+import { orderAvailabilityWarning } from "./order-availability";
 import { useEffect } from "react";
 
 // ============================================
@@ -76,6 +80,11 @@ export function OrderForm({
 }: OrderFormProps) {
   const isEditMode = !!order;
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
+  // Organization operating defaults seed create mode only; an existing record
+  // always wins. Warmed once per session in FacilityProvider, so this is a
+  // cache read rather than a round trip on open.
+  const { defaults: orgDefaults } = useOrganizationDefaultValues();
+
 
   const {
     register,
@@ -97,9 +106,10 @@ export function OrderForm({
         ? formatLocalDate(new Date(order.orderDate))
         : formatLocalDate(new Date()),
       quantityKg: order?.quantityKg ?? undefined,
-      packaging: (order?.packaging as PackagingType) ?? "loose",
+      packaging:
+        (order?.packaging as PackagingType) ?? orgDefaults.defaultPackaging,
       value: order?.value ?? undefined,
-      currency: order?.currency ?? "TZS",
+      currency: order?.currency ?? orgDefaults.defaultCurrency,
     },
   });
 
@@ -107,6 +117,23 @@ export function OrderForm({
   const selectedCustomerId = watchedCustomerId || undefined;
   const watchedLocationId = useWatch({ control, name: "customerLocationId" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const watchedBiocharProductId = useWatch({
+    control,
+    name: "biocharProductId",
+  });
+  const watchedQuantityKg = useWatch({ control, name: "quantityKg" });
+  const { data: selectedBiocharProduct } = useEntityById(
+    "biocharProduct",
+    watchedBiocharProductId || undefined,
+  );
+  // Product availability already excludes fulfilled mass. Until edit-mode
+  // orders expose their delivered allocation, comparing the full quantity
+  // would produce a false warning for otherwise valid existing orders.
+  const availabilityWarning = orderAvailabilityWarning(
+    watchedQuantityKg,
+    selectedBiocharProduct?.remainingMass?.wetKg,
+    { suppress: isEditMode },
+  );
 
   // Fetch related data for dropdowns
   const { data: customersData } = useCustomers({ pageSize: 100 });
@@ -172,14 +199,14 @@ export function OrderForm({
       <FormSpine control={control}>
       {/* Order Information */}
       <FormSection
-        title="Order Information"
+        title="Order information"
         icon={<CalendarIcon size={14} weight="bold" />}
         fields={["orderDate"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="orderDate"
-            label="Order Date"
+            label="Order date"
             error={errors.orderDate?.message}
             required
           >
@@ -197,7 +224,7 @@ export function OrderForm({
 
       {/* Customer Section */}
       <FormSection
-        title="Customer Details"
+        title="Customer details"
         icon={<StorefrontIcon size={14} weight="bold" />}
         fields={["customerId", "customerLocationId"]}
       >
@@ -248,22 +275,22 @@ export function OrderForm({
 
       {/* Product Section */}
       <FormSection
-        title="Product Details"
+        title="Product details"
         icon={<PackageIcon size={14} weight="bold" />}
         fields={["biocharProductId", "packaging", "quantityKg", "value", "currency"]}
       >
         <FormEntitySelect
           control={control}
           name="biocharProductId"
-          label="Biochar Product"
+          label="Product bin"
           entityType="biocharProduct"
-          placeholder="Select product..."
+          placeholder="Select product bin..."
           required
           disabled={isSubmitting}
           filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
           emptyHint={{
             message:
-              "No biochar products yet — create a product from a completed production run first.",
+              "No product bin contains a biochar product. Create one from a biochar bin first.",
             href: contextFacilityId
               ? `/biochar-products?facility=${encodeURIComponent(contextFacilityId)}`
               : "/biochar-products",
@@ -272,6 +299,35 @@ export function OrderForm({
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="quantityKg"
+            label="Quantity (kg)"
+            error={errors.quantityKg?.message}
+            warning={availabilityWarning}
+            required
+          >
+            <FormInput
+              id="quantityKg"
+              type="number"
+              step="any"
+              placeholder="e.g., 1000"
+              disabled={isSubmitting}
+              error={!!errors.quantityKg}
+              {...register("quantityKg", {
+                setValueAs: numericValue,
+              })}
+            />
+          </FormField>
+        </div>
+
+        <OrderMassPreview
+          quantityKg={watchedQuantityKg}
+          moisturePercent={
+            selectedBiocharProduct?.mass?.moisturePercent ?? null
+          }
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
           <FormField
             id="packaging"
             label="Packaging"
@@ -286,27 +342,6 @@ export function OrderForm({
               {...register("packaging")}
             />
           </FormField>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
-          <FormField
-            id="quantityKg"
-            label="Quantity (kg)"
-            error={errors.quantityKg?.message}
-            required
-          >
-            <FormInput
-              id="quantityKg"
-              type="number"
-              step="0.01"
-              placeholder="e.g., 1000"
-              disabled={isSubmitting}
-              error={!!errors.quantityKg}
-              {...register("quantityKg", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
 
           <FormField
             id="value"
@@ -316,7 +351,7 @@ export function OrderForm({
             <FormInput
               id="value"
               type="number"
-              step="0.01"
+              step="any"
               placeholder="e.g., 50000"
               disabled={isSubmitting}
               error={!!errors.value}

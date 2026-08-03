@@ -39,6 +39,8 @@ export interface ProductionRunWithRelations {
   feedstockWetMassKg: number | null;
   feedstockMoisturePercent: number | null;
   feedstockMassDryKg: number | null;
+  /** True only when an uploaded sensor-data document is saved for this run. */
+  hasReadingsFile: boolean;
   createdAt: Date;
   updatedAt: Date;
   // Relations
@@ -48,12 +50,13 @@ export interface ProductionRunWithRelations {
   reactorIdentifier: string | null;
   operatorName: string | null;
   biocharStorageLocationCode: string | null;
+  biocharStorageLocationName: string | null;
   feedstockStorageLocationCode: string | null;
+  feedstockStorageLocationName: string | null;
   // M:M feedstocks
   feedstocks: ProductionRunFeedstockWithDetails[];
   // Computed fields
   totalFeedstockMassKg: number;
-  readingsCount: number;
 }
 
 export interface PaginatedProductionRuns {
@@ -67,6 +70,7 @@ export interface PaginatedProductionRuns {
 export interface ProductionRunStats {
   totalRuns: number;
   totalBiocharKg: number;
+  totalBiocharDryKg: number | null;
   totalFeedstockKg: number;
   runningCount: number;
   completedCount: number;
@@ -91,6 +95,6 @@ export interface ProductionRunReadingRecord {
 }
 
 export type ProductionRunWithSamples = ProductionRun & {
+  hasReadingsFile: boolean;
   samples: Sample[];
-  readingsCount: number;
 };

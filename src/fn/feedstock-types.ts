@@ -94,7 +94,7 @@ export async function importIsometricFeedstockTypeFn(
     const data = importIsometricFeedstockTypeSchema.parse(input);
     if (!(await hasCertifierCredentials(ctx, "isometric"))) {
       throw new SafeError(
-        "Connect this organization to Isometric before importing feedstock types.",
+        "Connect this Organization to Isometric before importing feedstock types.",
       );
     }
     const client = await getIsometricClientForOrg(ctx.organizationId);

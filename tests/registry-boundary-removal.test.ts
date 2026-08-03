@@ -18,9 +18,10 @@ import {
  * again* — is asserted against the registry's state, not hand-wired mocks.
  *
  * Mocked besides the client: the removal context loader (pure data — the
- * lineage/template plumbing has its own tests) and the sources resolver
- * (mirroring stays on its own create/reconcile shape by decision; see the
- * plan's out-of-scope list).
+ * lineage/template plumbing has its own tests), generated evidence-ledger
+ * materialization (render/storage/mirroring has dedicated tests), and the
+ * sources resolver (mirroring stays on its own create/reconcile shape by
+ * decision; see the plan's out-of-scope list).
  *
  * Coverage (plan Phase 3, boundary tests 1, 2, 4, 5 — test 3 lives in
  * registry-boundary-ghg-statement.test.ts):
@@ -52,9 +53,24 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
   return createFakeClientModule(actual);
 });
 vi.mock("@/fn/certification/certify-context-core");
+vi.mock("@/fn/certification/ensure-evidence-ledgers", () => ({
+  ensureEvidenceLedgersFromContext: vi.fn(async () => undefined),
+}));
 vi.mock("@/fn/certification/sources", () => ({
-  collectCandidateDocumentIdsForRemoval: vi.fn(async () => []),
-  resolveSourceIdsForRemoval: vi.fn(async () => []),
+  collectCandidateDocumentIdsForRemoval: vi.fn(async () => [
+    "doc-boundary-1",
+  ]),
+  resolveSourceIdsForRemoval: vi.fn(async () => ["src-boundary-1"]),
+  collectCandidateSourceDocumentsForRemoval: vi.fn(async () => [
+    makeBoundarySourceDocument(),
+  ]),
+  resolveSourceBindingCandidates: vi.fn(async () => [
+    { ...makeBoundarySourceDocument(), sourceId: "src-boundary-1" },
+  ]),
+  // submitRemoval mirrors pending candidates before compiling the strict
+  // artifact; the boundary fixtures already resolve every candidate, so the
+  // mirror is a no-op here.
+  mirrorCandidateSourcesForSubmission: vi.fn(async () => undefined),
 }));
 
 import { db } from "@/db";
@@ -94,6 +110,27 @@ const PRODUCTION_RUN_ID = "pr-boundary-1";
 const ORIGINAL_BIOCHAR_MASS_KG = 1000;
 const CHANGED_BIOCHAR_MASS_KG = 1500;
 const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
+
+function makeBoundarySourceDocument() {
+  return {
+    documentId: "doc-boundary-1",
+    binding: {
+      nomaRole: "inventory" as const,
+      nomaRoleLabel: "Inventory",
+      lineage: {
+        entityType: "application",
+        entityId: "app-bd-1",
+        entityLabel: "Application APP-BD-001",
+      },
+      intendedTarget: {
+        kind: "sequestration" as const,
+        groupKey: "co2-stored" as const,
+        inputKey: "product_mass" as const,
+      },
+      mappingRevision: "source-binding-boundary-revision",
+    },
+  };
+}
 
 const createdFacilityIds: string[] = [];
 const createdRemovalIds: string[] = [];
@@ -307,7 +344,7 @@ function makeMapping(fixture: Fixture): CertifierProjectRow {
 
 function makeRun(
   biocharMassKg: number,
-): ProductionRun & { samples: Sample[]; readingsCount: number } {
+): ProductionRun & { samples: Sample[] } {
   return {
     id: PRODUCTION_RUN_ID,
     code: "PR-BD-001",
@@ -321,7 +358,6 @@ function makeRun(
     electricityKwh: 0,
     startTime: new Date("2026-01-01T00:00:00Z"),
     endTime: new Date("2026-01-31T23:59:59Z"),
-    readingsCount: 1,
     // Three eligible replicates (H/C_org < 0.5, O/C_org < 0.2) so the D3
     // durability gates pass; organicCarbonPercent stays 80 so the carbon
     // datapoint magnitude is unchanged.
@@ -354,7 +390,7 @@ function makeRun(
         moistureContentPercent: 10,
       } as unknown as Sample,
     ],
-  } as unknown as ProductionRun & { samples: Sample[]; readingsCount: number };
+  } as unknown as ProductionRun & { samples: Sample[] };
 }
 
 function makeContext(
@@ -401,8 +437,9 @@ function makeContext(
     // Eligible run, ≥3 in-spec replicates → no D3 blockers (mirrors what
     // buildRemovalContext would precompute; submitRemoval blocks on this field).
     durabilityGateBlockers: [],
+    futureDatedMeasurements: [],
     submissionWarnings: [],
-    supportingDocuments: { total: 0, mirrored: 0 },
+    supportingDocuments: { total: 1, mirrored: 1 },
     productionReadinessGap: null,
     runSummary: {
       runCount: 1,
@@ -469,7 +506,7 @@ function makeContext(
       source: "Test dataset (annual mean)",
       temperatureFloored: false,
       method:
-        "Facility reference soil temperature (annual average; 7 °C floor) — Test dataset (annual mean)",
+        "Facility reference soil temperature (annual average; 7 °C floor): Test dataset (annual mean)",
       warnings: [],
     },
   };
@@ -543,9 +580,17 @@ beforeEach(() => {
   registry = installFakeRegistry();
   // restoreMocks resets factory-installed implementations after each test.
   vi.mocked(sources.collectCandidateDocumentIdsForRemoval).mockResolvedValue(
-    [],
+    ["doc-boundary-1"],
   );
-  vi.mocked(sources.resolveSourceIdsForRemoval).mockResolvedValue([]);
+  vi.mocked(sources.resolveSourceIdsForRemoval).mockResolvedValue([
+    "src-boundary-1",
+  ]);
+  vi.mocked(
+    sources.collectCandidateSourceDocumentsForRemoval,
+  ).mockResolvedValue([makeBoundarySourceDocument()]);
+  vi.mocked(sources.resolveSourceBindingCandidates).mockResolvedValue([
+    { ...makeBoundarySourceDocument(), sourceId: "src-boundary-1" },
+  ]);
 });
 
 // ---------------------------------------------------------------------------
@@ -723,7 +768,7 @@ describe("submitRemoval boundary — removal orphan (test 2)", () => {
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: fixture.removalId }),
     ).rejects.toThrowError(
       new SafeError(
-        "Stale submission cannot be resumed because its fixed-input snapshot does not match the current schema.",
+        "This saved submission uses an older input format and cannot resume. Select Refresh review, then submit again.",
       ),
     );
 

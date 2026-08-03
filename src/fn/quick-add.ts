@@ -134,5 +134,5 @@ export async function createStorageLocationFn(
       (code) => createStorageLocation(ctx, { ...parsed, code }),
       CODE_CONFLICT_MESSAGES.storageLocation,
     );
-  }, { fallbackMessage: "Failed to create storage location" });
+  }, { fallbackMessage: "Failed to create storage bin" });
 }

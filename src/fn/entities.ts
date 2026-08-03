@@ -45,7 +45,7 @@ const searchEntitiesSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["filterBy", "facilityId"],
-        message: "facilityId filter must be a UUID",
+        message: "The facility filter is invalid. Refresh the page and try again.",
       });
     }
   });

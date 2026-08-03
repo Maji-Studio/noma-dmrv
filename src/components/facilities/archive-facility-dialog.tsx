@@ -15,7 +15,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { WarningIcon } from "@phosphor-icons/react";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, Modal } from "@/components/ui";
 import { useFacilityArchiveImpact } from "@/hooks/use-facilities";
 
@@ -38,7 +38,7 @@ const IMPACT_LABELS = [
   ["deliveryCount", "delivery", "deliveries"],
   ["applicationCount", "application", "applications"],
   ["creditBatchCount", "credit batch", "credit batches"],
-  ["sampleCount", "lab sample", "lab samples"],
+  ["sampleCount", "Sample", "Samples"],
   ["stockpileEventCount", "stockpile event", "stockpile events"],
   ["powerProcurementEvidenceCount", "power procurement record", "power procurement records"],
 ] as const;
@@ -109,11 +109,11 @@ export function ArchiveFacilityDialog({
           >
             Archiving{" "}
             <span className="font-medium text-[var(--color-text-primary)]">
-              {facility?.code} — {facility?.name}
+              {facility?.code}: {facility?.name}
             </span>{" "}
             hides it and all of its data from lists, pickers, and stats across
-            the app. Nothing is deleted — you can restore it any time from the
-            archived view.
+            the app. Nothing is deleted. You can restore it from the archived
+            view.
           </p>
 
           {isLoading ? (
@@ -146,7 +146,7 @@ export function ArchiveFacilityDialog({
             </div>
           ) : (
             <p className="body-small text-[var(--color-signal-red)]">
-              Couldn&apos;t load the impact preview — archiving is disabled.
+              The archive impact could not be loaded, so archiving is disabled.
               Close the dialog and try again.
             </p>
           )}
@@ -159,7 +159,7 @@ export function ArchiveFacilityDialog({
                 className="mt-2 shrink-0 text-[var(--clr-orange)]"
               />
               <p className="body-small text-[var(--color-text-primary)]">
-                This facility has removals or GHG statements submitted to the
+                This facility has Removals or GHG Statements submitted to the
                 certifier registry. Archiving hides them here but does not
                 change anything on the registry.
               </p>

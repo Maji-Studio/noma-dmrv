@@ -16,6 +16,8 @@ import {
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
 
+const PRODUCTION_RUN_DATE = "2025-06-15";
+
 async function createProductionRunForCreditBatch(
   page: Page,
   seededData: SeededChainData,
@@ -58,12 +60,17 @@ async function createProductionRunForCreditBatch(
     .click();
   await waitForSideSheetClose(page);
 
-  await page
-    .locator("tbody tr")
-    .first()
-    .getByRole("button", { name: /Actions for/ })
-    .click();
-  await page.getByRole("menuitem", { name: "Edit" }).click();
+  // A post-create list refetch can re-render the row and detach the menu's
+  // "Edit" item mid-click, so retry the open->Edit sequence instead of waiting
+  // for network idle (CI dev servers may never settle within budget).
+  await expect(async () => {
+    await page
+      .locator("tbody tr")
+      .first()
+      .getByRole("button", { name: /Actions for/ })
+      .click({ timeout: 5000 });
+    await page.getByRole("menuitem", { name: "Edit" }).click({ timeout: 5000 });
+  }).toPass({ timeout: 30000 });
   await waitForSideSheet(page);
   await page.fill('input[name="endDate"]', date);
   await page.fill('input[name="endTime"]', "12:00");
@@ -107,12 +114,12 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     await selectEntity(
       page,
-      "Biochar Product",
+      "Product bin",
       seededData.biocharProduct.id,
       seededData.biocharProduct.code
     );
     await page.selectOption('select[name="packaging"]', "loose");
-    await page.fill('input[name="quantityKg"]', "100");
+    await page.fill('input[name="quantityKg"]', "10000");
 
     const dialog = page.locator('[role="dialog"]');
     await dialog.locator('button:has-text("Create Order")').click();
@@ -130,6 +137,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     // The order picker is a FormEntitySelect (custom dropdown) — pick the first option
     await selectFirstEntity(page, "Order");
     await page.fill('input[name="deliveredWetMassKg"]', "10000");
+    await page.fill('input[name="moistureContentPercent"]', "10");
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
     await waitForSideSheetClose(page);
@@ -155,39 +163,20 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     // Fill required and optional fields
     await page.fill('input[name="biocharAppliedTons"]', "5000");
-    await page.fill('input[name="biocharAppliedDryTons"]', "4500");
+    await expect(
+      page.locator('input[name="biocharAppliedDryTons"]'),
+    ).toHaveCount(0);
     await page.fill('input[name="fieldSizeHa"]', "2");
     await page.fill('input[name="fieldIdentifier"]', "E2E-Field-01");
     await page.fill('input[name="cropType"]', "maize");
 
     await expect(
-      page.locator('input[name="evidenceMethod"][value="visual"]')
+      page.getByRole("radio", { name: /GIS reference/ }),
     ).toBeChecked();
-    await expect(page.locator('input[name="gisBoundaryReference"]')).toHaveCount(0);
-
-    // Scope to the side-sheet form: #264's list evidence-method <select> renders the
-    // same labels, so an unscoped getByText matches two elements (strict-mode violation).
-    await page
-      .locator('[role="dialog"]')
-      .getByText("Boundary records", { exact: true })
-      .click();
     await expect(
-      page.locator('input[name="evidenceMethod"][value="boundary"]')
-    ).toBeChecked();
-    await expect(page.locator('input[name="gisBoundaryReference"]')).toBeVisible();
-    await page.fill(
-      'input[name="gisBoundaryReference"]',
-      "https://maps.example.test/e2e-field-01",
-    );
-
-    await page
-      .locator('[role="dialog"]')
-      .getByText("Visual proof", { exact: true })
-      .click();
-    await expect(
-      page.locator('input[name="evidenceMethod"][value="visual"]')
-    ).toBeChecked();
-    await expect(page.locator('input[name="gisBoundaryReference"]')).toHaveCount(0);
+      page.getByRole("radio", { name: /Visual evidence/ }),
+    ).toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByText("Available later")).toBeVisible();
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
     await waitForSideSheetClose(page);
@@ -198,35 +187,25 @@ test.describe("Application + Credit Batch UI CRUD", () => {
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
 
-    const applicationRow = page.locator("table tbody tr[role='button']").first();
-    await applicationRow.focus();
-    await page.keyboard.press("Enter");
+    // Regression: the saved 4,500 kg derived dry mass is not retained as a
+    // hidden manual form value. Reducing wet mass must submit with a freshly
+    // derived dry mass rather than fail dry <= wet validation invisibly.
+    const firstApplicationRow = page.locator("tbody tr").first();
+    await firstApplicationRow
+      .getByRole("button", { name: /Actions for/ })
+      .click();
+    await page.getByRole("menuitem", { name: "Edit" }).click();
     await waitForSideSheet(page);
-    await page.getByRole("button", { name: "Edit Application" }).click();
-    // The visual-evidence panel renders one image upload slot per evidence role
-    // (APPLICATION_VISUAL_EVIDENCE_ROLES), so target the first; the no-geotag
-    // check is role-independent.
-    const evidenceUpload = page
-      .locator('[role="dialog"] input[type="file"][accept="image/*"]')
-      .first();
-    await evidenceUpload.setInputFiles({
-      name: "application-no-exif.jpg",
-      mimeType: "image/jpeg",
-      buffer: Buffer.from([
-        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00,
-        0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00, 0xff, 0xdb,
-        0x00, 0x43, 0x00, 0xff, 0xd9,
-      ]),
-    });
-    const uploadedEvidence = page.locator('[role="dialog"] li', {
-      hasText: "application-no-exif.jpg",
-    });
-    await expect(uploadedEvidence.first()).toBeVisible({
-      timeout: 10000,
-    });
-    await expect(uploadedEvidence.first()).toContainText("No geotag:", {
-      timeout: 10000,
-    });
+    await expect(
+      page.locator('input[name="biocharAppliedDryTons"]'),
+    ).toHaveCount(0);
+    await page.fill('input[name="biocharAppliedTons"]', "4000");
+    await page
+      .locator('[role="dialog"]')
+      .getByRole("button", { name: "Update Application" })
+      .click();
+    await waitForSideSheetClose(page);
+
   });
 
   test("blocks application against an undelivered delivery", async ({
@@ -253,12 +232,12 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     );
     await selectEntity(
       page,
-      "Biochar Product",
+      "Product bin",
       seededData.biocharProduct.id,
       seededData.biocharProduct.code
     );
     await page.selectOption('select[name="packaging"]', "loose");
-    await page.fill('input[name="quantityKg"]', "100");
+    await page.fill('input[name="quantityKg"]', "10000");
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Order")').click();
     await waitForSideSheetClose(page);
@@ -295,8 +274,11 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
-    const today = new Date().toISOString().split("T")[0];
-    await createProductionRunForCreditBatch(page, seededData, today);
+    await createProductionRunForCreditBatch(
+      page,
+      seededData,
+      PRODUCTION_RUN_DATE,
+    );
 
     await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
@@ -305,8 +287,8 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await waitForSideSheet(page);
 
     // Fill Overview section
-    await page.fill('input[name="startDate"]', today);
-    await page.fill('input[name="endDate"]', today);
+    await page.fill('input[name="startDate"]', PRODUCTION_RUN_DATE);
+    await page.fill('input[name="endDate"]', PRODUCTION_RUN_DATE);
 
     await selectFirstCreditBatchProductionRun(page, seededData.feedstockType);
 

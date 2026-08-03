@@ -20,6 +20,7 @@ import type {
 import type { CreditBatchCo2eStoredPreview } from "@/data-access/credit-batches";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateCertificationReadiness } from "./use-certification";
+import { invalidateOnboardingProgress } from "./use-onboarding";
 
 export { creditBatchKeys } from "./credit-batch-query-keys";
 
@@ -158,12 +159,13 @@ export function useCreateCreditBatch() {
 
   return useMutation({
     mutationFn: (data: CreditBatchFormData) => createCreditBatchFn(data),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
       invalidateCertificationReadiness(queryClient);
+      await invalidateOnboardingProgress(queryClient);
     },
   });
 }

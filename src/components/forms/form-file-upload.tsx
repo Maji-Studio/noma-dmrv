@@ -411,7 +411,7 @@ export function FormFileUpload({
                 <CheckCircleIcon
                   size={16}
                   weight="fill"
-                  className="shrink-0 text-[var(--color-signal-green)]"
+                  className="shrink-0 text-[var(--st-ok)]"
                 />
               )}
               {u.status === "failed" && (

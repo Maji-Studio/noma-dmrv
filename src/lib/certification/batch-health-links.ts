@@ -52,6 +52,12 @@ export function fallbackBatchHealthFixTarget(
   }
 }
 
+export function resolveBatchHealthFixTarget(
+  check: Pick<BatchHealthCheck, "key" | "fixTarget">,
+): BatchHealthFixTarget {
+  return check.fixTarget ?? fallbackBatchHealthFixTarget(check.key);
+}
+
 export function batchHealthFixLinkFor(
   // Only the key + explicit fixTarget drive the link — narrower than the full
   // check so callers (and tests) needn't construct unrelated fields.
@@ -59,7 +65,7 @@ export function batchHealthFixLinkFor(
   facilityId: string,
   creditBatchId?: string,
 ): BatchHealthFixLink {
-  const target = check.fixTarget ?? fallbackBatchHealthFixTarget(check.key);
+  const target = resolveBatchHealthFixTarget(check);
   const affectedIds = check.affectedRecords?.map((record) => record.id) ?? [];
   const affectedCount = affectedIds.length;
   const query = (
@@ -82,8 +88,8 @@ export function batchHealthFixLinkFor(
       return {
         label:
           affectedCount > 0
-            ? `Fix ${affectedCount} ${affectedCount === 1 ? "sample" : "samples"}`
-            : "Add lab sample data",
+            ? `Fix ${affectedCount} ${affectedCount === 1 ? "Sample" : "Samples"}`
+            : "Add Sample data",
         href: creditBatchId
           ? sampleCreateHref(facilityId, creditBatchId)
           : `/samples?${query(undefined, false)}`,

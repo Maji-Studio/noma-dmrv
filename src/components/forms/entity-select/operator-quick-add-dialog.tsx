@@ -39,7 +39,7 @@ export function OperatorQuickAddDialog({
     <QuickAddDialogShell
       isOpen={isOpen}
       onClose={onClose}
-      title="Add New Operator"
+      title="New operator"
       width="sm"
       testId="operator-quick-add-dialog"
     >
@@ -48,7 +48,7 @@ export function OperatorQuickAddDialog({
         onCancel={onClose}
         isSubmitting={isSubmitting}
         errorMessage={error ?? undefined}
-        submitLabel="Create Operator"
+        submitLabel="Create operator"
       />
     </QuickAddDialogShell>
   );

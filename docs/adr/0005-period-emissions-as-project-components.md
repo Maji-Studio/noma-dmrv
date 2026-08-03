@@ -5,6 +5,19 @@
 > + drift panel this ADR introduced were removed — Isometric is the sole
 > system-of-record for project emissions. Kept as the historical record.
 
+> **Current route note:** The period-emissions journal described here was
+> removed by ADR 0018. There is no current period-emissions route. The surviving
+> facility configuration lives at
+> `/certification/settings?section=emission-estimates&facility=<id>` (see
+> `src/lib/certification/links.ts`).
+
+> **Amended 2026-07-29**: the `miscellaneous/mass_based_ci_emissions/mass`
+> tuple gained a named-component exception — the template component `Safety
+> margin` (a per-tonne conservatism deduction that must track each removal's
+> biochar mass, so PROJECT-scope amortization would mis-state it) is
+> REMOVAL-scope and mapped in `INPUT_MAPPING`. The scope guard itself stands
+> for every other component (`docs/isometric/changes.md`, 2026-07-29).
+
 > **Status: Accepted, design-only** (2026-05-24). Resolves
 > `isometric/phase-3.7-period-inputs` (originally raised 2026-05-21,
 > scope-revised 2026-05-22 under ADR 0003). Implementation tracked under

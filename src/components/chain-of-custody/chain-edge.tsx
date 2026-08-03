@@ -21,6 +21,8 @@ export interface ChainEdgeData {
   pctLabel?: string | null;
   /** Which label the kg/% toggle is showing (injected at render). */
   labelMode?: "kg" | "pct";
+  /** Horizontal offset from the default midpoint for split/merge fan routing. */
+  routeOffsetX?: number | null;
   /** A node outside the hovered card's lineage — fade back. */
   dimmed?: boolean;
   /** On the hovered card's lineage path — read as the highlighted route. */
@@ -55,6 +57,7 @@ export function ChainEdge({
   markerEnd,
   data,
 }: EdgeProps) {
+  const routeOffsetX = (data as ChainEdgeData | undefined)?.routeOffsetX ?? 0;
   const [path, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -62,6 +65,10 @@ export function ChainEdge({
     targetX,
     targetY,
     targetPosition,
+    centerX:
+      routeOffsetX === 0
+        ? undefined
+        : (sourceX + targetX) / 2 + routeOffsetX,
   });
   const labelVisible = useStore(
     (state) => state.transform[2] >= EDGE_LABEL_MIN_ZOOM

@@ -23,18 +23,36 @@ import { StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { registerEvidenceLedgerFonts } from "./fonts";
 
 // ── Tokens ───────────────────────────────────────────────────────────────────
+/**
+ * EVERY token must be a 6-digit hex string — never `rgba()`, never 8-digit hex.
+ *
+ * @react-pdf/stylesheet folds an `rgba()` value into 8-digit hex (`#RRGGBBAA`),
+ * but @react-pdf/pdfkit's `_normalizeColor` only understands 3- and 6-digit
+ * hex: it parses all eight digits as one integer and shifts, so
+ * `rgba(15,2,26,0.12)` arrives as red 3842, which clamps to full red. Text fill
+ * and `backgroundColor` survive because @react-pdf/render splits those into
+ * colour + opacity, but border strokes go straight to `ctx.strokeColor(…)` —
+ * which is why translucent tokens used to paint every rule and table frame red.
+ *
+ * The tints below are therefore pre-flattened over `paper`
+ * (`round(channel × a + 255 × (1 − a))`), which is exactly the design system's
+ * two-greys rule — every grey is an alpha of ink or plum over paper — resolved
+ * ahead of time instead of at paint time. On the handful of hairlines that sit
+ * on the `sea` wash rather than bare paper the composite differs by under 1%
+ * luminance, far below a 1pt rule's visible threshold.
+ */
 export const C = {
   ink: "#0f021a",
-  ink70: "rgba(15,2,26,0.7)",
-  ink55: "rgba(15,2,26,0.55)",
-  ink40: "rgba(15,2,26,0.4)",
-  ink25: "rgba(15,2,26,0.25)",
-  ink12: "rgba(15,2,26,0.12)",
+  ink70: "#574e5f", // ink @ 70% over paper
+  ink55: "#7b7481", // ink @ 55% over paper
+  ink40: "#9f9aa3", // ink @ 40% over paper
+  ink25: "#c3c0c6", // ink @ 25% over paper
+  ink12: "#e2e1e4", // ink @ 12% over paper
   paper: "#ffffff",
   plum: "#480b73",
-  plumSoft: "rgba(72,11,115,0.45)",
-  sea: "rgba(72,11,115,0.05)",
-  sea2: "rgba(72,11,115,0.09)",
+  plumSoft: "#ad91c0", // plum @ 45% over paper
+  sea: "#f6f3f8", // plum @ 5% over paper
+  sea2: "#efe9f2", // plum @ 9% over paper
   pink: "#a6216e",
   burnt: "#bc4519",
   amber: "#8a5a00",

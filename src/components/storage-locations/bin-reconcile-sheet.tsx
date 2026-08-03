@@ -4,10 +4,18 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
-import { FormField, FormInput, FormTextarea } from "@/components/forms";
+import {
+  FormField,
+  FormInput,
+  FormTextarea,
+  MoistureField,
+  ResolvedErrorRevalidator,
+} from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { useToast } from "@/components/ui/toast";
-import { formatMass } from "@/lib/format-utils";
+import { formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { canonicalizeFeedstockStockTake } from "@/lib/calculations/bin-stock-take";
 import {
   RecordLossFieldError,
@@ -25,6 +33,10 @@ import {
 import { toNumberOrNull } from "@/schemas/helpers";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { binCurrentMassKg } from "./bin-display";
+import {
+  binStockOverdrawInlineMessage,
+  isStockOverdraw,
+} from "@/lib/stock-overdraw";
 
 type ReconcileMode = "stock-take" | "loss";
 
@@ -80,13 +92,14 @@ function ModeToggle({
   );
 }
 
+/**
+ * Fixed kg throughout this sheet: the book figure, the counted mass and the
+ * delta are the same arithmetic the movement history then prints in kg, so the
+ * operator never confirms "1.2 t" and reads back "+1,200 kg".
+ */
 function previewNumber(value: unknown): number | null {
   const parsed = toNumberOrNull(value);
   return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : null;
-}
-
-function formatMoisturePercent(value: number | null): string {
-  return value == null ? "Not available" : `${value.toFixed(1)}%`;
 }
 
 function CurrentStockContext({
@@ -110,7 +123,7 @@ function CurrentStockContext({
           Current derived stock
         </dt>
         <dd className="body-small font-medium text-[var(--color-text-primary)]">
-          {formatMass(binCurrentMassKg(storageLocation))}
+          {formatMassKg(binCurrentMassKg(storageLocation))}
           {isFeedstock ? " dry" : ""}
         </dd>
       </div>
@@ -150,6 +163,7 @@ function StockTakeForm({
     handleSubmit,
     setError,
     control,
+    trigger,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(stockTakeFormSchema),
@@ -185,7 +199,7 @@ function StockTakeForm({
   const deltaKg = countedDryKg != null ? countedDryKg - derivedMassKg : null;
 
   const countedLabel = isFeedstock
-    ? "Counted stock (wet kg)"
+    ? "Counted stock, wet (kg)"
     : "Counted stock (kg)";
 
   const onSubmit = handleSubmit(async (raw) => {
@@ -217,23 +231,21 @@ function StockTakeForm({
         return;
       }
       setServerError(
-        error instanceof Error ? error.message : "Failed to record stock-take"
+        error instanceof Error
+          ? error.message
+          : "The stock-take was not recorded. Check the form and try again."
       );
     }
   });
 
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormField
         id="counted"
         label={countedLabel}
         error={errors.counted?.message}
         required
-        helperText={
-          isFeedstock
-            ? "Enter the physically weighed wet mass; it is converted to dry below."
-            : undefined
-        }
       >
         <FormInput
           id="counted"
@@ -248,48 +260,27 @@ function StockTakeForm({
       </FormField>
 
       {isFeedstock && (
-        <FormField
+        <MoistureField
           id="moisture-percent"
-          label="Moisture content (%)"
           error={errors.moisturePercent?.message}
           required
-          helperText="Enter or confirm the moisture measured for this stock-take."
-        >
-          <FormInput
-            id="moisture-percent"
-            type="number"
-            step="any"
-            min="0"
-            max="100"
-            placeholder="e.g., 18"
-            disabled={recordStockTake.isPending}
-            error={!!errors.moisturePercent}
-            {...register("moisturePercent")}
-          />
-        </FormField>
+          disabled={recordStockTake.isPending}
+          placeholder="e.g. 18"
+          helperText="Measured for this stock-take"
+          registration={register("moisturePercent")}
+        />
       )}
 
-      {isFeedstock &&
-        countedNum != null &&
-        measuredMoisturePercent != null &&
-        countedDryKg != null && (
-          <div
-            aria-label="Wet-to-dry conversion preview"
-            className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] bg-[var(--color-background-light)] px-12 py-10"
-          >
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              Dry-equivalent count
-            </span>
-            <span className="body-small font-medium text-[var(--color-text-primary)]">
-              {formatMass(countedDryKg)} dry
-              <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
-                {" "}
-                · {formatMass(countedNum)} wet at{" "}
-                {formatMoisturePercent(measuredMoisturePercent)}
-              </span>
-            </span>
-          </div>
-        )}
+      {isFeedstock && (
+        <div className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
+          <MoistureSplit
+            wetMassKg={countedNum}
+            moisturePercent={measuredMoisturePercent}
+            materialLabel="Feedstock"
+            note="Counted wet mass is converted to dry before comparison."
+          />
+        </div>
+      )}
 
       {deltaKg != null && (
         <div className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] bg-[var(--color-background-light)] px-12 py-10">
@@ -306,15 +297,15 @@ function StockTakeForm({
             }`}
           >
             {deltaKg > 0 ? "+" : deltaKg < 0 ? "−" : ""}
-            {formatMass(Math.abs(deltaKg))}
+            {formatMassKg(Math.abs(deltaKg))}
           </span>
         </div>
       )}
 
       {deltaKg != null && deltaKg > 0 && (
         <p className="body-caption text-[var(--color-signal-red)]">
-          This count is above the displayed stock. Submit to recheck it against
-          the current inventory.
+          Count exceeds current stock. Confirm the count and explain the
+          difference before saving.
         </p>
       )}
 
@@ -323,7 +314,7 @@ function StockTakeForm({
         label="Reason"
         error={errors.reason?.message}
         required
-        helperText="Why the count differs — e.g. settling, scale recalibration, miscount."
+        helperText="Why the count differs, such as settling, scale recalibration, or a miscount."
       >
         <FormTextarea
           id="stock-take-reason"
@@ -356,21 +347,44 @@ function LossForm({
 }) {
   const toast = useToast();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [fieldServerError, setFieldServerError] = useState<{
+    message: string;
+    lossMassKg: number;
+  } | null>(null);
   const recordLoss = useRecordLoss();
   const lane = laneForStorageType(storageLocation.type);
+  const availableKg = binCurrentMassKg(storageLocation);
 
   const {
     register,
     handleSubmit,
-    setError,
+    control,
+    trigger,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(recordLossFormSchema),
     defaultValues: { reason: "" },
   });
+  const lossInput = useWatch({ control, name: "lossMassKg" });
+  const lossMassKg = previewNumber(lossInput);
+  const liveStockError =
+    lossMassKg !== null &&
+    isStockOverdraw(lossMassKg, availableKg)
+      ? binStockOverdrawInlineMessage(lane, availableKg)
+      : undefined;
+  const currentFieldServerError =
+    fieldServerError?.lossMassKg === lossMassKg
+      ? fieldServerError.message
+      : undefined;
+  const lossMassError =
+    errors.lossMassKg?.message ??
+    liveStockError ??
+    currentFieldServerError;
 
   const onSubmit = handleSubmit(async (raw) => {
     setServerError(null);
+    if (liveStockError) return;
+
     const values = raw as RecordLossFormData;
     try {
       await recordLoss.mutateAsync({
@@ -383,23 +397,29 @@ function LossForm({
       onRecorded?.();
     } catch (error) {
       if (error instanceof RecordLossFieldError) {
-        setError(error.field, { type: "server", message: error.message });
+        setFieldServerError({
+          message: error.message,
+          lossMassKg: values.lossMassKg,
+        });
         return;
       }
       setServerError(
-        error instanceof Error ? error.message : "Failed to record loss"
+        error instanceof Error
+          ? error.message
+          : "The loss was not recorded. Check the form and try again."
       );
     }
   });
 
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormField
         id="loss-amount"
         label="Amount lost (kg)"
-        error={errors.lossMassKg?.message}
+        error={lossMassError}
         required
-        helperText="The mass removed from the bin — spoilage, spillage, or write-off."
+        helperText="The mass removed from the bin through spoilage, spillage, or write-off."
       >
         <FormInput
           id="loss-amount"
@@ -408,7 +428,7 @@ function LossForm({
           min="0"
           placeholder="e.g., 50"
           disabled={recordLoss.isPending}
-          error={!!errors.lossMassKg}
+          error={!!lossMassError}
           {...register("lossMassKg")}
         />
       </FormField>
@@ -418,7 +438,7 @@ function LossForm({
         label="Reason"
         error={errors.reason?.message}
         required
-        helperText="What happened — e.g. spoiled batch, spilled during transfer, failed run."
+        helperText="What happened, such as a spoiled batch, transfer spill, or failed production run."
       >
         <FormTextarea
           id="loss-reason"

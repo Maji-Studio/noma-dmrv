@@ -52,7 +52,7 @@ const PLACEHOLDER_STATIONS: DashboardStation[] = (
   key,
   name,
   total: 0,
-  totalLabel: "—",
+  totalLabel: "Not available",
   attention: 0,
   reasons: [],
   href: "#",
@@ -87,7 +87,7 @@ export function FlowHero({
       {/* Head — title + smart-view segmented control. */}
       <div className="flex flex-wrap items-center justify-between gap-16 border-b border-[var(--color-border-tertiary)] px-20 py-16">
         <h2 className="label-micro text-[var(--color-text-primary)]">
-          Traceability — supplier to soil
+          Traceability: supplier to soil
         </h2>
         <div
           role="group"
@@ -199,7 +199,7 @@ export function FlowHero({
             className="w-16 border-t-[1.5px] border-dashed border-[var(--clr-dark-purple-50)]"
             aria-hidden
           />
-          Mass flow (t)
+          Dry mass flow (t)
         </span>
       </div>
     </section>

@@ -58,7 +58,7 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
   if (ctx.error || !ctx.data) {
     return (
       <p className="body-small text-[var(--color-signal-red)]" role="alert">
-        Unable to load certification state. Try refreshing the page.
+        Certification status could not be loaded. Refresh the page and try again.
       </p>
     );
   }
@@ -165,7 +165,7 @@ function RemovalStatusRow({ data }: { data: RemovalCertifyContext }) {
         </div>
       ) : (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          A removal is done at &ldquo;Submitted&rdquo;. If it&apos;s rolled into
+          A Removal is complete at &ldquo;Submitted&rdquo;. If it&apos;s included in
           a GHG Statement, the verifier status appears here.
         </p>
       )}
@@ -194,7 +194,7 @@ function MemberBatchesRow({
         </span>
       ) : (
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          Not grouped yet — a removal is created on first submit.
+          Not grouped. A Removal is created when you first submit.
         </span>
       )}
       {others.length > 0 && (

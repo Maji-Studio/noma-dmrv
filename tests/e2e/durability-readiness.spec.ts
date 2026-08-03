@@ -9,10 +9,10 @@
  *   - the lab-sample form's batch progress preview (the sample anchors on the
  *     credit batch directly — issue #309).
  *
- * Pure UI + DB (no Isometric) — runs in PR CI, NOT @live. The live
- * measurement-samples POST is gated (`DURABILITY_MEASUREMENT_SAMPLES_LIVE`), so
- * the submit path itself is out of scope here; the per-batch aggregation +
- * gates are covered by the offline unit/integration suites.
+ * Pure UI + DB (no Isometric) — runs in PR CI, NOT @live. The 200-year
+ * measurement-samples POST remains unavailable, so the submit path itself is
+ * out of scope here; the per-batch aggregation + gates are covered by the
+ * offline unit/integration suites.
  */
 import * as crypto from "crypto";
 import { test, expect } from "./fixtures/auth-fixtures";
@@ -39,11 +39,12 @@ test.describe("200-year durability readiness", () => {
     const panel = adminPage.getByTestId("credit-batch-durability-panel");
     await expect(panel).toBeVisible();
 
-    // The three readiness signals: ≥3 met, distributed across runs/days, eligible.
+    // The readiness signals: the §8.3.1 ≥3 count and the §3 Table 2 verdict.
+    // §8.3.1 requires no within-batch run/day distribution, so no such signal.
     const signals = panel.getByTestId("durability-readiness-signals");
-    await expect(signals).toContainText("3 of 3 usable samples");
-    await expect(signals).toContainText("distinct runs/days");
+    await expect(signals).toContainText("3 of 3 usable Samples");
     await expect(signals).toContainText("Chemistry eligible");
+    await expect(signals).not.toContainText("distinct runs/days");
 
     await panel.getByText("View chemistry details", { exact: true }).click();
 
@@ -97,7 +98,7 @@ test.describe("200-year durability readiness", () => {
     );
     await expect(
       progress.getByTestId("durability-readiness-signals"),
-    ).toContainText("3 of 3 usable samples");
+    ).toContainText("3 of 3 usable Samples");
     await expect(progress).toContainText("Chemistry eligible");
   });
 });

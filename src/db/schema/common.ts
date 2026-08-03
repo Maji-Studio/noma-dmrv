@@ -100,6 +100,7 @@ export const documentationType = pgEnum('documentation_type', [
   'video',
   'pdf',
   'sensor_data',
+  'gis_boundary',
 ]);
 
 export const documentVisibility = pgEnum('document_visibility', [

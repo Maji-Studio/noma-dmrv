@@ -12,6 +12,8 @@ function makeRun(
     code: "PR-26-001",
     date: "2026-05-13",
     status: "complete",
+    biocharStorageName: "Moshi Raw Biochar Curing Pad",
+    biocharOutputKg: 950,
     biocharDryMassKg: 900,
     feedstockMassDryKg: null,
     dieselOperationLiters: null,
@@ -51,16 +53,18 @@ describe("CreditBatchProductionRunsPreview", () => {
           id: "run-2",
           code: "PR-26-002",
           status: "running",
+          biocharOutputKg: null,
           biocharDryMassKg: null,
         }),
       ],
     });
 
     expect(html).toContain("1 completed · 1 preview");
-    expect(html).toContain("PR-26-001");
-    expect(html).toContain("PR-26-002");
+    expect(html).not.toContain("PR-26-001");
+    expect(html).not.toContain("PR-26-002");
     expect(html).toContain("May 13, 2026");
-    expect(html).toContain("0.90 t");
+    expect(html).toContain("Moshi Raw Biochar Curing Pad");
+    expect(html).toContain("Wet: 950 kg · Dry: 900 kg");
     expect(html).toContain('data-status="running"');
     expect(html).not.toContain('data-status="complete"');
     expect(html).not.toContain('type="checkbox"');
@@ -81,7 +85,8 @@ describe("CreditBatchProductionRunsPreview", () => {
       currentCreditBatchId: "batch-current",
     });
 
-    expect(html).toContain("Assigned to CB-26-099");
+    expect(html).toContain("Assigned to another credit batch");
+    expect(html).not.toContain("CB-26-099");
     expect(html).toContain("unavailable-run-id");
     expect(html).toContain("Details unavailable");
     expect(html).toContain("1 completed · 0 previews · 1 retained");

@@ -34,16 +34,38 @@ export function isFeedstockBinType(
 }
 
 /**
+ * Sort keys the storage-bin list accepts. Every key is resolved in SQL before
+ * LIMIT/OFFSET, so the order a page shows is the order across the whole result
+ * set — the list must never re-sort a page in the client, which would order
+ * only the twenty rows it happens to hold.
+ *
+ * On-hand mass is deliberately absent: it is derived after pagination from five
+ * aggregate sources (see `deriveLaneStock`), so it cannot be an ORDER BY
+ * without duplicating that derivation in the paginated query.
+ */
+export const storageLocationSortKeys = [
+  "code",
+  "name",
+  "type",
+  "capacityKg",
+  "createdAt",
+  "updatedAt",
+  "lastActivityAt",
+] as const;
+
+export type StorageLocationSortKey = (typeof storageLocationSortKeys)[number];
+
+/**
  * Short descriptions shown beneath the bin-type picker.
  */
 export const STORAGE_LOCATION_TYPE_DESCRIPTIONS: Record<StorageLocationType, string> = {
   feedstock_bin: "Holds input material. What it can feed depends on the held feedstock type usage.",
   biochar_bin: "Holds finished biochar after production, before blending or packing.",
-  product_bin: "Holds a packed, sellable product — optionally tied to one formulation.",
+  product_bin: "Holds a packed, sellable product. It can be tied to one formulation.",
 };
 
 const FORMULATION_PRODUCT_BIN_MESSAGE =
-  "formulationId is only allowed for product_bin storageMethod";
+  "A formulation can only be assigned to a product bin";
 
 const FEEDSTOCK_TYPE_REQUIRED_MESSAGE =
   "Feedstock bins must be restricted to one feedstock type";
@@ -61,20 +83,22 @@ export const storageLocationFormSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, "Storage location name is required")
+    .min(1, "Storage bin name is required")
     .max(255, "Name must be less than 255 characters"),
   type: z.enum(storageLocationTypes, {
-    message: "Please select a valid storage type",
+    message: "Choose a valid storage type.",
   }),
-  facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
+  facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
 
   // Optional fields
   capacityKg: positiveMassKgSchema("Capacity must be a positive number")
     .optional()
     .nullable(),
-  feedstockTypeId: emptyToNull.or(z.string().uuid("Invalid feedstock type")).nullable().optional(),
-  // Product bins only — restricts the bin to one formulation (empty = pure biochar)
-  formulationId: emptyToNull.or(z.string().uuid("Invalid formulation")).nullable().optional(),
+  feedstockTypeId: emptyToNull.or(z.string().uuid("Choose a valid feedstock type.")).nullable().optional(),
+  // Product bins only. Optional on purpose: a product bin with no formulation is
+  // an unassigned bin, which accepts pure biochar and is claimed by the first
+  // formulation put into it (`data-access/biochar-products.ts`).
+  formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
   storageMethod: z
     .string()
     .max(255, "Storage method must be less than 255 characters")
@@ -117,7 +141,7 @@ export const createStorageLocationSchema = storageLocationFormSchema;
  * All fields optional except storageLocationId
  */
 export const updateStorageLocationSchema = z.object({
-  storageLocationId: z.string().uuid("Invalid storage location ID"),
+  storageLocationId: z.string().uuid("Choose a valid storage bin."),
   code: z
     .string()
     .min(1)
@@ -158,7 +182,7 @@ export const updateStorageLocationSchema = z.object({
  * Schema for deleting a storage location
  */
 export const deleteStorageLocationSchema = z.object({
-  storageLocationId: z.string().uuid("Invalid storage location ID"),
+  storageLocationId: z.string().uuid("Choose a valid storage bin."),
 });
 
 /**
@@ -195,10 +219,9 @@ export const storageLocationFilterSchema = z.object({
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(100).default(20),
 
-  // Sorting
-  sortBy: z
-    .enum(["code", "name", "type", "capacityKg", "createdAt", "updatedAt"])
-    .default("code"),
+  // Sorting. `lastActivityAt` is derived (see `storageLocationLastActivityAt`
+  // in data-access) rather than a column, so it sorts NULLS LAST.
+  sortBy: z.enum(storageLocationSortKeys).default("code"),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
 
@@ -235,9 +258,9 @@ export type StorageLocationFilterData = z.infer<
  */
 export function formatStorageLocationType(type: StorageLocationType): string {
   const labels: Record<StorageLocationType, string> = {
-    feedstock_bin: "Feedstock Bin",
-    biochar_bin: "Biochar Bin",
-    product_bin: "Product Bin",
+    feedstock_bin: "Feedstock bin",
+    biochar_bin: "Biochar bin",
+    product_bin: "Product bin",
   };
   return labels[type];
 }

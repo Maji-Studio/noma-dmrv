@@ -1,9 +1,65 @@
 /*
- * Carbon Viewer map chrome — styles for DOM that MapLibre generates or that
- * the viewer injects imperatively (markers, distance chips, popups), where
- * Tailwind classes can't reach. Tokens only, per the concept build distilled
- * in docs/plans/2026-06-10-map-integration.md → Design reference.
+ * Carbon Viewer styles for what Tailwind classes can't reach: the map-view
+ * layout (a container query the utility classes have no name for), and the DOM
+ * MapLibre generates or the viewer injects imperatively (markers, distance
+ * chips, popups). Tokens only, per the concept build distilled in
+ * docs/archive/plans/2026-06-10-map-integration.md → Design reference.
  */
+
+/* ── map-view layout: the stages rail, the map pane, the docked record ───
+ *
+ * The two fixed columns are handed down as custom properties from
+ * carbon-transit-panel.tsx (RAIL_WIDTH_PX / RECORD_PANEL_WIDTH_PX), so the
+ * rail's width and the panel's dock offset are one number and cannot drift.
+ * The widths live here rather than in inline styles because inline wins over
+ * every stylesheet rule, and the narrow layout below has to override them.
+ */
+.cv-viewer {
+  container: cv-viewer / inline-size;
+}
+.cv-rail {
+  width: var(--cv-rail-w);
+}
+.cv-record-panel {
+  left: var(--cv-rail-w);
+  width: var(--cv-record-panel-w);
+  /* Never past the map pane's right edge: the close control is the panel's
+     only dismissal, so it has to stay inside the viewer's overflow-hidden. */
+  max-width: calc(100% - var(--cv-rail-w));
+}
+
+/* ── narrow viewer: the rail stacks above the map ────────────────────────
+ *
+ * Side by side under ~768px of viewer (roughly a 1010px window, since the app
+ * sidebar takes 240 of it) the rail's fixed column leaves the map a ~180px
+ * sliver. So the two stack instead: the rail keeps its full width on top,
+ * capped at 45% of the viewer so the map always holds the larger half, and the
+ * record panel stops docking beside the rail and takes the whole viewer, the
+ * way a record reads on a phone. A container query, not a media query — what
+ * decides this is the viewer's own width, not the window's.
+ */
+@container cv-viewer (width < 768px) {
+  .cv-stack {
+    flex-direction: column;
+  }
+  .cv-rail {
+    width: 100%;
+    max-height: 45%;
+    border-right-width: 0;
+    border-bottom-width: 1.5px;
+  }
+  /* The map pane is the flexible half; let it shrink under its own content. */
+  .cv-pane {
+    min-height: 0;
+  }
+  /* Edge to edge, so its right hairline would only double the viewer's frame. */
+  .cv-record-panel {
+    left: 0;
+    width: 100%;
+    max-width: none;
+    border-right-width: 0;
+  }
+}
 
 /* ── no-basemap field: sea wash + dotted grid (never a white void) ─────── */
 .cvm-field {

@@ -30,6 +30,7 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms/section-label";
@@ -44,6 +45,8 @@ import {
   SpineSectionStatic,
   type SpineMeta,
 } from "@/components/forms/form-spine";
+
+const EMPTY_DETAIL_VALUE = MISSING_VALUE.notRecorded;
 
 /* -------------------------------------------------------------------------------------------------
  * DetailSection - Flat section with mono label, mirrors FormSection so the
@@ -134,9 +137,16 @@ function DetailField({
   certifyRequired,
   certifyStatus,
 }: DetailFieldProps) {
-  const displayValue = value === null || value === undefined || value === "" ? "—" : value;
+  const displayValue =
+    value === null || value === undefined || value === ""
+      ? EMPTY_DETAIL_VALUE
+      : value;
   const resolvedCertifyStatus =
-    certifyStatus ?? resolveCertFieldStatus(true, isCertFieldValuePresent(value));
+    certifyStatus ??
+    resolveCertFieldStatus(
+      true,
+      !isMissingValueCopy(value) && isCertFieldValuePresent(value),
+    );
 
   return (
     <div className={cn("flex flex-1 flex-col gap-4 min-w-0", className)}>

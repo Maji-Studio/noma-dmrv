@@ -20,12 +20,16 @@ import {
 // Constants
 // ============================================
 
-const PERCENT_RANGE_MESSAGE = "Must be 0–100";
+const PERCENT_RANGE_MESSAGE = "Enter a value from 0 to 100";
 const NON_NEGATIVE_NUMBER_MESSAGE = "Must be a non-negative number";
 const PH_MIN = 0;
 const PH_MAX = 14;
 const PH_RANGE_MESSAGE = `Must be between ${PH_MIN} and ${PH_MAX}`;
 export const CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS = 0.5;
+export const ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE =
+  `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
+export const COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE =
+  `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
 
 const percentNumber = z
   .number()
@@ -72,39 +76,69 @@ const optionalFraction = optionalNumber.refine(
   { message: "Must be between 0 and 1" },
 ).optional();
 
-function carbonReconciliationSuperRefine(
-  value: {
-    totalCarbonPercent?: number | null;
-    organicCarbonPercent?: number | null;
-    inorganicCarbonPercent?: number | null;
-  },
-  ctx: z.RefinementCtx,
-): void {
+interface SampleCarbonValues {
+  totalCarbonPercent?: number | null;
+  organicCarbonPercent?: number | null;
+  inorganicCarbonPercent?: number | null;
+}
+
+export interface SampleCarbonReconciliationErrors {
+  organicCarbonPercent?: string;
+  inorganicCarbonPercent?: string;
+}
+
+function isCompleteNumber(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/** One reconciliation rule shared by live form feedback and Zod validation. */
+export function getSampleCarbonReconciliationErrors(
+  value: SampleCarbonValues,
+): SampleCarbonReconciliationErrors {
+  const errors: SampleCarbonReconciliationErrors = {};
+
   if (
-    value.totalCarbonPercent != null &&
-    value.organicCarbonPercent != null &&
+    isCompleteNumber(value.totalCarbonPercent) &&
+    isCompleteNumber(value.organicCarbonPercent) &&
     value.organicCarbonPercent - value.totalCarbonPercent >
       CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
   ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["organicCarbonPercent"],
-      message: `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`,
-    });
+    errors.organicCarbonPercent = ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE;
   }
 
   if (
-    value.totalCarbonPercent != null &&
-    value.organicCarbonPercent != null &&
-    value.inorganicCarbonPercent != null &&
+    isCompleteNumber(value.totalCarbonPercent) &&
+    isCompleteNumber(value.organicCarbonPercent) &&
+    isCompleteNumber(value.inorganicCarbonPercent) &&
     value.organicCarbonPercent + value.inorganicCarbonPercent -
       value.totalCarbonPercent >
       CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
   ) {
+    errors.inorganicCarbonPercent = COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE;
+  }
+
+  return errors;
+}
+
+function carbonReconciliationSuperRefine(
+  value: SampleCarbonValues,
+  ctx: z.RefinementCtx,
+): void {
+  const errors = getSampleCarbonReconciliationErrors(value);
+
+  if (errors.organicCarbonPercent) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["organicCarbonPercent"],
+      message: errors.organicCarbonPercent,
+    });
+  }
+
+  if (errors.inorganicCarbonPercent) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["inorganicCarbonPercent"],
-      message: `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`,
+      message: errors.inorganicCarbonPercent,
     });
   }
 }
@@ -133,13 +167,13 @@ export const sampleFormSchema = z
     // characterises — required: every sample belongs to exactly one batch
     // (issue #309). The batch pools biochar across its member runs, so the
     // sample never anchors on a production run.
-    creditBatchId: z.string().min(1, "Please select a credit batch").uuid("Invalid credit batch"),
+    creditBatchId: z.string().min(1, "Select a credit batch.").uuid("Choose a valid credit batch."),
     samplingTime: z.union([
       z.date(),
       z.string().transform((val, ctx) => {
         const date = new Date(val);
         if (isNaN(date.getTime())) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
           return z.NEVER;
         }
         return date;
@@ -302,20 +336,20 @@ export const createSampleSchema = sampleFormSchema;
  * All fields optional except sampleId
  */
 export const updateSampleSchema = z.object({
-  sampleId: z.string().uuid("Invalid sample ID"),
+  sampleId: z.string().uuid("Choose a valid Sample."),
   sampleCode: z
     .string()
     .min(1)
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  creditBatchId: z.string().uuid("Invalid credit batch").optional(),
+  creditBatchId: z.string().uuid("Choose a valid credit batch.").optional(),
   samplingTime: z.union([
     z.date(),
     z.string().transform((val, ctx) => {
       const date = new Date(val);
       if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
         return z.NEVER;
       }
       return date;
@@ -366,7 +400,7 @@ export const updateSampleSchema = z.object({
  * Schema for deleting a sample
  */
 export const deleteSampleSchema = z.object({
-  sampleId: z.string().uuid("Invalid sample ID"),
+  sampleId: z.string().uuid("Choose a valid Sample."),
 });
 
 // ============================================

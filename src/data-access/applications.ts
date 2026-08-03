@@ -21,7 +21,7 @@ import {
   type Application,
 } from "@/db/schema/application";
 import { certifierProjects } from "@/db/schema/certification";
-import { facilities } from "@/db/schema/facilities";
+import { facilities, storageLocations } from "@/db/schema/facilities";
 import {
   creditBatches,
   creditBatchApplications,
@@ -29,8 +29,16 @@ import {
 } from "@/db/schema/credits";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customers, customerLocations } from "@/db/schema/parties";
-import { biocharProducts, formulations } from "@/db/schema/products";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import {
+  biocharProductSourceAllocations,
+  biocharProducts,
+  formulations,
+} from "@/db/schema/products";
+import {
+  deriveMassDryKg,
+  DRY_MASS_EXCEEDS_WET_MESSAGE,
+  exceedsMassWithTolerance,
+} from "@/lib/calculations/mass-dry";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
 import type {
@@ -39,6 +47,7 @@ import type {
   CreateApplicationData,
   UpdateApplicationData,
 } from "@/schemas/applications";
+import type { GisBoundary } from "@/schemas/gis-boundary";
 import type { DeliveryStatus } from "@/schemas/deliveries";
 
 import { requireOrgScope } from "./utils";
@@ -47,6 +56,8 @@ import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
+import { parseGisBoundary } from "@/schemas/gis-boundary";
 
 // ============================================
 // Application Data Access Layer
@@ -62,6 +73,7 @@ export interface ApplicationDeliveryOptionData {
   deliveryDate: Date;
   orderCode: string | null;
   formulationName: string | null;
+  productBinName: string | null;
   massDryKg: number | null;
   deliveredWetMassKg: number | null;
   orderQuantityKg: number | null;
@@ -71,10 +83,15 @@ export interface ApplicationDeliveryOptionData {
   destinationGpsLatitude: number | null;
   destinationGpsLongitude: number | null;
   alreadyAppliedWetKg: number;
+  alreadyAppliedDryKg: number;
 }
 
-type CreateApplicationInput = Omit<CreateApplicationData, "evidenceMethod"> & {
+type CreateApplicationInput = Omit<
+  CreateApplicationData,
+  "evidenceMethod" | "gisBoundary"
+> & {
   evidenceMethod?: ApplicationEvidenceMethod;
+  gisBoundary?: GisBoundary | null;
 };
 
 function optionalText(value: string | null | undefined): string | null {
@@ -168,7 +185,7 @@ async function assertDeliveryAcceptsApplication(
 
   if (delivery.status !== "delivered") {
     throw new SafeError(
-      `Delivery ${delivery.code} has not been delivered yet — mark it as delivered before recording an application against it`,
+      `Delivery ${delivery.code} is not marked as delivered. Mark it as delivered before recording an application.`,
     );
   }
 
@@ -212,10 +229,35 @@ async function getLinkedCreditBatches(
         eq(biocharProducts.organizationId, ctx.organizationId),
       ),
     )
+    .leftJoin(
+      biocharProductSourceAllocations,
+      and(
+        eq(
+          biocharProductSourceAllocations.biocharProductId,
+          biocharProducts.id,
+        ),
+        eq(
+          biocharProductSourceAllocations.organizationId,
+          ctx.organizationId,
+        ),
+      ),
+    )
     .innerJoin(
       creditBatchProductionRuns,
       and(
-        eq(creditBatchProductionRuns.productionRunId, biocharProducts.linkedProductionRunId),
+        or(
+          eq(
+            creditBatchProductionRuns.productionRunId,
+            biocharProductSourceAllocations.productionRunId,
+          ),
+          and(
+            isNull(biocharProducts.sourceBiocharStorageLocationId),
+            eq(
+              creditBatchProductionRuns.productionRunId,
+              biocharProducts.linkedProductionRunId,
+            ),
+          ),
+        )!,
         eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
       ),
     )
@@ -240,6 +282,14 @@ async function resolveApplicationDryMassTons(
   txOrDb: DbTransaction | typeof db = db,
 ): Promise<number> {
   if (input.biocharAppliedDryTons != null) {
+    if (
+      exceedsMassWithTolerance(
+        tonnesToKg(input.biocharAppliedDryTons),
+        tonnesToKg(input.biocharAppliedTons),
+      )
+    ) {
+      throw new SafeError(DRY_MASS_EXCEEDS_WET_MESSAGE);
+    }
     return input.biocharAppliedDryTons;
   }
 
@@ -394,7 +444,7 @@ export async function getApplications(
       gpsLongitude: applications.gpsLongitude,
       applicationMethodType: applications.applicationMethodType,
       evidenceMethod: applications.evidenceMethod,
-      gisBoundaryReference: applications.gisBoundaryReference,
+      gisBoundary: applications.gisBoundary,
       soilTemperatureSource: applications.soilTemperatureSource,
       soilTemperatureC: applications.soilTemperatureC,
       co2eStoredTonnes: applications.co2eStoredTonnes,
@@ -456,6 +506,7 @@ export async function getApplicationDeliveryOptions(
         deliveryDate: deliveries.deliveryDate,
         orderCode: orders.code,
         formulationName: formulations.name,
+        productBinName: storageLocations.name,
         massDryKg: deliveries.massDryKg,
         deliveredWetMassKg: deliveries.deliveredWetMassKg,
         orderQuantityKg: orders.quantityKg,
@@ -483,8 +534,24 @@ export async function getApplicationDeliveryOptions(
           eq(certifierProjects.organizationId, ctx.organizationId),
         ),
       )
-      .leftJoin(biocharProducts, and(eq(deliveries.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
+      .leftJoin(
+        biocharProducts,
+        and(
+          eq(
+            biocharProducts.id,
+            sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+          ),
+          eq(biocharProducts.organizationId, ctx.organizationId),
+        ),
+      )
       .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
+      .leftJoin(
+        storageLocations,
+        and(
+          eq(biocharProducts.storageLocationId, storageLocations.id),
+          eq(storageLocations.organizationId, ctx.organizationId),
+        ),
+      )
       .where(whereClause)
       .orderBy(desc(deliveries.deliveryDate)),
     db
@@ -492,6 +559,9 @@ export async function getApplicationDeliveryOptions(
         deliveryId: applications.deliveryId,
         totalAppliedKg: numericAggregate(
           sql<number>`coalesce(sum(${applications.biocharAppliedTons}) * ${KG_PER_TONNE}, 0)`,
+        ),
+        totalAppliedDryKg: numericAggregate(
+          sql<number>`coalesce(sum(${applications.biocharAppliedDryTons}) * ${KG_PER_TONNE}, 0)`,
         ),
       })
       .from(applications)
@@ -501,13 +571,17 @@ export async function getApplicationDeliveryOptions(
   ]);
 
   const appliedByDeliveryId = new Map(
-    appliedRows.map((row) => [row.deliveryId, row.totalAppliedKg])
+    appliedRows.map((row) => [row.deliveryId, row])
   );
 
-  return rawDeliveries.map((delivery) => ({
-    ...delivery,
-    alreadyAppliedWetKg: appliedByDeliveryId.get(delivery.id) ?? 0,
-  }));
+  return rawDeliveries.map((delivery) => {
+    const applied = appliedByDeliveryId.get(delivery.id);
+    return {
+      ...delivery,
+      alreadyAppliedWetKg: applied?.totalAppliedKg ?? 0,
+      alreadyAppliedDryKg: applied?.totalAppliedDryKg ?? 0,
+    };
+  });
 }
 
 export interface CreditBatchApplicationOption {
@@ -632,7 +706,10 @@ export async function createApplication(
         gpsLongitude: data.gpsLongitude ?? null,
         applicationMethodType: data.applicationMethodType ?? null,
         evidenceMethod: data.evidenceMethod ?? "visual",
-        gisBoundaryReference: optionalText(data.gisBoundaryReference),
+        gisBoundary:
+          data.gisBoundary === null || data.gisBoundary === undefined
+            ? null
+            : parseGisBoundary(data.gisBoundary),
         soilTemperatureSource: data.soilTemperatureSource ?? null,
         soilTemperatureC: data.soilTemperatureC ?? null,
       })
@@ -736,7 +813,10 @@ export async function updateApplication(
     if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
     if (data.applicationMethodType !== undefined) updateData.applicationMethodType = data.applicationMethodType;
     if (data.evidenceMethod !== undefined) updateData.evidenceMethod = data.evidenceMethod;
-    if (data.gisBoundaryReference !== undefined) updateData.gisBoundaryReference = optionalText(data.gisBoundaryReference);
+    if (data.gisBoundary !== undefined) {
+      updateData.gisBoundary =
+        data.gisBoundary === null ? null : parseGisBoundary(data.gisBoundary);
+    }
     if (data.soilTemperatureSource !== undefined) updateData.soilTemperatureSource = data.soilTemperatureSource;
     if (data.soilTemperatureC !== undefined) updateData.soilTemperatureC = data.soilTemperatureC;
 
@@ -800,6 +880,7 @@ export async function deleteApplication(ctx: OrgContext, id: string): Promise<vo
     // Batch aggregates (applied weight, CO2e stored) are derived on read
     // (issue #285) — no write-back sync is needed after removing a member.
   });
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 /**

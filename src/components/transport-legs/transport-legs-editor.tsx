@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react";
+import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { useToast } from "@/components/ui/toast";
 import { ServerError } from "@/components/forms";
+import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { formatMass } from "@/lib/format-utils";
@@ -20,7 +21,7 @@ import type {
   TransportLegFormData,
 } from "@/schemas/transport-legs";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
-import { hasCompleteTransportEvidence } from "@/lib/certification/transport-evidence";
+import { hasAcceptedTransportEvidence } from "@/lib/certification/transport-evidence";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
 import { deriveTransportLegCertStatuses } from "./transport-leg-cert-status";
@@ -48,6 +49,11 @@ interface TransportLegsEditorProps {
 }
 
 type EditableTransportLeg = TransportLeg | TransportLegFormData;
+type TransportLegDialogState = {
+  open: boolean;
+  leg?: EditableTransportLeg;
+  deferredIndex?: number;
+};
 
 function isSavedTransportLeg(
   leg: EditableTransportLeg,
@@ -58,9 +64,9 @@ function isSavedTransportLeg(
 // Feedstock and biochar legs are auto-derived (supplier distance / delivery
 // aggregation) and only ever rendered read-only; sample → lab stays manual.
 const DEFAULT_TITLES: Record<TransportEntityTypeValue, string> = {
-  feedstock: "Transport: feedstock → processing",
+  feedstock: "Transport: feedstock to processing",
   biochar: "Transport: biochar distribution",
-  sample: "Transport: sample → lab",
+  sample: "Transport: Sample to lab",
 };
 
 function formatMethod(method: string): string {
@@ -71,8 +77,8 @@ function formatMethod(method: string): string {
 /**
  * Transport-leg management for the entity side sheet. Matches the production-run
  * child-entity pattern: a `border-t` section with an uppercase header + add
- * button, a compact table, and an inline (non-modal) add/edit form. Pass
- * `readOnly` for the view-mode summary.
+ * button, a compact table, and a centered add/edit dialog. Pass `readOnly` for
+ * the view-mode summary.
  */
 export function TransportLegsEditor({
   entityType,
@@ -97,14 +103,7 @@ export function TransportLegsEditor({
   const deleteMutation = useDeleteTransportLeg(entityType, entityId);
   const toast = useToast();
 
-  const [inlineForm, setInlineForm] = useState<
-    | { open: false }
-    | {
-        open: true;
-        leg?: EditableTransportLeg;
-        deferredIndex?: number;
-      }
-  >({ open: false });
+  const [dialog, setDialog] = useState<TransportLegDialogState>({ open: false });
   const [deleteTarget, setDeleteTarget] = useState<
     { savedId: string } | { deferredIndex: number } | null
   >(null);
@@ -113,13 +112,17 @@ export function TransportLegsEditor({
 
   const openCreate = () => {
     setFormError(null);
-    setInlineForm({ open: true });
+    setDialog({ open: true });
   };
   const openEdit = (leg: EditableTransportLeg, deferredIndex?: number) => {
     setFormError(null);
-    setInlineForm({ open: true, leg, deferredIndex });
+    setDialog({ open: true, leg, deferredIndex });
   };
-  const closeForm = () => setInlineForm({ open: false });
+  const closeDialog = () => {
+    // Preserve the selected leg while Base UI plays the close animation so the
+    // dialog title and form do not switch from Edit to Add mid-transition.
+    setDialog((current) => ({ ...current, open: false }));
+  };
 
   const handleSubmit = async (data: TransportLegFormData) => {
     if (disabled) return;
@@ -127,32 +130,31 @@ export function TransportLegsEditor({
 
     if (deferred) {
       const nextLegs =
-        inlineForm.open && inlineForm.deferredIndex !== undefined
+        dialog.deferredIndex !== undefined
           ? deferredLegs.map((leg, index) =>
-              index === inlineForm.deferredIndex ? data : leg,
+              index === dialog.deferredIndex ? data : leg,
             )
           : [...deferredLegs, data];
       onDeferredChange?.(nextLegs);
-      closeForm();
+      closeDialog();
       return;
     }
 
     try {
       if (
-        inlineForm.open &&
-        inlineForm.leg &&
-        isSavedTransportLeg(inlineForm.leg)
+        dialog.leg &&
+        isSavedTransportLeg(dialog.leg)
       ) {
-        await updateMutation.mutateAsync({ id: inlineForm.leg.id, ...data });
+        await updateMutation.mutateAsync({ id: dialog.leg.id, ...data });
         toast.success("Transport leg updated");
       } else {
         await createMutation.mutateAsync({ ...data, entityType, entityId });
         toast.success("Transport leg added");
       }
-      closeForm();
+      closeDialog();
     } catch (err) {
       setFormError(
-        err instanceof Error ? err.message : "Failed to save transport leg",
+        err instanceof Error ? err.message : "Transport leg was not saved. Try again.",
       );
     }
   };
@@ -175,13 +177,13 @@ export function TransportLegsEditor({
       setDeleteTarget(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Failed to delete transport leg",
+        err instanceof Error ? err.message : "Transport leg was not deleted. Try again.",
       );
     }
   };
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
-  const showAddButton = !readOnly && !inlineForm.open;
+  const showAddButton = !readOnly;
   const displayedLegs: EditableTransportLeg[] = deferred
     ? deferredLegs
     : (legs ?? []);
@@ -189,6 +191,7 @@ export function TransportLegsEditor({
   const certStatuses = deriveTransportLegCertStatuses(
     deferred ? deferredLegs : legs,
     !deferred,
+    entityType,
   );
 
   return (
@@ -204,7 +207,7 @@ export function TransportLegsEditor({
             variant="default"
             size="small"
             onClick={openCreate}
-            disabled={disabled}
+            disabled={dialog.open || disabled}
           >
             <PlusIcon size={16} weight="bold" />
             Add leg
@@ -215,15 +218,15 @@ export function TransportLegsEditor({
       {!deferred && error && (
         <ServerError
           message={
-            error instanceof Error ? error.message : "Failed to load transport legs"
+            error instanceof Error ? error.message : "The transport legs could not be loaded. Refresh the page and try again."
           }
         />
       )}
 
       {/* Table */}
       {!deferred && isLoading ? (
-        <TableSkeleton columns={readOnly ? 5 : 6} rows={2} />
-      ) : !hasLegs && !inlineForm.open ? (
+        <TableSkeleton columns={readOnly ? 6 : 7} rows={2} />
+      ) : !hasLegs ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
           {emptyMessage ??
             (readOnly
@@ -244,13 +247,16 @@ export function TransportLegsEditor({
                 </th>
                 <th className="py-8 pr-12 font-medium">
                   <span className="flex items-center gap-6">
-                    Provenance
-                    <CertificationFieldTag
-                      status={certStatuses.provenance}
-                      description="Distance source must be marked Document and at least one transport-evidence file uploaded to satisfy this requirement"
-                    />
+                    Distance source
+                    {certStatuses.provenance && (
+                      <CertificationFieldTag
+                        status={certStatuses.provenance.status}
+                        description={`Satisfied when the saved leg records ${certStatuses.provenance.label.toLowerCase()}`}
+                      />
+                    )}
                   </span>
                 </th>
+                <th className="py-8 pr-12 font-medium">Evidence</th>
                 <th className="py-8 pr-12 font-medium">Method</th>
                 <th className="py-8 pr-12 font-medium">
                   <span className="flex items-center gap-6">
@@ -268,38 +274,31 @@ export function TransportLegsEditor({
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 text-[var(--color-text-primary)]">
-                    {(leg.originName?.trim() || "—") +
+                    {(leg.originName?.trim() || "Not recorded") +
                       " → " +
-                      (leg.destinationName?.trim() || "—")}
+                      (leg.destinationName?.trim() || "Not recorded")}
                   </td>
                   <td className="py-8 pr-12">
                     {leg.distanceKm} km
                   </td>
                   <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
-                    <span className="flex items-center gap-6">
-                      {leg.distanceSource
-                        ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
-                        : "—"}
-                      {/* Per-row marker so the operator can tell WHICH leg is
-                          missing evidence when several are listed (the header
-                          tag only aggregates). */}
-                      {isSavedTransportLeg(leg) &&
-                        !deferred &&
-                        !hasCompleteTransportEvidence(
-                          leg.distanceSource,
-                          (leg as { transportEvidenceDocumentCount?: number })
-                            .transportEvidenceDocumentCount,
-                        ) && (
-                          <CertificationFieldTag
-                            status="missing"
-                            description="This leg needs Document provenance and at least one uploaded transport-evidence file"
-                          />
-                        )}
-                    </span>
+                    {leg.distanceSource
+                      ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
+                      : "Not recorded"}
+                  </td>
+                  <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
+                    {isSavedTransportLeg(leg) &&
+                    !deferred &&
+                    hasAcceptedTransportEvidence(
+                      (leg as { transportEvidenceDocumentCount?: number })
+                        .transportEvidenceDocumentCount,
+                    )
+                      ? "Attached"
+                      : "None"}
                   </td>
                   <td className="py-8 pr-12">{formatMethod(leg.transportMethodType)}</td>
                   <td className="py-8 pr-12">
-                    {leg.loadMassKg != null ? formatMass(leg.loadMassKg) : "—"}
+                    {leg.loadMassKg != null ? formatMass(leg.loadMassKg) : "Not recorded"}
                   </td>
                   {!readOnly && (
                     <td className="py-8 text-right">
@@ -312,7 +311,7 @@ export function TransportLegsEditor({
                             openEdit(leg, deferred ? index : undefined)
                           }
                           aria-label="Edit transport leg"
-                          disabled={inlineForm.open || disabled}
+                          disabled={dialog.open || disabled}
                         >
                           <PencilIcon size={16} />
                         </Button>
@@ -328,7 +327,7 @@ export function TransportLegsEditor({
                             )
                           }
                           aria-label="Delete transport leg"
-                          disabled={inlineForm.open || disabled}
+                          disabled={dialog.open || disabled}
                         >
                           <TrashIcon size={16} />
                         </Button>
@@ -342,28 +341,29 @@ export function TransportLegsEditor({
         </div>
       ) : null}
 
-      {/* Inline Add/Edit Form */}
-      {!readOnly && inlineForm.open && (
-        <div className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)] p-24">
-          <h4 className="title-heading-4 mb-16">
-            {inlineForm.leg ? "Edit transport leg" : "Add transport leg"}
-          </h4>
+      {!readOnly && (
+        <QuickAddDialogShell
+          isOpen={dialog.open}
+          onClose={closeDialog}
+          title={dialog.leg ? "Edit transport leg" : "Add transport leg"}
+          width="xl"
+          testId="transport-leg-dialog"
+        >
           <TransportLegForm
             key={
-              inlineForm.leg && isSavedTransportLeg(inlineForm.leg)
-                ? inlineForm.leg.id
-                : inlineForm.deferredIndex !== undefined
-                  ? `deferred-${inlineForm.deferredIndex}`
+              dialog.leg && isSavedTransportLeg(dialog.leg)
+                ? dialog.leg.id
+                : dialog.deferredIndex !== undefined
+                  ? `deferred-${dialog.deferredIndex}`
                   : "create"
             }
-            leg={inlineForm.leg}
+            leg={dialog.leg}
             onSubmit={handleSubmit}
-            onCancel={closeForm}
+            onCancel={closeDialog}
             isSubmitting={isSubmitting || disabled}
             errorMessage={formError ?? undefined}
-            embedded={deferred}
           />
-        </div>
+        </QuickAddDialogShell>
       )}
 
       {/* Delete Confirmation */}

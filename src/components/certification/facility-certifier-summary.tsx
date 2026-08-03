@@ -69,7 +69,7 @@ function SummaryBody({
   if (query.error || !query.data) {
     return (
       <p className="body-small text-[var(--color-signal-red)]" role="alert">
-        Unable to load the registry link.
+        The registry link could not be loaded. Refresh the page and try again.
       </p>
     );
   }
@@ -104,7 +104,7 @@ function SummaryBody({
         </span>
       </Field>
 
-      <Field label="Default removal template">
+      <Field label="Default Removal template">
         {mapping.defaultRemovalTemplateId ? (
           <span className="body-small font-mono text-[var(--color-text-primary)]">
             {mapping.defaultRemovalTemplateId}

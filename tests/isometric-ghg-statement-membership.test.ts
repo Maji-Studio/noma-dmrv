@@ -32,7 +32,7 @@ describe("decideRemovalMembership", () => {
     expect(decision.toLink).toEqual([]);
     expect(decision.linkedRemovalIds).toEqual([]);
     expect(decision.warnings).toHaveLength(1);
-    expect(decision.warnings[0]).toContain("different GHG statement");
+    expect(decision.warnings[0]).toContain("different GHG Statement");
   });
 
   it("treats a removal already linked to this statement as idempotent", () => {
@@ -60,7 +60,7 @@ describe("decideRemovalMembership", () => {
     expect(decision.toLink).toEqual(["local-a"]);
     expect(decision.warnings).toHaveLength(1);
     expect(decision.warnings[0]).toContain("rmv_ghost");
-    expect(decision.warnings[0]).toContain("no local record");
+    expect(decision.warnings[0]).toContain("it is not saved in noma");
   });
 
   it("warns when a ledger row points at a missing removal row", () => {

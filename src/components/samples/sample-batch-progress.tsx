@@ -4,10 +4,10 @@
  * A Sample characterises ONE credit batch (the protocol production batch —
  * ADR 0016, anchored directly since issue #309: the batch's biochar is
  * commingled across runs, so the form selects the batch, never a run). From the
- * chosen batch this panel shows live progress toward the protocol's ≥3
- * distributed-sample minimum (§8.3.1): the existing replicate count, the
- * runs/days they span (the distribution evidence), and the eligibility verdict
- * — the same `DurabilityReadinessSignals` the credit-batch detail uses.
+ * chosen batch this panel shows live progress toward the protocol's ≥3-sample
+ * minimum (§8.3.1): the existing replicate count and the eligibility verdict —
+ * the same `DurabilityReadinessSignals` the credit-batch detail uses. §8.3.1
+ * requires no within-batch run/day distribution, so none is shown.
  */
 "use client";
 
@@ -18,26 +18,80 @@ import type { DurabilityBatchSummary } from "@/lib/certification/durability-batc
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { DurabilityReadinessSignals } from "@/components/certification/durability-readiness";
 
+/**
+ * The sample-form inputs an operator actually types to close each universal
+ * eligibility ratio (§3.3 Table 2) — NOT the ratios themselves. H:Corg is a
+ * read-only derived field, and O:Corg falls back to O% ÷ C_org% when its
+ * override is left blank (`sample-form.tsx`), so naming the ratios sent
+ * operators looking for a field they cannot fill.
+ */
+const H_TO_CORG_INPUT_LABEL = "Hydrogen (%)";
+const O_TO_CORG_INPUT_LABEL = "Oxygen (%)";
+
 interface SampleBatchProgressProps {
   /** The form's currently-selected credit batch. */
   creditBatchId: string | undefined;
 }
 
+/** Replicates carrying BOTH eligibility ratios — the set every gate counts. */
+function isUsableReplicate(
+  replicate: DurabilityBatchSummary["replicates"][number],
+): boolean {
+  return replicate.hToCorg != null && replicate.oToCorg != null;
+}
+
 /**
- * Distinct (run code, day) labels among the batch's pooled samples. Run
- * provenance only exists on legacy pre-re-grain rows — batch-anchored samples
- * label by sampling day alone.
+ * The recorded samples that don't count yet only because an eligibility ratio
+ * is blank — the actionable half of a sub-minimum batch, since filling the
+ * missing value converts them into usable replicates without any new sampling.
  */
-function distinctProvenanceLabels(summary: DurabilityBatchSummary): string[] {
-  const seen = new Map<string, string>();
+function summarizeIncompleteChemistry(summary: DurabilityBatchSummary): {
+  count: number;
+  /** The input(s) to fill, e.g. `"Oxygen (%)"` or `"Hydrogen (%) and Oxygen (%)"`. */
+  label: string;
+} {
+  let count = 0;
+  let anyMissingH = false;
+  let anyMissingO = false;
+
   for (const r of summary.replicates) {
-    const day = r.samplingDay ?? "date unknown";
-    const key = `${r.productionRunId ?? "?"}::${r.samplingDay ?? "?"}`;
-    if (!seen.has(key)) {
-      seen.set(key, r.productionRunCode ? `${r.productionRunCode} · ${day}` : day);
-    }
+    if (isUsableReplicate(r)) continue;
+    count += 1;
+    anyMissingH ||= r.hToCorg == null;
+    anyMissingO ||= r.oToCorg == null;
   }
-  return Array.from(seen.values());
+
+  const missing = [
+    ...(anyMissingH ? [H_TO_CORG_INPUT_LABEL] : []),
+    ...(anyMissingO ? [O_TO_CORG_INPUT_LABEL] : []),
+  ];
+  return { count, label: missing.join(" and ") };
+}
+
+/**
+ * The one-or-two-sentence progress hint. Below the minimum it names the real
+ * gap: recorded-but-incomplete samples are a data-entry fix, not a reason to go
+ * back out and sample more.
+ */
+function progressHint(summary: DurabilityBatchSummary): string {
+  const usable = summary.usableReplicateCount;
+  const minimum = summary.minimumReplicates;
+  const remaining = Math.max(0, minimum - usable);
+
+  if (remaining === 0) {
+    return `This batch already has at least ${minimum} Samples.`;
+  }
+
+  const usableClause = `This batch has ${usable} usable replicate${usable === 1 ? "" : "s"}`;
+  const incomplete = summarizeIncompleteChemistry(summary);
+
+  if (incomplete.count === 0) {
+    return `${usableClause}. Add ${remaining} more to reach the minimum of ${minimum}.`;
+  }
+
+  const stillShort = Math.max(0, remaining - incomplete.count);
+  const thenAdd = stillShort > 0 ? `, then add ${stillShort} more` : "";
+  return `${usableClause}. ${incomplete.count} recorded Sample${incomplete.count === 1 ? " doesn't" : "s don't"} count yet. Enter ${incomplete.label} on ${incomplete.count === 1 ? "it" : "them"}${thenAdd} to reach the minimum of ${minimum}.`;
 }
 
 function Panel({ children }: { children: React.ReactNode }) {
@@ -85,12 +139,6 @@ export function SampleBatchProgress({
     );
   }
 
-  const remaining = Math.max(
-    0,
-    summary.minimumReplicates - summary.usableReplicateCount,
-  );
-  const provenance = distinctProvenanceLabels(summary);
-
   return (
     <Panel>
       <div className="flex flex-wrap items-center justify-between gap-8">
@@ -115,25 +163,8 @@ export function SampleBatchProgress({
       <DurabilityReadinessSignals summary={summary} />
 
       <p className="body-caption text-[var(--color-text-secondary)]">
-        {remaining > 0
-          ? `This batch has ${summary.usableReplicateCount} usable replicate${summary.usableReplicateCount === 1 ? "" : "s"} — add ${remaining} more (across distinct runs/days) to reach the ≥${summary.minimumReplicates} minimum.`
-          : summary.distributionWarning
-            ? `This batch meets ≥${summary.minimumReplicates}, but all replicates cluster on one run/day — §8.3.1 expects them distributed across distinct runs/days.`
-            : `This batch already meets the ≥${summary.minimumReplicates}-sample minimum across distinct runs/days.`}
+        {progressHint(summary)}
       </p>
-
-      {provenance.length > 0 && (
-        <div className="flex flex-wrap items-center gap-6">
-          {provenance.map((label) => (
-            <span
-              key={label}
-              className="inline-flex items-center border border-[var(--color-border-tertiary)] bg-[var(--color-background-white)] px-6 py-2 body-caption text-[var(--color-text-tertiary)]"
-            >
-              {label}
-            </span>
-          ))}
-        </div>
-      )}
     </Panel>
   );
 }

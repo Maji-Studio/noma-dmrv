@@ -1,380 +1,182 @@
-# Template Usage Guide
+# Adding a Feature
 
-This guide shows you how to customize and extend this Next.js template for your own projects.
+Use this checklist when adding an entity or extending a CRUD workflow in
+noma-dmrv. The current feedstock-type feature is the compact reference:
 
-## Getting Started with Customization
+- schema/table: `src/db/schema/feedstock.ts`
+- validation: `src/schemas/feedstock-types.ts`
+- data access: `src/data-access/feedstock-types.ts`
+- server actions: `src/fn/feedstock-types.ts`
+- React Query: `src/hooks/use-feedstock-types.ts`
+- UI: `src/components/feedstock-types/`
+- route: `src/app/(app)/feedstock-types/page.tsx`
+- focused tests: `src/components/feedstock-types/*.test.{ts,tsx}`
 
-### 1. Initial Setup
+Copy its layer boundaries, not its registry-specific behavior.
 
-**Prerequisites**: Docker Desktop installed and running.
+## 1. Define the domain and persistence boundary
 
-1. Install dependencies:
-   ```bash
-   pnpm install
-   ```
+Confirm the term and entity grain in `CONTEXT.md`. Read
+[`docs/organization.md`](docs/organization.md) before choosing paths and
+[`docs/database.md`](docs/database.md) plus
+[`docs/schema-overview.md`](docs/schema-overview.md) before changing schema.
 
-2. Copy environment variables:
-   ```bash
-   cp .env.example .env.local
-   ```
+Every normal domain table is organization-scoped:
 
-3. Configure `.env.local` with your values (see Environment Variables section in README)
+- add `organizationId NOT NULL`, stamped from `OrgContext`, never from client
+  input;
+- add the org-aware uniqueness, indexes, and composite foreign keys required by
+  its parents;
+- use shared numeric families and existing enums/helpers;
+- generate migrations with `pnpm db:generate`, review the SQL, and never edit an
+  already-applied migration.
 
-4. Start development:
-   ```bash
-   pnpm dev
-   ```
+Auth infrastructure and the geo route cache are explicit exceptions. A new
+domain entity is not.
 
-   This automatically:
-   - Starts PostgreSQL via Docker
-   - Creates database schema
-   - Seeds test data (1 admin, 1 user, 1 project, 2 items)
-   - Starts Next.js on port 3100
+## 2. Add Zod schemas
 
-5. Set passwords for seeded users:
-   - Visit http://localhost:3100
-   - Click "Forgot Password"
-   - Enter email (from `ADMIN_EMAIL` or `user@example.com`)
-   - Set password via email link
+Put form and action schemas in `src/schemas/<feature>.ts`. Infer TypeScript
+types from the schemas. The form schema describes UI fields; create/update
+schemas add ids or server-only shape and are parsed again in the server action.
 
-### 2. Rename the Project
+Use React Hook Form with `zodResolver`. Reuse numeric, date-only, GPS, mass, and
+empty-value helpers from `src/schemas/helpers.ts`; never use
+`valueAsNumber`. Read [`docs/forms.md`](docs/forms.md) before implementing the
+form, especially for organization-default hydration, cross-field
+revalidation, dates, and file evidence.
 
-1. Update `package.json`:
-   ```json
-   {
-     "name": "your-project-name",
-     "description": "Your project description"
-   }
-   ```
+## 3. Implement data access first
 
-2. Update `README.md` with your project details
+Data access owns both authorization and database queries. Every normal exported
+function takes `ctx: OrgContext` first:
 
-3. Update environment variables in `.env.local`
-
-### 3. Customize the Design System
-
-The template includes a custom design system in `docs/design-system.md`. To customize:
-
-1. Edit `src/app/globals.css` to change design tokens (colors, spacing, typography)
-2. Update CSS variables for your brand colors
-3. Modify typography classes as needed
-
-## Adding New Features
-
-### Creating a New Database Table
-
-Follow the example of the `items` table:
-
-1. **Create schema file** (`src/db/schema/your-feature.ts`):
-   ```typescript
-   import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-
-   export const yourFeature = pgTable("your_feature", {
-     id: uuid("id").primaryKey().defaultRandom(),
-     // Add your columns here
-     createdAt: timestamp("created_at").notNull().defaultNow(),
-   });
-
-   export type YourFeature = typeof yourFeature.$inferSelect;
-   export type NewYourFeature = typeof yourFeature.$inferInsert;
-   ```
-
-2. **Export from schema index** (`src/db/schema/index.ts`):
-   ```typescript
-   export * from "./your-feature";
-   ```
-
-3. **Generate migration**:
-   ```bash
-   pnpm db:generate
-   pnpm db:push
-   ```
-
-### Implementing CRUD Operations
-
-Follow the layered architecture pattern used in the `items` feature:
-
-#### 1. Data Access Layer (`src/data-access/your-feature.ts`)
-
-```typescript
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { yourFeature } from "@/db/schema";
-import { requireOrgScope, type OrgContext } from "@/data-access/utils";
-
-// `ctx: OrgContext` is always the first parameter. `requireOrgScope` validates
-// the context; the `organizationId` filter is what actually isolates tenants —
-// you need BOTH. A query without the WHERE clause returns every org's rows.
-export async function getYourFeatures(ctx: OrgContext) {
+```ts
+export async function listWidgets(ctx: OrgContext) {
   requireOrgScope(ctx);
-
   return db
     .select()
-    .from(yourFeature)
-    .where(eq(yourFeature.organizationId, ctx.organizationId));
-}
-
-export async function createYourFeature(ctx: OrgContext, data: NewYourFeature) {
-  requireOrgScope(ctx);
-
-  // organizationId is stamped server-side from the session — never accepted
-  // from client input or a Zod payload.
-  const [item] = await db
-    .insert(yourFeature)
-    .values({ ...data, organizationId: ctx.organizationId })
-    .returning();
-
-  return item;
+    .from(widgets)
+    .where(eq(widgets.organizationId, ctx.organizationId));
 }
 ```
 
-#### 2. Server Actions (`src/fn/your-feature.ts`)
+`requireOrgScope(ctx)` validates the context; the explicit
+`organizationId = ctx.organizationId` predicate is what isolates tenants. Add
+that predicate to relevant joins too. Use `assertSameOrg` for referenced ids
+and pass the current transaction as its executor. Use
+`requireOrgFacility` when a facility-owned workflow must be checked, and
+`requireOrgRole` only for a real Owner/Admin policy floor. Facility is a
+workflow boundary inside the Organization security boundary.
 
-```typescript
+Return cross-org ids as absent; do not reveal their existence. Throw
+`SafeError` for intentional operator-facing business rules and
+`ActionConflictError` when the UI should link to a blocking record. Never return
+raw database errors.
+
+## 4. Wrap actions with `withAction()`
+
+New and materially changed actions use `src/fn/with-action.ts`. It resolves
+`OrgContext`, formats `ActionResult<T>`, handles Zod failures/conflicts, logs
+unexpected errors safely, and can opt into per-user rate limiting:
+
+```ts
 "use server";
 
-import { z } from "zod";
-import type { ActionResult } from "@/types/actions";
-import { requireOrgContext } from "@/lib/auth/server";
-import { createYourFeature } from "@/data-access/your-feature";
-
-const createSchema = z.object({
-  // Define your validation schema
-});
-
-export async function createYourFeatureFn(
-  data: z.infer<typeof createSchema>
-): Promise<ActionResult<YourFeature>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const validated = createSchema.parse(data);
-    const item = await createYourFeature(ctx, validated);
-
-    return { success: true, data: item };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to create",
-    };
-  }
-}
-```
-
-#### 3. React Query Hooks (`src/hooks/use-your-feature.ts`)
-
-```typescript
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createYourFeatureFn, getYourFeatures } from "@/fn/your-feature";
-
-export function useYourFeatures() {
-  return useQuery({
-    queryKey: ["your-features"],
-    queryFn: () => getYourFeatures(),
-  });
-}
-
-export function useCreateYourFeature() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: createYourFeatureFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["your-features"] });
-    },
+export async function createWidgetFn(
+  input: unknown,
+): Promise<ActionResult<Widget>> {
+  return withAction(async (ctx) => {
+    const data = createWidgetSchema.parse(input);
+    return createWidget(ctx, data);
   });
 }
 ```
 
-#### 4. Components (`src/components/your-feature/`)
+Do not call `requireOrgContext()` again inside the callback and do not hand-roll
+`try/catch`. Some legacy entity actions still use direct wrappers; migrate the
+action when changing it rather than copying that pattern. Never send raw
+`error.message` to the client.
 
-Create components following the example in `src/components/items/`:
-- `YourFeatureList.tsx` - Main list component
-- `YourFeatureCard.tsx` - Individual item display
-- `YourFeatureForm.tsx` - Create/edit form (see "Creating Forms" below)
-- `index.ts` - Barrel export
+## 5. Add a query-key factory and hooks
 
-#### 5. Routes (`src/app/(app)/your-feature/page.tsx`)
+Keep all keys for the feature in one typed factory and derive detail/list keys
+from its root:
 
-```typescript
-import { YourFeatureList } from "@/components/your-feature";
-
-export default function YourFeaturePage() {
-  return <YourFeatureList />;
-}
+```ts
+export const widgetKeys = {
+  all: ["widgets"] as const,
+  lists: () => [...widgetKeys.all, "list"] as const,
+  list: (facilityId: string) =>
+    [...widgetKeys.lists(), facilityId] as const,
+  details: () => [...widgetKeys.all, "detail"] as const,
+  detail: (id: string) => [...widgetKeys.details(), id] as const,
+};
 ```
 
-### Creating Forms
+Hooks call `fn/` actions, unwrap `ActionResult`, and invalidate every affected
+factory root after mutations. Include `facilityId` and other filters in keys;
+never use an inline query if an existing hook already owns the data. Global
+query defaults live in `src/app/providers.tsx`; override freshness only when
+the feature needs different behavior.
 
-All forms use React Hook Form with Zod validation. Follow this pattern:
+## 6. Build the UI in existing primitives
 
-#### 1. Create Schema (`src/schemas/your-feature.ts`)
+Follow the feature-folder and page-shell conventions in
+[`docs/organization.md`](docs/organization.md) and
+[`docs/design-system.md`](docs/design-system.md). Forms use the shared
+`FormField`, inputs/selects, `FormSection`/`FormSpine` when appropriate, and one
+`FormActions` footer for action errors and CTAs. Use `EmptyState`, side sheets,
+dialogs, entity selects, quick-add, and file upload primitives instead of
+reimplementing them.
 
-```typescript
-import { z } from "zod";
+Facility-scoped forms read the active facility from context; they do not ask
+the operator to select it again. Organization operating defaults must be
+available before RHF mounts and only seed create mode.
 
-// Form schema (client-side validation)
-export const yourFeatureFormSchema = z.object({
-  title: z.string().min(1, "Title is required").max(255),
-  description: z.string().max(1000).optional().or(z.literal("")),
-});
+## 7. Test the production path
 
-// Server action schema (may extend form schema)
-export const createYourFeatureSchema = yourFeatureFormSchema.extend({
-  projectId: z.string().uuid(),
-});
+Add focused coverage proportional to risk:
 
-export type YourFeatureFormData = z.infer<typeof yourFeatureFormSchema>;
+- colocated `src/**/*.test.{ts,tsx}` for pure modules, schemas, hooks,
+  components, and route handlers;
+- root `tests/**/*.test.{ts,tsx}` for cross-module, database, authorization,
+  concurrency, and accounting contracts;
+- `tests/e2e/` for a user-visible workflow that needs browser/database proof.
+
+At minimum, cover Zod boundaries, organization isolation, role/facility gates,
+mutation invalidation or resulting UI state, and conflict/error behavior.
+Follow [`docs/testing.md`](docs/testing.md) for database setup, fixtures, and
+E2E naming/cleanup.
+
+Run targeted tests first, then the relevant broader gates:
+
+```bash
+pnpm test <path-or-pattern>
+pnpm lint
+pnpm typecheck
 ```
 
-#### 2. Create Form Component
+Run `pnpm db:generate`/migration verification for schema work and
+`pnpm test:e2e` when the browser flow changed.
 
-```typescript
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { yourFeatureFormSchema, type YourFeatureFormData } from "@/schemas/your-feature";
-import { FormField, FormInput, FormTextarea, ServerError } from "@/components/forms";
+## 8. Route documentation to its owner
 
-export function YourFeatureForm({ onSubmit }) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<YourFeatureFormData>({
-    resolver: zodResolver(yourFeatureFormSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-    },
-  });
+Update only evergreen sources:
 
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-m">
-      <FormField id="title" label="Title" error={errors.title?.message}>
-        <FormInput
-          id="title"
-          type="text"
-          placeholder="Enter title"
-          disabled={isSubmitting}
-          error={!!errors.title}
-          {...register("title")}
-        />
-      </FormField>
+- domain terms and entity grain → `CONTEXT.md`
+- layers, actions, query keys, routing → `docs/architecture.md`
+- guards and active organization → `docs/auth.md`
+- schema/query invariants → `docs/database.md` and
+  `docs/schema-overview.md`
+- form behavior → `docs/forms.md`
+- tests → `docs/testing.md`
+- object storage/evidence → `docs/storage.md`
+- durable decisions → `docs/adr/`
+- deferred decisions → `docs/open-questions.md`
+- dated implementation notes → `docs/archive/` (or a scoped plan under
+  `docs/plans/`)
 
-      <FormField
-        id="description"
-        label="Description (optional)"
-        error={errors.description?.message}
-      >
-        <FormTextarea
-          id="description"
-          placeholder="Enter description"
-          disabled={isSubmitting}
-          error={!!errors.description}
-          {...register("description")}
-        />
-      </FormField>
-
-      <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? "Saving..." : "Save"}
-      </button>
-    </form>
-  );
-}
-```
-
-**Key Points:**
-- Schemas provide client-side validation before server calls
-- Form components (`FormField`, `FormInput`, `FormTextarea`) handle design system styling
-- `isSubmitting` comes from `formState` automatically
-- Errors display automatically with field-level messages
-- See `docs/forms.md` for complete guide and advanced patterns
-
-## Common Patterns
-
-### Authentication Guards
-
-Guards split by layer — see [docs/auth.md](docs/auth.md), which owns this vocabulary.
-
-```typescript
-// Layouts and pages (redirecting guards):
-import { requireAuth } from "@/lib/auth/server";
-await requireAuth();
-
-// Data-access (org-scoped, throwing):
-import { requireOrgScope, requireOrgFacility, assertSameOrg } from "@/data-access/utils";
-
-requireOrgScope(ctx);                       // validate the OrgContext
-await requireOrgFacility(ctx, facilityId);  // facility belongs to this org
-await assertSameOrg(ctx, table, id, tx);    // cross-entity ref; pass `tx` inside a transaction
-```
-
-### Server Actions Pattern
-
-All server actions follow this pattern:
-
-1. Mark with `"use server"` directive
-2. Validate input with Zod
-3. Check authentication
-4. Call data-access layer
-5. Return `ActionResult<T>`
-
-### React Query Keys
-
-Use consistent query key structure:
-
-```typescript
-["resource-name", ...specifics]
-["items", projectId]
-["item", itemId]
-```
-
-## Removing Example Features
-
-To remove the example `items` feature:
-
-1. Delete files:
-   ```bash
-   rm -rf src/components/items
-   rm -rf src/data-access/items.ts
-   rm -rf src/fn/items.ts
-   rm -rf src/hooks/use-items.ts
-   rm -rf src/db/schema/items.ts
-   rm -rf src/app/(app)/[projectId]/items
-   rm -rf src/app/(app)/[projectId]/dashboard
-   ```
-
-2. Remove from schema index:
-   ```typescript
-   // Remove this line from src/db/schema/index.ts
-   export * from "./items";
-   ```
-
-3. Generate new migration:
-   ```bash
-   pnpm db:generate
-   ```
-
-## Best Practices
-
-1. **Never skip authentication checks** in data-access layer
-2. **Always validate input** with Zod in server actions
-3. **Use ActionResult type** for consistent error handling
-4. **Follow the layered architecture** - don't skip layers
-5. **Invalidate queries** after mutations for UI consistency
-6. **Use design system tokens** instead of hardcoded values
-7. **Keep files under 1000 lines** - split large files
-
-## Next Steps
-
-1. Review the existing `items` feature as a reference
-2. Read `docs/architecture.md` for detailed architecture patterns
-3. Check `.claude/CLAUDE.md` for AI-assisted development guidelines
-4. Explore `docs/design-system.md` for UI customization
-
-## Getting Help
-
-- Check existing code in `src/components/items/` for examples
-- Review server actions in `src/fn/items.ts` for patterns
-- Look at data-access layer in `src/data-access/items.ts` for auth guards
-- Consult the design system docs for styling guidance
+Update the owning doc in the same change when the feature changes a standard.
+Do not duplicate a rule into several guides unless each surface needs a concise
+cross-reference.

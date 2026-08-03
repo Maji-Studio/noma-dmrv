@@ -35,6 +35,11 @@ export {
   ProductionRunDependencyError,
 } from "./mutations";
 
+export {
+  assertProductionRunTimesNotFuture,
+  type ProductionRunMutationOptions,
+} from "./future-time";
+
 export { ProductionRunOverlapError } from "./overlap";
 
 export { productionRunDateExpr } from "./date-expr";

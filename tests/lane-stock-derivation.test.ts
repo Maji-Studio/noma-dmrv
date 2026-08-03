@@ -22,7 +22,7 @@ const FEEDSTOCK_INTAKE_KG = 120;
 const FEEDSTOCK_CONSUMED_KG = 50;
 const FEEDSTOCK_MOVEMENT_KG = -97;
 const BIOCHAR_PRODUCED_KG = 120;
-const BIOCHAR_ALLOCATED_KG = 25;
+const BIOCHAR_ALLOCATED_KG = 35;
 const BIOCHAR_MOVEMENT_KG = -3;
 const PRODUCT_MOVEMENT_KG = 7;
 
@@ -291,7 +291,7 @@ describe("shared lane-stock derivation", () => {
       biocharProducedKg: BIOCHAR_PRODUCED_KG,
       biocharAllocatedKg: BIOCHAR_ALLOCATED_KG,
       biocharMovementDeltaKg: BIOCHAR_MOVEMENT_KG,
-      biocharStockKg: 92,
+      biocharStockKg: 82,
     });
     expect(product?.productMovementDeltaKg).toBe(PRODUCT_MOVEMENT_KG);
   });
@@ -321,10 +321,10 @@ describe("shared lane-stock derivation", () => {
     expect(feedstock.feedstockInventory.batchCount).toBe(1);
     expect(feedstock.feedstockInventory.pendingDryMassKg).toBe(900);
     expect(feedstock.feedstockInventory.estimatedWetMassKg).toBeCloseTo(-33.75);
-    expect(biochar.biocharInventory.currentMassKg).toBe(92);
-    expect(biochar.biocharInventory.allocatedToProductsKg).toBe(25);
+    expect(biochar.biocharInventory.currentMassKg).toBe(82);
+    expect(biochar.biocharInventory.allocatedToProductsKg).toBe(35);
     expect(product.productInventory.currentMassKg).toBe(42);
-    expect(product.productInventory.biocharEquivalentKg).toBe(25);
+    expect(product.productInventory.biocharEquivalentKg).toBe(35);
   });
 
   it("reads movement overlays through the supplied transaction", async () => {
@@ -347,6 +347,77 @@ describe("shared lane-stock derivation", () => {
       expect(stock.feedstockStockDryKg).toBe(-16);
 
       await tx.delete(binMovements).where(eq(binMovements.id, movement.id));
+    });
+  });
+
+  it("replays wet-aware ingredient draws after the latest feedstock stock-take", async () => {
+    const stockTakeAt = new Date(Date.now() + 60_000);
+    const ingredientSnapshotAt = new Date(stockTakeAt.getTime() + 60_000);
+    const basislessLossAt = new Date(ingredientSnapshotAt.getTime() + 60_000);
+
+    await db.transaction(async (tx) => {
+      const [stockTake] = await tx
+        .insert(binMovements)
+        .values({
+          organizationId: TEST_ORG_ID,
+          storageLocationId: storageLocationIds[0],
+          lane: "feedstock",
+          movementType: "adjustment",
+          massDeltaKg: 0,
+          countedMassKg: 64,
+          countedWetMassKg: 80,
+          moistureRatioUsed: 0.2,
+          reason: "Authoritative wet-basis reset",
+          createdAt: stockTakeAt,
+        })
+        .returning({ id: binMovements.id });
+      const [ingredientProduct] = await tx
+        .insert(biocharProducts)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `BP-LANE-REPLAY-${tag}`,
+          facilityId,
+          formulationId,
+          massKg: 10,
+          storageLocationId: storageLocationIds[2],
+          composition: {
+            ingredients: [
+              {
+                storageLocationId: storageLocationIds[0],
+                massKg: 10,
+                massDryKg: 8,
+              },
+            ],
+          },
+          createdAt: ingredientSnapshotAt,
+        })
+        .returning({ id: biocharProducts.id });
+
+      const [afterIngredientDraw] = await deriveLaneStock(ctx, tx, {
+        storageLocationIds: [storageLocationIds[0]],
+      });
+      expect(afterIngredientDraw.feedstockStockWetKg).toBe(70);
+
+      const [loss] = await tx
+        .insert(binMovements)
+        .values({
+          organizationId: TEST_ORG_ID,
+          storageLocationId: storageLocationIds[0],
+          lane: "feedstock",
+          movementType: "loss",
+          massDeltaKg: -1,
+          reason: "Loss without a wet-mass basis",
+          createdAt: basislessLossAt,
+        })
+        .returning({ id: binMovements.id });
+
+      const [afterBasislessLoss] = await deriveLaneStock(ctx, tx, {
+        storageLocationIds: [storageLocationIds[0]],
+      });
+      expect(afterBasislessLoss.feedstockStockWetKg).toBeNull();
+
+      await tx.delete(binMovements).where(inArray(binMovements.id, [stockTake.id, loss.id]));
+      await tx.delete(biocharProducts).where(eq(biocharProducts.id, ingredientProduct.id));
     });
   });
 });

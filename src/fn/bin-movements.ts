@@ -27,7 +27,10 @@ import {
 } from "@/schemas/bin-movements";
 import type { ActionResult } from "@/types/actions";
 import { StockOverdrawError } from "@/data-access/bin-stock-guards";
-import { toLoggedActionError } from "./action-errors";
+import {
+  formatZodActionError,
+  toLoggedActionError,
+} from "./action-errors";
 
 export type RecordLossActionResult =
   | { success: true; data: BinMovement }
@@ -97,7 +100,7 @@ export async function recordStockTakeFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     if (error instanceof StockTakeIncreaseError) {
@@ -140,7 +143,7 @@ export async function recordLossFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodActionError(error),
       };
     }
     if (error instanceof StockOverdrawError) {

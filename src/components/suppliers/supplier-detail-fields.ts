@@ -19,7 +19,7 @@ export function buildSupplierFallbackDistanceField(
 ): DetailPanelField {
   if (!locationsLoaded) {
     return {
-      label: "Distance to Facility",
+      label: "Distance to facility",
       ...certificationDetailField("supplier", "distanceToFacilityKm"),
       certifyStatus: "neutral",
       value: null,
@@ -31,7 +31,7 @@ export function buildSupplierFallbackDistanceField(
     positiveOrNull(legacySupplierDistanceKm);
 
   return {
-    label: "Distance to Facility",
+    label: "Distance to facility",
     ...certificationDetailField("supplier", "distanceToFacilityKm"),
     certifyStatus: resolveCertFieldStatus(
       true,

@@ -27,7 +27,7 @@ vi.mock("@/hooks/use-file-upload", () => ({
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
 }));
-vi.mock("@phosphor-icons/react", () => ({
+vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   MapPinIcon: () => <span />,
   PlusIcon: () => <span />,
   LeafIcon: () => <span />,

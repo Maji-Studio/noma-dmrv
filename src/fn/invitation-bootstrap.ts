@@ -2,7 +2,10 @@
 
 import { cookies, headers } from "next/headers";
 import { z } from "zod";
-import { logActionError } from "@/fn/action-errors";
+import {
+  formatZodActionError,
+  logActionError,
+} from "@/fn/action-errors";
 import {
   createInvitedAccount,
   getInvitationBootstrapState as readInvitationBootstrapState,
@@ -30,7 +33,7 @@ async function toResult<T>(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: error.issues.map((issue) => issue.message).join(", "),
+        error: formatZodActionError(error),
       };
     }
     if (!(error instanceof SafeError)) {
@@ -102,7 +105,9 @@ export async function bootstrapInvitationAccountAction(
     });
     const organizationId = accepted?.invitation?.organizationId;
     if (!organizationId || organizationId !== account.organizationId) {
-      throw new SafeError("Invitation could not be accepted.");
+      throw new SafeError(
+        "The invitation was not accepted. Check that it is still valid and try again.",
+      );
     }
     await auth.api.setActiveOrganization({
       body: { organizationId },

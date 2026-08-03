@@ -3,9 +3,10 @@
  * Reusable application form with React Hook Form integration
  *
  * Form sections:
- * 1. Application Details — applicationDate, delivery, biocharAppliedTons + auto-calculated dry mass card
- * 2. Field Details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
- * 3. Soil Temperature — soilTemperatureSource (enum toggle), soilTemperatureC
+ * 1. Application details — applicationDate, delivery, biocharAppliedTons + auto-calculated dry mass card
+ * 2. Field details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
+ * 3. Evidence: evidenceMethod and evidence panel
+ * 4. Soil temperature — soilTemperatureSource (enum toggle), soilTemperatureC
  */
 "use client";
 
@@ -14,18 +15,18 @@ import { formatLocalDate } from "@/lib/date-utils";
 import { formatDate } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, CameraIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormSelect, FormSection, FormSpine, PositionPicker, FormActions, makeCertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
+import { ResolvedErrorRevalidator } from "@/components/forms";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import {
   applicationFormSchema,
-  applicationEvidenceMethods,
   applicationMethods,
   soilTemperatureSources,
-  formatApplicationEvidenceMethod,
   formatApplicationMethod,
   formatSoilTemperatureSource,
   type ApplicationFormData,
@@ -35,19 +36,29 @@ import {
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
+import {
+  FieldPositionField,
+  resetFieldPosition,
+} from "./field-position-field";
+import type { FieldPositionMode } from "./field-position-field";
 import {
   applicationKgToTons,
   applicationTonsToKg,
   calculateDryMass,
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
-  formatKg,
   resolveApplicationPositionDefault,
   resolveApplicationSoilTemperatureDefault,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
+import {
+  deliveryStockOverdrawMessage,
+  formatStockLimitKg,
+  isStockOverdraw,
+} from "@/lib/stock-overdraw";
 
 // ============================================
 // Constants for select options
@@ -68,108 +79,46 @@ const soilTemperatureSourceOptions: readonly { value: string; label: string }[] 
   }),
 );
 
-const evidenceMethodDescriptions: Record<ApplicationEvidenceMethod, string> = {
-  visual: "Geotagged photos for all three stages — stockpile, spreading, incorporation",
-  boundary: "GIS boundary map + dated logbook quantities (weighbridge, inventory, or affidavit)",
-};
-
 // ============================================
 // Dry Mass Calculation Card
 // ============================================
 
-function DryMassCard({
+/**
+ * The applied wet mass split into dry matter and water. Unlike the other
+ * mass/moisture surfaces the operator does not type the moisture here — it
+ * comes from the chosen delivery — so the panel's job is to explain where the
+ * dry figure came from.
+ *
+ * Without a delivery moisture there is no split to draw, and the unresolved
+ * state is already carried by the "Biochar applied, dry (kg)" input this form
+ * swaps in — the control the operator has to act on. The panel stays silent
+ * rather than restating that input's own helper text beside it.
+ */
+function AppliedMassSplit({
   appliedKg,
   moisturePercent,
 }: {
   appliedKg: number | null | undefined;
   moisturePercent: number | null | undefined;
 }) {
-  const dryKg = calculateDryMass(appliedKg, moisturePercent);
-  const hasMoisture = moisturePercent != null;
-  const hasApplied = appliedKg != null && appliedKg > 0;
-  const moistureFraction = moisturePercent != null ? moisturePercent / 100 : null;
-  const moistureKg =
-    appliedKg != null && moistureFraction != null
-      ? appliedKg * moistureFraction
-      : null;
+  if (moisturePercent == null) return null;
 
-  if (!hasMoisture && !hasApplied) return null;
+  const hasApplied = appliedKg != null && appliedKg > 0;
 
   return (
-    <div className="col-span-full mt-8">
-      {!hasMoisture ? (
-        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
-          <span className="body-small text-[var(--color-text-tertiary)] leading-relaxed">
-            No moisture content on delivery — enter dry mass manually or update the delivery record.
-          </span>
-        </div>
-      ) : !hasApplied ? (
-        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
-          <span className="body-small text-[var(--color-text-tertiary)] leading-relaxed">
-            Enter wet mass applied to calculate dry mass.
-          </span>
-        </div>
+    <div className="col-span-full border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
+      {!hasApplied ? (
+        <p className="body-small text-[var(--color-text-tertiary)]">
+          Enter the wet mass applied to see the dry mass this delivery&rsquo;s moisture implies.
+        </p>
       ) : (
-        <div className="bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)]">
-          {/* Header */}
-          <div className="px-16 py-8 border-b border-[var(--color-border-tertiary)]">
-            <span className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-              Dry Mass Calculation
-            </span>
-          </div>
-
-          {/* Visual breakdown */}
-          <div className="px-16 py-12">
-            <div className="flex items-center gap-8">
-              {/* Wet mass */}
-              <div className="flex flex-col items-center gap-2 min-w-0">
-                <span className="font-mono text-[var(--text-s)] font-[var(--font-weight-bold)] text-[var(--color-text-primary)]">
-                  {formatKg(appliedKg)}
-                </span>
-                <span className="body-caption text-[var(--color-text-tertiary)]">
-                  wet mass
-                </span>
-              </div>
-
-              {/* Minus sign */}
-              <span className="font-mono text-[var(--text-s)] text-[var(--color-text-tertiary)] shrink-0 pb-16">
-                &minus;
-              </span>
-
-              {/* Moisture removed */}
-              <div className="flex flex-col items-center gap-2 min-w-0">
-                <span className="font-mono text-[var(--text-s)] text-[var(--color-text-tertiary)]">
-                  {formatKg(moistureKg)}
-                </span>
-                <span className="body-caption text-[var(--color-text-tertiary)]">
-                  moisture ({moisturePercent?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
-                </span>
-              </div>
-
-              {/* Equals sign */}
-              <span className="font-mono text-[var(--text-s)] text-[var(--color-text-tertiary)] shrink-0 pb-16">
-                =
-              </span>
-
-              {/* Dry mass result */}
-              <div className="flex flex-col items-center gap-2 min-w-0 px-12 py-4 bg-[var(--clr-purple-10)] border-l-2 border-[var(--clr-purple)]">
-                <span className="font-mono text-[var(--text-l)] font-bold text-[var(--color-text-primary)]" aria-live="polite" aria-atomic="true">
-                  {formatKg(dryKg)}
-                </span>
-                <span className="body-caption font-medium text-[var(--clr-purple)]">
-                  dry mass
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Source note */}
-          <div className="px-16 py-6 border-t border-[var(--color-border-tertiary)]">
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              Moisture % from delivery record
-            </span>
-          </div>
-        </div>
+        <MoistureSplit
+          wetMassKg={appliedKg}
+          moisturePercent={moisturePercent}
+          wetLabel="Wet biochar product"
+          dryLabel="Dry biochar"
+          note="Moisture from the delivery record."
+        />
       )}
     </div>
   );
@@ -220,6 +169,11 @@ export function ApplicationForm({
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
   // removals derive durability from petrographic reflectance + TGA.
   const hideSoilTemperature = durabilityOption === "1000_year";
+  const initialDelivery = application
+    ? deliveries.find((delivery) => delivery.id === application.deliveryId)
+    : undefined;
+  const initialDeliveryHasMoisture =
+    initialDelivery?.moistureContentPercent != null;
 
   const defaultValues = {
     applicationDate: application?.applicationDate
@@ -227,15 +181,26 @@ export function ApplicationForm({
       : formatLocalDate(new Date()),
     deliveryId: application?.deliveryId ?? "",
     biocharAppliedTons: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
-    biocharAppliedDryTons: applicationTonsToKg(application?.biocharAppliedDryTons) ?? undefined,
+    // A delivery moisture owns the dry-mass calculation. Do not seed the
+    // hidden manual field with the previously derived value: lowering wet
+    // mass on edit would otherwise fail the client dry <= wet refinement on
+    // a value the operator cannot see or change.
+    biocharAppliedDryTons: initialDeliveryHasMoisture
+      ? undefined
+      : applicationTonsToKg(application?.biocharAppliedDryTons) ?? undefined,
     fieldSizeHa: application?.fieldSizeHa ?? undefined,
     fieldIdentifier: application?.fieldIdentifier ?? "",
     cropType: application?.cropType ?? "",
     gpsLatitude: application?.gpsLatitude ?? undefined,
     gpsLongitude: application?.gpsLongitude ?? undefined,
     applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
-    evidenceMethod: (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ?? "visual",
-    gisBoundaryReference: application?.gisBoundaryReference ?? "",
+    // The visual path is still UI-locked ("Available later"), so a new
+    // application always starts on the GIS reference path. The organization
+    // default evidence method stays inert here until visual is selectable.
+    evidenceMethod:
+      (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ??
+      "boundary",
+    gisBoundary: application?.gisBoundary ?? null,
     soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
     soilTemperatureC: application?.soilTemperatureC ?? undefined,
   };
@@ -244,8 +209,10 @@ export function ApplicationForm({
     register,
     handleSubmit,
     control,
+    trigger,
     setError,
     setValue,
+    resetField,
     getFieldState,
     formState: { errors },
   } = useForm<z.input<typeof applicationFormSchema>, unknown, ApplicationFormData>({
@@ -264,6 +231,7 @@ export function ApplicationForm({
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
+  const gisBoundary = useWatch({ control, name: "gisBoundary" });
 
   // Only delivered deliveries accept applications (issue #284) — undelivered
   // ones stay visible but disabled so operators see why they can't pick them.
@@ -276,6 +244,32 @@ export function ApplicationForm({
     disabled: d.status !== "delivered",
   }));
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
+  const derivedPosition = selectedDelivery
+    ? resolveApplicationPositionDefault({ delivery: selectedDelivery })
+    : null;
+
+  // The saved record's own delivery, not the currently selected one: the mode
+  // a stored application opens in must not flip just because the operator
+  // picked a different delivery, and it stays unresolved (so it defaults to
+  // derive) until the deliveries query settles rather than latching to manual.
+  const savedDelivery = application
+    ? deliveries.find((delivery) => delivery.id === application.deliveryId)
+    : undefined;
+  const savedDerivedPosition = savedDelivery
+    ? resolveApplicationPositionDefault({ delivery: savedDelivery })
+    : null;
+  const fieldPositionDefaultMode: FieldPositionMode =
+    application &&
+    savedDelivery &&
+    (application.gpsLatitude !== savedDerivedPosition?.gpsLatitude ||
+      application.gpsLongitude !== savedDerivedPosition?.gpsLongitude)
+      ? "manual"
+      : "derive";
+  // Null until the operator picks a mode, so the resolved mode keeps tracking
+  // the record while they have expressed no preference.
+  const [pickedFieldPositionMode, setPickedFieldPositionMode] =
+    useState<FieldPositionMode | null>(null);
+  const fieldPositionMode = pickedFieldPositionMode ?? fieldPositionDefaultMode;
 
   // Prefill soil temperature from the delivery's customer-location /
   // facility default, but only while the operator hasn't touched the
@@ -306,34 +300,41 @@ export function ApplicationForm({
     });
   }, [getFieldState, isEditMode, selectedDelivery, setValue, hideSoilTemperature]);
 
-  // Prefill the field position from the delivery's destination customer
-  // location, but only while the operator hasn't touched it (pin drag and
-  // address search set the fields dirty; prefills don't). While untouched,
-  // the position always mirrors the selected delivery — including clearing
-  // a stale prefill when the new destination has no GPS.
+  // In derive mode the position always mirrors the selected delivery's
+  // destination — on an edit too, so changing the delivery cannot leave the
+  // previous coordinates in form state behind a summary showing the new ones.
+  // It also clears a stale position when the new destination has no GPS.
+  // Manual mode owns the fields outright and is never overwritten here.
+  const derivedLatitude = derivedPosition?.gpsLatitude;
+  const derivedLongitude = derivedPosition?.gpsLongitude;
   useEffect(() => {
-    if (isEditMode || !selectedDelivery) return;
-    if (
-      getFieldState("gpsLatitude").isDirty ||
-      getFieldState("gpsLongitude").isDirty
-    ) {
-      return;
-    }
+    if (fieldPositionMode !== "derive" || !selectedDelivery) return;
 
-    const positionDefault = resolveApplicationPositionDefault({
-      delivery: selectedDelivery,
-    });
-    setValue("gpsLatitude", positionDefault?.gpsLatitude, {
+    setValue("gpsLatitude", derivedLatitude, {
       shouldDirty: false,
       shouldValidate: true,
     });
-    setValue("gpsLongitude", positionDefault?.gpsLongitude, {
+    setValue("gpsLongitude", derivedLongitude, {
       shouldDirty: false,
       shouldValidate: true,
     });
-  }, [getFieldState, isEditMode, selectedDelivery, setValue]);
+  }, [
+    derivedLatitude,
+    derivedLongitude,
+    fieldPositionMode,
+    selectedDelivery,
+    setValue,
+  ]);
 
   const moisturePercent = selectedDelivery?.moistureContentPercent ?? null;
+  useEffect(() => {
+    if (moisturePercent == null) return;
+
+    setValue("biocharAppliedDryTons", undefined, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+  }, [moisturePercent, setValue]);
   const appliedKgNum = typeof watchedAppliedKg === "string" ? parseFloat(watchedAppliedKg) : watchedAppliedKg;
   const appliedKgValid = appliedKgNum != null && !isNaN(appliedKgNum) && appliedKgNum > 0 ? appliedKgNum : null;
 
@@ -343,8 +344,29 @@ export function ApplicationForm({
   const isSameDelivery = isEditMode && application?.deliveryId === selectedDeliveryId;
   const currentApplicationKg = isSameDelivery ? (applicationTonsToKg(application?.biocharAppliedTons) ?? 0) : 0;
   const availableKg = deliveryCapacityKg !== null ? deliveryCapacityKg - alreadyApplied + currentApplicationKg : null;
+  const applicationStockError =
+    availableKg !== null &&
+    appliedKgValid !== null &&
+    isStockOverdraw(appliedKgValid, availableKg)
+      ? `Only ${formatStockLimitKg(availableKg)} remains in this delivery. Reduce the applied mass.`
+      : undefined;
+  const applicationMassFingerprint = [
+    selectedDeliveryId,
+    watchedAppliedKg,
+  ].join(":");
+  const routedServerError = useInlineStockServerError(
+    errorMessage,
+    applicationMassFingerprint,
+    (message) => message === deliveryStockOverdrawMessage(),
+  );
+  const biocharAppliedError =
+    errors.biocharAppliedTons?.message ??
+    applicationStockError ??
+    routedServerError.inlineError;
 
   const handleFormSubmit = handleSubmit(async (data) => {
+    if (applicationStockError) return;
+
     // Custody ordering (issue #284): the server rejects this too — but a
     // legacy application can still reference an undelivered delivery (the
     // option is disabled yet survives edit-mode defaults), so surface a
@@ -353,7 +375,7 @@ export function ApplicationForm({
       setError("deliveryId", {
         type: "manual",
         message:
-          "This delivery has not been delivered yet — mark it as delivered before recording an application",
+          "This delivery is not marked as delivered. Mark it as delivered before recording an application.",
       });
       return;
     }
@@ -369,14 +391,6 @@ export function ApplicationForm({
       setError("applicationDate", {
         type: "manual",
         message: `Application date cannot be before the delivery date (${formatDate(selectedDelivery.deliveryDate)})`,
-      });
-      return;
-    }
-
-    if (availableKg !== null && data.biocharAppliedTons > availableKg) {
-      setError("biocharAppliedTons", {
-        type: "manual",
-        message: `Cannot exceed available: ${formatKg(availableKg)} remaining from this delivery`,
       });
       return;
     }
@@ -404,22 +418,22 @@ export function ApplicationForm({
       ...data,
       biocharAppliedTons,
       biocharAppliedDryTons,
-      gisBoundaryReference:
-        data.evidenceMethod === "boundary" ? data.gisBoundaryReference : "",
+      gisBoundary: data.evidenceMethod === "boundary" ? data.gisBoundary : null,
     });
   });
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSpine control={control}>
       {/* === Section 1: Application Details === */}
       <FormSection
-        title="Application Details"
+        title="Application details"
         icon={<PackageIcon size={14} weight="bold" />}
         fields={["applicationDate", "deliveryId", "biocharAppliedTons", "biocharAppliedDryTons"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="applicationDate" label="Application Date" error={errors.applicationDate?.message} required>
+          <FormField id="applicationDate" label="Application date" error={errors.applicationDate?.message} required>
             <FormInput
               id="applicationDate"
               type="date"
@@ -456,15 +470,16 @@ export function ApplicationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="biocharAppliedTons"
-            label="Biochar Applied, Wet (kg)"
-            error={errors.biocharAppliedTons?.message}
+            label="Biochar applied, wet (kg)"
+            error={biocharAppliedError}
             required
             certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
             certifyStatus={certStatus("biocharAppliedTons")}
+            hint="As-received mass at delivery, water included."
             helperText={
               availableKg !== null
-                ? `${formatKg(availableKg)} available from this delivery`
-                : "As-received mass at delivery, before moisture adjustment"
+                ? `${formatStockLimitKg(availableKg)} available from this delivery`
+                : undefined
             }
           >
             <FormInput
@@ -473,7 +488,7 @@ export function ApplicationForm({
               step="any"
               placeholder="e.g., 5000"
               disabled={isSubmitting}
-              error={!!errors.biocharAppliedTons}
+              error={!!biocharAppliedError}
               {...register("biocharAppliedTons", {
                 setValueAs: numericValue,
               })}
@@ -484,9 +499,9 @@ export function ApplicationForm({
           {moisturePercent == null && selectedDelivery && (
             <FormField
               id="biocharAppliedDryTons"
-              label="Biochar Applied Dry (kg)"
+              label="Biochar applied, dry (kg)"
               error={errors.biocharAppliedDryTons?.message}
-              helperText="No moisture % on delivery — enter dry mass manually"
+              helperText="Moisture is not recorded for this delivery. Enter the dry mass."
               certifyRequired={isApplicationCertifyField("biocharAppliedDryTons")}
               certifyStatus={certStatus("biocharAppliedDryTons")}
             >
@@ -504,7 +519,7 @@ export function ApplicationForm({
             </FormField>
           )}
 
-          <DryMassCard
+          <AppliedMassSplit
             appliedKg={appliedKgValid}
             moisturePercent={moisturePercent}
           />
@@ -513,12 +528,12 @@ export function ApplicationForm({
 
       {/* === Section 2: Field Details === */}
       <FormSection
-        title="Field Details"
+        title="Field details"
         icon={<MapPinIcon size={14} weight="bold" />}
         fields={["fieldSizeHa", "fieldIdentifier", "cropType", "applicationMethodType", "gpsLatitude", "gpsLongitude"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="fieldSizeHa" label="Field Size (Ha)" error={errors.fieldSizeHa?.message}>
+          <FormField id="fieldSizeHa" label="Field size (ha)" error={errors.fieldSizeHa?.message}>
             <FormInput
               id="fieldSizeHa"
               type="number"
@@ -534,7 +549,7 @@ export function ApplicationForm({
 
           <FormField
             id="fieldIdentifier"
-            label="Field Identifier"
+            label="Field identifier"
             error={errors.fieldIdentifier?.message}
             helperText="Field name or parcel ID"
           >
@@ -550,7 +565,7 @@ export function ApplicationForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="cropType" label="Crop Type" error={errors.cropType?.message}>
+          <FormField id="cropType" label="Crop type" error={errors.cropType?.message}>
             <FormInput
               id="cropType"
               type="text"
@@ -563,7 +578,7 @@ export function ApplicationForm({
 
           <FormField
             id="applicationMethodType"
-            label="Application Method"
+            label="Application method"
             error={errors.applicationMethodType?.message}
           >
             <FormSelect
@@ -577,16 +592,18 @@ export function ApplicationForm({
           </FormField>
         </div>
 
-        <PositionPicker
-          idPrefix="gps"
-          label="Field position"
-          accent="pink"
+        <FieldPositionField
+          derived={derivedPosition}
+          hasDelivery={!!selectedDelivery}
           latitude={gpsLatitude ?? null}
           longitude={gpsLongitude ?? null}
+          mode={fieldPositionMode}
+          onModeChange={setPickedFieldPositionMode}
           onPositionChange={({ lat, lng }) => {
             setValue("gpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
             setValue("gpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
           }}
+          onDerive={() => resetFieldPosition(resetField, derivedPosition)}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
           disabled={isSubmitting}
@@ -595,71 +612,32 @@ export function ApplicationForm({
       </FormSection>
 
       {/* === Section 3: Evidence === */}
+      {/* Named "Evidence", not "Evidence method": the section carries the
+          declared method AND what proves it (GIS reference, uploaded files). */}
       <FormSection
-        title="Evidence Method"
+        title="Evidence"
         icon={<CameraIcon size={14} weight="bold" />}
-        hint="Isometric requires one of two evidence paths per application: geotagged stage photos, or a GIS boundary map with logbook quantities (Biochar Storage in Soil module §8.5)."
-        fields={["evidenceMethod", "gisBoundaryReference"]}
+        hint="Record the application area as a GIS reference and retain a dated logbook record for the quantity applied."
+        fields={["evidenceMethod", "gisBoundary"]}
       >
-        <div
-          className="grid grid-cols-1 gap-8 md:grid-cols-2"
-          role="radiogroup"
-          aria-label="Evidence method"
-        >
-          {applicationEvidenceMethods.map((method) => (
-            <label
-              key={method}
-              className={[
-                "flex min-h-44 cursor-pointer flex-col gap-4 border px-16 py-12 transition-colors duration-300",
-                evidenceMethod === method
-                  ? "border-[var(--color-interaction)] bg-[var(--color-background-interaction-light)]"
-                  : "border-[var(--color-border-tertiary)] bg-[var(--color-background-white)]",
-              ].join(" ")}
-            >
-              <span className="flex items-center gap-8">
-                <input
-                  type="radio"
-                  value={method}
-                  disabled={isSubmitting}
-                  className="size-16"
-                  {...register("evidenceMethod")}
-                />
-                <span className="body-small font-medium text-[var(--color-text-primary)]">
-                  {formatApplicationEvidenceMethod(method)}
-                </span>
-              </span>
-              <span className="body-caption text-[var(--color-text-tertiary)]">
-                {evidenceMethodDescriptions[method]}
-              </span>
-            </label>
-          ))}
-        </div>
-
-        {evidenceMethod === "boundary" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <FormField
-              id="gisBoundaryReference"
-              label="GIS Boundary Reference"
-              error={errors.gisBoundaryReference?.message}
-              helperText="Link to GIS layer data"
-            >
-              <FormInput
-                id="gisBoundaryReference"
-                type="text"
-                placeholder="e.g., https://maps.example.com/dec/plot-a"
-                disabled={isSubmitting}
-                error={!!errors.gisBoundaryReference}
-                {...register("gisBoundaryReference")}
-              />
-            </FormField>
-          </div>
-        )}
-
         <ApplicationEvidencePanel
           applicationId={application?.id}
-          mode={evidenceMethod ?? "visual"}
+          mode={evidenceMethod ?? "boundary"}
+          boundary={gisBoundary ?? null}
           disabled={isSubmitting}
           deferredAttachments={deferredAttachments}
+          onModeChange={(nextMode) =>
+            setValue("evidenceMethod", nextMode, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+          }
+          onBoundaryChange={(nextBoundary) =>
+            setValue("gisBoundary", nextBoundary, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+          }
         />
       </FormSection>
 
@@ -668,7 +646,7 @@ export function ApplicationForm({
           Woolf 2021 200-year durable fraction (ADR 0021). */}
       {!hideSoilTemperature && (
       <FormSection
-        title="Soil Temperature"
+        title="Soil temperature"
         icon={<ThermometerIcon size={14} weight="bold" />}
         hint="Used in the Isometric 200-year durability calculation."
         fields={["soilTemperatureSource", "soilTemperatureC"]}
@@ -676,7 +654,7 @@ export function ApplicationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="soilTemperatureSource"
-            label="Temperature Source"
+            label="Temperature source"
             error={errors.soilTemperatureSource?.message}
           >
             <FormSelect
@@ -691,7 +669,7 @@ export function ApplicationForm({
 
           <FormField
             id="soilTemperatureC"
-            label="Soil Temperature (°C)"
+            label="Soil temperature (°C)"
             error={errors.soilTemperatureC?.message}
             helperText="Annual average for this application site"
             certifyRequired={isApplicationCertifyField("soilTemperatureC")}
@@ -717,7 +695,7 @@ export function ApplicationForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={errorMessage}
+        errorMessage={routedServerError.footerError}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

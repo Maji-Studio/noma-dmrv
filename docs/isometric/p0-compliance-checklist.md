@@ -1,22 +1,30 @@
 # P0 Isometric Compliance Checklist
 
-> Scope: `biochar` + `biochar-storage-soil-environments` documentation set in this repo.
-> Status values: `open`, `in_progress`, `done`, `blocked`.
+> Scope: the pinned Biochar Protocol v1.1 and its five modules in
+> [`versions.json`](./versions.json). Status describes current repository state,
+> not external approval.
 
-| Checklist ID | Requirement area | Current state | Required implementation target | Acceptance criteria | Owner | Status |
-|---|---|---|---|---|---|---|
-| `P0-01` | Ineligible biomass >25% cap | No RP-level model | Add reporting-period feedstock eligibility ledger (eligible vs ineligible mass) and computed fraction | RP record stores totals and computed ineligible fraction; rule outcome is queryable for issuance decisions | TBD | in_progress |
-| `P0-02` | Counterfactual validity lifecycle | Counterfactual inputs exist but no lifecycle model | Add counterfactual assessment entity with assessment date, evidence window, valid-to date, and reassessment trigger fields | Every credited feedstock in an RP links to a non-expired counterfactual assessment | TBD | open |
-| `P0-03` | Method B enforcement guardrail | **ADR 0022:** production processes store an epoch and all-or-none prerequisites; credit batches store an immutable sampled/unsampled choice. New unsampled batches require Isometric organization credentials, a facility project mapping, recorded prerequisites, and a live eligible-sample count since the epoch that meets the agreed baseline (minimum 30). Blueprint routing reads the stored batch choice. | Computed Method-B eligibility at credit-batch creation with an auditable, immutable boundary choice | Unsampled creation fails without the registry connection, prerequisites, or sample threshold; sampled batches remain valid; existing batch choices cannot be changed | Transactional app guard + immutable update schema | implemented (live unsampled submission gated) |
-| `P0-04` | Leakage pressure calibration/test structure | Pressure timeseries exists, calibration structure missing | Add reactor/run monitoring QA tables for calibration/test events and standards | Each pressure-monitored period has auditable calibration/test entries with timestamps and evidence refs | TBD | open |
-| `P0-05` | Loss accounting adjustments | Incident reports exist, no loss-adjustment ledger | Add mass-loss adjustment table linking incidents to affected run/delivery/application and batch deduction | Credited mass excludes logged losses; adjustment chain is auditable end-to-end | TBD | open |
-| `P0-06` | 200-year durability evidence completeness | Inputs exist. **Tier-1 (2026-06-20):** removal submission fail-closes on incomplete durability evidence at the **credit-batch grain** — eligibility (H/C_org<0.5 & O/C_org<0.2) on each batch's pooled replicate mean, Method A sampling presence, and ≥3 usable replicates per sampled batch (`evaluateDurabilitySubmissionGates`); soil temperature is an operator-declared **facility reference** value (7°C floor, `resolveFacilityReferenceSoilTemperature`), with the old site-max conservative estimate repurposed as a future per-removal override. DB-layer: migrations `0053`/`0054` add `BEFORE INSERT/UPDATE` triggers on `credit_batches` / `credit_batch_applications` blocking a `200_year` batch from reaching `verified`/`issued` while any linked application lacks soil-temperature value + source. The measurement-samples submission step + a durability evidence-ledger PDF are built and staged; the **live POST remains sandbox-gated** (`DURABILITY_MEASUREMENT_SAMPLES_LIVE = false`). | Issuance-time guardrail ensuring linked applications provide required temperature/source evidence for 200-year batches | `verified/issued` transition fails when linked 200-year application durability evidence is incomplete (verified, migrations `0053`/`0054`) | TBD | done |
-| `P0-07` | Stockpiling controls | Missing | Add stockpile entity with start/end, condition/risk controls, and exception approval reference | Stockpile duration and required controls are auditable; >12 months requires explicit exception record | TBD | in_progress |
-| `P0-08` | Point-of-mixing constraints | Ratio can be represented, attestations missing | Add explicit attestations for irreversibility and fuel-unsuitability on mixed products/batches | Mixed-batch records include required attestations before crediting | TBD | open |
-| `P0-09` | Chain-of-custody hardening | Handoff ledger exists but polymorphic integrity is weak | Add stronger party/material integrity model (typed FKs or validated registry references) and mandatory evidence rules per handoff type | Handoffs cannot be created without valid sender/receiver/material references and required evidence | TBD | open |
-| `P0-10` | Facility intensity classification (>200 GWh) | Run-level electricity only | Add annual facility electricity rollup + classification state | Each facility-year has computed total GWh and intensive/non-intensive classification | TBD | open |
-| `P0-11` | EC1-EC5 low-carbon procurement evidence | Missing | Add structured energy procurement evidence model (PPA/EAC, retirement IDs, COD, grid region, temporal matching) | Each low-carbon claim links to complete EC1-EC5 evidence records | TBD | in_progress |
-| `P0-12` | BCU retirement/additionality/no-double-counting | Partial fields only | Extend transport BCU model with retirement timestamp, registry transaction ID, and anti-double-count attestation | BCU usage cannot be credited without retirement and anti-double-count evidence | TBD | open |
-| `P0-13` | Materiality threshold gate | Materiality table exists, no issuance gate | Add computed threshold logic (`SSR/net removals`) and issuance-time guardrail | Batch cannot move to `verified/issued` with unresolved material SSR items | TBD | open |
-| `P0-14` | Reversal risk and buffer reassessment | Buffer % exists, risk model missing | Add reversal risk assessment/history model and reassessment schedule fields | Buffer contribution is traceable to versioned risk assessment records | TBD | open |
-| `P0-15` | Embodied emissions inventory structure | Partial evidence only | Add normalized embodied inventory (materials/equipment, factor source hierarchy, EPD/LCA verification, allocation cycle) | Embodied emissions calculations are reproducible from structured inventory + verified factor links | TBD | open |
+| ID | Requirement area | Current state | Completion condition | Status |
+|---|---|---|---|---|
+| `P0-01` | Feedstock EC1-EC15 and >25% ineligible cap | Eligibility flags and read-time mass roll-ups exist; no assessment store or issuance gate | Versioned criterion evidence plus a Reporting-Period cap decision that blocks ineligible issuance | open |
+| `P0-02` | Counterfactual lifecycle | Quantity/category inputs exist | Dated assessment, evidence window, expiry/reassessment, sourcing-change invalidation, and wildfire handling | open |
+| `P0-03` | Method-B enforcement | Process epoch/prerequisites and immutable sampled/unsampled choice are implemented | Confirm the unsampled registry representation and enable it only after sandbox verification | partial |
+| `P0-04` | Pyrolysis-gas calibration/leak testing | Pressure readings exist | Allowed-method record plus calibration/test standard, event, evidence, and submission/readiness gate | open |
+| `P0-05` | Lost-mass accounting | Incident records exist | Auditable incident-to-run/delivery/application adjustment that reduces credited mass | open |
+| `P0-06` | Durability submission | Sampled 1,000-year measurement-sample path works in sandbox; 200-year builders exist | Confirm 200-year units/bindings and production availability; retain fail-closed tier/template gates | partial |
+| `P0-07` | Stockpile controls | `stockpile_events` and >12-month exception constraint exist | Operator workflow, duration/control alerts, and readiness/submission integration | partial |
+| `P0-08` | Point-of-mixing | Ratio/timeline are representable | Irreversibility and fuel-unsuitability attestations before crediting | open |
+| `P0-09` | Custody handoffs | No `custody_handoffs`; custody is reconstructed from lineage/evidence | Decide whether the derived trail suffices; otherwise add a canonical, integrity-checked handoff ledger | open |
+| `P0-10` | Facility electricity intensity | Run-level electricity only | Facility-year roll-up and >200 GWh classification | open |
+| `P0-11` | Low-carbon procurement EC1-EC5 | `power_procurement_evidence` exists | Conjunctive evaluator, qualified/non-qualified kWh split, and claim gate | partial |
+| `P0-12` | Book-and-Claim Units | No BCU structures | Full eligibility, quantity/cap, ownership, retirement, additionality, decarbonization statement, and anti-double-count model before use | not adopted |
+| `P0-13` | SSR/materiality assessment | No `ghg_materiality_assessments` | Versioned boundary/materiality assessment and appropriate issuance guard | open |
+| `P0-14` | Reversal risk and buffer | Buffer percentage exists | Questionnaire, versioned score/derivation, events, and reassessment schedule | open |
+| `P0-15` | Embodied emissions | Generic documents only | Reproducible full-lifecycle inventory and complete per-factor records | open |
+| `P0-16` | Transport method hierarchy | Method is stored | Evidence-required fallback from energy usage to distance method | open |
+| `P0-17` | Transport trip/evidence completeness | Return trip is representable; evidence references are permissive | Onward-trip proof for one-way plus required record types and scale calibration | open |
+| `P0-18` | Transport factor quality | Factor value is stored | Source, vintage, mode/vehicle match, full-fuel-cycle basis, and recency gate | open |
+
+Current implementation evidence belongs in
+[`schema-mapping.md`](./schema-mapping.md). Do not mark a row complete because
+the schema can store part of the requirement.

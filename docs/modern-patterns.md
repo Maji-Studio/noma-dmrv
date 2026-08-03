@@ -8,16 +8,17 @@ listed below — the training-data pattern is often the deprecated one. It carri
 [database.md](./database.md), [auth.md](./auth.md), [security.md](./security.md)),
 which win on any conflict.
 
-Pinned versions: `drizzle-orm ^0.45.1` · `zod ^4.3.6` · `next 16.2.6` ·
-`react-hook-form ^7.71.1`. Check `package.json` before trusting anything here.
+The exact dependency versions live in `package.json` and `pnpm-lock.yaml`; do
+not duplicate them here. The headings name the version families that introduced
+the relevant behavior.
 
 ---
 
 ## Drizzle ORM (0.45+)
 
 The extra-config callback returns an **array**, and indexes are declared inside
-it — not exported separately. All 47 table definitions in `src/db/schema/` use
-this form.
+it — not exported separately. Copy a current table definition from
+`src/db/schema/`.
 
 ```typescript
 export const certifierProjects = pgTable(
@@ -59,10 +60,10 @@ The full migration table (`z.email`, `z.url`, `z.iso.datetime`, …), the
 in-repo exceptions, and the numeric-coercion helpers are owned by
 [forms.md](./forms.md) — read it before writing a schema.
 
-One thing to know before you "fix" anything: `z.string().uuid()` is still the
-majority idiom here (~103 call sites vs ~13 of `z.uuid()`). It is deprecated but
-functional. Prefer `z.uuid()` in new code; **do not mass-migrate** the existing
-ones.
+One thing to know before you "fix" anything: both `z.string().uuid()` and the
+top-level `z.uuid()` remain in current schemas. The chained form is deprecated
+but functional. Prefer `z.uuid()` in new code; **do not mass-migrate** existing
+schemas without tracing their input/output contracts.
 
 ---
 
@@ -84,9 +85,9 @@ export default async function Page({
 
 ### Cache Components are NOT enabled
 
-`next.config.ts` does not set `cacheComponents`, and `"use cache"` appears zero
-times in `src/`. Do not add the directive — without the flag it does nothing,
-and enabling the flag is a config decision, not a local one.
+`next.config.ts` does not set `cacheComponents`, and the application does not
+use the `"use cache"` directive. Do not add the directive — without the flag it
+does nothing, and enabling the flag is a config decision, not a local one.
 
 Consequently `connection()` is not required in API routes, and
 `export const dynamic = "force-dynamic"` remains valid. Server-side caching is

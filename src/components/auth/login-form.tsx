@@ -59,7 +59,9 @@ export function LoginForm() {
     if (result.success) {
       router.push(getSafeSignInPath(searchParams.get("from")));
     } else {
-      setServerError(result.error || "Failed to sign in");
+      setServerError(
+        result.error || "You could not be signed in. Check your details and try again.",
+      );
 
       // Show resend verification option if email not verified
       if (
@@ -82,7 +84,10 @@ export function LoginForm() {
       setResendSuccess(true);
       setServerError("");
     } else {
-      setServerError(result.error || "Failed to resend verification email");
+      setServerError(
+        result.error ||
+          "The verification email was not sent. Check your connection and try again.",
+      );
     }
 
     setResendLoading(false);
@@ -137,7 +142,7 @@ export function LoginForm() {
           role="status"
           aria-live="polite"
         >
-          Verification email sent! Please check your inbox.
+          Verification email sent. Check your inbox.
         </div>
       )}
 

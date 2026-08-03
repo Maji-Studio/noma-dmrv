@@ -90,17 +90,12 @@ describe("runCreateWithEvidenceChoreography", () => {
     expect(retainedIds).toEqual([["feedstock-1", "feedstock-2"]]);
     expect(openEdit).toHaveBeenCalledWith({ id: "feedstock-1" });
     expect(setError).toHaveBeenLastCalledWith(
-      "Feedstock created, but 2 attachments failed to upload.",
+      "Feedstock created, but 2 attachments were not uploaded.",
     );
     expect(clear).not.toHaveBeenCalled();
   });
 
-  // The onAfterFlush contract carried by production-run-list: a post-flush step
-  // (readings-CSV import) can fail the choreography even when every upload
-  // succeeded, and decides whether the retry queue is still needed.
-  it("clears the settled queue on an import-only failure (uploads ok, onAfterFlush overrides)", async () => {
-    const setError = vi.fn<(message: string | null) => void>();
-    const openEdit = vi.fn();
+  it("completes production-run creation when its readings attachment uploads", async () => {
     const close = vi.fn();
     const toast = vi.fn();
     const clear = vi.fn();
@@ -113,6 +108,71 @@ describe("runCreateWithEvidenceChoreography", () => {
         entities: [{ id: "run-1" }],
         result: undefined,
       }),
+      flushMany: async () => ({
+        ok: true,
+        uploaded: [
+          {
+            documentType: "sensor_data",
+            documentId: "document-1",
+          } as DeferredAttachment,
+        ],
+        failed: [],
+      }),
+      clearAttachments: clear,
+      retainCreatedEntityIds: vi.fn(),
+      setFlushing: vi.fn(),
+      setError: vi.fn(),
+      getCreateErrorMessage: () => "create failed",
+      openEditOnFailure: vi.fn(),
+      closeOnSuccess: close,
+      onSuccess: toast,
+    });
+
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses task-specific copy when creation returns no entity", async () => {
+    const setError = vi.fn<(message: string | null) => void>();
+
+    await runCreateWithEvidenceChoreography({
+      input: undefined,
+      entityType: "sample",
+      entityNoun: "Sample",
+      executeCreate: async () => ({ entities: [], result: undefined }),
+      flushMany: vi.fn(),
+      clearAttachments: vi.fn(),
+      retainCreatedEntityIds: vi.fn(),
+      setFlushing: vi.fn(),
+      setError,
+      getCreateErrorMessage: (error) =>
+        error instanceof Error ? error.message : "Sample was not created. Try again.",
+      openEditOnFailure: vi.fn(),
+      closeOnSuccess: vi.fn(),
+      onSuccess: vi.fn(),
+    });
+
+    expect(setError).toHaveBeenLastCalledWith(
+      "Sample was not created. Try again.",
+    );
+  });
+
+  it("clears the settled queue when post-flush processing overrides success", async () => {
+    const setError = vi.fn<(message: string | null) => void>();
+    const openEdit = vi.fn();
+    const close = vi.fn();
+    const toast = vi.fn();
+    const clear = vi.fn();
+
+    await runCreateWithEvidenceChoreography({
+      input: undefined,
+      entityType: "sample",
+      entityNoun: "Sample",
+      executeCreate: async () => ({
+        entities: [{ id: "sample-1" }],
+        result: undefined,
+      }),
       flushMany: async () => ({ ok: true, uploaded: [], failed: [] }),
       clearAttachments: clear,
       retainCreatedEntityIds: vi.fn(),
@@ -122,18 +182,16 @@ describe("runCreateWithEvidenceChoreography", () => {
       openEditOnFailure: openEdit,
       closeOnSuccess: close,
       onAfterFlush: () => ({
-        failureMessage:
-          "Production run created, but 1 readings file could not be imported.",
-        // Import failures are durable on the document; no upload retry needed.
+        failureMessage: "Sample created, but its evidence could not be linked.",
         clearAttachmentsOnFailure: true,
       }),
       onSuccess: toast,
     });
 
     expect(clear).toHaveBeenCalledTimes(1);
-    expect(openEdit).toHaveBeenCalledWith({ id: "run-1" });
+    expect(openEdit).toHaveBeenCalledWith({ id: "sample-1" });
     expect(setError).toHaveBeenLastCalledWith(
-      "Production run created, but 1 readings file could not be imported.",
+      "Sample created, but its evidence could not be linked.",
     );
     expect(close).not.toHaveBeenCalled();
     expect(toast).not.toHaveBeenCalled();
@@ -146,10 +204,10 @@ describe("runCreateWithEvidenceChoreography", () => {
 
     await runCreateWithEvidenceChoreography({
       input: undefined,
-      entityType: "production_run",
-      entityNoun: "Production run",
+      entityType: "sample",
+      entityNoun: "Sample",
       executeCreate: async () => ({
-        entities: [{ id: "run-1" }],
+        entities: [{ id: "sample-1" }],
         result: undefined,
       }),
       flushMany: async () => ({
@@ -165,8 +223,7 @@ describe("runCreateWithEvidenceChoreography", () => {
       openEditOnFailure: openEdit,
       closeOnSuccess: vi.fn(),
       onAfterFlush: () => ({
-        failureMessage:
-          "Production run created, but 1 attachment failed to upload and 1 readings file could not be imported.",
+        failureMessage: "Sample created, but its evidence could not be linked.",
         // Uploads still need a retry: the queue must survive.
         clearAttachmentsOnFailure: false,
       }),
@@ -174,9 +231,9 @@ describe("runCreateWithEvidenceChoreography", () => {
     });
 
     expect(clear).not.toHaveBeenCalled();
-    expect(openEdit).toHaveBeenCalledWith({ id: "run-1" });
+    expect(openEdit).toHaveBeenCalledWith({ id: "sample-1" });
     expect(setError).toHaveBeenLastCalledWith(
-      "Production run created, but 1 attachment failed to upload and 1 readings file could not be imported.",
+      "Sample created, but its evidence could not be linked.",
     );
   });
 });
@@ -250,7 +307,7 @@ describe("confirmCreateWithEvidenceClose", () => {
       }),
     ).toBe(true);
     expect(confirmDiscard).toHaveBeenCalledWith(
-      "Discard 2 unsaved attachment(s)?",
+      "Discard 2 unsaved attachments?",
     );
   });
 });

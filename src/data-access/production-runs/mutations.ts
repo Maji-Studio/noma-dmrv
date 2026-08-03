@@ -17,7 +17,6 @@ import {
   feedstocks,
   feedstockTypes,
   operators,
-  biocharProducts,
   creditBatches,
   creditBatchProductionRuns,
 } from "@/db/schema";
@@ -56,7 +55,13 @@ import {
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
 import { retireDocumentsForEntities } from "../documents";
+import { processPendingStorageObjectDeletions } from "../storage-object-deletions";
 import { attachProductionRunToMatchingCreditBatch } from "../credit-batch-membership";
+import {
+  assertProductionRunTimesNotFuture,
+  type ProductionRunMutationOptions,
+} from "./future-time";
+import { getProductionRunDependentProduct } from "./product-dependencies";
 
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
@@ -105,7 +110,7 @@ async function allocateFeedstockMass(
 
   if (totalDryMass === 0) {
     throw new SafeError(
-      "Cannot allocate feedstock: batches in this bin have no recorded dry mass. Please update feedstock batch weights first."
+      "The feedstock batches in this bin have no recorded dry mass. Record their weights before allocating feedstock."
     );
   }
 
@@ -136,9 +141,9 @@ async function validateBiocharStorageLocation(
       ),
     );
 
-  if (!loc) throw new SafeError(`${label} storage location not found`);
+  if (!loc) throw new SafeError(`${label} storage bin not found`);
   if (loc.facilityId !== facilityId) throw new SafeError(`${label} bin does not belong to the selected facility`);
-  if (loc.type !== "biochar_bin") throw new SafeError("Selected storage location is not a biochar bin");
+  if (loc.type !== "biochar_bin") throw new SafeError("Selected storage bin is not a biochar bin");
 }
 
 /**
@@ -168,9 +173,9 @@ async function validateProductionFeedstockSource(
       ),
     );
 
-  if (!loc) throw new SafeError("Feedstock storage location not found");
+  if (!loc) throw new SafeError("Feedstock storage bin not found");
   if (loc.facilityId !== facilityId) throw new SafeError("Feedstock bin does not belong to the selected facility");
-  if (loc.type !== "feedstock_bin") throw new SafeError("Selected storage location is not a feedstock bin");
+  if (loc.type !== "feedstock_bin") throw new SafeError("Selected storage bin is not a feedstock bin");
   if (!loc.feedstockTypeId || !loc.feedstockTypeUsage) {
     throw new SafeError("Source bin must be restricted to a feedstock type before it can feed a production run");
   }
@@ -205,9 +210,12 @@ export async function createProductionRun(
     biocharMoisturePercent?: number | null;
     biocharStorageLocationId?: string | null;
     feedstockStorageLocationId?: string | null;
-  }
+  },
+  options: ProductionRunMutationOptions = {},
 ): Promise<ProductionRunWithRelations> {
   requireOrgScope(ctx);
+  const now = options.now ?? new Date();
+  assertProductionRunTimesNotFuture(data, now);
   if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
 
   // Verify facility exists and is active (no new children under an archived parent)
@@ -373,7 +381,7 @@ export async function createProductionRun(
     // slipped past the advisory lock to the friendly overlap message.
     if (isReactorStartUniqueViolation(error)) {
       throw new SafeError(
-        "Another run on this reactor already starts at that time — pick a different start time",
+        "Another production run on this reactor starts at that time. Choose a different start time.",
       );
     }
     throw error;
@@ -410,9 +418,20 @@ export async function updateProductionRun(
     biocharMoisturePercent?: number | null;
     biocharStorageLocationId?: string | null;
     feedstockStorageLocationId?: string | null;
-  }
+  },
+  options: ProductionRunMutationOptions = {},
 ): Promise<ProductionRunWithRelations> {
   requireOrgScope(ctx);
+  const now = options.now ?? new Date();
+  // Reject submitted future instants before any read or write. The merged
+  // effective window is checked again after loading the existing record.
+  assertProductionRunTimesNotFuture(
+    {
+      startTime: data.startTime,
+      endTime: data.endTime,
+    },
+    now,
+  );
   if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
 
   // Verify run exists
@@ -438,7 +457,7 @@ export async function updateProductionRun(
     }
   }
 
-  // Compute effective facility once — used for reactor + storage location validation
+  // Compute effective facility once — used for reactor + storage bin validation
   const targetFacilityId = data.facilityId ?? existing.facilityId;
 
   // Verify reactor belongs to the facility when reactor or facility changes
@@ -463,6 +482,13 @@ export async function updateProductionRun(
   const effectiveStartTime = data.startTime ?? existing.startTime;
   const effectiveEndTime =
     data.endTime !== undefined ? data.endTime : existing.endTime;
+  assertProductionRunTimesNotFuture(
+    {
+      startTime: effectiveStartTime,
+      endTime: effectiveEndTime,
+    },
+    now,
+  );
   const effectiveStatus = data.status ?? existing.status;
   const effectiveFeedstockStorageId =
     data.feedstockStorageLocationId !== undefined
@@ -471,7 +497,7 @@ export async function updateProductionRun(
 
   // Update production run + M:M re-allocation in a transaction
   const updateData: Record<string, unknown> = {
-    updatedAt: new Date(),
+    updatedAt: now,
   };
 
   if (data.code !== undefined) updateData.code = data.code;
@@ -624,14 +650,11 @@ export async function updateProductionRun(
     );
 
     if (lockedTargetStatus !== locked.status && lockedTargetStatus !== "complete") {
-      const [linkedProduct] = await tx
-        .select({ id: biocharProducts.id })
-        .from(biocharProducts)
-        .where(and(
-          eq(biocharProducts.linkedProductionRunId, productionRunId),
-          eq(biocharProducts.organizationId, ctx.organizationId),
-        ))
-        .limit(1);
+      const linkedProduct = await getProductionRunDependentProduct(
+        ctx,
+        tx,
+        productionRunId,
+      );
       if (linkedProduct) {
         throw new SafeError(
           "Remove linked Biochar products before changing this run's outcome.",
@@ -653,7 +676,7 @@ export async function updateProductionRun(
         .limit(1);
       if (membership) {
         throw new SafeError(
-          "Remove this run from its Credit batch before reopening it.",
+          "Remove this run from its credit batch before reopening it.",
         );
       }
     }
@@ -827,7 +850,7 @@ export async function updateProductionRun(
     // unique violation to the friendly overlap message.
     if (isReactorStartUniqueViolation(error)) {
       throw new SafeError(
-        "Another run on this reactor already starts at that time — pick a different start time",
+        "Another production run on this reactor starts at that time. Choose a different start time.",
       );
     }
     throw error;
@@ -889,14 +912,11 @@ export async function deleteProductionRun(
       "delete",
     );
 
-    const [dependentProduct] = await tx
-      .select({ id: biocharProducts.id, code: biocharProducts.code })
-      .from(biocharProducts)
-      .where(and(
-        eq(biocharProducts.linkedProductionRunId, productionRunId),
-        eq(biocharProducts.organizationId, ctx.organizationId),
-      ))
-      .limit(1);
+    const dependentProduct = await getProductionRunDependentProduct(
+      ctx,
+      tx,
+      productionRunId,
+    );
     const [dependentCreditBatch] = await tx
       .select({ id: creditBatches.id, code: creditBatches.code })
       .from(creditBatchProductionRuns)
@@ -964,4 +984,5 @@ export async function deleteProductionRun(
       })),
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }

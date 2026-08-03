@@ -64,8 +64,7 @@ export function assertNoForeignProductionClaims(
   if (foreignClaims.length > 0) {
     throw new SafeError(
       `Production emissions for ${foreignClaims.map((b) => b.code).join(", ")} ` +
-        "were already claimed by another removal (§8.6.2 front-loading). " +
-        "A delivery-only follow-up entry is not yet supported (issue #353).",
+        "already belong to another Removal. Remove those credit batches from this Removal, then submit again.",
     );
   }
 }
@@ -76,9 +75,7 @@ export async function assertProductionClaimGateFresh(
   removalId: string,
   expected: readonly MemberBatchLineage[],
 ): Promise<void> {
-  const scope = await resolveScopeForRemoval(orgCtx, removalId, {
-    skipPreview: true,
-  });
+  const scope = await resolveScopeForRemoval(orgCtx, removalId);
   assertNoForeignProductionClaims(
     scope.memberBatches.map((b) => ({
       creditBatchId: b.id,
@@ -145,8 +142,7 @@ export async function assertResumedSnapshotRevisionCurrent(
     reason: `mapping revision drift: snapshot ${String(revision)} != current ${MAPPING_REVISION}`,
   });
   throw new SafeError(
-    "This removal's interrupted draft was built under an older accounting " +
-      "revision and has been retired. Submit again to rebuild it from current data.",
+    "This Removal draft uses older calculation settings. Submit again to rebuild it with current data.",
   );
 }
 

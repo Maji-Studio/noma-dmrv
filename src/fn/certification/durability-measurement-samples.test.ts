@@ -1,12 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Sample } from "@/db/schema";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { FacilityReferenceSoilTemperature } from "@/lib/isometric/utils/durability-aggregation";
 import {
   buildDurabilityMeasurementSampleSubmissions,
-  DURABILITY_MEASUREMENT_SAMPLES_LIVE,
+  DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
+  patchMeasurementSampleSourceBindings,
 } from "./durability-measurement-samples";
 import { normalizeMeasurementSamplesForHash } from "./durability-measurement-sample-snapshot";
+import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
+import {
+  CARBON_CONTENTS_MEASUREMENT_PROPERTY,
+  PRODUCT_MASS_MEASUREMENT_PROPERTY,
+  S_FRACTION_MEASUREMENT_PROPERTY,
+} from "@/lib/isometric/transformers/measurement-sample";
+import {
+  buildRemovalSourceBindingPlan,
+  classifyRemovalSourceCandidate,
+} from "@/lib/certification/removal-source-bindings";
 
 function sample(overrides: Partial<Sample>): Sample {
   return {
@@ -68,9 +79,339 @@ const thousandYearBatch = (id: string, code: string) =>
     ],
   });
 
-describe("DURABILITY_MEASUREMENT_SAMPLES_LIVE", () => {
-  it("stays off without the sandbox-only operator opt-in", () => {
-    expect(DURABILITY_MEASUREMENT_SAMPLES_LIVE).toBe(false);
+describe("DURABILITY_MEASUREMENT_SAMPLES_ENABLED", () => {
+  // Targeting the Isometric sandbox IS the opt-in — there is no separate flag.
+  // The test env has no ISOMETRIC_ENVIRONMENT, which defaults to "sandbox".
+  it("is on whenever the environment targets the sandbox", () => {
+    expect(DURABILITY_MEASUREMENT_SAMPLES_ENABLED).toBe(true);
+  });
+
+  it("is off whenever the environment targets production", async () => {
+    const { env: currentEnv } = await import("@/config/env");
+    vi.resetModules();
+    vi.doMock("@/config/env", () => ({
+      env: { ...currentEnv, ISOMETRIC_ENVIRONMENT: "production" },
+    }));
+
+    try {
+      const productionModule = await import("./durability-measurement-samples");
+      expect(
+        productionModule.DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
+      ).toBe(false);
+    } finally {
+      vi.doUnmock("@/config/env");
+      vi.resetModules();
+    }
+  });
+});
+
+describe("patchMeasurementSampleSourceBindings", () => {
+  it("binds a boundary-method weighbridge Source to the staging batch product_mass Datapoint", async () => {
+    const creditBatchId = "01519716-f8e6-4042-886d-608792130dcc";
+    const applicationId = "application-staging-1";
+    const sourceId = "source-weighbridge";
+    const binding = classifyRemovalSourceCandidate({
+      documentType: "pdf",
+      metadata: { logbookEvidenceType: "weighbridge" },
+      lineage: {
+        entityType: "application",
+        entityId: applicationId,
+        entityLabel: "Application AP-26-001",
+      },
+    });
+    const sourceBindingPlan = buildRemovalSourceBindingPlan({
+      candidates: binding
+        ? [{ documentId: "document-weighbridge", sourceId, binding }]
+        : [],
+      template: {
+        groups: [
+          {
+            key: "co2-stored",
+            components: [
+              {
+                id: "component-sequestration",
+                blueprint_key: "biochar_sequestration_1000_year",
+                inputs: [{ input_key: "product_mass" }],
+              },
+            ],
+          },
+        ],
+      } as never,
+      applicationIdsByCreditBatchId: new Map([
+        [creditBatchId, [applicationId]],
+      ]),
+    });
+    const patch = vi.fn().mockResolvedValue({
+      id: "datapoint-product-mass",
+      source_ids: [sourceId],
+    });
+
+    await expect(
+      patchMeasurementSampleSourceBindings({
+        client: { patch } as never,
+        captures: [
+          {
+            measurementSampleId: "measurement-sample-existing",
+            supplierReferenceId: "measurement-sample-ref",
+            creditBatchId,
+            datapointIdsByMeasurementProperty: new Map([
+              [
+                encodeMeasurementProperty(PRODUCT_MASS_MEASUREMENT_PROPERTY),
+                ["datapoint-product-mass"],
+              ],
+            ]),
+          },
+        ],
+        sourceBindingPlan,
+      }),
+    ).resolves.toBe(1);
+
+    expect(patch).toHaveBeenCalledWith(
+      "/datapoints/datapoint-product-mass",
+      expect.objectContaining({ source_ids: [sourceId] }),
+    );
+  });
+
+  it("patches only product_mass response Datapoints with Inventory Sources", async () => {
+    const patch = vi.fn().mockResolvedValue({
+      id: "datapoint-product-mass",
+      source_ids: ["source-inventory"],
+    });
+    const productMassProperty = encodeMeasurementProperty(
+      PRODUCT_MASS_MEASUREMENT_PROPERTY,
+    );
+
+    await expect(
+      patchMeasurementSampleSourceBindings({
+        client: { patch } as never,
+        captures: [
+          {
+            measurementSampleId: "measurement-sample-1",
+            supplierReferenceId: "sample-ref-1",
+            creditBatchId: "credit-batch-1",
+            datapointIdsByMeasurementProperty: new Map([
+              [productMassProperty, ["datapoint-product-mass"]],
+              ["mass_fraction_dry_basis::total_carbon", ["datapoint-carbon"]],
+            ]),
+          },
+        ],
+        sourceBindingPlan: [
+          {
+            documentId: "document-inventory",
+            sourceId: "source-inventory",
+            nomaRole: "inventory",
+            lineage: {
+              entityType: "application",
+              entityId: "application-1",
+              entityLabel: "Application APP-001",
+            },
+            intendedTarget: {
+              kind: "sequestration",
+              groupKey: "co2-stored",
+              componentId: "component-sequestration",
+              componentBlueprintKey: "biochar_sequestration_1000_year",
+              inputKey: "product_mass",
+              creditBatchIds: ["credit-batch-1"],
+            },
+            mappingRevision: "revision-1",
+          },
+        ],
+      }),
+    ).resolves.toBe(1);
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    expect(patch).toHaveBeenCalledWith(
+      "/datapoints/datapoint-product-mass",
+      expect.objectContaining({ source_ids: ["source-inventory"] }),
+    );
+  });
+
+  it("keeps Inventory Sources scoped to each credit batch's product_mass Datapoint", async () => {
+    const patch = vi.fn(async (path: string, body: { source_ids: string[] }) => ({
+      id: path.split("/").at(-1),
+      source_ids: body.source_ids,
+    }));
+    const productMassProperty = encodeMeasurementProperty(
+      PRODUCT_MASS_MEASUREMENT_PROPERTY,
+    );
+
+    await expect(
+      patchMeasurementSampleSourceBindings({
+        client: { patch } as never,
+        captures: [
+          {
+            measurementSampleId: "measurement-sample-a",
+            supplierReferenceId: "sample-ref-a",
+            creditBatchId: "credit-batch-a",
+            datapointIdsByMeasurementProperty: new Map([
+              [productMassProperty, ["datapoint-product-mass-a"]],
+            ]),
+          },
+          {
+            measurementSampleId: "measurement-sample-b",
+            supplierReferenceId: "sample-ref-b",
+            creditBatchId: "credit-batch-b",
+            datapointIdsByMeasurementProperty: new Map([
+              [productMassProperty, ["datapoint-product-mass-b"]],
+            ]),
+          },
+        ],
+        sourceBindingPlan: [
+          {
+            documentId: "document-inventory-a",
+            sourceId: "source-inventory-a",
+            nomaRole: "inventory",
+            lineage: {
+              entityType: "application",
+              entityId: "application-a",
+              entityLabel: "Application APP-A",
+            },
+            intendedTarget: {
+              kind: "sequestration",
+              groupKey: "co2-stored",
+              componentId: "component-sequestration",
+              componentBlueprintKey: "biochar_sequestration_1000_year",
+              inputKey: "product_mass",
+              creditBatchIds: ["credit-batch-a"],
+            },
+            mappingRevision: "revision-1",
+          },
+          {
+            documentId: "document-inventory-b",
+            sourceId: "source-inventory-b",
+            nomaRole: "inventory",
+            lineage: {
+              entityType: "application",
+              entityId: "application-b",
+              entityLabel: "Application APP-B",
+            },
+            intendedTarget: {
+              kind: "sequestration",
+              groupKey: "co2-stored",
+              componentId: "component-sequestration",
+              componentBlueprintKey: "biochar_sequestration_1000_year",
+              inputKey: "product_mass",
+              creditBatchIds: ["credit-batch-b"],
+            },
+            mappingRevision: "revision-1",
+          },
+        ],
+      }),
+    ).resolves.toBe(2);
+
+    expect(patch).toHaveBeenNthCalledWith(
+      1,
+      "/datapoints/datapoint-product-mass-a",
+      expect.objectContaining({ source_ids: ["source-inventory-a"] }),
+    );
+    expect(patch).toHaveBeenNthCalledWith(
+      2,
+      "/datapoints/datapoint-product-mass-b",
+      expect.objectContaining({ source_ids: ["source-inventory-b"] }),
+    );
+  });
+
+  it("uses the durability ledger for every 1000-year input without requiring an Application logbook", async () => {
+    const patch = vi.fn(
+      async (path: string, body: { source_ids: string[] }) => ({
+        id: path.split("/").at(-1),
+        source_ids: body.source_ids,
+      }),
+    );
+    const creditBatchId = "credit-batch-1";
+    const durabilityBinding = classifyRemovalSourceCandidate({
+      documentType: "pdf",
+      metadata: {
+        kind: "durability_evidence_ledger",
+        removalId: "removal-1",
+        durabilityOption: "1000_year",
+      },
+      lineage: {
+        entityType: "credit_batch",
+        entityId: creditBatchId,
+        entityLabel: "Credit batch CB-001",
+      },
+      removalId: "removal-1",
+    })!;
+    const sourceBindingPlan = buildRemovalSourceBindingPlan({
+      candidates: [
+        {
+          documentId: "document-durability-ledger",
+          sourceId: "source-durability-ledger",
+          binding: durabilityBinding,
+        },
+      ],
+      template: {
+        groups: [
+          {
+            key: "co2-stored",
+            components: [
+              {
+                id: "component-sequestration",
+                blueprint_key: "biochar_sequestration_1000_year",
+                inputs: [
+                  { input_key: "carbon_contents" },
+                  { input_key: "product_mass" },
+                  { input_key: "s_fraction" },
+                ],
+              },
+            ],
+          },
+        ],
+      } as never,
+      applicationIdsByCreditBatchId: new Map([
+        [creditBatchId, ["application-1"]],
+      ]),
+    });
+
+    await expect(
+      patchMeasurementSampleSourceBindings({
+        client: { patch } as never,
+        captures: [
+          {
+            measurementSampleId: "measurement-sample-1",
+            supplierReferenceId: "sample-ref-1",
+            creditBatchId,
+            datapointIdsByMeasurementProperty: new Map([
+              [
+                encodeMeasurementProperty(PRODUCT_MASS_MEASUREMENT_PROPERTY),
+                ["datapoint-product-mass"],
+              ],
+              [
+                encodeMeasurementProperty(
+                  CARBON_CONTENTS_MEASUREMENT_PROPERTY,
+                ),
+                ["datapoint-carbon-a", "datapoint-carbon-b"],
+              ],
+              [
+                encodeMeasurementProperty(S_FRACTION_MEASUREMENT_PROPERTY),
+                ["datapoint-s-a", "datapoint-s-b"],
+              ],
+            ]),
+          },
+        ],
+        sourceBindingPlan,
+      }),
+    ).resolves.toBe(5);
+
+    expect(patch).toHaveBeenCalledWith(
+      "/datapoints/datapoint-product-mass",
+      expect.objectContaining({
+        source_ids: ["source-durability-ledger"],
+      }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "/datapoints/datapoint-carbon-a",
+      expect.objectContaining({
+        source_ids: ["source-durability-ledger"],
+      }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "/datapoints/datapoint-s-a",
+      expect.objectContaining({
+        source_ids: ["source-durability-ledger"],
+      }),
+    );
   });
 });
 
@@ -84,57 +425,28 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     measuredAt: "2026-01-31T00:00:00.000Z",
   };
 
-  it("emits one production-batch submission per sampled batch, then one soil submission", () => {
-    const submissions = buildDurabilityMeasurementSampleSubmissions({
-      ...common,
-      batches: [sampledBatch("a", "CB-A"), sampledBatch("b", "CB-B")],
-    });
-
-    expect(submissions).toHaveLength(3);
-    expect(submissions.map((s) => s.operationKey)).toEqual([
-      "pb:a",
-      "pb:b",
-      "soil",
-    ]);
-
-    for (const pb of submissions.slice(0, 2)) {
-      expect(pb.supplierRefId).toMatch(/^nm-mts-.*-pb-.*-v2$/);
-      expect(pb.body.supplier_reference_id).toBe(pb.supplierRefId);
-      expect(pb.body.measurement_type).toBe("biochar_production_batch");
-      expect(pb.body.project_id).toBe("prj_X");
-      expect(pb.body.measured_at).toBe("2026-01-31T00:00:00.000Z");
-    }
-
-    const soil = submissions[2];
-    expect(soil.supplierRefId).toMatch(/^nm-mts-.*-soil-v2$/);
-    expect(soil.body.measurement_type).toBe("biochar_soil");
-    expect(soil.body.values[0].value.magnitude).toBe(12.5);
-    expect(soil.body.values[0].value.unit).toBe("degC");
+  it("fails closed for sampled 200-year batches", () => {
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        batches: [sampledBatch("a", "CB-A")],
+      }),
+    ).toThrow(/200-year Removals cannot be submitted yet/i);
   });
 
-  it("routes an unsampled batch to the _unsampled blueprint (mass-only), then soil", () => {
-    const submissions = buildDurabilityMeasurementSampleSubmissions({
-      ...common,
-      batches: [
-        batch({
-          creditBatchId: "u",
-          creditBatchCode: "CB-U",
-          sampling: "unsampled",
-          runs: [{ id: "run-u", code: "R-U", biocharDryMassKg: 1000 }],
-        }),
-      ],
-    });
-
-    expect(submissions.map((s) => s.operationKey)).toEqual([
-      "pb-unsampled:u",
-      "soil",
-    ]);
-    const pb = submissions[0];
-    expect(pb.body.measurement_type).toBe("biochar_production_batch");
-    // Mass-only — the registry derives carbon + durable fraction from history.
-    expect(pb.body.values).toHaveLength(1);
-    expect(pb.body.values[0].measurement_property.quantity_kind).toBe("mass");
-    expect(pb.body.values[0].value.magnitude).toBe(1000);
+  it("fails closed for unsampled Method B batches", () => {
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        facilityReferenceSoilTemperature: null,
+        batches: [
+          {
+            ...thousandYearBatch("u", "CB-U"),
+            sampling: "unsampled",
+          },
+        ],
+      }),
+    ).toThrow(/Unsampled Method B Removals cannot be submitted yet/i);
   });
 
   it("emits the full per-replicate 1000-year payload without a soil sample", () => {
@@ -176,7 +488,7 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
           thousandYearBatch("t2", "CB-T2"),
         ],
       }),
-    ).toThrow(/supports exactly one credit batch.*single product_mass/);
+    ).toThrow(/can contain one credit batch.*Split these credit batches/);
   });
 
   it("normalizes to an identical hash payload regardless of sample row order", () => {
@@ -251,23 +563,24 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
           }),
         ],
       }),
-    ).toThrow(/1 sample.*missing total carbon or the R₀/);
+    ).toThrow(/1 Sample.*without total carbon or the R₀/);
   });
 
-  it("still fails closed when a 200-year batch has no soil reference", () => {
+  it("rejects 200-year before evaluating its soil-temperature payload", () => {
     expect(() =>
       buildDurabilityMeasurementSampleSubmissions({
         ...common,
         facilityReferenceSoilTemperature: null,
         batches: [sampledBatch("a", "CB-A")],
       }),
-    ).toThrow(/soil temperature is required for 200-year/);
+    ).toThrow(/200-year Removals cannot be submitted yet/i);
   });
 
   it("scales product mass by the per-run applied attribution", () => {
     const [pb] = buildDurabilityMeasurementSampleSubmissions({
       ...common,
-      batches: [sampledBatch("a", "CB-A")],
+      facilityReferenceSoilTemperature: null,
+      batches: [thousandYearBatch("a", "CB-A")],
       attributionByRunId: new Map([["run-a", 0.5]]),
     });
 

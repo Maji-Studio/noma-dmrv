@@ -18,6 +18,7 @@ import { db } from "@/db";
 import { documents } from "@/db/schema";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { DocumentEntityType } from "@/schemas/documents";
+import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { getChainOfCustodyData } from "./chain-of-custody";
 import { getProductionSamples } from "./production-samples";
 import { getTransportLegsForEntities } from "./transport-legs";
@@ -131,27 +132,39 @@ export async function getApplicationTrailEvidence(
   const chain = await getChainOfCustodyData(ctx, applicationId);
 
   const feedstockIds = chain.feedstocks.map((feedstock) => feedstock.id);
-  const productionRunId = chain.productionRun?.id ?? null;
+  const sources = resolveChainSources(chain);
+  const productionRunIds = sources.map(
+    (source) => source.productionRun.id,
+  );
   const biocharProductId = chain.biocharProduct?.id ?? null;
 
-  const [feedstockLegs, biocharLegs, samples] = await Promise.all([
+  const [feedstockLegs, biocharLegs, sampleRowsByRun] = await Promise.all([
     getTransportLegsForEntities(ctx, "feedstock", feedstockIds),
     getTransportLegsForEntities(
       ctx,
       "biochar",
       biocharProductId ? [biocharProductId] : [],
     ),
-    productionRunId
-      ? getProductionSamples(ctx, productionRunId)
-      : Promise.resolve([]),
+    Promise.all(
+      productionRunIds.map(async (productionRunId) => ({
+        productionRunId,
+        samples: await getProductionSamples(ctx, productionRunId),
+      })),
+    ),
   ]);
+  const samplesByRun = new Map(
+    sampleRowsByRun.map(({ productionRunId, samples }) => [
+      productionRunId,
+      samples,
+    ]),
+  );
 
   const allLegs = [...feedstockLegs, ...biocharLegs];
   const documentRows = await listDocumentsForScopes(ctx, [
     { entityType: "feedstock", entityIds: feedstockIds },
     {
       entityType: "production_run",
-      entityIds: productionRunId ? [productionRunId] : [],
+      entityIds: productionRunIds,
     },
     {
       entityType: "biochar_product",
@@ -207,10 +220,11 @@ export async function getApplicationTrailEvidence(
     });
   }
 
-  if (chain.productionRun) {
-    addNode(`production-run:${chain.productionRun.id}`, {
-      documents: entityDocuments("production_run", chain.productionRun.id),
-      samples: samples.map((sample) => ({
+  for (const source of sources) {
+    const productionRunId = source.productionRun.id;
+    addNode(`production-run:${productionRunId}`, {
+      documents: entityDocuments("production_run", productionRunId),
+      samples: (samplesByRun.get(productionRunId) ?? []).map((sample) => ({
         id: sample.id,
         sampleCode: sample.sampleCode,
         timestamp: sample.timestamp,

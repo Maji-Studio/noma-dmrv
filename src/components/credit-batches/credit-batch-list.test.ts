@@ -23,7 +23,7 @@ describe("credit batch delete confirmation", () => {
       "releases its production runs",
     );
     expect(CREDIT_BATCH_DELETE_MESSAGE).toContain(
-      "clears direct membership from its lab samples",
+      "clears direct membership from its lab Samples",
     );
     expect(CREDIT_BATCH_DELETE_MESSAGE).not.toMatch(
       /applications|re-link|manually/i,

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type {
   ChainGeoLeg,
+  ChainGeoNode,
+  ChainGeoNodeKind,
   ChainOfCustodyGeoData,
 } from "@/data-access/chain-of-custody-geo";
 import {
   bowedArc,
   chipAnchor,
+  legAnchorNodeId,
   legLineCoordinates,
   resolveLegEndpoints,
   totalLegAppliedWetMassKg,
@@ -37,6 +40,27 @@ function leg(overrides: Partial<ChainGeoLeg>): ChainGeoLeg {
     materialLabel: null,
     outerHref: null,
     outerCode: null,
+    outerNodeId: null,
+    ...overrides,
+  };
+}
+
+function node(
+  kind: ChainGeoNodeKind,
+  id: string,
+  entityId: string,
+  overrides: Partial<ChainGeoNode> = {}
+): ChainGeoNode {
+  return {
+    id,
+    kind,
+    entityId,
+    code: entityId.toUpperCase(),
+    lat: null,
+    lng: null,
+    positionSource: "none",
+    inheritedFromFacility: false,
+    sub: null,
     ...overrides,
   };
 }
@@ -180,6 +204,73 @@ describe("chipAnchor", () => {
       [1, 1],
     ];
     expect(two).toContainEqual(chipAnchor(two, 2));
+  });
+});
+
+describe("legAnchorNodeId", () => {
+  const FEEDSTOCK = node("feedstock", "feedstock:feedstock-1", "feedstock-1");
+  const PRODUCT = node("biocharProduct", "biochar-product:bp-1", "bp-1");
+  const APPLICATION_A = node("application", "application:app-a", "app-a");
+  const APPLICATION_B = node("application", "application:app-b", "app-b");
+
+  it("anchors an inbound leg on its feedstock", () => {
+    const data = geo({
+      nodes: [FEEDSTOCK, PRODUCT, APPLICATION_A],
+      legs: [leg({ outerNodeId: "feedstock:feedstock-1" })],
+    });
+    expect(legAnchorNodeId(data, data.legs[0])).toBe("feedstock:feedstock-1");
+  });
+
+  it("anchors each outbound leg of a batch roll-up on its own application", () => {
+    const data = geo({
+      nodes: [PRODUCT, APPLICATION_A, APPLICATION_B],
+      legs: [
+        leg({
+          id: "leg-a",
+          kind: "outbound",
+          entityType: "biochar",
+          entityId: "bp-1",
+          outerNodeId: "application:app-a",
+        }),
+        leg({
+          id: "leg-b",
+          kind: "outbound",
+          entityType: "biochar",
+          entityId: "bp-1",
+          outerNodeId: "application:app-b",
+        }),
+      ],
+    });
+    expect(data.legs.map((entry) => legAnchorNodeId(data, entry))).toEqual([
+      "application:app-a",
+      "application:app-b",
+    ]);
+  });
+
+  it("falls back to the leg's own entity when the outer record is not plotted", () => {
+    const inbound = geo({
+      nodes: [FEEDSTOCK],
+      legs: [leg({ outerNodeId: "feedstock:missing" })],
+    });
+    expect(legAnchorNodeId(inbound, inbound.legs[0])).toBe("feedstock:feedstock-1");
+
+    const outbound = geo({
+      nodes: [PRODUCT],
+      legs: [
+        leg({
+          kind: "outbound",
+          entityType: "biochar",
+          entityId: "bp-1",
+          outerNodeId: "application:missing",
+        }),
+      ],
+    });
+    expect(legAnchorNodeId(outbound, outbound.legs[0])).toBe("biochar-product:bp-1");
+  });
+
+  it("falls back to the facility when nothing in the chain resolves", () => {
+    const data = geo({ nodes: [], legs: [leg({})] });
+    expect(legAnchorNodeId(data, data.legs[0])).toBe("facility:fac-1");
   });
 });
 

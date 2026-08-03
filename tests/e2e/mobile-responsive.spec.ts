@@ -46,17 +46,20 @@ const ROUTES = [
   "/certification/removals",
   "/certification/ghg-statements",
   "/traceability",
-  "/admin",
-  "/admin/users",
+  // Settings is a rail plus one pane; both panes are checked because the rail
+  // and the pane stack differently below `md`.
+  "/settings/organization",
+  "/settings/defaults",
+  "/admin/organizations",
 ] as const;
 
 test.use({ viewport: MOBILE_VIEWPORT });
 
 /**
  * Fail if the document scrolls horizontally. A child element with its own
- * `overflow-x-auto` (e.g. the cert settings tab bar) does NOT widen the
- * document, so this only catches layout that escapes the viewport — exactly
- * the un-wrapped-table / non-stacked-grid regression we guard against.
+ * `overflow-x-auto` (e.g. a wrapped data table) does NOT widen the document, so
+ * this only catches layout that escapes the viewport — exactly the
+ * un-wrapped-table / non-stacked-grid regression we guard against.
  */
 async function expectNoHorizontalOverflow(page: Page, route: string) {
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
@@ -172,24 +175,26 @@ test.describe("Mobile responsiveness (390×844)", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible({ timeout: 15000 });
 
-    // "Reactor Type" and "Nominal Throughput (tph)" are paired in one
+    // "Reactor type" and "Nominal throughput (tph)" are paired in one
     // DetailRow (the QA detail-view pass moved Code/Identifier into separate
     // sections). At desktop they sit side-by-side (same row); below `sm` the
     // row must stack so a long value gets the full sheet width instead of a
     // wrapping ~170px half-column. Assert the second label renders clearly
     // BELOW the first — i.e. stacked, not beside it. (Guards the DetailRow
     // `flex-col sm:flex-row` contract.)
+    // Labels are sentence case (docs/design-system.md › Label casing) and
+    // `exact: true` is case-sensitive, so both strings must match the UI.
     const typeBox = await sheet
-      .getByText("Reactor Type", { exact: true })
+      .getByText("Reactor type", { exact: true })
       .boundingBox();
     const throughputBox = await sheet
-      .getByText("Nominal Throughput (tph)", { exact: true })
+      .getByText("Nominal throughput (tph)", { exact: true })
       .boundingBox();
     expect(typeBox).not.toBeNull();
     expect(throughputBox).not.toBeNull();
     expect(
       throughputBox!.y,
-      "Nominal Throughput should stack below Reactor Type on a phone, not sit beside it",
+      "Nominal throughput should stack below Reactor type on a phone, not sit beside it",
     ).toBeGreaterThan(typeBox!.y + 16);
   });
 });

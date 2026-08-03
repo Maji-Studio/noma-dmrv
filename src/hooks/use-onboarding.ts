@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { fetchOnboardingStatus } from "@/fn/onboarding";
 
 const ONBOARDING_STATUS_STALE_TIME_MS = 30_000;
@@ -10,6 +10,20 @@ export const onboardingKeys = {
   status: (facilityId: string | null) =>
     [...onboardingKeys.all, "status", facilityId] as const,
 };
+
+/**
+ * Setup progress is derived from record existence, so every mutation that can
+ * satisfy a setup step must invalidate this independent cache.
+ */
+export function invalidateOnboardingProgress(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({
+    queryKey: onboardingKeys.all,
+    // Setup CTAs create records on another route. Refresh inactive dashboard
+    // queries too, and let mutateAsync wait for the new progress before it
+    // navigates or closes the create surface.
+    refetchType: "all",
+  });
+}
 
 export function useOnboardingStatus(facilityId: string | null) {
   return useQuery({
@@ -22,10 +36,8 @@ export function useOnboardingStatus(facilityId: string | null) {
       return result.data;
     },
     staleTime: ONBOARDING_STATUS_STALE_TIME_MS,
-    // The guide's CTAs round-trip to entity hubs; the dashboard remounts on
-    // return, and none of the entity mutations invalidate onboardingKeys.
-    // Refetching on every mount keeps the computed Setup steps honest without
-    // wiring invalidations into every create-entity hook.
+    // Keep browser-back and route-cache restores honest even if a write came
+    // from a path outside the standard entity mutation hooks.
     refetchOnMount: "always",
   });
 }

@@ -1,4 +1,18 @@
 {
-  "_doc": "Sandbox inventory for `pnpm isometric:coverage-check --source=fixture` (ADR 0005 scope rules / ADR 0018). One `facilities[]` entry per sandbox project we want CI to assert against — the check verifies the live Removal Template's monitored inputs are all covered by INPUT_MAPPING and that no PROJECT-scope period input is declared REMOVAL-scope. Refresh this file when the sandbox project's template changes (see `docs/isometric/sandbox-template-authoring.md`).",
-  "facilities": []
+  "_doc": "Nightly read-only sandbox inventory for `pnpm isometric:coverage-check --source=fixture` (ADR 0005 / ADR 0018). `allowedSandboxPeriodInputs` contains exact normalized group/blueprint/component/input keys for the six known temporary period inputs on this sandbox template; all other PROJECT-scope tuples fail.",
+  "facilities": [
+    {
+      "label": "Dark Earth sandbox demo",
+      "externalProjectId": "prj_1K9YJ33RKSBX9FFF",
+      "defaultRemovalTemplateId": "rvt_1KS4S43VPSBXA26X",
+      "allowedSandboxPeriodInputs": [
+        "direct-emissions/ghg_direct_emissions/pyrolyzer co emissions/concentration",
+        "direct-emissions/ghg_direct_emissions/pyrolyzer co emissions/mass_flow",
+        "direct-emissions/ghg_direct_emissions/pyrolyzer ch₄ emissions/concentration",
+        "direct-emissions/ghg_direct_emissions/pyrolyzer ch₄ emissions/mass_flow",
+        "staff-travel/distance_based_ci_emissions/staff travel flights/distance",
+        "staff-travel/distance_based_ci_emissions/staff travel local/distance"
+      ]
+    }
+  ]
 }

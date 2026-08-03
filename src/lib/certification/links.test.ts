@@ -1,31 +1,49 @@
 import { describe, expect, it } from "vitest";
 import {
-  CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR,
+  CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
+  CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
+  CERTIFICATION_SETTINGS_SECTION_PARAM,
+  CERTIFICATION_SETTINGS_SOURCES_SECTION,
   certificationEmissionEstimatesHref,
   certificationRemovalsHref,
   certificationSettingsHref,
 } from "./links";
 
 describe("certificationEmissionEstimatesHref", () => {
-  it("targets the stacked emission-estimates section for the active facility", () => {
+  it("selects the emissions section for the active facility", () => {
     expect(certificationEmissionEstimatesHref("fac abc/123")).toBe(
-      `/certification/settings?facility=fac%20abc%2F123#${CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR}`,
+      `/certification/settings?${CERTIFICATION_SETTINGS_SECTION_PARAM}=${CERTIFICATION_SETTINGS_EMISSIONS_SECTION}` +
+        `&facility=fac%20abc%2F123`,
+    );
+  });
+
+  it("uses a query param, not a fragment — only the selected section mounts", () => {
+    // The settings page is a rail plus one detail pane, so `#emission-estimates`
+    // would scroll to an element that has not rendered.
+    const href = certificationEmissionEstimatesHref("fac-1");
+    expect(href).not.toContain("#");
+    const url = new URL(href, "http://localhost");
+    expect(url.searchParams.get(CERTIFICATION_SETTINGS_SECTION_PARAM)).toBe(
+      CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
     );
   });
 });
 
 describe("certificationSettingsHref", () => {
-  it("defaults to the connection tab", () => {
+  it("defaults to the certifier section", () => {
     const href = certificationSettingsHref("fac-abc123");
     expect(href).toBe(
-      "/certification/settings?tab=connection&facility=fac-abc123",
+      "/certification/settings?section=certifier&facility=fac-abc123",
     );
   });
 
-  it("accepts a custom tab override", () => {
-    const href = certificationSettingsHref("fac-abc123", "emissions");
+  it("accepts a section override", () => {
+    const href = certificationSettingsHref(
+      "fac-abc123",
+      CERTIFICATION_SETTINGS_SOURCES_SECTION,
+    );
     expect(href).toBe(
-      "/certification/settings?tab=emissions&facility=fac-abc123",
+      `/certification/settings?section=${CERTIFICATION_SETTINGS_SOURCES_SECTION}&facility=fac-abc123`,
     );
   });
 
@@ -34,9 +52,9 @@ describe("certificationSettingsHref", () => {
     expect(href).toContain("facility=fac%20abc%2F123");
   });
 
-  it("URL-encodes the tab name when it contains special characters", () => {
-    const href = certificationSettingsHref("fac-1", "my tab");
-    expect(href).toContain("tab=my%20tab");
+  it("URL-encodes the section when it contains special characters", () => {
+    const href = certificationSettingsHref("fac-1", "my section");
+    expect(href).toContain("section=my%20section");
   });
 
   it("always starts with /certification/settings", () => {
@@ -44,20 +62,24 @@ describe("certificationSettingsHref", () => {
     expect(href.startsWith("/certification/settings")).toBe(true);
   });
 
-  it("produces a path that includes both tab and facility params", () => {
+  it("produces a path that includes both section and facility params", () => {
     const href = certificationSettingsHref("fac-xyz");
     const url = new URL(href, "http://localhost");
-    expect(url.searchParams.get("tab")).toBe("connection");
+    expect(url.searchParams.get(CERTIFICATION_SETTINGS_SECTION_PARAM)).toBe(
+      CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
+    );
     expect(url.searchParams.get("facility")).toBe("fac-xyz");
   });
 
-  it("connection tab is the default so skipped checks always land in the right place", () => {
-    // The 'skipped' transport check in CreditBatchHealthStrip links to
-    // certificationSettingsHref(facilityId) without a tab override — it must
-    // land on the connection tab, not an arbitrary default.
+  it("certifier is the default so unmet setup checks land in the right place", () => {
+    // The submission checks and the batch-selection step both link to
+    // certificationSettingsHref(facilityId) with no override. Keys and the
+    // project link are one pane now, so either kind of gap is fixed there.
     const href = certificationSettingsHref("facility-id");
     const url = new URL(href, "http://localhost");
-    expect(url.searchParams.get("tab")).toBe("connection");
+    expect(url.searchParams.get(CERTIFICATION_SETTINGS_SECTION_PARAM)).toBe(
+      CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
+    );
   });
 });
 

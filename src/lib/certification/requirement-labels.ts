@@ -28,6 +28,7 @@ export type CertRequirementKey =
   | "carbon"
   | "facilityEmissions"
   | "production"
+  | "measurementDates"
   | "transport"
   | "transportUniformity"
   | "entityReadiness"
@@ -58,7 +59,7 @@ export const CERT_REQUIREMENT_META: Record<
   carbon: {
     requirementLabel: "Lab chemistry results",
     whyDetail:
-      "The durability method needs lab chemistry for this batch's samples. For 1000-year credits that means mean random reflectance (R₀) and non-reactive carbon — each with its standard deviation — across at least three replicate samples. These figures set how much of the stored carbon can be claimed as permanent.",
+      "The durability method needs lab chemistry for this credit batch's Samples. For 1000-year credits, record mean random reflectance (R₀), non-reactive carbon, and each standard deviation across at least three Samples. These figures set how much stored carbon can be claimed as permanent.",
   },
   facilityEmissions: {
     requirementLabel: "Facility reference soil temperature",
@@ -68,7 +69,12 @@ export const CERT_REQUIREMENT_META: Record<
   production: {
     requirementLabel: "Linked production data",
     whyDetail:
-      "This batch's applications must trace back to at least one production run so the removal can attribute the pyrolysed biochar mass and its production emissions. With no linked run there is nothing to submit.",
+      "This batch's applications must trace back to at least one production run so the Removal can attribute the pyrolysed biochar mass and its production emissions. With no linked run there is nothing to submit.",
+  },
+  measurementDates: {
+    requirementLabel: "Production and application dates",
+    whyDetail:
+      "These dates tell Isometric when production finished and when the reporting period ended. Future dates cannot be submitted.",
   },
   transport: {
     requirementLabel: "Transport legs recorded",
@@ -78,12 +84,12 @@ export const CERT_REQUIREMENT_META: Record<
   transportUniformity: {
     requirementLabel: "Transport legs aggregate cleanly",
     whyDetail:
-      "When several batches are pooled into one removal, their transport legs in each category must share a single method and emission factor. Mixed methods can't be rolled up into one tonne-kilometre figure, so the removal can't be submitted until they're consistent.",
+      "When several batches are pooled into one Removal, their transport legs in each category must share a single method and emission factor. Make the methods and factors consistent before submitting.",
   },
   entityReadiness: {
     requirementLabel: "Certifier fields on linked records",
     whyDetail:
-      "The production runs, applications and samples behind this batch carry fields the certifier requires — telemetry readings, a geotagged application photo, and similar. Any missing field blocks the whole removal, so they're surfaced on the batch before it's grouped.",
+      "The certifier requires fields on the production runs and Samples linked to this credit batch. Missing production or lab fields block the Removal. Complete each listed field before grouping the batch.",
   },
   mapping: {
     requirementLabel: "Facility linked to a registry project",
@@ -98,17 +104,17 @@ export const CERT_REQUIREMENT_META: Record<
   template: {
     requirementLabel: "Removal template resolved",
     whyDetail:
-      "The facility's default removal template defines which inputs and transport categories the registry expects. It has to resolve cleanly — every referenced component present — before a removal can be assembled from it.",
+      "The facility's default Removal template defines the inputs and transport categories the registry expects. Every referenced component must be available before a Removal can be assembled.",
   },
   evidence: {
-    requirementLabel: "Supporting documents mirrored",
+    requirementLabel: "Registry value sources linked",
     whyDetail:
-      "Mirrored documents are attached to the removal's registry Datapoints as Sources, making the underlying lab reports, transport records, and application evidence available to reviewers. Mirroring is advisory and does not block submission.",
+      "Registry value sources are sent automatically when you submit. Noma then verifies that each source reached the correct registry field.",
   },
   durability: {
     requirementLabel: "Sampling & durability eligibility",
     whyDetail:
-      "Each production run in the removal needs enough qualifying lab samples, with chemistry inside the method's limits, to meet the durability eligibility rules before its carbon can be claimed. This is the same check the submit step enforces.",
+      "Each credit batch in the Removal needs enough qualifying lab Samples, with chemistry inside the method's limits, before its carbon can be claimed. The submit step runs the same check.",
   },
 };
 

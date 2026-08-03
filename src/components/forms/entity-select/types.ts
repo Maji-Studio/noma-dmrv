@@ -9,6 +9,17 @@ export interface EntityOption {
   name: string;
   /** Optional subtitle for additional context (e.g., location, type) */
   subtitle?: string;
+  /** Structured mass data for forms that render a selected entity's mass. */
+  mass?: {
+    moisturePercent: number | null;
+  };
+  /** Live stock shown below the closed select while this option is selected. */
+  remainingMass?: {
+    /** Remaining wet mass. Null renders the repository's explicit unknown copy. */
+    wetKg: number | null;
+    /** Omit for wet-only materials; null renders an explicit unknown dry mass. */
+    dryKg?: number | null;
+  };
 }
 
 export type EntityType =
@@ -44,6 +55,10 @@ export interface EntitySelectProps {
   error?: boolean;
   /** Optional className for styling */
   className?: string;
+  /** Description ids supplied by a wrapping FormField. */
+  "aria-describedby"?: string;
+  /** Invalid state supplied by a wrapping FormField. */
+  "aria-invalid"?: boolean | "true" | "false";
   /** Whether to allow creating new entities inline */
   allowCreate?: boolean;
   /** Label for the quick-add button */

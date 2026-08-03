@@ -72,7 +72,7 @@ test.describe("Storage-bin archive", () => {
 
     const binCard = page.locator("article").filter({ hasText: bin.name });
     await expect(
-      binCard.getByRole("heading", { name: bin.name }),
+      binCard.getByText(bin.name, { exact: true }),
     ).toBeVisible();
 
     // A list refetch can replace the card between opening its overflow menu
@@ -103,12 +103,12 @@ test.describe("Storage-bin archive", () => {
       .click();
     await page.getByRole("menuitem", { name: "Archive" }).click();
     await expect(
-      binCard.getByRole("heading", { name: bin.name }),
+      binCard.getByText(bin.name, { exact: true }),
     ).not.toBeVisible();
 
-    await page.getByRole("button", { name: "Archived", exact: true }).click();
+    await page.getByRole("checkbox", { name: "Show archived" }).click();
     await expect(
-      binCard.getByRole("heading", { name: bin.name }),
+      binCard.getByText(bin.name, { exact: true }),
     ).toBeVisible();
     await expect(binCard.getByText("Archived", { exact: true })).toBeVisible();
 
@@ -117,12 +117,12 @@ test.describe("Storage-bin archive", () => {
       .click();
     await page.getByRole("menuitem", { name: "Restore" }).click();
     await expect(
-      binCard.getByRole("heading", { name: bin.name }),
+      binCard.getByText(bin.name, { exact: true }),
     ).not.toBeVisible();
 
-    await page.getByRole("button", { name: "Archived", exact: true }).click();
+    await page.getByRole("checkbox", { name: "Show archived" }).click();
     await expect(
-      binCard.getByRole("heading", { name: bin.name }),
+      binCard.getByText(bin.name, { exact: true }),
     ).toBeVisible();
   });
 });

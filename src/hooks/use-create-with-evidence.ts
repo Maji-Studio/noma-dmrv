@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { pluralize } from "@/lib/copy-utils";
 import {
   useDeferredAttachments,
   type DeferredAttachment,
@@ -67,7 +68,7 @@ export async function runCreateWithEvidenceChoreography<
     const created = await options.executeCreate(options.input);
     const firstEntity = created.entities[0];
     if (!firstEntity) {
-      throw new Error(`${options.entityNoun} creation returned no entity`);
+      throw new Error(`${options.entityNoun} was not created. Try again.`);
     }
 
     const entityIds = created.entities.map((entity) => entity.id);
@@ -83,7 +84,11 @@ export async function runCreateWithEvidenceChoreography<
     const failureMessage =
       afterFlushResult?.failureMessage ??
       (!flushResult.ok
-        ? `${options.entityNoun} created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`
+        ? `${options.entityNoun} created, but ${flushResult.failed.length} ${
+            flushResult.failed.length === 1
+              ? "attachment was not uploaded"
+              : "attachments were not uploaded"
+          }.`
         : undefined);
 
     if (failureMessage) {
@@ -145,7 +150,7 @@ export function confirmCreateWithEvidenceClose({
     !isCreateMode ||
     unsavedAttachmentCount === 0 ||
     confirmDiscard(
-      `Discard ${unsavedAttachmentCount} unsaved attachment(s)?`,
+      `Discard ${unsavedAttachmentCount} unsaved ${pluralize(unsavedAttachmentCount, "attachment")}?`,
     )
   );
 }

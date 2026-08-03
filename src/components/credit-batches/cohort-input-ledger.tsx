@@ -11,6 +11,7 @@
 
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { formatDate } from "@/lib/format-utils";
 
 // Per-run categorical palette for the dry-output composition bar. Accent hues
 // (not semantic good/warn/critical) so adjacent segments stay distinguishable;
@@ -29,7 +30,7 @@ export interface CohortInputTotals {
   dryOutputKg: number | null;
   /** Σ feedstock dry mass (kg). */
   feedstockDryKg: number | null;
-  /** Σ startup + genset diesel (litres). */
+  /** Σ startup + genset + preprocessing fuel (litres) — all one pyrolysis SSR. */
   dieselLiters: number | null;
   /** Σ grid electricity (kWh). */
   electricityKwh: number | null;
@@ -75,12 +76,12 @@ export function computeCohortInputTotals(
 }
 
 function formatTonnesFromKg(kg: number | null): string {
-  if (kg == null) return "—";
+  if (kg == null) return "Not recorded";
   return kgToTonnes(kg).toFixed(2);
 }
 
 function formatQuantity(value: number | null): string {
-  if (value == null) return "—";
+  if (value == null) return "Not recorded";
   return Math.round(value).toLocaleString();
 }
 
@@ -93,7 +94,7 @@ function Figure({
   value: string;
   unit: string;
 }) {
-  const isEmpty = value === "—";
+  const isEmpty = value === "Not recorded";
   return (
     <div className="flex flex-col gap-2">
       <span className="body-caption text-[var(--color-text-tertiary)]">
@@ -135,7 +136,9 @@ export function CohortInputLedger({
       ? runs
           .map((run, index) => ({
             id: run.id,
-            code: run.code,
+            label: [formatDate(run.date), run.biocharStorageName]
+              .filter(Boolean)
+              .join(" · "),
             kg: run.biocharDryMassKg ?? 0,
             color: COHORT_RUN_COLORS[index % COHORT_RUN_COLORS.length],
           }))
@@ -168,7 +171,7 @@ export function CohortInputLedger({
           unit="t"
         />
         <Figure
-          label="Diesel · genset + startup"
+          label="Diesel · startup + genset + preprocess"
           value={formatQuantity(totals.dieselLiters)}
           unit="L"
         />
@@ -190,7 +193,7 @@ export function CohortInputLedger({
                   width: `${(segment.kg / dryOutputKg) * 100}%`,
                   background: segment.color,
                 }}
-                title={`${segment.code} — ${formatTonnesFromKg(segment.kg)} t dry output`}
+                title={`${segment.label}: ${formatTonnesFromKg(segment.kg)} t dry output`}
               />
             ))}
           </div>
@@ -204,7 +207,7 @@ export function CohortInputLedger({
                   className="h-8 w-8 shrink-0"
                   style={{ background: segment.color }}
                 />
-                {segment.code}
+                {segment.label}
               </span>
             ))}
           </div>
@@ -212,9 +215,9 @@ export function CohortInputLedger({
       )}
 
       <p className="px-18 pb-16 pt-4 body-caption text-[var(--color-text-tertiary)] leading-relaxed border-t border-[var(--color-border-tertiary)]">
-        Claimed in full for this batch, once — regardless of how its output is
-        later split across removals. CO₂e is computed by Isometric at submission;
-        noma submits the quantities above, not emission factors.
+        Each input is claimed once in full for this credit batch, even when its
+        output is later split across Removals. Isometric calculates CO₂e at
+        submission. noma submits the quantities above, not emission factors.
       </p>
     </section>
   );

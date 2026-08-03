@@ -20,7 +20,7 @@
  */
 "use client";
 
-import { BuildingsIcon } from "@phosphor-icons/react";
+import { BuildingsIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useFacilityContext } from "@/hooks/use-facility-context";

@@ -25,14 +25,43 @@ vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");
 vi.mock("@/fn/certification/certify-context-core");
 vi.mock("@/fn/certification/ensure-evidence-ledgers");
-// Phase 3.5: submitRemoval now resolves mirrored Source IDs before
-// hashing. The default-empty mock keeps the pre-Phase-3.5 assertions
-// (`source_ids: []` on every Datapoint) valid; specific Phase 3.5 tests
-// override the mock to inject sources and assert hash supersede.
+// Removal submission fails closed unless every candidate document has a
+// validated mirrored Source ID. Tests that exercise missing/partial mirrors
+// override these healthy defaults.
 vi.mock("@/fn/certification/sources", async () => {
   return {
-    collectCandidateDocumentIdsForRemoval: vi.fn(async () => []),
-    resolveSourceIdsForRemoval: vi.fn(async () => []),
+    collectCandidateDocumentIdsForRemoval: vi.fn(async () => ["doc-test-1"]),
+    resolveSourceIdsForRemoval: vi.fn(async () => ["src-test-1"]),
+    collectCandidateSourceDocumentsForRemoval: vi.fn(async () => [
+      {
+        documentId: "doc-test-1",
+        binding: {
+          nomaRole: "inventory",
+          nomaRoleLabel: "Inventory",
+          lineage: {
+            entityType: "application",
+            entityId: "app-test-1",
+            entityLabel: "Application APP-TEST-001",
+          },
+          intendedTarget: {
+            kind: "sequestration",
+            groupKey: "co2-stored",
+            inputKey: "product_mass",
+          },
+          mappingRevision: "source-binding-test-revision",
+        },
+      },
+    ]),
+    resolveSourceBindingCandidates: vi.fn(async (_ctx, args) =>
+      args.candidates.map((candidate: {
+        documentId: string;
+        binding: unknown;
+      }) => ({
+        ...candidate,
+        sourceId: `src-${candidate.documentId}`,
+      })),
+    ),
+    mirrorCandidateSourcesForSubmission: vi.fn(),
   };
 });
 vi.mock("@/lib/isometric", async (importOriginal) => {
@@ -47,10 +76,8 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   };
 });
 // The Phase 3 measurement-samples flag is a build-time const (false while the
-// two sandbox confirms are pending). The issue #320 window test needs the
-// durability path live to observe `measured_at` staying production-anchored, so
-// expose the flag through a mutable getter (default: the real staged-off state)
-// and stub the POST-ing submitter.
+// two sandbox confirms are pending). Tests that exercise the durability path
+// expose it through a mutable getter and stub the POST-ing submitter.
 const durabilityFlag = vi.hoisted(() => ({ live: false }));
 vi.mock("@/fn/certification/durability-measurement-samples", async (importOriginal) => {
   const actual = await importOriginal<
@@ -58,14 +85,14 @@ vi.mock("@/fn/certification/durability-measurement-samples", async (importOrigin
   >();
   return {
     ...actual,
-    get DURABILITY_MEASUREMENT_SAMPLES_LIVE() {
+    get DURABILITY_MEASUREMENT_SAMPLES_ENABLED() {
       return durabilityFlag.live;
     },
     submitDurabilityMeasurementSamples: vi.fn(),
   };
 });
 
-export function setDurabilityMeasurementSamplesLive(live: boolean): void {
+export function setDurabilityMeasurementSamplesEnabled(live: boolean): void {
   durabilityFlag.live = live;
 }
 
@@ -75,6 +102,7 @@ import * as removalsDA from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
+import * as sources from "@/fn/certification/sources";
 import * as isometric from "@/lib/isometric";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { makeClaimSubmissionDraftFake } from "./fake-claim";
@@ -86,6 +114,7 @@ export {
   certifyContext,
   durabilitySamples,
   evidenceLedgers,
+  sources,
   isometric,
   submitRemoval,
 };
@@ -106,6 +135,37 @@ export const RTC_PRODUCT_MASS_ID = "rtc-product-mass";
 
 export const ORIGINAL_BIOCHAR_MASS_KG = 1000;
 export const CHANGED_BIOCHAR_MASS_KG = 1500;
+
+export function makeInventorySourceDocument(documentId: string) {
+  return {
+    documentId,
+    binding: {
+      nomaRole: "inventory" as const,
+      nomaRoleLabel: "Inventory",
+      lineage: {
+        entityType: "application",
+        entityId: APPLICATION_ID,
+        entityLabel: "Application APP-TEST-001",
+      },
+      intendedTarget: {
+        kind: "sequestration" as const,
+        groupKey: "co2-stored" as const,
+        inputKey: "product_mass" as const,
+      },
+      mappingRevision: "source-binding-test-revision",
+    },
+  };
+}
+
+export function makeResolvedInventorySource(
+  documentId: string,
+  sourceId: string,
+) {
+  return {
+    ...makeInventorySourceDocument(documentId),
+    sourceId,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // In-memory ledger simulator. Mirrors the (provider, submissionType,
@@ -179,9 +239,9 @@ export function makeTemplate(): IsometricGhgEntryTemplate {
   } as unknown as IsometricGhgEntryTemplate;
 }
 
-// A template that routes durability through the new measurement-samples path —
-// declares a `biochar_sequestration_200_year_*` component. submitRemoval blocks
-// it while DURABILITY_MEASUREMENT_SAMPLES_LIVE is off (Phase 3 staged gate).
+// A template that routes durability through the unverified 200-year
+// measurement-samples path. submitRemoval keeps it fail-closed until the
+// remaining H/C unit and binding contract is confirmed.
 export function makeSequestrationTemplate(): IsometricGhgEntryTemplate {
   return {
     id: TEMPLATE_ID,
@@ -295,7 +355,7 @@ function makeMapping(): CertifierProjectRow {
 
 export function makeRun(
   biocharMassKg: number,
-): ProductionRun & { samples: Sample[]; readingsCount: number } {
+): ProductionRun & { samples: Sample[] } {
   return {
     id: PRODUCTION_RUN_ID,
     code: "PR-TEST-001",
@@ -309,7 +369,6 @@ export function makeRun(
     electricityKwh: 0,
     startTime: new Date("2026-01-01T00:00:00Z"),
     endTime: new Date("2026-01-31T23:59:59Z"),
-    readingsCount: 1,
     // Three eligible replicates (H/C_org < 0.5, O/C_org < 0.2) so the D3
     // durability gates pass. organicCarbonPercent stays 80 across replicates so
     // the weighted carbon datapoint magnitude is unchanged.
@@ -342,7 +401,7 @@ export function makeRun(
         moistureContentPercent: 10,
       } as unknown as Sample,
     ],
-  } as unknown as ProductionRun & { samples: Sample[]; readingsCount: number };
+  } as unknown as ProductionRun & { samples: Sample[] };
 }
 
 // One credit batch pooling the removal's runs' samples (ADR 0016: the credit
@@ -453,6 +512,7 @@ export function makeContext(
     hasSubmittableRuns: true,
     productionReadinessGap: null,
     durabilityGateBlockers: durabilityBlockersFor(batchesWithSamples),
+    futureDatedMeasurements: [],
     submissionWarnings: [],
     runSummary: {
       runCount: 1,
@@ -484,14 +544,14 @@ export function makeContext(
       source: "Test dataset (annual mean)",
       temperatureFloored: false,
       method:
-        "Facility reference soil temperature (annual average; 7 °C floor) — Test dataset (annual mean)",
+        "Facility reference soil temperature (annual average; 7 °C floor): Test dataset (annual mean)",
       warnings: [],
     },
     ...overrides,
     entityReadinessGaps: overrides.entityReadinessGaps ?? [],
     supportingDocuments: overrides.supportingDocuments ?? {
-      total: 0,
-      mirrored: 0,
+      total: 1,
+      mirrored: 1,
     },
   };
 }
@@ -570,7 +630,6 @@ beforeEach(() => {
   vi.resetAllMocks();
   storedRows = [];
   nextLedgerRowId = 1;
-  // Real staged-off state; the issue #320 window test flips it per-test.
   durabilityFlag.live = false;
 
   // The claim choreography is one mocked function backed by the in-memory
@@ -637,6 +696,21 @@ beforeEach(() => {
   vi.mocked(evidenceLedgers.ensureEvidenceLedgersFromContext).mockResolvedValue(
     undefined,
   );
+  vi.mocked(sources.collectCandidateDocumentIdsForRemoval).mockResolvedValue([
+    "doc-test-1",
+  ]);
+  vi.mocked(sources.resolveSourceIdsForRemoval).mockResolvedValue([
+    "src-test-1",
+  ]);
+  vi.mocked(
+    sources.collectCandidateSourceDocumentsForRemoval,
+  ).mockResolvedValue([makeInventorySourceDocument("doc-test-1")]);
+  vi.mocked(sources.resolveSourceBindingCandidates).mockResolvedValue([
+    makeResolvedInventorySource("doc-test-1", "src-test-1"),
+  ]);
+  vi.mocked(
+    sources.mirrorCandidateSourcesForSubmission,
+  ).mockResolvedValue(undefined);
   // §8.6.2 fresh-read re-assert (production-claim-gate): after the draft
   // claim, submitRemoval re-reads the removal scope (claims + lineage
   // fingerprint) through resolveScopeForRemoval. Default: unclaimed,

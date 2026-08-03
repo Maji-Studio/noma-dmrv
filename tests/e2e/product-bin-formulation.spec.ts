@@ -156,6 +156,24 @@ test.describe("Product bin ↔ formulation filtering", () => {
 
       await expect(page).toHaveURL(/\/biochar-products/);
       await expect(page.locator('[data-testid="storage-location-quick-add-dialog"]')).toBeVisible();
+
+      const dialogBackdrop = page.locator(
+        '[data-overlay-layer="dialog-backdrop"]'
+      );
+      const sideSheet = page.locator(".slide-over-panel-popup");
+      const [dialogBackdropZIndex, sideSheetZIndex] = await Promise.all([
+        dialogBackdrop.evaluate((element) =>
+          Number.parseInt(getComputedStyle(element).zIndex, 10)
+        ),
+        sideSheet.evaluate((element) =>
+          Number.parseInt(getComputedStyle(element).zIndex, 10)
+        ),
+      ]);
+
+      expect(
+        dialogBackdropZIndex,
+        "the centered dialog backdrop should darken the open side sheet"
+      ).toBeGreaterThan(sideSheetZIndex);
     } finally {
       await deleteTestFacility(emptyFacility.id).catch(() => {});
     }

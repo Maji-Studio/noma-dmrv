@@ -46,7 +46,11 @@ export function useQuickAddSubmit<TFormData>({
       onSuccess(result.data);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Record was not created. Check the form.",
+      );
     } finally {
       setIsSubmitting(false);
     }

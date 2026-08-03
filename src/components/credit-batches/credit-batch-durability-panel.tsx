@@ -4,9 +4,8 @@
  * unit (ADR 0016), so this rolls up every lab Sample that characterises the batch
  * (across its member runs/days), shows the batch-level mean ± std-dev that the
  * measurement-sample submission actually sends, and states the readiness inline:
- * the §3 Table 2 eligibility verdict, the §8.3.1 ≥3 count, and the distribution
- * across distinct runs/days. User-facing copy stays plain — protocol § references
- * live in the header InfoHint, not the body.
+ * the §3 Table 2 eligibility verdict and the §8.3.1 ≥3 count. User-facing copy
+ * stays plain — protocol § references live in the header InfoHint, not the body.
  *
  * Figures come from `buildDurabilityBatchSummaries` — the SAME aggregation the
  * submit pipeline feeds — so this panel reconciles exactly to what's submitted.
@@ -36,31 +35,62 @@ import {
   DurabilityReadinessSignals,
   formatDurabilityStat,
 } from "@/components/certification/durability-readiness";
-import { sampleCreateHref } from "@/lib/sample-create-intent";
+import { sampleCreateHref, sampleDetailHref } from "@/lib/sample-create-intent";
+import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 
-function Section({ children }: { children: React.ReactNode }) {
+function Section({
+  children,
+  action,
+}: {
+  children: React.ReactNode;
+  action: React.ReactNode;
+}) {
   return (
     <section
       data-testid="credit-batch-durability-panel"
       className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] pt-16"
     >
-      <SectionLabel
-        hint={
-          <>
-            Samples from this batch&apos;s production runs are pooled into one
-            batch-level figure (mean ± standard deviation) — that is what the
-            registry receives for the 200-year durability claim. Protocol
-            rules (module §8.3.1, §3 Table 2): at least 3 independent samples
-            across distinct runs/days, eligible when the pooled mean H/C_org
-            &lt; {DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org &lt;{" "}
-            {DURABILITY_ELIGIBILITY_CEILINGS.oToC}.
-          </>
-        }
-      >
-        Lab samples
-      </SectionLabel>
+      <div className="flex items-center justify-between gap-12">
+        <SectionLabel
+          hint={
+            <>
+              Samples from this batch&apos;s production runs are pooled into one
+              credit batch figure with a mean and standard deviation. The
+              registry receives this figure for the 200-year durability claim. Protocol
+              rules (module §8.3.1, §3 Table 2): at least 3 Samples representative
+              of the batch&apos;s full range of physical characteristics, eligible
+              when the pooled mean H/C_org
+              &lt; {DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org &lt;{" "}
+              {DURABILITY_ELIGIBILITY_CEILINGS.oToC}.
+            </>
+          }
+        >
+          Lab Samples
+        </SectionLabel>
+        {action}
+      </div>
       {children}
     </section>
+  );
+}
+
+export function SampleCreateAction({
+  facilityId,
+  creditBatchId,
+  hasSamples,
+}: {
+  facilityId: string;
+  creditBatchId: string;
+  hasSamples: boolean;
+}) {
+  return (
+    <Link
+      href={sampleCreateHref(facilityId, creditBatchId)}
+      className={buttonVariants({ variant: "default", size: "small" })}
+    >
+      <PlusIcon size={16} aria-hidden />
+      {hasSamples ? "Record another Sample" : "Record a Sample"}
+    </Link>
   );
 }
 
@@ -92,7 +122,7 @@ function SubmittedStat({
 }
 
 function num(value: number | null, digits: number): string {
-  return value == null ? "—" : value.toFixed(digits);
+  return value == null ? "Not recorded" : value.toFixed(digits);
 }
 
 function ReplicateRow({ r }: { r: DurabilitySummaryReplicate }) {
@@ -105,14 +135,14 @@ function ReplicateRow({ r }: { r: DurabilitySummaryReplicate }) {
               size={13}
               weight="fill"
               className="shrink-0 text-[var(--st-wait)]"
-              aria-label="Outlier — exceeds an eligibility ceiling"
+              aria-label="Outlier: exceeds an eligibility limit"
             />
           )}
           {r.sampleCode}
         </span>
       </td>
       <td className="px-10 py-8 body-caption text-[var(--color-text-secondary)]">
-        {r.productionRunCode ?? "—"}
+        {r.productionRunCode ?? "Not available"}
         {r.samplingDay ? ` · ${r.samplingDay}` : ""}
       </td>
       <td className="px-10 py-8 text-right tabular-nums body-caption text-[var(--color-text-secondary)]">
@@ -167,31 +197,41 @@ function ReplicateTable({ summary }: { summary: DurabilityBatchSummary }) {
   );
 }
 
-function SampleSummaryRows({ summary }: { summary: DurabilityBatchSummary }) {
+function SampleSummaryRows({
+  summary,
+  facilityId,
+}: {
+  summary: DurabilityBatchSummary;
+  facilityId: string;
+}) {
   return (
-    <div className="divide-y divide-[var(--color-border-tertiary)] border-y border-[var(--color-border-tertiary)]">
+    <SheetLinkRows>
       {summary.replicates.map((replicate) => (
-        <div
+        <SheetLinkRow
           key={replicate.id}
-          className="flex items-center justify-between gap-12 py-8"
-        >
-          <span className="inline-flex min-w-0 items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
-            {replicate.outlier && (
-              <WarningIcon
-                size={13}
-                weight="fill"
-                className="shrink-0 text-[var(--st-wait)]"
-                aria-label="Chemistry outlier"
-              />
-            )}
-            {replicate.sampleCode}
-          </span>
-          <span className="truncate text-right body-caption text-[var(--color-text-tertiary)]">
-            {sampleProvenanceLabel(replicate)}
-          </span>
-        </div>
+          href={sampleDetailHref(facilityId, replicate.id)}
+          ariaLabel={`Open lab Sample ${replicate.sampleCode}`}
+          primary={
+            <span className="inline-flex min-w-0 items-center gap-6">
+              {replicate.outlier && (
+                <WarningIcon
+                  size={13}
+                  weight="fill"
+                  className="shrink-0 text-[var(--st-wait)]"
+                  aria-label="Chemistry outlier"
+                />
+              )}
+              {replicate.sampleCode}
+            </span>
+          }
+          meta={
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              {sampleProvenanceLabel(replicate)}
+            </span>
+          }
+        />
       ))}
-    </div>
+    </SheetLinkRows>
   );
 }
 
@@ -201,7 +241,7 @@ export function sampleProvenanceLabel(
     "productionRunCode" | "samplingDay"
   >,
 ): string {
-  const source = replicate.productionRunCode ?? "Batch sample";
+  const source = replicate.productionRunCode ?? "Batch Sample";
   return replicate.samplingDay
     ? `${source} · ${formatDate(replicate.samplingDay)}`
     : source;
@@ -216,15 +256,22 @@ export function CreditBatchDurabilityPanel({
 }) {
   const { data: summary, isLoading, error } =
     useBatchDurabilitySummary(creditBatchId);
+  const action = (
+    <SampleCreateAction
+      facilityId={facilityId}
+      creditBatchId={creditBatchId}
+      hasSamples={(summary?.sampleCount ?? 0) > 0}
+    />
+  );
 
   if (isLoading) {
     return (
-      <Section>
+      <Section action={action}>
         <span
           className="body-caption text-[var(--color-text-tertiary)]"
           aria-busy="true"
         >
-          Loading durability samples…
+          Loading durability data…
         </span>
       </Section>
     );
@@ -232,9 +279,10 @@ export function CreditBatchDurabilityPanel({
 
   if (error || !summary) {
     return (
-      <Section>
+      <Section action={action}>
         <span className="body-caption text-[var(--st-wait)]">
-          {error?.message ?? "Couldn't load this batch's durability samples."}
+          {error?.message ??
+            "This credit batch's durability Samples could not be loaded. Refresh the page and try again."}
         </span>
       </Section>
     );
@@ -242,30 +290,21 @@ export function CreditBatchDurabilityPanel({
 
   if (summary.sampleCount === 0) {
     return (
-      <Section>
+      <Section action={action}>
         <EmptyState
           padding="md"
           icon={<FlaskIcon size={40} weight="duotone" />}
-          title="No lab samples yet"
-          description="Lab samples recorded on this batch's production runs show up here. At least three samples, taken on different runs or days, are needed before this batch can be certified."
-          action={
-            <Link
-              href={sampleCreateHref(facilityId, creditBatchId)}
-              className={buttonVariants({ variant: "default", size: "small" })}
-            >
-              <PlusIcon size={16} aria-hidden />
-              Record a lab sample
-            </Link>
-          }
+          title="No lab Samples yet"
+          description="Lab Samples recorded for this credit batch appear here. Record at least three Samples that represent the batch's full range of physical characteristics."
         />
       </Section>
     );
   }
 
   return (
-    <Section>
+    <Section action={action}>
       <DurabilityReadinessSignals summary={summary} />
-      <SampleSummaryRows summary={summary} />
+      <SampleSummaryRows summary={summary} facilityId={facilityId} />
 
       <details className="group border border-[var(--color-border-tertiary)]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-12 px-12 py-10 body-small font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]">

@@ -8,6 +8,7 @@ import {
   KeyIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
+import { formatCount } from "@/lib/copy-utils";
 import { getSchemaTableByName, type SchemaArea } from "@/lib/schema/catalog";
 import columnExamples from "@/lib/schema/column-examples.json";
 import columnDescriptions from "@/lib/schema/column-descriptions.json";
@@ -85,7 +86,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
           </p>
 
           <div className="flex flex-wrap items-center gap-[8px] pt-[4px]">
-            <StatBadge label={`${tableInfo.columns.length} columns`} />
+            <StatBadge label={formatCount(tableInfo.columns.length, "column")} />
             <StatBadge
               label={`${tableInfo.outboundRelationships.length} outbound`}
               icon={<ArrowUpRightIcon size={12} />}
@@ -95,7 +96,10 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
               icon={<ArrowDownLeftIcon size={12} />}
             />
             <StatBadge
-              label={`${linkedToTables.length + linkedFromTables.length} linked tables`}
+              label={formatCount(
+                linkedToTables.length + linkedFromTables.length,
+                "linked table",
+              )}
             />
           </div>
 
@@ -284,7 +288,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
                       )}
                     </td>
                     <td className="py-[8px] px-[12px] text-center body-caption text-[var(--color-text-tertiary)]">
-                      {col.hasDefault ? "yes" : "—"}
+                      {col.hasDefault ? "Yes" : "None"}
                     </td>
                     <td className="py-[8px] px-[12px] body-small">
                       {col.name in examples ? (
@@ -295,11 +299,11 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
                           })()}
                         </code>
                       ) : (
-                        <span className="text-[var(--color-text-tertiary)]">—</span>
+                        <span className="text-[var(--color-text-tertiary)]">None</span>
                       )}
                     </td>
                     <td className="py-[8px] px-[12px] body-small text-[var(--color-text-secondary)]">
-                      {descriptions[col.name] ?? <span className="text-[var(--color-text-tertiary)]">—</span>}
+                      {descriptions[col.name] ?? <span className="text-[var(--color-text-tertiary)]">Not available</span>}
                     </td>
                   </tr>
                 ))}
