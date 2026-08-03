@@ -7,6 +7,7 @@ import type { CompositionRow } from "@/lib/biochar-composition";
 interface CapturedEntitySelectProps {
   allowCreate?: boolean;
   createLabel?: string;
+  disabled?: boolean;
   emptyHint?: { message: string };
   filterBy?: Record<string, string>;
   onCreateNew?: () => void;
@@ -26,6 +27,7 @@ const state = vi.hoisted(() => ({
   close: vi.fn(),
   dialog: undefined as CapturedDialogProps | undefined,
   massChange: vi.fn(),
+  massInput: undefined as { disabled?: boolean } | undefined,
   open: vi.fn(),
   select: undefined as CapturedEntitySelectProps | undefined,
   storageChange: vi.fn(),
@@ -68,7 +70,10 @@ vi.mock("@/components/forms", () => ({
     return null;
   },
   FormField: ({ children }: { children: ReactNode }) => children,
-  FormInput: () => null,
+  FormInput: (props: { disabled?: boolean }) => {
+    state.massInput = props;
+    return null;
+  },
 }));
 
 vi.mock("@/components/forms/entity-select", () => ({
@@ -99,13 +104,14 @@ const row: CompositionRow = {
   storageLocationFieldName: "ingredientBins.0.storageLocationId",
 };
 
-function renderField() {
-  renderToStaticMarkup(
+function renderField(allocationFrozen = false) {
+  return renderToStaticMarkup(
     <IngredientBinField
       row={row}
       control={{} as Control<FieldValues>}
       isSubmitting={false}
       facilityId="facility-1"
+      allocationFrozen={allocationFrozen}
     />,
   );
 }
@@ -114,6 +120,7 @@ beforeEach(() => {
   state.close.mockClear();
   state.dialog = undefined;
   state.massChange.mockClear();
+  state.massInput = undefined;
   state.open.mockClear();
   state.select = undefined;
   state.storageChange.mockClear();
@@ -157,5 +164,19 @@ describe("IngredientBinField feedstock-bin quick add", () => {
     state.dialog?.onSuccess({ id: "storage-location-1" });
     expect(state.storageChange).toHaveBeenCalledWith("storage-location-1");
     expect(state.close).toHaveBeenCalledOnce();
+  });
+
+  it("disables both allocation controls only when the source allocation is frozen", () => {
+    renderField();
+    expect(state.select?.disabled).toBe(false);
+    expect(state.massInput?.disabled).toBe(false);
+
+    renderField(true);
+    expect(state.select).toMatchObject({
+      allowCreate: false,
+      disabled: true,
+      onCreateNew: undefined,
+    });
+    expect(state.massInput?.disabled).toBe(true);
   });
 });

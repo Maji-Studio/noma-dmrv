@@ -282,6 +282,9 @@ export function BiocharProductForm({
 }: BiocharProductFormProps) {
   const formId = useId();
   const isEditMode = !!product;
+  const hasFrozenSourceAllocation = Boolean(
+    product?.sourceBiocharStorageLocationId,
+  );
   const initialFormulationId =
     product?.formulation?.id ?? product?.formulationId ?? null;
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -414,7 +417,9 @@ export function BiocharProductForm({
   const routedServerError = useInlineStockServerError(
     errorMessage,
     massFieldFingerprint,
-    (message) => message === binStockOverdrawMessage("biochar"),
+    (message) =>
+      message === binStockOverdrawMessage("biochar") ||
+      message === SOURCE_BIOCHAR_MASS_ERROR,
   );
   const massKgError =
     errors.massKg?.message ??
@@ -585,7 +590,10 @@ export function BiocharProductForm({
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
           }}
           splitFooter={
-            (biocharStockError || routedServerError.inlineError) && (
+            ((biocharStockError !== undefined &&
+              biocharStockError !== SOURCE_BIOCHAR_MASS_ERROR) ||
+              routedServerError.inlineError ===
+                binStockOverdrawMessage("biochar")) && (
               <StockReconciliationLink facilityId={contextFacilityId} />
             )
           }
@@ -664,7 +672,11 @@ export function BiocharProductForm({
         </FormField>
 
         {/* Blend ingredients — each drawn from the feedstock bin holding it */}
-        <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
+        <IngredientBinRows
+          composition={composition}
+          isSubmitting={isSubmitting}
+          allocationFrozen={hasFrozenSourceAllocation}
+        />
 
         <FormField
           id="storageLocationId"
