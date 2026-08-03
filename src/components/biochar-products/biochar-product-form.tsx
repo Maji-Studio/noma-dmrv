@@ -35,7 +35,6 @@ import type { BiocharProductWithRelations } from "@/data-access/biochar-products
 import {
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
-  shouldPrefillSuggestedMasses,
   SOURCE_BIOCHAR_MASS_ERROR,
   useBiocharComposition,
 } from "@/lib/biochar-composition";
@@ -332,16 +331,10 @@ export function BiocharProductForm({
   const watchedMoisture = useWatch({ control, name: "moistureContentPercent" });
   const watchedWaterAddedKg = useWatch({ control, name: "waterAddedKg" });
 
-  const massKgNumForComposition = typeof watchedMassKg === "number" ? watchedMassKg : null;
   const composition = useBiocharComposition(form, {
     formulationId: selectedFormulationId,
     facilityId: selectedFacilityId,
-    productMassKg: massKgNumForComposition,
-    prefillSuggestedMasses: shouldPrefillSuggestedMasses({
-      isEditMode,
-      initialFormulationId,
-      selectedFormulationId,
-    }),
+    allocationFrozen: hasFrozenSourceAllocation,
   });
 
   const { data: selectedSourceBiocharBin } = useEntityById(
@@ -427,7 +420,10 @@ export function BiocharProductForm({
     routedServerError.inlineError;
 
   const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(data as BiocharProductFormData);
+    const submitData = hasFrozenSourceAllocation
+      ? { ...data, ingredientBins: undefined }
+      : data;
+    return onSubmit(submitData as BiocharProductFormData);
   });
 
   // Derive preview values

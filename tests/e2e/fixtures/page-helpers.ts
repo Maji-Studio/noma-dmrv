@@ -17,8 +17,9 @@ export async function getListedActionCodes(
   });
   await expect
     .poll(async () => {
+      if (await emptyState.isVisible()) return "false";
       if (await table.count()) return table.getAttribute("aria-busy");
-      return (await emptyState.count()) ? "false" : "pending";
+      return "pending";
     })
     .toBe("false");
   const labels = await page

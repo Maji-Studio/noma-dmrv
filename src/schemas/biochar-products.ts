@@ -20,6 +20,16 @@ import {
 
 export const MOISTURE_MIN = 0;
 export const MOISTURE_MAX = 100;
+const UNIQUE_INGREDIENT_LINE_MESSAGE =
+  "Each formulation ingredient can only appear once";
+
+function hasUniqueIngredientLines(
+  ingredients: Array<{ formulationIngredientId: string }>,
+): boolean {
+  return new Set(
+    ingredients.map((ingredient) => ingredient.formulationIngredientId),
+  ).size === ingredients.length;
+}
 
 const requiredNonNegativeNumber = (message: string) =>
   requiredMassKgSchema(message);
@@ -56,10 +66,20 @@ const ingredientBinBaseSchema = z.object({
   feedstockTypeName: z.string(),
   feedstockTypeCategory: z.string(),
   // Recipe share snapshot — orientation only. The entered massKg is the
-  // record of what actually went into the blend; it is never validated
-  // against the ratio (deviation surfaces as a soft UI hint instead).
+  // wet/as-received record of what actually went into the blend; it is never
+  // validated against the ratio (deviation surfaces as a soft UI hint instead).
   ratio: z.number().min(0).max(1).optional().nullable(),
   massKg: massKgSchema("Ingredient mass must be 0 or greater"),
+  // Server-derived allocation snapshots. The client carries these through an
+  // edit, but create/update data access remains authoritative for their values.
+  massDryKg: massKgSchema("Ingredient dry mass must be 0 or greater")
+    .optional()
+    .nullable(),
+  moistureContentPercent: storedPercentSchema()
+    .min(MOISTURE_MIN)
+    .max(MOISTURE_MAX)
+    .optional()
+    .nullable(),
 });
 
 const ingredientBinFormSchema = ingredientBinBaseSchema.extend({
@@ -119,7 +139,12 @@ export const biocharProductFormSchema = z.object({
   waterAddedKg: requiredNonNegativeNumber("Water added must be 0 or greater"),
 
   // Ingredient bin mappings (formulation ingredient → physical bin)
-  ingredientBins: z.array(ingredientBinFormSchema).optional(),
+  ingredientBins: z
+    .array(ingredientBinFormSchema)
+    .refine(hasUniqueIngredientLines, {
+      message: UNIQUE_INGREDIENT_LINE_MESSAGE,
+    })
+    .optional(),
 });
 
 // ============================================
@@ -158,7 +183,12 @@ export const updateBiocharProductSchema = z.object({
     .optional(),
   densityKgM3: z.number().min(0).optional().nullable(),
   waterAddedKg: massKgSchema().optional(),
-  ingredientBins: z.array(ingredientBinUpdateSchema).optional(),
+  ingredientBins: z
+    .array(ingredientBinUpdateSchema)
+    .refine(hasUniqueIngredientLines, {
+      message: UNIQUE_INGREDIENT_LINE_MESSAGE,
+    })
+    .optional(),
 });
 
 /**

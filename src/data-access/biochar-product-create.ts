@@ -11,13 +11,16 @@ import {
 } from "@/db/schema";
 import { parseLocalDateString } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
-import { SOURCE_BIOCHAR_MASS_ERROR } from "@/lib/biochar-composition";
+import {
+  SOURCE_BIOCHAR_MASS_ERROR,
+} from "@/lib/biochar-composition";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import {
   assertCompositionIngredientDrawsWithinStock,
   deriveCompositionSourceBiocharMassKg,
   getCompositionIngredientDraws,
+  resolveCompositionIngredientMassBasis,
   validateCompositionIngredientBins,
 } from "./biochar-product-composition";
 import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
@@ -193,6 +196,19 @@ export async function createBiocharProduct(
       sourceBinId,
       ...ingredientDraws.map((draw) => draw.storageLocationId),
     ]);
+    await validateCompositionIngredientBins(
+      ctx,
+      tx,
+      data.composition,
+      formulationId,
+      data.facilityId,
+    );
+    const resolvedComposition =
+      await resolveCompositionIngredientMassBasis(
+        ctx,
+        tx,
+        data.composition,
+      );
 
     let productionDate: Date;
     let linkedProductionRunId: string | null;
@@ -293,17 +309,10 @@ export async function createBiocharProduct(
       linkedProductionRunId = data.linkedProductionRunId ?? null;
     }
 
-    await validateCompositionIngredientBins(
-      ctx,
-      tx,
-      data.composition,
-      formulationId,
-      data.facilityId,
-    );
     await assertCompositionIngredientDrawsWithinStock(
       ctx,
       tx,
-      data.composition,
+      resolvedComposition,
     );
 
     const [storage] = await tx
@@ -368,7 +377,7 @@ export async function createBiocharProduct(
         moistureContentPercent,
         densityKgM3: data.densityKgM3 ?? null,
         waterAddedKg,
-        composition: data.composition ?? {},
+        composition: resolvedComposition,
       })
       .returning();
 

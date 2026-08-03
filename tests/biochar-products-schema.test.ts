@@ -84,6 +84,34 @@ describe("biocharProductFormSchema", () => {
     ).toBe(true);
   });
 
+  it("rejects duplicate formulation ingredient rows", () => {
+    const ingredient = {
+      formulationIngredientId: "55555555-5555-4555-8555-555555555555",
+      feedstockTypeId: "66666666-6666-4666-8666-666666666666",
+      feedstockTypeName: "Compost",
+      feedstockTypeCategory: "compost",
+      ratio: 0.2,
+      massKg: 20,
+      storageLocationId: null,
+    };
+    const result = biocharProductFormSchema.safeParse({
+      ...validBiocharProductInput,
+      ingredientBins: [ingredient, { ...ingredient }],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["ingredientBins"],
+            message: "Each formulation ingredient can only appear once",
+          }),
+        ]),
+      );
+    }
+  });
+
   it("ignores a productionDate field because source allocation derives it", () => {
     const result = biocharProductFormSchema.safeParse({
       ...validBiocharProductInput,

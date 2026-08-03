@@ -120,6 +120,7 @@ import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle
 import {
   assertCompositionIngredientDrawsWithinStock,
   compositionAllocationChanged,
+  resolveCompositionIngredientMassBasis,
   validateCompositionIngredientBins,
 } from "./biochar-product-composition";
 import {
@@ -746,8 +747,8 @@ export async function updateBiocharProduct(
       transactionLinkedRunId,
       transactionStorageId,
       transactionMassKg,
-      transactionComposition,
     } = stockState;
+    let { transactionComposition } = stockState;
 
     // Re-snapshot the recipe's biochar ratio only when the product is pointed
     // at a different formulation — editing a formulation never rewrites the
@@ -807,6 +808,15 @@ export async function updateBiocharProduct(
         transactionFacilityId
       );
       if (data.composition !== undefined) {
+        if (!locked.sourceBiocharStorageLocationId) {
+          transactionComposition =
+            await resolveCompositionIngredientMassBasis(
+              ctx,
+              tx,
+              transactionComposition,
+              locked.composition as Record<string, unknown> | null,
+            );
+        }
         await assertCompositionIngredientDrawsWithinStock(
           ctx,
           tx,
@@ -852,7 +862,11 @@ export async function updateBiocharProduct(
       }
     }
 
-    await assertBiocharProductUpdateDraw(ctx, tx, productId, data, {
+    const persistedData =
+      data.composition !== undefined
+        ? { ...data, composition: transactionComposition ?? {} }
+        : data;
+    await assertBiocharProductUpdateDraw(ctx, tx, productId, persistedData, {
       transactionFacilityId,
       transactionFormulationId,
       transactionLinkedRunId,
@@ -864,7 +878,7 @@ export async function updateBiocharProduct(
     const [row] = await tx
       .update(biocharProducts)
       .set({
-        ...data,
+        ...persistedData,
         ...(biocharRatioSnapshot !== undefined && { biocharRatio: biocharRatioSnapshot }),
         ...(derivedProductionDate && { productionDate: derivedProductionDate }),
         updatedAt: new Date(),

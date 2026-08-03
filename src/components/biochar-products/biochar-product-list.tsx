@@ -606,7 +606,7 @@ export function BiocharProductList() {
                     value: ingredient.feedstockTypeName,
                   },
                   {
-                    label: `${prefix} · Mass (kg)`,
+                    label: `${prefix} · ${WET_MASS_FIELD_LABEL}`,
                     value: ingredient.massKg != null ? formatMassKg(ingredient.massKg) : null,
                   },
                   {

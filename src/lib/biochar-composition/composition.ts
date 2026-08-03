@@ -46,6 +46,10 @@ export function reconcileComposition(
       ratio: ing.ratio ?? null,
       storageLocationId: sameFeedstockType ? prior?.storageLocationId ?? null : null,
       massKg: prior?.massKg ?? null,
+      massDryKg: sameFeedstockType ? prior?.massDryKg ?? null : null,
+      moistureContentPercent: sameFeedstockType
+        ? prior?.moistureContentPercent ?? null
+        : null,
     };
   });
 }
@@ -79,13 +83,13 @@ interface IngredientMassLike {
 export const SOURCE_BIOCHAR_MASS_ERROR =
   "Recorded ingredient mass exceeds blend mass. Reduce ingredient mass or increase blend mass.";
 
-const GRAMS_PER_KILOGRAM = 1_000;
+export const GRAMS_PER_KILOGRAM = 1_000;
 
-function toPersistedMassGrams(massKg: number): number {
+export function toPersistedMassGrams(massKg: number): number {
   return Math.round(massKg * GRAMS_PER_KILOGRAM);
 }
 
-/** Sum the actual ingredient masses recorded for one product blend. */
+/** Sum the actual wet ingredient masses recorded for one product blend. */
 function sumRecordedIngredientMassKg(
   ingredients: readonly IngredientMassLike[] | null | undefined,
 ): number {
@@ -100,8 +104,9 @@ function sumRecordedIngredientMassKg(
 }
 
 /**
- * Source biochar is the recorded pre-water blend mass less recorded ingredient
- * masses. Formulation shares are volume guidance and never enter this equation.
+ * Source biochar is the recorded pre-water wet blend mass less recorded wet
+ * ingredient masses. Formulation shares are volume guidance and never enter
+ * this equation.
  */
 export function deriveSourceBiocharMassKg(
   blendMassKg: number | null | undefined,
@@ -118,23 +123,6 @@ export function deriveSourceBiocharMassKg(
     sumRecordedIngredientMassKg(ingredients),
   );
   return (blendMassGrams - ingredientMassGrams) / GRAMS_PER_KILOGRAM;
-}
-
-/**
- * Suggestions may become form values only while creating a composition. An
- * existing product keeps saved null masses empty unless the operator explicitly
- * assigns a different formulation, whose ingredient rows have no saved facts.
- */
-export function shouldPrefillSuggestedMasses(input: {
-  isEditMode: boolean;
-  initialFormulationId: string | null | undefined;
-  selectedFormulationId: string | null | undefined;
-}): boolean {
-  if (!input.selectedFormulationId) return false;
-  return (
-    !input.isEditMode ||
-    input.selectedFormulationId !== input.initialFormulationId
-  );
 }
 
 /**
@@ -180,6 +168,12 @@ export function fromCompositionJsonb(raw: unknown): IngredientBin[] {
       (bin.ratio == null || Number.isFinite(bin.ratio)) &&
       (bin.massKg == null ||
         (Number.isFinite(bin.massKg) && bin.massKg >= 0)) &&
+      (bin.massDryKg == null ||
+        (Number.isFinite(bin.massDryKg) && bin.massDryKg >= 0)) &&
+      (bin.moistureContentPercent == null ||
+        (Number.isFinite(bin.moistureContentPercent) &&
+          bin.moistureContentPercent >= 0 &&
+          bin.moistureContentPercent <= 100)) &&
       (bin.storageLocationId == null ||
         typeof bin.storageLocationId === "string")
     );

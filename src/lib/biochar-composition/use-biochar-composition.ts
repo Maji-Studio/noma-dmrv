@@ -27,10 +27,7 @@ import type { CompositionRow, IngredientBin } from "./types";
 export interface UseBiocharCompositionArgs {
   formulationId: string | null | undefined;
   facilityId: string | null | undefined;
-  /** Accepted for caller compatibility. Ingredient masses are operator-entered. */
-  productMassKg?: number | null | undefined;
-  /** Accepted for caller compatibility. Recipe-based prefill is disabled. */
-  prefillSuggestedMasses?: boolean;
+  allocationFrozen?: boolean;
 }
 
 export interface UseBiocharCompositionResult {
@@ -57,7 +54,7 @@ export function useBiocharComposition(
   form: LooseForm,
   args: UseBiocharCompositionArgs,
 ): UseBiocharCompositionResult {
-  const { formulationId, facilityId } = args;
+  const { formulationId, facilityId, allocationFrozen = false } = args;
 
   const control = form.control as Control<FieldValues>;
   const { fields, replace } = useFieldArray({ control, name: "ingredientBins" });
@@ -76,6 +73,12 @@ export function useBiocharComposition(
   // rejects compositions that don't cover every formulation line).
   const syncedFormulationIdRef = useRef("");
   useEffect(() => {
+    // A product with source allocations has immutable composition facts. Keep
+    // the saved rows even if its formulation recipe changes later.
+    if (allocationFrozen) {
+      syncedFormulationIdRef.current = formulationId ?? "";
+      return;
+    }
     // Pure-biochar product (no formulation) → no ingredient bins. Clear any rows
     // left over from a previously-selected formulation.
     if (!formulationId) {
@@ -92,7 +95,7 @@ export function useBiocharComposition(
     const live = (form.getValues("ingredientBins") as IngredientBin[] | undefined) ?? [];
     const next = reconcileComposition(formulation, live);
     replace(next);
-  }, [formulationId, formulation, form, replace]);
+  }, [allocationFrozen, formulationId, formulation, form, replace]);
 
   // Facility cascade: clear each row's storageLocationId when the user picks
   // a different facility. Skips the initial mount.

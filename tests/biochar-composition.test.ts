@@ -5,7 +5,6 @@ import {
   deriveSourceBiocharMassKg,
   deriveMassDeviationPercent,
   fromCompositionJsonb,
-  shouldPrefillSuggestedMasses,
   toCompositionJsonb,
 } from "@/lib/biochar-composition";
 import type { IngredientBin } from "@/lib/biochar-composition";
@@ -41,6 +40,8 @@ describe("reconcileComposition", () => {
         feedstockTypeCategory: "compost",
         ratio: 0.8,
         massKg: 80,
+        massDryKg: 72,
+        moistureContentPercent: 10,
         storageLocationId: BIN_A,
       },
       {
@@ -56,7 +57,13 @@ describe("reconcileComposition", () => {
 
     const next = reconcileComposition(formulation, existing);
     expect(next).toHaveLength(2);
-    expect(next[0]).toMatchObject({ formulationIngredientId: ING_A, storageLocationId: BIN_A, massKg: 80 });
+    expect(next[0]).toMatchObject({
+      formulationIngredientId: ING_A,
+      storageLocationId: BIN_A,
+      massKg: 80,
+      massDryKg: 72,
+      moistureContentPercent: 10,
+    });
     expect(next[1]).toMatchObject({ formulationIngredientId: ING_B, storageLocationId: BIN_B, massKg: 20 });
   });
 
@@ -176,6 +183,8 @@ describe("reconcileComposition", () => {
         feedstockTypeCategory: "compost",
         ratio: 1,
         massKg: null,
+        massDryKg: null,
+        moistureContentPercent: null,
         storageLocationId: null,
       },
     ]);
@@ -247,53 +256,6 @@ describe("deriveSourceBiocharMassKg", () => {
   });
 });
 
-describe("shouldPrefillSuggestedMasses", () => {
-  it("allows suggestions while creating a new product composition", () => {
-    expect(
-      shouldPrefillSuggestedMasses({
-        isEditMode: false,
-        initialFormulationId: null,
-        selectedFormulationId: ING_A,
-      }),
-    ).toBe(true);
-  });
-
-  it("does not fabricate a null saved mass during an unrelated edit", () => {
-    const savedWithNullMass: IngredientBin[] = [
-      {
-        formulationIngredientId: ING_A,
-        feedstockTypeId: FT_A,
-        feedstockTypeName: "Compost",
-        feedstockTypeCategory: "compost",
-        ratio: 0.2,
-        massKg: null,
-        storageLocationId: BIN_A,
-      },
-    ];
-
-    expect(
-      shouldPrefillSuggestedMasses({
-        isEditMode: true,
-        initialFormulationId: ING_C,
-        selectedFormulationId: ING_C,
-      }),
-    ).toBe(false);
-    expect(toCompositionJsonb(savedWithNullMass, { mode: "update" })).toEqual({
-      ingredients: [expect.objectContaining({ massKg: null })],
-    });
-  });
-
-  it("allows suggestions after an explicit formulation reassignment", () => {
-    expect(
-      shouldPrefillSuggestedMasses({
-        isEditMode: true,
-        initialFormulationId: ING_A,
-        selectedFormulationId: ING_B,
-      }),
-    ).toBe(true);
-  });
-});
-
 describe("deriveMassDeviationPercent", () => {
   it("computes the signed percent deviation vs the suggestion", () => {
     expect(deriveMassDeviationPercent(220, 200)).toBeCloseTo(10, 6);
@@ -338,6 +300,8 @@ describe("fromCompositionJsonb", () => {
           feedstockTypeCategory: "compost",
           ratio: 1,
           massKg: 100,
+          massDryKg: 90,
+          moistureContentPercent: 10,
           storageLocationId: BIN_A,
         },
       ],

@@ -15,22 +15,59 @@ describe("biochar-product ingredient draws", () => {
             feedstockTypeId: "feedstock-type-1",
             storageLocationId: "feedstock-bin-1",
             massKg: 40,
+            massDryKg: 32,
           },
           {
             formulationIngredientId: "ingredient-2",
             feedstockTypeId: "feedstock-type-1",
             storageLocationId: "feedstock-bin-1",
             massKg: 30,
+            massDryKg: 24,
           },
           {
             formulationIngredientId: "ingredient-3",
             feedstockTypeId: "feedstock-type-1",
             storageLocationId: "feedstock-bin-2",
             massKg: 0,
+            massDryKg: 0,
           },
         ],
       }),
-    ).toEqual([{ storageLocationId: "feedstock-bin-1", massKg: 70 }]);
+    ).toEqual([
+      {
+        storageLocationId: "feedstock-bin-1",
+        massKg: 70,
+        massDryKg: 56,
+      },
+    ]);
+  });
+
+  it("marks an aggregate unresolved when any wet draw lacks a dry snapshot", () => {
+    expect(
+      getCompositionIngredientDraws({
+        ingredients: [
+          {
+            formulationIngredientId: "ingredient-1",
+            feedstockTypeId: "feedstock-type-1",
+            storageLocationId: "feedstock-bin-1",
+            massKg: 40,
+            massDryKg: 32,
+          },
+          {
+            formulationIngredientId: "ingredient-2",
+            feedstockTypeId: "feedstock-type-1",
+            storageLocationId: "feedstock-bin-1",
+            massKg: 10,
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        storageLocationId: "feedstock-bin-1",
+        massKg: 50,
+        massDryKg: null,
+      },
+    ]);
   });
 
   it("allows a positive ingredient mass without a tracked source bin", () => {
@@ -58,6 +95,8 @@ describe("composition allocation comparison", () => {
     ratio: 0.2,
     storageLocationId: "bin-a",
     massKg: 0.1,
+    massDryKg: 0.08,
+    moistureContentPercent: 20,
   };
   const second = {
     formulationIngredientId: "line-b",
@@ -67,6 +106,8 @@ describe("composition allocation comparison", () => {
     ratio: 0.3,
     storageLocationId: "bin-b",
     massKg: 0.2,
+    massDryKg: 0.18,
+    moistureContentPercent: 10,
   };
 
   it("ignores row order, object key order, display metadata, and ratio", () => {
@@ -77,6 +118,8 @@ describe("composition allocation comparison", () => {
           ingredients: [
             {
               massKg: 0.2,
+              massDryKg: 0.18,
+              moistureContentPercent: 10,
               storageLocationId: "bin-b",
               ratio: 0.9,
               feedstockTypeCategory: "refreshed",
@@ -86,6 +129,8 @@ describe("composition allocation comparison", () => {
             },
             {
               massKg: 0.1,
+              massDryKg: 0.08,
+              moistureContentPercent: 20,
               storageLocationId: "bin-a",
               ratio: 0.8,
               feedstockTypeCategory: "refreshed",
@@ -104,6 +149,8 @@ describe("composition allocation comparison", () => {
     ["feedstock type", { ...first, feedstockTypeId: "type-c" }],
     ["source bin", { ...first, storageLocationId: "bin-c" }],
     ["recorded mass", { ...first, massKg: 0.101 }],
+    ["dry-mass snapshot", { ...first, massDryKg: 0.081 }],
+    ["moisture snapshot", { ...first, moistureContentPercent: 19 }],
   ])("detects a changed %s", (_label, changed) => {
     expect(
       compositionAllocationChanged(

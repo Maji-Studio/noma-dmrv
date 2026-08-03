@@ -10,6 +10,7 @@ import {
   COMPOSITION_BIN_TYPE,
   type CompositionRow,
 } from "@/lib/biochar-composition";
+import { WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 import { formatStorageLocationType } from "@/schemas/storage-locations";
 
@@ -116,7 +117,7 @@ export function IngredientBinField({
           <div>
             <FormField
               id={row.massKgFieldName}
-              label="Mass (kg)"
+              label={WET_MASS_FIELD_LABEL}
               required
               error={fieldState.error?.message}
             >
@@ -129,7 +130,10 @@ export function IngredientBinField({
                 disabled={isSubmitting || allocationFrozen}
                 error={!!fieldState.error}
                 value={field.value ?? ""}
-                onChange={field.onChange}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  field.onChange(value === "" ? null : Number(value));
+                }}
                 onBlur={field.onBlur}
                 name={field.name}
                 ref={field.ref}

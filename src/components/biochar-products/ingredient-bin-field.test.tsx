@@ -23,11 +23,17 @@ interface CapturedDialogProps {
   onSuccess: (entity: { id: string }) => void;
 }
 
+interface CapturedMassInputProps {
+  disabled?: boolean;
+  onChange?: (event: { target: { value: string } }) => void;
+}
+
 const state = vi.hoisted(() => ({
   close: vi.fn(),
   dialog: undefined as CapturedDialogProps | undefined,
+  fieldLabels: [] as string[],
   massChange: vi.fn(),
-  massInput: undefined as { disabled?: boolean } | undefined,
+  massInput: undefined as CapturedMassInputProps | undefined,
   open: vi.fn(),
   select: undefined as CapturedEntitySelectProps | undefined,
   storageChange: vi.fn(),
@@ -69,8 +75,17 @@ vi.mock("@/components/forms", () => ({
     state.select = props;
     return null;
   },
-  FormField: ({ children }: { children: ReactNode }) => children,
-  FormInput: (props: { disabled?: boolean }) => {
+  FormField: ({
+    children,
+    label,
+  }: {
+    children: ReactNode;
+    label: string;
+  }) => {
+    state.fieldLabels.push(label);
+    return children;
+  },
+  FormInput: (props: CapturedMassInputProps) => {
     state.massInput = props;
     return null;
   },
@@ -116,6 +131,7 @@ function renderField(allocationFrozen = false) {
 beforeEach(() => {
   state.close.mockClear();
   state.dialog = undefined;
+  state.fieldLabels = [];
   state.massChange.mockClear();
   state.massInput = undefined;
   state.open.mockClear();
@@ -124,6 +140,21 @@ beforeEach(() => {
 });
 
 describe("IngredientBinField feedstock-bin quick add", () => {
+  it("labels the operator-entered ingredient mass as wet mass", () => {
+    renderField();
+    expect(state.fieldLabels).toContain("Wet mass (kg)");
+  });
+
+  it("stores the wet mass as a number for live stock calculations", () => {
+    renderField();
+
+    state.massInput?.onChange?.({ target: { value: "20.5" } });
+    expect(state.massChange).toHaveBeenCalledWith(20.5);
+
+    state.massInput?.onChange?.({ target: { value: "" } });
+    expect(state.massChange).toHaveBeenLastCalledWith(null);
+  });
+
   it("offers a feedstock-bin action using the row filters", () => {
     renderField();
 
