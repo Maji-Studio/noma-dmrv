@@ -60,14 +60,16 @@ type MassMoistureFieldsProps = ComponentProps<typeof MassMoistureFields>;
  */
 export function BiocharSourceMassFields({
   wet,
+  materialLabel,
   ...props
 }: MassMoistureFieldsProps) {
   return (
     <MassMoistureFields
       {...props}
+      materialLabel={materialLabel}
       wet={{
         ...wet,
-        label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"),
+        label: qualifyMassLabel(WET_MASS_FIELD_LABEL, materialLabel ?? "Biochar"),
         helperText: wet.helperText ?? "Wet biochar drawn from the source bin.",
       }}
     />
