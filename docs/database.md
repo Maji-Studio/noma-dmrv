@@ -125,6 +125,11 @@ checksum, private `documents` row, and a per-report verifier-token digest.
 Verifier resubmission keeps that active digest while a separately committed
 pending digest is valid during the provider call; success promotes pending to
 active, while confirmed non-applied failure clears pending only.
+An ambiguous provider outcome never clears the pending digest from one read.
+Recovery promotes a matching URL observed on either fresh read, or restages
+only after the pending digest has aged and two delayed, fingerprint-stable
+`DRAFT` reads show no matching capability or submission markers. This keeps a
+stale registry read from invalidating a URL that the verifier may already hold.
 Lifecycle is monotonic `prepared → approved → submitted`; database checks keep
 approval/submission actor timestamps coherent, while unique constraints prevent
 duplicate statement versions, preparation idempotency keys, or document reuse.
