@@ -241,6 +241,40 @@ describe("EntitySelect selected-value display", () => {
   });
 });
 
+describe("EntitySelect none option", () => {
+  it("names the none state on the closed trigger instead of a placeholder", () => {
+    const html = renderToStaticMarkup(
+      <EntitySelect
+        entityType="formulation"
+        value=""
+        onChange={() => undefined}
+        noneOption={{ label: "None (Pure biochar)" }}
+      />,
+    );
+
+    expect(html).toContain(">None (Pure biochar)</span>");
+    expect(html).not.toContain(">Select formulation...</span>");
+  });
+
+  it("keeps the selected entity label over the none label", () => {
+    entityState.options = [
+      { id: "formulation-1", code: "F-1", name: "50/50 Mix" },
+    ];
+
+    const html = renderToStaticMarkup(
+      <EntitySelect
+        entityType="formulation"
+        value="formulation-1"
+        onChange={() => undefined}
+        noneOption={{ label: "None (Pure biochar)" }}
+      />,
+    );
+
+    expect(html).toContain("50/50 Mix");
+    expect(html).not.toContain("None (Pure biochar)");
+  });
+});
+
 describe("EntitySelect open option display", () => {
   it("keeps an explicitly allowed create action with non-empty options", () => {
     expect(

@@ -33,9 +33,13 @@ const PERCENT_MAX = 100;
  */
 export const MASS_MOISTURE_LABELS = {
   wet: "Wet mass",
+  finalWet: "Final wet",
   dry: "Dry mass",
   water: "Water",
+  waterBeforeAddition: "Water before addition",
+  waterAdded: "Water added",
   moisture: "Moisture",
+  finalMoisture: "Final moisture",
 } as const;
 
 export const WET_MASS_FIELD_LABEL = "Wet mass (kg)";
@@ -268,6 +272,15 @@ export function formatWetDryMass({
  */
 export function describeMassSplit(split: MassSplit): string {
   return `${formatSplitMass(split.wetKg)} wet: ${formatSplitMass(split.dryKg)} dry mass and ${formatSplitMass(split.waterKg)} water at ${formatMoisturePercent(split.moisturePercent)} moisture.`;
+}
+
+/** Screen-reader sentence for a split that distinguishes newly added water. */
+export function describeMassSplitAfterAddedWater(
+  split: MassSplit,
+  addedWaterKg: number,
+  finalSplit: MassSplit,
+): string {
+  return `${formatSplitMass(finalSplit.wetKg)} final wet mass: ${formatSplitMass(split.dryKg)} dry mass, ${formatSplitMass(split.waterKg)} water before addition, and ${formatSplitMass(addedWaterKg)} added water at ${formatMoisturePercent(finalSplit.moisturePercent)} moisture.`;
 }
 
 /** Compact one-line summary — "Wet: 1,000 kg · Dry: 800 kg". */

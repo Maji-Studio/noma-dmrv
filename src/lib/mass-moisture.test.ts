@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveEffectiveMoisturePercent,
   describeMassSplit,
+  describeMassSplitAfterAddedWater,
   formatMassSplitInline,
   formatMoisturePercent,
   formatSplitMass,
@@ -137,6 +138,22 @@ describe("split descriptions", () => {
     const split = splitWetMass(1000, 20)!;
     expect(describeMassSplit(split)).toBe(
       "1,000 kg wet: 800 kg dry mass and 200 kg water at 20% moisture."
+    );
+  });
+
+  it("distinguishes added water in the final split description", () => {
+    const split = splitWetMass(450, 10)!;
+    const addedWaterKg = 50;
+    const finalSplit = splitWetMassAfterAddedWater(
+      split.wetKg,
+      split.moisturePercent,
+      addedWaterKg,
+    )!;
+
+    expect(
+      describeMassSplitAfterAddedWater(split, addedWaterKg, finalSplit),
+    ).toBe(
+      "500 kg final wet mass: 405 kg dry mass, 45 kg water before addition, and 50 kg added water at 19% moisture.",
     );
   });
 

@@ -33,7 +33,6 @@ import {
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
-
 describe("createBiocharProduct — product bin ↔ formulation", () => {
   const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
   let facilityId: string;
@@ -711,6 +710,21 @@ beforeAll(async () => {
     const composition = formulationAComposition();
     composition.ingredients[0].massKg = 20;
     composition.ingredients[0].storageLocationId = ingredientBinId;
+
+    // 2% claims 78.4 kg dry from an 80 kg wet draw, above the lot's 72 kg.
+    await expect(
+      createBiocharProduct(ctx, {
+        ...baseProductInput(),
+        linkedProductionRunId: null,
+        sourceBiocharStorageLocationId: sourceBinId,
+        formulationId: formulationAId,
+        storageLocationId: firstProductBinId,
+        massKg: 100,
+        moistureContentPercent: 2,
+        composition,
+      }),
+    ).rejects.toThrow("Increase the moisture or reduce the blend mass");
+
     const product = await createBiocharProduct(ctx, {
       ...baseProductInput(),
       linkedProductionRunId: null,
@@ -718,6 +732,9 @@ beforeAll(async () => {
       formulationId: formulationAId,
       storageLocationId: firstProductBinId,
       massKg: 100,
+      // Matches the source lot's 10% so the measured dry draw equals the
+      // lot's full 72 kg dry stock.
+      moistureContentPercent: 10,
       composition,
     });
     createdProductIds.push(product.id);
@@ -840,15 +857,12 @@ beforeAll(async () => {
     ).rejects.toThrow("Not enough biochar in this bin");
   });
 
-  it("allows an all-ingredient product with zero required source mass", async () => {
+  it("allows a binless all-ingredient product with zero required source mass", async () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const sourceBinId = await makeBiocharBin();
     const productBinId = await makeProductBin(formulationAId);
-    const ingredientBinId = await makeStockedFeedstockBin(100);
     const composition = formulationAComposition();
     composition.ingredients[0].massKg = 100;
-    composition.ingredients[0].storageLocationId = ingredientBinId;
-
     const product = await createBiocharProduct(ctx, {
       ...baseProductInput(),
       linkedProductionRunId: null,
@@ -859,17 +873,10 @@ beforeAll(async () => {
       composition,
     });
     createdProductIds.push(product.id);
-
-    await expect(
-      db
-        .select()
-        .from(biocharProductSourceAllocations)
-        .where(
-          eq(biocharProductSourceAllocations.biocharProductId, product.id),
-        ),
-    ).resolves.toEqual([]);
+    const allocations = await db.select().from(biocharProductSourceAllocations)
+      .where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
+    expect(allocations).toEqual([]);
   });
-
   it("updates legacy blend mass without requiring a missing ingredient bin", async () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const sourceBinId = await makeBiocharBin();

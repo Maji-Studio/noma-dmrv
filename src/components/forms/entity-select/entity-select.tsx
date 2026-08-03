@@ -224,6 +224,7 @@ export function EntitySelect({
   hideSearch = false,
   formatSelectedLabel,
   emptyHint,
+  noneOption,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }: EntitySelectProps) {
@@ -341,9 +342,14 @@ export function EntitySelect({
     optionCount: options.length,
   });
 
+  // The none row only participates while the list is unsearched: a search is
+  // a lookup for a real entity, not a way to reach "none".
+  const showNoneOption = Boolean(noneOption) && searchQuery.length === 0;
+  const noneOffset = showNoneOption ? 1 : 0;
+
   // Clamp highlighted index when options change
   const maxHighlightedIndex =
-    options.length + (shouldShowCreateAction ? 1 : 0) - 1;
+    noneOffset + options.length + (shouldShowCreateAction ? 1 : 0) - 1;
   const clampedHighlightedIndex = Math.min(
     Math.max(0, highlightedIndex),
     Math.max(0, maxHighlightedIndex),
@@ -405,6 +411,12 @@ export function EntitySelect({
     [onChange]
   );
 
+  const handleSelectNone = useCallback(() => {
+    onChange("");
+    setIsOpen(false);
+    setSearchQuery("");
+  }, [onChange]);
+
   const handleClear = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -427,7 +439,8 @@ export function EntitySelect({
   const handleKeyDown = (
     e: KeyboardEvent<HTMLInputElement | HTMLButtonElement>,
   ) => {
-    const optionCount = options.length + (shouldShowCreateAction ? 1 : 0);
+    const optionCount =
+      noneOffset + options.length + (shouldShowCreateAction ? 1 : 0);
 
     switch (e.key) {
       case "ArrowDown":
@@ -440,8 +453,10 @@ export function EntitySelect({
         break;
       case "Enter":
         e.preventDefault();
-        if (
-          clampedHighlightedIndex === options.length &&
+        if (showNoneOption && clampedHighlightedIndex === 0) {
+          handleSelectNone();
+        } else if (
+          clampedHighlightedIndex === noneOffset + options.length &&
           shouldShowCreateAction &&
           resolvedCreateAction
         ) {
@@ -449,8 +464,8 @@ export function EntitySelect({
           resolvedCreateAction();
           setIsOpen(false);
           setSearchQuery("");
-        } else if (options[clampedHighlightedIndex]) {
-          handleSelect(options[clampedHighlightedIndex]);
+        } else if (options[clampedHighlightedIndex - noneOffset]) {
+          handleSelect(options[clampedHighlightedIndex - noneOffset]);
         }
         break;
       case "Escape":
@@ -518,15 +533,17 @@ export function EntitySelect({
           <span
             className={cn(
               "truncate text-left",
-              value && !isSelectionLoading
+              (value && !isSelectionLoading) || (!value && noneOption)
                 ? "text-[var(--color-text-primary)]"
                 : "text-[var(--color-text-tertiary)]"
             )}
           >
             {displayText ||
-              (isSelectionLoading
-                ? "Loading selection…"
-                : placeholder || defaultPlaceholder)}
+              (!value && noneOption
+                ? noneOption.label
+                : isSelectionLoading
+                  ? "Loading selection…"
+                  : placeholder || defaultPlaceholder)}
           </span>
           <ChevronDown
             className={cn(
@@ -593,6 +610,30 @@ export function EntitySelect({
             data-testid="entity-select-listbox"
             className="max-h-[280px] overflow-y-auto"
           >
+            {showNoneOption && noneOption && (
+              <li
+                role="option"
+                aria-selected={!value}
+                data-testid="entity-select-none"
+                onClick={handleSelectNone}
+                onMouseEnter={() => setHighlightedIndex(0)}
+                className={cn(
+                  "px-12 py-8 cursor-pointer transition-colors border-b border-[var(--color-border-primary)]",
+                  clampedHighlightedIndex === 0 &&
+                    "bg-[var(--color-background-medium)]",
+                  !value && "bg-[var(--color-background-interaction-light)]"
+                )}
+              >
+                <span className="block truncate text-[var(--text-s)] text-[var(--color-text-primary)]">
+                  {noneOption.label}
+                </span>
+                {noneOption.subtitle && (
+                  <span className="block body-small text-[var(--color-text-secondary)] mt-2">
+                    {noneOption.subtitle}
+                  </span>
+                )}
+              </li>
+            )}
             {isLoading ? (
               <li className="flex items-center justify-center gap-2 px-16 py-12 text-[var(--color-text-tertiary)]">
                 <SpinnerIcon className="size-16" />
@@ -630,10 +671,10 @@ export function EntitySelect({
                   aria-selected={option.id === value}
                   data-testid={`entity-option-${option.id}`}
                   onClick={() => handleSelect(option)}
-                  onMouseEnter={() => setHighlightedIndex(index)}
+                  onMouseEnter={() => setHighlightedIndex(index + noneOffset)}
                   className={cn(
                     "px-12 py-8 cursor-pointer transition-colors",
-                    index === clampedHighlightedIndex &&
+                    index + noneOffset === clampedHighlightedIndex &&
                       "bg-[var(--color-background-medium)]",
                     option.id === value &&
                       "bg-[var(--color-background-interaction-light)]"
@@ -655,10 +696,12 @@ export function EntitySelect({
                   setIsOpen(false);
                   setSearchQuery("");
                 }}
-                onMouseEnter={() => setHighlightedIndex(options.length)}
+                onMouseEnter={() =>
+                  setHighlightedIndex(noneOffset + options.length)
+                }
                 className={cn(
                   "flex items-center gap-8 px-12 py-8 cursor-pointer border-t border-[var(--color-border-primary)] text-[var(--color-interaction)] hover:bg-[var(--color-background-medium)] transition-colors",
-                  clampedHighlightedIndex === options.length &&
+                  clampedHighlightedIndex === noneOffset + options.length &&
                     "bg-[var(--color-background-medium)]"
                 )}
               >

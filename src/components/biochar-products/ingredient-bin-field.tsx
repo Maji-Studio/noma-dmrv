@@ -37,10 +37,6 @@ export function formatIngredientBinLabel(entity: {
   return parts.join(" · ");
 }
 
-function formatKgShort(value: number): string {
-  return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
-}
-
 function formatIngredientMass(value: unknown): string {
   return typeof value === "number" && Number.isFinite(value)
     ? String(value)
@@ -221,11 +217,6 @@ export function IngredientBinField({
               label={WET_MASS_FIELD_LABEL}
               required
               error={fieldState.error?.message}
-              helperText={
-                row.suggestedMassKg != null
-                  ? `Suggested: ${formatKgShort(row.suggestedMassKg)} kg. Enter the mass to confirm it.`
-                  : undefined
-              }
             >
               <IngredientMassInput
                 name={field.name}
