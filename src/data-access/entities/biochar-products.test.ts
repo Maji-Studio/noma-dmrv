@@ -127,4 +127,37 @@ describe("toBiocharProductEntityOption", () => {
       }).remainingMass,
     ).toEqual({ wetKg: 3_000, dryKg: null });
   });
+
+  it("shows zero dry biochar when ingredients consume the whole blend mass", () => {
+    expect(
+      toBiocharProductEntityOption({
+        id: "product-legacy-zero",
+        code: "PB-00",
+        name: "Legacy product bin",
+        productCode: "BP-00",
+        formulationName: "50/50 blend",
+        massKg: 500,
+        waterAddedKg: 50,
+        moisturePercent: 10,
+        composition: {
+          ingredients: [
+            {
+              formulationIngredientId: "ingredient-1",
+              feedstockTypeId: "feedstock-type-1",
+              feedstockTypeName: "Chicken manure",
+              feedstockTypeCategory: "manure",
+              ratio: 0.5,
+              massKg: 500,
+              storageLocationId: null,
+            },
+          ],
+        },
+        totalDeliveredKg: 0,
+        totalDeliveredDryKg: 0,
+        unresolvedDeliveredDryCount: 0,
+      }).subtitle,
+    ).toBe(
+      "Wet biochar product: 550kg | Dry biochar: 0kg available",
+    );
+  });
 });

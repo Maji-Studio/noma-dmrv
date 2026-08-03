@@ -7,11 +7,14 @@ export {
 
 export {
   reconcileComposition,
+  deriveSourceBiocharDryMassKg,
   deriveSourceBiocharMassKg,
   deriveBlendMassKg,
   deriveIngredientMassTotalKg,
   GRAMS_PER_KILOGRAM,
   SOURCE_BIOCHAR_MASS_ERROR,
+  ZERO_SOURCE_BIOCHAR_ERROR,
+  ZERO_SOURCE_BIOCHAR_WARNING,
   toPersistedMassGrams,
   fromCompositionJsonb,
   toCompositionJsonb,

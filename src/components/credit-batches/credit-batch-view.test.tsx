@@ -1,5 +1,7 @@
+import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { InfoHint, type InfoHintProps } from "@/components/ui/tooltip";
 import type {
   CreditBatchProductionRunOption,
   CreditBatchWithRelations,
@@ -71,6 +73,29 @@ function co2eStoredMarkup(
   return renderToStaticMarkup(<>{field?.value}</>);
 }
 
+function findInfoHint(
+  node: ReactNode,
+): ReactElement<InfoHintProps> | undefined {
+  if (!isValidElement<{ children?: ReactNode }>(node)) return undefined;
+  if (node.type === InfoHint) {
+    return node as ReactElement<InfoHintProps>;
+  }
+  const children = node.props.children;
+  if (Array.isArray(children)) {
+    return children.map(findInfoHint).find(Boolean);
+  }
+  return findInfoHint(children);
+}
+
+function co2eStoredExplanation(
+  options: Parameters<typeof creditBatchSheetSections>[0],
+): string {
+  const field = creditBatchSheetSections(options)
+    .find((section) => section.title === "Batch definition")
+    ?.fields.find((f) => f.label === "CO₂e stored");
+  return renderToStaticMarkup(<>{findInfoHint(field?.value)?.props.children}</>);
+}
+
 const baseOptions = {
   productionRuns: [],
   isLoadingRuns: false,
@@ -111,6 +136,25 @@ describe("credit batch CO₂e stored", () => {
     // hover/focus — the cell asserts the state and offers the trigger.
     expect(markup).toContain("Not calculable yet");
     expect(markup).toContain("Why there is no CO₂e figure");
+  });
+
+  it("explains a drift-locked preview without claiming that batch inputs are missing", () => {
+    const options = {
+      ...baseOptions,
+      creditBatch: makeBatch({
+        co2eStoredPreview: makePreview(null, [
+          "Stored CO₂e preview pending current-module re-verification",
+        ]),
+      }),
+    };
+    const explanation = co2eStoredExplanation(options);
+    const markup = co2eStoredMarkup(options);
+
+    expect(markup).toContain("Preview unavailable");
+    expect(markup).not.toContain("Not calculable yet");
+    expect(explanation).toContain("local CO₂e preview");
+    expect(explanation).toContain("current Isometric module");
+    expect(explanation).not.toContain("Certification requirements below");
   });
 
   it("renders the figure once the preview resolves", () => {

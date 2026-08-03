@@ -98,6 +98,8 @@ import {
 } from "./transport-legs";
 import { assertOrderQuantityCoversAllocations } from "./delivery-order-balance";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
+import { ZERO_SOURCE_BIOCHAR_WARNING } from "@/lib/biochar-composition";
+import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 
 // ============================================
 // Read Operations
@@ -504,7 +506,13 @@ export async function createOrder(
   requireOrgScope(ctx);
 
   const [product] = await db
-    .select({ facilityId: biocharProducts.facilityId })
+    .select({
+      facilityId: biocharProducts.facilityId,
+      sourceBiocharMassKg: sourceBiocharMassKgSql(
+        biocharProducts.massKg,
+        biocharProducts.composition,
+      ),
+    })
     .from(biocharProducts)
     .where(and(eq(biocharProducts.id, data.biocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
 
@@ -514,6 +522,10 @@ export async function createOrder(
 
   if (product.facilityId !== data.facilityId) {
     throw new SafeError("Biochar product belongs to a different facility");
+  }
+
+  if (product.sourceBiocharMassKg <= 0) {
+    throw new SafeError(ZERO_SOURCE_BIOCHAR_WARNING);
   }
 
   await assertSameOrg(ctx, customers, data.customerId);
@@ -603,7 +615,13 @@ export async function updateOrder(
     effectiveProductId
   ) {
     const [product] = await db
-      .select({ facilityId: biocharProducts.facilityId })
+      .select({
+        facilityId: biocharProducts.facilityId,
+        sourceBiocharMassKg: sourceBiocharMassKgSql(
+          biocharProducts.massKg,
+          biocharProducts.composition,
+        ),
+      })
       .from(biocharProducts)
       .where(and(eq(biocharProducts.id, effectiveProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
 
@@ -613,6 +631,10 @@ export async function updateOrder(
 
     if (product.facilityId !== effectiveFacilityId) {
       throw new SafeError("Biochar product belongs to a different facility");
+    }
+
+    if (product.sourceBiocharMassKg <= 0) {
+      throw new SafeError(ZERO_SOURCE_BIOCHAR_WARNING);
     }
   }
 

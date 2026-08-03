@@ -12,6 +12,10 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { InfoHint } from "@/components/ui/tooltip";
 import { carbonGapLabels } from "@/lib/certification/batch-health-facts";
+import {
+  hasStoredCo2eOperatorInputGap,
+  isStoredCo2ePreviewReverificationGap,
+} from "@/lib/certification/preview-gaps";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type {
@@ -183,13 +187,24 @@ function co2eStoredValue({
   }
 
   const gaps = carbonGapLabels(preview.missingInputs);
+  const pendingReverification = preview.missingInputs.some(
+    isStoredCo2ePreviewReverificationGap,
+  );
+  const unavailableForReverification =
+    pendingReverification &&
+    !hasStoredCo2eOperatorInputGap(preview.missingInputs);
+  const explanation = unavailableForReverification
+    ? "The local CO₂e preview is unavailable while its calculation is checked against the current Isometric module. No batch input is missing."
+    : gaps.length > 0
+      ? `This figure needs ${formatList(gaps)}. Fix it under Certification requirements below.`
+      : "This figure is waiting on data that hasn't been recorded yet. Certification requirements below lists what is outstanding.";
   return (
     <span className="inline-flex items-center gap-6">
-      Not calculable yet
+      {unavailableForReverification
+        ? "Preview unavailable"
+        : "Not calculable yet"}
       <InfoHint label="Why there is no CO₂e figure">
-        {gaps.length > 0
-          ? `This figure needs ${formatList(gaps)}. Fix it under Certification requirements below.`
-          : "This figure is waiting on data that hasn't been recorded yet. Certification requirements below lists what is outstanding."}
+        {explanation}
       </InfoHint>
     </span>
   );

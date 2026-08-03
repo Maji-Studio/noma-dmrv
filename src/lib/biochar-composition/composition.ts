@@ -7,6 +7,7 @@
  */
 
 import type { IngredientBin } from "./types";
+import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 
 interface FormulationIngredientLike {
   id: string;
@@ -61,6 +62,12 @@ interface IngredientMassLike {
 export const SOURCE_BIOCHAR_MASS_ERROR =
   "Recorded ingredient mass exceeds blend mass. Reduce ingredient mass or increase blend mass.";
 
+export const ZERO_SOURCE_BIOCHAR_ERROR =
+  "Source biochar mass must be greater than 0 kg. Increase the biochar wet mass before creating this product.";
+
+export const ZERO_SOURCE_BIOCHAR_WARNING =
+  "This product contains 0 kg of source biochar. It cannot be ordered or traced to a production run or credit batch. Delete it and create a new product with more than 0 kg of biochar.";
+
 export const GRAMS_PER_KILOGRAM = 1_000;
 
 export function toPersistedMassGrams(massKg: number): number {
@@ -101,6 +108,18 @@ export function deriveSourceBiocharMassKg(
     sumRecordedIngredientMassKg(ingredients),
   );
   return (blendMassGrams - ingredientMassGrams) / GRAMS_PER_KILOGRAM;
+}
+
+/** Dry source biochar only, excluding blend ingredients and added water. */
+export function deriveSourceBiocharDryMassKg(
+  blendMassKg: number | null | undefined,
+  moistureContentPercent: number | null | undefined,
+  ingredients: readonly IngredientMassLike[] | null | undefined,
+): number | null {
+  return computeClampedDryMass(
+    deriveSourceBiocharMassKg(blendMassKg, ingredients),
+    moistureContentPercent,
+  );
 }
 
 /**

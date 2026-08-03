@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   reconcileComposition,
   deriveBlendMassKg,
+  deriveSourceBiocharDryMassKg,
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
   toCompositionJsonb,
@@ -233,6 +234,20 @@ describe("deriveSourceBiocharMassKg", () => {
         { massKg: -1 },
       ]),
     ).toBe(1);
+  });
+});
+
+describe("deriveSourceBiocharDryMassKg", () => {
+  it("derives dry biochar from source mass rather than total blend mass", () => {
+    expect(
+      deriveSourceBiocharDryMassKg(100, 10, [{ massKg: 40 }]),
+    ).toBe(54);
+  });
+
+  it("returns zero dry biochar when ingredients consume the whole blend mass", () => {
+    expect(
+      deriveSourceBiocharDryMassKg(500, 10, [{ massKg: 500 }]),
+    ).toBe(0);
   });
 });
 

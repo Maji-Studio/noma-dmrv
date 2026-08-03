@@ -266,7 +266,7 @@ export function CreditBatchHealthStrip({
           (health.state === "ready" ? (
             <span className="inline-flex shrink-0 items-center gap-6 body-caption font-medium text-[var(--st-ok)]">
               <CheckCircleIcon size={14} weight="fill" aria-hidden />
-              All checks passed
+              All batch data checks passed
             </span>
           ) : (
             <span className="shrink-0 body-caption font-medium text-[var(--color-text-secondary)]">

@@ -7,7 +7,7 @@
  * multiple batches in one bin and shows physically remaining stock.
  */
 
-import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
@@ -24,20 +24,29 @@ import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import {
   deriveEffectiveMoisturePercent,
   formatWetDryMass,
-  splitWetMass,
 } from "@/lib/mass-moisture";
+import {
+  deriveSourceBiocharDryMassKg,
+  fromCompositionJsonb,
+} from "@/lib/biochar-composition";
+import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
 
 function formatStockSubtitle(
   massKg: number | null,
   waterAddedKg: number | null,
   moisturePercent: number | null,
+  composition: unknown,
   deliveredWetKg: number,
   deliveredDryKg: number,
   unresolvedDeliveredDryCount: number,
 ): string {
   const remainingWetKg =
     (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg;
-  const productDryKg = splitWetMass(massKg, moisturePercent)?.dryKg;
+  const productDryKg = deriveSourceBiocharDryMassKg(
+    massKg,
+    moisturePercent,
+    fromCompositionJsonb(composition),
+  );
   const remainingDryKg =
     productDryKg == null || unresolvedDeliveredDryCount > 0
       ? null
@@ -105,6 +114,7 @@ function buildSelection(
     massKg: biocharProducts.massKg,
     waterAddedKg: biocharProducts.waterAddedKg,
     moisturePercent: biocharProducts.moistureContentPercent,
+    composition: biocharProducts.composition,
     totalDeliveredKg: numericAggregate(
       sql<number>`COALESCE(${deliveredMassAggregate.totalDeliveredKg}, 0)`,
     ),
@@ -126,6 +136,7 @@ export function toBiocharProductEntityOption(r: {
   massKg: number | null;
   waterAddedKg: number | null;
   moisturePercent: number | null;
+  composition?: unknown;
   totalDeliveredKg: number;
   totalDeliveredDryKg: number;
   unresolvedDeliveredDryCount: number;
@@ -133,7 +144,11 @@ export function toBiocharProductEntityOption(r: {
   const productLabel = r.formulationName ?? PURE_BIOCHAR_LABEL;
   const remainingWetKg =
     (r.massKg ?? 0) + (r.waterAddedKg ?? 0) - r.totalDeliveredKg;
-  const productDryKg = splitWetMass(r.massKg, r.moisturePercent)?.dryKg;
+  const productDryKg = deriveSourceBiocharDryMassKg(
+    r.massKg,
+    r.moisturePercent,
+    fromCompositionJsonb(r.composition),
+  );
   const remainingDryKg =
     productDryKg == null || r.unresolvedDeliveredDryCount > 0
       ? null
@@ -158,6 +173,7 @@ export function toBiocharProductEntityOption(r: {
       r.massKg,
       r.waterAddedKg,
       r.moisturePercent,
+      r.composition,
       r.totalDeliveredKg,
       r.totalDeliveredDryKg,
       r.unresolvedDeliveredDryCount,
@@ -178,6 +194,13 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
 
   const conditions: SQL[] = [
     isNull(biocharProducts.archivedAt),
+    gt(
+      sourceBiocharMassKgSql(
+        biocharProducts.massKg,
+        biocharProducts.composition,
+      ),
+      0,
+    ),
     // Bin-less (legacy/partial) products stay orderable via their
     // product-code fallback; products whose bin is archived or not a
     // product bin stay hidden.

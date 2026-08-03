@@ -15,6 +15,7 @@ describe("order cross-parent guards", () => {
   const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
   let facilityId: string;
   let productId: string;
+  let zeroBiocharProductId: string;
   let customerAId: string;
   let customerBId: string;
   let locationAId: string;
@@ -31,7 +32,24 @@ beforeAll(async () => {
         .returning({ id: facilities.id });
       const [product] = await tx
         .insert(biocharProducts)
-        .values({ organizationId: TEST_ORG_ID, code: `BP-OCG-${tag}`, facilityId: facility.id })
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `BP-OCG-${tag}`,
+          facilityId: facility.id,
+          massKg: 100,
+        })
+        .returning({ id: biocharProducts.id });
+      const [zeroBiocharProduct] = await tx
+        .insert(biocharProducts)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `BP-OCG-ZERO-${tag}`,
+          facilityId: facility.id,
+          massKg: 100,
+          composition: {
+            ingredients: [{ massKg: 100 }],
+          },
+        })
         .returning({ id: biocharProducts.id });
       const [customerA] = await tx
         .insert(customers)
@@ -82,6 +100,7 @@ beforeAll(async () => {
         locationBId: locationB.id,
         orderId: order.id,
         productId: product.id,
+        zeroBiocharProductId: zeroBiocharProduct.id,
       };
     });
 
@@ -92,6 +111,7 @@ beforeAll(async () => {
     locationBId = fixture.locationBId;
     orderId = fixture.orderId;
     productId = fixture.productId;
+    zeroBiocharProductId = fixture.zeroBiocharProductId;
   });
 
   afterAll(async () => {
@@ -112,7 +132,11 @@ beforeAll(async () => {
     await cleanup(() =>
       db.delete(customers).where(inArray(customers.id, [customerAId, customerBId])),
     );
-    await cleanup(() => db.delete(biocharProducts).where(eq(biocharProducts.id, productId)));
+    await cleanup(() =>
+      db
+        .delete(biocharProducts)
+        .where(inArray(biocharProducts.id, [productId, zeroBiocharProductId])),
+    );
     await cleanup(() => db.delete(facilities).where(eq(facilities.id, facilityId)));
   });
 
@@ -129,6 +153,21 @@ beforeAll(async () => {
         packaging: "loose",
       }),
     ).rejects.toThrow("Delivery location belongs to a different customer");
+  });
+
+  it("rejects creating an order for a product with zero source biochar", async () => {
+    await expect(
+      createOrder(makeTestOrgContext(TEST_USER_ID), {
+        code: `OR-OCG-ZERO-${tag}`,
+        facilityId,
+        customerId: customerAId,
+        customerLocationId: locationAId,
+        biocharProductId: zeroBiocharProductId,
+        orderDate: new Date("2026-06-13"),
+        quantityKg: 100,
+        packaging: "loose",
+      }),
+    ).rejects.toThrow("contains 0 kg of source biochar");
   });
 
   it("rejects changing an order customer while preserving another customer's location", async () => {
