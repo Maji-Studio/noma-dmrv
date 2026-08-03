@@ -815,6 +815,7 @@ export async function updateBiocharProduct(
               tx,
               transactionComposition,
               locked.composition as Record<string, unknown> | null,
+              productId,
             );
         }
         await assertCompositionIngredientDrawsWithinStock(

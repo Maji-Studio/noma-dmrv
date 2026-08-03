@@ -23,12 +23,18 @@ interface CapturedDialogProps {
   onSuccess: (entity: { id: string }) => void;
 }
 
+interface CapturedMassInputProps {
+  disabled?: boolean;
+  onChange?: (event: { currentTarget: { value: string } }) => void;
+  value?: unknown;
+}
+
 const state = vi.hoisted(() => ({
   close: vi.fn(),
   dialog: undefined as CapturedDialogProps | undefined,
   fieldLabels: [] as string[],
   massChange: vi.fn(),
-  massInput: undefined as { disabled?: boolean } | undefined,
+  massInput: undefined as CapturedMassInputProps | undefined,
   open: vi.fn(),
   select: undefined as CapturedEntitySelectProps | undefined,
   storageChange: vi.fn(),
@@ -80,7 +86,7 @@ vi.mock("@/components/forms", () => ({
     state.fieldLabels.push(label);
     return children;
   },
-  FormInput: (props: { disabled?: boolean }) => {
+  FormInput: (props: CapturedMassInputProps) => {
     state.massInput = props;
     return null;
   },
@@ -141,6 +147,20 @@ describe("IngredientBinField feedstock-bin quick add", () => {
   it("labels the operator-entered ingredient mass as wet mass", () => {
     renderField();
     expect(state.fieldLabels).toContain("Wet mass (kg)");
+  });
+
+  it.each([
+    ["20", 20],
+    ["", null],
+    ["-", null],
+  ])("normalizes the controlled mass value %j to %j", (displayValue, expected) => {
+    renderField();
+
+    state.massInput?.onChange?.({
+      currentTarget: { value: displayValue },
+    });
+
+    expect(state.massChange).toHaveBeenCalledWith(expected);
   });
 
   it("offers a feedstock-bin action using the row filters", () => {
