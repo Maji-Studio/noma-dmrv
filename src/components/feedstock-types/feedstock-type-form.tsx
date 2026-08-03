@@ -142,7 +142,7 @@ export function FeedstockTypeForm({
     control,
     trigger,
     setValue,
-    formState: { errors },
+    formState: { errors, isSubmitted },
   } = useForm<FeedstockTypeFormData>({
     resolver: zodResolver(feedstockTypeFormSchema),
     defaultValues: {
@@ -159,16 +159,22 @@ export function FeedstockTypeForm({
     },
   });
 
+  const programmaticUpdateOptions = {
+    shouldDirty: true,
+    shouldTouch: isSubmitted,
+    shouldValidate: isSubmitted,
+  } as const;
+
   useClearOnDependencyChange(
     isEditMode ? undefined : showIsometricSection ? "available" : "unavailable",
     () => {
       if (showIsometricSection) return;
       setSelectedIsometricFeedstock(null);
-      setValue("isometricFeedstockTypeId", "", {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      });
+      setValue(
+        "isometricFeedstockTypeId",
+        "",
+        programmaticUpdateOptions,
+      );
     },
   );
 
@@ -196,29 +202,21 @@ export function FeedstockTypeForm({
     if (
       shouldSetUsageToPyrolysisForIsometricSelection(lockUsage, defaultUsage)
     ) {
-      setValue("usage", "pyrolysis", {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      });
+      setValue("usage", "pyrolysis", programmaticUpdateOptions);
       if (shouldClearCategoryForIsometricSelection(selectedUsage)) {
-        setValue("category", "" as FeedstockTypeFormData["category"], {
-          shouldDirty: true,
-          shouldTouch: true,
-          shouldValidate: true,
-        });
+        setValue(
+          "category",
+          "" as FeedstockTypeFormData["category"],
+          programmaticUpdateOptions,
+        );
       }
     }
-    setValue("name", type.name, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
-    setValue("isometricFeedstockTypeId", type.id, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
+    setValue("name", type.name, programmaticUpdateOptions);
+    setValue(
+      "isometricFeedstockTypeId",
+      type.id,
+      programmaticUpdateOptions,
+    );
   };
   const defaultSubmitLabel = isEditMode
     ? "Update Feedstock Type"
