@@ -33,7 +33,6 @@ import {
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
-
 describe("createBiocharProduct — product bin ↔ formulation", () => {
   const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
   let facilityId: string;
@@ -858,15 +857,12 @@ beforeAll(async () => {
     ).rejects.toThrow("Not enough biochar in this bin");
   });
 
-  it("allows an all-ingredient product with zero required source mass", async () => {
+  it("allows a binless all-ingredient product with zero required source mass", async () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const sourceBinId = await makeBiocharBin();
     const productBinId = await makeProductBin(formulationAId);
-    const ingredientBinId = await makeStockedFeedstockBin(100);
     const composition = formulationAComposition();
     composition.ingredients[0].massKg = 100;
-    composition.ingredients[0].storageLocationId = ingredientBinId;
-
     const product = await createBiocharProduct(ctx, {
       ...baseProductInput(),
       linkedProductionRunId: null,
@@ -877,17 +873,10 @@ beforeAll(async () => {
       composition,
     });
     createdProductIds.push(product.id);
-
-    await expect(
-      db
-        .select()
-        .from(biocharProductSourceAllocations)
-        .where(
-          eq(biocharProductSourceAllocations.biocharProductId, product.id),
-        ),
-    ).resolves.toEqual([]);
+    const allocations = await db.select().from(biocharProductSourceAllocations)
+      .where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
+    expect(allocations).toEqual([]);
   });
-
   it("updates legacy blend mass without requiring a missing ingredient bin", async () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const sourceBinId = await makeBiocharBin();
