@@ -86,6 +86,7 @@ import {
   retireDocumentsForEntities,
   type DocumentEntityRef,
 } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
   deliveryDrawsStock,
   lockCreateDeliveryStock,
@@ -639,6 +640,7 @@ export async function createDelivery(
 
     return row;
   });
+  await processPendingStorageObjectDeletions(ctx);
 
   return delivery;
 }
@@ -876,6 +878,7 @@ export async function updateDelivery(
 
     return row;
   });
+  await processPendingStorageObjectDeletions(ctx);
 
   return updated;
 }
@@ -937,6 +940,7 @@ export async function deleteDelivery(
       ...deferredRetirements,
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 // ============================================

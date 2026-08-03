@@ -87,6 +87,7 @@ import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
   assertOrderProductRepointWithinStock,
   lockOrderProductRepointBins,
@@ -746,6 +747,7 @@ export async function updateOrder(
     );
     return row;
   });
+  await processPendingStorageObjectDeletions(ctx);
 
   return updated;
 }
@@ -799,6 +801,7 @@ export async function deleteOrder(
       { entityType: "order", entityId: orderId },
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 // ============================================

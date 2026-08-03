@@ -32,6 +32,7 @@ import {
 } from "./transport-legs";
 import { SafeError } from "@/lib/errors";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
@@ -651,6 +652,7 @@ export async function updateFeedstock(
         !explicitDistanceSourceSupplied,
     });
   });
+  await processPendingStorageObjectDeletions(ctx);
 
   return getFeedstockById(ctx, feedstockId);
 }
@@ -736,6 +738,7 @@ export async function deleteFeedstock(
       ...transportLegDocuments,
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 // ============================================

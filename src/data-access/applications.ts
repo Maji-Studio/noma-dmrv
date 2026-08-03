@@ -56,6 +56,7 @@ import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { parseGisBoundary } from "@/schemas/gis-boundary";
 
 // ============================================
@@ -879,6 +880,7 @@ export async function deleteApplication(ctx: OrgContext, id: string): Promise<vo
     // Batch aggregates (applied weight, CO2e stored) are derived on read
     // (issue #285) — no write-back sync is needed after removing a member.
   });
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 /**

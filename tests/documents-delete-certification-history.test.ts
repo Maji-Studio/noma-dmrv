@@ -7,8 +7,10 @@ import {
   certifierRemovals,
   documents,
   facilities,
+  storageObjectDeletions,
 } from "@/db/schema";
 import { deleteDocumentWithCertificationSafety } from "@/data-access/documents";
+import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import { __setStorageProviderForTests } from "@/lib/storage";
 import type {
   ObjectHead,
@@ -28,6 +30,7 @@ class DeleteSafetyStorageProvider implements StorageProvider {
   readonly bucket = "local-fs";
   readonly objects = new Set<string>();
   readonly deleteCalls: string[] = [];
+  failKey: string | null = null;
 
   async createUploadUrl(): Promise<PresignedUpload> {
     throw new Error("Not used by document deletion tests");
@@ -45,6 +48,7 @@ class DeleteSafetyStorageProvider implements StorageProvider {
 
   async deleteObject(key: string): Promise<void> {
     this.deleteCalls.push(key);
+    if (key === this.failKey) throw new Error("Injected storage failure");
     this.objects.delete(key);
   }
 
@@ -116,6 +120,9 @@ async function createFixture(tag: string) {
 
 async function cleanupFixture(fixture: Awaited<ReturnType<typeof createFixture>>) {
   await db
+    .delete(storageObjectDeletions)
+    .where(eq(storageObjectDeletions.storageKey, fixture.storageKey));
+  await db
     .delete(certificationSubmissions)
     .where(eq(certificationSubmissions.localEntityId, fixture.removalId));
   await db
@@ -153,6 +160,46 @@ describe("owning-document certification safety", () => {
           .from(documents)
           .where(eq(documents.id, fixture.documentId)),
       ).toHaveLength(0);
+    } finally {
+      await cleanupFixture(fixture);
+    }
+  });
+
+  it("commits document retirement while a failed object deletion stays retryable", async () => {
+    const fixture = await createFixture(crypto.randomUUID().slice(0, 8));
+    provider.failKey = fixture.storageKey;
+
+    try {
+      const deleted = await deleteDocumentWithCertificationSafety(
+        makeTestOrgContext(TEST_USER_ID),
+        fixture.documentId,
+      );
+
+      expect(deleted?.id).toBe(fixture.documentId);
+      expect(provider.objects.has(fixture.storageKey)).toBe(true);
+      expect(
+        await db
+          .select()
+          .from(documents)
+          .where(eq(documents.id, fixture.documentId)),
+      ).toHaveLength(0);
+      const [pending] = await db
+        .select()
+        .from(storageObjectDeletions)
+        .where(eq(storageObjectDeletions.storageKey, fixture.storageKey));
+      expect(pending).toMatchObject({
+        attemptCount: 1,
+        completedAt: null,
+        lastErrorCode: "storage_delete_failed",
+      });
+
+      provider.failKey = null;
+      expect(
+        await processPendingStorageObjectDeletions(
+          makeTestOrgContext(TEST_USER_ID),
+        ),
+      ).toEqual({ completed: 1, failed: 0 });
+      expect(provider.objects.has(fixture.storageKey)).toBe(false);
     } finally {
       await cleanupFixture(fixture);
     }
