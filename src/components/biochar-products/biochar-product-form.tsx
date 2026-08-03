@@ -12,10 +12,7 @@ import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
-import {
-  formatMoisturePercent,
-  splitWetMassAfterAddedWater,
-} from "@/lib/mass-moisture";
+import { splitWetMassAfterAddedWater } from "@/lib/mass-moisture";
 import { formatMassKg } from "@/lib/format-utils";
 import {
   StorageLocationQuickAddDialog,
@@ -466,10 +463,6 @@ export function BiocharProductForm({
     typeof watchedWaterAddedKg === "number" && Number.isFinite(watchedWaterAddedKg)
       ? watchedWaterAddedKg
       : null;
-  const effectiveWetMassKg =
-    massKgNum !== null && (waterAddedKgNum === null || waterAddedKgNum >= 0)
-      ? massKgNum + (waterAddedKgNum ?? 0)
-      : null;
   const hasWaterAdded = waterAddedKgNum != null && waterAddedKgNum > 0;
   const finalMassSplit = splitWetMassAfterAddedWater(
     massKgNum,
@@ -587,11 +580,7 @@ export function BiocharProductForm({
           materialLabel="Biochar"
           wetMassKg={watchedMassKg}
           moisturePercent={watchedMoisture}
-          splitNote={
-            hasWaterAdded && effectiveWetMassKg !== null
-              ? `Before added water. With ${formatMassKg(waterAddedKgNum)} added: ${formatMassKg(effectiveWetMassKg)} wet at ${formatMoisturePercent(finalMassSplit?.moisturePercent)} moisture.`
-              : undefined
-          }
+          addedWaterKg={watchedWaterAddedKg}
           wet={{
             id: "massKg",
             error: massKgError,
@@ -615,6 +604,46 @@ export function BiocharProductForm({
             helperText: "Typically 1 to 2% for biochar",
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
           }}
+          beforeSplit={
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
+              <FormField
+                id="waterAddedKg"
+                label="Water added (kg)"
+                error={errors.waterAddedKg?.message}
+                helperText="Water added to reach target moisture"
+                hint="Dry mass is unchanged by added water."
+                required
+              >
+                <FormInput
+                  id="waterAddedKg"
+                  type="number"
+                  step={MASS_KG_INPUT_STEP}
+                  min="0"
+                  placeholder="e.g., 50"
+                  disabled={isSubmitting}
+                  error={!!errors.waterAddedKg}
+                  {...register("waterAddedKg", { setValueAs: nullableNumericValue })}
+                />
+              </FormField>
+
+              <FormField
+                id="densityKgM3"
+                label="Density (kg/m³)"
+                error={errors.densityKgM3?.message}
+              >
+                <FormInput
+                  id="densityKgM3"
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="e.g., 350"
+                  disabled={isSubmitting}
+                  error={!!errors.densityKgM3}
+                  {...register("densityKgM3")}
+                />
+              </FormField>
+            </div>
+          }
           splitFooter={
             ((biocharStockError !== undefined &&
               biocharStockError !== SOURCE_BIOCHAR_MASS_ERROR) ||
@@ -624,45 +653,6 @@ export function BiocharProductForm({
             )
           }
         />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
-            id="waterAddedKg"
-            label="Water added (kg)"
-            error={errors.waterAddedKg?.message}
-            helperText="Water added to reach target moisture"
-            hint="Dry mass is unchanged by added water."
-            required
-          >
-            <FormInput
-              id="waterAddedKg"
-              type="number"
-              step={MASS_KG_INPUT_STEP}
-              min="0"
-              placeholder="e.g., 50"
-              disabled={isSubmitting}
-              error={!!errors.waterAddedKg}
-              {...register("waterAddedKg", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
-
-          <FormField
-            id="densityKgM3"
-            label="Density (kg/m³)"
-            error={errors.densityKgM3?.message}
-          >
-            <FormInput
-              id="densityKgM3"
-              type="number"
-              step="any"
-              min="0"
-              placeholder="e.g., 350"
-              disabled={isSubmitting}
-              error={!!errors.densityKgM3}
-              {...register("densityKgM3")}
-            />
-          </FormField>
-        </div>
 
       </FormSection>
 

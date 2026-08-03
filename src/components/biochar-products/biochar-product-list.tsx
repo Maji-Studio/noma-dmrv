@@ -390,13 +390,6 @@ export function BiocharProductList() {
   const editingEntity =
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
   const isSubmitting = createProduct.isPending || updateProduct.isPending;
-  const finalDisplayedMassSplit = displaySideSheet?.entity
-    ? splitWetMassAfterAddedWater(
-        displaySideSheet.entity.massKg,
-        displaySideSheet.entity.moistureContentPercent,
-        displaySideSheet.entity.waterAddedKg,
-      )
-    : null;
   const displayedWaterAddedKg =
     displaySideSheet?.entity?.waterAddedKg ?? null;
   const displayedHasWaterAdded =
@@ -575,21 +568,10 @@ export function BiocharProductList() {
             ],
             content: (
               <MoistureSplit
-                wetMassKg={
-                  finalDisplayedMassSplit?.wetKg ??
-                  displaySideSheet.entity.massKg
-                }
-                moisturePercent={
-                  finalDisplayedMassSplit?.moisturePercent ??
-                  displaySideSheet.entity.moistureContentPercent
-                }
+                wetMassKg={displaySideSheet.entity.massKg}
+                moisturePercent={displaySideSheet.entity.moistureContentPercent}
+                addedWaterKg={displaySideSheet.entity.waterAddedKg}
                 materialLabel="Biochar"
-                note={
-                  finalDisplayedMassSplit &&
-                  displayedHasWaterAdded
-                    ? `Final after ${formatMassKg(displayedWaterAddedKg)} added water · ${formatMassKg(finalDisplayedMassSplit.wetKg)} wet · ${formatMassKg(finalDisplayedMassSplit.waterKg)} water.`
-                    : undefined
-                }
               />
             ),
           },

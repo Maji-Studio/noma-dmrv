@@ -63,4 +63,42 @@ describe("MoistureSplit", () => {
     );
   });
 
+  it("includes added water in the final wet mass and draws it separately", () => {
+    const html = renderToStaticMarkup(
+      <MoistureSplit
+        wetMassKg={450}
+        moisturePercent={10}
+        addedWaterKg={50}
+        materialLabel="Biochar"
+      />,
+    );
+
+    expect(html).toContain(
+      "Wet biochar: 500kg | Dry biochar: 405kg",
+    );
+    expect(html).toContain('data-moisture-segment="dry"');
+    expect(html).toContain('data-moisture-segment="water"');
+    expect(html).toContain('data-moisture-segment="added-water"');
+    expect(html).toContain("Water before addition: 45 kg");
+    expect(html).toContain("Water added: 50 kg");
+    expect(html).toContain("Final moisture: 19%");
+  });
+
+  it("keeps the existing two-part chart when no water is added", () => {
+    const html = renderToStaticMarkup(
+      <MoistureSplit
+        wetMassKg={450}
+        moisturePercent={10}
+        addedWaterKg={0}
+        materialLabel="Biochar"
+      />,
+    );
+
+    expect(html).toContain(
+      "Wet biochar: 450kg | Dry biochar: 405kg",
+    );
+    expect(html).not.toContain('data-moisture-segment="added-water"');
+    expect(html).toContain("Moisture: 10% · Water: 45 kg");
+  });
+
 });

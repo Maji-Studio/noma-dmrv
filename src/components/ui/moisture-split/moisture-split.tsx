@@ -1,13 +1,12 @@
 /**
- * MoistureSplit — the one way this app shows a wet mass broken into dry matter
- * and water.
+ * MoistureSplit — the one way this app shows a wet mass broken into dry matter,
+ * water already present, and any water added afterward.
  *
  * The bar is the load itself, seen in section: a solid plum block for the dry
- * matter that carbon accounting is paid on, and a hatched void for the water
- * that it is not. Reading it takes no arithmetic — a wet feedstock batch is
- * visibly half void, a 2%-moisture biochar is visibly solid — which is the
- * point, because the numbers alone ("1,500 kg", "35%") never made the
- * relationship obvious.
+ * matter that carbon accounting is paid on, a hatched void for the water that
+ * it is not, and an optional blue segment for added water. Reading it takes no
+ * arithmetic — a wet feedstock batch is visibly half void, a 2%-moisture
+ * biochar is visibly solid, and added water remains visibly attributable.
  *
  * Deliberately area-neutral: moisture means the same thing on a feedstock
  * delivery as on a finished product, so it never takes the production /
@@ -33,6 +32,7 @@ import {
   formatSplitMass,
   formatWetDryMass,
   splitWetMass,
+  splitWetMassAfterAddedWater,
   type MassSplit,
 } from "@/lib/mass-moisture";
 
@@ -49,6 +49,8 @@ interface MoistureSplitProps {
   moisturePercent: number | null | undefined;
   /** Stored authoritative dry mass, when the entity carries one. */
   dryMassKg?: number | null;
+  /** Water added after the recorded wet mass and moisture measurement. */
+  addedWaterKg?: number | null;
   variant?: MoistureSplitVariant;
   /**
    * What the mass is, when the surrounding context does not already say it
@@ -147,25 +149,151 @@ function formatVisualizationMass({
   });
 }
 
-function SplitBar({ split, height }: { split: MassSplit; height: string }) {
-  const widths = segmentWidths(split);
+interface AddedWaterState {
+  addedWaterKg: number;
+  finalSplit: MassSplit;
+}
+
+function resolveAddedWaterState(
+  split: MassSplit,
+  addedWaterKg: number | null | undefined,
+): AddedWaterState | null {
+  if (
+    addedWaterKg == null ||
+    !Number.isFinite(addedWaterKg) ||
+    addedWaterKg <= 0
+  ) {
+    return null;
+  }
+
+  const finalSplit = splitWetMassAfterAddedWater(
+    split.wetKg,
+    split.moisturePercent,
+    addedWaterKg,
+  );
+  return finalSplit ? { addedWaterKg, finalSplit } : null;
+}
+
+function addedWaterSegmentWidths(
+  split: MassSplit,
+  addedWaterState: AddedWaterState,
+): { dry: number; water: number; addedWater: number } {
+  const finalWetKg = addedWaterState.finalSplit.wetKg;
+  if (finalWetKg <= 0) {
+    return { dry: PERCENT_SCALE, water: 0, addedWater: 0 };
+  }
+
+  const rawSegments = {
+    dry: (split.dryKg / finalWetKg) * PERCENT_SCALE,
+    water: (split.waterKg / finalWetKg) * PERCENT_SCALE,
+    addedWater: (addedWaterState.addedWaterKg / finalWetKg) * PERCENT_SCALE,
+  };
+  const smallSegmentTotal = Object.values(rawSegments)
+    .filter((width) => width > 0 && width < MIN_VISIBLE_SEGMENT_PERCENT)
+    .reduce((total) => total + MIN_VISIBLE_SEGMENT_PERCENT, 0);
+  const scalableTotal = Object.values(rawSegments)
+    .filter((width) => width >= MIN_VISIBLE_SEGMENT_PERCENT)
+    .reduce((total, width) => total + width, 0);
+  const remainingWidth = PERCENT_SCALE - smallSegmentTotal;
+
+  const visibleWidth = (width: number): number => {
+    if (width <= 0) return 0;
+    if (width < MIN_VISIBLE_SEGMENT_PERCENT) {
+      return MIN_VISIBLE_SEGMENT_PERCENT;
+    }
+    return scalableTotal > 0
+      ? (width / scalableTotal) * remainingWidth
+      : width;
+  };
+
+  return {
+    dry: visibleWidth(rawSegments.dry),
+    water: visibleWidth(rawSegments.water),
+    addedWater: visibleWidth(rawSegments.addedWater),
+  };
+}
+
+function describeAddedWaterSplit(
+  split: MassSplit,
+  addedWaterState: AddedWaterState,
+): string {
+  return `${formatSplitMass(addedWaterState.finalSplit.wetKg)} final wet mass: ${formatSplitMass(split.dryKg)} dry mass, ${formatSplitMass(split.waterKg)} water before addition, and ${formatSplitMass(addedWaterState.addedWaterKg)} added water at ${formatMoisturePercent(addedWaterState.finalSplit.moisturePercent)} moisture.`;
+}
+
+function SplitBar({
+  split,
+  height,
+  addedWaterState,
+}: {
+  split: MassSplit;
+  height: string;
+  addedWaterState: AddedWaterState | null;
+}) {
+  const widths = addedWaterState
+    ? addedWaterSegmentWidths(split, addedWaterState)
+    : { ...segmentWidths(split), addedWater: 0 };
 
   return (
     <div
       role="img"
-      aria-label={describeMassSplit(split)}
+      aria-label={
+        addedWaterState
+          ? describeAddedWaterSplit(split, addedWaterState)
+          : describeMassSplit(split)
+      }
       className={`flex w-full overflow-hidden border border-[var(--color-border-secondary)] ${height}`}
     >
       <div
         aria-hidden="true"
+        data-moisture-segment="dry"
         className="bg-[var(--clr-dark-purple-80)]"
         style={{ width: `${widths.dry}%` }}
       />
       <div
         aria-hidden="true"
+        data-moisture-segment="water"
         className="moisture-water-hatch border-l border-[var(--color-border-secondary)]"
         style={{ width: `${widths.water}%` }}
       />
+      {addedWaterState && (
+        <div
+          aria-hidden="true"
+          data-moisture-segment="added-water"
+          className="border-l border-[var(--color-border-secondary)] bg-[var(--color-moisture-added-water)]"
+          style={{ width: `${widths.addedWater}%` }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AddedWaterSummary({
+  split,
+  addedWaterState,
+}: {
+  split: MassSplit;
+  addedWaterState: AddedWaterState;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-16 gap-y-4">
+      <span className="inline-flex items-center gap-6">
+        <span
+          aria-hidden="true"
+          className="inline-block h-8 w-8 moisture-water-hatch border border-[var(--color-border-secondary)]"
+        />
+        Water before addition: {formatSplitMass(split.waterKg)}
+      </span>
+      <span className="inline-flex items-center gap-6">
+        <span
+          aria-hidden="true"
+          className="inline-block h-8 w-8 bg-[var(--color-moisture-added-water)]"
+        />
+        Water added: {formatSplitMass(addedWaterState.addedWaterKg)}
+      </span>
+      <span className="font-medium text-[var(--color-text-secondary)]">
+        Final moisture:{" "}
+        {formatMoisturePercent(addedWaterState.finalSplit.moisturePercent)}
+      </span>
     </div>
   );
 }
@@ -183,6 +311,7 @@ export function MoistureSplit({
   wetMassKg,
   moisturePercent,
   dryMassKg,
+  addedWaterKg,
   variant = "detail",
   materialLabel,
   wetLabel,
@@ -224,12 +353,15 @@ export function MoistureSplit({
     );
   }
 
+  const addedWaterState = resolveAddedWaterState(split, addedWaterKg);
+  const displayedSplit = addedWaterState?.finalSplit ?? split;
+
   if (variant === "inline") {
     return (
       <span className={`body-caption text-[var(--color-text-secondary)] ${className}`}>
         <span className="font-mono text-[var(--color-text-primary)]">
           {formatVisualizationMass({
-            split,
+            split: displayedSplit,
             materialLabel,
             wetLabel,
             dryLabel,
@@ -244,15 +376,19 @@ export function MoistureSplit({
       <div className={`flex flex-col gap-6 ${className}`}>
         <p className="body-caption font-mono text-[var(--color-text-primary)]">
           {formatVisualizationMass({
-            split,
+            split: displayedSplit,
             materialLabel,
             wetLabel,
             dryLabel,
           })}
         </p>
-        <SplitBar split={split} height="h-8" />
+        <SplitBar
+          split={split}
+          height="h-8"
+          addedWaterState={addedWaterState}
+        />
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          {formatMoisturePercent(split.moisturePercent)} moisture
+          {formatMoisturePercent(displayedSplit.moisturePercent)} moisture
         </p>
       </div>
     );
@@ -266,23 +402,32 @@ export function MoistureSplit({
         aria-atomic="true"
       >
         {formatVisualizationMass({
-          split,
+          split: displayedSplit,
           materialLabel,
           wetLabel,
           dryLabel,
         })}
       </p>
 
-      <SplitBar split={split} height="h-12" />
+      <SplitBar
+        split={split}
+        height="h-12"
+        addedWaterState={addedWaterState}
+      />
 
-      <p className="body-caption text-[var(--color-text-tertiary)]">
-        {note ?? (
+      <div className="body-caption text-[var(--color-text-tertiary)]">
+        {addedWaterState ? (
+          <AddedWaterSummary
+            split={split}
+            addedWaterState={addedWaterState}
+          />
+        ) : note ?? (
           <>
             Moisture: {formatMoisturePercent(split.moisturePercent)} · Water:{" "}
             {formatSplitMass(split.waterKg)}
           </>
         )}
-      </p>
+      </div>
     </div>
   );
 }

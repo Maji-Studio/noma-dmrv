@@ -412,10 +412,13 @@ split inline, or format a percentage by hand.**
   cells, option labels). Missing moisture renders an explicit *unresolved*
   state (hatched dashed bar, "Moisture not recorded"), never nothing — dry mass
   drives certification readiness, so its absence has to be visible.
-- **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter,
-  the `.moisture-water-hatch` void for water. It does **not** take the
-  production/infrastructure/distribution accent — moisture means the same thing
-  in every area, and that is what lets one component appear across five.
+- **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter and
+  the `.moisture-water-hatch` void for water already present. When an operator
+  records a positive amount of added water, a third segment uses solid
+  `--color-moisture-added-water`. The headline and moisture value then use the
+  final wet mass, while the bar still distinguishes the original water from the
+  added water. It does **not** take the production/infrastructure/distribution
+  accent, so the same moisture concept reads consistently across every area.
 - **Split figures are always kg** (`formatSplitMass` and `MassPair`), never the
   auto-tonne `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in
   tonnes both round to "1.5 t", claiming no water was removed. The rule also
