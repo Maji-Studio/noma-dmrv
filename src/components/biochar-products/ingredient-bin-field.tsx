@@ -8,7 +8,6 @@ import {
 } from "@/components/forms/entity-select";
 import {
   COMPOSITION_BIN_TYPE,
-  INGREDIENT_MASS_DEVIATION_WARN_PERCENT,
   type CompositionRow,
 } from "@/lib/biochar-composition";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
@@ -31,10 +30,6 @@ export function formatIngredientBinLabel(entity: {
   return parts.join(" · ");
 }
 
-function formatKgShort(value: number): string {
-  return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
-}
-
 interface IngredientBinFieldProps {
   row: CompositionRow;
   control: Control<FieldValues>;
@@ -51,10 +46,6 @@ export function IngredientBinField({
   allocationFrozen = false,
 }: IngredientBinFieldProps) {
   const feedstockBinDialog = useQuickAddDialog();
-
-  const showDeviation =
-    row.deviationPercent != null &&
-    Math.abs(row.deviationPercent) >= INGREDIENT_MASS_DEVIATION_WARN_PERCENT;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-x-12 gap-y-12">
@@ -86,7 +77,7 @@ export function IngredientBinField({
                   formatSelectedLabel={formatIngredientBinLabel}
                   allowCreate={!allocationFrozen}
                   emptyHint={{
-                    message: `No ${row.feedstockTypeName} feedstock bins. Create a bin here, then record a feedstock intake to add stock.`,
+                    message: `No ${row.feedstockTypeName} feedstock bins yet.`,
                   }}
                   createLabel={`Create ${row.feedstockTypeName} feedstock bin`}
                   onCreateNew={
@@ -128,11 +119,6 @@ export function IngredientBinField({
               label="Mass (kg)"
               required
               error={fieldState.error?.message}
-              helperText={
-                row.suggestedMassKg != null
-                  ? `Suggested: ${formatKgShort(row.suggestedMassKg)} kg. Enter the mass to confirm it.`
-                  : undefined
-              }
             >
               <FormInput
                 id={row.massKgFieldName}
@@ -149,13 +135,6 @@ export function IngredientBinField({
                 ref={field.ref}
               />
             </FormField>
-            {showDeviation && row.deviationPercent != null && (
-              <p className="body-caption text-[var(--st-wait)] mt-4">
-                {row.deviationPercent > 0 ? "+" : ""}
-                {row.deviationPercent.toFixed(0)}% vs recipe. Recorded as
-                entered.
-              </p>
-            )}
           </div>
         )}
       />

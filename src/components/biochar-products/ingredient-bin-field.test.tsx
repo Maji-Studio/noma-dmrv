@@ -97,9 +97,6 @@ const row: CompositionRow = {
   feedstockTypeId: "feedstock-type-manure",
   feedstockTypeName: "Manure",
   feedstockTypeCategory: "Agricultural residue",
-  ratio: 0.2,
-  suggestedMassKg: 100,
-  deviationPercent: null,
   massKgFieldName: "ingredientBins.0.massKg",
   storageLocationFieldName: "ingredientBins.0.storageLocationId",
 };
@@ -134,8 +131,7 @@ describe("IngredientBinField feedstock-bin quick add", () => {
       allowCreate: true,
       createLabel: "Create Manure feedstock bin",
       emptyHint: {
-        message:
-          "No Manure feedstock bins. Create a bin here, then record a feedstock intake to add stock.",
+        message: "No Manure feedstock bins yet.",
       },
       filterBy: {
         facilityId: "facility-1",
