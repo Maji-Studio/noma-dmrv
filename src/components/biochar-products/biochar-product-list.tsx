@@ -48,11 +48,11 @@ import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import {
   BLEND_WET_MASS_LABEL,
-  BIOCHAR_PRE_WATER_MOISTURE_LABEL,
   PURE_BIOCHAR_LABEL,
 } from "@/config/product-labels";
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import {
+  deriveEffectiveMoisturePercent,
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
@@ -117,10 +117,21 @@ function createColumns(
     {
       id: "moistureContentPercent",
       header: "Moisture",
-      accessorFn: (row) => row.moistureContentPercent,
+      accessorFn: (row) =>
+        deriveEffectiveMoisturePercent(
+          row.massKg,
+          row.moistureContentPercent,
+          row.waterAddedKg,
+        ) ?? row.moistureContentPercent,
       cell: ({ row }) => (
         <span className="font-mono">
-          {formatMoisturePercent(row.original.moistureContentPercent)}
+          {formatMoisturePercent(
+            deriveEffectiveMoisturePercent(
+              row.original.massKg,
+              row.original.moistureContentPercent,
+              row.original.waterAddedKg,
+            ) ?? row.original.moistureContentPercent,
+          )}
         </span>
       ),
     },
@@ -390,17 +401,6 @@ export function BiocharProductList() {
   const editingEntity =
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
   const isSubmitting = createProduct.isPending || updateProduct.isPending;
-  const finalDisplayedMassSplit = displaySideSheet?.entity
-    ? splitWetMassAfterAddedWater(
-        displaySideSheet.entity.massKg,
-        displaySideSheet.entity.moistureContentPercent,
-        displaySideSheet.entity.waterAddedKg,
-      )
-    : null;
-  const displayedWaterAddedKg =
-    displaySideSheet?.entity?.waterAddedKg ?? null;
-  const displayedHasWaterAdded =
-    displayedWaterAddedKg != null && displayedWaterAddedKg > 0;
 
   const columns = createColumns(openEdit, handleDelete);
 
@@ -569,27 +569,16 @@ export function BiocharProductList() {
                     ?.biocharStorageLocationName,
               },
               { label: BLEND_WET_MASS_LABEL, value: formatMassKg(displaySideSheet.entity.massKg) },
-              { label: displayedHasWaterAdded ? BIOCHAR_PRE_WATER_MOISTURE_LABEL : qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
+              { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
               { label: "Water added (kg)", value: formatMassKg(displaySideSheet.entity.waterAddedKg) },
               { label: "Density (kg/m³)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
             ],
             content: (
               <MoistureSplit
-                wetMassKg={
-                  finalDisplayedMassSplit?.wetKg ??
-                  displaySideSheet.entity.massKg
-                }
-                moisturePercent={
-                  finalDisplayedMassSplit?.moisturePercent ??
-                  displaySideSheet.entity.moistureContentPercent
-                }
+                wetMassKg={displaySideSheet.entity.massKg}
+                moisturePercent={displaySideSheet.entity.moistureContentPercent}
+                addedWaterKg={displaySideSheet.entity.waterAddedKg}
                 materialLabel="Biochar"
-                note={
-                  finalDisplayedMassSplit &&
-                  displayedHasWaterAdded
-                    ? `Final after ${formatMassKg(displayedWaterAddedKg)} added water · ${formatMassKg(finalDisplayedMassSplit.wetKg)} wet · ${formatMassKg(finalDisplayedMassSplit.waterKg)} water.`
-                    : undefined
-                }
               />
             ),
           },

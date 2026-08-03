@@ -70,8 +70,8 @@ describe("biochar-product ingredient draws", () => {
     ]);
   });
 
-  it("requires a bin for every positive ingredient mass", () => {
-    expect(() =>
+  it("skips a binless ingredient instead of drawing stock", () => {
+    expect(
       getCompositionIngredientDraws({
         ingredients: [
           {
@@ -80,9 +80,22 @@ describe("biochar-product ingredient draws", () => {
             storageLocationId: null,
             massKg: 1,
           },
+          {
+            formulationIngredientId: "ingredient-2",
+            feedstockTypeId: "feedstock-type-1",
+            storageLocationId: "feedstock-bin-1",
+            massKg: 40,
+            massDryKg: 32,
+          },
         ],
       }),
-    ).toThrow("Choose a feedstock bin");
+    ).toEqual([
+      {
+        storageLocationId: "feedstock-bin-1",
+        massKg: 40,
+        massDryKg: 32,
+      },
+    ]);
   });
 });
 

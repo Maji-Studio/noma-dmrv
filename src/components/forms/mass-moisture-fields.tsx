@@ -165,14 +165,16 @@ interface MassMoistureFieldsProps {
   wetMassKg: unknown;
   /** Watched moisture value driving the live split. */
   moisturePercent: unknown;
+  /** Watched water added after the recorded wet mass and moisture measurement. */
+  addedWaterKg?: unknown;
+  /** Added-water input (and any companion fields) rendered after the base measurements and before the chart. */
+  addedWaterField?: ReactNode;
   /** Qualifies both labels and the split's dry-mass label ("Biochar", "Feedstock"). */
   materialLabel?: string;
   /** Overrides the wet figure label without changing the input label. */
   wetSplitLabel?: string;
   /** Overrides the dry figure label without changing the input label. */
   drySplitLabel?: string;
-  /** Replaces the split's footnote — use for provenance, e.g. "Moisture from delivery record". */
-  splitNote?: string;
   /** Extra content rendered inside the split panel, below the bar. */
   splitFooter?: ReactNode;
 }
@@ -186,16 +188,22 @@ export function MassMoistureFields({
   moisture,
   wetMassKg,
   moisturePercent,
+  addedWaterKg,
+  addedWaterField,
   materialLabel,
   wetSplitLabel,
   drySplitLabel,
-  splitNote,
   splitFooter,
 }: MassMoistureFieldsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
       <WetMassField {...wet} materialLabel={materialLabel} />
       <MoistureField {...moisture} materialLabel={materialLabel} />
+      {addedWaterField && (
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-16">
+          {addedWaterField}
+        </div>
+      )}
       <div
         data-testid="mass-moisture-split"
         className="md:col-span-2 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"
@@ -203,10 +211,10 @@ export function MassMoistureFields({
         <MoistureSplit
           wetMassKg={parseWatchedNumber(wetMassKg)}
           moisturePercent={parseWatchedNumber(moisturePercent)}
+          addedWaterKg={parseWatchedNumber(addedWaterKg)}
           materialLabel={materialLabel}
           wetLabel={wetSplitLabel}
           dryLabel={drySplitLabel}
-          note={splitNote}
         />
         {splitFooter}
       </div>
