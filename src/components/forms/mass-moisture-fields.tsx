@@ -167,8 +167,8 @@ interface MassMoistureFieldsProps {
   moisturePercent: unknown;
   /** Watched water added after the recorded wet mass and moisture measurement. */
   addedWaterKg?: unknown;
-  /** Supporting controls rendered after the measurements and before the chart. */
-  beforeSplit?: ReactNode;
+  /** Added-water input rendered after the base measurements and before the chart. */
+  addedWaterField?: ReactNode;
   /** Qualifies both labels and the split's dry-mass label ("Biochar", "Feedstock"). */
   materialLabel?: string;
   /** Overrides the wet figure label without changing the input label. */
@@ -191,7 +191,7 @@ export function MassMoistureFields({
   wetMassKg,
   moisturePercent,
   addedWaterKg,
-  beforeSplit,
+  addedWaterField,
   materialLabel,
   wetSplitLabel,
   drySplitLabel,
@@ -202,7 +202,11 @@ export function MassMoistureFields({
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
       <WetMassField {...wet} materialLabel={materialLabel} />
       <MoistureField {...moisture} materialLabel={materialLabel} />
-      {beforeSplit && <div className="md:col-span-2">{beforeSplit}</div>}
+      {addedWaterField && (
+        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-16">
+          {addedWaterField}
+        </div>
+      )}
       <div
         data-testid="mass-moisture-split"
         className="md:col-span-2 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"

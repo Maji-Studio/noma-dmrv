@@ -32,7 +32,7 @@ describe("MassMoistureFields", () => {
         wetMassKg={450}
         moisturePercent={10}
         addedWaterKg={50}
-        beforeSplit={<div data-testid="before-split">Water and density</div>}
+        addedWaterField={<div data-testid="added-water-field">Water added</div>}
         wet={{
           id: "massKg",
           registration: registration("massKg"),
@@ -44,9 +44,9 @@ describe("MassMoistureFields", () => {
       />,
     );
 
-    expect(html.indexOf('data-testid="before-split"')).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf('data-testid="added-water-field"')).toBeGreaterThanOrEqual(0);
     expect(html.indexOf('data-testid="mass-moisture-split"')).toBeGreaterThan(
-      html.indexOf('data-testid="before-split"'),
+      html.indexOf('data-testid="added-water-field"'),
     );
     expect(html).toContain("Added water: 50");
   });

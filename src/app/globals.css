@@ -222,7 +222,7 @@
   /* ===== SEMANTIC COLOR TOKENS ===== */
 
   /* Added water is distinct from moisture already present in a wet mass. */
-  --color-moisture-added-water: #4f86c6;
+  --color-moisture-added-water: var(--clr-purple);
 
   /* Borders — plum alphas, not neutral grays (Maji "two greys" rule:
      every grey on the light theme is an alpha of plum over white; cool
