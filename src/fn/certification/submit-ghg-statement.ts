@@ -66,6 +66,19 @@ export interface SubmitGhgStatementResult {
   remoteStatus: GhgStatementStatus;
 }
 
+const AMBIGUOUS_PROVIDER_FAILURE_STATUSES = new Set([408, 409, 425, 429]);
+
+function isDefinitiveProviderRejection(error: unknown): boolean {
+  return (
+    error instanceof IsometricApiError &&
+    error.code === "http" &&
+    typeof error.status === "number" &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    !AMBIGUOUS_PROVIDER_FAILURE_STATUSES.has(error.status)
+  );
+}
+
 export async function submitGhgStatementToVerifierCore(args: {
   orgCtx: OrgContext;
   ghgStatementId: string;
@@ -178,16 +191,10 @@ export async function submitGhgStatementToVerifierCore(args: {
             token: previouslyStagedToken,
           });
           if (!promoted) {
-            await clearPendingVerifierReportToken(orgCtx, {
-              reportId: generatedReport.id,
-              expectedTokenHash: generatedReport.pendingVerifierTokenHash,
-            });
+            throw new SafeError(
+              "A previous verifier submission is still being reconciled. Refresh the GHG Statement and try again.",
+            );
           }
-        } else if (remoteBefore) {
-          await clearPendingVerifierReportToken(orgCtx, {
-            reportId: generatedReport.id,
-            expectedTokenHash: generatedReport.pendingVerifierTokenHash,
-          });
         } else {
           throw new SafeError(
             "A previous verifier submission is still being reconciled. Refresh the GHG Statement and try again.",
@@ -331,7 +338,6 @@ export async function submitGhgStatementToVerifierCore(args: {
         if (after && submitApplied) {
           onProgress?.({ step: "ghg_statement.sending", state: "complete" });
           onProgress?.({ step: "ghg_statement.confirming", state: "active" });
-          await finalizeSubmitSuccess(after);
           await appendSyncEvent(orgCtx, {
             provider: ISOMETRIC_PROVIDER,
             entityType: GHG_STATEMENT_ENTITY_TYPE,
@@ -343,18 +349,15 @@ export async function submitGhgStatementToVerifierCore(args: {
               id: initialExternalId,
               source: "reconciliation",
               detected_status: after.status,
+              submission_attempt_id: submissionAttemptId,
+              external_mutation: "confirmed",
             },
           });
+          await finalizeSubmitSuccess(after);
           return { externalId: initialExternalId, remoteStatus: after.status };
         }
 
-        const confirmedNonApplied =
-          Boolean(after) ||
-          (err instanceof IsometricApiError &&
-            err.code === "http" &&
-            typeof err.status === "number" &&
-            err.status >= 400 &&
-            err.status < 500);
+        const confirmedNonApplied = isDefinitiveProviderRejection(err);
         if (
           generatedReport &&
           pendingVerifierToken &&
@@ -380,7 +383,12 @@ export async function submitGhgStatementToVerifierCore(args: {
           operation: `ghg_statement:${submitMode}`,
           status: "failed",
           requestPayload: submitRequestPayload,
-          responsePayload: providerFailure ?? undefined,
+          responsePayload: {
+            ...(providerFailure ?? {}),
+            submission_attempt_id: submissionAttemptId,
+            external_mutation: confirmedNonApplied ? "none" : "possible",
+            reconciliation: after ? "not_confirmed" : "unavailable",
+          },
           errorMessage: message,
         });
         throw new SafeError(message);
@@ -388,7 +396,6 @@ export async function submitGhgStatementToVerifierCore(args: {
 
       onProgress?.({ step: "ghg_statement.sending", state: "complete" });
       onProgress?.({ step: "ghg_statement.confirming", state: "active" });
-      await finalizeSubmitSuccess(remoteAfter);
       await appendSyncEvent(orgCtx, {
         provider: ISOMETRIC_PROVIDER,
         entityType: GHG_STATEMENT_ENTITY_TYPE,
@@ -396,8 +403,14 @@ export async function submitGhgStatementToVerifierCore(args: {
         operation: `ghg_statement:${submitMode}`,
         status: "succeeded",
         requestPayload: submitRequestPayload,
-        responsePayload: { id: remoteAfter.id, status: remoteAfter.status },
+        responsePayload: {
+          id: remoteAfter.id,
+          status: remoteAfter.status,
+          submission_attempt_id: submissionAttemptId,
+          external_mutation: "confirmed",
+        },
       });
+      await finalizeSubmitSuccess(remoteAfter);
       return {
         externalId: initialExternalId,
         remoteStatus: remoteAfter.status,

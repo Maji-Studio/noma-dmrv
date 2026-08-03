@@ -43,6 +43,8 @@ import {
 } from "./helpers/test-org";
 
 const TEST_USER_ID = "parent-document-retirement-user";
+const DELETION_BATCH_SIZE = 50;
+const RETRY_BACKOFF_ELAPSED_AT = new Date("2000-01-01T00:00:00.000Z");
 
 class RetirementStorageProvider implements StorageProvider {
   readonly name = "local-fs" as const;
@@ -556,6 +558,15 @@ describe("parent document retirement", () => {
       ).toHaveLength(1);
 
       provider.failKey = null;
+      expect(
+        await processPendingStorageObjectDeletions(
+          makeTestOrgContext(TEST_USER_ID),
+        ),
+      ).toEqual({ completed: 0, failed: 0 });
+      await db
+        .update(storageObjectDeletions)
+        .set({ lastAttemptAt: RETRY_BACKOFF_ELAPSED_AT })
+        .where(eq(storageObjectDeletions.storageKey, keys[1]));
       const retryResult = await processPendingStorageObjectDeletions(
         makeTestOrgContext(TEST_USER_ID),
       );
@@ -576,6 +587,70 @@ describe("parent document retirement", () => {
       await db.delete(documents).where(eq(documents.entityId, fixture.reactorId));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
       await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    }
+  });
+
+  it("does not let permanent configuration mismatches starve valid deletions", async () => {
+    const tag = crypto.randomUUID().slice(0, 8);
+    const validKey = `outbox/${tag}/valid.pdf`;
+    const mismatchKeys = Array.from(
+      { length: DELETION_BATCH_SIZE },
+      (_, index) => `outbox/${tag}/mismatch-${index}.pdf`,
+    );
+    provider.objects.add(validKey);
+
+    try {
+      await db.insert(storageObjectDeletions).values([
+        ...mismatchKeys.map((storageKey) => ({
+          organizationId: TEST_ORG_ID,
+          storageProvider: "retired-provider",
+          storageBucket: "retired-bucket",
+          storageKey,
+          createdAt: RETRY_BACKOFF_ELAPSED_AT,
+        })),
+        {
+          organizationId: TEST_ORG_ID,
+          storageProvider: provider.name,
+          storageBucket: provider.bucket,
+          storageKey: validKey,
+        },
+      ]);
+
+      await expect(
+        processPendingStorageObjectDeletions(
+          makeTestOrgContext(TEST_USER_ID),
+        ),
+      ).resolves.toEqual({
+        completed: 1,
+        failed: DELETION_BATCH_SIZE,
+      });
+      expect(provider.deleteCalls).toEqual([validKey]);
+      expect(provider.objects.has(validKey)).toBe(false);
+
+      const mismatches = await db
+        .select()
+        .from(storageObjectDeletions)
+        .where(inArray(storageObjectDeletions.storageKey, mismatchKeys));
+      expect(mismatches).toHaveLength(DELETION_BATCH_SIZE);
+      expect(mismatches).toEqual(
+        expect.arrayContaining(
+          mismatchKeys.map((storageKey) =>
+            expect.objectContaining({
+              storageKey,
+              attemptCount: 0,
+              completedAt: null,
+              lastErrorCode: "storage_configuration_mismatch",
+            }),
+          ),
+        ),
+      );
+    } finally {
+      await db
+        .delete(storageObjectDeletions)
+        .where(inArray(storageObjectDeletions.storageKey, [
+          validKey,
+          ...mismatchKeys,
+        ]));
     }
   });
 

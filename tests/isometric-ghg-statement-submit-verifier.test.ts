@@ -525,7 +525,6 @@ describe("submitGhgStatementToVerifier — happy path", () => {
   });
 
   it("POSTs /ghg_statements/{id}/submit, flips remote status, attaches a report document, and updates ledger metadata", async () => {
-    // Arrange the ledger to look like createGhgStatementDraft already ran.
     const remoteBefore = makeRemoteStatement({ status: "DRAFT" });
     const remoteAfter = makeRemoteStatement({
       status: "AWAITING_VERIFICATION",
@@ -540,8 +539,6 @@ describe("submitGhgStatementToVerifier — happy path", () => {
       reportingPeriodEndOn: REPORTING_PERIOD_END,
     });
 
-    // For the submit-to-verifier flow, getGhgStatement is called for the
-    // pre-state read, and submitGhgStatement returns the post-state.
     vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
     vi.mocked(isometric.submitGhgStatement).mockResolvedValue(remoteAfter);
 
@@ -556,7 +553,6 @@ describe("submitGhgStatementToVerifier — happy path", () => {
       remoteStatus: "AWAITING_VERIFICATION",
     });
 
-    // Submit body carries the operator-supplied report URL.
     expect(isometric.submitGhgStatement).toHaveBeenCalledExactlyOnceWith(
       expect.any(Object),
       EXTERNAL_STATEMENT_ID,
@@ -639,7 +635,7 @@ describe("submitGhgStatementToVerifier — happy path", () => {
     );
   });
 
-  it("preserves the active URL when a resubmit is confirmed failed", async () => {
+  it("preserves the active and pending URLs when a resubmit outcome is ambiguous", async () => {
     const remoteDraft = makeRemoteStatement({ status: "DRAFT" });
     const activeReportUrl =
       `http://localhost:3100/api/ghg-statement-reports/${REPORT_ID}?token=active`;
@@ -678,13 +674,7 @@ describe("submitGhgStatementToVerifier — happy path", () => {
     expect(remoteBefore.ghg_statement_report_url).toBe(activeReportUrl);
     expect(ledger.attachReportDocument).not.toHaveBeenCalled();
     expect(reportDA.promotePendingVerifierReportToken).not.toHaveBeenCalled();
-    expect(reportDA.clearPendingVerifierReportToken).toHaveBeenCalledWith(
-      makeTestOrgContext("user-test-1"),
-      {
-        reportId: REPORT_ID,
-        expectedTokenHash: hashVerifierToken("opaque"),
-      },
-    );
+    expect(reportDA.clearPendingVerifierReportToken).not.toHaveBeenCalled();
   });
 
   it("rejects a stale approved report before provider submission", async () => {
@@ -816,7 +806,7 @@ describe("submitGhgStatementToVerifier — happy path", () => {
     expect(reportDA.clearPendingVerifierReportToken).not.toHaveBeenCalled();
   });
 
-  it("does not reconcile an unrelated registry change as report submission", async () => {
+  it("preserves a pending capability when reconciliation returns unrelated stale state", async () => {
     const remoteBefore = makeRemoteStatement({ status: "DRAFT" });
     const unrelatedAfter = makeRemoteStatement({
       status: "AWAITING_VERIFICATION",
@@ -851,7 +841,47 @@ describe("submitGhgStatementToVerifier — happy path", () => {
 
     expect(result).toMatchObject({ success: false });
     expect(reportDA.promotePendingVerifierReportToken).not.toHaveBeenCalled();
-    expect(reportDA.clearPendingVerifierReportToken).toHaveBeenCalledOnce();
+    expect(reportDA.clearPendingVerifierReportToken).not.toHaveBeenCalled();
+  });
+
+  it("clears a pending capability after an explicit definitive provider rejection", async () => {
+    const remoteBefore = makeRemoteStatement({ status: "DRAFT" });
+    vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteBefore);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
+    await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    vi.mocked(reportDA.getApprovedGhgStatementReport).mockResolvedValue({
+      id: REPORT_ID,
+      ghgStatementId: STATEMENT_ID,
+      documentId: REPORT_DOCUMENT_ID,
+      version: 1,
+      lifecycle: "approved",
+      sourceFingerprint: "a".repeat(64),
+    } as GhgStatementReportRow);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
+    vi.mocked(isometric.submitGhgStatement).mockRejectedValue(
+      new isometric.IsometricApiError(
+        "invalid report URL",
+        422,
+        { detail: "invalid report URL" },
+        "http",
+      ),
+    );
+
+    const result = await submitGhgStatementToVerifier(STATEMENT_ID, {
+      reportId: REPORT_ID,
+    });
+
+    expect(result).toMatchObject({ success: false });
+    expect(reportDA.clearPendingVerifierReportToken).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      {
+        reportId: REPORT_ID,
+        expectedTokenHash: hashVerifierToken("opaque"),
+      },
+    );
   });
 
   it("promotes a previously staged URL before returning the idempotent awaiting-state refusal", async () => {
