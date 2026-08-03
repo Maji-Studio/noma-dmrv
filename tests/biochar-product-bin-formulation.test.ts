@@ -767,6 +767,36 @@ beforeAll(async () => {
     ).rejects.toThrow("Not enough biochar in this bin");
   });
 
+  it("allows an all-ingredient product with zero required source mass", async () => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const sourceBinId = await makeBiocharBin();
+    const productBinId = await makeProductBin(formulationAId);
+    const ingredientBinId = await makeStockedFeedstockBin(100);
+    const composition = formulationAComposition();
+    composition.ingredients[0].massKg = 100;
+    composition.ingredients[0].storageLocationId = ingredientBinId;
+
+    const product = await createBiocharProduct(ctx, {
+      ...baseProductInput(),
+      linkedProductionRunId: null,
+      sourceBiocharStorageLocationId: sourceBinId,
+      formulationId: formulationAId,
+      storageLocationId: productBinId,
+      massKg: 100,
+      composition,
+    });
+    createdProductIds.push(product.id);
+
+    await expect(
+      db
+        .select()
+        .from(biocharProductSourceAllocations)
+        .where(
+          eq(biocharProductSourceAllocations.biocharProductId, product.id),
+        ),
+    ).resolves.toEqual([]);
+  });
+
   it("updates legacy blend mass without requiring a missing ingredient bin", async () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const sourceBinId = await makeBiocharBin();
