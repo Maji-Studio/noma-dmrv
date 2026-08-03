@@ -860,7 +860,6 @@ describe("submitGhgStatementToVerifier — happy path", () => {
       lifecycle: "approved",
       sourceFingerprint: "a".repeat(64),
     } as GhgStatementReportRow);
-    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
     vi.mocked(isometric.submitGhgStatement).mockRejectedValue(
       new isometric.IsometricApiError(
         "invalid report URL",
