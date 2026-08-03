@@ -9,8 +9,59 @@
  */
 import { test, expect } from "./fixtures";
 import { selectEntity, waitForSideSheet, waitForSideSheetClose } from "./fixtures";
+import { eq } from "drizzle-orm";
+import { DEC_ORG_ID } from "@/db/org-defaults";
+import * as schema from "../../src/db/schema";
+import { createDbConnection } from "./fixtures/db";
 
 test.describe("Feedstock UI CRUD", () => {
+  test("offers blend-usage feedstock types for incoming feedstock", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    const blendType = {
+      id: crypto.randomUUID(),
+      organizationId: DEC_ORG_ID,
+      code: `E2E-FST-BLEND-${Date.now()}`,
+      name: `E2E Blend Material ${Date.now()}`,
+      category: "compost",
+      usage: "blend" as const,
+    };
+    const { db, pool } = createDbConnection();
+
+    try {
+      await db.insert(schema.feedstockTypes).values(blendType);
+
+      await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+      await expect(
+        page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+      ).toBeVisible({ timeout: 15000 });
+      await page.getByRole("button", { name: "New Feedstock" }).click();
+      await waitForSideSheet(page);
+
+      const dialog = page.getByRole("dialog");
+      const feedstockTypeField = dialog
+        .locator("label")
+        .filter({ hasText: "Feedstock type" })
+        .first()
+        .locator(
+          "xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]",
+        );
+      await feedstockTypeField
+        .locator('[data-testid="entity-select-trigger"]')
+        .click();
+
+      await expect(
+        page.getByRole("option").filter({ hasText: blendType.name }),
+      ).toBeVisible();
+    } finally {
+      await db
+        .delete(schema.feedstockTypes)
+        .where(eq(schema.feedstockTypes.id, blendType.id));
+      await pool.end();
+    }
+  });
+
   test("admin can create a feedstock and it appears in the list", async ({
     adminPage: page,
     seededData,
