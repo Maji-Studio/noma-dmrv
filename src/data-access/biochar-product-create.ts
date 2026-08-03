@@ -352,7 +352,7 @@ export async function createBiocharProduct(
       );
     }
 
-    if (sourceBinId) {
+    if (sourceBinId && sourceBiocharMassKg > 0) {
       await assertBiocharDrawWithinStock(ctx, tx, {
         biocharStorageLocationId: sourceBinId,
         requestedBiocharKg: sourceBiocharMassKg,

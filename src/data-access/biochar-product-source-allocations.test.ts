@@ -239,13 +239,17 @@ describe("planBiocharProductSourceAllocations", () => {
     );
   });
 
-  it("returns no allocations for a zero draw", () => {
+  it("returns no allocations for a zero draw even when the bin is negative", () => {
     expect(
-      planBiocharProductSourceAllocations([lot()], 0, 10),
+      planBiocharProductSourceAllocations(
+        [lot({ feasibilityWetMassKg: -10 })],
+        0,
+        60,
+      ),
     ).toEqual({
       allocations: [],
       productionDate: null,
-      availableWetMassKg: 40,
+      availableWetMassKg: -70,
     });
   });
 
