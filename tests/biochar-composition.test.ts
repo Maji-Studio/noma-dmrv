@@ -253,9 +253,10 @@ describe("deriveBlendMassKg", () => {
     expect(deriveSourceBiocharMassKg(blend, ingredients)).toBe(500.5);
   });
 
-  it("returns null without a finite biochar mass", () => {
+  it("returns null without a finite non-negative biochar mass", () => {
     expect(deriveBlendMassKg(null, [{ massKg: 20 }])).toBeNull();
     expect(deriveBlendMassKg(Number.NaN, [{ massKg: 20 }])).toBeNull();
+    expect(deriveBlendMassKg(-1, [{ massKg: 20 }])).toBeNull();
   });
 });
 
