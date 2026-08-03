@@ -174,9 +174,9 @@ export const biocharProductFormSchema = z.object({
 
   // Measurement fields (setValueAs in form converts "" to null and strings to numbers)
   massKg: requiredPositiveMassKgSchema(
-    "Wet mass is required",
-    "Wet mass must be a number",
-    "Wet mass must be greater than 0",
+    "Biochar wet mass is required",
+    "Biochar wet mass must be a number",
+    "Biochar wet mass must be greater than 0",
   ),
   moistureContentPercent: requiredPercent,
   densityKgM3: optionalPositiveNumber,

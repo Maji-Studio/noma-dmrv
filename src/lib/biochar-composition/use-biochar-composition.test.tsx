@@ -81,7 +81,6 @@ function Harness({
   const composition = useBiocharComposition(form, {
     formulationId: "formulation-1",
     facilityId: "facility-1",
-    productMassKg: 100,
     allocationFrozen,
   });
 

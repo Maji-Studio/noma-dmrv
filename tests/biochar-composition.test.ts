@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   reconcileComposition,
-  deriveSuggestedIngredientMassKg,
+  deriveBlendMassKg,
   deriveSourceBiocharMassKg,
-  deriveMassDeviationPercent,
   fromCompositionJsonb,
   toCompositionJsonb,
 } from "@/lib/biochar-composition";
@@ -191,25 +190,6 @@ describe("reconcileComposition", () => {
   });
 });
 
-describe("deriveSuggestedIngredientMassKg", () => {
-  it("computes productMassKg * ingredientRatio", () => {
-    expect(deriveSuggestedIngredientMassKg(500, 0.5)).toBeCloseTo(250, 6);
-  });
-
-  it("suggests 160 kg for a 0.2 ingredient in an 800 kg product", () => {
-    expect(deriveSuggestedIngredientMassKg(800, 0.2)).toBeCloseTo(160, 6);
-  });
-
-  it("returns null when any input is null, undefined, zero, or negative", () => {
-    expect(deriveSuggestedIngredientMassKg(null, 0.2)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(800, null)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(undefined, 0.2)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(0, 0.2)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(800, 0)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(-1, 0.2)).toBeNull();
-  });
-});
-
 describe("deriveSourceBiocharMassKg", () => {
   it("subtracts actual recorded ingredient masses from pre-water blend mass", () => {
     expect(
@@ -256,24 +236,26 @@ describe("deriveSourceBiocharMassKg", () => {
   });
 });
 
-describe("deriveMassDeviationPercent", () => {
-  it("computes the signed percent deviation vs the suggestion", () => {
-    expect(deriveMassDeviationPercent(220, 200)).toBeCloseTo(10, 6);
-    expect(deriveMassDeviationPercent(150, 200)).toBeCloseTo(-25, 6);
-    expect(deriveMassDeviationPercent(200, 200)).toBeCloseTo(0, 6);
+describe("deriveBlendMassKg", () => {
+  it("adds recorded ingredient masses to the entered biochar mass", () => {
+    expect(
+      deriveBlendMassKg(80, [{ massKg: 12 }, { massKg: 8 }]),
+    ).toBe(100);
   });
 
-  it("treats an entered zero mass as a full -100% deviation", () => {
-    expect(deriveMassDeviationPercent(0, 200)).toBeCloseTo(-100, 6);
+  it("uses exact persisted gram arithmetic", () => {
+    expect(deriveBlendMassKg(0.1, [{ massKg: 0.2 }])).toBe(0.3);
   });
 
-  it("returns null when either side is missing or the suggestion is non-positive", () => {
-    expect(deriveMassDeviationPercent(null, 200)).toBeNull();
-    expect(deriveMassDeviationPercent(undefined, 200)).toBeNull();
-    expect(deriveMassDeviationPercent(200, null)).toBeNull();
-    expect(deriveMassDeviationPercent(200, 0)).toBeNull();
-    expect(deriveMassDeviationPercent(-1, 200)).toBeNull();
-    expect(deriveMassDeviationPercent(Number.NaN, 200)).toBeNull();
+  it("round-trips with deriveSourceBiocharMassKg", () => {
+    const ingredients = [{ massKg: 550.123 }, { massKg: 49.877 }];
+    const blend = deriveBlendMassKg(500.5, ingredients);
+    expect(deriveSourceBiocharMassKg(blend, ingredients)).toBe(500.5);
+  });
+
+  it("returns null without a finite biochar mass", () => {
+    expect(deriveBlendMassKg(null, [{ massKg: 20 }])).toBeNull();
+    expect(deriveBlendMassKg(Number.NaN, [{ massKg: 20 }])).toBeNull();
   });
 });
 
