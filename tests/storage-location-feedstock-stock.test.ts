@@ -153,6 +153,8 @@ describe("storage-location feedstock stock", () => {
             feedstockTypeId: fixture.feedstockTypeId,
             storageLocationId: fixture.storageLocationId,
             massKg: 30,
+            massDryKg: 24,
+            moistureContentPercent: 20,
           }],
         },
       })
@@ -165,7 +167,7 @@ describe("storage-location feedstock stock", () => {
       );
 
       expect(result.items).toHaveLength(1);
-      expect(result.items[0]?.inventorySummary.feedstockDryKg).toBe(170);
+      expect(result.items[0]?.inventorySummary.feedstockDryKg).toBe(176);
     } finally {
       await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
       await cleanupFixture(fixture);

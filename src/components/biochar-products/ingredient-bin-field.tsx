@@ -11,6 +11,7 @@ import {
   INGREDIENT_MASS_DEVIATION_WARN_PERCENT,
   type CompositionRow,
 } from "@/lib/biochar-composition";
+import { WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 import { formatStorageLocationType } from "@/schemas/storage-locations";
 
@@ -40,6 +41,7 @@ interface IngredientBinFieldProps {
   control: Control<FieldValues>;
   isSubmitting: boolean;
   facilityId: string;
+  allocationFrozen?: boolean;
 }
 
 export function IngredientBinField({
@@ -47,6 +49,7 @@ export function IngredientBinField({
   control,
   isSubmitting,
   facilityId,
+  allocationFrozen = false,
 }: IngredientBinFieldProps) {
   const feedstockBinDialog = useQuickAddDialog();
 
@@ -73,7 +76,7 @@ export function IngredientBinField({
                   value={field.value || ""}
                   onChange={field.onChange}
                   placeholder="Select a feedstock bin..."
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || allocationFrozen}
                   error={!!fieldState.error}
                   filterBy={{
                     ...(facilityId ? { facilityId } : {}),
@@ -82,12 +85,16 @@ export function IngredientBinField({
                     feedstockTypeUsage: "blend",
                   }}
                   formatSelectedLabel={formatIngredientBinLabel}
-                  allowCreate
+                  allowCreate={!allocationFrozen}
                   emptyHint={{
                     message: `No ${row.feedstockTypeName} feedstock bins. Create a bin here, then record a feedstock intake to add stock.`,
                   }}
                   createLabel={`Create ${row.feedstockTypeName} feedstock bin`}
-                  onCreateNew={facilityId ? feedstockBinDialog.open : undefined}
+                  onCreateNew={
+                    facilityId && !allocationFrozen
+                      ? feedstockBinDialog.open
+                      : undefined
+                  }
                 />
               </FormField>
 
@@ -119,7 +126,7 @@ export function IngredientBinField({
           <div>
             <FormField
               id={row.massKgFieldName}
-              label="Mass (kg)"
+              label={WET_MASS_FIELD_LABEL}
               required
               error={fieldState.error?.message}
               helperText={
@@ -134,7 +141,7 @@ export function IngredientBinField({
                 step={MASS_KG_INPUT_STEP}
                 min="0"
                 placeholder="e.g., 120"
-                disabled={isSubmitting}
+                disabled={isSubmitting || allocationFrozen}
                 error={!!fieldState.error}
                 value={field.value ?? ""}
                 onChange={field.onChange}

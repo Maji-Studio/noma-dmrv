@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getCompositionIngredientDraws } from "./biochar-product-composition";
+import {
+  compositionAllocationChanged,
+  deriveCompositionSourceBiocharMassKg,
+  getCompositionIngredientDraws,
+} from "./biochar-product-composition";
 
 describe("biochar-product ingredient draws", () => {
   it("aggregates positive masses that draw from the same bin", () => {
@@ -11,22 +15,59 @@ describe("biochar-product ingredient draws", () => {
             feedstockTypeId: "feedstock-type-1",
             storageLocationId: "feedstock-bin-1",
             massKg: 40,
+            massDryKg: 32,
           },
           {
             formulationIngredientId: "ingredient-2",
             feedstockTypeId: "feedstock-type-1",
             storageLocationId: "feedstock-bin-1",
             massKg: 30,
+            massDryKg: 24,
           },
           {
             formulationIngredientId: "ingredient-3",
             feedstockTypeId: "feedstock-type-1",
             storageLocationId: "feedstock-bin-2",
             massKg: 0,
+            massDryKg: 0,
           },
         ],
       }),
-    ).toEqual([{ storageLocationId: "feedstock-bin-1", massKg: 70 }]);
+    ).toEqual([
+      {
+        storageLocationId: "feedstock-bin-1",
+        massKg: 70,
+        massDryKg: 56,
+      },
+    ]);
+  });
+
+  it("marks an aggregate unresolved when any wet draw lacks a dry snapshot", () => {
+    expect(
+      getCompositionIngredientDraws({
+        ingredients: [
+          {
+            formulationIngredientId: "ingredient-1",
+            feedstockTypeId: "feedstock-type-1",
+            storageLocationId: "feedstock-bin-1",
+            massKg: 40,
+            massDryKg: 32,
+          },
+          {
+            formulationIngredientId: "ingredient-2",
+            feedstockTypeId: "feedstock-type-1",
+            storageLocationId: "feedstock-bin-1",
+            massKg: 10,
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        storageLocationId: "feedstock-bin-1",
+        massKg: 50,
+        massDryKg: null,
+      },
+    ]);
   });
 
   it("requires a bin for every positive ingredient mass", () => {
@@ -42,5 +83,102 @@ describe("biochar-product ingredient draws", () => {
         ],
       }),
     ).toThrow("Choose a feedstock bin");
+  });
+});
+
+describe("composition allocation comparison", () => {
+  const first = {
+    formulationIngredientId: "line-a",
+    feedstockTypeId: "type-a",
+    feedstockTypeName: "Old name",
+    feedstockTypeCategory: "old-category",
+    ratio: 0.2,
+    storageLocationId: "bin-a",
+    massKg: 0.1,
+    massDryKg: 0.08,
+    moistureContentPercent: 20,
+  };
+  const second = {
+    formulationIngredientId: "line-b",
+    feedstockTypeId: "type-b",
+    feedstockTypeName: "Second",
+    feedstockTypeCategory: "mineral",
+    ratio: 0.3,
+    storageLocationId: "bin-b",
+    massKg: 0.2,
+    massDryKg: 0.18,
+    moistureContentPercent: 10,
+  };
+
+  it("ignores row order, object key order, display metadata, and ratio", () => {
+    expect(
+      compositionAllocationChanged(
+        { ingredients: [first, second] },
+        {
+          ingredients: [
+            {
+              massKg: 0.2,
+              massDryKg: 0.18,
+              moistureContentPercent: 10,
+              storageLocationId: "bin-b",
+              ratio: 0.9,
+              feedstockTypeCategory: "refreshed",
+              feedstockTypeName: "Refreshed second",
+              feedstockTypeId: "type-b",
+              formulationIngredientId: "line-b",
+            },
+            {
+              massKg: 0.1,
+              massDryKg: 0.08,
+              moistureContentPercent: 20,
+              storageLocationId: "bin-a",
+              ratio: 0.8,
+              feedstockTypeCategory: "refreshed",
+              feedstockTypeName: "Refreshed first",
+              feedstockTypeId: "type-a",
+              formulationIngredientId: "line-a",
+            },
+          ],
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it.each([
+    ["formulation line", { ...first, formulationIngredientId: "line-c" }],
+    ["feedstock type", { ...first, feedstockTypeId: "type-c" }],
+    ["source bin", { ...first, storageLocationId: "bin-c" }],
+    ["recorded mass", { ...first, massKg: 0.101 }],
+    ["dry-mass snapshot", { ...first, massDryKg: 0.081 }],
+    ["moisture snapshot", { ...first, moistureContentPercent: 19 }],
+  ])("detects a changed %s", (_label, changed) => {
+    expect(
+      compositionAllocationChanged(
+        { ingredients: [first] },
+        { ingredients: [changed] },
+      ),
+    ).toBe(true);
+  });
+
+  it("detects allocation-relevant mass even on a malformed legacy row", () => {
+    expect(
+      compositionAllocationChanged(
+        { ingredients: [] },
+        { ingredients: [{ massKg: 1 }] },
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("deriveCompositionSourceBiocharMassKg", () => {
+  it("totals legacy ingredient mass without requiring a source bin", () => {
+    expect(
+      deriveCompositionSourceBiocharMassKg(0.3, {
+        ingredients: [
+          { massKg: 0.1 },
+          { massKg: 0.2, storageLocationId: null },
+        ],
+      }),
+    ).toBe(0);
   });
 });

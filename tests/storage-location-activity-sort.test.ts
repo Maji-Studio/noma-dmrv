@@ -178,7 +178,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
         organizationId: TEST_ORG_ID,
         code: `FORM-ACT-${runId}`,
         name: `Garden Blend ${runId}`,
-        biocharRatio: 1,
+        biocharRatio: 0.7,
       })
       .returning({ id: formulations.id });
 
@@ -271,8 +271,19 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
           organizationId: TEST_ORG_ID,
           code: `BP-ACT-DRAWN-${runId}`,
           facilityId: facility.id,
+          formulationId: formulation.id,
           linkedProductionRunId: binDRunId,
           massKg: 50,
+          composition: {
+            ingredients: [{
+              formulationIngredientId: crypto.randomUUID(),
+              feedstockTypeId: feedstockType.id,
+              storageLocationId: binA.id,
+              massKg: 10,
+              massDryKg: 10,
+              moistureContentPercent: 0,
+            }],
+          },
           createdAt: T4_PRODUCT_FROM_RUN,
         },
         // Branch 5: a commingled product drawn from bin G. Its two allocation
@@ -456,12 +467,12 @@ describe("storage-location lastActivityAt sort", () => {
 
       expect(legacyBin?.lastActivity).toMatchObject({
         type: "out",
-        massKg: 50,
-        massDryKg: 40,
-        label: "Pure biochar",
+        massKg: 40,
+        massDryKg: 32,
+        label: `Garden Blend ${runId}`,
       });
       expect(legacyBin?.biocharInventory.downstreamFormulations).toEqual([
-        "Pure biochar",
+        `Garden Blend ${runId}`,
       ]);
       expect(commingledBin?.lastActivity).toMatchObject({
         type: "out",

@@ -20,12 +20,45 @@ import { seedCreditBatch } from "./fixtures/seed-chain-data";
 import type { Page } from "@playwright/test";
 
 const FUTURE_DATE = "2026-08-01";
+const ACTION_LABEL_PREFIX = "Actions for ";
 
 const pdf = (name: string) => ({
   name,
   mimeType: "application/pdf",
   buffer: Buffer.from("%PDF-1.4\n% e2e deferred attachment probe\n"),
 });
+
+async function getListedFeedstockCodes(page: Page): Promise<Set<string>> {
+  const labels = await page
+    .locator(`tbody button[aria-label^="${ACTION_LABEL_PREFIX}"]`)
+    .evaluateAll(
+      (buttons, prefixLength) =>
+        buttons
+          .map((button) => button.getAttribute("aria-label"))
+          .filter((label): label is string => label !== null)
+          .map((label) => label.slice(prefixLength)),
+      ACTION_LABEL_PREFIX.length,
+    );
+  return new Set(labels);
+}
+
+async function getCreatedFeedstockCode(
+  page: Page,
+  existingCodes: Set<string>,
+): Promise<string> {
+  let createdCodes: string[] = [];
+  await expect
+    .poll(async () => {
+      createdCodes = [...(await getListedFeedstockCodes(page))].filter(
+        (code) => !existingCodes.has(code),
+      );
+      return createdCodes.length;
+    })
+    .toBe(1);
+  const createdCode = createdCodes[0];
+  if (!createdCode) throw new Error("Created feedstock code was not rendered");
+  return createdCode;
+}
 
 async function fillMinimalFeedstock(
   page: Page,
@@ -63,6 +96,11 @@ test.describe("Deferred create attachments", () => {
     void cleanupTestData;
     await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("table", { name: "Feedstocks" })).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
+    const existingFeedstockCodes = await getListedFeedstockCodes(page);
 
     await page.click('button:has-text("New Feedstock")');
     await waitForSideSheet(page);
@@ -81,9 +119,22 @@ test.describe("Deferred create attachments", () => {
     await dialog.locator('button:has-text("Create Feedstock")').click();
     await waitForSideSheetClose(page);
 
-    // Reopen the newest feedstock: view mode lists the document read-only.
+    // Reopen the feedstock created by this test. Delivery-date sorting can put
+    // a newer seeded row ahead of it, so row position is not an identity.
     await page.waitForLoadState("networkidle");
-    await page.locator("table tbody tr").first().click();
+    const createdFeedstockCode = await getCreatedFeedstockCode(
+      page,
+      existingFeedstockCodes,
+    );
+    await page
+      .locator("table tbody tr")
+      .filter({
+        has: page.getByRole("button", {
+          name: `${ACTION_LABEL_PREFIX}${createdFeedstockCode}`,
+          exact: true,
+        }),
+      })
+      .click();
     await waitForSideSheet(page);
     await expect(dialog.getByText("bol-deferred.pdf")).toBeVisible({
       timeout: 15000,

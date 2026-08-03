@@ -51,6 +51,7 @@ import {
   type LaneStockDerivation,
 } from "../lane-stock-derivation";
 import { estimateRemainingFeedstockWetMassKg } from "../storage-location-enrichment";
+import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
 
 export function formatStorageLocationSubtitle(
   type: string,
@@ -229,9 +230,9 @@ function buildInventoryAggregates(
       COALESCE(
         SUM(
           CASE
-            WHEN jsonb_typeof(ingredient.value -> 'massKg') = 'number'
-              AND (ingredient.value ->> 'massKg')::numeric > 0
-            THEN (ingredient.value ->> 'massKg')::numeric
+            WHEN jsonb_typeof(ingredient.value -> 'massDryKg') = 'number'
+              AND (ingredient.value ->> 'massDryKg')::numeric > 0
+            THEN (ingredient.value ->> 'massDryKg')::numeric
             ELSE 0
           END
         ),
@@ -293,7 +294,7 @@ function buildInventoryAggregates(
     totalAllocatedWetKg: numericAggregate(sql<number>`
       COALESCE(
         SUM(
-          COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
+          ${sourceBiocharMassKgSql(biocharProducts.massKg, biocharProducts.composition)}
         ),
         0
       )
@@ -301,8 +302,7 @@ function buildInventoryAggregates(
     totalAllocatedDryKg: numericAggregate(sql<number>`
       COALESCE(
         SUM(
-          COALESCE(${biocharProducts.massKg}, 0)
-          * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
+          ${sourceBiocharMassKgSql(biocharProducts.massKg, biocharProducts.composition)}
           * (
             COALESCE(${productionRuns.biocharDryMassKg}, 0)
             / NULLIF(COALESCE(${productionRuns.biocharOutputKg}, 0), 0)
@@ -318,13 +318,6 @@ function buildInventoryAggregates(
     and(
       eq(biocharProducts.linkedProductionRunId, productionRuns.id),
       eq(biocharProducts.organizationId, ctx.organizationId),
-    ),
-  )
-  .leftJoin(
-    formulations,
-    and(
-      eq(biocharProducts.formulationId, formulations.id),
-      eq(formulations.organizationId, ctx.organizationId),
     ),
   )
   .where(and(
@@ -405,20 +398,13 @@ function buildInventoryAggregates(
     biocharEquivalentKg: numericAggregate(sql<number>`
       COALESCE(
         SUM(
-          COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
+          ${sourceBiocharMassKgSql(biocharProducts.massKg, biocharProducts.composition)}
         ),
         0
       )
     `).as("biochar_equivalent_kg"),
   })
   .from(biocharProducts)
-  .leftJoin(
-    formulations,
-    and(
-      eq(biocharProducts.formulationId, formulations.id),
-      eq(formulations.organizationId, ctx.organizationId),
-    ),
-  )
   .where(eq(biocharProducts.organizationId, ctx.organizationId))
   .groupBy(biocharProducts.storageLocationId)
   .as("product_inventory_agg");
