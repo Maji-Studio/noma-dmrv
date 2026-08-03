@@ -366,6 +366,7 @@ export function CustomerList() {
                     distanceLabel: "One-way distance from facility (per leg, km)",
                     defaultLabel: "Default destination",
                     positionLabel: "Application site position",
+                    descriptionLabel: "Site description",
                     includeSoilTemperature: true,
                   }),
                 },

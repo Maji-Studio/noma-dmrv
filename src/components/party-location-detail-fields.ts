@@ -18,6 +18,7 @@ interface BuildPartyLocationDetailFieldsOptions {
   distanceLabel: string;
   defaultLabel: string;
   positionLabel: string;
+  descriptionLabel?: string;
   includeSoilTemperature?: boolean;
 }
 
@@ -35,7 +36,10 @@ export function buildPartyLocationDetailFields(
       { label: `${prefix}Country`, value: location?.country ?? null },
       { label: `${prefix}State / region`, value: location?.stateRegion ?? null },
       { label: `${prefix}City`, value: location?.city ?? null },
-      { label: `${prefix}Address / description`, value: location?.address ?? null },
+      {
+        label: `${prefix}${options.descriptionLabel ?? "Address / description"}`,
+        value: location?.address ?? null,
+      },
       { label: `${prefix}${options.positionLabel} latitude`, value: location?.gpsLatitude ?? null },
       { label: `${prefix}${options.positionLabel} longitude`, value: location?.gpsLongitude ?? null },
     ];

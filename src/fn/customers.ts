@@ -409,7 +409,7 @@ export async function createCustomerLocationFn(
       city: validated.city || null,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
-      address: validated.address,
+      address: validated.address || null,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
       distanceSource: resolveDistanceSource(
         validated.distanceFromFacilityKm ?? null,
@@ -456,7 +456,8 @@ export async function updateCustomerLocationFn(
       city: validated.city || null,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
-      address: validated.address,
+      address:
+        validated.address === undefined ? undefined : validated.address || null,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
       distanceSource: resolveDistanceSource(
         validated.distanceFromFacilityKm,

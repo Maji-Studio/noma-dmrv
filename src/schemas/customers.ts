@@ -26,10 +26,11 @@ const locationPartSchema = z.string().max(LOCATION_PART_MAX).optional().nullable
 
 const optionalLatitudeSchema = requiredLat.nullable().optional();
 const optionalLongitudeSchema = requiredLng.nullable().optional();
-const customerLocationTextSchema = z
+const customerLocationDescriptionSchema = z
   .string()
-  .min(1, "Address / description is required")
-  .max(500, "Address / description must be less than 500 characters");
+  .max(500, "Site description must be less than 500 characters")
+  .optional()
+  .nullable();
 // ============================================
 // Customer Form Schema (Client-side validation)
 // ============================================
@@ -88,7 +89,7 @@ export const customerLocationFormSchema = z.object({
   country: z.string().min(1, "Country is required").max(100, "Country must be less than 100 characters"),
   stateRegion: locationPartSchema,
   city: locationPartSchema,
-  address: customerLocationTextSchema,
+  address: customerLocationDescriptionSchema,
   gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   // Operational road distance (km) from the origin facility. Certifier
@@ -153,7 +154,7 @@ export const createCustomerLocationSchema = z.object({
   country: z.string().min(1, "Country is required").max(LOCATION_PART_MAX),
   stateRegion: locationPartSchema,
   city: locationPartSchema,
-  address: customerLocationTextSchema,
+  address: customerLocationDescriptionSchema,
   gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   distanceFromFacilityKm: optionalPositiveNumber,
@@ -173,7 +174,7 @@ export const updateCustomerLocationSchema = z.object({
   city: locationPartSchema,
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
-  address: customerLocationTextSchema.optional(),
+  address: customerLocationDescriptionSchema,
   distanceFromFacilityKm: optionalPositiveNumber,
   distanceSource: optionalDistanceSource,
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
