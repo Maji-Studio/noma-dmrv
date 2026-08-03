@@ -1,7 +1,5 @@
-import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { InfoHint, type InfoHintProps } from "@/components/ui/tooltip";
 import type {
   CreditBatchProductionRunOption,
   CreditBatchWithRelations,
@@ -73,29 +71,6 @@ function co2eStoredMarkup(
   return renderToStaticMarkup(<>{field?.value}</>);
 }
 
-function findInfoHint(
-  node: ReactNode,
-): ReactElement<InfoHintProps> | undefined {
-  if (!isValidElement<{ children?: ReactNode }>(node)) return undefined;
-  if (node.type === InfoHint) {
-    return node as ReactElement<InfoHintProps>;
-  }
-  const children = node.props.children;
-  if (Array.isArray(children)) {
-    return children.map(findInfoHint).find(Boolean);
-  }
-  return findInfoHint(children);
-}
-
-function co2eStoredExplanation(
-  options: Parameters<typeof creditBatchSheetSections>[0],
-): string {
-  const field = creditBatchSheetSections(options)
-    .find((section) => section.title === "Batch definition")
-    ?.fields.find((f) => f.label === "CO₂e stored");
-  return renderToStaticMarkup(<>{findInfoHint(field?.value)?.props.children}</>);
-}
-
 const baseOptions = {
   productionRuns: [],
   isLoadingRuns: false,
@@ -106,55 +81,22 @@ const baseOptions = {
 };
 
 describe("credit batch CO₂e stored", () => {
-  it("distinguishes a preview still loading from one that cannot be computed", () => {
+  it("omits the field until a numeric preview is available", () => {
     expect(
       co2eStoredMarkup({
         ...baseOptions,
         creditBatch: makeBatch(),
-        isCo2ePreviewLoading: true,
       }),
-    ).toContain("Calculating");
+    ).toBe("");
 
     expect(
       co2eStoredMarkup({
         ...baseOptions,
-        creditBatch: makeBatch(),
-        co2ePreviewFailed: true,
+        creditBatch: makeBatch({
+          co2eStoredPreview: makePreview(null, ["organicCarbonPercent"]),
+        }),
       }),
-    ).toContain("Not available");
-  });
-
-  it("states that a resolved-but-empty preview is not calculable, with an explanation", () => {
-    const markup = co2eStoredMarkup({
-      ...baseOptions,
-      creditBatch: makeBatch({
-        co2eStoredPreview: makePreview(null, ["organicCarbonPercent"]),
-      }),
-    });
-
-    // The gap list itself lives in the tooltip popup, which only mounts on
-    // hover/focus — the cell asserts the state and offers the trigger.
-    expect(markup).toContain("Not calculable yet");
-    expect(markup).toContain("Why there is no CO₂e figure");
-  });
-
-  it("explains a drift-locked preview without claiming that batch inputs are missing", () => {
-    const options = {
-      ...baseOptions,
-      creditBatch: makeBatch({
-        co2eStoredPreview: makePreview(null, [
-          "Stored CO₂e preview pending current-module re-verification",
-        ]),
-      }),
-    };
-    const explanation = co2eStoredExplanation(options);
-    const markup = co2eStoredMarkup(options);
-
-    expect(markup).toContain("Preview unavailable");
-    expect(markup).not.toContain("Not calculable yet");
-    expect(explanation).toContain("local CO₂e preview");
-    expect(explanation).toContain("current Isometric module");
-    expect(explanation).not.toContain("Certification requirements below");
+    ).toBe("");
   });
 
   it("renders the figure once the preview resolves", () => {
@@ -164,7 +106,6 @@ describe("credit batch CO₂e stored", () => {
         creditBatch: makeBatch({
           co2eStoredPreview: makePreview(12.5, []),
         }),
-        isCo2ePreviewLoading: true,
       }),
     ).toContain("12.50 t CO₂e");
   });

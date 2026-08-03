@@ -31,7 +31,6 @@ import {
   ListPagination,
   PageHeader,
 } from "@/components/ui";
-import { InfoHint } from "@/components/ui/tooltip";
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
@@ -59,10 +58,6 @@ import {
 import { formatDateRange } from "@/lib/format-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/credit-batch-links";
-import {
-  hasStoredCo2eOperatorInputGap,
-  isStoredCo2ePreviewReverificationGap,
-} from "@/lib/certification/preview-gaps";
 import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
@@ -230,13 +225,8 @@ export function CreditBatchList({
 
   // Keep preview query chunks stable while operators adjust filters; totals are
   // still calculated from the filtered subset below.
-  const {
-    data: co2eStoredPreviews = {},
-    isLoading: previewsLoading,
-    isFetching: previewsFetching,
-    error: previewsError,
-    refetch: refetchPreviews,
-  } = useCreditBatchCo2eStoredPreviews(allBatchIds);
+  const { data: co2eStoredPreviews = {} } =
+    useCreditBatchCo2eStoredPreviews(allBatchIds);
   const hydratedFilteredItems = filteredItems.map((batch) => {
     const preview = co2eStoredPreviews[batch.id];
     return preview
@@ -258,26 +248,10 @@ export function CreditBatchList({
   const visibleCo2ePreviews = hydratedFilteredItems
     .map((b) => b.co2eStoredPreview)
     .filter((preview): preview is NonNullable<typeof preview> => Boolean(preview));
-  const hasCalculatedCo2e = visibleCo2ePreviews.some(
-    (preview) => preview.co2eStoredTonnes != null,
-  );
-  const hasUnavailableCo2e =
-    visibleCo2ePreviews.length < hydratedFilteredItems.length ||
-    visibleCo2ePreviews.some((preview) => preview.co2eStoredTonnes == null);
-  const allCo2eUnavailable =
+  const hasCompleteCo2eSummary =
     hydratedFilteredItems.length > 0 &&
-    !hasCalculatedCo2e &&
-    hasUnavailableCo2e;
-  const hasCo2eInputGaps =
-    !previewsError &&
-    visibleCo2ePreviews.some((preview) =>
-      hasStoredCo2eOperatorInputGap(preview.missingInputs),
-    );
-  const hasDriftLockedCo2e = visibleCo2ePreviews.some((preview) =>
-    preview.missingInputs.some(isStoredCo2ePreviewReverificationGap),
-  );
-  const hasPartialUnavailableCo2e =
-    hasCalculatedCo2e && hasUnavailableCo2e && !hasCo2eInputGaps;
+    visibleCo2ePreviews.length === hydratedFilteredItems.length &&
+    visibleCo2ePreviews.every((preview) => preview.co2eStoredTonnes != null);
   const totalCo2e = visibleCo2ePreviews.reduce(
     (sum, preview) => sum + (preview.co2eStoredTonnes ?? 0),
     0
@@ -557,54 +531,10 @@ export function CreditBatchList({
               ? "Readiness unavailable"
               : `${totalFiltered} ${totalFiltered === 1 ? "batch" : "batches"}`}
         </span>
-        {previewsError ? (
-          <span
-            className="inline-flex items-center gap-8 body-small text-[var(--st-wait)]"
-            role="alert"
-          >
-            <WarningIcon size={14} weight="fill" aria-hidden />
-            CO₂e unavailable
-            <Button
-              variant="weak"
-              size="small"
-              busy={previewsFetching}
-              onClick={() => void refetchPreviews()}
-            >
-              Retry
-            </Button>
-          </span>
-        ) : (
+        {hasCompleteCo2eSummary && (
           <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
             <LeafIcon size={16} weight="bold" aria-hidden />
-            {previewsLoading && "Calculating CO₂e…"}
-            {!previewsLoading && allCo2eUnavailable && (
-              <>
-                CO₂e preview unavailable
-                {hasDriftLockedCo2e && !hasCo2eInputGaps && (
-                  <InfoHint
-                    label="Why the CO₂e preview is unavailable"
-                    side="bottom"
-                  >
-                    The local CO₂e preview is unavailable while its calculation is checked against the current Isometric module. No batch input is missing.
-                  </InfoHint>
-                )}
-              </>
-            )}
-            {!previewsLoading &&
-              !allCo2eUnavailable &&
-              `${totalCo2e.toFixed(2)} t CO₂e stored`}
-          </span>
-        )}
-        {hasCo2eInputGaps && !previewsLoading && (
-          <span className="inline-flex items-center gap-6 body-caption text-[var(--st-wait)]">
-            <WarningIcon size={14} weight="fill" aria-hidden />
-            Some batches need CO₂e inputs
-          </span>
-        )}
-        {hasPartialUnavailableCo2e && !previewsLoading && (
-          <span className="inline-flex items-center gap-6 body-caption text-[var(--st-wait)]">
-            <WarningIcon size={14} weight="fill" aria-hidden />
-            Some CO₂e previews are unavailable
+            {`${totalCo2e.toFixed(2)} t CO₂e stored`}
           </span>
         )}
       </div>
@@ -760,8 +690,6 @@ export function CreditBatchList({
                   ? undefined
                   : batchHealthSummaries[sideSheetEntity.id],
                 isHealthLoading: healthLoading && !healthError,
-                isCo2ePreviewLoading: previewsLoading || previewsFetching,
-                co2ePreviewFailed: !!previewsError,
               })
             : undefined
         }
