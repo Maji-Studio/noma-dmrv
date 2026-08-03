@@ -40,6 +40,8 @@ describe("reconcileComposition", () => {
         feedstockTypeCategory: "compost",
         ratio: 0.8,
         massKg: 80,
+        massDryKg: 72,
+        moistureContentPercent: 10,
         storageLocationId: BIN_A,
       },
       {
@@ -55,7 +57,13 @@ describe("reconcileComposition", () => {
 
     const next = reconcileComposition(formulation, existing);
     expect(next).toHaveLength(2);
-    expect(next[0]).toMatchObject({ formulationIngredientId: ING_A, storageLocationId: BIN_A, massKg: 80 });
+    expect(next[0]).toMatchObject({
+      formulationIngredientId: ING_A,
+      storageLocationId: BIN_A,
+      massKg: 80,
+      massDryKg: 72,
+      moistureContentPercent: 10,
+    });
     expect(next[1]).toMatchObject({ formulationIngredientId: ING_B, storageLocationId: BIN_B, massKg: 20 });
   });
 
@@ -175,6 +183,8 @@ describe("reconcileComposition", () => {
         feedstockTypeCategory: "compost",
         ratio: 1,
         massKg: null,
+        massDryKg: null,
+        moistureContentPercent: null,
         storageLocationId: null,
       },
     ]);
@@ -290,6 +300,8 @@ describe("fromCompositionJsonb", () => {
           feedstockTypeCategory: "compost",
           ratio: 1,
           massKg: 100,
+          massDryKg: 90,
+          moistureContentPercent: 10,
           storageLocationId: BIN_A,
         },
       ],

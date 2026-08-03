@@ -3,9 +3,9 @@ import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 /**
  * Source-biochar mass for persisted product rows.
  *
- * `massKg` is the total pre-water blend mass. Ingredient `massKg` values are
- * the recorded material inputs. Formulation ratios are volume shares and are
- * deliberately absent from this expression.
+ * `massKg` is the total pre-water wet blend mass. Ingredient `massKg` values
+ * are the recorded wet/as-received material inputs. Their server-derived dry
+ * snapshots are feedstock-inventory facts and deliberately absent here.
  */
 export function sourceBiocharMassKgSql(
   blendMassKg: SQLWrapper,

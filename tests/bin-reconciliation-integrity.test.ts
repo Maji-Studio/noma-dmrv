@@ -292,6 +292,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
             feedstockTypeId: feedstockType.id,
             storageLocationId: bin.id,
             massKg: 30,
+            massDryKg: 30,
+            moistureContentPercent: 0,
           }],
         },
       })

@@ -230,9 +230,9 @@ function buildInventoryAggregates(
       COALESCE(
         SUM(
           CASE
-            WHEN jsonb_typeof(ingredient.value -> 'massKg') = 'number'
-              AND (ingredient.value ->> 'massKg')::numeric > 0
-            THEN (ingredient.value ->> 'massKg')::numeric
+            WHEN jsonb_typeof(ingredient.value -> 'massDryKg') = 'number'
+              AND (ingredient.value ->> 'massDryKg')::numeric > 0
+            THEN (ingredient.value ->> 'massDryKg')::numeric
             ELSE 0
           END
         ),

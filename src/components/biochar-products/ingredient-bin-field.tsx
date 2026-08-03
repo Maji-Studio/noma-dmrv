@@ -11,6 +11,7 @@ import {
   INGREDIENT_MASS_DEVIATION_WARN_PERCENT,
   type CompositionRow,
 } from "@/lib/biochar-composition";
+import { WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 import { formatStorageLocationType } from "@/schemas/storage-locations";
 
@@ -125,7 +126,7 @@ export function IngredientBinField({
           <div>
             <FormField
               id={row.massKgFieldName}
-              label="Mass (kg)"
+              label={WET_MASS_FIELD_LABEL}
               required
               error={fieldState.error?.message}
               helperText={

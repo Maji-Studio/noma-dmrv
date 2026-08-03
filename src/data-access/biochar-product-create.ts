@@ -20,6 +20,7 @@ import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards"
 import {
   assertCompositionIngredientDrawsWithinStock,
   getCompositionIngredientDraws,
+  resolveCompositionIngredientMassBasis,
   validateCompositionIngredientBins,
 } from "./biochar-product-composition";
 import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
@@ -195,6 +196,19 @@ export async function createBiocharProduct(
       sourceBinId,
       ...ingredientDraws.map((draw) => draw.storageLocationId),
     ]);
+    await validateCompositionIngredientBins(
+      ctx,
+      tx,
+      data.composition,
+      formulationId,
+      data.facilityId,
+    );
+    const resolvedComposition =
+      await resolveCompositionIngredientMassBasis(
+        ctx,
+        tx,
+        data.composition,
+      );
 
     let productionDate: Date;
     let linkedProductionRunId: string | null;
@@ -295,17 +309,10 @@ export async function createBiocharProduct(
       linkedProductionRunId = data.linkedProductionRunId ?? null;
     }
 
-    await validateCompositionIngredientBins(
-      ctx,
-      tx,
-      data.composition,
-      formulationId,
-      data.facilityId,
-    );
     await assertCompositionIngredientDrawsWithinStock(
       ctx,
       tx,
-      data.composition,
+      resolvedComposition,
     );
 
     const [storage] = await tx
@@ -370,7 +377,7 @@ export async function createBiocharProduct(
         moistureContentPercent,
         densityKgM3: data.densityKgM3 ?? null,
         waterAddedKg,
-        composition: data.composition ?? {},
+        composition: resolvedComposition,
       })
       .returning();
 

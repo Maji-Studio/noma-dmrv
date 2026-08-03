@@ -280,6 +280,8 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
               feedstockTypeId: feedstockType.id,
               storageLocationId: binA.id,
               massKg: 10,
+              massDryKg: 10,
+              moistureContentPercent: 0,
             }],
           },
           createdAt: T4_PRODUCT_FROM_RUN,

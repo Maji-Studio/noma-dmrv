@@ -26,6 +26,7 @@ interface CapturedDialogProps {
 const state = vi.hoisted(() => ({
   close: vi.fn(),
   dialog: undefined as CapturedDialogProps | undefined,
+  fieldLabels: [] as string[],
   massChange: vi.fn(),
   massInput: undefined as { disabled?: boolean } | undefined,
   open: vi.fn(),
@@ -69,7 +70,16 @@ vi.mock("@/components/forms", () => ({
     state.select = props;
     return null;
   },
-  FormField: ({ children }: { children: ReactNode }) => children,
+  FormField: ({
+    children,
+    label,
+  }: {
+    children: ReactNode;
+    label: string;
+  }) => {
+    state.fieldLabels.push(label);
+    return children;
+  },
   FormInput: (props: { disabled?: boolean }) => {
     state.massInput = props;
     return null;
@@ -119,6 +129,7 @@ function renderField(allocationFrozen = false) {
 beforeEach(() => {
   state.close.mockClear();
   state.dialog = undefined;
+  state.fieldLabels = [];
   state.massChange.mockClear();
   state.massInput = undefined;
   state.open.mockClear();
@@ -127,6 +138,11 @@ beforeEach(() => {
 });
 
 describe("IngredientBinField feedstock-bin quick add", () => {
+  it("labels the operator-entered ingredient mass as wet mass", () => {
+    renderField();
+    expect(state.fieldLabels).toContain("Wet mass (kg)");
+  });
+
   it("offers a feedstock-bin action using the row filters", () => {
     renderField();
 

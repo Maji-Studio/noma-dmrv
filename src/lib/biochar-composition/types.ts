@@ -19,7 +19,12 @@ export interface IngredientBin {
   feedstockTypeName: string;
   feedstockTypeCategory: string;
   ratio?: number | null;
+  /** Wet/as-received mass entered by the operator. */
   massKg?: number | null;
+  /** Server-derived dry mass frozen from the source bin's intake basis. */
+  massDryKg?: number | null;
+  /** Server-derived wet-basis moisture snapshot used for massDryKg. */
+  moistureContentPercent?: number | null;
   storageLocationId?: string | null;
 }
 

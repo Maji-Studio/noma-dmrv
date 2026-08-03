@@ -8,10 +8,12 @@
  * to keep that file under the 1000-line cap.
  */
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { countRows, sumNumeric } from "@/db/aggregate";
 import type { OrgContext } from "@/lib/auth/server";
 import {
+  feedstocks,
   formulationIngredients,
   storageLocations,
   feedstockTypes,
@@ -27,7 +29,11 @@ interface CompositionIngredientRef {
   formulationIngredientId: string;
   feedstockTypeId: string;
   storageLocationId: string | null;
+  /** Wet/as-received mass recorded by the operator. */
   massKg: number;
+  /** Server-derived dry-mass allocation snapshot. */
+  massDryKg: number | null;
+  moistureContentPercent: number | null;
 }
 
 function getCompositionIngredientRefs(
@@ -62,6 +68,18 @@ function getCompositionIngredientRefs(
           Number.isFinite(ingredient.massKg)
             ? ingredient.massKg
             : 0,
+        massDryKg:
+          "massDryKg" in ingredient &&
+          typeof ingredient.massDryKg === "number" &&
+          Number.isFinite(ingredient.massDryKg)
+            ? ingredient.massDryKg
+            : null,
+        moistureContentPercent:
+          "moistureContentPercent" in ingredient &&
+          typeof ingredient.moistureContentPercent === "number" &&
+          Number.isFinite(ingredient.moistureContentPercent)
+            ? ingredient.moistureContentPercent
+            : null,
       };
     })
     .filter((ref): ref is CompositionIngredientRef =>
@@ -69,7 +87,43 @@ function getCompositionIngredientRefs(
     );
 }
 
-const GRAMS_PER_KILOGRAM = 1_000;
+const MASS_PRECISION_FACTOR = 1_000;
+const PERCENT_PRECISION_FACTOR = 10_000_000;
+
+function massSnapshotKey(ingredient: Record<string, unknown>): string {
+  const massGrams =
+    typeof ingredient.massKg === "number" &&
+    Number.isFinite(ingredient.massKg)
+      ? Math.round(ingredient.massKg * MASS_PRECISION_FACTOR)
+      : null;
+  return JSON.stringify([
+    ingredient.formulationIngredientId ?? null,
+    ingredient.feedstockTypeId ?? null,
+    ingredient.storageLocationId ?? null,
+    massGrams,
+  ]);
+}
+
+function persistedIngredientMassSnapshot(
+  ingredient: Record<string, unknown> | undefined,
+): { massDryKg: number; moistureContentPercent: number } | null {
+  if (
+    !ingredient ||
+    typeof ingredient.massDryKg !== "number" ||
+    !Number.isFinite(ingredient.massDryKg) ||
+    ingredient.massDryKg < 0 ||
+    typeof ingredient.moistureContentPercent !== "number" ||
+    !Number.isFinite(ingredient.moistureContentPercent) ||
+    ingredient.moistureContentPercent < 0 ||
+    ingredient.moistureContentPercent > 100
+  ) {
+    return null;
+  }
+  return {
+    massDryKg: ingredient.massDryKg,
+    moistureContentPercent: ingredient.moistureContentPercent,
+  };
+}
 
 function getCompositionIngredientObjects(
   composition: Record<string, unknown> | null | undefined,
@@ -102,7 +156,20 @@ function canonicalAllocationIngredients(
       massGrams:
         typeof ingredient.massKg === "number" &&
         Number.isFinite(ingredient.massKg)
-          ? Math.round(ingredient.massKg * GRAMS_PER_KILOGRAM)
+          ? Math.round(ingredient.massKg * MASS_PRECISION_FACTOR)
+          : null,
+      massDryGrams:
+        typeof ingredient.massDryKg === "number" &&
+        Number.isFinite(ingredient.massDryKg)
+          ? Math.round(ingredient.massDryKg * MASS_PRECISION_FACTOR)
+          : null,
+      moistureBasis:
+        typeof ingredient.moistureContentPercent === "number" &&
+        Number.isFinite(ingredient.moistureContentPercent)
+          ? Math.round(
+              ingredient.moistureContentPercent *
+                PERCENT_PRECISION_FACTOR,
+            )
           : null,
     }))
     .sort((left, right) =>
@@ -132,13 +199,19 @@ export function deriveCompositionSourceBiocharMassKg(
 
 export interface CompositionIngredientDraw {
   storageLocationId: string;
+  /** Wet/as-received mass used to derive source biochar in the blend. */
   massKg: number;
+  /** Dry mass deducted from the feedstock bin. */
+  massDryKg: number | null;
 }
 
 export function getCompositionIngredientDraws(
   composition: Record<string, unknown> | null | undefined,
 ): CompositionIngredientDraw[] {
-  const byStorageLocation = new Map<string, number>();
+  const byStorageLocation = new Map<
+    string,
+    { massKg: number; massDryKg: number | null }
+  >();
   for (const ref of getCompositionIngredientRefs(composition)) {
     if (ref.massKg <= 0) continue;
     if (!ref.storageLocationId) {
@@ -146,14 +219,167 @@ export function getCompositionIngredientDraws(
         "Choose a feedstock bin for every ingredient with a positive mass",
       );
     }
-    byStorageLocation.set(
-      ref.storageLocationId,
-      (byStorageLocation.get(ref.storageLocationId) ?? 0) + ref.massKg,
-    );
+    const existing = byStorageLocation.get(ref.storageLocationId);
+    byStorageLocation.set(ref.storageLocationId, {
+      massKg: (existing?.massKg ?? 0) + ref.massKg,
+      massDryKg:
+        existing?.massDryKg === null || ref.massDryKg === null
+          ? null
+          : (existing?.massDryKg ?? 0) + ref.massDryKg,
+    });
   }
   return [...byStorageLocation.entries()].map(
-    ([storageLocationId, massKg]) => ({ storageLocationId, massKg }),
+    ([storageLocationId, mass]) => ({ storageLocationId, ...mass }),
   );
+}
+
+const INGREDIENT_MOISTURE_BASIS_ERROR =
+  "This ingredient bin has no complete wet-mass and moisture basis. Complete its feedstock intake before using it in a blend.";
+
+function roundMassKg(value: number): number {
+  return Math.round(value * MASS_PRECISION_FACTOR) / MASS_PRECISION_FACTOR;
+}
+
+function roundPercent(value: number): number {
+  return Math.round(value * PERCENT_PRECISION_FACTOR) /
+    PERCENT_PRECISION_FACTOR;
+}
+
+interface FeedstockMassBasis {
+  totalWetKg: number;
+  totalDryKg: number;
+  missingWetMassCount: number;
+}
+
+function deriveIngredientMassSnapshot(
+  wetMassKg: number,
+  basis: FeedstockMassBasis | undefined,
+): { massDryKg: number; moistureContentPercent: number } {
+  if (
+    !basis ||
+    basis.missingWetMassCount > 0 ||
+    basis.totalWetKg <= 0 ||
+    basis.totalDryKg <= 0 ||
+    basis.totalDryKg > basis.totalWetKg
+  ) {
+    throw new SafeError(INGREDIENT_MOISTURE_BASIS_ERROR);
+  }
+
+  const dryRatio = basis.totalDryKg / basis.totalWetKg;
+  return {
+    massDryKg: roundMassKg(wetMassKg * dryRatio),
+    moistureContentPercent: roundPercent((1 - dryRatio) * 100),
+  };
+}
+
+/**
+ * Freeze each ingredient's dry-mass withdrawal from the selected bin's
+ * completed intake basis. `massKg` stays the operator's wet/as-received mass;
+ * the derived fields are server-owned allocation facts persisted in JSONB.
+ * Call only while the caller holds every ingredient bin's stock lock.
+ */
+export async function resolveCompositionIngredientMassBasis(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  composition: Record<string, unknown> | null | undefined,
+  previousComposition?: Record<string, unknown> | null,
+): Promise<Record<string, unknown>> {
+  requireOrgScope(ctx);
+  const ingredients = getCompositionIngredientObjects(composition);
+  if (ingredients.length === 0) return composition ?? {};
+  const previousIngredientsByKey = new Map(
+    getCompositionIngredientObjects(previousComposition).map((ingredient) => [
+      massSnapshotKey(ingredient),
+      ingredient,
+    ]),
+  );
+  const positiveRefs = getCompositionIngredientRefs(composition).filter(
+    (ref) => ref.massKg > 0,
+  );
+  const storageLocationIds = [
+    ...new Set(
+      positiveRefs.map((ref) => {
+        if (!ref.storageLocationId) {
+          throw new SafeError(
+            "Choose a feedstock bin for every ingredient with a positive mass",
+          );
+        }
+        return ref.storageLocationId;
+      }),
+    ),
+  ];
+
+  const basisRows = storageLocationIds.length > 0
+    ? await tx
+        .select({
+          storageLocationId: feedstocks.storageLocationId,
+          totalWetKg: sumNumeric(feedstocks.massWetKg),
+          totalDryKg: sumNumeric(feedstocks.massDryKg),
+          missingWetMassCount: countRows(
+            sql`${feedstocks.massWetKg} IS NULL AND ${feedstocks.massDryKg} > 0`,
+          ),
+        })
+        .from(feedstocks)
+        .where(
+          and(
+            inArray(feedstocks.storageLocationId, storageLocationIds),
+            eq(feedstocks.organizationId, ctx.organizationId),
+            eq(feedstocks.status, "complete"),
+          ),
+        )
+        .groupBy(feedstocks.storageLocationId)
+    : [];
+  const basisByStorageLocation = new Map(
+    basisRows
+      .filter(
+        (row): row is typeof row & { storageLocationId: string } =>
+          row.storageLocationId !== null,
+      )
+      .map((row) => [row.storageLocationId, row]),
+  );
+
+  return {
+    ...(composition ?? {}),
+    ingredients: ingredients.map((ingredient) => {
+      const wetMassKg =
+        typeof ingredient.massKg === "number" &&
+        Number.isFinite(ingredient.massKg)
+          ? ingredient.massKg
+          : 0;
+      if (wetMassKg < 0) {
+        throw new SafeError("Ingredient wet mass must be 0 or greater");
+      }
+      if (wetMassKg === 0) {
+        return {
+          ...ingredient,
+          massDryKg: 0,
+          moistureContentPercent: null,
+        };
+      }
+      const previousSnapshot = persistedIngredientMassSnapshot(
+        previousIngredientsByKey.get(massSnapshotKey(ingredient)),
+      );
+      if (previousSnapshot) {
+        return { ...ingredient, ...previousSnapshot };
+      }
+      const storageLocationId =
+        typeof ingredient.storageLocationId === "string"
+          ? ingredient.storageLocationId
+          : null;
+      if (!storageLocationId) {
+        throw new SafeError(
+          "Choose a feedstock bin for every ingredient with a positive mass",
+        );
+      }
+      return {
+        ...ingredient,
+        ...deriveIngredientMassSnapshot(
+          wetMassKg,
+          basisByStorageLocation.get(storageLocationId),
+        ),
+      };
+    }),
+  };
 }
 
 export async function assertCompositionIngredientDrawsWithinStock(
@@ -164,9 +390,12 @@ export async function assertCompositionIngredientDrawsWithinStock(
 ): Promise<void> {
   requireOrgScope(ctx);
   for (const draw of getCompositionIngredientDraws(composition)) {
+    if (draw.massDryKg === null) {
+      throw new SafeError(INGREDIENT_MOISTURE_BASIS_ERROR);
+    }
     await assertFeedstockDrawWithinStock(ctx, tx, {
       storageLocationId: draw.storageLocationId,
-      requestedDryKg: draw.massKg,
+      requestedDryKg: draw.massDryKg,
       excludeProductId,
       binLockAlreadyHeld: true,
     });

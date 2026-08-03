@@ -46,6 +46,10 @@ export function reconcileComposition(
       ratio: ing.ratio ?? null,
       storageLocationId: sameFeedstockType ? prior?.storageLocationId ?? null : null,
       massKg: prior?.massKg ?? null,
+      massDryKg: sameFeedstockType ? prior?.massDryKg ?? null : null,
+      moistureContentPercent: sameFeedstockType
+        ? prior?.moistureContentPercent ?? null
+        : null,
     };
   });
 }
@@ -85,7 +89,7 @@ function toPersistedMassGrams(massKg: number): number {
   return Math.round(massKg * GRAMS_PER_KILOGRAM);
 }
 
-/** Sum the actual ingredient masses recorded for one product blend. */
+/** Sum the actual wet ingredient masses recorded for one product blend. */
 function sumRecordedIngredientMassKg(
   ingredients: readonly IngredientMassLike[] | null | undefined,
 ): number {
@@ -100,8 +104,9 @@ function sumRecordedIngredientMassKg(
 }
 
 /**
- * Source biochar is the recorded pre-water blend mass less recorded ingredient
- * masses. Formulation shares are volume guidance and never enter this equation.
+ * Source biochar is the recorded pre-water wet blend mass less recorded wet
+ * ingredient masses. Formulation shares are volume guidance and never enter
+ * this equation.
  */
 export function deriveSourceBiocharMassKg(
   blendMassKg: number | null | undefined,
@@ -163,6 +168,12 @@ export function fromCompositionJsonb(raw: unknown): IngredientBin[] {
       (bin.ratio == null || Number.isFinite(bin.ratio)) &&
       (bin.massKg == null ||
         (Number.isFinite(bin.massKg) && bin.massKg >= 0)) &&
+      (bin.massDryKg == null ||
+        (Number.isFinite(bin.massDryKg) && bin.massDryKg >= 0)) &&
+      (bin.moistureContentPercent == null ||
+        (Number.isFinite(bin.moistureContentPercent) &&
+          bin.moistureContentPercent >= 0 &&
+          bin.moistureContentPercent <= 100)) &&
       (bin.storageLocationId == null ||
         typeof bin.storageLocationId === "string")
     );
