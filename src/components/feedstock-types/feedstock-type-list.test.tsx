@@ -99,9 +99,6 @@ vi.mock("@/components/ui/stat-card", () => ({ StatCard: () => null }));
 vi.mock("@/components/forms", () => ({ ServerError: () => null }));
 vi.mock("./feedstock-type-form", () => ({ FeedstockTypeForm: () => null }));
 vi.mock("./feedstock-type-sampling", () => ({ FeedstockTypeSampling: () => null }));
-vi.mock("./isometric-feedstock-import-dialog", () => ({
-  IsometricFeedstockImportDialog: () => null,
-}));
 
 import {
   FeedstockDeleteConflictNotice,

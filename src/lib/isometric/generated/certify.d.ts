@@ -1869,7 +1869,10 @@ export interface components {
         };
         /** CreateDatapointRequest */
         CreateDatapointRequest: {
-            /** Description */
+            /**
+             * Description
+             * @description A free-text description of the datapoint. Must be at most 500 characters long.
+             */
             description: string;
             /** Display Name */
             display_name: string;
@@ -2077,9 +2080,19 @@ export interface components {
         };
         /** CreateMeasurementLocationRequest */
         CreateMeasurementLocationRequest: {
-            /** Latitude */
+            /**
+             * Latitude
+             * @description A WGS84 latitude in decimal degrees, between -90 and 90.
+             * @example 51.5072
+             * @example -33.8688
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description A WGS84 longitude in decimal degrees, between -180 and 180.
+             * @example -0.1276
+             * @example 151.2093
+             */
             longitude: number;
             /**
              * Project Id
@@ -2354,11 +2367,24 @@ export interface components {
              *     }
              */
             description: string | components["schemas"]["Undefined"];
-            /** Latitude */
+            /**
+             * Latitude
+             * @description A WGS84 latitude in decimal degrees, between -90 and 90.
+             * @example 51.5072
+             * @example -33.8688
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description A WGS84 longitude in decimal degrees, between -180 and 180.
+             * @example -0.1276
+             * @example 151.2093
+             */
             longitude: number;
-            /** Name */
+            /**
+             * Name
+             * @description The name of the storage location. Must be at most 100 characters long.
+             */
             name: string;
             /**
              * Project Id
@@ -2391,11 +2417,24 @@ export interface components {
              *     }
              */
             description: string | components["schemas"]["Undefined"];
-            /** Latitude */
+            /**
+             * Latitude
+             * @description A WGS84 latitude in decimal degrees, between -90 and 90.
+             * @example 51.5072
+             * @example -33.8688
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description A WGS84 longitude in decimal degrees, between -180 and 180.
+             * @example -0.1276
+             * @example 151.2093
+             */
             longitude: number;
-            /** Name */
+            /**
+             * Name
+             * @description The name of the storage unit. Must be at most 100 characters long.
+             */
             name: string;
             /**
              * Storage Location Id
@@ -2579,7 +2618,7 @@ export interface components {
          * Frequency
          * @enum {string}
          */
-        Frequency: "na" | "once" | "optional" | "if_needed" | "every_1_days" | "every_1_months" | "every_2_weeks" | "every_3_months" | "every_6_months" | "every_1_years" | "every_2_years" | "every_5_years";
+        Frequency: "na" | "once" | "optional" | "if_needed" | "every_1_days" | "every_1_weeks" | "every_1_months" | "every_2_weeks" | "every_3_months" | "every_6_months" | "every_1_years" | "every_2_years" | "every_5_years" | "once_per_production_batch" | "once_per_injection_batch" | "continuous";
         /** GhgEntry */
         GhgEntry: {
             /**
@@ -2862,7 +2901,6 @@ export interface components {
         IsometricIDPathParam_MonitoringRequirement_: components["schemas"]["IsometricIDRequestParam_MonitoringRequirement_"];
         IsometricIDPathParam_MonitoringSubmission_: components["schemas"]["IsometricIDRequestParam_MonitoringSubmission_"];
         IsometricIDPathParam_ProductionBatch_: components["schemas"]["IsometricIDRequestParam_ProductionBatch_"];
-        IsometricIDPathParam_ProjectRequirement_: components["schemas"]["IsometricIDRequestParam_ProjectRequirement_"];
         IsometricIDPathParam_Project_: components["schemas"]["IsometricIDRequestParam_Project_"];
         IsometricIDPathParam_Sensor_: components["schemas"]["IsometricIDRequestParam_Sensor_"];
         IsometricIDPathParam_Source_: components["schemas"]["IsometricIDRequestParam_Source_"];
@@ -2960,12 +2998,6 @@ export interface components {
          */
         IsometricIDRequestParam_ProductionBatch_: string;
         /**
-         * @example pfx_1HQTSP3RX1S0Y2RG
-         * @example pfx_1HQTSP3RX1S0Y2RG
-         * @example pfx_1FFWQZH4HSBX6F9N
-         */
-        IsometricIDRequestParam_ProjectRequirement_: string;
-        /**
          * @example prj_1CTWZQGKE1S0VAXA
          * @example prj_1CTWZQGKE1S0VAXA
          * @example prj_1E0QTWB22SBX34D1
@@ -3004,9 +3036,19 @@ export interface components {
              * @example mlc_1GF73PG90SBXKEX1
              */
             id: string;
-            /** Latitude */
+            /**
+             * Latitude
+             * @description A WGS84 latitude in decimal degrees, between -90 and 90.
+             * @example 51.5072
+             * @example -33.8688
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description A WGS84 longitude in decimal degrees, between -180 and 180.
+             * @example -0.1276
+             * @example 151.2093
+             */
             longitude: number;
             /** Supplier Reference Id */
             supplier_reference_id: string | null;
@@ -3072,8 +3114,6 @@ export interface components {
             id: string;
             /** Notes */
             notes: string | null;
-            /** Project Monitoring Requirement Id */
-            project_monitoring_requirement_id: string;
             /**
              * Source Id
              * @example src_1EBBF4M7X1S06G1Y
@@ -3708,8 +3748,13 @@ export interface components {
         ProjectMonitoringRequirement: {
             /** Display Name */
             display_name: string;
-            frequency: components["schemas"]["Frequency"];
-            /** Id */
+            frequency: components["schemas"]["Frequency"] | null;
+            /**
+             * Id
+             * @example mnr_1DJJQY5C61S0R519
+             * @example mnr_1DJJQY5C61S0R519
+             * @example mnr_1EKAZQMAZSBXDV59
+             */
             id: string;
             monitoring_phase: components["schemas"]["MonitoringPhase"];
             /** Notes */
@@ -6575,7 +6620,7 @@ export interface operations {
             };
             path: {
                 project_id: components["schemas"]["IsometricIDPathParam_Project_"];
-                id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"] | components["schemas"]["IsometricIDPathParam_ProjectRequirement_"];
+                id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"];
             };
             cookie?: never;
         };
@@ -6610,7 +6655,7 @@ export interface operations {
             };
             path: {
                 project_id: components["schemas"]["IsometricIDPathParam_Project_"];
-                id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"] | components["schemas"]["IsometricIDPathParam_ProjectRequirement_"];
+                id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"];
             };
             cookie?: never;
         };
@@ -6649,7 +6694,7 @@ export interface operations {
             };
             path: {
                 project_id: components["schemas"]["IsometricIDPathParam_Project_"];
-                monitoring_requirement_id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"] | components["schemas"]["IsometricIDPathParam_ProjectRequirement_"];
+                monitoring_requirement_id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"];
                 id: components["schemas"]["IsometricIDPathParam_MonitoringSubmission_"];
             };
             cookie?: never;
@@ -6683,7 +6728,7 @@ export interface operations {
             };
             path: {
                 project_id: components["schemas"]["IsometricIDPathParam_Project_"];
-                requirement_id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"] | components["schemas"]["IsometricIDPathParam_ProjectRequirement_"];
+                requirement_id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"];
             };
             cookie?: never;
         };

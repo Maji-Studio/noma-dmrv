@@ -354,8 +354,8 @@ helpers and numeric/mass/ratio constants — see [forms.md](./forms.md)) ·
 `enforce-main-source.yml` (branch-protection: `main` only from `staging`) ·
 `e2e.yml` and `e2e-live.yml` (Playwright, see [testing.md](./testing.md)) ·
 `isometric-health.yml` and `storage-health.yml` (daily read-only pings) ·
-`claude.yml` and `.coderabbit.yaml` (AI review).
+`.coderabbit.yaml` (AI review).
 
 CI secrets come from 1Password via `1password/load-secrets-action` plus the
-`OP_SERVICE_ACCOUNT_TOKEN` repo secret; only `CLAUDE_CODE_OAUTH_TOKEN` remains a
-plain Actions secret. See [security.md](./security.md) → Secrets Management.
+single `OP_SERVICE_ACCOUNT_TOKEN` repository secret. See
+[security.md](./security.md) → Secrets Management.

@@ -36,7 +36,7 @@
     "docs:check": "node scripts/check-doc-references.mjs",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:integration": "RUN_ISOMETRIC_SANDBOX_TESTS=1 vitest run tests/**/*.integration.test.ts",
+    "test:integration": "RUN_ISOMETRIC_SANDBOX_TESTS=1 vitest run .integration.test.",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "isometric:coverage-check": "tsx scripts/isometric-coverage-check.ts",
