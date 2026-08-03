@@ -28,6 +28,11 @@ export interface InputMappingEntry {
   // tests/isometric-emission-buckets.test.ts.
   bucket: EmissionInputBucket;
   transform?: (value: number) => number;
+  // Stable, declarative identity for `transform`. Function source text is not
+  // stable across independently compiled Next.js bundles (a minifier may, for
+  // example, rename the parameter), so MAPPING_REVISION hashes this value
+  // instead of Function#toString. Bump it whenever transform semantics change.
+  transformRevision?: string;
   // Per-template-component source override. Set ONLY where one
   // (group, blueprint, input) triple is declared by MORE THAN ONE component
   // (e.g. the pyrolysis diesel split: "Generator diesel usage" vs "Startup
@@ -131,6 +136,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         expectedQuantityKind: "dimensionless",
         bucket: "stored",
         transform: (v) => v / 100,
+        transformRevision: "percent-to-fraction-v1",
       },
       product_mass: {
         source: "totalBiocharDryMassKg",
@@ -412,8 +418,39 @@ export function lookupPeriodInputTuple(
 // Computed once at module load and embedded in every submitRemoval semantic
 // hash, payloadSnapshot, and sync event so a binding change supersedes the prior
 // removal version. PROJECT-scope is omitted by design (ADR 0018).
+function declarativeInputMappingRevision(
+  mapping: InputMappingTable,
+): Record<string, unknown> {
+  const groups: Record<string, unknown> = {};
+  for (const [groupKey, blueprints] of Object.entries(mapping)) {
+    const declarativeBlueprints: Record<string, unknown> = {};
+    for (const [blueprintKey, inputs] of Object.entries(blueprints)) {
+      const declarativeInputs: Record<string, unknown> = {};
+      for (const [inputKey, entry] of Object.entries(inputs)) {
+        const { transform, transformRevision, ...declarativeEntry } = entry;
+        if (transform && !transformRevision) {
+          throw new Error(
+            `Input mapping ${groupKey}/${blueprintKey}/${inputKey} has a transform without a transformRevision`,
+          );
+        }
+        if (!transform && transformRevision) {
+          throw new Error(
+            `Input mapping ${groupKey}/${blueprintKey}/${inputKey} has a transformRevision without a transform`,
+          );
+        }
+        declarativeInputs[inputKey] = transform
+          ? { ...declarativeEntry, transformRevision }
+          : declarativeEntry;
+      }
+      declarativeBlueprints[blueprintKey] = declarativeInputs;
+    }
+    groups[groupKey] = declarativeBlueprints;
+  }
+  return groups;
+}
+
 export const MAPPING_REVISION_INPUT = {
-  inputMapping: INPUT_MAPPING,
+  inputMapping: declarativeInputMappingRevision(INPUT_MAPPING),
   sequestrationComponentInputBindings:
     SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
 };

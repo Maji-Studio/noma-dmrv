@@ -17,6 +17,9 @@ import {
   type TestStorageLocation,
 } from "./fixtures";
 import {
+  ACTION_LABEL_PREFIX,
+  getCreatedActionCode,
+  getListedActionCodes,
   selectEntity,
   selectEntityByText,
   waitForSideSheet,
@@ -35,52 +38,12 @@ const DELIVERY_DATE = "2027-06-16";
 
 const BIOCHAR_BIN_STOCK_KG = "100";
 const ORDER_QUANTITY_KG = "200000";
-const feedstockOverdrawText = /^Not enough feedstock in this bin$/;
-const biocharOverdrawText = /^Not enough biochar in this bin$/;
-const deliveryOverdrawText = /^Not enough biochar in this product$/;
-const ACTION_LABEL_PREFIX = "Actions for ";
-
-async function getListedActionCodes(page: Page): Promise<Set<string>> {
-  const table = page.getByRole("table", { name: "Production runs" });
-  const emptyState = page.getByText(/No production runs (?:yet|found)/, {
-    exact: true,
-  });
-  await expect
-    .poll(async () => {
-      if (await table.count()) return table.getAttribute("aria-busy");
-      return (await emptyState.count()) ? "false" : "pending";
-    })
-    .toBe("false");
-  const labels = await page
-    .locator(`tbody button[aria-label^="${ACTION_LABEL_PREFIX}"]`)
-    .evaluateAll(
-      (buttons, prefixLength) =>
-        buttons
-          .map((button) => button.getAttribute("aria-label"))
-          .filter((label): label is string => label !== null)
-          .map((label) => label.slice(prefixLength)),
-      ACTION_LABEL_PREFIX.length,
-    );
-  return new Set(labels);
-}
-
-async function getCreatedActionCode(
-  page: Page,
-  existingCodes: Set<string>,
-): Promise<string> {
-  let createdCodes: string[] = [];
-  await expect
-    .poll(async () => {
-      createdCodes = [...(await getListedActionCodes(page))].filter(
-        (code) => !existingCodes.has(code),
-      );
-      return createdCodes.length;
-    })
-    .toBe(1);
-  const createdCode = createdCodes[0];
-  if (!createdCode) throw new Error("Created action code was not rendered");
-  return createdCode;
-}
+const feedstockOverdrawText =
+  /^Only .+ of dry feedstock is available\. At .+% moisture, enter at most .+ wet mass\.$/;
+const biocharOverdrawText =
+  /^Only .+ of biochar is available\. Reduce the mass\.$/;
+const deliveryOverdrawText =
+  /^Only .+ of biochar is available\. Reduce the delivered mass\.$/;
 
 /** Open the existing draft run form against the seeded 100 kg-dry source bin. */
 async function openRunFormWithSource(
@@ -702,6 +665,43 @@ test.describe("createDelivery product-batch guard", () => {
     await submitDeliveryCreate(page);
 
     await waitForSideSheetClose(page);
+  });
+});
+
+/** Upcoming deliveries allocate order quantity without drawing physical stock. */
+test.describe("createDelivery order-balance guard", () => {
+  test("shows and blocks an order over-allocation while typing", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await createOrder(page, seededData);
+    await page.goto(`${DELIVERIES_URL}?facility=${seededData.facility.id}`);
+    await expect(
+      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+    ).toBeVisible({ timeout: 15000 });
+    const newDeliveryButton = page
+      .locator("header")
+      .getByRole("button", { name: "New Delivery" });
+    await expect(newDeliveryButton).toBeVisible();
+    await newDeliveryButton.click();
+    await waitForSideSheet(page);
+
+    await page.fill('input[name="deliveryDate"]', DELIVERY_DATE);
+    await page.selectOption('select[name="status"]', "upcoming");
+    await selectEntityByText(page, "Order", seededData.customer.name);
+    await page.fill('input[name="deliveredWetMassKg"]', "200001");
+
+    const error = page.locator("#deliveredWetMassKg-error");
+    await expect(error).toHaveText(
+      "Only 200,000 kg remains on this order. Reduce the delivered mass.",
+      { timeout: 10000 },
+    );
+    await submitDeliveryCreate(page);
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
+    await expect(error).toBeVisible();
+
+    await page.fill('input[name="deliveredWetMassKg"]', "190000");
+    await expect(error).toBeHidden();
   });
 });
 

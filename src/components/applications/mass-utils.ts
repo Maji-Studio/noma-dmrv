@@ -1,4 +1,6 @@
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import {
+  deriveMassDryKg,
+} from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";

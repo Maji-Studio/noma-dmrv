@@ -19,6 +19,7 @@ describe("order product-bin options", () => {
   let facilityId: string;
   let productBinId: string;
   let productId: string;
+  let binlessProductId: string;
 
   beforeAll(async () => {
     await ensureTestOrg();
@@ -53,20 +54,35 @@ describe("order product-bin options", () => {
           moistureContentPercent: 15,
         })
         .returning({ id: biocharProducts.id });
+      const [binlessProduct] = await tx
+        .insert(biocharProducts)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `BP-NOBIN-${tag}`,
+          facilityId: facility.id,
+          massKg: 250,
+          moistureContentPercent: 15,
+        })
+        .returning({ id: biocharProducts.id });
 
       return {
         facilityId: facility.id,
         productBinId: productBin.id,
         productId: product.id,
+        binlessProductId: binlessProduct.id,
       };
     });
 
     facilityId = fixture.facilityId;
     productBinId = fixture.productBinId;
     productId = fixture.productId;
+    binlessProductId = fixture.binlessProductId;
   });
 
   afterAll(async () => {
+    await db
+      .delete(biocharProducts)
+      .where(eq(biocharProducts.id, binlessProductId));
     await db.delete(biocharProducts).where(eq(biocharProducts.id, productId));
     await db
       .delete(storageLocations)
@@ -96,6 +112,27 @@ describe("order product-bin options", () => {
     });
   });
 
+  it("offers a bin-less product under its product code", async () => {
+    const options = await getBiocharProducts(ctx, {
+      facilityId,
+      limit: 10,
+    });
+
+    expect(options).toContainEqual({
+      id: binlessProductId,
+      code: `BP-NOBIN-${tag}`,
+      name: "Pure biochar",
+      mass: {
+        moisturePercent: 15,
+      },
+      remainingMass: {
+        wetKg: 250,
+        dryKg: 212.5,
+      },
+      subtitle: "Wet biochar product: 250kg | Dry biochar: 212.5kg available",
+    });
+  });
+
   it("keeps an existing selection resolvable after its bin is archived", async () => {
     await db
       .update(storageLocations)
@@ -116,5 +153,21 @@ describe("order product-bin options", () => {
       subtitle:
         "Wet biochar product: 250kg | Dry biochar: 212.5kg available",
     });
+  });
+
+  it("excludes a product whose bin is archived from new selections", async () => {
+    await db
+      .update(storageLocations)
+      .set({ archivedAt: new Date() })
+      .where(eq(storageLocations.id, productBinId));
+
+    const options = await getBiocharProducts(ctx, {
+      facilityId,
+      limit: 10,
+    });
+
+    const ids = options.map((option) => option.id);
+    expect(ids).not.toContain(productId);
+    expect(ids).toContain(binlessProductId);
   });
 });

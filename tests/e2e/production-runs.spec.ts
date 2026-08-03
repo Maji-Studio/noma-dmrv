@@ -241,6 +241,100 @@ async function saveEdit(page: Page) {
 }
 
 test.describe("Production Run lifecycle (#254)", () => {
+  test("shows immediate concise wet and dry mass-balance feedback", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+    await expect(
+      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+    ).toBeVisible({ timeout: 15000 });
+    await page.getByRole("button", { name: "New Production Run" }).click();
+    await waitForSideSheet(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    await selectEntity(
+      page,
+      "Source Bin",
+      seededData.feedstockStorageLocation.id,
+      seededData.feedstockStorageLocation.name,
+    );
+    await dialog.locator('input[name="feedstockWetMassKg"]').fill("1000");
+    await dialog.locator('input[name="feedstockMoisturePercent"]').fill("20");
+    await dialog.locator('input[name="biocharOutputKg"]').fill("20000");
+
+    await expect(
+      dialog.getByText(
+        "Wet output exceeds wet input. Review the masses before continuing.",
+      ),
+    ).toBeVisible();
+
+    await dialog.locator('input[name="biocharMoisturePercent"]').fill("1.5");
+    await expect(
+      dialog.getByText(
+        "Dry output exceeds dry input. Reduce the biochar output or correct the moisture values.",
+      ),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Wet output exceeds wet input. Review the masses before continuing.",
+      ),
+    ).not.toBeVisible();
+
+    await dialog.locator('input[name="biocharOutputKg"]').fill("500");
+    await expect(
+      dialog.getByText(
+        "Dry output exceeds dry input. Reduce the biochar output or correct the moisture values.",
+      ),
+    ).not.toBeVisible();
+
+    await dialog.locator('input[name="feedstockMoisturePercent"]').fill("50");
+    await dialog.locator('input[name="biocharOutputKg"]').fill("600");
+    await dialog.locator('input[name="biocharMoisturePercent"]').fill("0");
+    await expect(
+      dialog.getByText(
+        "Dry output exceeds dry input. Reduce the biochar output or correct the moisture values.",
+      ),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Wet output exceeds wet input. Review the masses before continuing.",
+      ),
+    ).not.toBeVisible();
+  });
+
+  test("defers the complete-run feedstock requirement until submit", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+    await expect(
+      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+    ).toBeVisible({ timeout: 15000 });
+    await page.getByRole("button", { name: "New Production Run" }).click();
+    await waitForSideSheet(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    const feedstockRequirement = dialog.locator(
+      "#feedstockMoisturePercent-error",
+    );
+
+    await dialog.locator('select[name="status"]').selectOption("complete");
+    await selectEntity(
+      page,
+      "Source Bin",
+      seededData.feedstockStorageLocation.id,
+      seededData.feedstockStorageLocation.name,
+    );
+    await dialog.locator('input[name="feedstockWetMassKg"]').fill("1000");
+    await dialog.locator('input[name="feedstockMoisturePercent"]').focus();
+
+    await expect(feedstockRequirement).not.toBeVisible();
+
+    await submitCreate(page);
+    await expect(feedstockRequirement).toHaveText("Enter feedstock moisture.");
+  });
+
   test("offers only legal initial statuses", async ({
     adminPage: page,
     seededData,

@@ -191,6 +191,7 @@ export function TransportLegsEditor({
   const certStatuses = deriveTransportLegCertStatuses(
     deferred ? deferredLegs : legs,
     !deferred,
+    entityType,
   );
 
   return (
@@ -247,10 +248,12 @@ export function TransportLegsEditor({
                 <th className="py-8 pr-12 font-medium">
                   <span className="flex items-center gap-6">
                     Distance source
-                    <CertificationFieldTag
-                      status={certStatuses.provenance}
-                      description="Satisfied when the saved leg records its distance provenance"
-                    />
+                    {certStatuses.provenance && (
+                      <CertificationFieldTag
+                        status={certStatuses.provenance.status}
+                        description={`Satisfied when the saved leg records ${certStatuses.provenance.label.toLowerCase()}`}
+                      />
+                    )}
                   </span>
                 </th>
                 <th className="py-8 pr-12 font-medium">Evidence</th>

@@ -34,7 +34,7 @@ import { toNumberOrNull } from "@/schemas/helpers";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { binCurrentMassKg } from "./bin-display";
 import {
-  binStockOverdrawMessage,
+  binStockOverdrawInlineMessage,
   isStockOverdraw,
 } from "@/lib/stock-overdraw";
 
@@ -304,8 +304,8 @@ function StockTakeForm({
 
       {deltaKg != null && deltaKg > 0 && (
         <p className="body-caption text-[var(--color-signal-red)]">
-          This count is above the displayed stock. Submit to recheck it against
-          the current inventory.
+          Count exceeds current stock. Confirm the count and explain the
+          difference before saving.
         </p>
       )}
 
@@ -370,7 +370,7 @@ function LossForm({
   const liveStockError =
     lossMassKg !== null &&
     isStockOverdraw(lossMassKg, availableKg)
-      ? binStockOverdrawMessage(lane)
+      ? binStockOverdrawInlineMessage(lane, availableKg)
       : undefined;
   const currentFieldServerError =
     fieldServerError?.lossMassKg === lossMassKg
