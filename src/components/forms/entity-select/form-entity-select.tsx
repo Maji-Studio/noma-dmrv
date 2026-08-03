@@ -49,6 +49,8 @@ interface FormEntitySelectProps<
   alwaysShowSearch?: boolean;
   /** Hide the search input entirely */
   hideSearch?: boolean;
+  /** Whether the selected option's remaining-mass caption includes dry mass. */
+  showRemainingDryMass?: EntitySelectProps["showRemainingDryMass"];
   /**
    * Dependency value(s) for cascading selects.
    * When any value changes, the selected value is cleared automatically.
@@ -87,6 +89,7 @@ export function FormEntitySelect<
   autoSelectSingle,
   alwaysShowSearch = false,
   hideSearch = false,
+  showRemainingDryMass = true,
   dependsOn,
   emptyHint,
 }: FormEntitySelectProps<TFieldValues, TName>) {
@@ -121,6 +124,7 @@ export function FormEntitySelect<
         autoSelectSingle={autoSelectSingle ?? required}
         alwaysShowSearch={alwaysShowSearch}
         hideSearch={hideSearch}
+        showRemainingDryMass={showRemainingDryMass}
         emptyHint={emptyHint}
       />
     </FormField>

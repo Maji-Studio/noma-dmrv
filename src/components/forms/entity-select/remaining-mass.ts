@@ -11,8 +11,9 @@ function formatWholeKg(kg: number | null): string {
 /** Exact operator copy for the selected option's always-visible stock caption. */
 export function formatRemainingMass(
   remainingMass: NonNullable<EntityOption["remainingMass"]>,
+  includeDryMass = true,
 ): string {
   const wet = `Remaining wet mass: ${formatWholeKg(remainingMass.wetKg)}`;
-  if (!("dryKg" in remainingMass)) return wet;
+  if (!includeDryMass || !("dryKg" in remainingMass)) return wet;
   return `${wet} | dry mass: ${formatWholeKg(remainingMass.dryKg ?? null)}`;
 }

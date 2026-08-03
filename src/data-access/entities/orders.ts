@@ -25,7 +25,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { formatDate } from "@/lib/format-utils";
 import {
   deriveEffectiveMoisturePercent,
-  formatWetDryMass,
+  formatRecordedMass,
   splitWetMass,
 } from "@/lib/mass-moisture";
 import { requireOrgScope } from "../utils";
@@ -126,14 +126,10 @@ export function toOrderEntityOption(r: {
       wetKg: remainingWetKg,
       dryKg: remainingDryKg,
     },
-    subtitle: `${formatWetDryMass({
-      wetKg: remainingWetKg,
-      dryKg: remainingDryKg,
-      wetLabel: "Wet biochar product",
-      dryLabel: "Dry biochar",
-      separator: " | ",
-      unitSpacing: "compact",
-    })} remaining`,
+    subtitle: `Wet biochar product: ${formatRecordedMass(
+      remainingWetKg,
+      "compact",
+    )} remaining`,
   };
 }
 
