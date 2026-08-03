@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getVerifierReportDocument } from "@/data-access/ghg-statement-reports";
 import {
-  verifyReportCapabilityToken,
+  verifyReportCapabilityTokenAgainstHashes,
 } from "@/lib/certification/ghg-statement-report/verifier-url";
 import { getStorageProvider } from "@/lib/storage";
 
@@ -21,7 +21,13 @@ export async function GET(
   }
   const token = request.nextUrl.searchParams.get("token") ?? "";
   const report = await getVerifierReportDocument(reportId);
-  if (!report || !verifyReportCapabilityToken(token, report.verifierTokenHash)) {
+  if (
+    !report ||
+    !verifyReportCapabilityTokenAgainstHashes(token, [
+      report.verifierTokenHash,
+      report.pendingVerifierTokenHash,
+    ])
+  ) {
     return new NextResponse("Not Found", { status: 404 });
   }
   if (!report.storageKey || report.uploadStatus !== "uploaded") {

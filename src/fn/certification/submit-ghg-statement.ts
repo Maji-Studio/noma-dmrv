@@ -4,7 +4,6 @@ import {
 } from "@/data-access/certification";
 import {
   getLatestSubmission,
-  getLatestSubmissionWithExecutor,
 } from "@/data-access/certification-submissions";
 import { applyGhgRemoteState } from "@/data-access/certifier-ghg-remote-state";
 import {
@@ -12,12 +11,17 @@ import {
   getCertifierGhgStatementById,
 } from "@/data-access/certifier-ghg-statements";
 import {
+  clearPendingVerifierReportToken,
   getApprovedGhgStatementReport,
-  markGhgStatementReportSubmitted,
+  promotePendingVerifierReportToken,
 } from "@/data-access/ghg-statement-reports";
 import { getFacilityById } from "@/data-access/facilities";
-import { withFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
+import { withFacilityDurabilitySessionLock } from "@/data-access/facility-durability-lock";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
+import {
+  getVerifierTokenFromReportUrl,
+  hashVerifierToken,
+} from "@/lib/certification/ghg-statement-report/verifier-url";
 import {
   redactReportSecrets,
   redactReportUrlSecrets,
@@ -101,24 +105,18 @@ export async function submitGhgStatementToVerifierCore(args: {
 
   const facility = await getFacilityById(orgCtx, statement.facilityId);
   const externalReportUrl = parsed.externalReportUrl ?? parsed.reportUrl;
-  const generatedReport = parsed.reportId
+  const selectedGeneratedReport = parsed.reportId
     ? await getApprovedGhgStatementReport(orgCtx, {
         ghgStatementId,
         reportId: parsed.reportId,
       })
     : null;
-  if (parsed.reportId && !generatedReport) {
+  if (parsed.reportId && !selectedGeneratedReport) {
     throw new SafeError(
       "Approve the selected generated report before submitting.",
     );
   }
-  if (generatedReport) {
-    await assertGhgStatementReportFresh(orgCtx, generatedReport);
-  }
-  const reportUrl = generatedReport
-    ? await issueVerifierReportUrl(orgCtx, generatedReport.id)
-    : externalReportUrl;
-  if (!reportUrl) {
+  if (!selectedGeneratedReport && !externalReportUrl) {
     throw new SafeError(
       "Approve a generated report or enter an external report URL.",
     );
@@ -130,14 +128,13 @@ export async function submitGhgStatementToVerifierCore(args: {
     localEntityId: ghgStatementId,
   };
 
-  const result = await withFacilityDurabilityLock(
+  const result = await withFacilityDurabilitySessionLock(
     orgCtx,
     statement.facilityId,
-    async (tx): Promise<SubmitGhgStatementResult> => {
+    async (): Promise<SubmitGhgStatementResult> => {
       const readCurrentSubmission = async () => {
-        const current = await getLatestSubmissionWithExecutor(
+        const current = await getLatestSubmission(
           orgCtx,
-          tx,
           submissionKey,
           statement.facilityId,
         );
@@ -154,10 +151,50 @@ export async function submitGhgStatementToVerifierCore(args: {
       };
 
       let submission = await readCurrentSubmission();
+      const generatedReport = parsed.reportId
+        ? await getApprovedGhgStatementReport(orgCtx, {
+            ghgStatementId,
+            reportId: parsed.reportId,
+          })
+        : null;
+      if (parsed.reportId && !generatedReport) {
+        throw new SafeError(
+          "Approve the selected generated report before submitting.",
+        );
+      }
       const remoteBefore = await getGhgStatement(
         client,
         initialExternalId,
       ).catch(() => null);
+
+      if (generatedReport?.pendingVerifierTokenHash) {
+        const previouslyStagedToken = getVerifierTokenFromReportUrl(
+          remoteBefore?.ghg_statement_report_url ?? null,
+          generatedReport.id,
+        );
+        if (previouslyStagedToken && remoteBefore?.status !== "DRAFT") {
+          const promoted = await promotePendingVerifierReportToken(orgCtx, {
+            reportId: generatedReport.id,
+            token: previouslyStagedToken,
+          });
+          if (!promoted) {
+            await clearPendingVerifierReportToken(orgCtx, {
+              reportId: generatedReport.id,
+              expectedTokenHash: generatedReport.pendingVerifierTokenHash,
+            });
+          }
+        } else if (remoteBefore) {
+          await clearPendingVerifierReportToken(orgCtx, {
+            reportId: generatedReport.id,
+            expectedTokenHash: generatedReport.pendingVerifierTokenHash,
+          });
+        } else {
+          throw new SafeError(
+            "A previous verifier submission is still being reconciled. Refresh the GHG Statement and try again.",
+          );
+        }
+      }
+
       const linkedCount = remoteBefore
         ? remoteBefore.ghg_entry_ids.length
         : (await countRemovalsByGhgStatementIds(orgCtx, [ghgStatementId])).get(
@@ -184,6 +221,24 @@ export async function submitGhgStatementToVerifierCore(args: {
       if (submitMode === "resubmit" && !parsed.summaryOfChanges?.trim()) {
         throw new SafeError("Summary of changes is required for resubmission.");
       }
+      if (generatedReport) {
+        await assertGhgStatementReportFresh(orgCtx, generatedReport);
+      }
+
+      const reportUrl = generatedReport
+        ? await issueVerifierReportUrl(orgCtx, generatedReport.id)
+        : externalReportUrl;
+      if (!reportUrl) {
+        throw new SafeError(
+          "Approve a generated report or enter an external report URL.",
+        );
+      }
+      const pendingVerifierToken = generatedReport
+        ? getVerifierTokenFromReportUrl(reportUrl, generatedReport.id)
+        : null;
+      if (generatedReport && !pendingVerifierToken) {
+        throw new Error("Generated verifier report URL is malformed.");
+      }
 
       onProgress?.({ step: "ghg_statement.checking", state: "complete" });
       onProgress?.({
@@ -204,6 +259,17 @@ export async function submitGhgStatementToVerifierCore(args: {
         Boolean(parsed.summaryOfChanges?.trim()),
       );
       const finalizeSubmitSuccess = async (remote: GhgStatement) => {
+        if (generatedReport && pendingVerifierToken) {
+          const promoted = await promotePendingVerifierReportToken(orgCtx, {
+            reportId: generatedReport.id,
+            token: pendingVerifierToken,
+          });
+          if (!promoted) {
+            throw new Error(
+              "Verifier report capability could not be promoted after provider success.",
+            );
+          }
+        }
         submission = await readCurrentSubmission();
         await applyGhgRemoteState(
           orgCtx,
@@ -215,7 +281,6 @@ export async function submitGhgStatementToVerifierCore(args: {
             lastReportDocumentId: document.id,
             submittedToVerifierAt: new Date().toISOString(),
           },
-          tx,
         );
       };
 
@@ -266,6 +331,7 @@ export async function submitGhgStatementToVerifierCore(args: {
         if (after && submitApplied) {
           onProgress?.({ step: "ghg_statement.sending", state: "complete" });
           onProgress?.({ step: "ghg_statement.confirming", state: "active" });
+          await finalizeSubmitSuccess(after);
           await appendSyncEvent(orgCtx, {
             provider: ISOMETRIC_PROVIDER,
             entityType: GHG_STATEMENT_ENTITY_TYPE,
@@ -279,8 +345,25 @@ export async function submitGhgStatementToVerifierCore(args: {
               detected_status: after.status,
             },
           });
-          await finalizeSubmitSuccess(after);
           return { externalId: initialExternalId, remoteStatus: after.status };
+        }
+
+        const confirmedNonApplied =
+          Boolean(after) ||
+          (err instanceof IsometricApiError &&
+            err.code === "http" &&
+            typeof err.status === "number" &&
+            err.status >= 400 &&
+            err.status < 500);
+        if (
+          generatedReport &&
+          pendingVerifierToken &&
+          confirmedNonApplied
+        ) {
+          await clearPendingVerifierReportToken(orgCtx, {
+            reportId: generatedReport.id,
+            expectedTokenHash: hashVerifierToken(pendingVerifierToken),
+          });
         }
 
         const message =
@@ -305,6 +388,7 @@ export async function submitGhgStatementToVerifierCore(args: {
 
       onProgress?.({ step: "ghg_statement.sending", state: "complete" });
       onProgress?.({ step: "ghg_statement.confirming", state: "active" });
+      await finalizeSubmitSuccess(remoteAfter);
       await appendSyncEvent(orgCtx, {
         provider: ISOMETRIC_PROVIDER,
         entityType: GHG_STATEMENT_ENTITY_TYPE,
@@ -314,16 +398,12 @@ export async function submitGhgStatementToVerifierCore(args: {
         requestPayload: submitRequestPayload,
         responsePayload: { id: remoteAfter.id, status: remoteAfter.status },
       });
-      await finalizeSubmitSuccess(remoteAfter);
       return {
         externalId: initialExternalId,
         remoteStatus: remoteAfter.status,
       };
     },
   );
-  if (generatedReport) {
-    await markGhgStatementReportSubmitted(orgCtx, generatedReport.id);
-  }
   onProgress?.({ step: "ghg_statement.confirming", state: "complete" });
   onProgress?.({ step: "ghg_statement.complete", state: "complete" });
   return result;

@@ -115,6 +115,7 @@ import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import {
@@ -972,6 +973,7 @@ export async function deleteBiocharProduct(
       ...transportLegDocuments,
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }
 
 // Code-availability and dropdown-option lookups live in

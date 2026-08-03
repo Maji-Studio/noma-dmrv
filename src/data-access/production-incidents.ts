@@ -10,6 +10,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 
 export interface ProductionIncidentWithRelations {
   id: string;
@@ -198,4 +199,5 @@ export async function deleteProductionIncident(
       { entityType: "production_incident", entityId: id },
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }

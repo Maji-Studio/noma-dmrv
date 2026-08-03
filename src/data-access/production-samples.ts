@@ -10,6 +10,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { retireDocumentsForEntities } from "./documents";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 
 // ============================================
 // Types
@@ -211,4 +212,5 @@ export async function deleteProductionSample(
       { entityType: "production_sample", entityId: id },
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }

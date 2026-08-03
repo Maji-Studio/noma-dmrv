@@ -307,6 +307,7 @@ export const certifierGhgStatementReports = pgTable(
     reviewedNarratives: jsonb('reviewed_narratives').notNull(),
     preparationIdempotencyKey: uuid('preparation_idempotency_key').notNull(),
     verifierTokenHash: text('verifier_token_hash').notNull(),
+    pendingVerifierTokenHash: text('pending_verifier_token_hash'),
     preparedBy: text('prepared_by')
       .notNull()
       .references(() => users.id),

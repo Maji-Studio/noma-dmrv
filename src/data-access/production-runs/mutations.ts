@@ -55,6 +55,7 @@ import {
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
 import { retireDocumentsForEntities } from "../documents";
+import { processPendingStorageObjectDeletions } from "../storage-object-deletions";
 import { attachProductionRunToMatchingCreditBatch } from "../credit-batch-membership";
 import {
   assertProductionRunTimesNotFuture,
@@ -983,4 +984,5 @@ export async function deleteProductionRun(
       })),
     ]);
   });
+  await processPendingStorageObjectDeletions(ctx);
 }

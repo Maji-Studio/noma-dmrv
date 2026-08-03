@@ -7,7 +7,7 @@ vi.mock("@/data-access/ghg-statement-reports", () => ({
 vi.mock(
   "@/lib/certification/ghg-statement-report/verifier-url",
   () => ({
-    verifyReportCapabilityToken: vi.fn(),
+    verifyReportCapabilityTokenAgainstHashes: vi.fn(),
   }),
 );
 vi.mock("@/lib/storage", () => ({
@@ -15,7 +15,7 @@ vi.mock("@/lib/storage", () => ({
 }));
 
 import { getVerifierReportDocument } from "@/data-access/ghg-statement-reports";
-import { verifyReportCapabilityToken } from "@/lib/certification/ghg-statement-report/verifier-url";
+import { verifyReportCapabilityTokenAgainstHashes } from "@/lib/certification/ghg-statement-report/verifier-url";
 import { getStorageProvider } from "@/lib/storage";
 import { GET } from "./route";
 
@@ -32,11 +32,12 @@ describe("GHG Statement verifier report route", () => {
       storageKey: "org/org-1/ghg-statement-reports/report.pdf",
       uploadStatus: "uploaded",
       verifierTokenHash: "a".repeat(64),
+      pendingVerifierTokenHash: "b".repeat(64),
     });
   });
 
   it("returns 404 without a valid capability token", async () => {
-    vi.mocked(verifyReportCapabilityToken).mockReturnValue(false);
+    vi.mocked(verifyReportCapabilityTokenAgainstHashes).mockReturnValue(false);
 
     const response = await GET(
       new NextRequest(
@@ -50,7 +51,7 @@ describe("GHG Statement verifier report route", () => {
   });
 
   it("redirects a valid capability to a fresh private-storage URL", async () => {
-    vi.mocked(verifyReportCapabilityToken).mockReturnValue(true);
+    vi.mocked(verifyReportCapabilityTokenAgainstHashes).mockReturnValue(true);
     const createDownloadUrl = vi
       .fn()
       .mockResolvedValue("https://storage.example/signed-report.pdf");
@@ -68,9 +69,9 @@ describe("GHG Statement verifier report route", () => {
     expect(response.status).toBe(302);
     // The token is checked against the stored digest alone; the report is
     // identified by the row the digest came from, not by a derived value.
-    expect(verifyReportCapabilityToken).toHaveBeenCalledWith(
+    expect(verifyReportCapabilityTokenAgainstHashes).toHaveBeenCalledWith(
       "opaque",
-      "a".repeat(64),
+      ["a".repeat(64), "b".repeat(64)],
     );
     expect(response.headers.get("location")).toBe(
       "https://storage.example/signed-report.pdf",

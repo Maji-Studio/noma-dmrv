@@ -75,7 +75,7 @@ export function ghgSubmitAppearsApplied(
 ): boolean {
   return (
     remote.ghg_statement_report_url === reportUrl &&
-    (remote.status === "AWAITING_VERIFICATION" || remote.status === "VERIFIED")
+    remote.status !== "DRAFT"
   );
 }
 
