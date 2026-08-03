@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, type ComponentProps } from "react";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { nullableNumericValue } from "@/lib/form-utils";
 
@@ -43,8 +43,8 @@ import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import Link from "next/link";
 import {
+  BLEND_WET_MASS_LABEL,
   BIOCHAR_PRE_WATER_MOISTURE_LABEL,
-  BIOCHAR_PRE_WATER_WET_MASS_LABEL,
 } from "@/config/product-labels";
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
@@ -56,6 +56,25 @@ import {
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
+
+type MassMoistureFieldsProps = ComponentProps<typeof MassMoistureFields>;
+
+/** Product mass is the whole pre-water blend, including every ingredient. */
+export function BiocharBlendMassFields({
+  wet,
+  ...props
+}: MassMoistureFieldsProps) {
+  return (
+    <MassMoistureFields
+      {...props}
+      wet={{
+        ...wet,
+        label: BLEND_WET_MASS_LABEL,
+        helperText: wet.helperText ?? "Includes all blend ingredients.",
+      }}
+    />
+  );
+}
 
 // ============================================
 // Transfer Flow Visual
@@ -336,6 +355,7 @@ export function BiocharProductForm({
     formulationId: selectedFormulationId,
     facilityId: selectedFacilityId,
     productMassKg: massKgNumForComposition,
+    allocationFrozen: hasFrozenSourceAllocation,
   });
 
   const { data: selectedSourceBiocharBin } = useEntityById(
@@ -548,7 +568,7 @@ export function BiocharProductForm({
           />
         </FormField>
 
-        <MassMoistureFields
+        <BiocharBlendMassFields
           materialLabel="Biochar"
           wetMassKg={watchedMassKg}
           moisturePercent={watchedMoisture}
@@ -559,15 +579,12 @@ export function BiocharProductForm({
           }
           wet={{
             id: "massKg",
-            label: hasWaterAdded
-              ? BIOCHAR_PRE_WATER_WET_MASS_LABEL
-              : undefined,
             error: massKgError,
             required: true,
             disabled: isSubmitting || isEditMode,
             placeholder: "e.g. 500",
             helperText: isEditMode
-              ? "The source draw is fixed to preserve its production-run allocations."
+              ? "Includes all blend ingredients. Source allocation is fixed."
               : undefined,
             registration: register("massKg", { setValueAs: nullableNumericValue }),
           }}

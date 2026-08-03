@@ -1,6 +1,42 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { TransferFlowPreview } from "./biochar-product-form";
+import type { UseFormRegisterReturn } from "react-hook-form";
+import {
+  BiocharBlendMassFields,
+  TransferFlowPreview,
+} from "./biochar-product-form";
+
+const registration = (name: string): UseFormRegisterReturn => ({
+  name,
+  onBlur: async () => undefined,
+  onChange: async () => undefined,
+  ref: () => undefined,
+});
+
+describe("BiocharBlendMassFields", () => {
+  it("labels the total blend wet mass and keeps the ingredient scope visible", () => {
+    const html = renderToStaticMarkup(
+      <BiocharBlendMassFields
+        wetMassKg={100}
+        moisturePercent={10}
+        materialLabel="Biochar"
+        wet={{
+          id: "massKg",
+          registration: registration("massKg"),
+        }}
+        moisture={{
+          id: "moistureContentPercent",
+          registration: registration("moistureContentPercent"),
+        }}
+      />,
+    );
+    const text = html.replace(/<[^>]+>/g, "");
+
+    expect(text).toContain("Blend wet mass (kg)");
+    expect(text).toContain("Includes all blend ingredients.");
+    expect(text).not.toContain("Biochar wet mass");
+  });
+});
 
 describe("TransferFlowPreview", () => {
   it("derives the source dry draw from source stock rather than product moisture", () => {
