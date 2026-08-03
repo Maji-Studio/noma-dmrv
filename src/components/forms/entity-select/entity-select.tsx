@@ -13,6 +13,7 @@ import {
   useMemo,
   type KeyboardEvent,
 } from "react";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEntityOptions, useEntityById } from "@/hooks/use-entities";
@@ -561,7 +562,7 @@ export function EntitySelect({
       {/* Dropdown */}
       {isOpen && (
         <div
-          className="absolute z-50 mt-1 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] shadow-lg"
+          className="absolute z-[var(--z-layer-popover)] mt-4 w-full bg-[var(--paper)] [border:var(--hair)]"
           role="presentation"
         >
           {/* Search input */}
@@ -606,17 +607,18 @@ export function EntitySelect({
               // Explain WHY the list is empty and link the upstream fix; a
               // search miss keeps the plain "no match" reading instead.
               emptyHint && searchQuery.length === 0 ? (
-                <li className="flex flex-col gap-4 px-16 py-12">
-                  <span className="text-[var(--text-s)] text-[var(--color-text-secondary)]">
+                <li>
+                  <p className="px-12 py-10 body-small text-[var(--color-text-tertiary)]">
                     {emptyHint.message}
-                  </span>
+                  </p>
                   {emptyHint.href && (
                     <a
                       href={emptyHint.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="self-start text-[var(--text-s)] font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+                      className="flex min-h-44 w-full items-center gap-8 border-t border-[var(--color-border-secondary)] px-12 py-8 body-small font-medium text-[var(--color-interaction)] transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:bg-[var(--color-background-medium)]"
                     >
+                      <ArrowSquareOutIcon aria-hidden size={16} weight="bold" />
                       {emptyHint.linkLabel ?? "Open prerequisite"}
                     </a>
                   )}
