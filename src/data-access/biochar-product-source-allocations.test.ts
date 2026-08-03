@@ -248,4 +248,15 @@ describe("planBiocharProductSourceAllocations", () => {
       availableWetMassKg: 40,
     });
   });
+
+  it.each([
+    ["null", null as unknown as number],
+    ["NaN", Number.NaN],
+    ["infinity", Number.POSITIVE_INFINITY],
+    ["negative", -1],
+  ])("rejects a %s requested source mass", (_case, requestedWetMassKg) => {
+    expect(() =>
+      planBiocharProductSourceAllocations([lot()], requestedWetMassKg),
+    ).toThrow("requestedWetMassKg must be a finite number at or above 0");
+  });
 });

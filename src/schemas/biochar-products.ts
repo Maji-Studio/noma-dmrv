@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { DRY_MASS_EXCEEDS_WET_MESSAGE } from "@/lib/calculations/mass-dry";
 import {
   emptyToNull,
   massKgSchema,
@@ -20,6 +21,8 @@ import {
 
 export const MOISTURE_MIN = 0;
 export const MOISTURE_MAX = 100;
+export const DUPLICATE_FORMULATION_INGREDIENT_MESSAGE =
+  "Each formulation ingredient can appear only once.";
 
 const requiredNonNegativeNumber = (message: string) =>
   requiredMassKgSchema(message);
@@ -72,17 +75,68 @@ const ingredientBinBaseSchema = z.object({
     .nullable(),
 });
 
-const ingredientBinFormSchema = ingredientBinBaseSchema.extend({
-  storageLocationId: emptyToNull.or(z.string().uuid()).optional().nullable(),
-  massKg: requiredNumber(
-    "Ingredient mass is required",
-    "Ingredient mass must be a number",
-  ).pipe(massKgSchema("Ingredient mass must be 0 or greater")),
-});
+type IngredientMassFields = {
+  massKg: number;
+  massDryKg?: number | null;
+};
 
-const ingredientBinUpdateSchema = ingredientBinBaseSchema.extend({
-  storageLocationId: z.string().uuid().optional().nullable(),
-});
+function ingredientDryMassRefinement(
+  ingredient: IngredientMassFields,
+  ctx: z.RefinementCtx,
+): void {
+  if (
+    ingredient.massDryKg == null ||
+    ingredient.massDryKg <= ingredient.massKg
+  ) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ["massDryKg"],
+    message: DRY_MASS_EXCEEDS_WET_MESSAGE,
+  });
+}
+
+const ingredientBinFormSchema = ingredientBinBaseSchema
+  .extend({
+    storageLocationId: emptyToNull.or(z.string().uuid()).optional().nullable(),
+    massKg: requiredNumber(
+      "Ingredient mass is required",
+      "Ingredient mass must be a number",
+    ).pipe(massKgSchema("Ingredient mass must be 0 or greater")),
+  })
+  .superRefine(ingredientDryMassRefinement);
+
+const ingredientBinUpdateSchema = ingredientBinBaseSchema
+  .extend({
+    storageLocationId: z.string().uuid().optional().nullable(),
+  })
+  .superRefine(ingredientDryMassRefinement);
+
+function uniqueFormulationIngredientsRefinement(
+  ingredients: ReadonlyArray<{ formulationIngredientId: string }>,
+  ctx: z.RefinementCtx,
+): void {
+  const seen = new Set<string>();
+  ingredients.forEach((ingredient, index) => {
+    if (seen.has(ingredient.formulationIngredientId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [index, "formulationIngredientId"],
+        message: DUPLICATE_FORMULATION_INGREDIENT_MESSAGE,
+      });
+    }
+    seen.add(ingredient.formulationIngredientId);
+  });
+}
+
+const ingredientBinsFormSchema = z
+  .array(ingredientBinFormSchema)
+  .superRefine(uniqueFormulationIngredientsRefinement);
+const ingredientBinsUpdateSchema = z
+  .array(ingredientBinUpdateSchema)
+  .superRefine(uniqueFormulationIngredientsRefinement);
 
 export type IngredientBin = z.infer<typeof ingredientBinFormSchema>;
 
@@ -129,7 +183,7 @@ export const biocharProductFormSchema = z.object({
   waterAddedKg: requiredNonNegativeNumber("Water added must be 0 or greater"),
 
   // Ingredient bin mappings (formulation ingredient → physical bin)
-  ingredientBins: z.array(ingredientBinFormSchema).optional(),
+  ingredientBins: ingredientBinsFormSchema.optional(),
 });
 
 // ============================================
@@ -168,7 +222,7 @@ export const updateBiocharProductSchema = z.object({
     .optional(),
   densityKgM3: z.number().min(0).optional().nullable(),
   waterAddedKg: massKgSchema().optional(),
-  ingredientBins: z.array(ingredientBinUpdateSchema).optional(),
+  ingredientBins: ingredientBinsUpdateSchema.optional(),
 });
 
 /**

@@ -11,6 +11,7 @@ import {
   INGREDIENT_MASS_DEVIATION_WARN_PERCENT,
   type CompositionRow,
 } from "@/lib/biochar-composition";
+import { nullableNumericValue } from "@/lib/form-utils";
 import { WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 import { formatStorageLocationType } from "@/schemas/storage-locations";
@@ -34,6 +35,14 @@ export function formatIngredientBinLabel(entity: {
 
 function formatKgShort(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+/** Keep controlled ingredient mass state finite; blank or invalid input clears it. */
+export function normalizeIngredientMassInput(value: unknown): number | null {
+  const normalized = nullableNumericValue(value);
+  return normalized !== null && Number.isFinite(normalized)
+    ? normalized
+    : null;
 }
 
 interface IngredientBinFieldProps {
@@ -144,7 +153,11 @@ export function IngredientBinField({
                 disabled={isSubmitting || allocationFrozen}
                 error={!!fieldState.error}
                 value={field.value ?? ""}
-                onChange={field.onChange}
+                onChange={(event) =>
+                  field.onChange(
+                    normalizeIngredientMassInput(event.currentTarget.value),
+                  )
+                }
                 onBlur={field.onBlur}
                 name={field.name}
                 ref={field.ref}

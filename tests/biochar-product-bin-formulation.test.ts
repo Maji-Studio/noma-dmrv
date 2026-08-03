@@ -371,6 +371,35 @@ beforeAll(async () => {
     ).rejects.toThrow("must include every ingredient");
   });
 
+  it("rejects duplicate formulation ingredient rows before drawing stock", async () => {
+    const productBinId = await makeProductBin(formulationAId);
+    const ingredientBinId = await makeStockedFeedstockBin(100);
+    const composition = formulationAComposition();
+    composition.ingredients[0].massKg = 20;
+    composition.ingredients[0].storageLocationId = ingredientBinId;
+
+    await expect(
+      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
+        ...baseProductInput(),
+        formulationId: formulationAId,
+        storageLocationId: productBinId,
+        composition: {
+          ingredients: [
+            composition.ingredients[0],
+            { ...composition.ingredients[0] },
+          ],
+        },
+      }),
+    ).rejects.toThrow("Each formulation ingredient can appear only once");
+
+    const ingredientBin = await getEntityById(
+      makeTestOrgContext(TEST_USER_ID),
+      "storageLocation",
+      ingredientBinId,
+    );
+    expect(ingredientBin?.subtitle).toContain("100 kg stored");
+  });
+
   it("allows a pure-biochar product in an unassigned bin and leaves it unclaimed", async () => {
     const binId = await makeProductBin(null);
 
@@ -538,6 +567,50 @@ beforeAll(async () => {
       ingredientBinId,
     );
     expect(ingredientBin?.subtitle).toContain("140 kg stored");
+  });
+
+  it("derives a new ingredient basis from mixed-history remaining stock", async () => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const ingredientBinId = await makeStockedFeedstockBin(80, 100);
+    const firstProductBinId = await makeProductBin(formulationAId);
+    const firstComposition = formulationAComposition();
+    firstComposition.ingredients[0].massKg = 50;
+    firstComposition.ingredients[0].storageLocationId = ingredientBinId;
+
+    const firstProduct = await createBiocharProduct(ctx, {
+      ...baseProductInput(),
+      formulationId: formulationAId,
+      storageLocationId: firstProductBinId,
+      composition: firstComposition,
+    });
+    createdProductIds.push(firstProduct.id);
+
+    await addCompletedFeedstock(ingredientBinId, 100, 100);
+
+    const secondProductBinId = await makeProductBin(formulationAId);
+    const secondComposition = formulationAComposition();
+    secondComposition.ingredients[0].massKg = 30;
+    secondComposition.ingredients[0].storageLocationId = ingredientBinId;
+    const secondProduct = await createBiocharProduct(ctx, {
+      ...baseProductInput(),
+      formulationId: formulationAId,
+      storageLocationId: secondProductBinId,
+      composition: secondComposition,
+    });
+    createdProductIds.push(secondProduct.id);
+
+    const [ingredient] = (
+      secondProduct.composition as {
+        ingredients: Array<{
+          massDryKg: number;
+          moistureContentPercent: number;
+        }>;
+      }
+    ).ingredients;
+    expect(ingredient).toMatchObject({
+      massDryKg: 28,
+      moistureContentPercent: 6.666667,
+    });
   });
 
   it("rejects an update that increases an ingredient draw beyond stock", async () => {
@@ -765,6 +838,36 @@ beforeAll(async () => {
         composition: overdrawComposition,
       }),
     ).rejects.toThrow("Not enough biochar in this bin");
+  });
+
+  it("allows an all-ingredient product with zero required source mass", async () => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const sourceBinId = await makeBiocharBin();
+    const productBinId = await makeProductBin(formulationAId);
+    const ingredientBinId = await makeStockedFeedstockBin(100);
+    const composition = formulationAComposition();
+    composition.ingredients[0].massKg = 100;
+    composition.ingredients[0].storageLocationId = ingredientBinId;
+
+    const product = await createBiocharProduct(ctx, {
+      ...baseProductInput(),
+      linkedProductionRunId: null,
+      sourceBiocharStorageLocationId: sourceBinId,
+      formulationId: formulationAId,
+      storageLocationId: productBinId,
+      massKg: 100,
+      composition,
+    });
+    createdProductIds.push(product.id);
+
+    await expect(
+      db
+        .select()
+        .from(biocharProductSourceAllocations)
+        .where(
+          eq(biocharProductSourceAllocations.biocharProductId, product.id),
+        ),
+    ).resolves.toEqual([]);
   });
 
   it("updates legacy blend mass without requiring a missing ingredient bin", async () => {

@@ -242,7 +242,7 @@ export async function createBiocharProduct(
       productionDate =
         sourceAllocationPlan.productionDate ?? new Date();
       const [sourceAllocation] = sourceAllocationPlan.allocations;
-      if (!sourceAllocation) {
+      if (!sourceAllocation && sourceBiocharMassKg > 0) {
         throw new SafeError(
           "A positive product mass requires traceable biochar in the source bin.",
         );
@@ -252,7 +252,7 @@ export async function createBiocharProduct(
       // allocation rows and deliberately leave this compatibility link empty.
       linkedProductionRunId =
         sourceAllocationPlan.allocations.length === 1
-          ? sourceAllocation.productionRunId
+          ? sourceAllocation?.productionRunId ?? null
           : null;
     } else {
       if (!run) {

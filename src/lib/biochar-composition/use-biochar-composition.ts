@@ -34,6 +34,8 @@ export interface UseBiocharCompositionArgs {
   formulationId: string | null | undefined;
   facilityId: string | null | undefined;
   productMassKg: number | null | undefined;
+  /** Persisted source allocations keep their exact saved composition snapshot. */
+  allocationFrozen: boolean;
 }
 
 export interface UseBiocharCompositionResult {
@@ -64,6 +66,7 @@ export function useBiocharComposition(
     formulationId,
     facilityId,
     productMassKg,
+    allocationFrozen,
   } = args;
 
   const control = form.control as Control<FieldValues>;
@@ -75,14 +78,13 @@ export function useBiocharComposition(
     !!formulationId,
   );
 
-  // Sync rows whenever a formulation's ingredient list arrives — including
-  // the initial load when editing a saved product. `reconcileComposition`
-  // preserves the saved/user-entered massKg and bin per ingredient line, so
-  // this never loses data; it refreshes catalog fields and, crucially, adds
-  // rows for recipe lines added after the product was saved (the server
-  // rejects compositions that don't cover every formulation line).
+  // Sync rows whenever an unfrozen formulation's ingredient list arrives.
+  // Products with persisted source allocations retain the exact saved rows and
+  // metadata because those facts are part of the immutable allocation.
   const syncedFormulationIdRef = useRef("");
   useEffect(() => {
+    if (allocationFrozen) return;
+
     // Pure-biochar product (no formulation) → no ingredient bins. Clear any rows
     // left over from a previously-selected formulation.
     if (!formulationId) {
@@ -99,7 +101,7 @@ export function useBiocharComposition(
     const live = (form.getValues("ingredientBins") as IngredientBin[] | undefined) ?? [];
     const next = reconcileComposition(formulation, live);
     replace(next);
-  }, [formulationId, formulation, form, replace]);
+  }, [allocationFrozen, formulationId, formulation, form, replace]);
 
   // Facility cascade: clear each row's storageLocationId when the user picks
   // a different facility. Skips the initial mount.
