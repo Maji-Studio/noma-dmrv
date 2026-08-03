@@ -26,6 +26,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import {
@@ -84,6 +85,7 @@ const STEPS: StepFlowStep[] = [
 const DIALOG_TITLE_ID = "ghg-statement-create-title";
 const DIALOG_DESCRIPTION_ID = "ghg-statement-create-description";
 const REGISTRY_STATEMENTS_ITEM = "registry-statements";
+const RESULT_WARNINGS_ITEM = "result-warnings";
 
 // Period-derivation + window logic is shared with the server empty-statement
 // guard (`ghg-reporting-window.ts`) so the operator's preview and the registry
@@ -127,6 +129,7 @@ function DialogBody({
   const [furthest, setFurthest] = useState(0);
   const [registryStatementsExpanded, setRegistryStatementsExpanded] =
     useState(false);
+  const router = useRouter();
   const toast = useToast();
   const mutation = useCreateGhgStatement();
   const statementsQuery = useGhgStatementsForFacility(facilityId);
@@ -207,6 +210,7 @@ function DialogBody({
     }
     try {
       const result = await mutation.mutateAsync(data);
+      router.refresh();
       const linked = `${result.linkedRemovalIds.length} linked ${
         result.linkedRemovalIds.length === 1 ? "Removal" : "Removals"
       }`;
@@ -238,7 +242,11 @@ function DialogBody({
     <div className="flex flex-col gap-24">
       <header className="flex flex-col gap-4 pr-40">
         <h2 id={DIALOG_TITLE_ID} className="title-heading-3">
-          New GHG Statement
+          {result
+            ? result.outcome === "existing"
+              ? "GHG Statement already exists"
+              : "GHG Statement created"
+            : "New GHG Statement"}
         </h2>
         <p
           id={DIALOG_DESCRIPTION_ID}
@@ -246,8 +254,8 @@ function DialogBody({
         >
           {result
             ? result.outcome === "existing"
-              ? "Already in Isometric."
-              : "Created in Isometric."
+              ? "Found in Isometric and synced to noma."
+              : "Created in Isometric and saved in noma."
             : "Choose a period, preview Removals, then create."}
         </p>
       </header>
@@ -789,7 +797,7 @@ function StepConfirm({
   );
 }
 
-function ResultPanel({
+export function ResultPanel({
   outcome,
   externalId,
   linkedCount,
@@ -812,50 +820,91 @@ function ResultPanel({
   return (
     <div className="flex flex-col gap-16">
       <div
-        className={`flex items-start gap-8 border-l-2 pl-12 py-4 ${
+        role="status"
+        className={`flex items-start gap-12 border p-16 ${
           alreadyExisted
-            ? "border-[var(--st-run)]"
-            : "border-[var(--st-ok)]"
+            ? "border-[var(--st-run-border)] bg-[var(--st-run-bg)]"
+            : "border-[var(--st-ok-border)] bg-[var(--st-ok-bg)]"
         }`}
       >
         <OutcomeIcon
-          size={18}
+          size={24}
           weight="fill"
           aria-hidden
-          className={`mt-px shrink-0 ${
+          className={`shrink-0 ${
             alreadyExisted
               ? "text-[var(--st-run)]"
               : "text-[var(--st-ok)]"
           }`}
         />
-        <p className="body-small text-[var(--color-text-primary)]">
-          <span className="font-mono">{externalId}</span>{" "}
-          {alreadyExisted
-            ? "already exists for this period, with"
-            : "created with"}{" "}
-          <strong className="font-medium">
-            {formatCount(linkedCount, "Removal")}
-          </strong>
-          .
-        </p>
+        <div className="flex min-w-0 flex-col gap-8">
+          <div className="flex flex-col gap-2">
+            <p className="body-medium font-medium text-[var(--color-text-primary)]">
+              {alreadyExisted
+                ? "Statement synced successfully"
+                : "Statement created successfully"}
+            </p>
+            <p className="body-small text-[var(--color-text-secondary)]">
+              {alreadyExisted
+                ? `The existing statement has ${formatCount(linkedCount, "linked Removal")}.`
+                : `${formatCount(linkedCount, "Removal")} linked from this reporting period.`}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className="label-micro text-[var(--color-text-tertiary)]">
+              Registry ID
+            </span>
+            <span className="body-caption break-all font-mono text-[var(--color-text-primary)]">
+              {externalId}
+            </span>
+          </div>
+        </div>
       </div>
       {warnings.length > 0 && (
-        <div className="flex flex-col gap-8 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-          <span className="inline-flex items-center gap-6 body-caption uppercase tracking-wide text-[var(--color-signal-orange)]">
-            <WarningIcon size={14} weight="fill" aria-hidden />
-            {warnings.length} {warnings.length === 1 ? "warning" : "warnings"}
-          </span>
-          <ul className="flex flex-col gap-4">
-            {warnings.map((w) => (
-              <li
-                key={w}
-                className="body-caption text-[var(--color-text-secondary)]"
+        <Accordion.Root className="gap-0" defaultValue={[]}>
+          <Accordion.Item
+            value={RESULT_WARNINGS_ITEM}
+            className={CERTIFICATION_ACCORDION_ITEM}
+          >
+            <Accordion.Header>
+              <Accordion.Trigger
+                className={CERTIFICATION_ACCORDION_TRIGGER}
+                labelClassName={CERTIFICATION_ACCORDION_LABEL}
               >
-                {w}
-              </li>
-            ))}
-          </ul>
-        </div>
+                <span className="flex w-full items-center justify-between gap-12">
+                  <span className="inline-flex items-center gap-8">
+                    <WarningIcon
+                      size={16}
+                      weight="fill"
+                      aria-hidden
+                      className="shrink-0 text-[var(--color-signal-orange)]"
+                    />
+                    Review warnings
+                  </span>
+                  <span className="body-caption font-normal text-[var(--color-signal-orange)]">
+                    {formatCount(warnings.length, "warning")}
+                  </span>
+                </span>
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Panel className="[&>div]:p-0">
+              <p className="body-caption border-b border-[var(--color-border-tertiary)] px-16 py-10 text-[var(--color-text-secondary)]">
+                The statement is saved. These linked Removals need attention in
+                noma.
+              </p>
+              <ul className="flex max-h-[280px] flex-col overflow-y-auto">
+                {warnings.map((warning, index) => (
+                  <li
+                    key={`${index}-${warning}`}
+                    className="body-caption border-b border-[var(--color-border-tertiary)] px-16 py-10 text-[var(--color-text-secondary)] last:border-b-0"
+                  >
+                    {warning}
+                  </li>
+                ))}
+              </ul>
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion.Root>
       )}
     </div>
   );
