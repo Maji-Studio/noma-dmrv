@@ -34,6 +34,7 @@ import {
 } from "@/db/schema";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { deriveLaneStock } from "./lane-stock-derivation";
+import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 import { requireOrgScope } from "./utils";
 
 // ============================================
@@ -294,7 +295,10 @@ export async function enrichStorageLocationRows(
             biocharEquivalentKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
-                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
+                  ${sourceBiocharMassKgSql(
+                    biocharProducts.massKg,
+                    biocharProducts.composition,
+                  )}
                 ),
                 0
               )
@@ -443,7 +447,10 @@ export async function enrichStorageLocationRows(
               pr.biochar_storage_location_id,
               'out',
               bp.created_at,
-              COALESCE(bp.mass_kg, 0) * COALESCE(bp.biochar_ratio, f.biochar_ratio, 1),
+              ${sourceBiocharMassKgSql(
+                sql.raw("bp.mass_kg"),
+                sql.raw("bp.composition"),
+              )},
               CASE
                 WHEN bp.mass_kg IS NULL
                   OR pr.biochar_output_kg IS NULL
@@ -451,8 +458,10 @@ export async function enrichStorageLocationRows(
                   OR pr.biochar_dry_mass_kg IS NULL
                 THEN NULL
                 ELSE
-                  bp.mass_kg
-                  * COALESCE(bp.biochar_ratio, f.biochar_ratio, 1)
+                  ${sourceBiocharMassKgSql(
+                    sql.raw("bp.mass_kg"),
+                    sql.raw("bp.composition"),
+                  )}
                   * pr.biochar_dry_mass_kg
                   / pr.biochar_output_kg
               END,

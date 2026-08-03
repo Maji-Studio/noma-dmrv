@@ -33,8 +33,9 @@ import {
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import {
+  deriveSourceBiocharMassKg,
   fromCompositionJsonb,
-  shouldPrefillSuggestedMasses,
+  SOURCE_BIOCHAR_MASS_ERROR,
   useBiocharComposition,
 } from "@/lib/biochar-composition";
 import { IngredientBinRows } from "./ingredient-bin-rows";
@@ -280,6 +281,9 @@ export function BiocharProductForm({
 }: BiocharProductFormProps) {
   const formId = useId();
   const isEditMode = !!product;
+  const hasFrozenSourceAllocation = Boolean(
+    product?.sourceBiocharStorageLocationId,
+  );
   const initialFormulationId =
     product?.formulation?.id ?? product?.formulationId ?? null;
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -323,6 +327,7 @@ export function BiocharProductForm({
   const storageLocationId = useWatch({ control, name: "storageLocationId" });
   const selectedFormulationId = useWatch({ control, name: "formulationId" });
   const watchedMassKg = useWatch({ control, name: "massKg" });
+  const watchedIngredientBins = useWatch({ control, name: "ingredientBins" });
   const watchedMoisture = useWatch({ control, name: "moistureContentPercent" });
   const watchedWaterAddedKg = useWatch({ control, name: "waterAddedKg" });
 
@@ -331,11 +336,6 @@ export function BiocharProductForm({
     formulationId: selectedFormulationId,
     facilityId: selectedFacilityId,
     productMassKg: massKgNumForComposition,
-    prefillSuggestedMasses: shouldPrefillSuggestedMasses({
-      isEditMode,
-      initialFormulationId,
-      selectedFormulationId,
-    }),
   });
 
   const { data: selectedSourceBiocharBin } = useEntityById(
@@ -377,16 +377,10 @@ export function BiocharProductForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
 
-  const effectiveBiocharRatio =
-    isEditMode &&
-    selectedFormulationId === initialFormulationId &&
-    product?.biocharRatio != null
-      ? product.biocharRatio
-      : (composition.biocharRatio ?? 1);
-  const requestedBiocharKg =
-    typeof watchedMassKg === "number"
-      ? watchedMassKg * effectiveBiocharRatio
-      : null;
+  const requestedBiocharKg = deriveSourceBiocharMassKg(
+    typeof watchedMassKg === "number" ? watchedMassKg : null,
+    watchedIngredientBins,
+  );
   const { data: biocharAvailability } = useStockAvailability(
     sourceBiocharStorageLocationId
       ? {
@@ -397,24 +391,29 @@ export function BiocharProductForm({
       : null,
   );
   const biocharStockError =
-    requestedBiocharKg !== null &&
-    biocharAvailability &&
-    biocharAvailability.availableKg !== null &&
-    isStockOverdraw(requestedBiocharKg, biocharAvailability.availableKg)
-      ? binStockOverdrawInlineMessage(
-          "biochar",
-          biocharAvailability.availableKg,
-        )
-      : undefined;
+    requestedBiocharKg !== null && requestedBiocharKg < 0
+      ? SOURCE_BIOCHAR_MASS_ERROR
+      : requestedBiocharKg !== null &&
+          biocharAvailability &&
+          biocharAvailability.availableKg !== null &&
+          isStockOverdraw(requestedBiocharKg, biocharAvailability.availableKg)
+        ? binStockOverdrawInlineMessage(
+            "biochar",
+            biocharAvailability.availableKg,
+          )
+        : undefined;
   const massFieldFingerprint = [
     sourceBiocharStorageLocationId,
     selectedFormulationId,
     watchedMassKg,
+    ...(watchedIngredientBins ?? []).map((ingredient) => ingredient.massKg),
   ].join(":");
   const routedServerError = useInlineStockServerError(
     errorMessage,
     massFieldFingerprint,
-    (message) => message === binStockOverdrawMessage("biochar"),
+    (message) =>
+      message === binStockOverdrawMessage("biochar") ||
+      message === SOURCE_BIOCHAR_MASS_ERROR,
   );
   const massKgError =
     errors.massKg?.message ??
@@ -585,7 +584,10 @@ export function BiocharProductForm({
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
           }}
           splitFooter={
-            (biocharStockError || routedServerError.inlineError) && (
+            ((biocharStockError !== undefined &&
+              biocharStockError !== SOURCE_BIOCHAR_MASS_ERROR) ||
+              routedServerError.inlineError ===
+                binStockOverdrawMessage("biochar")) && (
               <StockReconciliationLink facilityId={contextFacilityId} />
             )
           }
@@ -664,7 +666,11 @@ export function BiocharProductForm({
         </FormField>
 
         {/* Blend ingredients — each drawn from the feedstock bin holding it */}
-        <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
+        <IngredientBinRows
+          composition={composition}
+          isSubmitting={isSubmitting}
+          allocationFrozen={hasFrozenSourceAllocation}
+        />
 
         <FormField
           id="storageLocationId"

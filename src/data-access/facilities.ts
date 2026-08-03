@@ -16,7 +16,6 @@ import {
   productionRuns,
   productionRunFeedstocks,
   biocharProducts,
-  formulations,
   orders,
   deliveries,
   applications,
@@ -29,6 +28,7 @@ import {
 import { hasBlockingFacilitySubmission } from "./certification";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 
 // Individual entity archives originate from JavaScript Date values and are
 // stored at whole-millisecond precision. Facility cascades use a database
@@ -254,9 +254,9 @@ export async function getFacilities(
               COALESCE(
                 SUM(
                   CASE
-                    WHEN jsonb_typeof(ingredient.value -> 'massKg') = 'number'
-                      AND (ingredient.value ->> 'massKg')::numeric > 0
-                    THEN (ingredient.value ->> 'massKg')::numeric
+                    WHEN jsonb_typeof(ingredient.value -> 'massDryKg') = 'number'
+                      AND (ingredient.value ->> 'massDryKg')::numeric > 0
+                    THEN (ingredient.value ->> 'massDryKg')::numeric
                     ELSE 0
                   END
                 ),
@@ -305,14 +305,16 @@ export async function getFacilities(
             totalAllocatedKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
-                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
+                  ${sourceBiocharMassKgSql(
+                    biocharProducts.massKg,
+                    biocharProducts.composition,
+                  )}
                 ),
                 0
               )
             `),
           })
           .from(biocharProducts)
-          .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
           .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId)))
           .groupBy(biocharProducts.facilityId),
         db

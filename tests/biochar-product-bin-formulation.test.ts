@@ -18,12 +18,15 @@ import {
   createBiocharProduct,
   updateBiocharProduct,
 } from "@/data-access/biochar-products";
+import { updateFormulation } from "@/data-access/formulations";
 import { getEntityById } from "@/data-access/entities";
+import { getStockAvailability } from "@/data-access/stock-availability";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
 import { productionRuns } from "@/db/schema/production";
 import {
   biocharProducts,
+  biocharProductSourceAllocations,
   formulationIngredients,
   formulations,
 } from "@/db/schema/products";
@@ -45,6 +48,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
   const createdBinIds: string[] = [];
   const createdFeedstockIds: string[] = [];
   const createdProductIds: string[] = [];
+  const createdSourceRunIds: string[] = [];
 
   beforeAll(() => ensureTestOrg());
 
@@ -171,6 +175,13 @@ beforeAll(async () => {
     if (runId) {
       await cleanup(() => db.delete(productionRuns).where(eq(productionRuns.id, runId)));
     }
+    if (createdSourceRunIds.length > 0) {
+      await cleanup(() =>
+        db
+          .delete(productionRuns)
+          .where(inArray(productionRuns.id, createdSourceRunIds)),
+      );
+    }
     if (reactorId) {
       await cleanup(() => db.delete(reactors).where(eq(reactors.id, reactorId)));
     }
@@ -236,8 +247,36 @@ beforeAll(async () => {
     return bin.id;
   }
 
-  async function makeStockedFeedstockBin(massDryKg: number): Promise<string> {
+  async function makeBiocharBin(): Promise<string> {
+    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const [bin] = await db
+      .insert(storageLocations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `BIN-PBF-BC-${suffix}`,
+        name: `PBF Biochar Bin ${tag} ${suffix}`,
+        type: "biochar_bin",
+        facilityId,
+      })
+      .returning({ id: storageLocations.id });
+    createdBinIds.push(bin.id);
+    return bin.id;
+  }
+
+  async function makeStockedFeedstockBin(
+    massDryKg: number,
+    massWetKg = massDryKg,
+  ): Promise<string> {
     const binId = await makeFeedstockBin(blendTypeAId);
+    await addCompletedFeedstock(binId, massDryKg, massWetKg);
+    return binId;
+  }
+
+  async function addCompletedFeedstock(
+    binId: string,
+    massDryKg: number,
+    massWetKg = massDryKg,
+  ): Promise<void> {
     const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [feedstock] = await db
       .insert(feedstocks)
@@ -248,11 +287,13 @@ beforeAll(async () => {
         status: "complete",
         feedstockTypeId: blendTypeAId,
         massDryKg,
+        massWetKg,
+        moistureContentPercent:
+          massWetKg > 0 ? ((massWetKg - massDryKg) / massWetKg) * 100 : 0,
         storageLocationId: binId,
       })
       .returning({ id: feedstocks.id });
     createdFeedstockIds.push(feedstock.id);
-    return binId;
   }
 
   function baseProductInput() {
@@ -402,7 +443,7 @@ beforeAll(async () => {
     ).rejects.toThrow("Feedstock bin must match the formulation material");
   });
 
-  it("rejects a positive ingredient draw from an empty bin", async () => {
+  it("requires a wet-mass and moisture basis for an ingredient draw", async () => {
     const productBinId = await makeProductBin(formulationAId);
     const ingredientBinId = await makeFeedstockBin(blendTypeAId);
     const composition = formulationAComposition();
@@ -416,7 +457,87 @@ beforeAll(async () => {
         storageLocationId: productBinId,
         composition,
       }),
-    ).rejects.toThrow("Not enough feedstock in this bin");
+    ).rejects.toThrow("no complete wet-mass and moisture basis");
+  });
+
+  it("stores ingredient wet mass and deducts its frozen dry-mass basis", async () => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const productBinId = await makeProductBin(formulationAId);
+    const ingredientBinId = await makeStockedFeedstockBin(80, 100);
+    const composition = formulationAComposition();
+    composition.ingredients[0].massKg = 50;
+    composition.ingredients[0].storageLocationId = ingredientBinId;
+
+    const product = await createBiocharProduct(ctx, {
+      ...baseProductInput(),
+      formulationId: formulationAId,
+      storageLocationId: productBinId,
+      composition,
+    });
+    createdProductIds.push(product.id);
+
+    const [ingredient] = (
+      product.composition as {
+        ingredients: Array<{
+          massKg: number;
+          massDryKg: number;
+          moistureContentPercent: number;
+        }>;
+      }
+    ).ingredients;
+    expect(ingredient).toMatchObject({
+      massKg: 50,
+      massDryKg: 40,
+      moistureContentPercent: 20,
+    });
+
+    const ingredientBin = await getEntityById(
+      ctx,
+      "storageLocation",
+      ingredientBinId,
+    );
+    expect(ingredientBin?.subtitle).toContain("40 kg stored");
+  });
+
+  it("preserves a frozen ingredient basis when later intakes change bin moisture", async () => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const productBinId = await makeProductBin(formulationAId);
+    const ingredientBinId = await makeStockedFeedstockBin(80, 100);
+    const composition = formulationAComposition();
+    composition.ingredients[0].massKg = 50;
+    composition.ingredients[0].storageLocationId = ingredientBinId;
+
+    const product = await createBiocharProduct(ctx, {
+      ...baseProductInput(),
+      formulationId: formulationAId,
+      storageLocationId: productBinId,
+      composition,
+    });
+    createdProductIds.push(product.id);
+    await addCompletedFeedstock(ingredientBinId, 100, 100);
+
+    const updated = await updateBiocharProduct(ctx, product.id, {
+      composition: product.composition as Record<string, unknown>,
+    });
+    const [ingredient] = (
+      updated.composition as {
+        ingredients: Array<{
+          massDryKg: number;
+          moistureContentPercent: number;
+        }>;
+      }
+    ).ingredients;
+    expect(ingredient).toMatchObject({
+      massDryKg: 40,
+      moistureContentPercent: 20,
+    });
+
+    const ingredientBin = await getEntityById(
+      ctx,
+      "storageLocation",
+      ingredientBinId,
+    );
+    expect(ingredientBin?.subtitle).toContain("140 kg stored");
   });
 
   it("rejects an update that increases an ingredient draw beyond stock", async () => {
@@ -485,6 +606,219 @@ beforeAll(async () => {
       ingredientBinId,
     );
     expect(ingredientBin?.subtitle).toContain("40 kg stored");
+  });
+
+  it("withdraws recorded source mass, keeps allocations immutable, and blocks overdraw", async () => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const sourceBinId = await makeBiocharBin();
+    const ingredientBinId = await makeStockedFeedstockBin(40);
+    const [firstProductBinId, secondProductBinId] = await Promise.all([
+      makeProductBin(formulationAId),
+      makeProductBin(formulationAId),
+    ]);
+    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const [sourceRun] = await db
+      .insert(productionRuns)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `PR-PBF-SOURCE-${suffix}`,
+        facilityId,
+        reactorId,
+        status: "complete",
+        startTime: new Date("2026-02-01T08:00:00Z"),
+        endTime: new Date("2026-02-01T12:00:00Z"),
+        biocharStorageLocationId: sourceBinId,
+        biocharOutputKg: 80,
+        biocharDryMassKg: 72,
+        biocharMoisturePercent: 10,
+      })
+      .returning({ id: productionRuns.id });
+    createdSourceRunIds.push(sourceRun.id);
+
+    const composition = formulationAComposition();
+    composition.ingredients[0].massKg = 20;
+    composition.ingredients[0].storageLocationId = ingredientBinId;
+    const product = await createBiocharProduct(ctx, {
+      ...baseProductInput(),
+      linkedProductionRunId: null,
+      sourceBiocharStorageLocationId: sourceBinId,
+      formulationId: formulationAId,
+      storageLocationId: firstProductBinId,
+      massKg: 100,
+      composition,
+    });
+    createdProductIds.push(product.id);
+
+    const allocations = await db
+      .select({
+        allocatedWetMassKg:
+          biocharProductSourceAllocations.allocatedWetMassKg,
+        allocatedDryMassKg:
+          biocharProductSourceAllocations.allocatedDryMassKg,
+      })
+      .from(biocharProductSourceAllocations)
+      .where(
+        eq(biocharProductSourceAllocations.biocharProductId, product.id),
+      );
+    expect(product.massKg).toBe(100);
+    expect(product.biocharRatio).toBe(0.6);
+    expect(allocations).toEqual([
+      { allocatedWetMassKg: 80, allocatedDryMassKg: 72 },
+    ]);
+    await expect(
+      getStockAvailability(ctx, {
+        kind: "biocharProduct",
+        sourceBiocharStorageLocationId: sourceBinId,
+      }),
+    ).resolves.toEqual({ availableKg: 0 });
+
+    const metadataRefreshedComposition = {
+      ingredients: [
+        {
+          massKg: 20,
+          massDryKg: 20,
+          moistureContentPercent: 0,
+          storageLocationId: ingredientBinId,
+          ratio: 0.9,
+          feedstockTypeCategory: "refreshed-category",
+          feedstockTypeName: "Refreshed display name",
+          feedstockTypeId: blendTypeAId,
+          formulationIngredientId: formulationIngredientAId,
+        },
+      ],
+    };
+    await expect(
+      updateBiocharProduct(ctx, product.id, {
+        composition: metadataRefreshedComposition,
+      }),
+    ).resolves.toMatchObject({ id: product.id });
+    await expect(
+      db
+        .select({
+          allocatedWetMassKg:
+            biocharProductSourceAllocations.allocatedWetMassKg,
+        })
+        .from(biocharProductSourceAllocations)
+        .where(
+          eq(biocharProductSourceAllocations.biocharProductId, product.id),
+        ),
+    ).resolves.toEqual([{ allocatedWetMassKg: 80 }]);
+
+    await updateFormulation(ctx, formulationAId, { biocharRatio: 0.7 });
+    try {
+      await expect(
+        db
+          .select({
+            allocatedWetMassKg:
+              biocharProductSourceAllocations.allocatedWetMassKg,
+            allocatedDryMassKg:
+              biocharProductSourceAllocations.allocatedDryMassKg,
+          })
+          .from(biocharProductSourceAllocations)
+          .where(
+            eq(biocharProductSourceAllocations.biocharProductId, product.id),
+          ),
+      ).resolves.toEqual([
+        { allocatedWetMassKg: 80, allocatedDryMassKg: 72 },
+      ]);
+      await expect(
+        getStockAvailability(ctx, {
+          kind: "biocharProduct",
+          sourceBiocharStorageLocationId: sourceBinId,
+        }),
+      ).resolves.toEqual({ availableKg: 0 });
+    } finally {
+      await updateFormulation(ctx, formulationAId, { biocharRatio: 0.6 });
+    }
+
+    const changedComposition = formulationAComposition();
+    changedComposition.ingredients[0].massKg = 25;
+    changedComposition.ingredients[0].storageLocationId = ingredientBinId;
+    await expect(
+      updateBiocharProduct(ctx, product.id, {
+        composition: changedComposition,
+      }),
+    ).rejects.toThrow("source allocation is fixed");
+    await expect(
+      db
+        .select({
+          allocatedWetMassKg:
+            biocharProductSourceAllocations.allocatedWetMassKg,
+        })
+        .from(biocharProductSourceAllocations)
+        .where(
+          eq(biocharProductSourceAllocations.biocharProductId, product.id),
+        ),
+    ).resolves.toEqual([{ allocatedWetMassKg: 80 }]);
+
+    const overdrawComposition = formulationAComposition();
+    overdrawComposition.ingredients[0].massKg = 5;
+    overdrawComposition.ingredients[0].storageLocationId = ingredientBinId;
+    await expect(
+      createBiocharProduct(ctx, {
+        ...baseProductInput(),
+        linkedProductionRunId: null,
+        sourceBiocharStorageLocationId: sourceBinId,
+        formulationId: formulationAId,
+        storageLocationId: secondProductBinId,
+        massKg: 10,
+        composition: overdrawComposition,
+      }),
+    ).rejects.toThrow("Not enough biochar in this bin");
+  });
+
+  it("updates legacy blend mass without requiring a missing ingredient bin", async () => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const sourceBinId = await makeBiocharBin();
+    const productBinId = await makeProductBin(formulationAId);
+    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const [sourceRun] = await db
+      .insert(productionRuns)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `PR-PBF-LEGACY-${suffix}`,
+        facilityId,
+        reactorId,
+        status: "complete",
+        startTime: new Date("2026-02-02T08:00:00Z"),
+        endTime: new Date("2026-02-02T12:00:00Z"),
+        biocharStorageLocationId: sourceBinId,
+        biocharOutputKg: 100,
+        biocharDryMassKg: 90,
+        biocharMoisturePercent: 10,
+      })
+      .returning({ id: productionRuns.id });
+    createdSourceRunIds.push(sourceRun.id);
+
+    const [legacyProduct] = await db
+      .insert(biocharProducts)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `BP-PBF-LEGACY-${suffix}`,
+        facilityId,
+        linkedProductionRunId: sourceRun.id,
+        formulationId: formulationAId,
+        storageLocationId: productBinId,
+        massKg: 50,
+        moistureContentPercent: 2,
+        waterAddedKg: 0,
+        composition: {
+          ingredients: [
+            {
+              formulationIngredientId: formulationIngredientAId,
+              feedstockTypeId: blendTypeAId,
+              massKg: 20,
+              storageLocationId: null,
+            },
+          ],
+        },
+      })
+      .returning({ id: biocharProducts.id });
+    createdProductIds.push(legacyProduct.id);
+
+    await expect(
+      updateBiocharProduct(ctx, legacyProduct.id, { massKg: 60 }),
+    ).resolves.toMatchObject({ massKg: 60 });
   });
 
   it("keeps the snapshot ratio when the formulation's live ratio changes", async () => {

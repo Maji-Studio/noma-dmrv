@@ -56,10 +56,20 @@ const ingredientBinBaseSchema = z.object({
   feedstockTypeName: z.string(),
   feedstockTypeCategory: z.string(),
   // Recipe share snapshot — orientation only. The entered massKg is the
-  // record of what actually went into the blend; it is never validated
-  // against the ratio (deviation surfaces as a soft UI hint instead).
+  // wet/as-received record of what actually went into the blend; it is never
+  // validated against the ratio (deviation surfaces as a soft UI hint instead).
   ratio: z.number().min(0).max(1).optional().nullable(),
   massKg: massKgSchema("Ingredient mass must be 0 or greater"),
+  // Server-derived allocation snapshots. The client carries these through an
+  // edit, but create/update data access remains authoritative for their values.
+  massDryKg: massKgSchema("Ingredient dry mass must be 0 or greater")
+    .optional()
+    .nullable(),
+  moistureContentPercent: storedPercentSchema()
+    .min(MOISTURE_MIN)
+    .max(MOISTURE_MAX)
+    .optional()
+    .nullable(),
 });
 
 const ingredientBinFormSchema = ingredientBinBaseSchema.extend({

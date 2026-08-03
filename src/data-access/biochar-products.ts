@@ -119,6 +119,8 @@ import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards"
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import {
   assertCompositionIngredientDrawsWithinStock,
+  compositionAllocationChanged,
+  resolveCompositionIngredientMassBasis,
   validateCompositionIngredientBins,
 } from "./biochar-product-composition";
 import {
@@ -577,6 +579,11 @@ export async function updateBiocharProduct(
       data.formulationId !== existing.formulationId) ||
     (data.massKg !== undefined &&
       data.massKg !== existing.massKg) ||
+    (data.composition !== undefined &&
+      compositionAllocationChanged(
+        existing.composition as Record<string, unknown> | null,
+        data.composition,
+      )) ||
     (data.linkedProductionRunId !== undefined &&
       data.linkedProductionRunId !==
         existing.linkedProductionRunId);
@@ -585,7 +592,7 @@ export async function updateBiocharProduct(
     changesSourceAllocation
   ) {
     throw new SafeError(
-      "This product's source allocation is fixed. Delete and recreate the product to change its facility, formulation, mass, or source.",
+      "This product's source allocation is fixed. Delete and recreate the product to change its facility, formulation, blend mass, ingredients, or source.",
     );
   }
 
@@ -740,9 +747,8 @@ export async function updateBiocharProduct(
       transactionLinkedRunId,
       transactionStorageId,
       transactionMassKg,
-      transactionComposition,
-      transactionBiocharRatio,
     } = stockState;
+    let { transactionComposition } = stockState;
 
     // Re-snapshot the recipe's biochar ratio only when the product is pointed
     // at a different formulation — editing a formulation never rewrites the
@@ -802,6 +808,15 @@ export async function updateBiocharProduct(
         transactionFacilityId
       );
       if (data.composition !== undefined) {
+        if (!locked.sourceBiocharStorageLocationId) {
+          transactionComposition =
+            await resolveCompositionIngredientMassBasis(
+              ctx,
+              tx,
+              transactionComposition,
+              locked.composition as Record<string, unknown> | null,
+            );
+        }
         await assertCompositionIngredientDrawsWithinStock(
           ctx,
           tx,
@@ -847,22 +862,23 @@ export async function updateBiocharProduct(
       }
     }
 
-    await assertBiocharProductUpdateDraw(ctx, tx, productId, data, {
+    const persistedData =
+      data.composition !== undefined
+        ? { ...data, composition: transactionComposition ?? {} }
+        : data;
+    await assertBiocharProductUpdateDraw(ctx, tx, productId, persistedData, {
       transactionFacilityId,
       transactionFormulationId,
       transactionLinkedRunId,
       transactionStorageId,
       transactionMassKg,
       transactionComposition,
-      transactionBiocharRatio: formulationChanged
-        ? biocharRatioSnapshot ?? null
-        : transactionBiocharRatio,
     });
 
     const [row] = await tx
       .update(biocharProducts)
       .set({
-        ...data,
+        ...persistedData,
         ...(biocharRatioSnapshot !== undefined && { biocharRatio: biocharRatioSnapshot }),
         ...(derivedProductionDate && { productionDate: derivedProductionDate }),
         updatedAt: new Date(),

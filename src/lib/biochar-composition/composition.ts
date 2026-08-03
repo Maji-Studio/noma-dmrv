@@ -3,7 +3,7 @@
  *
  * Server-safe (no React, no DB, no Zod). All transforms between the form
  * shape (`IngredientBin[]`) and the persisted JSONB envelope live here, plus
- * the formulation-driven reconcile and the removal-kg derivation.
+ * the formulation-driven reconcile and source-biochar mass derivation.
  */
 
 import type { IngredientBin } from "./types";
@@ -46,16 +46,18 @@ export function reconcileComposition(
       ratio: ing.ratio ?? null,
       storageLocationId: sameFeedstockType ? prior?.storageLocationId ?? null : null,
       massKg: prior?.massKg ?? null,
+      massDryKg: sameFeedstockType ? prior?.massDryKg ?? null : null,
+      moistureContentPercent: sameFeedstockType
+        ? prior?.moistureContentPercent ?? null
+        : null,
     };
   });
 }
 
 /**
- * Recipe-suggested mass for a single ingredient =
- * productMassKg * ingredientRatio.
- * Orientation only — prefills the editable mass field; the entered mass is
- * authoritative. Formulation ratios partition the total solid blend, so the
- * product mass is already the correct basis. Returns null whenever either
+ * Recipe-suggested mass for a single ingredient = productMassKg *
+ * ingredientRatio. This value only prefills the editable mass field; the
+ * recorded mass is authoritative for allocation. Returns null whenever either
  * input is missing or non-positive.
  */
 export function deriveSuggestedIngredientMassKg(
@@ -74,21 +76,53 @@ export function deriveSuggestedIngredientMassKg(
   return mass * ingredient;
 }
 
+interface IngredientMassLike {
+  massKg?: unknown;
+}
+
+export const SOURCE_BIOCHAR_MASS_ERROR =
+  "Recorded ingredient mass exceeds blend mass. Reduce ingredient mass or increase blend mass.";
+
+export const GRAMS_PER_KILOGRAM = 1_000;
+
+export function toPersistedMassGrams(massKg: number): number {
+  return Math.round(massKg * GRAMS_PER_KILOGRAM);
+}
+
+/** Sum the actual wet ingredient masses recorded for one product blend. */
+function sumRecordedIngredientMassKg(
+  ingredients: readonly IngredientMassLike[] | null | undefined,
+): number {
+  const totalGrams = (ingredients ?? []).reduce((total, ingredient) => {
+    const massKg = ingredient.massKg;
+    return total +
+      (typeof massKg === "number" && Number.isFinite(massKg) && massKg > 0
+        ? toPersistedMassGrams(massKg)
+        : 0);
+  }, 0);
+  return totalGrams / GRAMS_PER_KILOGRAM;
+}
+
 /**
- * Suggestions may become form values only while creating a composition. An
- * existing product keeps saved null masses empty unless the operator explicitly
- * assigns a different formulation, whose ingredient rows have no saved facts.
+ * Source biochar is the recorded pre-water wet blend mass less recorded wet
+ * ingredient masses. Formulation shares are volume guidance and never enter
+ * this equation.
  */
-export function shouldPrefillSuggestedMasses(input: {
-  isEditMode: boolean;
-  initialFormulationId: string | null | undefined;
-  selectedFormulationId: string | null | undefined;
-}): boolean {
-  if (!input.selectedFormulationId) return false;
-  return (
-    !input.isEditMode ||
-    input.selectedFormulationId !== input.initialFormulationId
+export function deriveSourceBiocharMassKg(
+  blendMassKg: number | null | undefined,
+  ingredients: readonly IngredientMassLike[] | null | undefined,
+): number | null {
+  if (
+    typeof blendMassKg !== "number" ||
+    !Number.isFinite(blendMassKg)
+  ) {
+    return null;
+  }
+  const blendMassGrams = toPersistedMassGrams(blendMassKg);
+  const ingredientMassGrams = toPersistedMassGrams(
+    sumRecordedIngredientMassKg(ingredients),
   );
+  return (blendMassGrams - ingredientMassGrams) / GRAMS_PER_KILOGRAM;
 }
 
 /**
@@ -134,6 +168,12 @@ export function fromCompositionJsonb(raw: unknown): IngredientBin[] {
       (bin.ratio == null || Number.isFinite(bin.ratio)) &&
       (bin.massKg == null ||
         (Number.isFinite(bin.massKg) && bin.massKg >= 0)) &&
+      (bin.massDryKg == null ||
+        (Number.isFinite(bin.massDryKg) && bin.massDryKg >= 0)) &&
+      (bin.moistureContentPercent == null ||
+        (Number.isFinite(bin.moistureContentPercent) &&
+          bin.moistureContentPercent >= 0 &&
+          bin.moistureContentPercent <= 100)) &&
       (bin.storageLocationId == null ||
         typeof bin.storageLocationId === "string")
     );
