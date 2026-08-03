@@ -33,8 +33,8 @@ describe("biochar-product ingredient draws", () => {
     ).toEqual([{ storageLocationId: "feedstock-bin-1", massKg: 70 }]);
   });
 
-  it("requires a bin for every positive ingredient mass", () => {
-    expect(() =>
+  it("allows a positive ingredient mass without a tracked source bin", () => {
+    expect(
       getCompositionIngredientDraws({
         ingredients: [
           {
@@ -45,7 +45,7 @@ describe("biochar-product ingredient draws", () => {
           },
         ],
       }),
-    ).toThrow("Choose a feedstock bin");
+    ).toEqual([]);
   });
 });
 

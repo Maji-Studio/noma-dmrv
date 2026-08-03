@@ -429,6 +429,67 @@ beforeAll(async () => {
     ).rejects.toThrow("Feedstock bin must match the formulation material");
   });
 
+  it("creates a blend without requiring an ingredient source bin", async () => {
+    const blendWetMassKg = 500;
+    const sourceRunWetMassKg = 500;
+    const sourceRunDryMassKg = 450;
+    const sourceRunMoisturePercent = 10;
+    const ingredientMassKg = 100;
+    const sourceBinId = await makeBiocharBin();
+    const productBinId = await makeProductBin(formulationAId);
+    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const [sourceRun] = await db
+      .insert(productionRuns)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `PR-PBF-OPTIONAL-INGREDIENT-BIN-${suffix}`,
+        facilityId,
+        reactorId,
+        status: "complete",
+        startTime: new Date("2026-02-03T08:00:00Z"),
+        endTime: new Date("2026-02-03T12:00:00Z"),
+        biocharStorageLocationId: sourceBinId,
+        biocharOutputKg: sourceRunWetMassKg,
+        biocharDryMassKg: sourceRunDryMassKg,
+        biocharMoisturePercent: sourceRunMoisturePercent,
+      })
+      .returning({ id: productionRuns.id });
+    createdSourceRunIds.push(sourceRun.id);
+
+    const composition = formulationAComposition();
+    composition.ingredients[0].massKg = ingredientMassKg;
+
+    const product = await createBiocharProduct(
+      makeTestOrgContext(TEST_USER_ID),
+      {
+        ...baseProductInput(),
+        linkedProductionRunId: null,
+        sourceBiocharStorageLocationId: sourceBinId,
+        formulationId: formulationAId,
+        storageLocationId: productBinId,
+        massKg: blendWetMassKg,
+        composition,
+      },
+    );
+    createdProductIds.push(product.id);
+
+    const [allocation] = await db
+      .select({
+        allocatedWetMassKg:
+          biocharProductSourceAllocations.allocatedWetMassKg,
+        allocatedDryMassKg:
+          biocharProductSourceAllocations.allocatedDryMassKg,
+      })
+      .from(biocharProductSourceAllocations)
+      .where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
+
+    if (!allocation) {
+      throw new Error("Expected a source allocation for the blended product");
+    }
+    expect(allocation.allocatedWetMassKg).toBeLessThan(sourceRunWetMassKg);
+    expect(allocation.allocatedDryMassKg).toBeLessThan(sourceRunDryMassKg);
+  });
+
   it("rejects a positive ingredient draw from an empty bin", async () => {
     const productBinId = await makeProductBin(formulationAId);
     const ingredientBinId = await makeFeedstockBin(blendTypeAId);

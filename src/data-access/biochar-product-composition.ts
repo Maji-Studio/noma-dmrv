@@ -141,11 +141,9 @@ export function getCompositionIngredientDraws(
   const byStorageLocation = new Map<string, number>();
   for (const ref of getCompositionIngredientRefs(composition)) {
     if (ref.massKg <= 0) continue;
-    if (!ref.storageLocationId) {
-      throw new SafeError(
-        "Choose a feedstock bin for every ingredient with a positive mass",
-      );
-    }
+    // A source bin is optional. The ingredient mass still contributes to the
+    // blend composition; only explicitly tracked bins produce stock draws.
+    if (!ref.storageLocationId) continue;
     byStorageLocation.set(
       ref.storageLocationId,
       (byStorageLocation.get(ref.storageLocationId) ?? 0) + ref.massKg,
