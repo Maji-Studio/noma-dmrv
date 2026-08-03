@@ -141,7 +141,7 @@ export function CustomerLocationDetails({
             </p>
           ) : (
             <p className="body-medium text-[var(--color-text-tertiary)]">
-              No street address on file
+              No site description recorded
             </p>
           )}
           {localityLine && (

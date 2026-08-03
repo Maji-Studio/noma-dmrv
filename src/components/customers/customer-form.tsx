@@ -290,8 +290,8 @@ function CreateModeLocationsSection({
                       </p>
                     ) : null}
                     <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
-                      {loc.address}
-                      {`, ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`}
+                      {loc.address ? `${loc.address}, ` : ""}
+                      {`${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`}
                     </p>
                   </div>
                 </div>
