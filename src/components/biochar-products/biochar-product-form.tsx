@@ -86,7 +86,7 @@ export function BiocharSourceMassFields({
 export function prepareBiocharProductSubmission(
   data: BiocharProductFormData,
   allocationFrozen: boolean,
-  persistedBlendMassKg?: number | null,
+  persistedBlendMassKg?: number,
 ): BiocharProductFormData {
   const massKg =
     persistedBlendMassKg !== undefined
@@ -503,7 +503,7 @@ export function BiocharProductForm({
       prepareBiocharProductSubmission(
         data as BiocharProductFormData,
         hasFrozenSourceAllocation,
-        isEditMode ? product?.massKg ?? null : undefined,
+        isEditMode ? product?.massKg ?? undefined : undefined,
       ),
     );
   });

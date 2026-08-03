@@ -68,7 +68,6 @@ describe("prepareBiocharProductSubmission", () => {
     // stored total must never be rebuilt from them.
     expect(prepareBiocharProductSubmission(data, false, 90).massKg).toBe(90);
     expect(prepareBiocharProductSubmission(data, true, 90).massKg).toBe(90);
-    expect(prepareBiocharProductSubmission(data, false, null).massKg).toBeNull();
   });
 
   it("omits immutable composition from a frozen allocation update", () => {
