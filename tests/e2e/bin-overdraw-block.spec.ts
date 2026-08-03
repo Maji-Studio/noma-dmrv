@@ -526,7 +526,8 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
     adminPage: page,
     seededData,
   }) => {
-    // A 150 kg blend less 45 kg ingredient = 105 kg from a 100 kg-output run.
+    // This formulation has no ingredient lines, so 101 kg requires 101 kg from
+    // the 100 kg-output run and must be rejected.
     const productBin = await createProductBin(seededData);
     try {
       await createCompleteRun(page, seededData, {
@@ -537,17 +538,17 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
         page,
         seededData,
         productBin,
-        "150",
+        "101",
       );
 
       const error = page.locator("#massKg-error");
       await expect(error).toBeVisible({ timeout: 10000 });
       await expect(error).toHaveText(biocharOverdrawText);
 
-      await page.fill('input[name="massKg"]', "140");
+      await page.fill('input[name="massKg"]', "100");
       await expect(error).toBeHidden();
 
-      await page.fill('input[name="massKg"]', "150");
+      await page.fill('input[name="massKg"]', "101");
       await submitProductCreate(page);
       await expect(error).toBeVisible({ timeout: 10000 });
     } finally {
@@ -559,7 +560,8 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
     adminPage: page,
     seededData,
   }) => {
-    // A 140 kg blend less 42 kg ingredient = 98 kg, within the 100 kg output.
+    // This formulation has no ingredient lines, so 100 kg draws exactly the
+    // 100 kg available from the run.
     const productBin = await createProductBin(seededData);
     let productCreated = false;
     try {
@@ -571,7 +573,7 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
         page,
         seededData,
         productBin,
-        "140",
+        "100",
       );
       await submitProductCreate(page);
       await waitForSideSheetClose(page);
