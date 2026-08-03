@@ -41,6 +41,7 @@ import type {
 } from "@/data-access/certifier-ghg-statements";
 import type { CertifierRemovalRow } from "@/data-access/certifier-removals";
 import type { GhgStatementReportRow } from "@/data-access/ghg-statement-reports";
+import { hashVerifierToken } from "@/lib/certification/ghg-statement-report/verifier-url";
 import type { GhgStatement } from "@/lib/isometric";
 
 // ---------------------------------------------------------------------------
@@ -145,6 +146,7 @@ const REPORT_ID = "55555555-5555-4555-8555-555555555555";
 const REPORT_DOCUMENT_ID = "66666666-6666-4666-8666-666666666666";
 const GENERATED_REPORT_URL =
   `http://localhost:3100/api/ghg-statement-reports/${REPORT_ID}?token=opaque`;
+const AGED_PENDING_CAPABILITY_AT = new Date("2000-01-01T00:00:00.000Z");
 // Inside the reporting window (no prior statement → unbounded start, so any
 // completion on or before REPORTING_PERIOD_END is in-window).
 const IN_WINDOW_COMPLETED_ON = "2026-01-15";
@@ -232,6 +234,7 @@ function makeRemoteStatement(
 async function prepareGeneratedReportSubmission(
   remoteBefore: GhgStatement,
   pendingVerifierTokenHash: string | null = null,
+  pendingUpdatedAt = AGED_PENDING_CAPABILITY_AT,
 ): Promise<void> {
   vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteBefore);
   vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteBefore);
@@ -248,6 +251,7 @@ async function prepareGeneratedReportSubmission(
     lifecycle: "approved",
     sourceFingerprint: "a".repeat(64),
     pendingVerifierTokenHash,
+    updatedAt: pendingVerifierTokenHash ? pendingUpdatedAt : new Date(),
   } as GhgStatementReportRow);
 }
 
@@ -716,11 +720,32 @@ describe("submitGhgStatementToVerifier — recovery audit ordering", () => {
     );
   });
 
-  it("keeps a staged capability when a fresh read cannot prove application", async () => {
+  it("restages safely after an ambiguous failure receives stable fresh DRAFT confirmation", async () => {
     const remoteDraft = makeRemoteStatement();
-    await prepareGeneratedReportSubmission(remoteDraft, "pending-token-hash");
+    const remoteAfter = makeRemoteStatement({
+      status: "AWAITING_VERIFICATION",
+      ghg_statement_report_url: GENERATED_REPORT_URL,
+    });
+    await prepareGeneratedReportSubmission(remoteDraft);
     vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteDraft);
+    vi.mocked(isometric.submitGhgStatement).mockRejectedValue(
+      new Error("response lost"),
+    );
 
+    const ambiguous = await submitGhgStatementToVerifier(STATEMENT_ID, {
+      reportId: REPORT_ID,
+    });
+    expect(ambiguous).toMatchObject({ success: false });
+    expect(reportDA.clearPendingVerifierReportToken).not.toHaveBeenCalled();
+
+    const pendingTokenHash = hashVerifierToken("opaque");
+    await prepareGeneratedReportSubmission(
+      remoteDraft,
+      pendingTokenHash,
+      new Date(),
+    );
+    vi.mocked(reportActions.issueVerifierReportUrl).mockClear();
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteDraft);
     await expect(
       submitGhgStatementToVerifier(STATEMENT_ID, { reportId: REPORT_ID }),
     ).resolves.toMatchObject({
@@ -728,7 +753,52 @@ describe("submitGhgStatementToVerifier — recovery audit ordering", () => {
       error: expect.stringMatching(/still being reconciled/i),
     });
     expect(reportDA.clearPendingVerifierReportToken).not.toHaveBeenCalled();
+
+    await prepareGeneratedReportSubmission(remoteDraft, pendingTokenHash);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteDraft);
+    vi.mocked(isometric.submitGhgStatement).mockResolvedValue(remoteAfter);
+
+    await expect(
+      submitGhgStatementToVerifier(STATEMENT_ID, { reportId: REPORT_ID }),
+    ).resolves.toMatchObject({
+      success: true,
+      data: { remoteStatus: "AWAITING_VERIFICATION" },
+    });
+    expect(reportDA.clearPendingVerifierReportToken).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      { reportId: REPORT_ID, expectedTokenHash: pendingTokenHash },
+    );
+    expect(reportActions.issueVerifierReportUrl).toHaveBeenCalledOnce();
+  });
+
+  it("promotes a pending capability when a delayed read exposes stale DRAFT state", async () => {
+    const remoteDraft = makeRemoteStatement();
+    const remoteApplied = makeRemoteStatement({
+      status: "AWAITING_VERIFICATION",
+      ghg_statement_report_url: GENERATED_REPORT_URL,
+    });
+    await prepareGeneratedReportSubmission(
+      remoteDraft,
+      hashVerifierToken("opaque"),
+    );
+    vi.mocked(isometric.getGhgStatement).mockReset();
+    vi.mocked(isometric.getGhgStatement)
+      .mockResolvedValueOnce(remoteDraft)
+      .mockResolvedValueOnce(remoteApplied);
+
+    await expect(
+      submitGhgStatementToVerifier(STATEMENT_ID, { reportId: REPORT_ID }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringMatching(/already awaiting verification/i),
+    });
+    expect(reportDA.promotePendingVerifierReportToken).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      { reportId: REPORT_ID, token: "opaque" },
+    );
+    expect(reportDA.clearPendingVerifierReportToken).not.toHaveBeenCalled();
     expect(reportActions.issueVerifierReportUrl).not.toHaveBeenCalled();
+    expect(isometric.submitGhgStatement).not.toHaveBeenCalled();
   });
 });
 

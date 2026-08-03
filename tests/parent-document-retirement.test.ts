@@ -654,6 +654,59 @@ describe("parent document retirement", () => {
     }
   });
 
+  it("drains never-attempted rows before an older eligible retry backlog", async () => {
+    const tag = crypto.randomUUID().slice(0, 8);
+    const newKey = `outbox/${tag}/never-attempted.pdf`;
+    const retryKeys = Array.from(
+      { length: DELETION_BATCH_SIZE },
+      (_, index) => `outbox/${tag}/retry-${index}.pdf`,
+    );
+    provider.objects.add(newKey);
+
+    try {
+      await db.insert(storageObjectDeletions).values([
+        ...retryKeys.map((storageKey) => ({
+          organizationId: TEST_ORG_ID,
+          storageProvider: provider.name,
+          storageBucket: provider.bucket,
+          storageKey,
+          attemptCount: 1,
+          lastAttemptAt: RETRY_BACKOFF_ELAPSED_AT,
+          lastErrorCode: "storage_delete_failed",
+          createdAt: RETRY_BACKOFF_ELAPSED_AT,
+        })),
+        {
+          organizationId: TEST_ORG_ID,
+          storageProvider: provider.name,
+          storageBucket: provider.bucket,
+          storageKey: newKey,
+        },
+      ]);
+
+      await expect(
+        processPendingStorageObjectDeletions(
+          makeTestOrgContext(TEST_USER_ID),
+        ),
+      ).resolves.toEqual({ completed: DELETION_BATCH_SIZE, failed: 0 });
+      expect(provider.deleteCalls[0]).toBe(newKey);
+      expect(provider.objects.has(newKey)).toBe(false);
+      const remainingRetries = await db
+        .select()
+        .from(storageObjectDeletions)
+        .where(
+          and(
+            inArray(storageObjectDeletions.storageKey, retryKeys),
+            isNull(storageObjectDeletions.completedAt),
+          ),
+        );
+      expect(remainingRetries).toHaveLength(1);
+    } finally {
+      await db
+        .delete(storageObjectDeletions)
+        .where(inArray(storageObjectDeletions.storageKey, [newKey, ...retryKeys]));
+    }
+  });
+
   it("retires a stale derived leg through the mirrored-evidence guard", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db

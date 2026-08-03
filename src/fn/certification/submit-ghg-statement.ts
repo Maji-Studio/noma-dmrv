@@ -14,6 +14,7 @@ import {
   clearPendingVerifierReportToken,
   getApprovedGhgStatementReport,
   promotePendingVerifierReportToken,
+  type GhgStatementReportRow,
 } from "@/data-access/ghg-statement-reports";
 import { getFacilityById } from "@/data-access/facilities";
 import { withFacilityDurabilitySessionLock } from "@/data-access/facility-durability-lock";
@@ -38,6 +39,7 @@ import {
   submitGhgStatement,
   type GhgStatement,
   type GhgStatementStatus,
+  type IsometricClient,
 } from "@/lib/isometric";
 import {
   buildGhgSubmitRequestPayload,
@@ -67,6 +69,9 @@ export interface SubmitGhgStatementResult {
 }
 
 const AMBIGUOUS_PROVIDER_FAILURE_STATUSES = new Set([408, 409, 425, 429]);
+const PENDING_CAPABILITY_MIN_AGE_MS = 30_000;
+const PENDING_CAPABILITY_CONFIRMATION_DELAY_MS = 250;
+type PendingCapabilityRecovery = "cleared" | "pending" | "promoted";
 
 function isDefinitiveProviderRejection(error: unknown): boolean {
   return (
@@ -77,6 +82,135 @@ function isDefinitiveProviderRejection(error: unknown): boolean {
     error.status < 500 &&
     !AMBIGUOUS_PROVIDER_FAILURE_STATUSES.has(error.status)
   );
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function pendingCapabilityAppearsApplied(args: {
+  remote: GhgStatement;
+  reportId: string;
+  pendingTokenHash: string;
+}): string | null {
+  const token = getVerifierTokenFromReportUrl(
+    args.remote.ghg_statement_report_url,
+    args.reportId,
+  );
+  return token &&
+    hashVerifierToken(token) === args.pendingTokenHash &&
+    args.remote.status !== "DRAFT"
+    ? token
+    : null;
+}
+
+function isUnsubmittedDraftWithoutPendingCapability(args: {
+  remote: GhgStatement;
+  reportId: string;
+  pendingTokenHash: string;
+}): boolean {
+  const token = getVerifierTokenFromReportUrl(
+    args.remote.ghg_statement_report_url,
+    args.reportId,
+  );
+  const hasPendingCapability =
+    token !== null && hashVerifierToken(token) === args.pendingTokenHash;
+  return (
+    args.remote.status === "DRAFT" &&
+    args.remote.submitted_at === null &&
+    (args.remote.pending_total_co2e_removed_kg === null ||
+      args.remote.pending_total_co2e_removed_kg <= 0) &&
+    !hasPendingCapability
+  );
+}
+
+/**
+ * A single DRAFT read may be stale after an ambiguous write. Promote an
+ * observed matching capability immediately, but clear only an aged pending
+ * hash backed by two stable DRAFT reads separated by a fresh provider call.
+ */
+async function recoverPendingVerifierCapability(args: {
+  orgCtx: OrgContext;
+  client: IsometricClient;
+  externalId: string;
+  report: GhgStatementReportRow;
+  remote: GhgStatement | null;
+}): Promise<{ outcome: PendingCapabilityRecovery; remote: GhgStatement | null }> {
+  const pendingTokenHash = args.report.pendingVerifierTokenHash;
+  if (!pendingTokenHash || !args.remote) {
+    return { outcome: "pending", remote: args.remote };
+  }
+
+  const appliedToken = pendingCapabilityAppearsApplied({
+    remote: args.remote,
+    reportId: args.report.id,
+    pendingTokenHash,
+  });
+  if (appliedToken) {
+    const promoted = await promotePendingVerifierReportToken(args.orgCtx, {
+      reportId: args.report.id,
+      token: appliedToken,
+    });
+    return {
+      outcome: promoted ? "promoted" : "pending",
+      remote: args.remote,
+    };
+  }
+
+  const pendingAgeMs = Date.now() - args.report.updatedAt.getTime();
+  if (
+    pendingAgeMs < PENDING_CAPABILITY_MIN_AGE_MS ||
+    !isUnsubmittedDraftWithoutPendingCapability({
+      remote: args.remote,
+      reportId: args.report.id,
+      pendingTokenHash,
+    })
+  ) {
+    return { outcome: "pending", remote: args.remote };
+  }
+
+  await delay(PENDING_CAPABILITY_CONFIRMATION_DELAY_MS);
+  const confirmation = await getGhgStatement(
+    args.client,
+    args.externalId,
+  ).catch(() => null);
+  if (!confirmation) return { outcome: "pending", remote: args.remote };
+
+  const confirmedAppliedToken = pendingCapabilityAppearsApplied({
+    remote: confirmation,
+    reportId: args.report.id,
+    pendingTokenHash,
+  });
+  if (confirmedAppliedToken) {
+    const promoted = await promotePendingVerifierReportToken(args.orgCtx, {
+      reportId: args.report.id,
+      token: confirmedAppliedToken,
+    });
+    return {
+      outcome: promoted ? "promoted" : "pending",
+      remote: confirmation,
+    };
+  }
+
+  const stableUnsubmittedDraft =
+    !ghgSubmitFingerprintChanged(args.remote, confirmation) &&
+    isUnsubmittedDraftWithoutPendingCapability({
+      remote: confirmation,
+      reportId: args.report.id,
+      pendingTokenHash,
+    });
+  if (!stableUnsubmittedDraft) {
+    return { outcome: "pending", remote: confirmation };
+  }
+
+  const cleared = await clearPendingVerifierReportToken(args.orgCtx, {
+    reportId: args.report.id,
+    expectedTokenHash: pendingTokenHash,
+  });
+  return {
+    outcome: cleared ? "cleared" : "pending",
+    remote: confirmation,
+  };
 }
 
 export async function submitGhgStatementToVerifierCore(args: {
@@ -175,27 +309,21 @@ export async function submitGhgStatementToVerifierCore(args: {
           "Approve the selected generated report before submitting.",
         );
       }
-      const remoteBefore = await getGhgStatement(
+      let remoteBefore = await getGhgStatement(
         client,
         initialExternalId,
       ).catch(() => null);
 
       if (generatedReport?.pendingVerifierTokenHash) {
-        const previouslyStagedToken = getVerifierTokenFromReportUrl(
-          remoteBefore?.ghg_statement_report_url ?? null,
-          generatedReport.id,
-        );
-        if (previouslyStagedToken && remoteBefore?.status !== "DRAFT") {
-          const promoted = await promotePendingVerifierReportToken(orgCtx, {
-            reportId: generatedReport.id,
-            token: previouslyStagedToken,
-          });
-          if (!promoted) {
-            throw new SafeError(
-              "A previous verifier submission is still being reconciled. Refresh the GHG Statement and try again.",
-            );
-          }
-        } else {
+        const recovery = await recoverPendingVerifierCapability({
+          orgCtx,
+          client,
+          externalId: initialExternalId,
+          report: generatedReport,
+          remote: remoteBefore,
+        });
+        remoteBefore = recovery.remote;
+        if (recovery.outcome === "pending") {
           throw new SafeError(
             "A previous verifier submission is still being reconciled. Refresh the GHG Statement and try again.",
           );

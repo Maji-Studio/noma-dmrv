@@ -184,7 +184,10 @@ export async function processPendingStorageObjectDeletions(
           ),
         ),
       )
-      .orderBy(asc(storageObjectDeletions.createdAt))
+      .orderBy(
+        sql`${storageObjectDeletions.lastAttemptAt} asc nulls first`,
+        asc(storageObjectDeletions.createdAt),
+      )
       .limit(DELETION_BATCH_SIZE);
 
     const result: StorageDeletionRunResult = {
