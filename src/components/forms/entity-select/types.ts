@@ -91,6 +91,16 @@ export interface EntitySelectProps {
     href?: string;
     linkLabel?: string;
   };
+  /**
+   * Renders an explicit "none" choice at the top of the list, selected while
+   * `value` is empty. Use when an empty selection is a deliberate state the
+   * operator should see named (e.g. "None (Pure biochar)"), not a blank
+   * placeholder. Selecting it calls `onChange("")`.
+   */
+  noneOption?: {
+    label: string;
+    subtitle?: string;
+  };
 }
 
 export interface UseEntityOptionsParams {

@@ -65,13 +65,13 @@ describe("prepareBiocharProductSubmission", () => {
 });
 
 describe("TransferFlowPreview", () => {
-  it("derives the source dry draw from source stock rather than product moisture", () => {
+  it("derives the source dry draw from the entered biochar moisture", () => {
     const html = renderToStaticMarkup(
       <TransferFlowPreview
         sourceBinName="Biochar July"
-        sourceAvailableWetMassKg={500}
         sourceAvailableDryMassKg={400}
         sourceWetMassKg={100}
+        moisturePercent={10}
         destinationDryMassKg={90}
         destinationBinLabel="Product July"
       />,
@@ -79,19 +79,35 @@ describe("TransferFlowPreview", () => {
     const text = html.replace(/<[^>]+>/g, "");
 
     expect(text).toContain("Source · Biochar July");
-    expect(text).toContain("Dry biochar: 400 kg (−80 kg)");
-    expect(text).toContain("Remaining: 320 kg");
+    expect(text).toContain("Dry biochar: 400 kg (−90 kg)");
+    expect(text).toContain("Remaining: 310 kg");
     expect(text).toContain("Dry product: +90 kg");
-    expect(text).not.toContain("(−90 kg)");
   });
 
-  it("uses the recorded edit allocation after the source ratio changes", () => {
+  it("asks for moisture while the dry draw is unresolved", () => {
     const html = renderToStaticMarkup(
       <TransferFlowPreview
         sourceBinName="Biochar July"
-        sourceAvailableWetMassKg={100}
+        sourceAvailableDryMassKg={400}
+        sourceWetMassKg={100}
+        moisturePercent={null}
+        destinationDryMassKg={null}
+        destinationBinLabel="Product July"
+      />,
+    );
+    const text = html.replace(/<[^>]+>/g, "");
+
+    expect(text).toContain("Record moisture to calculate the dry draw.");
+    expect(text).not.toContain("Remaining:");
+  });
+
+  it("uses the recorded edit allocation instead of the entered moisture", () => {
+    const html = renderToStaticMarkup(
+      <TransferFlowPreview
+        sourceBinName="Biochar July"
         sourceAvailableDryMassKg={50}
         sourceWetMassKg={50}
+        moisturePercent={10}
         recordedSourceDryMassKg={40}
         destinationDryMassKg={45}
         destinationBinLabel={null}
@@ -102,14 +118,13 @@ describe("TransferFlowPreview", () => {
 
     expect(text).toContain("Dry biochar: 90 kg (−40 kg)");
     expect(text).toContain("Remaining: 50 kg");
-    expect(text).not.toContain("(−25 kg)");
+    expect(text).not.toContain("(−45 kg)");
   });
 
   it("reconstructs the recorded edit draw when the source bin is exhausted", () => {
     const html = renderToStaticMarkup(
       <TransferFlowPreview
         sourceBinName="Biochar July"
-        sourceAvailableWetMassKg={0}
         sourceAvailableDryMassKg={0}
         sourceWetMassKg={50}
         recordedSourceDryMassKg={40}
@@ -128,9 +143,9 @@ describe("TransferFlowPreview", () => {
     const html = renderToStaticMarkup(
       <TransferFlowPreview
         sourceBinName="Legacy biochar"
-        sourceAvailableWetMassKg={100}
         sourceAvailableDryMassKg={50}
         sourceWetMassKg={50}
+        moisturePercent={10}
         recordedSourceDryMassKg={null}
         destinationDryMassKg={45}
         destinationBinLabel={null}
@@ -140,7 +155,7 @@ describe("TransferFlowPreview", () => {
     const text = html.replace(/<[^>]+>/g, "");
 
     expect(text).toContain("Recorded source dry allocation is not available.");
-    expect(text).not.toContain("(−25 kg)");
+    expect(text).not.toContain("(−45 kg)");
     expect(text).not.toContain("Remaining:");
   });
 
@@ -148,9 +163,9 @@ describe("TransferFlowPreview", () => {
     const html = renderToStaticMarkup(
       <TransferFlowPreview
         sourceBinName="Biochar July"
-        sourceAvailableWetMassKg={500}
         sourceAvailableDryMassKg={null}
         sourceWetMassKg={100}
+        moisturePercent={10}
         destinationDryMassKg={90}
         destinationBinLabel={null}
       />,
@@ -168,7 +183,6 @@ describe("TransferFlowPreview", () => {
     const html = renderToStaticMarkup(
       <TransferFlowPreview
         sourceBinName={null}
-        sourceAvailableWetMassKg={null}
         sourceAvailableDryMassKg={null}
         sourceWetMassKg={100}
         destinationDryMassKg={null}
@@ -184,9 +198,9 @@ describe("TransferFlowPreview", () => {
     const html = renderToStaticMarkup(
       <TransferFlowPreview
         sourceBinName="Biochar July"
-        sourceAvailableWetMassKg={500}
         sourceAvailableDryMassKg={400}
         sourceWetMassKg={100}
+        moisturePercent={10}
         destinationDryMassKg={null}
         destinationBinLabel="Product July"
       />,

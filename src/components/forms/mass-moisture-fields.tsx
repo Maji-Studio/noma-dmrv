@@ -167,7 +167,7 @@ interface MassMoistureFieldsProps {
   moisturePercent: unknown;
   /** Watched water added after the recorded wet mass and moisture measurement. */
   addedWaterKg?: unknown;
-  /** Added-water input rendered after the base measurements and before the chart. */
+  /** Added-water input (and any companion fields) rendered after the base measurements and before the chart. */
   addedWaterField?: ReactNode;
   /** Qualifies both labels and the split's dry-mass label ("Biochar", "Feedstock"). */
   materialLabel?: string;

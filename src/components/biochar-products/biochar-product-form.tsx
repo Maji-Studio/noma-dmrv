@@ -12,7 +12,7 @@ import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
-import { splitWetMassAfterAddedWater } from "@/lib/mass-moisture";
+import { splitWetMass, splitWetMassAfterAddedWater } from "@/lib/mass-moisture";
 import { formatMassKg } from "@/lib/format-utils";
 import {
   StorageLocationQuickAddDialog,
@@ -41,7 +41,7 @@ import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import Link from "next/link";
 import {
   BLEND_WET_MASS_LABEL,
-  BIOCHAR_PRE_WATER_MOISTURE_LABEL,
+  PURE_BIOCHAR_LABEL,
 } from "@/config/product-labels";
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
@@ -94,18 +94,19 @@ export function prepareBiocharProductSubmission(
  */
 export function TransferFlowPreview({
   sourceBinName,
-  sourceAvailableWetMassKg,
   sourceAvailableDryMassKg,
   sourceWetMassKg,
+  moisturePercent = null,
   recordedSourceDryMassKg = null,
   destinationDryMassKg,
   destinationBinLabel,
   isEditMode = false,
 }: {
   sourceBinName: string | null;
-  sourceAvailableWetMassKg: number | null;
   sourceAvailableDryMassKg: number | null;
   sourceWetMassKg: number | null;
+  /** Entered biochar moisture. It fixes the dry draw during creation. */
+  moisturePercent?: number | null;
   recordedSourceDryMassKg?: number | null;
   destinationDryMassKg: number | null;
   destinationBinLabel: string | null;
@@ -113,20 +114,15 @@ export function TransferFlowPreview({
 }) {
   const hasSource = !!sourceBinName;
   const hasWetTransfer = sourceWetMassKg !== null && sourceWetMassKg > 0;
-  // Creation previews the proportional draw from today's source stock. Edits
-  // must use the immutable allocation recorded at creation: today's bin ratio
-  // may have changed after later lots or losses, or the bin may be exhausted.
-  const proportionalSourceDryMassKg =
-    hasWetTransfer &&
-    sourceAvailableWetMassKg !== null &&
-    sourceAvailableWetMassKg > 0 &&
-    sourceAvailableDryMassKg !== null
-      ? sourceWetMassKg *
-        (sourceAvailableDryMassKg / sourceAvailableWetMassKg)
-      : null;
+  // Creation previews the same dry draw the server records: the wet draw at
+  // the entered biochar moisture, which is a fresh measurement of the drawn
+  // biochar. Edits must use the immutable allocation recorded at creation.
+  const measuredSourceDryMassKg = hasWetTransfer
+    ? splitWetMass(sourceWetMassKg, moisturePercent)?.dryKg ?? null
+    : null;
   const sourceDryMassKg = isEditMode
     ? recordedSourceDryMassKg
-    : proportionalSourceDryMassKg;
+    : measuredSourceDryMassKg;
   const hasDryTransfer = sourceDryMassKg !== null && sourceDryMassKg > 0;
   const hasDestination = !!destinationBinLabel;
   // Entity options report today's post-allocation remainder. On edit, add the
@@ -187,10 +183,11 @@ export function TransferFlowPreview({
                   ? "Add wet mass to calculate the transfer."
                   : isEditMode && recordedSourceDryMassKg === null
                     ? "Recorded source dry allocation is not available."
-                    : sourceAvailableDryMassKg === null ||
-                        (!isEditMode && sourceAvailableWetMassKg === null)
-                    ? "Source dry stock is not available. Reconcile the storage bin."
-                    : "Source dry transfer cannot be calculated."}
+                    : !isEditMode && measuredSourceDryMassKg === null
+                      ? "Record moisture to calculate the dry draw."
+                      : sourceAvailableDryMassKg === null
+                        ? "Source dry stock is not available. Reconcile the storage bin."
+                        : "Source dry transfer cannot be calculated."}
               </p>
             )}
           </>
@@ -463,7 +460,6 @@ export function BiocharProductForm({
     typeof watchedWaterAddedKg === "number" && Number.isFinite(watchedWaterAddedKg)
       ? watchedWaterAddedKg
       : null;
-  const hasWaterAdded = waterAddedKgNum != null && waterAddedKgNum > 0;
   const finalMassSplit = splitWetMassAfterAddedWater(
     massKgNum,
     moistureNum,
@@ -505,13 +501,11 @@ export function BiocharProductForm({
           </SectionLabel>
           <TransferFlowPreview
             sourceBinName={selectedSourceBiocharBin?.name ?? null}
-            sourceAvailableWetMassKg={
-              selectedSourceBiocharBin?.remainingMass?.wetKg ?? null
-            }
             sourceAvailableDryMassKg={
               selectedSourceBiocharBin?.remainingMass?.dryKg ?? null
             }
             sourceWetMassKg={requestedBiocharKg}
+            moisturePercent={moistureNum}
             recordedSourceDryMassKg={
               product?.sourceAllocatedDryMassKg ?? null
             }
@@ -594,9 +588,6 @@ export function BiocharProductForm({
           }}
           moisture={{
             id: "moistureContentPercent",
-            label: hasWaterAdded
-              ? BIOCHAR_PRE_WATER_MOISTURE_LABEL
-              : undefined,
             error: errors.moistureContentPercent?.message,
             required: true,
             disabled: isSubmitting,
@@ -605,25 +596,43 @@ export function BiocharProductForm({
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
           }}
           addedWaterField={
-            <FormField
-              id="waterAddedKg"
-              label="Water added (kg)"
-              error={errors.waterAddedKg?.message}
-              helperText="Water added to reach target moisture"
-              hint="Dry mass is unchanged by added water."
-              required
-            >
-              <FormInput
+            <>
+              <FormField
                 id="waterAddedKg"
-                type="number"
-                step={MASS_KG_INPUT_STEP}
-                min="0"
-                placeholder="e.g., 50"
-                disabled={isSubmitting}
-                error={!!errors.waterAddedKg}
-                {...register("waterAddedKg", { setValueAs: nullableNumericValue })}
-              />
-            </FormField>
+                label="Water added (kg)"
+                error={errors.waterAddedKg?.message}
+                helperText="Water added to reach target moisture"
+                hint="Dry mass is unchanged by added water."
+                required
+              >
+                <FormInput
+                  id="waterAddedKg"
+                  type="number"
+                  step={MASS_KG_INPUT_STEP}
+                  min="0"
+                  placeholder="e.g., 50"
+                  disabled={isSubmitting}
+                  error={!!errors.waterAddedKg}
+                  {...register("waterAddedKg", { setValueAs: nullableNumericValue })}
+                />
+              </FormField>
+              <FormField
+                id="densityKgM3"
+                label="Density (kg/m³)"
+                error={errors.densityKgM3?.message}
+              >
+                <FormInput
+                  id="densityKgM3"
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="e.g., 350"
+                  disabled={isSubmitting}
+                  error={!!errors.densityKgM3}
+                  {...register("densityKgM3")}
+                />
+              </FormField>
+            </>
           }
           splitFooter={
             ((biocharStockError !== undefined &&
@@ -635,25 +644,6 @@ export function BiocharProductForm({
           }
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16">
-          <FormField
-            id="densityKgM3"
-            label="Density (kg/m³)"
-            error={errors.densityKgM3?.message}
-          >
-            <FormInput
-              id="densityKgM3"
-              type="number"
-              step="any"
-              min="0"
-              placeholder="e.g., 350"
-              disabled={isSubmitting}
-              error={!!errors.densityKgM3}
-              {...register("densityKgM3")}
-            />
-          </FormField>
-        </div>
-
       </FormSection>
 
       {/* Destination + Product Details */}
@@ -664,12 +654,11 @@ export function BiocharProductForm({
       >
 
         {/* Formulation drives ingredient-bin rows and the destination bin filter.
-            Leaving it empty produces a pure-biochar product. */}
+            The explicit none choice produces a pure-biochar product. */}
         <FormField
           id="formulationId"
           label="Formulation"
           error={errors.formulationId?.message}
-          helperText="Leave empty for a pure-biochar product (no amendment blend)."
         >
           <Controller
             name="formulationId"
@@ -679,9 +668,12 @@ export function BiocharProductForm({
                 entityType="formulation"
                 value={field.value || ""}
                 onChange={field.onChange}
-                placeholder="Select a formulation (or leave empty for pure biochar)"
                 disabled={isSubmitting || isEditMode}
                 error={!!fieldState.error}
+                noneOption={{
+                  label: `None (${PURE_BIOCHAR_LABEL})`,
+                  subtitle: "No amendment blend",
+                }}
               />
             )}
           />
