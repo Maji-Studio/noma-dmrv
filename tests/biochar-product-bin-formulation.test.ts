@@ -371,6 +371,35 @@ beforeAll(async () => {
     ).rejects.toThrow("must include every ingredient");
   });
 
+  it("rejects duplicate formulation ingredient rows before drawing stock", async () => {
+    const productBinId = await makeProductBin(formulationAId);
+    const ingredientBinId = await makeStockedFeedstockBin(100);
+    const composition = formulationAComposition();
+    composition.ingredients[0].massKg = 20;
+    composition.ingredients[0].storageLocationId = ingredientBinId;
+
+    await expect(
+      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
+        ...baseProductInput(),
+        formulationId: formulationAId,
+        storageLocationId: productBinId,
+        composition: {
+          ingredients: [
+            composition.ingredients[0],
+            { ...composition.ingredients[0] },
+          ],
+        },
+      }),
+    ).rejects.toThrow("Each formulation ingredient can appear only once");
+
+    const ingredientBin = await getEntityById(
+      makeTestOrgContext(TEST_USER_ID),
+      "storageLocation",
+      ingredientBinId,
+    );
+    expect(ingredientBin?.subtitle).toContain("100 kg stored");
+  });
+
   it("allows a pure-biochar product in an unassigned bin and leaves it unclaimed", async () => {
     const binId = await makeProductBin(null);
 

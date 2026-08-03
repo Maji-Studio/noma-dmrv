@@ -81,4 +81,33 @@ describe("biochar product ingredient mass schemas", () => {
   ])("accepts valid %s ingredient masses", (_variant, schema, input) => {
     expect(schema.safeParse(input).success).toBe(true);
   });
+
+  it.each([
+    ["form", biocharProductFormSchema, {
+      facilityId: FACILITY_ID,
+      sourceBiocharStorageLocationId: SOURCE_BIN_ID,
+      storageLocationId: PRODUCT_BIN_ID,
+      massKg: 100,
+      moistureContentPercent: 10,
+      waterAddedKg: 0,
+      ingredientBins: [ingredientBin(20, 18), ingredientBin(10, 9)],
+    }],
+    ["update", updateBiocharProductSchema, {
+      productId: PRODUCT_ID,
+      ingredientBins: [ingredientBin(20, 18), ingredientBin(10, 9)],
+    }],
+  ])("rejects duplicate %s formulation ingredients", (_variant, schema, input) => {
+    const result = schema.safeParse(input);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["ingredientBins", 1, "formulationIngredientId"],
+          }),
+        ]),
+      );
+    }
+  });
 });

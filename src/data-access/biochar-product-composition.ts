@@ -18,6 +18,7 @@ import {
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import { formatCount } from "@/lib/copy-utils";
+import { DUPLICATE_FORMULATION_INGREDIENT_MESSAGE } from "@/schemas/biochar-products";
 import {
   deriveSourceBiocharMassKg,
   GRAMS_PER_KILOGRAM,
@@ -397,6 +398,12 @@ export async function validateCompositionIngredientBins(
   facilityId: string,
 ) {
   const ingredientRefs = getCompositionIngredientRefs(composition);
+  const uniqueIngredientIds = new Set(
+    ingredientRefs.map((ref) => ref.formulationIngredientId),
+  );
+  if (uniqueIngredientIds.size !== ingredientRefs.length) {
+    throw new SafeError(DUPLICATE_FORMULATION_INGREDIENT_MESSAGE);
+  }
   if (ingredientRefs.length > 0) {
     if (!formulationId) {
       throw new SafeError("Formulation is required for ingredient composition");
