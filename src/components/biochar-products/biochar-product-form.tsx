@@ -76,6 +76,16 @@ export function BiocharBlendMassFields({
   );
 }
 
+/** Immutable source allocations keep their persisted composition server-side. */
+export function prepareBiocharProductSubmission(
+  data: BiocharProductFormData,
+  allocationFrozen: boolean,
+): BiocharProductFormData {
+  return allocationFrozen
+    ? { ...data, ingredientBins: undefined }
+    : data;
+}
+
 // ============================================
 // Transfer Flow Visual
 // ============================================
@@ -441,7 +451,12 @@ export function BiocharProductForm({
     routedServerError.inlineError;
 
   const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(data as BiocharProductFormData);
+    return onSubmit(
+      prepareBiocharProductSubmission(
+        data as BiocharProductFormData,
+        hasFrozenSourceAllocation,
+      ),
+    );
   });
 
   // Derive preview values
