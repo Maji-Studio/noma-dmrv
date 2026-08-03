@@ -54,28 +54,6 @@ export function reconcileComposition(
   });
 }
 
-/**
- * Recipe-suggested mass for a single ingredient = productMassKg *
- * ingredientRatio. This value only prefills the editable mass field; the
- * recorded mass is authoritative for allocation. Returns null whenever either
- * input is missing or non-positive.
- */
-export function deriveSuggestedIngredientMassKg(
-  productMassKg: number | null | undefined,
-  ingredientRatio: number | null | undefined,
-): number | null {
-  if (
-    !Number.isFinite(productMassKg) ||
-    !Number.isFinite(ingredientRatio)
-  ) {
-    return null;
-  }
-  const mass = productMassKg as number;
-  const ingredient = ingredientRatio as number;
-  if (mass <= 0 || ingredient <= 0) return null;
-  return mass * ingredient;
-}
-
 interface IngredientMassLike {
   massKg?: unknown;
 }
@@ -126,27 +104,33 @@ export function deriveSourceBiocharMassKg(
 }
 
 /**
- * Threshold (in percent) past which the entered ingredient mass shows a soft
- * "vs recipe" hint. Never blocks submission — the recipe is orientation, not
- * a constraint.
+ * Inverse of `deriveSourceBiocharMassKg`: the persisted pre-water blend mass
+ * is the operator-entered biochar wet mass plus recorded wet ingredient
+ * masses. The form captures biochar-only mass; the database keeps the blend
+ * total, so the exact gram arithmetic must round-trip both directions.
  */
-export const INGREDIENT_MASS_DEVIATION_WARN_PERCENT = 10;
-
-/**
- * Signed percent deviation of the entered mass against the recipe suggestion.
- * Null when either side is missing or the suggestion is non-positive.
- */
-export function deriveMassDeviationPercent(
-  actualMassKg: number | null | undefined,
-  suggestedMassKg: number | null | undefined,
+export function deriveBlendMassKg(
+  sourceBiocharMassKg: number | null | undefined,
+  ingredients: readonly IngredientMassLike[] | null | undefined,
 ): number | null {
-  if (!Number.isFinite(actualMassKg) || !Number.isFinite(suggestedMassKg)) {
+  if (
+    typeof sourceBiocharMassKg !== "number" ||
+    !Number.isFinite(sourceBiocharMassKg)
+  ) {
     return null;
   }
-  const actual = actualMassKg as number;
-  const suggested = suggestedMassKg as number;
-  if (suggested <= 0 || actual < 0) return null;
-  return ((actual - suggested) / suggested) * 100;
+  const biocharMassGrams = toPersistedMassGrams(sourceBiocharMassKg);
+  const ingredientMassGrams = toPersistedMassGrams(
+    sumRecordedIngredientMassKg(ingredients),
+  );
+  return (biocharMassGrams + ingredientMassGrams) / GRAMS_PER_KILOGRAM;
+}
+
+/** Sum of recorded positive ingredient wet masses, gram-exact. */
+export function deriveIngredientMassTotalKg(
+  ingredients: readonly IngredientMassLike[] | null | undefined,
+): number {
+  return sumRecordedIngredientMassKg(ingredients);
 }
 
 /**

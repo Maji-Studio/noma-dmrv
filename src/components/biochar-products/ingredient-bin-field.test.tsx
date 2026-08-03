@@ -120,8 +120,6 @@ const row: CompositionRow = {
   feedstockTypeName: "Manure",
   feedstockTypeCategory: "Agricultural residue",
   ratio: 0.2,
-  suggestedMassKg: 100,
-  deviationPercent: null,
   massKgFieldName: "ingredientBins.0.massKg",
   storageLocationFieldName: "ingredientBins.0.storageLocationId",
 };

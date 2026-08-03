@@ -7,8 +7,7 @@
  *   - the `ingredientBins` field array,
  *   - the formulation fetch (via `useFormulation`),
  *   - the formulation-change sync effect (preserves user-entered fields),
- *   - the facility-change cascade (clears each row's `storageLocationId`),
- *   - the recipe suggestion and deviation per row.
+ *   - the facility-change cascade (clears each row's `storageLocationId`).
  *
  * The form passes its `useForm` return value in and renders rows from the
  * `rows` array — no `useFieldArray`, no sync effect, no inline math.
@@ -17,23 +16,17 @@
 import { useEffect, useRef } from "react";
 import {
   useFieldArray,
-  useWatch,
   type Control,
   type FieldValues,
   type UseFormReturn,
 } from "react-hook-form";
 import { useFormulation } from "@/hooks/use-formulations";
-import {
-  deriveMassDeviationPercent,
-  deriveSuggestedIngredientMassKg,
-  reconcileComposition,
-} from "./composition";
+import { reconcileComposition } from "./composition";
 import type { CompositionRow, IngredientBin } from "./types";
 
 export interface UseBiocharCompositionArgs {
   formulationId: string | null | undefined;
   facilityId: string | null | undefined;
-  productMassKg: number | null | undefined;
   /** Persisted source allocations keep their exact saved composition snapshot. */
   allocationFrozen: boolean;
 }
@@ -65,7 +58,6 @@ export function useBiocharComposition(
   const {
     formulationId,
     facilityId,
-    productMassKg,
     allocationFrozen,
   } = args;
 
@@ -119,44 +111,17 @@ export function useBiocharComposition(
     });
   }, [facilityId, form]);
 
-  const productMass = typeof productMassKg === "number" ? productMassKg : null;
-
-  // Live values (not the field-array snapshot) so the deviation hint tracks
-  // the user's typing.
-  const liveBins = useWatch({ control, name: "ingredientBins" }) as
-    | IngredientBin[]
-    | undefined;
-
-  const rows: CompositionRow[] = ingredientFields.map((field, index) => {
-    const suggestedMassKg = deriveSuggestedIngredientMassKg(
-      productMass,
-      field.ratio ?? null,
-    );
-    const liveMassRaw = liveBins?.[index]?.massKg as
-      | number
-      | string
-      | null
-      | undefined;
-    const liveMassKg =
-      typeof liveMassRaw === "number"
-        ? liveMassRaw
-        : liveMassRaw != null && liveMassRaw !== ""
-          ? Number(liveMassRaw)
-          : null;
-    return {
-      key: field.id,
-      index,
-      formulationIngredientId: field.formulationIngredientId,
-      feedstockTypeId: field.feedstockTypeId,
-      feedstockTypeName: field.feedstockTypeName,
-      feedstockTypeCategory: field.feedstockTypeCategory,
-      ratio: field.ratio ?? null,
-      suggestedMassKg,
-      deviationPercent: deriveMassDeviationPercent(liveMassKg, suggestedMassKg),
-      massKgFieldName: `ingredientBins.${index}.massKg` as const,
-      storageLocationFieldName: `ingredientBins.${index}.storageLocationId` as const,
-    };
-  });
+  const rows: CompositionRow[] = ingredientFields.map((field, index) => ({
+    key: field.id,
+    index,
+    formulationIngredientId: field.formulationIngredientId,
+    feedstockTypeId: field.feedstockTypeId,
+    feedstockTypeName: field.feedstockTypeName,
+    feedstockTypeCategory: field.feedstockTypeCategory,
+    ratio: field.ratio ?? null,
+    massKgFieldName: `ingredientBins.${index}.massKg` as const,
+    storageLocationFieldName: `ingredientBins.${index}.storageLocationId` as const,
+  }));
 
   return {
     rows,

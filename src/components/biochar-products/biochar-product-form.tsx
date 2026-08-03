@@ -12,7 +12,7 @@ import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
-import { splitWetMass, splitWetMassAfterAddedWater } from "@/lib/mass-moisture";
+import { splitWetMass, splitWetMassAfterAddedWater, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { formatMassKg } from "@/lib/format-utils";
 import {
   StorageLocationQuickAddDialog,
@@ -30,6 +30,7 @@ import {
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import {
+  deriveBlendMassKg,
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
   SOURCE_BIOCHAR_MASS_ERROR,
@@ -39,10 +40,7 @@ import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import Link from "next/link";
-import {
-  BLEND_WET_MASS_LABEL,
-  PURE_BIOCHAR_LABEL,
-} from "@/config/product-labels";
+import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import {
@@ -56,8 +54,11 @@ const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: t
 
 type MassMoistureFieldsProps = ComponentProps<typeof MassMoistureFields>;
 
-/** Product mass is the whole pre-water blend, including every ingredient. */
-export function BiocharBlendMassFields({
+/**
+ * The operator enters the wet biochar drawn from the source bin. Blend
+ * ingredients stack on top of this figure; they never reduce it.
+ */
+export function BiocharSourceMassFields({
   wet,
   ...props
 }: MassMoistureFieldsProps) {
@@ -66,31 +67,49 @@ export function BiocharBlendMassFields({
       {...props}
       wet={{
         ...wet,
-        label: BLEND_WET_MASS_LABEL,
-        helperText: wet.helperText ?? "Includes all blend ingredients.",
+        label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"),
+        helperText: wet.helperText ?? "Wet biochar drawn from the source bin.",
       }}
     />
   );
 }
 
-/** Immutable source allocations keep their persisted composition server-side. */
+/**
+ * The form captures the biochar-only wet mass, while the persisted `massKg`
+ * stays the pre-water blend total (biochar plus every recorded ingredient) so
+ * server accounting is unchanged. Immutable source allocations additionally
+ * keep their persisted composition server-side.
+ */
 export function prepareBiocharProductSubmission(
   data: BiocharProductFormData,
   allocationFrozen: boolean,
 ): BiocharProductFormData {
+  const blendMassKg = deriveBlendMassKg(
+    typeof data.massKg === "number" ? data.massKg : null,
+    data.ingredientBins,
+  );
+  const next = { ...data, massKg: blendMassKg ?? data.massKg };
   return allocationFrozen
-    ? { ...data, ingredientBins: undefined }
-    : data;
+    ? { ...next, ingredientBins: undefined }
+    : next;
 }
 
 // ============================================
 // Transfer Flow Visual
 // ============================================
 
+/** One line on the transfer arrow: a mass joining the blend on its way to the bin. */
+export interface TransferAddition {
+  label: string;
+  massKg: number;
+}
+
 /**
  * Keep the preview dry-mass first and intentionally terse. The source summary
  * reads as one stock equation: available dry biochar, planned subtraction, and
- * the remaining stock. Wet mass stays in the editable fields below.
+ * the remaining stock. Wet mass stays in the editable fields below. Ingredient
+ * and water additions ride the arrow; the destination shows the dry biochar
+ * plus the total wet product that lands in the bin.
  */
 export function TransferFlowPreview({
   sourceBinName,
@@ -98,7 +117,9 @@ export function TransferFlowPreview({
   sourceWetMassKg,
   moisturePercent = null,
   recordedSourceDryMassKg = null,
+  additions = [],
   destinationDryMassKg,
+  destinationWetProductKg = null,
   destinationBinLabel,
   isEditMode = false,
 }: {
@@ -108,7 +129,11 @@ export function TransferFlowPreview({
   /** Entered biochar moisture. It fixes the dry draw during creation. */
   moisturePercent?: number | null;
   recordedSourceDryMassKg?: number | null;
+  /** Ingredient and water masses added between source and destination. */
+  additions?: TransferAddition[];
   destinationDryMassKg: number | null;
+  /** Total wet product landing in the bin: biochar, water and ingredients. */
+  destinationWetProductKg?: number | null;
   destinationBinLabel: string | null;
   isEditMode?: boolean;
 }) {
@@ -160,7 +185,7 @@ export function TransferFlowPreview({
               </span>
             </p>
             <p className="body-small text-[var(--color-text-primary)] mt-6">
-              Dry biochar:{" "}
+              Dry biochar available:{" "}
               <span className="font-medium">
                 {formatMassKg(sourceDryMassBeforeTransferKg)}
               </span>
@@ -180,7 +205,7 @@ export function TransferFlowPreview({
             ) : (
               <p className="body-small text-[var(--color-text-tertiary)] mt-2">
                 {!hasWetTransfer
-                  ? "Add wet mass to calculate the transfer."
+                  ? "Add biochar wet mass to calculate the transfer."
                   : isEditMode && recordedSourceDryMassKg === null
                     ? "Recorded source dry allocation is not available."
                     : !isEditMode && measuredSourceDryMassKg === null
@@ -203,12 +228,10 @@ export function TransferFlowPreview({
         )}
       </div>
 
-      {/* Direction only: the mass is already stated in the source equation. */}
-      <div
-        aria-hidden="true"
-        className="flex items-center justify-center py-2 sm:px-4 sm:py-0"
-      >
+      {/* The arrow carries what joins the blend on the way to the bin. */}
+      <div className="flex flex-col items-center justify-center gap-4 py-2 sm:px-4 sm:py-0">
         <svg
+          aria-hidden="true"
           width="40"
           height="16"
           viewBox="0 0 48 16"
@@ -223,6 +246,21 @@ export function TransferFlowPreview({
             strokeLinejoin="round"
           />
         </svg>
+        {additions.length > 0 && (
+          <ul
+            aria-label="Added to the blend"
+            className="flex flex-col items-center gap-2"
+          >
+            {additions.map((addition, index) => (
+              <li
+                key={`${addition.label}-${index}`}
+                className="body-caption whitespace-nowrap text-[var(--color-text-secondary)]"
+              >
+                +{formatMassKg(addition.massKg)} {addition.label}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Destination bin */}
@@ -245,15 +283,23 @@ export function TransferFlowPreview({
             </p>
             {destinationDryMassKg !== null && destinationDryMassKg > 0 && (
               <span className="body-small text-[var(--color-text-secondary)] mt-6">
-                Dry product:{" "}
+                Dry biochar:{" "}
                 <span className="font-medium text-[var(--st-ok)]">
                   +{formatMassKg(destinationDryMassKg)}
                 </span>
               </span>
             )}
+            {destinationWetProductKg !== null && destinationWetProductKg > 0 && (
+              <span className="body-small text-[var(--color-text-secondary)] mt-2">
+                Wet product:{" "}
+                <span className="font-medium">
+                  {formatMassKg(destinationWetProductKg)}
+                </span>
+              </span>
+            )}
             {hasWetTransfer && destinationDryMassKg === null && (
               <span className="body-small text-[var(--color-text-tertiary)] mt-6">
-                Record moisture to calculate the dry product.
+                Record moisture to calculate the dry biochar.
               </span>
             )}
           </>
@@ -309,6 +355,7 @@ export function BiocharProductForm({
   );
   const initialFormulationId =
     product?.formulation?.id ?? product?.formulationId ?? null;
+  const initialIngredientBins = fromCompositionJsonb(product?.composition);
   const { facilityId: contextFacilityId } = useFacilityContext();
   const storageLocationDialog = useQuickAddDialog();
 
@@ -326,11 +373,15 @@ export function BiocharProductForm({
         "",
       storageLocationId: product?.storageLocation?.id ?? "",
       status: product?.status ?? "testing",
-      massKg: product?.massKg ?? null,
+      // The field carries the biochar-only wet mass; the record stores the
+      // blend total, so edit mode subtracts the persisted ingredient masses.
+      massKg: product
+        ? deriveSourceBiocharMassKg(product.massKg ?? null, initialIngredientBins)
+        : null,
       moistureContentPercent: product?.moistureContentPercent ?? null,
       densityKgM3: product?.densityKgM3 ?? null,
       waterAddedKg: product?.waterAddedKg ?? null,
-      ingredientBins: fromCompositionJsonb(product?.composition),
+      ingredientBins: initialIngredientBins,
     },
   });
   const {
@@ -354,11 +405,9 @@ export function BiocharProductForm({
   const watchedMoisture = useWatch({ control, name: "moistureContentPercent" });
   const watchedWaterAddedKg = useWatch({ control, name: "waterAddedKg" });
 
-  const massKgNumForComposition = typeof watchedMassKg === "number" ? watchedMassKg : null;
   const composition = useBiocharComposition(form, {
     formulationId: selectedFormulationId,
     facilityId: selectedFacilityId,
-    productMassKg: massKgNumForComposition,
     allocationFrozen: hasFrozenSourceAllocation,
   });
 
@@ -401,10 +450,10 @@ export function BiocharProductForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
 
-  const requestedBiocharKg = deriveSourceBiocharMassKg(
-    typeof watchedMassKg === "number" ? watchedMassKg : null,
-    watchedIngredientBins,
-  );
+  // The entered mass IS the source draw: ingredients stack on top of it and
+  // never reduce what leaves the biochar bin.
+  const massKgNum = typeof watchedMassKg === "number" ? watchedMassKg : null;
+  const requestedBiocharKg = massKgNum;
   const { data: biocharAvailability } = useStockAvailability(
     sourceBiocharStorageLocationId
       ? {
@@ -415,17 +464,15 @@ export function BiocharProductForm({
       : null,
   );
   const biocharStockError =
-    requestedBiocharKg !== null && requestedBiocharKg < 0
-      ? SOURCE_BIOCHAR_MASS_ERROR
-      : requestedBiocharKg !== null &&
-          biocharAvailability &&
-          biocharAvailability.availableKg !== null &&
-          isStockOverdraw(requestedBiocharKg, biocharAvailability.availableKg)
-        ? binStockOverdrawInlineMessage(
-            "biochar",
-            biocharAvailability.availableKg,
-          )
-        : undefined;
+    requestedBiocharKg !== null &&
+    biocharAvailability &&
+    biocharAvailability.availableKg !== null &&
+    isStockOverdraw(requestedBiocharKg, biocharAvailability.availableKg)
+      ? binStockOverdrawInlineMessage(
+          "biochar",
+          biocharAvailability.availableKg,
+        )
+      : undefined;
   const massFieldFingerprint = [
     sourceBiocharStorageLocationId,
     selectedFormulationId,
@@ -454,7 +501,6 @@ export function BiocharProductForm({
   });
 
   // Derive preview values
-  const massKgNum = typeof watchedMassKg === "number" ? watchedMassKg : null;
   const moistureNum = typeof watchedMoisture === "number" ? watchedMoisture : null;
   const waterAddedKgNum =
     typeof watchedWaterAddedKg === "number" && Number.isFinite(watchedWaterAddedKg)
@@ -465,6 +511,22 @@ export function BiocharProductForm({
     moistureNum,
     waterAddedKgNum,
   );
+  const ingredientAdditions: TransferAddition[] = (
+    watchedIngredientBins ?? []
+  ).flatMap((ingredient) =>
+    typeof ingredient.massKg === "number" &&
+    Number.isFinite(ingredient.massKg) &&
+    ingredient.massKg > 0
+      ? [{ label: ingredient.feedstockTypeName, massKg: ingredient.massKg }]
+      : [],
+  );
+  const transferAdditions =
+    waterAddedKgNum !== null && waterAddedKgNum > 0
+      ? [...ingredientAdditions, { label: "Water", massKg: waterAddedKgNum }]
+      : ingredientAdditions;
+  const blendMassKg = deriveBlendMassKg(massKgNum, watchedIngredientBins);
+  const destinationWetProductKg =
+    blendMassKg !== null ? blendMassKg + (waterAddedKgNum ?? 0) : null;
 
   return (
     <div className="space-y-20">
@@ -509,7 +571,9 @@ export function BiocharProductForm({
             recordedSourceDryMassKg={
               product?.sourceAllocatedDryMassKg ?? null
             }
+            additions={transferAdditions}
             destinationDryMassKg={finalMassSplit?.dryKg ?? null}
+            destinationWetProductKg={destinationWetProductKg}
             destinationBinLabel={
               selectedStorageLocation?.name
                 ?? ((storageLocationId == null || storageLocationId === "")
@@ -570,7 +634,7 @@ export function BiocharProductForm({
           />
         </FormField>
 
-        <BiocharBlendMassFields
+        <BiocharSourceMassFields
           materialLabel="Biochar"
           wetMassKg={watchedMassKg}
           moisturePercent={watchedMoisture}
@@ -582,7 +646,7 @@ export function BiocharProductForm({
             disabled: isSubmitting || isEditMode,
             placeholder: "e.g. 500",
             helperText: isEditMode
-              ? "Includes all blend ingredients. Source allocation is fixed."
+              ? "Source allocation is fixed."
               : undefined,
             registration: register("massKg", { setValueAs: nullableNumericValue }),
           }}
