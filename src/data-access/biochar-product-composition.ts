@@ -20,7 +20,11 @@ import {
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import { formatCount } from "@/lib/copy-utils";
-import { deriveSourceBiocharMassKg } from "@/lib/biochar-composition";
+import {
+  deriveSourceBiocharMassKg,
+  GRAMS_PER_KILOGRAM,
+  toPersistedMassGrams,
+} from "@/lib/biochar-composition";
 import type { DbTransaction } from "@/db";
 import { assertFeedstockDrawWithinStock } from "./bin-stock-guards";
 import { requireOrgScope } from "./utils";
@@ -87,14 +91,13 @@ function getCompositionIngredientRefs(
     );
 }
 
-const MASS_PRECISION_FACTOR = 1_000;
 const PERCENT_PRECISION_FACTOR = 1_000_000;
 
 function massSnapshotKey(ingredient: Record<string, unknown>): string {
   const massGrams =
     typeof ingredient.massKg === "number" &&
     Number.isFinite(ingredient.massKg)
-      ? Math.round(ingredient.massKg * MASS_PRECISION_FACTOR)
+      ? toPersistedMassGrams(ingredient.massKg)
       : null;
   return JSON.stringify([
     ingredient.formulationIngredientId ?? null,
@@ -156,12 +159,12 @@ function canonicalAllocationIngredients(
       massGrams:
         typeof ingredient.massKg === "number" &&
         Number.isFinite(ingredient.massKg)
-          ? Math.round(ingredient.massKg * MASS_PRECISION_FACTOR)
+          ? toPersistedMassGrams(ingredient.massKg)
           : null,
       massDryGrams:
         typeof ingredient.massDryKg === "number" &&
         Number.isFinite(ingredient.massDryKg)
-          ? Math.round(ingredient.massDryKg * MASS_PRECISION_FACTOR)
+          ? toPersistedMassGrams(ingredient.massDryKg)
           : null,
       moistureBasis:
         typeof ingredient.moistureContentPercent === "number" &&
@@ -237,7 +240,7 @@ const INGREDIENT_MOISTURE_BASIS_ERROR =
   "This ingredient bin has no complete wet-mass and moisture basis. Complete its feedstock intake before using it in a blend.";
 
 function roundMassKg(value: number): number {
-  return Math.round(value * MASS_PRECISION_FACTOR) / MASS_PRECISION_FACTOR;
+  return toPersistedMassGrams(value) / GRAMS_PER_KILOGRAM;
 }
 
 function roundPercent(value: number): number {

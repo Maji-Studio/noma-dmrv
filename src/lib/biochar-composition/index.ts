@@ -10,8 +10,10 @@ export {
   deriveSuggestedIngredientMassKg,
   deriveSourceBiocharMassKg,
   deriveMassDeviationPercent,
+  GRAMS_PER_KILOGRAM,
   SOURCE_BIOCHAR_MASS_ERROR,
   INGREDIENT_MASS_DEVIATION_WARN_PERCENT,
+  toPersistedMassGrams,
   fromCompositionJsonb,
   toCompositionJsonb,
 } from "./composition";

@@ -83,9 +83,9 @@ interface IngredientMassLike {
 export const SOURCE_BIOCHAR_MASS_ERROR =
   "Recorded ingredient mass exceeds blend mass. Reduce ingredient mass or increase blend mass.";
 
-const GRAMS_PER_KILOGRAM = 1_000;
+export const GRAMS_PER_KILOGRAM = 1_000;
 
-function toPersistedMassGrams(massKg: number): number {
+export function toPersistedMassGrams(massKg: number): number {
   return Math.round(massKg * GRAMS_PER_KILOGRAM);
 }
 
