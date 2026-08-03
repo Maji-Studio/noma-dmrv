@@ -1,0 +1,1 @@
+ALTER TABLE "certifier_ghg_statement_reports" ADD COLUMN "pending_verifier_token_hash" text;

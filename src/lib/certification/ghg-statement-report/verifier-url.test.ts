@@ -4,6 +4,7 @@ import {
   generateVerifierToken,
   hashVerifierToken,
   verifyReportCapabilityToken,
+  verifyReportCapabilityTokenAgainstHashes,
 } from "./verifier-url";
 
 const REPORT_ID = "11111111-1111-4111-8111-111111111111";
@@ -32,6 +33,25 @@ describe("GHG Statement verifier capability URL", () => {
     const rotatedHash = hashVerifierToken(generateVerifierToken());
 
     expect(verifyReportCapabilityToken(oldToken, rotatedHash)).toBe(false);
+  });
+
+  it("accepts the active or pending token and rejects every other token", () => {
+    const activeToken = generateVerifierToken();
+    const pendingToken = generateVerifierToken();
+    const hashes = [
+      hashVerifierToken(activeToken),
+      hashVerifierToken(pendingToken),
+    ];
+
+    expect(
+      verifyReportCapabilityTokenAgainstHashes(activeToken, hashes),
+    ).toBe(true);
+    expect(
+      verifyReportCapabilityTokenAgainstHashes(pendingToken, hashes),
+    ).toBe(true);
+    expect(
+      verifyReportCapabilityTokenAgainstHashes(generateVerifierToken(), hashes),
+    ).toBe(false);
   });
 
   it("rejects empty tokens and malformed stored hashes", () => {

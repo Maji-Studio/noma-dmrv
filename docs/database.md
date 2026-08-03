@@ -122,6 +122,9 @@ Source visibility), `certifier_projects`, `certifier_sensors`,
 sent with a GHG Statement verifier submission. Every preparation gets a
 positive version, frozen live input/model, source fingerprint, content
 checksum, private `documents` row, and a per-report verifier-token digest.
+Verifier resubmission keeps that active digest while a separately committed
+pending digest is valid during the provider call; success promotes pending to
+active, while confirmed non-applied failure clears pending only.
 Lifecycle is monotonic `prepared → approved → submitted`; database checks keep
 approval/submission actor timestamps coherent, while unique constraints prevent
 duplicate statement versions, preparation idempotency keys, or document reuse.

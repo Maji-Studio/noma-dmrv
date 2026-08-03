@@ -9,7 +9,7 @@ import {
   getNextGhgStatementReportVersion,
   getReportByPreparationKey,
   insertPreparedGhgStatementReport,
-  issueVerifierReportToken,
+  stageVerifierReportToken,
   listGhgStatementReports,
   type GhgStatementReportRow,
 } from "@/data-access/ghg-statement-reports";
@@ -299,7 +299,7 @@ export async function issueVerifierReportUrl(
 ): Promise<string> {
   return buildVerifierReportUrl(
     reportId,
-    await issueVerifierReportToken(orgCtx, reportId),
+    await stageVerifierReportToken(orgCtx, reportId),
   );
 }
 
@@ -378,7 +378,7 @@ export async function prepareGhgStatementReport(
           reportModel: model,
           preparationKey: parsed.preparationKey,
           // Seeded with a token nobody holds: the link stays inert until
-          // submission issues a real one via `issueVerifierReportToken`.
+          // submission stages a real one via `stageVerifierReportToken`.
           verifierTokenHash: hashVerifierToken(generateVerifierToken()),
           preparedAt,
           storage: {

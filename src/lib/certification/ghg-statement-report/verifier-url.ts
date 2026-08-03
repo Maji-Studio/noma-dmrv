@@ -13,6 +13,7 @@ import { env } from "@/config/env";
  */
 const TOKEN_BYTES = 32;
 const TOKEN_HASH_PATTERN = /^[a-f0-9]{64}$/;
+const INVALID_TOKEN_HASH = "0".repeat(64);
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 export function generateVerifierToken(): string {
@@ -51,11 +52,53 @@ export function buildVerifierReportUrl(
  */
 export function verifyReportCapabilityToken(
   suppliedToken: string,
-  storedTokenHash: string,
+  storedTokenHash: string | null,
 ): boolean {
-  if (!suppliedToken || !TOKEN_HASH_PATTERN.test(storedTokenHash)) return false;
-  return timingSafeEqual(
-    Buffer.from(hashVerifierToken(suppliedToken), "hex"),
-    Buffer.from(storedTokenHash, "hex"),
+  return verifyReportCapabilityTokenAgainstHashes(suppliedToken, [
+    storedTokenHash,
+  ]);
+}
+
+export function verifyReportCapabilityTokenAgainstHashes(
+  suppliedToken: string,
+  storedTokenHashes: readonly (string | null)[],
+): boolean {
+  if (!suppliedToken) return false;
+  const suppliedTokenHash = Buffer.from(
+    hashVerifierToken(suppliedToken),
+    "hex",
   );
+  let matched = 0;
+  for (const storedTokenHash of storedTokenHashes) {
+    const comparableHash =
+      storedTokenHash && TOKEN_HASH_PATTERN.test(storedTokenHash)
+        ? storedTokenHash
+        : INVALID_TOKEN_HASH;
+    matched |= Number(
+      timingSafeEqual(suppliedTokenHash, Buffer.from(comparableHash, "hex")),
+    );
+  }
+  return matched === 1;
+}
+
+/** Returns a capability only when the URL is the canonical URL for this report. */
+export function getVerifierTokenFromReportUrl(
+  reportUrl: string | null,
+  reportId: string,
+): string | null {
+  if (!reportUrl) return null;
+  try {
+    const candidate = new URL(reportUrl);
+    const base = new URL(env.NEXT_PUBLIC_APP_URL);
+    if (
+      candidate.origin !== base.origin ||
+      candidate.pathname !==
+        `/api/ghg-statement-reports/${encodeURIComponent(reportId)}`
+    ) {
+      return null;
+    }
+    return candidate.searchParams.get("token");
+  } catch {
+    return null;
+  }
 }
