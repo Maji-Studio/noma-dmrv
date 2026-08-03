@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { Control, FieldValues } from "react-hook-form";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CompositionRow } from "@/lib/biochar-composition";
 
@@ -8,6 +9,7 @@ interface CapturedEntitySelectProps {
   allowCreate?: boolean;
   createLabel?: string;
   disabled?: boolean;
+  onBlur?: () => void;
   emptyHint?: { message: string };
   filterBy?: Record<string, string>;
   onCreateNew?: () => void;
@@ -104,7 +106,11 @@ vi.mock("@/components/forms/entity-select", () => ({
   }),
 }));
 
-import { IngredientBinField } from "./ingredient-bin-field";
+import {
+  IngredientBinField,
+  IngredientMassInput,
+  parseIngredientMassDraft,
+} from "./ingredient-bin-field";
 
 const row: CompositionRow = {
   key: "ingredient-1",
@@ -132,6 +138,24 @@ function renderField(allocationFrozen = false) {
   );
 }
 
+function IngredientMassHarness() {
+  const [value, setValue] = useState<number | null>(null);
+  return (
+    <IngredientMassInput
+      name={row.massKgFieldName}
+      value={value}
+      onChange={(next) => {
+        state.massChange(next);
+        setValue(next);
+      }}
+      onBlur={() => undefined}
+      inputRef={() => undefined}
+      disabled={false}
+      error={false}
+    />
+  );
+}
+
 beforeEach(() => {
   state.close.mockClear();
   state.dialog = undefined;
@@ -152,15 +176,47 @@ describe("IngredientBinField feedstock-bin quick add", () => {
   it.each([
     ["20", 20],
     ["", null],
-    ["-", null],
-  ])("normalizes the controlled mass value %j to %j", (displayValue, expected) => {
-    renderField();
+    ["-", undefined],
+  ])("parses the mass draft %j as %j", (displayValue, expected) => {
+    expect(parseIngredientMassDraft(displayValue)).toBe(expected);
+  });
 
-    state.massInput?.onChange?.({
-      currentTarget: { value: displayValue },
+  it("keeps a trailing decimal while the operator continues typing", () => {
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(<IngredientMassHarness />);
     });
 
-    expect(state.massChange).toHaveBeenCalledWith(expected);
+    act(() => {
+      state.massInput?.onChange?.({ currentTarget: { value: "1." } });
+    });
+    expect(state.massInput?.value).toBe("1.");
+
+    act(() => {
+      state.massInput?.onChange?.({ currentTarget: { value: "1.5" } });
+    });
+    expect(state.massInput?.value).toBe("1.5");
+    expect(state.massChange).toHaveBeenLastCalledWith(1.5);
+
+    act(() => renderer.unmount());
+  });
+
+  it("clears the committed ingredient mass when the draft is cleared", () => {
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(<IngredientMassHarness />);
+    });
+    act(() => {
+      state.massInput?.onChange?.({ currentTarget: { value: "2" } });
+    });
+    act(() => {
+      state.massInput?.onChange?.({ currentTarget: { value: "" } });
+    });
+
+    expect(state.massInput?.value).toBe("");
+    expect(state.massChange).toHaveBeenLastCalledWith(null);
+
+    act(() => renderer.unmount());
   });
 
   it("offers a feedstock-bin action using the row filters", () => {
