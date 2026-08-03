@@ -109,7 +109,9 @@ describe("MoistureSplit", () => {
       />,
     );
 
-    expect(html).toContain("Moisture from delivery record");
+    expect(html).toContain(
+      '<p class="body-caption">Moisture from delivery record</p>',
+    );
     expect(html).toContain("Water added: 50 kg");
   });
 

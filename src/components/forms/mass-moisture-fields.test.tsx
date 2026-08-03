@@ -48,6 +48,10 @@ describe("MassMoistureFields", () => {
     expect(html.indexOf('data-testid="mass-moisture-split"')).toBeGreaterThan(
       html.indexOf('data-testid="added-water-field"'),
     );
+    expect(html).toContain(
+      'class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-16"',
+    );
+    expect(html).not.toContain("sm:grid-cols-2");
     expect(html).toContain("Added water: 50");
   });
 });

@@ -200,7 +200,7 @@ export function MassMoistureFields({
       <WetMassField {...wet} materialLabel={materialLabel} />
       <MoistureField {...moisture} materialLabel={materialLabel} />
       {addedWaterField && (
-        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-16">
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-16">
           {addedWaterField}
         </div>
       )}

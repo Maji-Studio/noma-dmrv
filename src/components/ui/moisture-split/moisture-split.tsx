@@ -64,9 +64,8 @@ interface MoistureSplitProps {
   /** Override the dry figure label for a more specific surface. */
   dryLabel?: string;
   /**
-   * Replaces the default footnote. Pass the provenance when the moisture came
-   * from somewhere the operator did not just type (e.g. "Moisture from delivery
-   * record").
+   * Replaces the default footnote without added water; with added water, renders
+   * before the breakdown. Pass provenance such as "Moisture from delivery record".
    */
   note?: string;
   className?: string;
@@ -410,7 +409,7 @@ export function MoistureSplit({
       <div className="body-caption text-[var(--color-text-tertiary)]">
         {addedWaterState ? (
           <>
-            {note && <p>{note}</p>}
+            {note && <p className="body-caption">{note}</p>}
             <AddedWaterSummary
               split={split}
               addedWaterState={addedWaterState}
