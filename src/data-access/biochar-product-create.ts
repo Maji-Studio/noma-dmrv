@@ -10,6 +10,7 @@ import {
   type BiocharProduct,
 } from "@/db/schema";
 import { parseLocalDateString } from "@/lib/date-utils";
+import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { SafeError } from "@/lib/errors";
 import {
   deriveSourceBiocharMassKg,
@@ -185,6 +186,13 @@ export async function createBiocharProduct(
   if (sourceBiocharMassKg === null || sourceBiocharMassKg < 0) {
     throw new SafeError(SOURCE_BIOCHAR_MASS_ERROR);
   }
+  // The operator's moisture reading is a fresh measurement of the drawn
+  // biochar, so it, not the bin's stored wet/dry ratio, fixes the dry mass
+  // withdrawn from the source bin.
+  const sourceBiocharDryMassKg = computeClampedDryMass(
+    sourceBiocharMassKg,
+    moistureContentPercent,
+  );
 
   return db.transaction(async (tx) => {
     const sourceBinId =
@@ -227,6 +235,7 @@ export async function createBiocharProduct(
             sourceBiocharStorageLocationId,
           facilityId: data.facilityId,
           requestedWetMassKg: sourceBiocharMassKg,
+          requestedDryMassKg: sourceBiocharDryMassKg,
         });
       for (const allocation of sourceAllocationPlan.allocations) {
         await assertCanMutateCertifiedLineage(

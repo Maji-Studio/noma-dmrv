@@ -711,6 +711,21 @@ beforeAll(async () => {
     const composition = formulationAComposition();
     composition.ingredients[0].massKg = 20;
     composition.ingredients[0].storageLocationId = ingredientBinId;
+
+    // 2% claims 78.4 kg dry from an 80 kg wet draw, above the lot's 72 kg.
+    await expect(
+      createBiocharProduct(ctx, {
+        ...baseProductInput(),
+        linkedProductionRunId: null,
+        sourceBiocharStorageLocationId: sourceBinId,
+        formulationId: formulationAId,
+        storageLocationId: firstProductBinId,
+        massKg: 100,
+        moistureContentPercent: 2,
+        composition,
+      }),
+    ).rejects.toThrow("Increase the moisture or reduce the blend mass");
+
     const product = await createBiocharProduct(ctx, {
       ...baseProductInput(),
       linkedProductionRunId: null,
@@ -718,6 +733,9 @@ beforeAll(async () => {
       formulationId: formulationAId,
       storageLocationId: firstProductBinId,
       massKg: 100,
+      // Matches the source lot's 10% so the measured dry draw equals the
+      // lot's full 72 kg dry stock.
+      moistureContentPercent: 10,
       composition,
     });
     createdProductIds.push(product.id);
