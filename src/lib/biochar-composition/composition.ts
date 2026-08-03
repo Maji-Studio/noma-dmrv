@@ -115,7 +115,8 @@ export function deriveBlendMassKg(
 ): number | null {
   if (
     typeof sourceBiocharMassKg !== "number" ||
-    !Number.isFinite(sourceBiocharMassKg)
+    !Number.isFinite(sourceBiocharMassKg) ||
+    sourceBiocharMassKg < 0
   ) {
     return null;
   }
