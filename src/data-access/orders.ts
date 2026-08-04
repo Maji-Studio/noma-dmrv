@@ -626,10 +626,7 @@ export async function updateOrder(
       ? data.customerLocationId
       : existing.customerLocationId;
 
-  if (
-    (data.facilityId !== undefined || data.biocharProductId !== undefined) &&
-    effectiveProductId
-  ) {
+  if (effectiveProductId) {
     await assertOrderProductCanBeUsed(
       ctx,
       effectiveProductId,

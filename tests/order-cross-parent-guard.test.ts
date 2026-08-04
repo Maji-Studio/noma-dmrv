@@ -21,6 +21,7 @@ describe("order cross-parent guards", () => {
   let locationAId: string;
   let locationBId: string;
   let orderId: string;
+  let zeroProductOrderId: string;
 
   beforeAll(() => ensureTestOrg());
 
@@ -91,6 +92,20 @@ beforeAll(async () => {
           packaging: "loose",
         })
         .returning({ id: orders.id });
+      const [zeroProductOrder] = await tx
+        .insert(orders)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `OR-OCG-ZERO-EXISTING-${tag}`,
+          facilityId: facility.id,
+          customerId: customerA.id,
+          customerLocationId: locationA.id,
+          biocharProductId: zeroBiocharProduct.id,
+          orderDate: new Date("2026-06-13"),
+          quantityKg: 100,
+          packaging: "loose",
+        })
+        .returning({ id: orders.id });
 
       return {
         customerAId: customerA.id,
@@ -101,6 +116,7 @@ beforeAll(async () => {
         orderId: order.id,
         productId: product.id,
         zeroBiocharProductId: zeroBiocharProduct.id,
+        zeroProductOrderId: zeroProductOrder.id,
       };
     });
 
@@ -112,6 +128,7 @@ beforeAll(async () => {
     orderId = fixture.orderId;
     productId = fixture.productId;
     zeroBiocharProductId = fixture.zeroBiocharProductId;
+    zeroProductOrderId = fixture.zeroProductOrderId;
   });
 
   afterAll(async () => {
@@ -123,7 +140,9 @@ beforeAll(async () => {
       }
     }
 
-    await cleanup(() => db.delete(orders).where(eq(orders.id, orderId)));
+    await cleanup(() =>
+      db.delete(orders).where(inArray(orders.id, [orderId, zeroProductOrderId])),
+    );
     await cleanup(() =>
       db
         .delete(customerLocations)
@@ -180,5 +199,13 @@ beforeAll(async () => {
     await expect(
       updateOrder(makeTestOrgContext(TEST_USER_ID), orderId, { customerLocationId: locationBId }),
     ).rejects.toThrow("Delivery location belongs to a different customer");
+  });
+
+  it("rejects any update while an order references a zero-source product", async () => {
+    await expect(
+      updateOrder(makeTestOrgContext(TEST_USER_ID), zeroProductOrderId, {
+        packaging: "bagged",
+      }),
+    ).rejects.toThrow("contains 0 kg of source biochar");
   });
 });
