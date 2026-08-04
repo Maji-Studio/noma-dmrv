@@ -609,7 +609,6 @@ export function BiocharProductList() {
                     ?.biocharStorageLocationName,
               },
               { label: "Source biochar wet mass (kg)", value: formatMassKg(viewedSourceWetMassKg) },
-              { label: "Source biochar dry mass (kg)", value: formatMassKg(viewedSourceDryMassKg) },
               { label: BLEND_WET_MASS_LABEL, value: formatMassKg(displaySideSheet.entity.massKg) },
               { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
               { label: "Water added (kg)", value: formatMassKg(displaySideSheet.entity.waterAddedKg) },
