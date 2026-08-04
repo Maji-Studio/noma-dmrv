@@ -65,6 +65,9 @@ import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 
+const WET_PRODUCT_LABEL = "Wet product";
+const DRY_BIOCHAR_LABEL = "Dry biochar";
+
 function sourceBiocharWetMassKg(
   product: Pick<BiocharProductWithRelations, "massKg" | "composition">,
 ): number | null {
@@ -139,8 +142,8 @@ function createColumns(
           <MassPair
             wetKg={finalWetProductMassKg(row.original)}
             dryKg={sourceBiocharDryMassKg(row.original)}
-            wetLabel="Wet product"
-            dryLabel="Dry biochar"
+            wetLabel={WET_PRODUCT_LABEL}
+            dryLabel={DRY_BIOCHAR_LABEL}
             layout="stacked"
             variant="compact"
           />
@@ -231,8 +234,8 @@ export function BiocharProductPageMassSummary({
         <MassPair
           wetKg={pageMass.wetKg}
           dryKg={pageMass.hasMissingDry ? null : pageMass.dryKg}
-          wetLabel="Wet product"
-          dryLabel="Dry biochar"
+          wetLabel={WET_PRODUCT_LABEL}
+          dryLabel={DRY_BIOCHAR_LABEL}
         />
       }
       valueLayout="breakdown"
@@ -622,8 +625,8 @@ export function BiocharProductList() {
                 <MassPair
                   wetKg={finalWetProductMassKg(displaySideSheet.entity)}
                   dryKg={viewedSourceDryMassKg}
-                  wetLabel="Wet product"
-                  dryLabel="Dry biochar"
+                  wetLabel={WET_PRODUCT_LABEL}
+                  dryLabel={DRY_BIOCHAR_LABEL}
                 />
               </div>
             ),
