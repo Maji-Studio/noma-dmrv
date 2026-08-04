@@ -204,6 +204,8 @@ export function FeedstockTypeForm({
       if (shouldClearCategoryForIsometricSelection(selectedUsage)) {
         setValue("category", "" as FeedstockTypeFormData["category"], {
           shouldDirty: true,
+          shouldTouch: true,
+          shouldValidate: true,
         });
       }
     }

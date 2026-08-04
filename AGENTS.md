@@ -27,7 +27,6 @@ This file is intentionally brief so agent guidance does not drift across two mai
 - Reuse existing entity CRUD patterns before inventing new abstractions.
 - Use React Hook Form with Zod schemas in `src/schemas/`.
 - Prefer targeted verification for touched areas, then broader checks when risk warrants it.
-- No production database exists yet. Keep migrations usable for development and tests, but do not add production-data backfills or transitional schema compatibility; local database resets are acceptable, and shared staging resets require notifying the user first.
 
 ## Key References
 
