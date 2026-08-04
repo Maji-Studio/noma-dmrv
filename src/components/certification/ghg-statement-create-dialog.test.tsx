@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   PeriodWindow,
   RegistryStatementsPanel,
-  ResultPanel,
 } from "./ghg-statement-create-dialog";
+import { ResultPanel } from "./ghg-statement-result-panel";
 
 describe("PeriodWindow", () => {
   it("shows Isometric-owned first start and the chosen end", () => {
