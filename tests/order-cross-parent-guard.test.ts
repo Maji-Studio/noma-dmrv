@@ -1,6 +1,6 @@
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createOrder, updateOrder } from "@/data-access/orders";
 import { db } from "@/db";
 import { facilities } from "@/db/schema/facilities";
@@ -9,6 +9,7 @@ import { customerLocations, customers } from "@/db/schema/parties";
 import { biocharProducts } from "@/db/schema/products";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
+const CONCURRENCY_BARRIER_TIMEOUT_MS = 10_000;
 
 
 describe("order cross-parent guards", () => {
@@ -16,12 +17,15 @@ describe("order cross-parent guards", () => {
   let facilityId: string;
   let productId: string;
   let zeroBiocharProductId: string;
+  let concurrentCreateProductId: string;
+  let concurrentUpdateProductId: string;
   let customerAId: string;
   let customerBId: string;
   let locationAId: string;
   let locationBId: string;
   let orderId: string;
   let zeroProductOrderId: string;
+  let concurrentUpdateOrderId: string;
 
   beforeAll(() => ensureTestOrg());
 
@@ -50,6 +54,24 @@ beforeAll(async () => {
           composition: {
             ingredients: [{ massKg: 100 }],
           },
+        })
+        .returning({ id: biocharProducts.id });
+      const [concurrentCreateProduct] = await tx
+        .insert(biocharProducts)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `BP-OCG-CREATE-RACE-${tag}`,
+          facilityId: facility.id,
+          massKg: 100,
+        })
+        .returning({ id: biocharProducts.id });
+      const [concurrentUpdateProduct] = await tx
+        .insert(biocharProducts)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `BP-OCG-UPDATE-RACE-${tag}`,
+          facilityId: facility.id,
+          massKg: 100,
         })
         .returning({ id: biocharProducts.id });
       const [customerA] = await tx
@@ -106,8 +128,25 @@ beforeAll(async () => {
           packaging: "loose",
         })
         .returning({ id: orders.id });
+      const [concurrentUpdateOrder] = await tx
+        .insert(orders)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `OR-OCG-UPDATE-RACE-${tag}`,
+          facilityId: facility.id,
+          customerId: customerA.id,
+          customerLocationId: locationA.id,
+          biocharProductId: concurrentUpdateProduct.id,
+          orderDate: new Date("2026-06-13"),
+          quantityKg: 100,
+          packaging: "loose",
+        })
+        .returning({ id: orders.id });
 
       return {
+        concurrentCreateProductId: concurrentCreateProduct.id,
+        concurrentUpdateOrderId: concurrentUpdateOrder.id,
+        concurrentUpdateProductId: concurrentUpdateProduct.id,
         customerAId: customerA.id,
         customerBId: customerB.id,
         facilityId: facility.id,
@@ -129,6 +168,9 @@ beforeAll(async () => {
     productId = fixture.productId;
     zeroBiocharProductId = fixture.zeroBiocharProductId;
     zeroProductOrderId = fixture.zeroProductOrderId;
+    concurrentCreateProductId = fixture.concurrentCreateProductId;
+    concurrentUpdateOrderId = fixture.concurrentUpdateOrderId;
+    concurrentUpdateProductId = fixture.concurrentUpdateProductId;
   });
 
   afterAll(async () => {
@@ -141,7 +183,13 @@ beforeAll(async () => {
     }
 
     await cleanup(() =>
-      db.delete(orders).where(inArray(orders.id, [orderId, zeroProductOrderId])),
+      db
+        .delete(orders)
+        .where(inArray(orders.id, [
+          orderId,
+          zeroProductOrderId,
+          concurrentUpdateOrderId,
+        ])),
     );
     await cleanup(() =>
       db
@@ -154,7 +202,12 @@ beforeAll(async () => {
     await cleanup(() =>
       db
         .delete(biocharProducts)
-        .where(inArray(biocharProducts.id, [productId, zeroBiocharProductId])),
+        .where(inArray(biocharProducts.id, [
+          productId,
+          zeroBiocharProductId,
+          concurrentCreateProductId,
+          concurrentUpdateProductId,
+        ])),
     );
     await cleanup(() => db.delete(facilities).where(eq(facilities.id, facilityId)));
   });
@@ -207,5 +260,98 @@ beforeAll(async () => {
         packaging: "bagged",
       }),
     ).rejects.toThrow("contains 0 kg of source biochar");
+  });
+
+  async function runWhileProductBecomesZero(
+    productIdToChange: string,
+    orderWrite: () => Promise<unknown>,
+  ): Promise<unknown> {
+    let releaseProductUpdate = () => {};
+    let signalProductUpdateReady = () => {};
+    const productUpdateReady = new Promise<void>((resolve) => {
+      signalProductUpdateReady = resolve;
+    });
+    const productUpdateRelease = new Promise<void>((resolve) => {
+      releaseProductUpdate = resolve;
+    });
+    let blockerBackendPid = 0;
+    const productUpdate = db.transaction(async (tx) => {
+      await tx
+        .update(biocharProducts)
+        .set({ massKg: 0 })
+        .where(eq(biocharProducts.id, productIdToChange));
+      const backend = await tx.execute<{ pid: number }>(
+        sql`select pg_backend_pid() as pid`,
+      );
+      blockerBackendPid = backend.rows[0]?.pid ?? 0;
+      signalProductUpdateReady();
+      await productUpdateRelease;
+    });
+    let orderWritePromise: Promise<unknown> | undefined;
+
+    try {
+      await productUpdateReady;
+      orderWritePromise = orderWrite();
+      await expect.poll(async () => {
+        const blocked = await db.execute<{ waiting: boolean }>(sql`
+          select exists (
+            select 1
+            from pg_stat_activity
+            where ${blockerBackendPid} = any(pg_blocking_pids(pid))
+          ) as waiting
+        `);
+        return blocked.rows[0]?.waiting ?? false;
+      }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
+
+      releaseProductUpdate();
+      await productUpdate;
+      return await orderWritePromise;
+    } finally {
+      releaseProductUpdate();
+      await productUpdate.catch(() => undefined);
+      await orderWritePromise?.catch(() => undefined);
+    }
+  }
+
+  it("serializes create validation behind a concurrent product mass update", async () => {
+    const code = `OR-OCG-CREATE-RACE-${tag}`;
+
+    await expect(
+      runWhileProductBecomesZero(concurrentCreateProductId, () =>
+        createOrder(makeTestOrgContext(TEST_USER_ID), {
+          code,
+          facilityId,
+          customerId: customerAId,
+          customerLocationId: locationAId,
+          biocharProductId: concurrentCreateProductId,
+          orderDate: new Date("2026-06-13"),
+          quantityKg: 100,
+          packaging: "loose",
+        }),
+      ),
+    ).rejects.toThrow("contains 0 kg of source biochar");
+
+    await expect(
+      db.select({ id: orders.id }).from(orders).where(eq(orders.code, code)),
+    ).resolves.toEqual([]);
+  });
+
+  it("serializes update validation behind a concurrent product mass update", async () => {
+    await expect(
+      runWhileProductBecomesZero(concurrentUpdateProductId, () =>
+        updateOrder(
+          makeTestOrgContext(TEST_USER_ID),
+          concurrentUpdateOrderId,
+          { packaging: "bagged" },
+        ),
+      ),
+    ).rejects.toThrow("contains 0 kg of source biochar");
+
+    await expect(
+      db
+        .select({ packaging: orders.packaging })
+        .from(orders)
+        .where(eq(orders.id, concurrentUpdateOrderId)),
+    ).resolves.toEqual([{ packaging: "loose" }]);
   });
 });

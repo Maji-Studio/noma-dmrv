@@ -5,7 +5,7 @@
 
 import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { countRows, numericAggregate } from "@/db/aggregate";
 import {
   orders,
@@ -488,10 +488,11 @@ async function validateCustomerLocationBelongsToCustomer(
 /** Enforce the product/facility/source-mass invariant shared by order writes. */
 async function assertOrderProductCanBeUsed(
   ctx: OrgContext,
+  tx: DbTransaction,
   biocharProductId: string,
   facilityId: string,
 ): Promise<void> {
-  const [product] = await db
+  const [product] = await tx
     .select({
       facilityId: biocharProducts.facilityId,
       sourceBiocharMassKg: sourceBiocharMassKgSql(
@@ -505,7 +506,8 @@ async function assertOrderProductCanBeUsed(
         eq(biocharProducts.id, biocharProductId),
         eq(biocharProducts.organizationId, ctx.organizationId),
       ),
-    );
+    )
+    .for("update");
 
   if (!product) {
     throw new SafeError("Biochar product not found");
@@ -538,12 +540,6 @@ export async function createOrder(
 ): Promise<Order> {
   requireOrgScope(ctx);
 
-  await assertOrderProductCanBeUsed(
-    ctx,
-    data.biocharProductId,
-    data.facilityId,
-  );
-
   await assertSameOrg(ctx, customers, data.customerId);
   await validateCustomerLocationBelongsToCustomer(
     ctx,
@@ -551,24 +547,33 @@ export async function createOrder(
     data.customerLocationId
   );
 
-  const [order] = await db
-    .insert(orders)
-    .values({
-      organizationId: ctx.organizationId,
-      code: data.code,
-      facilityId: data.facilityId,
-      customerId: data.customerId,
-      customerLocationId: data.customerLocationId,
-      biocharProductId: data.biocharProductId,
-      orderDate: data.orderDate,
-      quantityKg: data.quantityKg,
-      packaging: data.packaging,
-      value: data.value ?? null,
-      currency: data.currency ?? "TZS",
-    })
-    .returning();
+  return db.transaction(async (tx) => {
+    await assertOrderProductCanBeUsed(
+      ctx,
+      tx,
+      data.biocharProductId,
+      data.facilityId,
+    );
 
-  return order;
+    const [order] = await tx
+      .insert(orders)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        facilityId: data.facilityId,
+        customerId: data.customerId,
+        customerLocationId: data.customerLocationId,
+        biocharProductId: data.biocharProductId,
+        orderDate: data.orderDate,
+        quantityKg: data.quantityKg,
+        packaging: data.packaging,
+        value: data.value ?? null,
+        currency: data.currency ?? "TZS",
+      })
+      .returning();
+
+    return order;
+  });
 }
 
 // ============================================
@@ -618,21 +623,11 @@ export async function updateOrder(
     }
   }
 
-  const effectiveFacilityId = data.facilityId ?? existing.facilityId;
-  const effectiveProductId = data.biocharProductId ?? existing.biocharProductId;
   const effectiveCustomerId = data.customerId ?? existing.customerId;
   const effectiveCustomerLocationId =
     data.customerLocationId !== undefined
       ? data.customerLocationId
       : existing.customerLocationId;
-
-  if (effectiveProductId) {
-    await assertOrderProductCanBeUsed(
-      ctx,
-      effectiveProductId,
-      effectiveFacilityId,
-    );
-  }
 
   if (data.customerId !== undefined || data.customerLocationId !== undefined) {
     await assertSameOrg(ctx, customers, effectiveCustomerId);
@@ -707,6 +702,13 @@ export async function updateOrder(
         repointPreparation,
       );
     }
+
+    await assertOrderProductCanBeUsed(
+      ctx,
+      tx,
+      data.biocharProductId ?? locked.biocharProductId,
+      data.facilityId ?? locked.facilityId,
+    );
 
     const productChanged =
       data.biocharProductId !== undefined &&
