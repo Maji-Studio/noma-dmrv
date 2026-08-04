@@ -17,6 +17,9 @@ describe("toOrderEntityOption", () => {
         totalDeliveredKg: 100,
         totalDeliveredDryKg: 85,
         unresolvedDeliveredDryCount: 0,
+        productAllocatedWetKg: 100,
+        productAllocatedDryKg: 85,
+        productUnresolvedDryCount: 0,
       }),
     ).toEqual({
       id: "order-1",
@@ -45,6 +48,9 @@ describe("toOrderEntityOption", () => {
         totalDeliveredKg: 0,
         totalDeliveredDryKg: 0,
         unresolvedDeliveredDryCount: 0,
+        productAllocatedWetKg: 0,
+        productAllocatedDryKg: 0,
+        productUnresolvedDryCount: 0,
       }).subtitle,
     ).toBe("Wet biochar product: 100kg remaining");
   });
@@ -63,6 +69,9 @@ describe("toOrderEntityOption", () => {
       totalDeliveredKg: 10,
       totalDeliveredDryKg: 0,
       unresolvedDeliveredDryCount: 1,
+      productAllocatedWetKg: 10,
+      productAllocatedDryKg: 0,
+      productUnresolvedDryCount: 1,
     });
 
     expect(option.subtitle).toBe("Wet biochar product: 90kg remaining");
@@ -85,8 +94,35 @@ describe("toOrderEntityOption", () => {
       totalDeliveredKg: 250,
       totalDeliveredDryKg: 112.5,
       unresolvedDeliveredDryCount: 0,
+      productAllocatedWetKg: 250,
+      productAllocatedDryKg: 112.5,
+      productUnresolvedDryCount: 0,
     });
 
     expect(option.remainingMass).toEqual({ wetKg: 750, dryKg: 337.5 });
+  });
+
+  it("uses the authoritative remaining product basis after its wet mass changes", () => {
+    const option = toOrderEntityOption({
+      id: "order-3",
+      code: "OR-26-003",
+      orderDate: new Date("2026-05-17T00:00:00.000Z"),
+      quantityKg: 800,
+      customerName: "North Farm",
+      productBinName: "Finished product north",
+      productMassKg: 2_000,
+      productWaterAddedKg: 0,
+      productMoisturePercent: 40,
+      productComposition: { ingredients: [{ massKg: 500 }] },
+      sourceAllocatedDryMassKg: 900,
+      totalDeliveredKg: 200,
+      totalDeliveredDryKg: 90,
+      unresolvedDeliveredDryCount: 0,
+      productAllocatedWetKg: 1_000,
+      productAllocatedDryKg: 450,
+      productUnresolvedDryCount: 0,
+    });
+
+    expect(option.remainingMass).toEqual({ wetKg: 600, dryKg: 270 });
   });
 });

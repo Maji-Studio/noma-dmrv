@@ -325,7 +325,7 @@ describe("stock-reducing update guards", () => {
     expect(persisted.biocharProductId).toBe(initialProduct.id);
   });
 
-  it("rejects reducing a product below its already-delivered wet mass", async () => {
+  it("rejects reducing a product below wet mass allocated to an upcoming delivery", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const productCode = `BP-SHRINK-${tag}`;
     const [facility] = await db
@@ -397,7 +397,7 @@ describe("stock-reducing update guards", () => {
         storageLocationId: productBin.id,
         code: `DL-SHRINK-${tag}`,
         deliveryDate: new Date("2026-07-06T00:00:00Z"),
-        status: "delivered",
+        status: "upcoming",
         deliveredWetMassKg: SHRINK_PRODUCT_DELIVERED_MASS_KG,
       })
       .returning({ id: deliveries.id });

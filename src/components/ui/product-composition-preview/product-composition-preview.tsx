@@ -15,6 +15,7 @@ interface ProductCompositionPreviewProps {
   note?: string;
   className?: string;
   framed?: boolean;
+  testId?: string;
 }
 
 /** Two-part mass preview for blended biochar products. */
@@ -29,6 +30,7 @@ export function ProductCompositionPreview({
   note,
   className = "",
   framed = true,
+  testId = "product-composition-preview",
 }: ProductCompositionPreviewProps) {
   const remainderKg =
     wetMassKg != null && dryBiocharKg != null
@@ -58,7 +60,7 @@ export function ProductCompositionPreview({
 
   return (
     <div
-      data-testid="product-composition-preview"
+      data-testid={testId}
       className={`${framed ? "border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12" : ""} ${className}`.trim()}
     >
       <p className="body-small text-[var(--color-text-secondary)]">

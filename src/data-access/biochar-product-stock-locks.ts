@@ -14,7 +14,7 @@ import { SafeError } from "@/lib/errors";
 import { productStockOverdrawMessage } from "@/lib/stock-overdraw";
 import {
   assertBiocharDrawWithinStock,
-  deriveBiocharProductDeliveredKg,
+  deriveBiocharProductAllocatedKg,
   deriveProductAvailableKg,
   isOverdraw,
   overdrawError,
@@ -322,12 +322,12 @@ export async function assertBiocharProductMassReductionWithinStock(
     return;
   }
 
-  const deliveredKg = await deriveBiocharProductDeliveredKg(
+  const allocatedKg = await deriveBiocharProductAllocatedKg(
     ctx,
     tx,
     productId,
   );
-  if (isOverdraw(deliveredKg, transactionTotalMassKg)) {
+  if (isOverdraw(allocatedKg, transactionTotalMassKg)) {
     throw new SafeError(productStockOverdrawMessage());
   }
 

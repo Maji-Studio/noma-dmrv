@@ -18,6 +18,7 @@ describe("OrderMassPreview", () => {
     expect(html).toContain("450 kg");
     expect(html).toContain("planning estimate");
     expect(html).toContain("bg-[var(--color-background-medium)]");
+    expect(html).toContain('data-testid="order-mass-preview"');
   });
 
   it("keeps the unresolved visualization when inputs are incomplete", () => {

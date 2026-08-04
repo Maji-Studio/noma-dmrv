@@ -27,7 +27,7 @@ export function OrderMassPreview({
 
   return (
     <ProductCompositionPreview
-      className="order-mass-preview"
+      testId="order-mass-preview"
       wetMassKg={wetKg}
       dryBiocharKg={dryBiocharKg}
       wetLabel="Wet biochar product reserved"

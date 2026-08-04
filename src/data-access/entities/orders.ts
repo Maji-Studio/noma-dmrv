@@ -61,8 +61,50 @@ function buildAllocatedMassAggregate(ctx: OrgContext) {
   .as("allocated_mass_agg");
 }
 
+// Product-wide delivery allocations provide the current remaining composition
+// basis. This avoids mixing a corrected product wet mass with dry allocations
+// that were frozen before the correction.
+function buildProductAllocatedMassAggregate(ctx: OrgContext) {
+  return db
+    .select({
+      biocharProductId:
+        sql<string>`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`.as(
+          "allocated_biochar_product_id",
+        ),
+      totalAllocatedWetKg: sumNumeric(deliveries.deliveredWetMassKg).as(
+        "total_allocated_wet_kg",
+      ),
+      totalAllocatedDryKg: sumNumeric(deliveries.massDryKg).as(
+        "total_allocated_dry_kg",
+      ),
+      unresolvedAllocatedDryCount: countRows(and(
+        sql`${deliveries.deliveredWetMassKg} > 0`,
+        isNull(deliveries.massDryKg),
+      )).as("unresolved_allocated_dry_count"),
+    })
+    .from(deliveries)
+    .innerJoin(
+      orders,
+      and(
+        eq(deliveries.orderId, orders.id),
+        eq(orders.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(
+      eq(deliveries.organizationId, ctx.organizationId),
+      isNull(deliveries.archivedAt),
+    ))
+    .groupBy(
+      sql`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+    )
+    .as("product_allocated_mass_agg");
+}
+
 function buildSelection(
   allocatedMassAggregate: ReturnType<typeof buildAllocatedMassAggregate>,
+  productAllocatedMassAggregate: ReturnType<
+    typeof buildProductAllocatedMassAggregate
+  >,
   sourceAllocationAggregate: ReturnType<typeof buildSourceAllocationAggregate>,
 ) {
   return {
@@ -86,6 +128,15 @@ function buildSelection(
     unresolvedDeliveredDryCount: numericAggregate(
       sql<number>`COALESCE(${allocatedMassAggregate.unresolvedDeliveredDryCount}, 0)`,
     ),
+    productAllocatedWetKg: numericAggregate(
+      sql<number>`COALESCE(${productAllocatedMassAggregate.totalAllocatedWetKg}, 0)`,
+    ),
+    productAllocatedDryKg: numericAggregate(
+      sql<number>`COALESCE(${productAllocatedMassAggregate.totalAllocatedDryKg}, 0)`,
+    ),
+    productUnresolvedDryCount: numericAggregate(
+      sql<number>`COALESCE(${productAllocatedMassAggregate.unresolvedAllocatedDryCount}, 0)`,
+    ),
   };
 }
 
@@ -104,6 +155,9 @@ export function toOrderEntityOption(r: {
   totalDeliveredKg: number;
   totalDeliveredDryKg: number;
   unresolvedDeliveredDryCount: number;
+  productAllocatedWetKg: number;
+  productAllocatedDryKg: number;
+  productUnresolvedDryCount: number;
 }): EntityOption {
   const remainingWetKg = Math.max(
     0,
@@ -115,18 +169,24 @@ export function toOrderEntityOption(r: {
     biocharMoisturePercent: r.productMoisturePercent,
     ingredients: fromCompositionMassJsonb(r.productComposition),
   });
-  const orderedDryKg = allocateTrackedDryBiocharKg({
-    totalWetKg:
-      r.productMassKg == null
-        ? null
-        : r.productMassKg + (r.productWaterAddedKg ?? 0),
-    totalDryBiocharKg: productDryBiocharKg,
-    requestedWetKg: r.quantityKg,
-  });
-  const remainingDryKg =
-    orderedDryKg == null || r.unresolvedDeliveredDryCount > 0
+  const productWetKg = r.productMassKg == null
+    ? null
+    : r.productMassKg + (r.productWaterAddedKg ?? 0);
+  const remainingProductWetKg = productWetKg == null
+    ? null
+    : Math.max(0, productWetKg - r.productAllocatedWetKg);
+  const remainingProductDryKg =
+    productDryBiocharKg == null || r.productUnresolvedDryCount > 0
       ? null
-      : Math.max(0, orderedDryKg - r.totalDeliveredDryKg);
+      : Math.max(0, productDryBiocharKg - r.productAllocatedDryKg);
+  const remainingDryKg =
+    r.unresolvedDeliveredDryCount > 0
+      ? null
+      : allocateTrackedDryBiocharKg({
+          totalWetKg: remainingProductWetKg,
+          totalDryBiocharKg: remainingProductDryKg,
+          requestedWetKg: remainingWetKg,
+        });
   return {
     id: r.id,
     code: r.code,
@@ -155,8 +215,14 @@ export async function getOrdersEntity(ctx: OrgContext, params: {
 }): Promise<EntityOption[]> {
   requireOrgScope(ctx);
   const allocatedMassAggregate = buildAllocatedMassAggregate(ctx);
+  const productAllocatedMassAggregate =
+    buildProductAllocatedMassAggregate(ctx);
   const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
-  const selection = buildSelection(allocatedMassAggregate, sourceAllocationAggregate);
+  const selection = buildSelection(
+    allocatedMassAggregate,
+    productAllocatedMassAggregate,
+    sourceAllocationAggregate,
+  );
   const { search, facilityId, limit } = params;
   requireOrgScope(ctx);
 
@@ -205,6 +271,13 @@ export async function getOrdersEntity(ctx: OrgContext, params: {
       ),
     )
     .leftJoin(allocatedMassAggregate, eq(allocatedMassAggregate.orderId, orders.id))
+    .leftJoin(
+      productAllocatedMassAggregate,
+      eq(
+        productAllocatedMassAggregate.biocharProductId,
+        biocharProducts.id,
+      ),
+    )
     .leftJoin(sourceAllocationAggregate, eq(sourceAllocationAggregate.biocharProductId, biocharProducts.id))
     .where(and(eq(orders.organizationId, ctx.organizationId), whereClause))
     .orderBy(desc(orders.orderDate))
@@ -219,8 +292,14 @@ export async function getOrderEntityById(
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
   const allocatedMassAggregate = buildAllocatedMassAggregate(ctx);
+  const productAllocatedMassAggregate =
+    buildProductAllocatedMassAggregate(ctx);
   const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
-  const selection = buildSelection(allocatedMassAggregate, sourceAllocationAggregate);
+  const selection = buildSelection(
+    allocatedMassAggregate,
+    productAllocatedMassAggregate,
+    sourceAllocationAggregate,
+  );
   const [result] = await db
     .select(selection)
     .from(orders)
@@ -246,6 +325,13 @@ export async function getOrderEntityById(
       ),
     )
     .leftJoin(allocatedMassAggregate, eq(allocatedMassAggregate.orderId, orders.id))
+    .leftJoin(
+      productAllocatedMassAggregate,
+      eq(
+        productAllocatedMassAggregate.biocharProductId,
+        biocharProducts.id,
+      ),
+    )
     .leftJoin(sourceAllocationAggregate, eq(sourceAllocationAggregate.biocharProductId, biocharProducts.id))
     .where(and(eq(orders.id, id), eq(orders.organizationId, ctx.organizationId)))
     .limit(1);

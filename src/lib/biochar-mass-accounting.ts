@@ -97,8 +97,10 @@ export function allocateTrackedDryBiocharKg(
   const remainingDryKg = Math.max(0, totalDryKg - allocatedDryKg);
   if (
     input.hasUnresolvedDryAllocation ||
+    totalDryKg > totalWetKg + MASS_COMPARISON_EPSILON_KG ||
     allocatedWetKg > totalWetKg + MASS_COMPARISON_EPSILON_KG ||
     allocatedDryKg > totalDryKg + MASS_COMPARISON_EPSILON_KG ||
+    remainingDryKg > remainingWetKg + MASS_COMPARISON_EPSILON_KG ||
     requestedWetKg > remainingWetKg + MASS_COMPARISON_EPSILON_KG
   ) {
     return null;

@@ -43,9 +43,8 @@ import {
   deliveryOrderBalanceMessage,
   isDeliveryOrderBalanceMessage,
 } from "@/lib/delivery-order-balance";
-import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
-import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { useEntityById } from "@/hooks/use-entities";
+import { DeliveryMassPreview } from "./delivery-mass-preview";
 
 // ============================================
 // Constants for select options
@@ -272,12 +271,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const allocationDryBasisKg = selectedRemainingDryKg == null
     ? null
     : selectedRemainingDryKg + (editingSameOrder ? delivery?.massDryKg ?? 0 : 0);
-  const previewDryBiocharKg = allocateTrackedDryBiocharKg({
-    totalWetKg: allocationWetBasisKg,
-    totalDryBiocharKg: allocationDryBasisKg,
-    requestedWetKg: typeof watchWetMass === "number" ? watchWetMass : null,
-  });
-
   const { data: deliveryAvailability } = useStockAvailability(
     watchOrderId
       ? {
@@ -429,12 +422,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             placeholder="e.g. 20"
             registration={register("moistureContentPercent")}
           />
-          <ProductCompositionPreview
-            className="md:col-span-2"
-            wetMassKg={typeof watchWetMass === "number" ? watchWetMass : null}
-            dryBiocharKg={previewDryBiocharKg}
-            moisturePercent={typeof watchMoisture === "number" ? watchMoisture : null}
-            note="Dry biochar is allocated from the linked product's tracked composition."
+          <DeliveryMassPreview
+            deliveredWetMassKg={watchWetMass}
+            allocationWetBasisKg={allocationWetBasisKg}
+            allocationDryBasisKg={allocationDryBasisKg}
+            moisturePercent={watchMoisture}
           />
           {(deliveryStockError || routedServerError.inlineError) && (
             <div className="md:col-span-2">

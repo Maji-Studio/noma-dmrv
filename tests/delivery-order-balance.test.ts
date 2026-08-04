@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import { createDelivery, updateDelivery } from "@/data-access/deliveries";
 import { updateOrder } from "@/data-access/orders";
+import { getOrderEntityById } from "@/data-access/entities/orders";
 import { getStockAvailability } from "@/data-access/stock-availability";
 import {
   ensureTestOrg,
@@ -99,14 +100,12 @@ describe("delivery order balance", () => {
         status: "upcoming",
         deliveredWetMassKg: 10_000,
         moistureContentPercent: 40,
-        massDryKg: 1,
       });
 
       expect(delivery.massDryKg).toBe(1_800);
 
       const updated = await updateDelivery(ctx, delivery.id, {
         moistureContentPercent: 5,
-        massDryKg: 0,
       });
       expect(updated.massDryKg).toBe(1_800);
     } finally {
@@ -178,6 +177,33 @@ describe("delivery order balance", () => {
     }
   });
 
+  it("previews remaining order dry mass from the product's current remaining basis", async () => {
+    const seeded = await seedOrder(1_000);
+
+    try {
+      await createDelivery(ctx, {
+        code: `DL-ORDER-BAL-${seeded.tag}-PREVIEW-BASIS`,
+        orderId: seeded.orderId,
+        facilityId: seeded.facilityId,
+        deliveryDate: new Date("2026-08-01T00:00:00Z"),
+        status: "upcoming",
+        deliveredWetMassKg: 250,
+      });
+      await db
+        .update(biocharProducts)
+        .set({ waterAddedKg: 10_000 })
+        .where(eq(biocharProducts.id, seeded.productId));
+
+      await expect(
+        getOrderEntityById(ctx, seeded.orderId),
+      ).resolves.toMatchObject({
+        remainingMass: { wetKg: 750, dryKg: 66.646 },
+      });
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
   it("repairs a lone missing dry allocation on an unchanged save", async () => {
     const seeded = await seedOrder(10_000);
 
@@ -228,6 +254,16 @@ describe("delivery order balance", () => {
         })
         .returning({ id: applications.id });
       applicationId = application.id;
+
+      await db
+        .update(deliveries)
+        .set({ massDryKg: null })
+        .where(eq(deliveries.id, delivery.id));
+      await expect(
+        updateDelivery(ctx, delivery.id, {
+          code: `DL-ORDER-BAL-${seeded.tag}-APPLIED-RENAMED`,
+        }),
+      ).resolves.toMatchObject({ massDryKg: 180 });
 
       await expect(
         updateDelivery(ctx, delivery.id, { deliveredWetMassKg: 900 }),
@@ -569,7 +605,6 @@ describe("delivery order balance", () => {
           biocharProductId: null,
           status: "upcoming",
           deliveredWetMassKg: 60,
-          massDryKg: null,
           moistureContentPercent: null,
         }),
       ).resolves.toMatchObject({

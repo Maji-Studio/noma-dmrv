@@ -78,6 +78,21 @@ describe("conserved dry biochar accounting", () => {
     })).toBeNull();
   });
 
+  it("refuses an inconsistent basis whose dry biochar exceeds wet product", () => {
+    expect(allocateTrackedDryBiocharKg({
+      totalWetKg: 100,
+      totalDryBiocharKg: 101,
+      requestedWetKg: 100,
+    })).toBeNull();
+    expect(allocateTrackedDryBiocharKg({
+      totalWetKg: 100,
+      totalDryBiocharKg: 90,
+      requestedWetKg: 10,
+      allocatedWetKg: 90,
+      allocatedDryBiocharKg: 10,
+    })).toBeNull();
+  });
+
   it("refuses to guess when another dry allocation is unresolved", () => {
     expect(allocateTrackedDryBiocharKg({
       totalWetKg: 1_000,

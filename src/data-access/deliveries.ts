@@ -530,7 +530,6 @@ export async function createDelivery(
     vehicleId?: string | null;
     status?: "upcoming" | "delivered";
     deliveredWetMassKg?: number | null;
-    massDryKg?: number | null;
     moistureContentPercent?: number | null;
     distanceKmOverride?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
@@ -662,7 +661,6 @@ export async function updateDelivery(
     vehicleId?: string | null;
     status?: "upcoming" | "delivered";
     deliveredWetMassKg?: number | null;
-    massDryKg?: number | null;
     moistureContentPercent?: number | null;
     distanceKmOverride?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
@@ -828,12 +826,13 @@ export async function updateDelivery(
         ? data.biocharProductId ?? lockedEffectiveOrder.biocharProductId
         : lockedDelivery.biocharProductId ??
           lockedEffectiveOrder.biocharProductId;
-    const dryAllocationChanged =
+    const dryAllocationLineageChanged =
       lockedEffectiveOrderId !== lockedDelivery.orderId ||
       lockedEffectiveBiocharProductId !== lockedExistingBiocharProductId ||
-      lockedEffectiveWetMass !== lockedDelivery.deliveredWetMassKg ||
-      (lockedDelivery.massDryKg == null && lockedEffectiveWetMass != null);
-    if (dryAllocationChanged) {
+      lockedEffectiveWetMass !== lockedDelivery.deliveredWetMassKg;
+    const needsDryAllocationBackfill =
+      lockedDelivery.massDryKg == null && lockedEffectiveWetMass != null;
+    if (dryAllocationLineageChanged) {
       const [existingApplication] = await tx
         .select({ id: applications.id })
         .from(applications)
@@ -848,7 +847,9 @@ export async function updateDelivery(
         );
       }
     }
-    const massDryKg = dryAllocationChanged && lockedEffectiveBiocharProductId
+    const massDryKg =
+      (dryAllocationLineageChanged || needsDryAllocationBackfill) &&
+      lockedEffectiveBiocharProductId
       ? await deriveDeliveryDryBiocharKg(ctx, tx, {
           biocharProductId: lockedEffectiveBiocharProductId,
           deliveredWetMassKg: lockedEffectiveWetMass,
@@ -860,8 +861,8 @@ export async function updateDelivery(
       .update(deliveries)
       .set({
         ...data,
-        // Never trust the submitted compatibility field. Recompute only when
-        // the linked order/product or wet mass actually changes.
+        // Dry mass remains server-derived. An unrelated save may repair a
+        // missing snapshot without treating it as a lineage mutation.
         massDryKg,
         ...(deliveryColumns.distanceKmOverride
           ? {}

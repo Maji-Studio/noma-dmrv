@@ -9,9 +9,11 @@ describe("ProductCompositionPreview", () => {
         wetMassKg={4_000}
         dryBiocharKg={1_800}
         moisturePercent={40}
+        testId="composition-under-test"
       />,
     );
 
+    expect(html).toContain('data-testid="composition-under-test"');
     expect(html).toContain("Dry biochar");
     expect(html).toContain("1,800 kg");
     expect(html).toContain("Ingredients + water");
