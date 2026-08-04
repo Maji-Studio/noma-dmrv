@@ -4,21 +4,20 @@
  * certification surfaces read identically:
  *
  *   1. Created in registry   — registry record link when present
- *   2. Report generated      — v1 generates automatically once the statement
- *                              is ready; the button regenerates or retries
- *   3. Report approved       — Review link + inline Approve action
+ *   2. Report generated      — Generate/regenerate inside the submit dialog
+ *   3. Report approved       — Review + Approve inside the submit dialog
  *   4. Submitted to verifier — status detail + inline Submit/Resubmit action
  *                              (opens the sheet's submit dialog)
  *
- * The component owns the generate/approve mutations. The created and verifier
- * step models are computed by the detail sheet, which holds the remote
- * statement state. Older report versions collapse behind a disclosure.
+ * The detail sheet renders this as a passive status ladder with one Submit
+ * entry point. The submit dialog renders it interactively so every report
+ * action stays in one guided flow. Older versions collapse behind a disclosure.
  */
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui";
+import { useState } from "react";
+import { Button, buttonVariants } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import {
@@ -32,10 +31,6 @@ import { DisclosureSummary } from "./disclosure-summary";
 import type { WorkflowStepModel } from "./ghg-statement-workflow-state";
 
 type ReportsQuery = ReturnType<typeof useGhgStatementReports>;
-type PrepareMutation = ReturnType<
-  typeof usePrepareGhgStatementReport
->["mutate"];
-
 interface GhgStatementWorkflowProps {
   ghgStatementId: string;
   reportsQuery: ReportsQuery;
@@ -46,9 +41,9 @@ interface GhgStatementWorkflowProps {
   /** Server-computed Owner/Admin capability for report mutations. */
   canManageReports: boolean;
   canGenerate?: boolean;
-  /** The DRAFT statement's exact live registry roll-up is ready. */
-  autoGenerationReady?: boolean;
   generationUnavailableReason?: string | null;
+  /** Enables Generate, Review, and Approve inside the submit dialog. */
+  interactive?: boolean;
   /** Computed by the sheet from the remote statement + submit mode. */
   verifierStep: WorkflowStepModel;
   /**
@@ -60,61 +55,13 @@ interface GhgStatementWorkflowProps {
   submitLabel?: string;
 }
 
-export function shouldAutoGenerateFirstReport({
-  created,
-  canManageReports,
-  autoGenerationReady,
-  reportsLoaded,
-  reportCount,
-}: {
-  created: boolean;
-  canManageReports: boolean;
-  autoGenerationReady: boolean;
-  reportsLoaded: boolean;
-  reportCount: number;
-}): boolean {
-  return (
-    created &&
-    canManageReports &&
-    autoGenerationReady &&
-    reportsLoaded &&
-    reportCount === 0
-  );
-}
-
-export function startAutomaticFirstReportGeneration({
-  shouldStart,
-  ghgStatementId,
-  attemptedFor,
-  mutate,
-  onError,
-}: {
-  shouldStart: boolean;
-  ghgStatementId: string;
-  attemptedFor: { current: string | null };
-  mutate: PrepareMutation;
-  onError: (error: unknown) => void;
-}): boolean {
-  if (!shouldStart || attemptedFor.current === ghgStatementId) return false;
-  attemptedFor.current = ghgStatementId;
-  mutate(
-    {
-      ghgStatementId,
-      preparationKey: ghgStatementId,
-      ensureFirst: true,
-    },
-    { onError },
-  );
-  return true;
-}
-
 export function findApprovedGhgStatementReport(
   reports: GhgStatementReportView[],
 ): GhgStatementReportView | undefined {
-  return reports.find(
-    (report) =>
-      report.lifecycle === "approved" || report.lifecycle === "submitted",
-  );
+  const latest = reports[0];
+  return latest?.lifecycle === "approved" || latest?.lifecycle === "submitted"
+    ? latest
+    : undefined;
 }
 
 function reportBadge(lifecycle: string): {
@@ -139,8 +86,8 @@ export function GhgStatementWorkflow({
   registryRecord,
   canManageReports,
   canGenerate = true,
-  autoGenerationReady = false,
   generationUnavailableReason,
+  interactive = false,
   verifierStep,
   onSubmit,
   submitLabel = "Submit",
@@ -151,7 +98,7 @@ export function GhgStatementWorkflow({
     crypto.randomUUID(),
   );
   const [error, setError] = useState<string | null>(null);
-  const autoGenerateAttemptedFor = useRef<string | null>(null);
+  const [reviewedReportId, setReviewedReportId] = useState<string | null>(null);
 
   const reports = reportsQuery.data ?? [];
   const latest: GhgStatementReportView | undefined = reports[0];
@@ -178,32 +125,6 @@ export function GhgStatementWorkflow({
     setError(null);
     void runGenerate();
   };
-
-  // External-system sync (the sanctioned useEffect case): the first report
-  // version is generated automatically once the statement is ready, so the
-  // operator's only gates are Approve and Submit. One attempt per mount — a
-  // failure surfaces below and leaves the manual Generate button as the retry.
-  const shouldAutoGenerate = shouldAutoGenerateFirstReport({
-    created,
-    canManageReports,
-    autoGenerationReady,
-    reportsLoaded: !reportsQuery.isLoading && !reportsQuery.error,
-    reportCount: reports.length,
-  });
-  useEffect(() => {
-    startAutomaticFirstReportGeneration({
-      shouldStart: shouldAutoGenerate,
-      ghgStatementId,
-      attemptedFor: autoGenerateAttemptedFor,
-      mutate: prepare.mutate,
-      onError: (prepareError) =>
-        setError(
-          prepareError instanceof Error
-            ? prepareError.message
-            : "The report was not generated. Try again.",
-        ),
-    });
-  }, [ghgStatementId, prepare.mutate, shouldAutoGenerate]);
 
   if (reportsQuery.isLoading) {
     return (
@@ -285,7 +206,11 @@ export function GhgStatementWorkflow({
           label="Report generated"
           detail={generatedStep.detail}
         >
-          {created && !reportsUnavailable && canGenerate && canManageReports && (
+          {interactive &&
+            created &&
+            !reportsUnavailable &&
+            canGenerate &&
+            canManageReports && (
             <Button
               size="small"
               variant={generated ? "default" : "primary"}
@@ -309,18 +234,24 @@ export function GhgStatementWorkflow({
                 href={latest.reviewUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+                className={
+                  interactive
+                    ? buttonVariants({ variant: "default", size: "small" })
+                    : "body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+                }
+                onClick={() => setReviewedReportId(latest.id)}
               >
-                Review
+                {interactive ? "Review report" : "Review"}
               </a>
-              {latestPrepared && canManageReports && (
+              {interactive && latestPrepared && canManageReports && (
                 <Button
                   size="small"
                   variant="primary"
                   busy={approve.isPending}
+                  disabled={reviewedReportId !== latest.id}
                   onClick={() => void approveLatest()}
                 >
-                  Approve
+                  Approve report
                 </Button>
               )}
             </span>

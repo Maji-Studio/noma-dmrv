@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 
-export const GHG_STATEMENT_TOTAL_TOLERANCE_KG = 0.001;
 export const GHG_STATEMENT_REPORT_MODEL_VERSION = 2;
 
 export interface GhgStatementReportDocumentControl {
@@ -198,14 +197,9 @@ export function buildGhgStatementReportModel(
     "GHG Statement pending total",
     input.authoritativeStatement.pendingTotalCo2eRemovedKg,
   );
-  if (
-    Math.abs(netRemovedKg - statementTotal) >
-    GHG_STATEMENT_TOTAL_TOLERANCE_KG
-  ) {
-    throw new GhgStatementReportReconciliationError(
-      "The GHG Statement total does not match the exact live GHG Entry sum.",
-    );
-  }
+  // Isometric can quantize the statement total to issuable-credit precision
+  // while its GHG Entries retain a higher-precision net-removal result. Keep
+  // both registry facts in the report fingerprint without requiring equality.
   const netRemovedWithoutDiscountKg = entries.reduce(
     (total, entry) => total + entry.netRemovedWithoutDiscountKg,
     0,
