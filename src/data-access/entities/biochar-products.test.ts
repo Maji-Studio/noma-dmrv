@@ -160,4 +160,23 @@ describe("toBiocharProductEntityOption", () => {
       "Wet biochar product: 550kg | Dry biochar: 0kg available",
     );
   });
+
+  it("uses ingredient mass even when legacy formulation metadata is absent", () => {
+    expect(
+      toBiocharProductEntityOption({
+        id: "product-mass-only",
+        code: "PB-02",
+        name: "Mass-only product bin",
+        productCode: "BP-02",
+        formulationName: null,
+        massKg: 1_000,
+        waterAddedKg: 0,
+        moisturePercent: 10,
+        composition: { ingredients: [{ massKg: 200 }] },
+        totalDeliveredKg: 0,
+        totalDeliveredDryKg: 0,
+        unresolvedDeliveredDryCount: 0,
+      }).remainingMass,
+    ).toEqual({ wetKg: 1_000, dryKg: 720 });
+  });
 });

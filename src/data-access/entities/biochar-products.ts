@@ -27,7 +27,7 @@ import {
 } from "@/lib/mass-moisture";
 import {
   deriveSourceBiocharDryMassKg,
-  fromCompositionJsonb,
+  fromCompositionMassJsonb,
 } from "@/lib/biochar-composition";
 import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
 
@@ -45,7 +45,7 @@ function formatStockSubtitle(
   const productDryKg = deriveSourceBiocharDryMassKg(
     massKg,
     moisturePercent,
-    fromCompositionJsonb(composition),
+    fromCompositionMassJsonb(composition),
   );
   const remainingDryKg =
     productDryKg == null || unresolvedDeliveredDryCount > 0
@@ -147,7 +147,7 @@ export function toBiocharProductEntityOption(r: {
   const productDryKg = deriveSourceBiocharDryMassKg(
     r.massKg,
     r.moisturePercent,
-    fromCompositionJsonb(r.composition),
+    fromCompositionMassJsonb(r.composition),
   );
   const remainingDryKg =
     productDryKg == null || r.unresolvedDeliveredDryCount > 0

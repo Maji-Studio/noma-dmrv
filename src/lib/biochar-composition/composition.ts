@@ -59,6 +59,21 @@ interface IngredientMassLike {
   massKg?: unknown;
 }
 
+/** Read mass-only ingredient facts without requiring formulation metadata. */
+export function fromCompositionMassJsonb(raw: unknown): IngredientMassLike[] {
+  if (!raw || typeof raw !== "object") return [];
+  const ingredients = (raw as { ingredients?: unknown }).ingredients;
+  if (!Array.isArray(ingredients)) return [];
+
+  return ingredients.flatMap((ingredient) => {
+    if (!ingredient || typeof ingredient !== "object") return [];
+    const massKg = (ingredient as IngredientMassLike).massKg;
+    return typeof massKg === "number" && Number.isFinite(massKg) && massKg >= 0
+      ? [{ massKg }]
+      : [];
+  });
+}
+
 export const SOURCE_BIOCHAR_MASS_ERROR =
   "Recorded ingredient mass exceeds blend mass. Reduce ingredient mass or increase blend mass.";
 

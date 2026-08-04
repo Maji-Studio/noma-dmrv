@@ -16,6 +16,7 @@ export {
   ZERO_SOURCE_BIOCHAR_ERROR,
   ZERO_SOURCE_BIOCHAR_WARNING,
   toPersistedMassGrams,
+  fromCompositionMassJsonb,
   fromCompositionJsonb,
   toCompositionJsonb,
 } from "./composition";
