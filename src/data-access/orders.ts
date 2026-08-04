@@ -5,7 +5,7 @@
 
 import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { countRows, numericAggregate } from "@/db/aggregate";
 import {
   orders,
@@ -98,6 +98,8 @@ import {
 } from "./transport-legs";
 import { assertOrderQuantityCoversAllocations } from "./delivery-order-balance";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
+import { ZERO_SOURCE_BIOCHAR_WARNING } from "@/lib/biochar-composition";
+import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 
 // ============================================
 // Read Operations
@@ -483,9 +485,44 @@ async function validateCustomerLocationBelongsToCustomer(
   }
 }
 
-/**
- * Create a new order
- */
+/** Enforce the product/facility/source-mass invariant shared by order writes. */
+async function assertOrderProductCanBeUsed(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  biocharProductId: string,
+  facilityId: string,
+): Promise<void> {
+  const [product] = await tx
+    .select({
+      facilityId: biocharProducts.facilityId,
+      sourceBiocharMassKg: sourceBiocharMassKgSql(
+        biocharProducts.massKg,
+        biocharProducts.composition,
+      ),
+    })
+    .from(biocharProducts)
+    .where(
+      and(
+        eq(biocharProducts.id, biocharProductId),
+        eq(biocharProducts.organizationId, ctx.organizationId),
+      ),
+    )
+    .for("update");
+
+  if (!product) {
+    throw new SafeError("Biochar product not found");
+  }
+
+  if (product.facilityId !== facilityId) {
+    throw new SafeError("Biochar product belongs to a different facility");
+  }
+
+  if (product.sourceBiocharMassKg <= 0) {
+    throw new SafeError(ZERO_SOURCE_BIOCHAR_WARNING);
+  }
+}
+
+/** Create a new order. */
 export async function createOrder(
   ctx: OrgContext,
   data: {
@@ -503,19 +540,6 @@ export async function createOrder(
 ): Promise<Order> {
   requireOrgScope(ctx);
 
-  const [product] = await db
-    .select({ facilityId: biocharProducts.facilityId })
-    .from(biocharProducts)
-    .where(and(eq(biocharProducts.id, data.biocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
-
-  if (!product) {
-    throw new SafeError("Biochar product not found");
-  }
-
-  if (product.facilityId !== data.facilityId) {
-    throw new SafeError("Biochar product belongs to a different facility");
-  }
-
   await assertSameOrg(ctx, customers, data.customerId);
   await validateCustomerLocationBelongsToCustomer(
     ctx,
@@ -523,24 +547,33 @@ export async function createOrder(
     data.customerLocationId
   );
 
-  const [order] = await db
-    .insert(orders)
-    .values({
-      organizationId: ctx.organizationId,
-      code: data.code,
-      facilityId: data.facilityId,
-      customerId: data.customerId,
-      customerLocationId: data.customerLocationId,
-      biocharProductId: data.biocharProductId,
-      orderDate: data.orderDate,
-      quantityKg: data.quantityKg,
-      packaging: data.packaging,
-      value: data.value ?? null,
-      currency: data.currency ?? "TZS",
-    })
-    .returning();
+  return db.transaction(async (tx) => {
+    await assertOrderProductCanBeUsed(
+      ctx,
+      tx,
+      data.biocharProductId,
+      data.facilityId,
+    );
 
-  return order;
+    const [order] = await tx
+      .insert(orders)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        facilityId: data.facilityId,
+        customerId: data.customerId,
+        customerLocationId: data.customerLocationId,
+        biocharProductId: data.biocharProductId,
+        orderDate: data.orderDate,
+        quantityKg: data.quantityKg,
+        packaging: data.packaging,
+        value: data.value ?? null,
+        currency: data.currency ?? "TZS",
+      })
+      .returning();
+
+    return order;
+  });
 }
 
 // ============================================
@@ -590,31 +623,11 @@ export async function updateOrder(
     }
   }
 
-  const effectiveFacilityId = data.facilityId ?? existing.facilityId;
-  const effectiveProductId = data.biocharProductId ?? existing.biocharProductId;
   const effectiveCustomerId = data.customerId ?? existing.customerId;
   const effectiveCustomerLocationId =
     data.customerLocationId !== undefined
       ? data.customerLocationId
       : existing.customerLocationId;
-
-  if (
-    (data.facilityId !== undefined || data.biocharProductId !== undefined) &&
-    effectiveProductId
-  ) {
-    const [product] = await db
-      .select({ facilityId: biocharProducts.facilityId })
-      .from(biocharProducts)
-      .where(and(eq(biocharProducts.id, effectiveProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
-
-    if (!product) {
-      throw new SafeError("Biochar product not found");
-    }
-
-    if (product.facilityId !== effectiveFacilityId) {
-      throw new SafeError("Biochar product belongs to a different facility");
-    }
-  }
 
   if (data.customerId !== undefined || data.customerLocationId !== undefined) {
     await assertSameOrg(ctx, customers, effectiveCustomerId);
@@ -689,6 +702,13 @@ export async function updateOrder(
         repointPreparation,
       );
     }
+
+    await assertOrderProductCanBeUsed(
+      ctx,
+      tx,
+      data.biocharProductId ?? locked.biocharProductId,
+      data.facilityId ?? locked.facilityId,
+    );
 
     const productChanged =
       data.biocharProductId !== undefined &&

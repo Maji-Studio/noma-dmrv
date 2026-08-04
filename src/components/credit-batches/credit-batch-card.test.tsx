@@ -91,6 +91,40 @@ describe("CreditBatchCard", () => {
     expect(collectText(loading)).toContain("Loading certification progress…");
   });
 
+  it("shows CO₂e only when a numeric preview is available", () => {
+    const unavailableBatch = {
+      ...creditBatch,
+      co2eStoredPreview: {
+        provider: "isometric",
+        co2eStoredTonnes: null,
+        moduleVersion: null,
+        applicationResults: [],
+        missingInputs: ["dryMassTonnes"],
+        warnings: [],
+      },
+    } as CreditBatchWithRelations;
+    const availableBatch = {
+      ...unavailableBatch,
+      co2eStoredPreview: {
+        ...unavailableBatch.co2eStoredPreview,
+        co2eStoredTonnes: 12.5,
+        missingInputs: [],
+      },
+    } as CreditBatchWithRelations;
+    const renderCardText = (batch: CreditBatchWithRelations) =>
+      collectText(
+        CreditBatchCard({
+          creditBatch: batch,
+          onView: vi.fn(),
+          onEdit: vi.fn(),
+          onDelete: vi.fn(),
+        }),
+      );
+
+    expect(renderCardText(unavailableBatch)).not.toContain("CO₂e stored");
+    expect(renderCardText(availableBatch)).toContain("CO₂e stored12.50 t");
+  });
+
   it("places readiness beside the open lifecycle state", () => {
     const summary: CreditBatchHealthSummary = {
       state: "incomplete",

@@ -857,25 +857,23 @@ beforeAll(async () => {
     ).rejects.toThrow("Not enough biochar in this bin");
   });
 
-  it("allows a binless all-ingredient product with zero required source mass", async () => {
+  it("rejects a binless all-ingredient product with zero source biochar", async () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const sourceBinId = await makeBiocharBin();
     const productBinId = await makeProductBin(formulationAId);
     const composition = formulationAComposition();
     composition.ingredients[0].massKg = 100;
-    const product = await createBiocharProduct(ctx, {
-      ...baseProductInput(),
-      linkedProductionRunId: null,
-      sourceBiocharStorageLocationId: sourceBinId,
-      formulationId: formulationAId,
-      storageLocationId: productBinId,
-      massKg: 100,
-      composition,
-    });
-    createdProductIds.push(product.id);
-    const allocations = await db.select().from(biocharProductSourceAllocations)
-      .where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
-    expect(allocations).toEqual([]);
+    await expect(
+      createBiocharProduct(ctx, {
+        ...baseProductInput(),
+        linkedProductionRunId: null,
+        sourceBiocharStorageLocationId: sourceBinId,
+        formulationId: formulationAId,
+        storageLocationId: productBinId,
+        massKg: 100,
+        composition,
+      }),
+    ).rejects.toThrow("Source biochar mass must be greater than 0 kg");
   });
   it("updates legacy blend mass without requiring a missing ingredient bin", async () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);

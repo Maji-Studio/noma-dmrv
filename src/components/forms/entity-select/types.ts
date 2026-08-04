@@ -79,6 +79,8 @@ export interface EntitySelectProps {
   alwaysShowSearch?: boolean;
   /** Hide the search input entirely */
   hideSearch?: boolean;
+  /** Whether the selected option's remaining-mass caption includes dry mass. */
+  showRemainingDryMass?: boolean;
   /** Custom formatter for the selected value display */
   formatSelectedLabel?: (entity: EntityOption) => string;
   /**
