@@ -103,7 +103,7 @@ describe("stock-reducing update guards", () => {
     }
   });
 
-  it("allows inherited deliveries to move between products in the same bin", async () => {
+  it("rejects moving inherited deliveries between products in the same bin", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
@@ -189,17 +189,19 @@ describe("stock-reducing update guards", () => {
       .returning({ id: deliveries.id });
     createdDeliveryIds.push(delivery.id);
 
-    const updated = await updateOrder(makeTestOrgContext(), order.id, {
-      biocharProductId: targetProduct.id,
-    });
-
-    expect(updated.biocharProductId).toBe(targetProduct.id);
+    await expect(
+      updateOrder(makeTestOrgContext(), order.id, {
+        biocharProductId: targetProduct.id,
+      }),
+    ).rejects.toThrow(
+      "This order already has deliveries. Create a new order instead of changing its biochar product.",
+    );
 
     const [persisted] = await db
       .select({ biocharProductId: orders.biocharProductId })
       .from(orders)
       .where(eq(orders.id, order.id));
-    expect(persisted.biocharProductId).toBe(targetProduct.id);
+    expect(persisted.biocharProductId).toBe(initialProduct.id);
   });
 
   it("rejects inherited deliveries that overdraw a different product bin", async () => {
