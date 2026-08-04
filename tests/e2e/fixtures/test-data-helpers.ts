@@ -55,6 +55,7 @@ export interface TestBiocharProduct {
   productionDate: Date;
   status: "draft" | "testing" | "ready" | "sold";
   massKg: number | null;
+  moistureContentPercent: number | null;
 }
 
 export interface TestApplication {
@@ -318,6 +319,7 @@ export async function createTestBiocharProduct(
       productionDate: overrides.productionDate ?? new Date(),
       status: overrides.status ?? "testing",
       massKg: overrides.massKg ?? 500,
+      moistureContentPercent: overrides.moistureContentPercent ?? 10,
     };
 
     await db.insert(schema.biocharProducts).values({
@@ -329,6 +331,7 @@ export async function createTestBiocharProduct(
       productionDate: product.productionDate,
       status: product.status,
       massKg: product.massKg,
+      moistureContentPercent: product.moistureContentPercent,
     });
 
     return product;

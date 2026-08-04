@@ -11,7 +11,7 @@
  * two in step if either changes.
  */
 
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import type { db, DbTransaction } from "@/db";
 import { sumNumeric } from "@/db/aggregate";
 import {
@@ -393,4 +393,36 @@ export async function deriveBiocharProductDeliveredKg(
     .where(and(...deliveredConditions));
 
   return delivered.total;
+}
+
+/** Wet mass reserved by every non-archived delivery for one product batch. */
+export async function deriveBiocharProductAllocatedKg(
+  ctx: OrgContext,
+  tx: DbReader,
+  biocharProductId: string,
+  excludeDeliveryId?: string,
+): Promise<number> {
+  requireOrgScope(ctx);
+  const allocationConditions = [
+    eq(deliveries.organizationId, ctx.organizationId),
+    isNull(deliveries.archivedAt),
+    sql`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId}) = ${biocharProductId}`,
+  ];
+  if (excludeDeliveryId) {
+    allocationConditions.push(ne(deliveries.id, excludeDeliveryId));
+  }
+
+  const [allocated] = await tx
+    .select({ total: sumNumeric(deliveries.deliveredWetMassKg) })
+    .from(deliveries)
+    .innerJoin(
+      orders,
+      and(
+        eq(deliveries.orderId, orders.id),
+        eq(orders.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(...allocationConditions));
+
+  return allocated.total;
 }

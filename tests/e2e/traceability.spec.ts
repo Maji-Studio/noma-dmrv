@@ -298,7 +298,11 @@ async function seedBatchChain(seededData: SeededChainData) {
         .set({
           linkedProductionRunId: ids.productionRun,
           storageLocationId: seededData.biocharStorageLocation.id,
+          // This Sankey fixture models a 300 kg dry lot. Override the shared
+          // fixture's 10% moisture so the wet-to-dry conversion stays aligned
+          // with the production run and the documented 50 kg remainder.
           massKg: 300,
+          moistureContentPercent: 0,
         })
         .where(eq(schema.biocharProducts.id, seededData.biocharProduct.id));
 

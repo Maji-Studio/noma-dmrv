@@ -717,9 +717,13 @@ export async function updateOrder(
       data.customerLocationId !== undefined &&
       data.customerLocationId !== locked.customerLocationId;
     const affectedProductIds: Array<string | null> = [];
+    let inheritingDeliveries: Array<{
+      biocharProductId: string | null;
+      customerLocationId: string | null;
+    }> = [];
 
     if (productChanged || customerLocationChanged) {
-      const inheritingDeliveries = await tx
+      inheritingDeliveries = await tx
         .select({
           biocharProductId: deliveries.biocharProductId,
           customerLocationId: deliveries.customerLocationId,
@@ -728,15 +732,22 @@ export async function updateOrder(
         .where(and(
           eq(deliveries.orderId, orderId),
           eq(deliveries.organizationId, ctx.organizationId),
-        ));
+        ))
+        .orderBy(deliveries.id)
+        .for("update");
 
-      for (const delivery of inheritingDeliveries) {
-        if (productChanged && delivery.biocharProductId === null) {
-          affectedProductIds.push(
-            locked.biocharProductId,
-            data.biocharProductId ?? locked.biocharProductId,
+      if (productChanged) {
+        const inheritedProductDelivery = inheritingDeliveries.find(
+          (delivery) => delivery.biocharProductId === null,
+        );
+        if (inheritedProductDelivery) {
+          throw new SafeError(
+            "This order already has deliveries. Create a new order instead of changing its biochar product.",
           );
         }
+      }
+
+      for (const delivery of inheritingDeliveries) {
         if (
           customerLocationChanged &&
           delivery.customerLocationId === null

@@ -24,6 +24,7 @@ describe("mass input caps", () => {
       orderId: UUID,
       deliveryDate: new Date("2026-07-01"),
       deliveredWetMassKg: MASS_INPUT_MAX_KG * 10,
+      moistureContentPercent: 10,
     });
 
     expect(result.success).toBe(false);
@@ -44,17 +45,18 @@ describe("mass input caps", () => {
       orderId: UUID,
       deliveryDate: new Date("2026-07-01"),
       deliveredWetMassKg: MASS_INPUT_MAX_KG,
+      moistureContentPercent: 10,
     });
 
     expect(result.success).toBe(true);
   });
 
-  it("rejects negative delivery wet and dry mass before the DB check", () => {
+  it("rejects negative delivery wet mass before the DB check", () => {
     const result = deliveryFormSchema.safeParse({
       orderId: UUID,
       deliveryDate: new Date("2026-07-01"),
       deliveredWetMassKg: -1,
-      massDryKg: -1,
+      moistureContentPercent: 10,
     });
 
     expect(result.success).toBe(false);
@@ -64,10 +66,6 @@ describe("mass input caps", () => {
           expect.objectContaining({
             path: ["deliveredWetMassKg"],
             message: "Wet mass must be 0 or more",
-          }),
-          expect.objectContaining({
-            path: ["massDryKg"],
-            message: "Dry mass must be 0 or more",
           }),
         ]),
       );

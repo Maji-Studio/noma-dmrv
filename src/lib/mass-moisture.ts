@@ -1,22 +1,22 @@
 /**
  * The one vocabulary and the one arithmetic for wet mass, moisture and dry mass.
  *
- * Every biochar entity that carries a mass carries the same three quantities in
- * the same relationship:
+ * For a single unmixed material, the three quantities have this relationship:
  *
  *     wet mass  =  dry mass  +  water
  *     moisture  =  water / wet mass        (wet basis, 0–100 %)
  *
- * Dry mass is the figure carbon accounting is built on; wet mass is what the
- * scale reads. Before this module each surface said it differently ("Moisture
+ * A blended biochar product is different: finished-product moisture cannot
+ * split dry biochar from ingredient solids, so those surfaces use tracked
+ * composition accounting instead. Before this module each moisture surface said it differently ("Moisture
  * Content (%)", "Moisture (%)", "Moisture %"), formatted it differently, and
  * derived the split inline. Labels, precision and the split now come from here
  * so a feedstock batch, a delivery and a production run all read the same.
  *
  * Presentation lives in `@/components/ui/moisture-split`; the form inputs live
  * in `@/components/forms/mass-moisture-fields`. Server-side the
- * authoritative dry mass is still recomputed from `@/lib/calculations/mass-dry`
- * — anything derived here is operator feedback, never a submitted value.
+ * authoritative unmixed-material dry mass is recomputed server-side. Anything
+ * derived here is operator feedback, never a submitted value.
  */
 
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";

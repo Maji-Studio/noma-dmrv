@@ -1,41 +1,48 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { deriveEffectiveMoisturePercent } from "@/lib/mass-moisture";
 import { OrderMassPreview } from "./order-mass-preview";
 
 describe("OrderMassPreview", () => {
-  it("derives dry mass from the entered wet quantity and selected product moisture", () => {
+  it("shows the proportional tracked dry biochar as a planning estimate", () => {
     const html = renderToStaticMarkup(
-      <OrderMassPreview quantityKg="1000" moisturePercent={15} />,
+      <OrderMassPreview
+        quantityKg="1000"
+        productWetBasisKg={4_000}
+        productDryBiocharKg={1_800}
+      />,
     );
 
-    expect(html).toContain(
-      "Wet biochar product: 1,000kg | Dry biochar: 850kg",
-    );
-    expect(html).toContain('data-testid="order-mass-preview"');
+    expect(html).toContain("Wet biochar product reserved:");
+    expect(html).toContain("1,000 kg");
+    expect(html).toContain("Dry biochar");
+    expect(html).toContain("450 kg");
+    expect(html).toContain("planning estimate");
     expect(html).toContain("bg-[var(--color-background-medium)]");
+    expect(html).toContain('data-testid="order-mass-preview"');
   });
 
   it("keeps the unresolved visualization when inputs are incomplete", () => {
     const html = renderToStaticMarkup(
-      <OrderMassPreview quantityKg="" moisturePercent={15} />,
-    );
-
-    expect(html).toContain("Wet mass not recorded");
-    expect(html).toContain("Dry biochar cannot be calculated");
-  });
-
-  it("previews dry mass from effective moisture after added water", () => {
-    const html = renderToStaticMarkup(
       <OrderMassPreview
-        quantityKg="100"
-        moisturePercent={deriveEffectiveMoisturePercent(100, 10, 50)}
+        quantityKg=""
+        productWetBasisKg={4_000}
+        productDryBiocharKg={1_800}
       />,
     );
 
-    expect(html).toContain(
-      "Wet biochar product: 100kg | Dry biochar: 60kg",
+    expect(html).toContain("Not recorded");
+  });
+
+  it("does not use finished-product moisture to estimate dry biochar", () => {
+    const html = renderToStaticMarkup(
+      <OrderMassPreview
+        quantityKg="100"
+        productWetBasisKg={150}
+        productDryBiocharKg={90}
+      />,
     );
-    expect(html).not.toContain("Dry biochar: 90kg");
+
+    expect(html).toContain("60 kg");
+    expect(html).not.toContain("90 kg");
   });
 });

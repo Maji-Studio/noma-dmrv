@@ -270,7 +270,6 @@ export async function createDeliveryFn(
           vehicleId: validated.vehicleId ?? null,
           status: validated.status,
           deliveredWetMassKg: validated.deliveredWetMassKg ?? null,
-          massDryKg: validated.massDryKg ?? null,
           moistureContentPercent: validated.moistureContentPercent ?? null,
           distanceKmOverride: validated.distanceKmOverride ?? null,
           distanceSource: resolveDeliveryDistanceSource(
@@ -328,7 +327,6 @@ export async function updateDeliveryFn(
       vehicleId: validated.vehicleId,
       status: validated.status,
       deliveredWetMassKg: validated.deliveredWetMassKg,
-      massDryKg: validated.massDryKg,
       moistureContentPercent: validated.moistureContentPercent,
       distanceKmOverride: validated.distanceKmOverride,
       distanceSource: resolveDeliveryDistanceSource(

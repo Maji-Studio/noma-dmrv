@@ -1,9 +1,4 @@
-/**
- * Storage-location options for searchable entity selection.
- *
- * The subtitle reflects live inventory (remaining feedstock, available biochar,
- * stored product), computed from five aggregate subqueries joined per location.
- */
+/** Storage-location options with live inventory subtitles. */
 
 import {
   ilike,
@@ -51,7 +46,10 @@ import {
   type LaneStockDerivation,
 } from "../lane-stock-derivation";
 import { estimateRemainingFeedstockWetMassKg } from "../storage-location-enrichment";
-import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
+import {
+  productDryBiocharKgSql,
+  sourceBiocharMassKgSql,
+} from "../biochar-product-source-mass";
 
 export function formatStorageLocationSubtitle(
   type: string,
@@ -378,16 +376,24 @@ function buildInventoryAggregates(
     totalProductKg: sumNumeric(
       sql`COALESCE(${biocharProducts.massKg}, 0) + COALESCE(${biocharProducts.waterAddedKg}, 0)`,
     ).as("total_product_kg"),
-    totalProductDryKg: sumNumeric(
-      sql`${biocharProducts.massKg} * (1 - (${biocharProducts.moistureContentPercent} / 100.0))`,
-      sql`${biocharProducts.massKg} IS NOT NULL AND ${biocharProducts.moistureContentPercent} IS NOT NULL`,
-    ).as("total_product_dry_kg"),
+    totalProductDryKg: sumNumeric(productDryBiocharKgSql(
+      biocharProducts.id,
+      biocharProducts.massKg,
+      biocharProducts.moistureContentPercent,
+      biocharProducts.composition,
+      ctx.organizationId,
+    )).as("total_product_dry_kg"),
     unresolvedProductDryCount: numericAggregate(sql<number>`
       COALESCE(
         SUM(
           CASE
             WHEN COALESCE(${biocharProducts.massKg}, 0) > 0
               AND ${biocharProducts.moistureContentPercent} IS NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM ${biocharProductSourceAllocations} allocation
+                WHERE allocation.biochar_product_id = ${biocharProducts.id}
+                  AND allocation.organization_id = ${ctx.organizationId}
+              )
             THEN 1
             ELSE 0
           END

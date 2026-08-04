@@ -50,6 +50,7 @@ import {
   isStockOverdraw,
 } from "@/lib/stock-overdraw";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
+import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -292,21 +293,14 @@ export function TransferFlowPreview({
                 {destinationBinLabel}
               </span>
             </p>
-            {destinationDryMassKg !== null && destinationDryMassKg > 0 && (
-              <span className="body-small text-[var(--color-text-secondary)] mt-6">
-                Dry biochar:{" "}
-                <span className="font-medium text-[var(--st-ok)]">
-                  +{formatMassKg(destinationDryMassKg)}
-                </span>
-              </span>
-            )}
-            {destinationWetProductKg !== null && destinationWetProductKg > 0 && (
-              <span className="body-small text-[var(--color-text-secondary)] mt-2">
-                Wet product:{" "}
-                <span className="font-medium">
-                  {formatMassKg(destinationWetProductKg)}
-                </span>
-              </span>
+            {(destinationDryMassKg !== null || destinationWetProductKg !== null) && (
+              <ProductCompositionPreview
+                wetMassKg={destinationWetProductKg}
+                dryBiocharKg={destinationDryMassKg}
+                wetLabel="Final wet biochar product"
+                framed={false}
+                className="mt-6"
+              />
             )}
             {hasWetTransfer && destinationDryMassKg === null && (
               <span className="body-small text-[var(--color-text-tertiary)] mt-6">
@@ -558,6 +552,9 @@ export function BiocharProductForm({
     waterAddedKgNum >= 0
       ? blendMassKg + waterAddedKgNum
       : null;
+  const destinationDryBiocharKg = isEditMode
+    ? product?.sourceAllocatedDryMassKg ?? finalMassSplit?.dryKg ?? null
+    : finalMassSplit?.dryKg ?? null;
 
   return (
     <div className="space-y-20">
@@ -606,7 +603,7 @@ export function BiocharProductForm({
               product?.sourceAllocatedDryMassKg ?? null
             }
             additions={transferAdditions}
-            destinationDryMassKg={finalMassSplit?.dryKg ?? null}
+            destinationDryMassKg={destinationDryBiocharKg}
             destinationWetProductKg={destinationWetProductKg}
             destinationBinLabel={
               selectedStorageLocation?.name

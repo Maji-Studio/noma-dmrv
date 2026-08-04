@@ -397,12 +397,17 @@ restore for free.
 
 ### Wet mass, moisture, dry mass
 
-One vocabulary, one arithmetic, one visual — all from `@/lib/mass-moisture`
+One vocabulary and one visual system for unmixed materials, all from `@/lib/mass-moisture`
 (`splitWetMass`, `formatMoisturePercent`, `formatSplitMass`, the
 `*_FIELD_LABEL` constants), `MoistureSplit`
 (`@/components/ui/moisture-split`), and `MassPair`
 (`@/components/ui/mass-pair`). **Never retype a moisture label, re-derive the
 split inline, or format a percentage by hand.**
+
+Blended biochar products use `ProductCompositionPreview` instead. It shows the
+conserved `Dry biochar` allocation and the mutually exclusive `Ingredients +
+water` remainder. Show measured finished-product moisture separately as
+delivery evidence; never use it to recalculate either composition mass.
 
 - **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
   ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
