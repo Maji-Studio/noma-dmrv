@@ -43,6 +43,7 @@ vi.mock("react-hook-form", () => ({
 }));
 
 vi.mock("@/components/ui", () => ({
+  buttonVariants: () => "button",
   Button: ({ children, onClick, type, disabled }: {
     children: ReactNode;
     onClick?: () => void;
@@ -106,6 +107,28 @@ vi.mock("@/hooks/use-certification", () => ({
     isSuccess: false,
     mutateAsync: state.submit,
     reset: vi.fn(),
+  }),
+  useGhgStatementReports: () => ({
+    data: [
+      {
+        id: "report-1",
+        version: 1,
+        lifecycle: "approved",
+        reviewUrl: "/api/documents/report-1",
+      },
+    ],
+    error: null,
+    isFetching: false,
+    isLoading: false,
+    refetch: vi.fn(),
+  }),
+  usePrepareGhgStatementReport: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
+  }),
+  useApproveGhgStatementReport: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
   }),
 }));
 
@@ -197,7 +220,7 @@ describe("GHG Statement route refreshes", () => {
           onClose={vi.fn()}
           isProduction={false}
           isResubmit={false}
-          approvedReportId={null}
+          canGenerate
         />,
       );
     });

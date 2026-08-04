@@ -158,16 +158,38 @@ describe("GHG Statement report model", () => {
     expect(repinned.sourceFingerprint).not.toBe(base.sourceFingerprint);
   });
 
-  it("fails closed when the statement total drifts from the live entry sum", () => {
-    expect(() =>
-      buildGhgStatementReportModel({
-        ...buildInput(),
-        authoritativeStatement: {
-          externalEntryIds: ["rmv_a", "rmv_b"],
-          pendingTotalCo2eRemovedKg: 999,
+  it("allows the statement total to use coarser issuance precision", () => {
+    const model = buildGhgStatementReportModel({
+      ...buildInput(),
+      authoritativeStatement: {
+        externalEntryIds: ["rmv_live"],
+        pendingTotalCo2eRemovedKg: 1_500,
+      },
+      remoteEntries: [
+        {
+          id: "rmv_live",
+          startedOn: "2026-08-03",
+          completedOn: "2026-08-04",
+          netRemovedKg: 1_502.1608971810922,
+          netRemovedWithoutDiscountKg: 1_527.153951802095,
+          netRemovedStandardDeviationKg: 24.99305462100288,
+          supplierCreditKg: 1_470,
+          bufferPoolKg: 30,
+          ghgStatementId: "ggs_1",
         },
-      }),
-    ).toThrowError(/total/i);
+      ],
+    });
+
+    expect(model.totals).toMatchObject({
+      netRemovedKg: 1_502.1608971810922,
+      netRemovedWithoutDiscountKg: 1_527.153951802095,
+      supplierCreditKg: 1_470,
+      bufferPoolKg: 30,
+    });
+    expect(model.totals.uncertaintyDiscountKg).toBeCloseTo(
+      24.99305462100288,
+      10,
+    );
   });
 });
 
