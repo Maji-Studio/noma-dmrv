@@ -831,7 +831,23 @@ export async function updateDelivery(
     const dryAllocationChanged =
       lockedEffectiveOrderId !== lockedDelivery.orderId ||
       lockedEffectiveBiocharProductId !== lockedExistingBiocharProductId ||
-      lockedEffectiveWetMass !== lockedDelivery.deliveredWetMassKg;
+      lockedEffectiveWetMass !== lockedDelivery.deliveredWetMassKg ||
+      (lockedDelivery.massDryKg == null && lockedEffectiveWetMass != null);
+    if (dryAllocationChanged) {
+      const [existingApplication] = await tx
+        .select({ id: applications.id })
+        .from(applications)
+        .where(and(
+          eq(applications.deliveryId, deliveryId),
+          eq(applications.organizationId, ctx.organizationId),
+        ))
+        .limit(1);
+      if (existingApplication) {
+        throw new SafeError(
+          "This delivery already has applications. Delete them before changing its order, product, or wet mass.",
+        );
+      }
+    }
     const massDryKg = dryAllocationChanged && lockedEffectiveBiocharProductId
       ? await deriveDeliveryDryBiocharKg(ctx, tx, {
           biocharProductId: lockedEffectiveBiocharProductId,

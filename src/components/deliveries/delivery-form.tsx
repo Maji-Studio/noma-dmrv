@@ -410,7 +410,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <WetMassField
             id="deliveredWetMassKg"
-            label="Biochar product wet mass (kg)"
+            materialLabel="Biochar product"
             error={deliveredWetMassError}
             hint="As-received weight of the delivery, water included."
             required
@@ -422,12 +422,12 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           />
           <MoistureField
             id="moistureContentPercent"
-            label="Biochar product moisture (%)"
+            materialLabel="Biochar product"
             error={errors.moistureContentPercent?.message}
             required
             disabled={isSubmitting}
             placeholder="e.g. 20"
-            registration={register("moistureContentPercent", { setValueAs: numericValue })}
+            registration={register("moistureContentPercent")}
           />
           <ProductCompositionPreview
             className="md:col-span-2"

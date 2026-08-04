@@ -236,6 +236,37 @@ describe("application mutations", () => {
     }
   });
 
+  it("rejects a final allocation when prior dry mass exceeds the delivery", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const [corrupt] = await db
+        .insert(applications)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `AP-AM-${runId}-CORRUPT`,
+          deliveryId: fixture.deliveryIds[0],
+          applicationDate: new Date("2025-07-08"),
+          biocharAppliedTons: 4,
+          biocharAppliedDryTons: 4.1,
+        })
+        .returning({ id: applications.id });
+      fixture.applicationIds.push(corrupt.id);
+
+      await expect(
+        createApplication(makeTestOrgContext(TEST_USER_ID), {
+          code: `AP-AM-${runId}-AFTER-CORRUPT`,
+          deliveryId: fixture.deliveryIds[0],
+          applicationDate: new Date("2025-07-09"),
+          biocharAppliedTons: 1,
+        }),
+      ).rejects.toThrow("Tracked dry biochar is not available");
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
   it("defaults new applications to visual evidence", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
@@ -353,7 +384,7 @@ describe("application mutations", () => {
     }
   });
 
-  it("ignores submitted dry mass and uses the delivery allocation", async () => {
+  it("derives dry mass from the delivery allocation", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
     const code = `AP-AM-${runId}-DRY-OVER-WET`;
@@ -369,7 +400,6 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
-          biocharAppliedDryTons: 2.001,
         });
       fixture.applicationIds.push(application.id);
       expect(application.biocharAppliedDryTons).toBeCloseTo(1.6);
@@ -379,7 +409,7 @@ describe("application mutations", () => {
     }
   });
 
-  it("does not recalculate or overwrite dry biochar for a dry-only update", async () => {
+  it("does not recalculate dry biochar for an unrelated update", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
 
@@ -396,13 +426,12 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
-          biocharAppliedDryTons: 1.5,
         },
       );
       fixture.applicationIds.push(application.id);
 
       const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
-          biocharAppliedDryTons: 2.001,
+          fieldIdentifier: "Updated field",
         });
       expect(updated.biocharAppliedDryTons).toBeCloseTo(1.6);
     } finally {

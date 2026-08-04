@@ -737,7 +737,20 @@ export async function updateOrder(
         .where(and(
           eq(deliveries.orderId, orderId),
           eq(deliveries.organizationId, ctx.organizationId),
-        ));
+        ))
+        .orderBy(deliveries.id)
+        .for("update");
+
+      if (productChanged) {
+        const inheritedProductDelivery = inheritingDeliveries.find(
+          (delivery) => delivery.biocharProductId === null,
+        );
+        if (inheritedProductDelivery) {
+          throw new SafeError(
+            "This order already has deliveries. Create a new order instead of changing its biochar product.",
+          );
+        }
+      }
 
       for (const delivery of inheritingDeliveries) {
         if (productChanged && delivery.biocharProductId === null) {

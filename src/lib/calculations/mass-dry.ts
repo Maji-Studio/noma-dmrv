@@ -10,7 +10,7 @@ export function exceedsMassWithTolerance(
   return candidateMassKg > referenceMassKg + MASS_COMPARISON_EPSILON_KG;
 }
 
-function roundKg(value: number): number {
+export function roundKg(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 

@@ -62,6 +62,10 @@ import {
 } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
+  MASS_MOISTURE_LABELS,
+  MOISTURE_FIELD_LABEL,
+  qualifyMassLabel,
+  WET_MASS_FIELD_LABEL,
 } from "@/lib/mass-moisture";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
@@ -140,7 +144,7 @@ function createColumns(
     // still showed it.
     {
       accessorKey: "deliveredWetMassKg",
-      header: "Biochar product wet mass",
+      header: qualifyMassLabel(MASS_MOISTURE_LABELS.wet, "Biochar product"),
       cell: ({ row }) => (
         <span className="font-mono text-right">{formatMassKg(row.original.deliveredWetMassKg)}</span>
       ),
@@ -154,7 +158,10 @@ function createColumns(
     },
     {
       accessorKey: "moistureContentPercent",
-      header: "Biochar product moisture",
+      header: qualifyMassLabel(
+        MASS_MOISTURE_LABELS.moisture,
+        "Biochar product",
+      ),
       cell: ({ row }) => (
         <span className="font-mono text-right">
           {formatMoisturePercent(row.original.moistureContentPercent)}
@@ -616,12 +623,18 @@ export function DeliveryList() {
                   title: "Mass and moisture",
                   fields: [
                     {
-                      label: "Biochar product wet mass (kg)",
+                      label: qualifyMassLabel(
+                        WET_MASS_FIELD_LABEL,
+                        "Biochar product",
+                      ),
                       ...certificationDetailField("delivery", "deliveredWetMassKg"),
                       value: formatMassKg(sideSheetEntity.deliveredWetMassKg),
                     },
                     {
-                      label: "Biochar product moisture (%)",
+                      label: qualifyMassLabel(
+                        MOISTURE_FIELD_LABEL,
+                        "Biochar product",
+                      ),
                       value: formatMoisturePercent(sideSheetEntity.moistureContentPercent),
                     },
                   ],

@@ -34,7 +34,10 @@ import {
 } from "@/db/schema";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { deriveLaneStock } from "./lane-stock-derivation";
-import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
+import {
+  productDryBiocharKgSql,
+  sourceBiocharMassKgSql,
+} from "./biochar-product-source-mass";
 import { requireOrgScope } from "./utils";
 
 // ============================================
@@ -501,26 +504,13 @@ export async function enrichStorageLocationRows(
               'in',
               bp.created_at,
               COALESCE(bp.mass_kg, 0) + COALESCE(bp.water_added_kg, 0),
-              CASE
-                WHEN EXISTS (
-                  SELECT 1
-                  FROM biochar_product_source_allocations allocation
-                  WHERE allocation.biochar_product_id = bp.id
-                    AND allocation.organization_id = ${ctx.organizationId}
-                ) THEN (
-                  SELECT COALESCE(SUM(allocation.allocated_dry_mass_kg), 0)
-                  FROM biochar_product_source_allocations allocation
-                  WHERE allocation.biochar_product_id = bp.id
-                    AND allocation.organization_id = ${ctx.organizationId}
-                )
-                WHEN bp.mass_kg IS NULL OR bp.moisture_content_percent IS NULL
-                  THEN NULL
-                ELSE
-                  ${sourceBiocharMassKgSql(
-                    sql.raw("bp.mass_kg"),
-                    sql.raw("bp.composition"),
-                  )} * (1 - bp.moisture_content_percent / 100.0)
-              END,
+              ${productDryBiocharKgSql(
+                sql.raw("bp.id"),
+                sql.raw("bp.mass_kg"),
+                sql.raw("bp.moisture_content_percent"),
+                sql.raw("bp.composition"),
+                ctx.organizationId,
+              )},
               COALESCE(f.name, ${PURE_BIOCHAR_LABEL})
             FROM biochar_products bp
             LEFT JOIN formulations f

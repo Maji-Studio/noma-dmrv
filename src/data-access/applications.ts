@@ -88,14 +88,9 @@ type CreateApplicationInput = Omit<
 > & {
   evidenceMethod?: ApplicationEvidenceMethod;
   gisBoundary?: GisBoundary | null;
-  /** Legacy direct callers may submit this, but the data layer ignores it. */
-  biocharAppliedDryTons?: number | null;
 };
 
-type UpdateApplicationInput = Omit<UpdateApplicationData, "applicationId"> & {
-  /** Legacy direct callers may submit this, but the data layer ignores it. */
-  biocharAppliedDryTons?: number | null;
-};
+type UpdateApplicationInput = Omit<UpdateApplicationData, "applicationId">;
 
 function optionalText(value: string | null | undefined): string | null {
   const trimmed = value?.trim() ?? "";
@@ -286,7 +281,7 @@ function resolveApplicationDryMassTons(
   });
   if (allocatedDryKg == null) {
     throw new SafeError(
-      "Tracked dry biochar is not available for this delivery. Update the delivery before recording an application.",
+      "Tracked dry biochar is not available. Complete the linked product's biochar mass and moisture, then save the delivery again.",
     );
   }
   return kgToTonnes(allocatedDryKg);

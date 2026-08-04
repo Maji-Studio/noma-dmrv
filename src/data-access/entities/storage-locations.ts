@@ -46,7 +46,10 @@ import {
   type LaneStockDerivation,
 } from "../lane-stock-derivation";
 import { estimateRemainingFeedstockWetMassKg } from "../storage-location-enrichment";
-import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
+import {
+  productDryBiocharKgSql,
+  sourceBiocharMassKgSql,
+} from "../biochar-product-source-mass";
 
 export function formatStorageLocationSubtitle(
   type: string,
@@ -373,22 +376,13 @@ function buildInventoryAggregates(
     totalProductKg: sumNumeric(
       sql`COALESCE(${biocharProducts.massKg}, 0) + COALESCE(${biocharProducts.waterAddedKg}, 0)`,
     ).as("total_product_kg"),
-    totalProductDryKg: sumNumeric(
-      sql`CASE
-        WHEN EXISTS (
-          SELECT 1 FROM ${biocharProductSourceAllocations} allocation
-          WHERE allocation.biochar_product_id = ${biocharProducts.id}
-            AND allocation.organization_id = ${ctx.organizationId}
-        ) THEN COALESCE((
-          SELECT SUM(allocation.allocated_dry_mass_kg)
-          FROM ${biocharProductSourceAllocations} allocation
-          WHERE allocation.biochar_product_id = ${biocharProducts.id}
-            AND allocation.organization_id = ${ctx.organizationId}
-        ), 0)
-        ELSE ${sourceBiocharMassKgSql(biocharProducts.massKg, biocharProducts.composition)}
-          * (1 - (${biocharProducts.moistureContentPercent} / 100.0))
-      END`,
-    ).as("total_product_dry_kg"),
+    totalProductDryKg: sumNumeric(productDryBiocharKgSql(
+      biocharProducts.id,
+      biocharProducts.massKg,
+      biocharProducts.moistureContentPercent,
+      biocharProducts.composition,
+      ctx.organizationId,
+    )).as("total_product_dry_kg"),
     unresolvedProductDryCount: numericAggregate(sql<number>`
       COALESCE(
         SUM(

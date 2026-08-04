@@ -95,6 +95,7 @@ async function createDeliveryViaUi(page: Page, seededData: SeededChainData) {
   await page.selectOption('select[name="status"]', "upcoming");
   await selectEntityByText(page, "Order", seededData.customer.name);
   await page.fill('input[name="deliveredWetMassKg"]', "95");
+  await page.fill('input[name="moistureContentPercent"]', "10");
   await page.click('button[type="submit"]:has-text("Create Delivery")');
   await page.waitForSelector('[role="dialog"]', {
     state: "hidden",

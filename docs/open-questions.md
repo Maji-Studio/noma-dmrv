@@ -556,16 +556,16 @@ two oversized data-access files. Still open:
   remainder. `deliveries.massDryKg` is the server-authoritative dry-biochar
   allocation; finished-product moisture is independent delivery evidence.
 - **Deferred limitation:** partial allocation assumes the recorded mixture is
-  homogeneous and its wet-mass basis has not changed since mixing. Define the
-  auditable reconciliation workflow for later moisture or wet-stock changes,
-  stock takes, segregation, additions, and recorded losses before relaxing that
-  assumption.
+  homogeneous. Recorded added water changes the remaining wet basis without
+  changing conserved dry biochar, but unrecorded stock changes, stock takes,
+  segregation, ingredient additions, and losses still need an auditable
+  reconciliation workflow.
 - **Registry check:** use the Isometric MCP `how_to` flow to confirm the required
   grain and evidence for biochar moisture versus finished blended-product
   moisture before changing certification field gates. Local protocol summaries
   are not authoritative for closing this point.
 - **To resolve:** specify the mass-ledger and operator-reconciliation workflow
-  for departures from the accepted homogeneous, unchanged-wet-basis assumption,
+  for departures from the accepted homogeneous recorded-basis assumption,
   then regression-test those reconciliation paths.
 
 ### Product-bin formulation claim-release policy (`product-bins/formulation`, opened 2026-06-04) — **deferred**

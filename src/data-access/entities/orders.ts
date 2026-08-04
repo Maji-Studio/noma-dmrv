@@ -15,7 +15,6 @@ import { db } from "@/db";
 import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
-  biocharProductSourceAllocations,
   customers,
   deliveries,
   orders,
@@ -33,23 +32,7 @@ import {
   allocateTrackedDryBiocharKg,
   resolveProductDryBiocharKg,
 } from "@/lib/biochar-mass-accounting";
-
-function buildSourceAllocationAggregate(ctx: OrgContext) {
-  return db
-    .select({
-      biocharProductId: biocharProductSourceAllocations.biocharProductId,
-      allocatedDryMassKg: sumNumeric(
-        biocharProductSourceAllocations.allocatedDryMassKg,
-      ).as("allocated_dry_mass_kg"),
-    })
-    .from(biocharProductSourceAllocations)
-    .where(eq(
-      biocharProductSourceAllocations.organizationId,
-      ctx.organizationId,
-    ))
-    .groupBy(biocharProductSourceAllocations.biocharProductId)
-    .as("source_allocation_agg");
-}
+import { buildSourceAllocationAggregate } from "./source-allocation-aggregate";
 
 // Total wet mass already allocated to each order by its (non-archived)
 // deliveries, whatever their status.

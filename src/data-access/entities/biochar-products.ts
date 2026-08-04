@@ -12,7 +12,6 @@ import { db } from "@/db";
 import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
-  biocharProductSourceAllocations,
   deliveries,
   formulations,
   orders,
@@ -29,6 +28,7 @@ import {
 import { fromCompositionMassJsonb } from "@/lib/biochar-composition";
 import { resolveProductDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
+import { buildSourceAllocationAggregate } from "./source-allocation-aggregate";
 
 function remainingSourceBiocharDryMassKg(
   productDryKg: number | null,
@@ -38,23 +38,6 @@ function remainingSourceBiocharDryMassKg(
   if (productDryKg == null) return null;
   if (unresolvedDeliveredDryCount > 0) return null;
   return Math.max(0, productDryKg - deliveredDryKg);
-}
-
-function buildSourceAllocationAggregate(ctx: OrgContext) {
-  return db
-    .select({
-      biocharProductId: biocharProductSourceAllocations.biocharProductId,
-      allocatedDryMassKg: sumNumeric(
-        biocharProductSourceAllocations.allocatedDryMassKg,
-      ).as("allocated_dry_mass_kg"),
-    })
-    .from(biocharProductSourceAllocations)
-    .where(eq(
-      biocharProductSourceAllocations.organizationId,
-      ctx.organizationId,
-    ))
-    .groupBy(biocharProductSourceAllocations.biocharProductId)
-    .as("source_allocation_agg");
 }
 
 function formatStockSubtitle(

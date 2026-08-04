@@ -1,10 +1,31 @@
 import { deriveSourceBiocharDryMassKg } from "@/lib/biochar-composition";
+import {
+  MASS_COMPARISON_EPSILON_KG,
+  roundKg,
+} from "@/lib/calculations/mass-dry";
 
 const MASS_PRECISION_FACTOR = 1_000;
-export const MASS_ALLOCATION_EPSILON_KG = 0.001;
 
-function roundMassKg(value: number): number {
-  return Math.round(value * MASS_PRECISION_FACTOR) / MASS_PRECISION_FACTOR;
+function toMassGrams(valueKg: number): bigint {
+  return BigInt(Math.round(valueKg * MASS_PRECISION_FACTOR));
+}
+
+function gramsToKg(valueGrams: bigint): number {
+  return Number(valueGrams) / MASS_PRECISION_FACTOR;
+}
+
+function allocateProportionallyInGrams(
+  requestedWetKg: number,
+  remainingDryKg: number,
+  remainingWetKg: number,
+): number {
+  const requestedWetGrams = toMassGrams(requestedWetKg);
+  const remainingDryGrams = toMassGrams(remainingDryKg);
+  const remainingWetGrams = toMassGrams(remainingWetKg);
+  const numerator = requestedWetGrams * remainingDryGrams;
+  return gramsToKg(
+    (numerator + remainingWetGrams / BigInt(2)) / remainingWetGrams,
+  );
 }
 
 export interface ProductDryBiocharInput {
@@ -23,7 +44,7 @@ export function resolveProductDryBiocharKg(
   input: ProductDryBiocharInput,
 ): number | null {
   if (input.sourceAllocatedDryMassKg != null) {
-    return roundMassKg(Math.max(0, input.sourceAllocatedDryMassKg));
+    return roundKg(Math.max(0, input.sourceAllocatedDryMassKg));
   }
 
   return deriveSourceBiocharDryMassKg(
@@ -44,9 +65,11 @@ export interface TrackedDryAllocationInput {
 
 /**
  * Allocate conserved dry biochar on the homogeneous recorded-wet-mass basis.
- * Partial transfers use the original product ratio. The transfer that consumes
- * the entire remaining wet basis carries the exact dry remainder, preventing
- * cumulative rounding loss.
+ * Partial transfers use the composition of the remaining wet basis. The
+ * transfer that consumes that basis carries the exact dry remainder,
+ * preventing cumulative rounding loss. Arithmetic is rounded once in integer
+ * grams so persisted credit-bearing allocations do not depend on binary
+ * floating-point half-gram boundaries.
  */
 export function allocateTrackedDryBiocharKg(
   input: TrackedDryAllocationInput,
@@ -71,13 +94,27 @@ export function allocateTrackedDryBiocharKg(
   const allocatedWetKg = Math.max(0, input.allocatedWetKg ?? 0);
   const allocatedDryKg = Math.max(0, input.allocatedDryBiocharKg ?? 0);
   const remainingWetKg = Math.max(0, totalWetKg - allocatedWetKg);
+  const remainingDryKg = Math.max(0, totalDryKg - allocatedDryKg);
+  if (
+    input.hasUnresolvedDryAllocation ||
+    allocatedWetKg > totalWetKg + MASS_COMPARISON_EPSILON_KG ||
+    allocatedDryKg > totalDryKg + MASS_COMPARISON_EPSILON_KG ||
+    requestedWetKg > remainingWetKg + MASS_COMPARISON_EPSILON_KG
+  ) {
+    return null;
+  }
   const consumesRemainingWetBasis =
-    !input.hasUnresolvedDryAllocation &&
-    Math.abs(requestedWetKg - remainingWetKg) <= MASS_ALLOCATION_EPSILON_KG;
+    Math.abs(requestedWetKg - remainingWetKg) <=
+      MASS_COMPARISON_EPSILON_KG;
 
   if (consumesRemainingWetBasis) {
-    return roundMassKg(Math.max(0, totalDryKg - allocatedDryKg));
+    return roundKg(remainingDryKg);
   }
 
-  return roundMassKg(requestedWetKg * (totalDryKg / totalWetKg));
+  if (remainingWetKg <= 0) return requestedWetKg === 0 ? 0 : null;
+  return allocateProportionallyInGrams(
+    requestedWetKg,
+    remainingDryKg,
+    remainingWetKg,
+  );
 }

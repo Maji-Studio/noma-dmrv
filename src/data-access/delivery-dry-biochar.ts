@@ -14,6 +14,7 @@ import {
 } from "@/lib/biochar-mass-accounting";
 import { fromCompositionMassJsonb } from "@/lib/biochar-composition";
 import { SafeError } from "@/lib/errors";
+import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import { requireOrgScope } from "./utils";
 
 /** Derive one server-authoritative delivery allocation while its product is locked. */
@@ -99,11 +100,40 @@ export async function deriveDeliveryDryBiocharKg(
     ingredients: fromCompositionMassJsonb(product.composition),
   });
 
+  const productWetKg = product.massKg == null
+    ? null
+    : product.massKg + (product.waterAddedKg ?? 0);
+  const remainingWetKg = productWetKg == null
+    ? null
+    : Math.max(0, productWetKg - deliveryAllocation.allocatedWetMassKg);
+  if (
+    input.deliveredWetMassKg != null &&
+    remainingWetKg != null &&
+    exceedsMassWithTolerance(input.deliveredWetMassKg, remainingWetKg)
+  ) {
+    throw new SafeError(
+      "Biochar product wet mass exceeds the unallocated product balance.",
+    );
+  }
+  if (
+    productDryBiocharKg != null &&
+    exceedsMassWithTolerance(
+      deliveryAllocation.allocatedDryMassKg,
+      productDryBiocharKg,
+    )
+  ) {
+    throw new SafeError(
+      "Dry biochar allocations exceed the linked product. Reconcile its deliveries before continuing.",
+    );
+  }
+  if (deliveryAllocation.unresolvedDryCount > 0) {
+    throw new SafeError(
+      "Another delivery has no tracked dry biochar. Re-save that delivery before allocating more product.",
+    );
+  }
+
   return allocateTrackedDryBiocharKg({
-    totalWetKg:
-      product.massKg == null
-        ? null
-        : product.massKg + (product.waterAddedKg ?? 0),
+    totalWetKg: productWetKg,
     totalDryBiocharKg: productDryBiocharKg,
     requestedWetKg: input.deliveredWetMassKg,
     allocatedWetKg: deliveryAllocation.allocatedWetMassKg,
