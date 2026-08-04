@@ -502,11 +502,24 @@ export async function enrichStorageLocationRows(
               bp.created_at,
               COALESCE(bp.mass_kg, 0) + COALESCE(bp.water_added_kg, 0),
               CASE
-                WHEN bp.mass_kg IS NULL
-                  OR bp.moisture_content_percent IS NULL
-                THEN NULL
+                WHEN EXISTS (
+                  SELECT 1
+                  FROM biochar_product_source_allocations allocation
+                  WHERE allocation.biochar_product_id = bp.id
+                    AND allocation.organization_id = ${ctx.organizationId}
+                ) THEN (
+                  SELECT COALESCE(SUM(allocation.allocated_dry_mass_kg), 0)
+                  FROM biochar_product_source_allocations allocation
+                  WHERE allocation.biochar_product_id = bp.id
+                    AND allocation.organization_id = ${ctx.organizationId}
+                )
+                WHEN bp.mass_kg IS NULL OR bp.moisture_content_percent IS NULL
+                  THEN NULL
                 ELSE
-                  bp.mass_kg * (1 - bp.moisture_content_percent / 100.0)
+                  ${sourceBiocharMassKgSql(
+                    sql.raw("bp.mass_kg"),
+                    sql.raw("bp.composition"),
+                  )} * (1 - bp.moisture_content_percent / 100.0)
               END,
               COALESCE(f.name, ${PURE_BIOCHAR_LABEL})
             FROM biochar_products bp

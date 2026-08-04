@@ -126,7 +126,7 @@ export const deliveryDryMassSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['mass_dry_kg'],
-        message: "Dry mass must be 0 kg or more",
+        message: "Dry biochar must be 0 kg or more",
       });
     }
 
@@ -138,7 +138,7 @@ export const deliveryDryMassSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['mass_dry_kg'],
-        message: "Dry mass cannot exceed delivered wet mass",
+        message: "Dry biochar cannot exceed delivered wet product mass",
       });
     }
   });

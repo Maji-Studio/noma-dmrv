@@ -103,6 +103,7 @@ import {
 } from "./transport-legs";
 import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
+import { deriveDeliveryDryBiocharKg } from "./delivery-dry-biochar";
 
 // ============================================
 // Read Operations
@@ -540,15 +541,6 @@ export async function createDelivery(
   requireOrgScope(ctx);
   const deliveryColumns = await getDeliveryColumnAvailability();
 
-  // Validate massDryKg <= deliveredWetMassKg
-  if (
-    data.massDryKg != null &&
-    data.deliveredWetMassKg != null &&
-    data.massDryKg > data.deliveredWetMassKg
-  ) {
-    throw new SafeError("Dry mass must be less than or equal to wet mass");
-  }
-
   const effectiveStatus = data.status ?? "upcoming";
   if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
   if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
@@ -604,6 +596,11 @@ export async function createDelivery(
       requestedWetKg: data.deliveredWetMassKg,
     });
 
+    const massDryKg = await deriveDeliveryDryBiocharKg(ctx, tx, {
+      biocharProductId: effectiveBiocharProductId,
+      deliveredWetMassKg: data.deliveredWetMassKg,
+    });
+
     const [row] = await tx
       .insert(deliveries)
       .values({
@@ -617,7 +614,7 @@ export async function createDelivery(
         vehicleId: data.vehicleId ?? null,
         status: effectiveStatus,
         deliveredWetMassKg: data.deliveredWetMassKg ?? null,
-        massDryKg: data.massDryKg ?? null,
+        massDryKg,
         moistureContentPercent: data.moistureContentPercent ?? null,
         ...(deliveryColumns.distanceKmOverride
           ? { distanceKmOverride: data.distanceKmOverride ?? null }
@@ -684,22 +681,6 @@ export async function updateDelivery(
 
   if (!existing) {
     throw new SafeError("Delivery not found");
-  }
-
-  // Validate massDryKg <= deliveredWetMassKg with merged data
-  const finalWetMass = data.deliveredWetMassKg !== undefined
-    ? data.deliveredWetMassKg
-    : existing.deliveredWetMassKg;
-  const finalDryMass = data.massDryKg !== undefined
-    ? data.massDryKg
-    : existing.massDryKg;
-
-  if (
-    finalDryMass != null &&
-    finalWetMass != null &&
-    finalDryMass > finalWetMass
-  ) {
-    throw new SafeError("Dry mass must be less than or equal to wet mass");
   }
 
   // If code is being changed, check for duplicates
@@ -847,11 +828,25 @@ export async function updateDelivery(
         ? data.biocharProductId ?? lockedEffectiveOrder.biocharProductId
         : lockedDelivery.biocharProductId ??
           lockedEffectiveOrder.biocharProductId;
+    const dryAllocationChanged =
+      lockedEffectiveOrderId !== lockedDelivery.orderId ||
+      lockedEffectiveBiocharProductId !== lockedExistingBiocharProductId ||
+      lockedEffectiveWetMass !== lockedDelivery.deliveredWetMassKg;
+    const massDryKg = dryAllocationChanged && lockedEffectiveBiocharProductId
+      ? await deriveDeliveryDryBiocharKg(ctx, tx, {
+          biocharProductId: lockedEffectiveBiocharProductId,
+          deliveredWetMassKg: lockedEffectiveWetMass,
+          excludeDeliveryId: deliveryId,
+        })
+      : undefined;
 
     const [row] = await tx
       .update(deliveries)
       .set({
         ...data,
+        // Never trust the submitted compatibility field. Recompute only when
+        // the linked order/product or wet mass actually changes.
+        massDryKg,
         ...(deliveryColumns.distanceKmOverride
           ? {}
           : { distanceKmOverride: undefined }),

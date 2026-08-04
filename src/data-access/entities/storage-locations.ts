@@ -1,9 +1,4 @@
-/**
- * Storage-location options for searchable entity selection.
- *
- * The subtitle reflects live inventory (remaining feedstock, available biochar,
- * stored product), computed from five aggregate subqueries joined per location.
- */
+/** Storage-location options with live inventory subtitles. */
 
 import {
   ilike,
@@ -379,8 +374,20 @@ function buildInventoryAggregates(
       sql`COALESCE(${biocharProducts.massKg}, 0) + COALESCE(${biocharProducts.waterAddedKg}, 0)`,
     ).as("total_product_kg"),
     totalProductDryKg: sumNumeric(
-      sql`${biocharProducts.massKg} * (1 - (${biocharProducts.moistureContentPercent} / 100.0))`,
-      sql`${biocharProducts.massKg} IS NOT NULL AND ${biocharProducts.moistureContentPercent} IS NOT NULL`,
+      sql`CASE
+        WHEN EXISTS (
+          SELECT 1 FROM ${biocharProductSourceAllocations} allocation
+          WHERE allocation.biochar_product_id = ${biocharProducts.id}
+            AND allocation.organization_id = ${ctx.organizationId}
+        ) THEN COALESCE((
+          SELECT SUM(allocation.allocated_dry_mass_kg)
+          FROM ${biocharProductSourceAllocations} allocation
+          WHERE allocation.biochar_product_id = ${biocharProducts.id}
+            AND allocation.organization_id = ${ctx.organizationId}
+        ), 0)
+        ELSE ${sourceBiocharMassKgSql(biocharProducts.massKg, biocharProducts.composition)}
+          * (1 - (${biocharProducts.moistureContentPercent} / 100.0))
+      END`,
     ).as("total_product_dry_kg"),
     unresolvedProductDryCount: numericAggregate(sql<number>`
       COALESCE(
@@ -388,6 +395,11 @@ function buildInventoryAggregates(
           CASE
             WHEN COALESCE(${biocharProducts.massKg}, 0) > 0
               AND ${biocharProducts.moistureContentPercent} IS NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM ${biocharProductSourceAllocations} allocation
+                WHERE allocation.biochar_product_id = ${biocharProducts.id}
+                  AND allocation.organization_id = ${ctx.organizationId}
+              )
             THEN 1
             ELSE 0
           END

@@ -113,7 +113,7 @@ function createColumns(
     },
     {
       accessorKey: "biocharAppliedTons",
-      header: "Biochar applied, wet (kg)",
+      header: "Biochar product applied (kg)",
       cell: ({ row }) => (
         <span className="font-mono">
           {formatApplicationKgFromTons(row.original.biocharAppliedTons)}
@@ -122,7 +122,7 @@ function createColumns(
     },
     {
       accessorKey: "biocharAppliedDryTons",
-      header: "Biochar applied, dry (kg)",
+      header: "Dry biochar applied (kg)",
       cell: ({ row }) => (
         <span className="font-mono">
           {formatApplicationKgFromTons(row.original.biocharAppliedDryTons)}
@@ -691,14 +691,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                   : null,
               },
               {
-                label: "Biochar applied, wet (kg)",
+                label: "Biochar product applied (kg)",
                 ...certificationDetailField("application", "biocharAppliedTons"),
                 value: sideSheetEntity.biocharAppliedTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedTons)
                   : null,
               },
               {
-                label: "Biochar applied, dry (kg)",
+                label: "Dry biochar applied (kg)",
                 ...certificationDetailField("application", "biocharAppliedDryTons"),
                 value: sideSheetEntity.biocharAppliedDryTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)

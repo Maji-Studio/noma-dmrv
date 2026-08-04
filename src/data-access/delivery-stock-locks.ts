@@ -143,6 +143,7 @@ export async function lockDeliveryUpdateStock(
     ? data.deliveredWetMassKg
     : snapshot.deliveredWetMassKg;
   const stockDerivationChanged =
+    transactionOrderId !== snapshot.orderId ||
     transactionStatus !== snapshot.status ||
     transactionWetMass !== snapshot.deliveredWetMassKg ||
     transactionProductSnapshotId !== snapshotProductId;

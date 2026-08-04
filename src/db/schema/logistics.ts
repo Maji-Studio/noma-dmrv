@@ -157,6 +157,7 @@ export const deliveries = pgTable(
     ),
     moistureContentPercent: percent('moisture_content_percent'),
     deliveredWetMassKg: massKg('delivered_wet_mass_kg'),
+    // Server-authoritative dry biochar allocated from the linked product.
     massDryKg: massKg('mass_dry_kg'),
 
     // --- Operational transport (emissions canonical in transport_legs) ---

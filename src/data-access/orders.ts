@@ -100,6 +100,7 @@ import { assertOrderQuantityCoversAllocations } from "./delivery-order-balance";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
 import { ZERO_SOURCE_BIOCHAR_WARNING } from "@/lib/biochar-composition";
 import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
+import { deriveDeliveryDryBiocharKg } from "./delivery-dry-biochar";
 
 // ============================================
 // Read Operations
@@ -717,12 +718,20 @@ export async function updateOrder(
       data.customerLocationId !== undefined &&
       data.customerLocationId !== locked.customerLocationId;
     const affectedProductIds: Array<string | null> = [];
+    let inheritingDeliveries: Array<{
+      id: string;
+      biocharProductId: string | null;
+      customerLocationId: string | null;
+      deliveredWetMassKg: number | null;
+    }> = [];
 
     if (productChanged || customerLocationChanged) {
-      const inheritingDeliveries = await tx
+      inheritingDeliveries = await tx
         .select({
+          id: deliveries.id,
           biocharProductId: deliveries.biocharProductId,
           customerLocationId: deliveries.customerLocationId,
+          deliveredWetMassKg: deliveries.deliveredWetMassKg,
         })
         .from(deliveries)
         .where(and(
@@ -759,6 +768,36 @@ export async function updateOrder(
       })
       .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)))
       .returning();
+
+    if (productChanged) {
+      const inheritedProductDeliveries = inheritingDeliveries
+        .filter((delivery) => delivery.biocharProductId === null)
+        .sort((left, right) => left.id.localeCompare(right.id));
+      if (inheritedProductDeliveries.length > 0) {
+        await tx
+          .update(deliveries)
+          .set({ massDryKg: null })
+          .where(and(
+            eq(deliveries.orderId, orderId),
+            eq(deliveries.organizationId, ctx.organizationId),
+            isNull(deliveries.biocharProductId),
+          ));
+        for (const delivery of inheritedProductDeliveries) {
+          const massDryKg = await deriveDeliveryDryBiocharKg(ctx, tx, {
+            biocharProductId: row.biocharProductId,
+            deliveredWetMassKg: delivery.deliveredWetMassKg,
+            excludeDeliveryId: delivery.id,
+          });
+          await tx
+            .update(deliveries)
+            .set({ massDryKg })
+            .where(and(
+              eq(deliveries.id, delivery.id),
+              eq(deliveries.organizationId, ctx.organizationId),
+            ));
+        }
+      }
+    }
 
     await syncBiocharProductTransportLegs(
       ctx,

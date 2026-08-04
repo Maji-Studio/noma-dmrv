@@ -90,6 +90,20 @@ and reason. Bin stock is the consequence of its movements; nothing
 changes stock except a movement.
 _Avoid_: stock change, log entry, audit record.
 
+**Biochar product**:
+The finished material offered, delivered, and applied after source biochar is
+optionally mixed with blend ingredients and water. Its wet mass and moisture
+describe the whole mixture, not the biochar component alone.
+_Avoid_: calling the whole mixture biochar when discussing mass or moisture.
+
+**Dry biochar mass**:
+The water-free mass established from the source biochar's wet mass and
+biochar-only moisture before mixing, excluding blend ingredients. It is
+conserved through mixing, product-moisture changes, delivery, and application
+unless a recorded physical loss removes biochar.
+_Avoid_: deriving it from the wet mass and moisture of a blended product; dry
+product mass, total dry solids.
+
 ### Sampling, characterization & durability
 
 **Sample**:

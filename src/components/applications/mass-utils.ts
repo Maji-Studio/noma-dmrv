@@ -1,6 +1,3 @@
-import {
-  deriveMassDryKg,
-} from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
@@ -96,19 +93,6 @@ export function resolveApplicationSoilTemperatureDefault({
   };
 }
 
-/**
- * Calculate dry mass from wet mass and moisture content.
- * Formula: dryKg = wetKg * (1 - moisturePercent / 100)
- */
-export function calculateDryMass(
-  wetKg: number | null | undefined,
-  moisturePercent: number | null | undefined,
-): number | null {
-  if (wetKg == null || moisturePercent == null) return null;
-  if (wetKg < 0 || moisturePercent < 0 || moisturePercent > 100) return null;
-  return deriveMassDryKg(wetKg, moisturePercent);
-}
-
 export function applicationTonsToKg(value: number | null | undefined): number | null {
   if (value == null) {
     return null;
@@ -138,7 +122,6 @@ export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOpt
       wetKg: delivery.deliveredWetMassKg,
       dryKg: delivery.massDryKg,
       moisturePercent: delivery.moistureContentPercent,
-      deriveDryWhenMissing: true,
       wetLabel: "Wet biochar product",
       dryLabel: "Dry biochar",
       separator: " | ",
@@ -187,12 +170,7 @@ export function formatApplicationDeliveryHelperText(delivery: ApplicationDeliver
     delivery.deliveredWetMassKg == null
       ? null
       : Math.max(0, delivery.deliveredWetMassKg - delivery.alreadyAppliedWetKg);
-  const deliveredDryKg =
-    delivery.massDryKg ??
-    calculateDryMass(
-      delivery.deliveredWetMassKg,
-      delivery.moistureContentPercent,
-    );
+  const deliveredDryKg = delivery.massDryKg;
   const remainingDryKg =
     deliveredDryKg == null
       ? null

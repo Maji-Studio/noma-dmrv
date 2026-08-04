@@ -103,7 +103,8 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
           status: "delivered",
           deliveryDate: new Date("2025-07-05"),
           deliveredWetMassKg: 5_000,
-          moistureContentPercent: 20,
+          massDryKg: 4_000,
+          moistureContentPercent: 40,
         },
         {
           organizationId: TEST_ORG_ID,
@@ -113,7 +114,8 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
           status: "delivered",
           deliveryDate: new Date("2025-07-06"),
           deliveredWetMassKg: 3_000,
-          moistureContentPercent: 10,
+          massDryKg: 2_700,
+          moistureContentPercent: 5,
         },
       ])
       .returning({ id: deliveries.id });
@@ -176,7 +178,7 @@ async function cleanupMutationFixture(fixture: ApplicationMutationFixture): Prom
 beforeAll(() => ensureTestOrg());
 
 describe("application mutations", () => {
-  it("creates an application and derives dry mass from delivery moisture", async () => {
+  it("creates an application from the delivery's tracked dry-biochar ratio", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
 
@@ -202,6 +204,33 @@ describe("application mutations", () => {
         alreadyAppliedWetKg: 2_000,
         alreadyAppliedDryKg: 1_600,
       });
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("carries all remaining delivery dry biochar on full application", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const first = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+        code: `AP-AM-${runId}-PARTIAL`,
+        deliveryId: fixture.deliveryIds[0],
+        applicationDate: new Date("2025-07-08"),
+        biocharAppliedTons: 2,
+      });
+      const last = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+        code: `AP-AM-${runId}-REMAINDER`,
+        deliveryId: fixture.deliveryIds[0],
+        applicationDate: new Date("2025-07-09"),
+        biocharAppliedTons: 3,
+      });
+      fixture.applicationIds.push(first.id, last.id);
+
+      expect(first.biocharAppliedDryTons).toBe(1.6);
+      expect(last.biocharAppliedDryTons).toBe(2.4);
+      expect(first.biocharAppliedDryTons + last.biocharAppliedDryTons).toBe(4);
     } finally {
       await cleanupMutationFixture(fixture);
     }
@@ -324,7 +353,7 @@ describe("application mutations", () => {
     }
   });
 
-  it("rejects manual dry applied mass above wet applied mass", async () => {
+  it("ignores submitted dry mass and uses the delivery allocation", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
     const code = `AP-AM-${runId}-DRY-OVER-WET`;
@@ -335,31 +364,22 @@ describe("application mutations", () => {
         .set({ moistureContentPercent: null })
         .where(eq(deliveries.id, fixture.deliveryIds[0]));
 
-      await expect(
-        createApplication(makeTestOrgContext(TEST_USER_ID), {
+      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
           code,
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
           biocharAppliedDryTons: 2.001,
-        }),
-      ).rejects.toThrow(
-        "Dry mass cannot exceed wet mass. Reduce the dry mass.",
-      );
-
-      const [application] = await db
-        .select({ id: applications.id })
-        .from(applications)
-        .where(eq(applications.code, code));
-
-      expect(application).toBeUndefined();
+        });
+      fixture.applicationIds.push(application.id);
+      expect(application.biocharAppliedDryTons).toBeCloseTo(1.6);
     } finally {
       await db.delete(applications).where(eq(applications.code, code));
       await cleanupMutationFixture(fixture);
     }
   });
 
-  it("rejects an update that raises manual dry mass above stored wet mass", async () => {
+  it("does not recalculate or overwrite dry biochar for a dry-only update", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
 
@@ -381,13 +401,10 @@ describe("application mutations", () => {
       );
       fixture.applicationIds.push(application.id);
 
-      await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
           biocharAppliedDryTons: 2.001,
-        }),
-      ).rejects.toThrow(
-        "Dry mass cannot exceed wet mass. Reduce the dry mass.",
-      );
+        });
+      expect(updated.biocharAppliedDryTons).toBeCloseTo(1.6);
     } finally {
       await cleanupMutationFixture(fixture);
     }

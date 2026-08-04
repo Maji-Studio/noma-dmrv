@@ -3,7 +3,6 @@ import {
   computeClampedDryMass,
   deriveMassDryKg,
   deriveMassDryKgWithAddedWater,
-  resolveDeliveryDryMass,
 } from "@/lib/calculations/mass-dry";
 
 describe("Dry mass derivation", () => {
@@ -37,40 +36,4 @@ describe("Dry mass derivation", () => {
     expect(computeClampedDryMass(-Infinity, 10)).toBeNull();
   });
 
-  it("prioritizes measured dry mass over derived dry mass", () => {
-    const result = resolveDeliveryDryMass({
-      measuredMassDryKg: 820,
-      deliveredWetMassKg: 1000,
-      moisturePercent: 20,
-    });
-
-    expect(result).toEqual({
-      massDryKg: 820,
-      source: "measured",
-      creditReady: true,
-    });
-  });
-
-  it("falls back to derived dry mass when measured value is absent", () => {
-    const result = resolveDeliveryDryMass({
-      deliveredWetMassKg: 500,
-      moisturePercent: 5,
-    });
-
-    expect(result).toEqual({
-      massDryKg: 475,
-      source: "derived",
-      creditReady: true,
-    });
-  });
-
-  it("marks records as non-credit-ready when derivation inputs are missing", () => {
-    const result = resolveDeliveryDryMass({
-      deliveredWetMassKg: 500,
-    });
-
-    expect(result.creditReady).toBe(false);
-    expect(result.source).toBe("missing");
-    expect(result.reason).toContain("moisturePercent");
-  });
 });

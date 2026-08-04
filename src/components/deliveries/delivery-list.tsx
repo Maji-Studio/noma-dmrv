@@ -62,10 +62,8 @@ import {
 } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
-  MOISTURE_FIELD_LABEL,
-  WET_MASS_FIELD_LABEL,
 } from "@/lib/mass-moisture";
-import { MoistureSplit } from "@/components/ui/moisture-split";
+import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { parseAsString, useQueryState } from "nuqs";
@@ -135,28 +133,28 @@ function createColumns(
       ),
     },
     // Every mass on this surface — these two columns, the KPI strip, the detail
-    // sheet's wet-mass row and its MoistureSplit — goes through `formatMassKg`:
-    // fixed kg, one decimal. Wet and dry sit next to each other and must stay
-    // subtractable, and dry mass is derived (wet × (1 − moisture/100)), so it
-    // routinely lands on a half kilo. `formatMass` would round that away in the
-    // table while the split bar below still showed it.
+    // sheet's wet-mass row and composition preview go through `formatMassKg`:
+    // fixed kg, one decimal. Wet product and its tracked dry-biochar allocation
+    // sit next to each other and must keep compatible precision. `formatMass`
+    // would round allocation detail away in the table while the preview below
+    // still showed it.
     {
       accessorKey: "deliveredWetMassKg",
-      header: "Wet mass",
+      header: "Biochar product wet mass",
       cell: ({ row }) => (
         <span className="font-mono text-right">{formatMassKg(row.original.deliveredWetMassKg)}</span>
       ),
     },
     {
       accessorKey: "massDryKg",
-      header: "Dry mass",
+      header: "Dry biochar",
       cell: ({ row }) => (
         <span className="font-mono text-right">{formatMassKg(row.original.massDryKg)}</span>
       ),
     },
     {
       accessorKey: "moistureContentPercent",
-      header: "Moisture",
+      header: "Biochar product moisture",
       cell: ({ row }) => (
         <span className="font-mono text-right">
           {formatMoisturePercent(row.original.moistureContentPercent)}
@@ -618,22 +616,21 @@ export function DeliveryList() {
                   title: "Mass and moisture",
                   fields: [
                     {
-                      label: WET_MASS_FIELD_LABEL,
+                      label: "Biochar product wet mass (kg)",
                       ...certificationDetailField("delivery", "deliveredWetMassKg"),
                       value: formatMassKg(sideSheetEntity.deliveredWetMassKg),
                     },
                     {
-                      label: MOISTURE_FIELD_LABEL,
+                      label: "Biochar product moisture (%)",
                       value: formatMoisturePercent(sideSheetEntity.moistureContentPercent),
                     },
                   ],
                   content: (
-                    <MoistureSplit
+                    <ProductCompositionPreview
                       wetMassKg={sideSheetEntity.deliveredWetMassKg}
                       moisturePercent={sideSheetEntity.moistureContentPercent}
-                      dryMassKg={sideSheetEntity.massDryKg}
-                      wetLabel="Wet biochar product"
-                      dryLabel="Dry biochar"
+                      dryBiocharKg={sideSheetEntity.massDryKg}
+                      note="Dry biochar is allocated from the linked product's tracked composition."
                     />
                   ),
                 },

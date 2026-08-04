@@ -15,6 +15,7 @@ import { db } from "@/db";
 import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
+  biocharProductSourceAllocations,
   customers,
   deliveries,
   orders,
@@ -24,11 +25,31 @@ import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatDate } from "@/lib/format-utils";
 import {
-  deriveEffectiveMoisturePercent,
   formatRecordedMass,
-  splitWetMass,
 } from "@/lib/mass-moisture";
 import { requireOrgScope } from "../utils";
+import { fromCompositionMassJsonb } from "@/lib/biochar-composition";
+import {
+  allocateTrackedDryBiocharKg,
+  resolveProductDryBiocharKg,
+} from "@/lib/biochar-mass-accounting";
+
+function buildSourceAllocationAggregate(ctx: OrgContext) {
+  return db
+    .select({
+      biocharProductId: biocharProductSourceAllocations.biocharProductId,
+      allocatedDryMassKg: sumNumeric(
+        biocharProductSourceAllocations.allocatedDryMassKg,
+      ).as("allocated_dry_mass_kg"),
+    })
+    .from(biocharProductSourceAllocations)
+    .where(eq(
+      biocharProductSourceAllocations.organizationId,
+      ctx.organizationId,
+    ))
+    .groupBy(biocharProductSourceAllocations.biocharProductId)
+    .as("source_allocation_agg");
+}
 
 // Total wet mass already allocated to each order by its (non-archived)
 // deliveries, whatever their status.
@@ -59,6 +80,7 @@ function buildAllocatedMassAggregate(ctx: OrgContext) {
 
 function buildSelection(
   allocatedMassAggregate: ReturnType<typeof buildAllocatedMassAggregate>,
+  sourceAllocationAggregate: ReturnType<typeof buildSourceAllocationAggregate>,
 ) {
   return {
     id: orders.id,
@@ -70,6 +92,8 @@ function buildSelection(
     productMassKg: biocharProducts.massKg,
     productWaterAddedKg: biocharProducts.waterAddedKg,
     productMoisturePercent: biocharProducts.moistureContentPercent,
+    productComposition: biocharProducts.composition,
+    sourceAllocatedDryMassKg: sourceAllocationAggregate.allocatedDryMassKg,
     totalDeliveredKg: numericAggregate(
       sql<number>`COALESCE(${allocatedMassAggregate.totalDeliveredKg}, 0)`,
     ),
@@ -92,6 +116,8 @@ export function toOrderEntityOption(r: {
   productMassKg: number | null;
   productWaterAddedKg: number | null;
   productMoisturePercent: number | null;
+  productComposition?: unknown;
+  sourceAllocatedDryMassKg?: number | null;
   totalDeliveredKg: number;
   totalDeliveredDryKg: number;
   unresolvedDeliveredDryCount: number;
@@ -100,14 +126,20 @@ export function toOrderEntityOption(r: {
     0,
     r.quantityKg - r.totalDeliveredKg,
   );
-  const orderedDryKg = splitWetMass(
-    r.quantityKg,
-    deriveEffectiveMoisturePercent(
-      r.productMassKg,
-      r.productMoisturePercent,
-      r.productWaterAddedKg,
-    ),
-  )?.dryKg;
+  const productDryBiocharKg = resolveProductDryBiocharKg({
+    sourceAllocatedDryMassKg: r.sourceAllocatedDryMassKg,
+    blendMassKg: r.productMassKg,
+    biocharMoisturePercent: r.productMoisturePercent,
+    ingredients: fromCompositionMassJsonb(r.productComposition),
+  });
+  const orderedDryKg = allocateTrackedDryBiocharKg({
+    totalWetKg:
+      r.productMassKg == null
+        ? null
+        : r.productMassKg + (r.productWaterAddedKg ?? 0),
+    totalDryBiocharKg: productDryBiocharKg,
+    requestedWetKg: r.quantityKg,
+  });
   const remainingDryKg =
     orderedDryKg == null || r.unresolvedDeliveredDryCount > 0
       ? null
@@ -140,7 +172,8 @@ export async function getOrdersEntity(ctx: OrgContext, params: {
 }): Promise<EntityOption[]> {
   requireOrgScope(ctx);
   const allocatedMassAggregate = buildAllocatedMassAggregate(ctx);
-  const selection = buildSelection(allocatedMassAggregate);
+  const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
+  const selection = buildSelection(allocatedMassAggregate, sourceAllocationAggregate);
   const { search, facilityId, limit } = params;
   requireOrgScope(ctx);
 
@@ -189,6 +222,7 @@ export async function getOrdersEntity(ctx: OrgContext, params: {
       ),
     )
     .leftJoin(allocatedMassAggregate, eq(allocatedMassAggregate.orderId, orders.id))
+    .leftJoin(sourceAllocationAggregate, eq(sourceAllocationAggregate.biocharProductId, biocharProducts.id))
     .where(and(eq(orders.organizationId, ctx.organizationId), whereClause))
     .orderBy(desc(orders.orderDate))
     .limit(limit);
@@ -202,7 +236,8 @@ export async function getOrderEntityById(
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
   const allocatedMassAggregate = buildAllocatedMassAggregate(ctx);
-  const selection = buildSelection(allocatedMassAggregate);
+  const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
+  const selection = buildSelection(allocatedMassAggregate, sourceAllocationAggregate);
   const [result] = await db
     .select(selection)
     .from(orders)
@@ -228,6 +263,7 @@ export async function getOrderEntityById(
       ),
     )
     .leftJoin(allocatedMassAggregate, eq(allocatedMassAggregate.orderId, orders.id))
+    .leftJoin(sourceAllocationAggregate, eq(sourceAllocationAggregate.biocharProductId, biocharProducts.id))
     .where(and(eq(orders.id, id), eq(orders.organizationId, ctx.organizationId)))
     .limit(1);
 

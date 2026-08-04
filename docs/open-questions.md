@@ -542,6 +542,32 @@ two oversized data-access files. Still open:
 
 ## Product bins & formulations
 
+### Conserve dry biochar through orders, deliveries, and applications (`product-mass/dry-biochar-lineage`, opened 2026-08-04) — **deferred · needs-registry-check**
+
+- **Agreed invariant:** dry biochar mass is established before mixing from the
+  source biochar's wet mass and biochar-only moisture. Wet ingredients, added
+  water, and later changes to finished-product moisture do not create or remove
+  dry biochar. Finished-product moisture remains important evidence of the
+  condition and actual mass delivered to the customer, but it cannot distinguish
+  ingredient solids, ingredient water, biochar water, and added water.
+- **Accepted first version:** orders reserve a proportional planning estimate.
+  Deliveries and applications transfer tracked dry biochar in proportion to the
+  recorded wet-product basis, with the final full use carrying the exact dry
+  remainder. `deliveries.massDryKg` is the server-authoritative dry-biochar
+  allocation; finished-product moisture is independent delivery evidence.
+- **Deferred limitation:** partial allocation assumes the recorded mixture is
+  homogeneous and its wet-mass basis has not changed since mixing. Define the
+  auditable reconciliation workflow for later moisture or wet-stock changes,
+  stock takes, segregation, additions, and recorded losses before relaxing that
+  assumption.
+- **Registry check:** use the Isometric MCP `how_to` flow to confirm the required
+  grain and evidence for biochar moisture versus finished blended-product
+  moisture before changing certification field gates. Local protocol summaries
+  are not authoritative for closing this point.
+- **To resolve:** specify the mass-ledger and operator-reconciliation workflow
+  for departures from the accepted homogeneous, unchanged-wet-basis assumption,
+  then regression-test those reconciliation paths.
+
 ### Product-bin formulation claim-release policy (`product-bins/formulation`, opened 2026-06-04) — **deferred**
 
 - A product bin (`storage_locations` of type `product_bin`) carries an optional

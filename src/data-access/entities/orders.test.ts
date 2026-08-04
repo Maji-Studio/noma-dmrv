@@ -30,7 +30,7 @@ describe("toOrderEntityOption", () => {
     });
   });
 
-  it("uses effective blended moisture for remaining dry mass", () => {
+  it("uses the product's tracked dry-biochar share for remaining dry mass", () => {
     expect(
       toOrderEntityOption({
         id: "order-1",
@@ -67,5 +67,26 @@ describe("toOrderEntityOption", () => {
 
     expect(option.subtitle).toBe("Wet biochar product: 90kg remaining");
     expect(option.remainingMass).toEqual({ wetKg: 90, dryKg: null });
+  });
+
+  it("uses tracked product dry biochar for the order planning estimate", () => {
+    const option = toOrderEntityOption({
+      id: "order-2",
+      code: "OR-26-002",
+      orderDate: new Date("2026-05-17T00:00:00.000Z"),
+      quantityKg: 1_000,
+      customerName: "North Farm",
+      productBinName: "Finished product north",
+      productMassKg: 4_000,
+      productWaterAddedKg: 0,
+      productMoisturePercent: 40,
+      productComposition: { ingredients: [{ massKg: 2_000 }] },
+      sourceAllocatedDryMassKg: 1_800,
+      totalDeliveredKg: 250,
+      totalDeliveredDryKg: 112.5,
+      unresolvedDeliveredDryCount: 0,
+    });
+
+    expect(option.remainingMass).toEqual({ wetKg: 750, dryKg: 337.5 });
   });
 });
