@@ -90,7 +90,7 @@ export const ZERO_SOURCE_BIOCHAR_ERROR =
   "Source biochar mass must be greater than 0 kg. Increase the biochar wet mass before creating this product.";
 
 export const ZERO_SOURCE_BIOCHAR_WARNING =
-  "This product contains 0 kg of source biochar. It cannot be ordered or traced to a production run or credit batch. Delete it and create a new product with more than 0 kg of biochar.";
+  "This product contains 0 kg of source biochar. It cannot be ordered or traced to a production run or credit batch. Create a new product with more than 0 kg of biochar.";
 
 export const GRAMS_PER_KILOGRAM = 1_000;
 

@@ -12,6 +12,8 @@ describe("ZeroSourceBiocharWarning", () => {
     expect(html).toContain("0 kg of source biochar");
     expect(html).toContain("cannot be ordered");
     expect(html).toContain("credit batch");
+    expect(html).toContain("Create a new product");
+    expect(html).not.toContain("Delete it");
   });
 
   it("renders nothing for a positive source mass", () => {
