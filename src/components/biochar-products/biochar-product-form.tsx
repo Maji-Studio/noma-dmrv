@@ -34,6 +34,7 @@ import {
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
   SOURCE_BIOCHAR_MASS_ERROR,
+  ZERO_SOURCE_BIOCHAR_ERROR,
   useBiocharComposition,
 } from "@/lib/biochar-composition";
 import { IngredientBinRows } from "./ingredient-bin-rows";
@@ -48,6 +49,7 @@ import {
   binStockOverdrawMessage,
   isStockOverdraw,
 } from "@/lib/stock-overdraw";
+import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -365,6 +367,10 @@ export function BiocharProductForm({
   const initialFormulationId =
     product?.formulation?.id ?? product?.formulationId ?? null;
   const initialIngredientBins = fromCompositionJsonb(product?.composition);
+  const initialSourceBiocharMassKg = product
+    ? deriveSourceBiocharMassKg(product.massKg, initialIngredientBins)
+    : null;
+  const hasZeroSourceBiochar = initialSourceBiocharMassKg === 0;
   const { facilityId: contextFacilityId } = useFacilityContext();
   const storageLocationDialog = useQuickAddDialog();
 
@@ -385,7 +391,7 @@ export function BiocharProductForm({
       // The field carries the biochar-only wet mass; the record stores the
       // blend total, so edit mode subtracts the persisted ingredient masses.
       massKg: product
-        ? deriveSourceBiocharMassKg(product.massKg ?? null, initialIngredientBins)
+        ? initialSourceBiocharMassKg
         : null,
       moistureContentPercent: product?.moistureContentPercent ?? null,
       densityKgM3: product?.densityKgM3 ?? null,
@@ -493,7 +499,8 @@ export function BiocharProductForm({
     massFieldFingerprint,
     (message) =>
       message === binStockOverdrawMessage("biochar") ||
-      message === SOURCE_BIOCHAR_MASS_ERROR,
+      message === SOURCE_BIOCHAR_MASS_ERROR ||
+      message === ZERO_SOURCE_BIOCHAR_ERROR,
   );
   const massKgError =
     errors.massKg?.message ??
@@ -578,6 +585,9 @@ export function BiocharProductForm({
         </ActionableFocusTarget>
       )}
       <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
+      <ZeroSourceBiocharWarning
+        sourceBiocharMassKg={initialSourceBiocharMassKg}
+      />
       {/* Transfer preview — a derived recap of the transfer, not a data-entry
           step, so it sits above the numbered spine and only when it has data. */}
       {(selectedSourceBiocharBin || selectedStorageLocation || massKgNum != null) && (
@@ -834,6 +844,7 @@ export function BiocharProductForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        submitDisabled={hasZeroSourceBiochar}
         errorMessage={routedServerError.footerError}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}

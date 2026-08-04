@@ -12,7 +12,10 @@ import {
 import { parseLocalDateString } from "@/lib/date-utils";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { SafeError } from "@/lib/errors";
-import { SOURCE_BIOCHAR_MASS_ERROR } from "@/lib/biochar-composition";
+import {
+  SOURCE_BIOCHAR_MASS_ERROR,
+  ZERO_SOURCE_BIOCHAR_ERROR,
+} from "@/lib/biochar-composition";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import {
@@ -183,6 +186,9 @@ export async function createBiocharProduct(
   );
   if (sourceBiocharMassKg === null || sourceBiocharMassKg < 0) {
     throw new SafeError(SOURCE_BIOCHAR_MASS_ERROR);
+  }
+  if (sourceBiocharMassKg === 0) {
+    throw new SafeError(ZERO_SOURCE_BIOCHAR_ERROR);
   }
   // The operator's moisture reading is a fresh measurement of the drawn
   // biochar, so it, not the bin's stored wet/dry ratio, fixes the dry mass

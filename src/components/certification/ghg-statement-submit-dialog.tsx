@@ -8,6 +8,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   FormField,
   FormInput,
@@ -46,6 +47,7 @@ export function GhgStatementSubmitDialog({
   isResubmit,
   approvedReportId,
 }: GhgStatementSubmitDialogProps) {
+  const router = useRouter();
   const mutation = useSubmitGhgStatementToVerifier();
   const toast = useToast();
   const schema = buildSubmitGhgStatementDialogSchema({
@@ -103,6 +105,7 @@ export function GhgStatementSubmitDialog({
           setProgressUpdates((current) => [...current, update]);
         },
       });
+      router.refresh();
       toast.success(
         `GHG Statement ${result.remoteStatus.replace(/_/g, " ").toLowerCase()}.`,
       );

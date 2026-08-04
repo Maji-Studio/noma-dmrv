@@ -7,7 +7,7 @@
  * multiple batches in one bin and shows physically remaining stock.
  */
 
-import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
@@ -24,24 +24,58 @@ import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import {
   deriveEffectiveMoisturePercent,
   formatWetDryMass,
-  splitWetMass,
 } from "@/lib/mass-moisture";
+import {
+  deriveIngredientDryMassTotalKg,
+  deriveSourceBiocharDryMassKg,
+  fromCompositionMassJsonb,
+} from "@/lib/biochar-composition";
+import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
+
+function remainingSourceBiocharDryMassKg(
+  productDryKg: number | null,
+  composition: unknown,
+  deliveredDryKg: number,
+  unresolvedDeliveredDryCount: number,
+): number | null {
+  if (productDryKg == null) return null;
+  if (unresolvedDeliveredDryCount > 0) return null;
+  if (deliveredDryKg <= 0) return productDryKg;
+
+  const ingredientDryKg = deriveIngredientDryMassTotalKg(
+    fromCompositionMassJsonb(composition),
+  );
+  if (ingredientDryKg == null) return null;
+  const wholeProductDryKg = productDryKg + ingredientDryKg;
+  if (wholeProductDryKg <= 0) return 0;
+
+  const deliveredSourceDryKg =
+    deliveredDryKg * (productDryKg / wholeProductDryKg);
+  return Math.max(0, productDryKg - deliveredSourceDryKg);
+}
 
 function formatStockSubtitle(
   massKg: number | null,
   waterAddedKg: number | null,
   moisturePercent: number | null,
+  composition: unknown,
   deliveredWetKg: number,
   deliveredDryKg: number,
   unresolvedDeliveredDryCount: number,
 ): string {
   const remainingWetKg =
     (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg;
-  const productDryKg = splitWetMass(massKg, moisturePercent)?.dryKg;
-  const remainingDryKg =
-    productDryKg == null || unresolvedDeliveredDryCount > 0
-      ? null
-      : productDryKg - deliveredDryKg;
+  const productDryKg = deriveSourceBiocharDryMassKg(
+    massKg,
+    moisturePercent,
+    fromCompositionMassJsonb(composition),
+  );
+  const remainingDryKg = remainingSourceBiocharDryMassKg(
+    productDryKg,
+    composition,
+    deliveredDryKg,
+    unresolvedDeliveredDryCount,
+  );
   return `${formatWetDryMass({
     wetKg: remainingWetKg,
     dryKg: remainingDryKg,
@@ -105,6 +139,7 @@ function buildSelection(
     massKg: biocharProducts.massKg,
     waterAddedKg: biocharProducts.waterAddedKg,
     moisturePercent: biocharProducts.moistureContentPercent,
+    composition: biocharProducts.composition,
     totalDeliveredKg: numericAggregate(
       sql<number>`COALESCE(${deliveredMassAggregate.totalDeliveredKg}, 0)`,
     ),
@@ -126,6 +161,7 @@ export function toBiocharProductEntityOption(r: {
   massKg: number | null;
   waterAddedKg: number | null;
   moisturePercent: number | null;
+  composition?: unknown;
   totalDeliveredKg: number;
   totalDeliveredDryKg: number;
   unresolvedDeliveredDryCount: number;
@@ -133,11 +169,17 @@ export function toBiocharProductEntityOption(r: {
   const productLabel = r.formulationName ?? PURE_BIOCHAR_LABEL;
   const remainingWetKg =
     (r.massKg ?? 0) + (r.waterAddedKg ?? 0) - r.totalDeliveredKg;
-  const productDryKg = splitWetMass(r.massKg, r.moisturePercent)?.dryKg;
-  const remainingDryKg =
-    productDryKg == null || r.unresolvedDeliveredDryCount > 0
-      ? null
-      : productDryKg - r.totalDeliveredDryKg;
+  const productDryKg = deriveSourceBiocharDryMassKg(
+    r.massKg,
+    r.moisturePercent,
+    fromCompositionMassJsonb(r.composition),
+  );
+  const remainingDryKg = remainingSourceBiocharDryMassKg(
+    productDryKg,
+    r.composition,
+    r.totalDeliveredDryKg,
+    r.unresolvedDeliveredDryCount,
+  );
 
   return {
     id: r.id,
@@ -158,6 +200,7 @@ export function toBiocharProductEntityOption(r: {
       r.massKg,
       r.waterAddedKg,
       r.moisturePercent,
+      r.composition,
       r.totalDeliveredKg,
       r.totalDeliveredDryKg,
       r.unresolvedDeliveredDryCount,
@@ -178,6 +221,13 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
 
   const conditions: SQL[] = [
     isNull(biocharProducts.archivedAt),
+    gt(
+      sourceBiocharMassKgSql(
+        biocharProducts.massKg,
+        biocharProducts.composition,
+      ),
+      0,
+    ),
     // Bin-less (legacy/partial) products stay orderable via their
     // product-code fallback; products whose bin is archived or not a
     // product bin stay hidden.

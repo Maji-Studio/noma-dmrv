@@ -26,8 +26,7 @@ describe("toOrderEntityOption", () => {
         wetKg: 900,
         dryKg: 765,
       },
-      subtitle:
-        "Wet biochar product: 900kg | Dry biochar: 765kg remaining",
+      subtitle: "Wet biochar product: 900kg remaining",
     });
   });
 
@@ -47,9 +46,7 @@ describe("toOrderEntityOption", () => {
         totalDeliveredDryKg: 0,
         unresolvedDeliveredDryCount: 0,
       }).subtitle,
-    ).toBe(
-      "Wet biochar product: 100kg | Dry biochar: 60kg remaining",
-    );
+    ).toBe("Wet biochar product: 100kg remaining");
   });
 
   it("keeps remaining dry mass unknown when a delivery has no dry mass", () => {
@@ -68,9 +65,7 @@ describe("toOrderEntityOption", () => {
       unresolvedDeliveredDryCount: 1,
     });
 
-    expect(option.subtitle).toBe(
-      "Wet biochar product: 90kg | Dry biochar: Not recorded remaining",
-    );
+    expect(option.subtitle).toBe("Wet biochar product: 90kg remaining");
     expect(option.remainingMass).toEqual({ wetKg: 90, dryKg: null });
   });
 });

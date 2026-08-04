@@ -222,6 +222,7 @@ export function EntitySelect({
   autoSelectSingle = false,
   alwaysShowSearch = false,
   hideSearch = false,
+  showRemainingDryMass = true,
   formatSelectedLabel,
   emptyHint,
   noneOption,
@@ -571,7 +572,7 @@ export function EntitySelect({
           id={remainingMassId}
           className="body-caption text-[var(--color-text-tertiary)] mt-4"
         >
-          {formatRemainingMass(remainingMass)}
+          {formatRemainingMass(remainingMass, showRemainingDryMass)}
         </p>
       )}
 

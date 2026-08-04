@@ -37,7 +37,6 @@ import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error
 import {
   binStockOverdrawMessage,
   deliveryStockOverdrawInlineMessage,
-  formatStockLimitKg,
   isStockOverdraw,
   productStockOverdrawMessage,
 } from "@/lib/stock-overdraw";
@@ -387,6 +386,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           entityType="order"
           placeholder="Select order..."
           required
+          showRemainingDryMass={false}
           disabled={isSubmitting || !contextFacilityId}
           filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
           emptyHint={{
@@ -416,12 +416,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             id: "deliveredWetMassKg",
             error: deliveredWetMassError,
             hint: "As-received weight of the delivery, water included.",
-            helperText:
-              deliveryAvailability?.availableKg != null
-                ? `${formatStockLimitKg(
-                    deliveryAvailability.availableKg,
-                  )} available from this product`
-                : undefined,
             required: true,
             disabled: isSubmitting,
             placeholder: "e.g. 1000",

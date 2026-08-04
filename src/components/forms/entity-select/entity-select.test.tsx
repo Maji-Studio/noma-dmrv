@@ -144,6 +144,28 @@ describe("EntitySelect selected-value display", () => {
     expect(html).toContain('aria-invalid="true"');
   });
 
+  it("can limit the selected remaining mass caption to wet mass", () => {
+    entityState.selected = {
+      id: "order-1",
+      code: "ORD-1",
+      name: "Customer order",
+      remainingMass: { wetKg: 500, dryKg: 409 },
+    };
+    entityState.selectedPending = false;
+
+    const html = renderToStaticMarkup(
+      <EntitySelect
+        entityType="order"
+        value="order-1"
+        onChange={() => undefined}
+        showRemainingDryMass={false}
+      />,
+    );
+
+    expect(html).toContain("Remaining wet mass: 500kg");
+    expect(html).not.toContain("dry mass");
+  });
+
   it("uses list stock when its successful query is fresher while keeping the detail label", () => {
     entityState.options = [
       {

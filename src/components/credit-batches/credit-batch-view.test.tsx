@@ -81,36 +81,22 @@ const baseOptions = {
 };
 
 describe("credit batch CO₂e stored", () => {
-  it("distinguishes a preview still loading from one that cannot be computed", () => {
+  it("omits the field until a numeric preview is available", () => {
     expect(
       co2eStoredMarkup({
         ...baseOptions,
         creditBatch: makeBatch(),
-        isCo2ePreviewLoading: true,
       }),
-    ).toContain("Calculating");
+    ).toBe("");
 
     expect(
       co2eStoredMarkup({
         ...baseOptions,
-        creditBatch: makeBatch(),
-        co2ePreviewFailed: true,
+        creditBatch: makeBatch({
+          co2eStoredPreview: makePreview(null, ["organicCarbonPercent"]),
+        }),
       }),
-    ).toContain("Not available");
-  });
-
-  it("states that a resolved-but-empty preview is not calculable, with an explanation", () => {
-    const markup = co2eStoredMarkup({
-      ...baseOptions,
-      creditBatch: makeBatch({
-        co2eStoredPreview: makePreview(null, ["organicCarbonPercent"]),
-      }),
-    });
-
-    // The gap list itself lives in the tooltip popup, which only mounts on
-    // hover/focus — the cell asserts the state and offers the trigger.
-    expect(markup).toContain("Not calculable yet");
-    expect(markup).toContain("Why there is no CO₂e figure");
+    ).toBe("");
   });
 
   it("renders the figure once the preview resolves", () => {
@@ -120,7 +106,6 @@ describe("credit batch CO₂e stored", () => {
         creditBatch: makeBatch({
           co2eStoredPreview: makePreview(12.5, []),
         }),
-        isCo2ePreviewLoading: true,
       }),
     ).toContain("12.50 t CO₂e");
   });

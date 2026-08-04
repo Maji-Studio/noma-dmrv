@@ -257,7 +257,8 @@ test.describe("Credit batch view sheet (Phase 5)", () => {
     // Sentence case (docs/design-system.md › Label casing); `exact: true` is
     // case-sensitive, so this string must match the UI's casing exactly.
     await expect(sheet.getByText("Feedstock type", { exact: true })).toBeVisible();
-    await expect(sheet.getByText("CO₂e stored", { exact: true })).toBeVisible();
+    // This fixture has no calculated preview, so the unavailable metric is hidden.
+    await expect(sheet.getByText("CO₂e stored", { exact: true })).toHaveCount(0);
     await expect(sheet.getByText("Durability", { exact: true })).toBeVisible();
     await expect(
       sheet.getByText("Production runs", { exact: true }),

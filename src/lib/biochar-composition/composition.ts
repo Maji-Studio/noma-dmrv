@@ -7,6 +7,7 @@
  */
 
 import type { IngredientBin } from "./types";
+import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 
 interface FormulationIngredientLike {
   id: string;
@@ -56,10 +57,40 @@ export function reconcileComposition(
 
 interface IngredientMassLike {
   massKg?: unknown;
+  massDryKg?: unknown;
+}
+
+/** Read mass-only ingredient facts without requiring formulation metadata. */
+export function fromCompositionMassJsonb(raw: unknown): IngredientMassLike[] {
+  if (!raw || typeof raw !== "object") return [];
+  const ingredients = (raw as { ingredients?: unknown }).ingredients;
+  if (!Array.isArray(ingredients)) return [];
+
+  return ingredients.flatMap((ingredient) => {
+    if (!ingredient || typeof ingredient !== "object") return [];
+    const { massKg, massDryKg } = ingredient as IngredientMassLike;
+    return typeof massKg === "number" && Number.isFinite(massKg) && massKg >= 0
+      ? [{
+          massKg,
+          massDryKg:
+            typeof massDryKg === "number" &&
+            Number.isFinite(massDryKg) &&
+            massDryKg >= 0
+              ? massDryKg
+              : undefined,
+        }]
+      : [];
+  });
 }
 
 export const SOURCE_BIOCHAR_MASS_ERROR =
   "Recorded ingredient mass exceeds blend mass. Reduce ingredient mass or increase blend mass.";
+
+export const ZERO_SOURCE_BIOCHAR_ERROR =
+  "Source biochar mass must be greater than 0 kg. Increase the biochar wet mass before creating this product.";
+
+export const ZERO_SOURCE_BIOCHAR_WARNING =
+  "This product contains 0 kg of source biochar. It cannot be ordered or traced to a production run or credit batch. Create a new product with more than 0 kg of biochar.";
 
 export const GRAMS_PER_KILOGRAM = 1_000;
 
@@ -103,6 +134,18 @@ export function deriveSourceBiocharMassKg(
   return (blendMassGrams - ingredientMassGrams) / GRAMS_PER_KILOGRAM;
 }
 
+/** Dry source biochar only, excluding blend ingredients and added water. */
+export function deriveSourceBiocharDryMassKg(
+  blendMassKg: number | null | undefined,
+  moistureContentPercent: number | null | undefined,
+  ingredients: readonly IngredientMassLike[] | null | undefined,
+): number | null {
+  return computeClampedDryMass(
+    deriveSourceBiocharMassKg(blendMassKg, ingredients),
+    moistureContentPercent,
+  );
+}
+
 /**
  * Inverse of `deriveSourceBiocharMassKg`: the persisted pre-water blend mass
  * is the operator-entered biochar wet mass plus recorded wet ingredient
@@ -132,6 +175,25 @@ export function deriveIngredientMassTotalKg(
   ingredients: readonly IngredientMassLike[] | null | undefined,
 ): number {
   return sumRecordedIngredientMassKg(ingredients);
+}
+
+/** Sum ingredient dry snapshots, or return null when a recorded mass lacks one. */
+export function deriveIngredientDryMassTotalKg(
+  ingredients: readonly IngredientMassLike[] | null | undefined,
+): number | null {
+  return (ingredients ?? []).reduce<number | null>((total, ingredient) => {
+    if (total == null) return null;
+    const massKg = ingredient.massKg;
+    if (typeof massKg !== "number" || !Number.isFinite(massKg) || massKg <= 0) {
+      return total;
+    }
+    const massDryKg = ingredient.massDryKg;
+    return typeof massDryKg === "number" &&
+      Number.isFinite(massDryKg) &&
+      massDryKg >= 0
+      ? total + massDryKg
+      : null;
+  }, 0);
 }
 
 /**

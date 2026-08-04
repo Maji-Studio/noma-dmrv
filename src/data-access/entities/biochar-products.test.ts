@@ -127,4 +127,77 @@ describe("toBiocharProductEntityOption", () => {
       }).remainingMass,
     ).toEqual({ wetKg: 3_000, dryKg: null });
   });
+
+  it("shows zero dry biochar when ingredients consume the whole blend mass", () => {
+    expect(
+      toBiocharProductEntityOption({
+        id: "product-legacy-zero",
+        code: "PB-00",
+        name: "Legacy product bin",
+        productCode: "BP-00",
+        formulationName: "50/50 blend",
+        massKg: 500,
+        waterAddedKg: 50,
+        moisturePercent: 10,
+        composition: {
+          ingredients: [
+            {
+              formulationIngredientId: "ingredient-1",
+              feedstockTypeId: "feedstock-type-1",
+              feedstockTypeName: "Chicken manure",
+              feedstockTypeCategory: "manure",
+              ratio: 0.5,
+              massKg: 500,
+              storageLocationId: null,
+            },
+          ],
+        },
+        totalDeliveredKg: 0,
+        totalDeliveredDryKg: 0,
+        unresolvedDeliveredDryCount: 0,
+      }).subtitle,
+    ).toBe(
+      "Wet biochar product: 550kg | Dry biochar: 0kg available",
+    );
+  });
+
+  it("uses ingredient mass even when legacy formulation metadata is absent", () => {
+    expect(
+      toBiocharProductEntityOption({
+        id: "product-mass-only",
+        code: "PB-02",
+        name: "Mass-only product bin",
+        productCode: "BP-02",
+        formulationName: null,
+        massKg: 1_000,
+        waterAddedKg: 0,
+        moisturePercent: 10,
+        composition: { ingredients: [{ massKg: 200 }] },
+        totalDeliveredKg: 0,
+        totalDeliveredDryKg: 0,
+        unresolvedDeliveredDryCount: 0,
+      }).remainingMass,
+    ).toEqual({ wetKg: 1_000, dryKg: 720 });
+  });
+
+  it("subtracts only the source-biochar share of a blended delivery", () => {
+    expect(
+      toBiocharProductEntityOption({
+        id: "product-blend",
+        code: "PB-03",
+        name: "Blended product bin",
+        productCode: "BP-03",
+        formulationName: "Biochar Fertilizer",
+        massKg: 1_000,
+        waterAddedKg: 0,
+        moisturePercent: 10,
+        composition: {
+          ingredients: [{ massKg: 200, massDryKg: 180 }],
+        },
+        totalDeliveredKg: 500,
+        totalDeliveredDryKg: 450,
+        unresolvedDeliveredDryCount: 0,
+      }).remainingMass,
+    ).toEqual({ wetKg: 500, dryKg: 360 });
+  });
 });
