@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { Button } from "@/components/ui";
 import {
+  findApprovedGhgStatementReport,
   GhgStatementWorkflow,
-  startAutomaticFirstReportGeneration,
-  shouldAutoGenerateFirstReport,
 } from "./ghg-statement-workflow";
 
 const prepareMutation = {
@@ -64,7 +64,24 @@ describe("GhgStatementWorkflow", () => {
     approveMutation.mutateAsync.mockReset();
   });
 
-  it("renders all four steps with one-click generation and no narrative fields", () => {
+  it("does not reuse an older approval after generating a new version", () => {
+    expect(
+      findApprovedGhgStatementReport([
+        {
+          id: "report-2",
+          version: 2,
+          lifecycle: "prepared",
+        } as never,
+        {
+          id: "report-1",
+          version: 1,
+          lifecycle: "approved",
+        } as never,
+      ]),
+    ).toBeUndefined();
+  });
+
+  it("keeps the sheet workflow passive except for its Submit entry point", () => {
     const html = renderToStaticMarkup(
       <GhgStatementWorkflow
         ghgStatementId="11111111-1111-4111-8111-111111111111"
@@ -79,9 +96,100 @@ describe("GhgStatementWorkflow", () => {
     expect(html).toContain("Report generated");
     expect(html).toContain("Report approved");
     expect(html).toContain("Submitted to verifier");
-    expect(html).toContain("Generate report");
+    expect(html).not.toContain(">Generate report<");
     expect(html).not.toContain("<textarea");
     expect(html).not.toContain('type="checkbox"');
+  });
+
+  it("renders separate report actions inside the interactive submit flow", () => {
+    const html = renderToStaticMarkup(
+      <GhgStatementWorkflow
+        ghgStatementId="11111111-1111-4111-8111-111111111111"
+        created
+        canManageReports
+        interactive
+        verifierStep={{ status: "skipped" }}
+        reportsQuery={reportsQuery([])}
+      />,
+    );
+
+    expect(html).toContain(">Generate report<");
+    expect(html).not.toContain(">Review report<");
+    expect(html).not.toContain(">Approve report<");
+  });
+
+  it("runs generation from its own step button", async () => {
+    prepareMutation.mutateAsync.mockResolvedValue({ id: "report-1" });
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementWorkflow
+          ghgStatementId="11111111-1111-4111-8111-111111111111"
+          created
+          canManageReports
+          interactive
+          verifierStep={{ status: "skipped" }}
+          reportsQuery={reportsQuery([])}
+        />,
+      );
+    });
+
+    const generate = renderer!.root
+      .findAllByType(Button)
+      .find((button) => button.props.children === "Generate report");
+    await act(async () => generate?.props.onClick());
+
+    expect(prepareMutation.mutateAsync).toHaveBeenCalledWith({
+      ghgStatementId: "11111111-1111-4111-8111-111111111111",
+      preparationKey: expect.any(String),
+    });
+    await act(async () => renderer?.unmount());
+  });
+
+  it("requires Review report before Approve report", async () => {
+    approveMutation.mutateAsync.mockResolvedValue({ id: "report-2" });
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementWorkflow
+          ghgStatementId="11111111-1111-4111-8111-111111111111"
+          created
+          canManageReports
+          interactive
+          verifierStep={{ status: "skipped" }}
+          reportsQuery={reportsQuery([
+            {
+              id: "22222222-2222-4222-8222-222222222222",
+              version: 2,
+              lifecycle: "prepared",
+              reviewUrl: "/api/documents/report",
+            },
+          ])}
+        />,
+      );
+    });
+
+    const review = renderer!.root
+      .findAllByType("a")
+      .find((link) => link.props.children === "Review report");
+    let approve = renderer!.root
+      .findAllByType(Button)
+      .find((button) => button.props.children === "Approve report");
+    expect(approve?.props.disabled).toBe(true);
+
+    await act(async () => review?.props.onClick());
+    approve = renderer!.root
+      .findAllByType(Button)
+      .find((button) => button.props.children === "Approve report");
+    expect(approve?.props.disabled).toBe(false);
+    await act(async () => approve?.props.onClick());
+
+    expect(approveMutation.mutateAsync).toHaveBeenCalledWith({
+      ghgStatementId: "11111111-1111-4111-8111-111111111111",
+      reportId: "22222222-2222-4222-8222-222222222222",
+      version: 2,
+    });
+    await act(async () => renderer?.unmount());
   });
 
   it("keeps review and approval explicit for a prepared version", () => {
@@ -90,6 +198,7 @@ describe("GhgStatementWorkflow", () => {
         ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
         canManageReports
+        interactive
         verifierStep={{ status: "skipped" }}
         reportsQuery={reportsQuery([
           {
@@ -103,8 +212,8 @@ describe("GhgStatementWorkflow", () => {
     );
 
     expect(html).toContain("Generate new version");
-    expect(html).toContain("Review");
-    expect(html).toContain("Approve");
+    expect(html).toContain("Review report");
+    expect(html).toContain("Approve report");
     expect(html).toContain("Review version 2, then approve it.");
   });
 
@@ -115,6 +224,7 @@ describe("GhgStatementWorkflow", () => {
         created
         canManageReports
         canGenerate={false}
+        interactive
         generationUnavailableReason="Submit a Removal in this reporting period before generating a report."
         verifierStep={{ status: "skipped" }}
         reportsQuery={reportsQuery([])}
@@ -133,6 +243,7 @@ describe("GhgStatementWorkflow", () => {
         ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
         canManageReports
+        interactive
         verifierStep={{
           status: "met",
           detail: "In verification. No action is needed.",
@@ -181,6 +292,7 @@ describe("GhgStatementWorkflow", () => {
         created
         canManageReports
         canGenerate
+        interactive
         verifierStep={{ status: "active" }}
         onSubmit={() => undefined}
         reportsQuery={failedReportsRefresh([
@@ -266,102 +378,4 @@ describe("GhgStatementWorkflow", () => {
     expect(html).toContain("<details");
   });
 
-  it("auto-generates only for managing viewers with a ready live roll-up", () => {
-    const eligible = {
-      created: true,
-      canManageReports: true,
-      autoGenerationReady: true,
-      reportsLoaded: true,
-      reportCount: 0,
-    };
-
-    expect(shouldAutoGenerateFirstReport(eligible)).toBe(true);
-    expect(
-      shouldAutoGenerateFirstReport({
-        ...eligible,
-        canManageReports: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldAutoGenerateFirstReport({
-        ...eligible,
-        autoGenerationReady: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldAutoGenerateFirstReport({ ...eligible, reportCount: 1 }),
-    ).toBe(false);
-  });
-
-  it("starts one idempotent automatic preparation per statement", () => {
-    const attemptedFor = { current: null as string | null };
-    const onError = vi.fn();
-    const statementId = "11111111-1111-4111-8111-111111111111";
-
-    expect(
-      startAutomaticFirstReportGeneration({
-        shouldStart: true,
-        ghgStatementId: statementId,
-        attemptedFor,
-        mutate: prepareMutation.mutate as never,
-        onError,
-      }),
-    ).toBe(true);
-    expect(
-      startAutomaticFirstReportGeneration({
-        shouldStart: true,
-        ghgStatementId: statementId,
-        attemptedFor,
-        mutate: prepareMutation.mutate as never,
-        onError,
-      }),
-    ).toBe(false);
-    expect(prepareMutation.mutate).toHaveBeenCalledTimes(1);
-    expect(prepareMutation.mutate).toHaveBeenCalledWith(
-      {
-        ghgStatementId: statementId,
-        preparationKey: statementId,
-        ensureFirst: true,
-      },
-      { onError },
-    );
-  });
-
-  it("executes the guarded automatic-generation effect exactly once", async () => {
-    const statementId = "11111111-1111-4111-8111-111111111111";
-    let renderer: ReactTestRenderer | undefined;
-    const workflow = (
-      <GhgStatementWorkflow
-        ghgStatementId={statementId}
-        created
-        canManageReports
-        canGenerate
-        autoGenerationReady
-        verifierStep={{ status: "skipped" }}
-        reportsQuery={reportsQuery([])}
-      />
-    );
-
-    await act(async () => {
-      renderer = create(workflow);
-    });
-    expect(prepareMutation.mutate).toHaveBeenCalledTimes(1);
-    expect(prepareMutation.mutate).toHaveBeenCalledWith(
-      {
-        ghgStatementId: statementId,
-        preparationKey: statementId,
-        ensureFirst: true,
-      },
-      expect.objectContaining({ onError: expect.any(Function) }),
-    );
-
-    await act(async () => {
-      renderer?.update(workflow);
-    });
-    expect(prepareMutation.mutate).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      renderer?.unmount();
-    });
-  });
 });

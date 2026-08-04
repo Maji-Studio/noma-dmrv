@@ -17,7 +17,10 @@ import {
 } from "@/components/forms";
 import { Button, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { useSubmitGhgStatementToVerifier } from "@/hooks/use-certification";
+import {
+  useGhgStatementReports,
+  useSubmitGhgStatementToVerifier,
+} from "@/hooks/use-certification";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import {
@@ -25,6 +28,10 @@ import {
   type SubmitGhgStatementDialogInput,
 } from "@/schemas/certification";
 import { ProductionConfirmation } from "./production-confirmation";
+import {
+  findApprovedGhgStatementReport,
+  GhgStatementWorkflow,
+} from "./ghg-statement-workflow";
 import {
   canRetrySubmissionProgress,
   SubmissionProgress,
@@ -36,7 +43,8 @@ interface GhgStatementSubmitDialogProps {
   onClose: () => void;
   isProduction: boolean;
   isResubmit: boolean;
-  approvedReportId: string | null;
+  canGenerate: boolean;
+  generationUnavailableReason?: string | null;
 }
 
 export function GhgStatementSubmitDialog({
@@ -45,18 +53,23 @@ export function GhgStatementSubmitDialog({
   onClose,
   isProduction,
   isResubmit,
-  approvedReportId,
+  canGenerate,
+  generationUnavailableReason,
 }: GhgStatementSubmitDialogProps) {
   const router = useRouter();
   const mutation = useSubmitGhgStatementToVerifier();
+  const reportsQuery = useGhgStatementReports(ghgStatementId, isOpen);
+  const approvedReport = findApprovedGhgStatementReport(
+    reportsQuery.data ?? [],
+  );
+  const approvedReportId = approvedReport?.id ?? null;
   const toast = useToast();
   const schema = buildSubmitGhgStatementDialogSchema({
     isResubmit,
     isProduction,
   });
-  const [reportSource, setReportSource] = useState<"generated" | "external">(
-    approvedReportId ? "generated" : "external",
-  );
+  const [reportSource, setReportSource] =
+    useState<"generated" | "external">("generated");
   const [progressUpdates, setProgressUpdates] = useState<
     SubmissionProgressUpdate[]
   >([]);
@@ -91,7 +104,7 @@ export function GhgStatementSubmitDialog({
     mutation.reset();
     setProgressUpdates([]);
     setLastInput(null);
-    setReportSource(approvedReportId ? "generated" : "external");
+    setReportSource("generated");
   };
 
   const runSubmission = async (input: SubmitGhgStatementDialogInput) => {
@@ -238,7 +251,7 @@ export function GhgStatementSubmitDialog({
           ) : (
             <>
               <div className="flex flex-col gap-12">
-                <label className="flex items-start gap-8 border border-[var(--color-border-secondary)] p-12 body-small">
+                <label className="flex items-start gap-8 body-small">
                   <input
                     type="radio"
                     name="reportSource"
@@ -248,17 +261,43 @@ export function GhgStatementSubmitDialog({
                       setValue("reportId", approvedReportId ?? undefined);
                       setValue("externalReportUrl", undefined);
                     }}
-                    disabled={!approvedReportId}
                   />
                   <span>
-                    <strong>Approved generated report</strong>
+                    <strong>Use a generated report</strong>
                     <span className="mt-2 block text-[var(--color-text-tertiary)]">
                       {approvedReportId
-                        ? "Submit the current approved immutable report."
-                        : "Generate and approve a report to use this option."}
+                        ? "The current approved report is ready to submit."
+                        : "Generate, review, and approve the report before submitting."}
                     </span>
                   </span>
                 </label>
+
+                {reportSource === "generated" && (
+                  <GhgStatementWorkflow
+                    ghgStatementId={ghgStatementId}
+                    reportsQuery={reportsQuery}
+                    created
+                    canManageReports
+                    canGenerate={canGenerate}
+                    generationUnavailableReason={generationUnavailableReason}
+                    interactive
+                    verifierStep={
+                      approvedReportId
+                        ? {
+                            status: "active",
+                            detail: "Submit the approved report to the verifier.",
+                          }
+                        : {
+                            status: "skipped",
+                            detail: "Approve the report before submitting it.",
+                          }
+                    }
+                    onSubmit={
+                      approvedReportId ? () => void onSubmit() : undefined
+                    }
+                    submitLabel={isResubmit ? "Resubmit" : "Submit"}
+                  />
+                )}
 
                 <details className="border border-[var(--color-border-secondary)] p-12">
                   <summary className="body-small cursor-pointer">
@@ -337,13 +376,15 @@ export function GhgStatementSubmitDialog({
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  busy={mutation.isPending}
-                >
-                  {isResubmit ? "Resubmit" : "Submit"}
-                </Button>
+                {reportSource === "external" && (
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    busy={mutation.isPending}
+                  >
+                    {isResubmit ? "Resubmit" : "Submit"}
+                  </Button>
+                )}
               </div>
             </>
           )}
