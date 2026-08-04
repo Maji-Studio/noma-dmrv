@@ -56,6 +56,10 @@ import type { SampleWithRelations } from "@/data-access/samples";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { TransportLegFormData } from "@/schemas/transport-legs";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
+import {
+  H_TO_C_ORG_ELIGIBILITY_MAX,
+  O_TO_C_ORG_ELIGIBILITY_MAX,
+} from "@/lib/calculations/biochar-eligibility";
 
 // ============================================
 // Constants
@@ -746,7 +750,7 @@ export function SampleForm({
           title="Stability ratios"
           hint={
             is1000Year
-              ? "These ratios are not used for the 1000-year durability estimate, but remain required for the universal eligibility check (H/C_org < 0.5, O/C_org < 0.2). A sample without both ratios does not count toward the credit batch's minimum number of replicates."
+              ? `These ratios are not used for the 1000-year durability estimate, but remain required for the universal eligibility check (H/C_org < ${H_TO_C_ORG_ELIGIBILITY_MAX}, O/C_org < ${O_TO_C_ORG_ELIGIBILITY_MAX}). A sample without both ratios does not count toward the credit batch's minimum number of replicates.`
               : undefined
           }
           icon={<CalculatorIcon size={14} weight="bold" />}
