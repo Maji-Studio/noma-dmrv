@@ -57,6 +57,7 @@ export function reconcileComposition(
 
 interface IngredientMassLike {
   massKg?: unknown;
+  massDryKg?: unknown;
 }
 
 /** Read mass-only ingredient facts without requiring formulation metadata. */
@@ -67,9 +68,17 @@ export function fromCompositionMassJsonb(raw: unknown): IngredientMassLike[] {
 
   return ingredients.flatMap((ingredient) => {
     if (!ingredient || typeof ingredient !== "object") return [];
-    const massKg = (ingredient as IngredientMassLike).massKg;
+    const { massKg, massDryKg } = ingredient as IngredientMassLike;
     return typeof massKg === "number" && Number.isFinite(massKg) && massKg >= 0
-      ? [{ massKg }]
+      ? [{
+          massKg,
+          massDryKg:
+            typeof massDryKg === "number" &&
+            Number.isFinite(massDryKg) &&
+            massDryKg >= 0
+              ? massDryKg
+              : undefined,
+        }]
       : [];
   });
 }
@@ -166,6 +175,25 @@ export function deriveIngredientMassTotalKg(
   ingredients: readonly IngredientMassLike[] | null | undefined,
 ): number {
   return sumRecordedIngredientMassKg(ingredients);
+}
+
+/** Sum ingredient dry snapshots, or return null when a recorded mass lacks one. */
+export function deriveIngredientDryMassTotalKg(
+  ingredients: readonly IngredientMassLike[] | null | undefined,
+): number | null {
+  return (ingredients ?? []).reduce<number | null>((total, ingredient) => {
+    if (total == null) return null;
+    const massKg = ingredient.massKg;
+    if (typeof massKg !== "number" || !Number.isFinite(massKg) || massKg <= 0) {
+      return total;
+    }
+    const massDryKg = ingredient.massDryKg;
+    return typeof massDryKg === "number" &&
+      Number.isFinite(massDryKg) &&
+      massDryKg >= 0
+      ? total + massDryKg
+      : null;
+  }, 0);
 }
 
 /**

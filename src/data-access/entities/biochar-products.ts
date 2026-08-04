@@ -26,10 +26,33 @@ import {
   formatWetDryMass,
 } from "@/lib/mass-moisture";
 import {
+  deriveIngredientDryMassTotalKg,
   deriveSourceBiocharDryMassKg,
   fromCompositionMassJsonb,
 } from "@/lib/biochar-composition";
 import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
+
+function remainingSourceBiocharDryMassKg(
+  productDryKg: number | null,
+  composition: unknown,
+  deliveredDryKg: number,
+  unresolvedDeliveredDryCount: number,
+): number | null {
+  if (productDryKg == null) return null;
+  if (unresolvedDeliveredDryCount > 0) return null;
+  if (deliveredDryKg <= 0) return productDryKg;
+
+  const ingredientDryKg = deriveIngredientDryMassTotalKg(
+    fromCompositionMassJsonb(composition),
+  );
+  if (ingredientDryKg == null) return null;
+  const wholeProductDryKg = productDryKg + ingredientDryKg;
+  if (wholeProductDryKg <= 0) return 0;
+
+  const deliveredSourceDryKg =
+    deliveredDryKg * (productDryKg / wholeProductDryKg);
+  return Math.max(0, productDryKg - deliveredSourceDryKg);
+}
 
 function formatStockSubtitle(
   massKg: number | null,
@@ -47,10 +70,12 @@ function formatStockSubtitle(
     moisturePercent,
     fromCompositionMassJsonb(composition),
   );
-  const remainingDryKg =
-    productDryKg == null || unresolvedDeliveredDryCount > 0
-      ? null
-      : productDryKg - deliveredDryKg;
+  const remainingDryKg = remainingSourceBiocharDryMassKg(
+    productDryKg,
+    composition,
+    deliveredDryKg,
+    unresolvedDeliveredDryCount,
+  );
   return `${formatWetDryMass({
     wetKg: remainingWetKg,
     dryKg: remainingDryKg,
@@ -149,10 +174,12 @@ export function toBiocharProductEntityOption(r: {
     r.moisturePercent,
     fromCompositionMassJsonb(r.composition),
   );
-  const remainingDryKg =
-    productDryKg == null || r.unresolvedDeliveredDryCount > 0
-      ? null
-      : productDryKg - r.totalDeliveredDryKg;
+  const remainingDryKg = remainingSourceBiocharDryMassKg(
+    productDryKg,
+    r.composition,
+    r.totalDeliveredDryKg,
+    r.unresolvedDeliveredDryCount,
+  );
 
   return {
     id: r.id,

@@ -179,4 +179,25 @@ describe("toBiocharProductEntityOption", () => {
       }).remainingMass,
     ).toEqual({ wetKg: 1_000, dryKg: 720 });
   });
+
+  it("subtracts only the source-biochar share of a blended delivery", () => {
+    expect(
+      toBiocharProductEntityOption({
+        id: "product-blend",
+        code: "PB-03",
+        name: "Blended product bin",
+        productCode: "BP-03",
+        formulationName: "Biochar Fertilizer",
+        massKg: 1_000,
+        waterAddedKg: 0,
+        moisturePercent: 10,
+        composition: {
+          ingredients: [{ massKg: 200, massDryKg: 180 }],
+        },
+        totalDeliveredKg: 500,
+        totalDeliveredDryKg: 450,
+        unresolvedDeliveredDryCount: 0,
+      }).remainingMass,
+    ).toEqual({ wetKg: 500, dryKg: 360 });
+  });
 });
