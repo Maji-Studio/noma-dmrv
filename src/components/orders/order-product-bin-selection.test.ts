@@ -27,7 +27,7 @@ describe("order product-bin selection", () => {
     );
   });
 
-  it("wires the selected product moisture into a preview after quantity and before packaging", () => {
+  it("wires tracked product composition into a preview after quantity and before packaging", () => {
     const selectorIndex = orderFormSource.indexOf(
       'name="biocharProductId"',
     );
@@ -40,7 +40,10 @@ describe("order product-bin selection", () => {
     expect(orderFormSource).toContain('name: "biocharProductId"');
     expect(orderFormSource).toContain('name: "quantityKg"');
     expect(orderFormSource).toContain(
-      "selectedBiocharProduct?.mass?.moisturePercent",
+      "productWetBasisKg={selectedBiocharProduct?.remainingMass?.wetKg ?? null}",
+    );
+    expect(orderFormSource).toContain(
+      "productDryBiocharKg={selectedBiocharProduct?.remainingMass?.dryKg ?? null}",
     );
     expect(selectorIndex).toBeLessThan(quantityIndex);
     expect(quantityIndex).toBeLessThan(previewIndex);

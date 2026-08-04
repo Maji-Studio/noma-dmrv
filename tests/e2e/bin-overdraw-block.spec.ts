@@ -408,6 +408,7 @@ async function openDeliveredDeliveryForm(
   await page.selectOption('select[name="status"]', "delivered");
   await selectEntityByText(page, "Order", seededData.customer.name);
   await page.fill('input[name="deliveredWetMassKg"]', wetMassKg);
+  await page.fill('input[name="moistureContentPercent"]', "10");
 }
 
 /** Submit the create-delivery side sheet. */
@@ -692,6 +693,7 @@ test.describe("createDelivery order-balance guard", () => {
     await page.selectOption('select[name="status"]', "upcoming");
     await selectEntityByText(page, "Order", seededData.customer.name);
     await page.fill('input[name="deliveredWetMassKg"]', "200001");
+    await page.fill('input[name="moistureContentPercent"]', "10");
 
     const error = page.locator("#deliveredWetMassKg-error");
     await expect(error).toHaveText(

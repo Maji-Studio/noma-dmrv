@@ -28,6 +28,8 @@ import {
   DEC_ORG_SLUG,
   STARTER_FEEDSTOCK_TYPES,
 } from './org-defaults';
+import { allocateTrackedDryBiocharKg } from '../lib/biochar-mass-accounting';
+import { KG_PER_TONNE } from '../lib/calculations/unit-conversions';
 
 config({ path: '.env.local' });
 // Dev-only CLI: the lazily imported storage layer validates the full env
@@ -277,6 +279,123 @@ const demoTimestamps = {
   creditBatch1End: new Date('2026-05-31T23:59:59.000Z'),
 } as const;
 
+const curatedProductSourceAllocations = [
+  {
+    id: ids.biocharProductSourceAllocation1,
+    biocharProductId: ids.biocharProduct1,
+    productionRunId: ids.productionRun1,
+    sourceStorageLocationId: ids.storageCharMoshi,
+    allocatedWetMassKg: 376.627,
+    allocatedDryMassKg: 369.094,
+  },
+  {
+    id: ids.biocharProductSourceAllocation2,
+    biocharProductId: ids.biocharProduct1,
+    productionRunId: ids.productionRun2,
+    sourceStorageLocationId: ids.storageCharMoshi,
+    allocatedWetMassKg: 276.706,
+    allocatedDryMassKg: 271.172,
+  },
+  {
+    id: ids.biocharProductSourceAllocation3,
+    biocharProductId: ids.biocharProduct1,
+    productionRunId: ids.productionRun3,
+    sourceStorageLocationId: ids.storageCharMoshi,
+    allocatedWetMassKg: 326.667,
+    allocatedDryMassKg: 320.134,
+  },
+  {
+    id: ids.biocharProductSourceAllocation4,
+    biocharProductId: ids.biocharProduct2,
+    productionRunId: ids.productionRun1,
+    sourceStorageLocationId: ids.storageCharMoshi,
+    allocatedWetMassKg: 269.02,
+    allocatedDryMassKg: 263.64,
+  },
+  {
+    id: ids.biocharProductSourceAllocation5,
+    biocharProductId: ids.biocharProduct2,
+    productionRunId: ids.productionRun2,
+    sourceStorageLocationId: ids.storageCharMoshi,
+    allocatedWetMassKg: 197.647,
+    allocatedDryMassKg: 193.694,
+  },
+  {
+    id: ids.biocharProductSourceAllocation6,
+    biocharProductId: ids.biocharProduct2,
+    productionRunId: ids.productionRun3,
+    sourceStorageLocationId: ids.storageCharMoshi,
+    allocatedWetMassKg: 233.333,
+    allocatedDryMassKg: 228.666,
+  },
+  {
+    id: ids.biocharProductSourceAllocation7,
+    biocharProductId: ids.biocharProduct3,
+    productionRunId: ids.productionRun1,
+    sourceStorageLocationId: ids.storageCharMoshi,
+    allocatedWetMassKg: 307.451,
+    allocatedDryMassKg: 301.302,
+  },
+  {
+    id: ids.biocharProductSourceAllocation8,
+    biocharProductId: ids.biocharProduct3,
+    productionRunId: ids.productionRun2,
+    sourceStorageLocationId: ids.storageCharMoshi,
+    allocatedWetMassKg: 225.882,
+    allocatedDryMassKg: 221.364,
+  },
+  {
+    id: ids.biocharProductSourceAllocation9,
+    biocharProductId: ids.biocharProduct3,
+    productionRunId: ids.productionRun3,
+    sourceStorageLocationId: ids.storageCharMoshi,
+    allocatedWetMassKg: 266.667,
+    allocatedDryMassKg: 261.334,
+  },
+] as const;
+
+const CURATED_MASS_RECONCILIATION_ERROR =
+  'Curated biochar chain masses do not reconcile';
+
+function deriveCuratedBiocharChainMasses(input: {
+  productId: string;
+  productWetKg: number;
+  biocharRatio: number;
+  orderWetKg: number;
+  deliveredWetKg: number;
+  appliedWetTons: number;
+}) {
+  const sourceDryKg = curatedProductSourceAllocations
+    .filter((allocation) => allocation.biocharProductId === input.productId)
+    .reduce((total, allocation) => total + allocation.allocatedDryMassKg, 0);
+  const deliveredDryKg = allocateTrackedDryBiocharKg({
+    totalWetKg: input.productWetKg,
+    totalDryBiocharKg: sourceDryKg,
+    requestedWetKg: input.deliveredWetKg,
+  });
+  const appliedWetKg = input.appliedWetTons * KG_PER_TONNE;
+  const appliedDryKg = allocateTrackedDryBiocharKg({
+    totalWetKg: input.deliveredWetKg,
+    totalDryBiocharKg: deliveredDryKg,
+    requestedWetKg: appliedWetKg,
+  });
+  if (
+    deliveredDryKg == null ||
+    appliedDryKg == null ||
+    deliveredDryKg > sourceDryKg ||
+    appliedDryKg > deliveredDryKg
+  ) {
+    throw new Error(CURATED_MASS_RECONCILIATION_ERROR);
+  }
+
+  return {
+    ...input,
+    sourceDryKg,
+    deliveredDryKg,
+    appliedDryTons: appliedDryKg / KG_PER_TONNE,
+  };
+}
+
 /**
  * Keep the curated product chain physically reconcilable from the biochar bin
  * through certification. Product wet mass is the finished blend; the source
@@ -285,33 +404,30 @@ const demoTimestamps = {
  * the applied biochar share rather than the amendment ingredients.
  */
 const curatedBiocharChainMasses = {
-  product1: {
+  product1: deriveCuratedBiocharChainMasses({
+    productId: ids.biocharProduct1,
     productWetKg: 2450,
     biocharRatio: 0.4,
     orderWetKg: 2000,
     deliveredWetKg: 2000,
-    deliveredDryKg: 1890,
     appliedWetTons: 0.756,
-    appliedDryTons: 0.71442,
-  },
-  product2: {
+  }),
+  product2: deriveCuratedBiocharChainMasses({
+    productId: ids.biocharProduct2,
     productWetKg: 1000,
     biocharRatio: 0.7,
     orderWetKg: 900,
     deliveredWetKg: 900,
-    deliveredDryKg: 856.8,
     appliedWetTons: 0.595,
-    appliedDryTons: 0.56644,
-  },
-  product3: {
+  }),
+  product3: deriveCuratedBiocharChainMasses({
+    productId: ids.biocharProduct3,
     productWetKg: 1600,
     biocharRatio: 0.5,
     orderWetKg: 1400,
     deliveredWetKg: 1400,
-    deliveredDryKg: 1316,
     appliedWetTons: 0.65,
-    appliedDryTons: 0.611,
-  },
+  }),
 } as const;
 
 async function seedDemoData() {
@@ -1277,80 +1393,9 @@ async function seedDemoData() {
 
       console.log('Creating biochar product source allocations...');
       await tx.insert(schema.biocharProductSourceAllocations).values(
-        withBootstrapOrg<typeof schema.biocharProductSourceAllocations.$inferInsert>([
-          {
-            id: ids.biocharProductSourceAllocation1,
-            biocharProductId: ids.biocharProduct1,
-            productionRunId: ids.productionRun1,
-            sourceStorageLocationId: ids.storageCharMoshi,
-            allocatedWetMassKg: 376.627,
-            allocatedDryMassKg: 369.094,
-          },
-          {
-            id: ids.biocharProductSourceAllocation2,
-            biocharProductId: ids.biocharProduct1,
-            productionRunId: ids.productionRun2,
-            sourceStorageLocationId: ids.storageCharMoshi,
-            allocatedWetMassKg: 276.706,
-            allocatedDryMassKg: 271.172,
-          },
-          {
-            id: ids.biocharProductSourceAllocation3,
-            biocharProductId: ids.biocharProduct1,
-            productionRunId: ids.productionRun3,
-            sourceStorageLocationId: ids.storageCharMoshi,
-            allocatedWetMassKg: 326.667,
-            allocatedDryMassKg: 320.134,
-          },
-          {
-            id: ids.biocharProductSourceAllocation4,
-            biocharProductId: ids.biocharProduct2,
-            productionRunId: ids.productionRun1,
-            sourceStorageLocationId: ids.storageCharMoshi,
-            allocatedWetMassKg: 269.02,
-            allocatedDryMassKg: 263.64,
-          },
-          {
-            id: ids.biocharProductSourceAllocation5,
-            biocharProductId: ids.biocharProduct2,
-            productionRunId: ids.productionRun2,
-            sourceStorageLocationId: ids.storageCharMoshi,
-            allocatedWetMassKg: 197.647,
-            allocatedDryMassKg: 193.694,
-          },
-          {
-            id: ids.biocharProductSourceAllocation6,
-            biocharProductId: ids.biocharProduct2,
-            productionRunId: ids.productionRun3,
-            sourceStorageLocationId: ids.storageCharMoshi,
-            allocatedWetMassKg: 233.333,
-            allocatedDryMassKg: 228.666,
-          },
-          {
-            id: ids.biocharProductSourceAllocation7,
-            biocharProductId: ids.biocharProduct3,
-            productionRunId: ids.productionRun1,
-            sourceStorageLocationId: ids.storageCharMoshi,
-            allocatedWetMassKg: 307.451,
-            allocatedDryMassKg: 301.302,
-          },
-          {
-            id: ids.biocharProductSourceAllocation8,
-            biocharProductId: ids.biocharProduct3,
-            productionRunId: ids.productionRun2,
-            sourceStorageLocationId: ids.storageCharMoshi,
-            allocatedWetMassKg: 225.882,
-            allocatedDryMassKg: 221.364,
-          },
-          {
-            id: ids.biocharProductSourceAllocation9,
-            biocharProductId: ids.biocharProduct3,
-            productionRunId: ids.productionRun3,
-            sourceStorageLocationId: ids.storageCharMoshi,
-            allocatedWetMassKg: 266.667,
-            allocatedDryMassKg: 261.334,
-          },
-        ]),
+        withBootstrapOrg<typeof schema.biocharProductSourceAllocations.$inferInsert>(
+          [...curatedProductSourceAllocations],
+        ),
       );
       // ============================================================
       // TRANSPORT LEGS (Isometric Transportation Module v1.1)

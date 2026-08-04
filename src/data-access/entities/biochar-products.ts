@@ -25,33 +25,19 @@ import {
   deriveEffectiveMoisturePercent,
   formatWetDryMass,
 } from "@/lib/mass-moisture";
-import {
-  deriveIngredientDryMassTotalKg,
-  deriveSourceBiocharDryMassKg,
-  fromCompositionMassJsonb,
-} from "@/lib/biochar-composition";
+import { fromCompositionMassJsonb } from "@/lib/biochar-composition";
+import { resolveProductDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
+import { buildSourceAllocationAggregate } from "./source-allocation-aggregate";
 
 function remainingSourceBiocharDryMassKg(
   productDryKg: number | null,
-  composition: unknown,
   deliveredDryKg: number,
   unresolvedDeliveredDryCount: number,
 ): number | null {
   if (productDryKg == null) return null;
   if (unresolvedDeliveredDryCount > 0) return null;
-  if (deliveredDryKg <= 0) return productDryKg;
-
-  const ingredientDryKg = deriveIngredientDryMassTotalKg(
-    fromCompositionMassJsonb(composition),
-  );
-  if (ingredientDryKg == null) return null;
-  const wholeProductDryKg = productDryKg + ingredientDryKg;
-  if (wholeProductDryKg <= 0) return 0;
-
-  const deliveredSourceDryKg =
-    deliveredDryKg * (productDryKg / wholeProductDryKg);
-  return Math.max(0, productDryKg - deliveredSourceDryKg);
+  return Math.max(0, productDryKg - deliveredDryKg);
 }
 
 function formatStockSubtitle(
@@ -62,17 +48,18 @@ function formatStockSubtitle(
   deliveredWetKg: number,
   deliveredDryKg: number,
   unresolvedDeliveredDryCount: number,
+  sourceAllocatedDryMassKg?: number | null,
 ): string {
   const remainingWetKg =
     (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg;
-  const productDryKg = deriveSourceBiocharDryMassKg(
-    massKg,
-    moisturePercent,
-    fromCompositionMassJsonb(composition),
-  );
+  const productDryKg = resolveProductDryBiocharKg({
+    sourceAllocatedDryMassKg,
+    blendMassKg: massKg,
+    biocharMoisturePercent: moisturePercent,
+    ingredients: fromCompositionMassJsonb(composition),
+  });
   const remainingDryKg = remainingSourceBiocharDryMassKg(
     productDryKg,
-    composition,
     deliveredDryKg,
     unresolvedDeliveredDryCount,
   );
@@ -129,6 +116,7 @@ function buildDeliveredMassAggregate(ctx: OrgContext) {
 
 function buildSelection(
   deliveredMassAggregate: ReturnType<typeof buildDeliveredMassAggregate>,
+  sourceAllocationAggregate: ReturnType<typeof buildSourceAllocationAggregate>,
 ) {
   return {
     id: biocharProducts.id,
@@ -140,6 +128,7 @@ function buildSelection(
     waterAddedKg: biocharProducts.waterAddedKg,
     moisturePercent: biocharProducts.moistureContentPercent,
     composition: biocharProducts.composition,
+    sourceAllocatedDryMassKg: sourceAllocationAggregate.allocatedDryMassKg,
     totalDeliveredKg: numericAggregate(
       sql<number>`COALESCE(${deliveredMassAggregate.totalDeliveredKg}, 0)`,
     ),
@@ -165,18 +154,19 @@ export function toBiocharProductEntityOption(r: {
   totalDeliveredKg: number;
   totalDeliveredDryKg: number;
   unresolvedDeliveredDryCount: number;
+  sourceAllocatedDryMassKg?: number | null;
 }): EntityOption {
   const productLabel = r.formulationName ?? PURE_BIOCHAR_LABEL;
   const remainingWetKg =
     (r.massKg ?? 0) + (r.waterAddedKg ?? 0) - r.totalDeliveredKg;
-  const productDryKg = deriveSourceBiocharDryMassKg(
-    r.massKg,
-    r.moisturePercent,
-    fromCompositionMassJsonb(r.composition),
-  );
+  const productDryKg = resolveProductDryBiocharKg({
+    sourceAllocatedDryMassKg: r.sourceAllocatedDryMassKg,
+    blendMassKg: r.massKg,
+    biocharMoisturePercent: r.moisturePercent,
+    ingredients: fromCompositionMassJsonb(r.composition),
+  });
   const remainingDryKg = remainingSourceBiocharDryMassKg(
     productDryKg,
-    r.composition,
     r.totalDeliveredDryKg,
     r.unresolvedDeliveredDryCount,
   );
@@ -204,6 +194,7 @@ export function toBiocharProductEntityOption(r: {
       r.totalDeliveredKg,
       r.totalDeliveredDryKg,
       r.unresolvedDeliveredDryCount,
+      r.sourceAllocatedDryMassKg,
     ),
   };
 }
@@ -215,7 +206,8 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
 }): Promise<EntityOption[]> {
   requireOrgScope(ctx);
   const deliveredMassAggregate = buildDeliveredMassAggregate(ctx);
-  const selection = buildSelection(deliveredMassAggregate);
+  const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
+  const selection = buildSelection(deliveredMassAggregate, sourceAllocationAggregate);
   const { search, facilityId, limit } = params;
   requireOrgScope(ctx);
 
@@ -279,6 +271,10 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
       deliveredMassAggregate,
       eq(deliveredMassAggregate.biocharProductId, biocharProducts.id)
     )
+    .leftJoin(
+      sourceAllocationAggregate,
+      eq(sourceAllocationAggregate.biocharProductId, biocharProducts.id),
+    )
     .where(and(eq(biocharProducts.organizationId, ctx.organizationId), whereClause))
     .orderBy(desc(biocharProducts.productionDate))
     .limit(limit);
@@ -292,7 +288,8 @@ export async function getBiocharProductEntityById(
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
   const deliveredMassAggregate = buildDeliveredMassAggregate(ctx);
-  const selection = buildSelection(deliveredMassAggregate);
+  const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
+  const selection = buildSelection(deliveredMassAggregate, sourceAllocationAggregate);
   const [result] = await db
     .select(selection)
     .from(biocharProducts)
@@ -313,6 +310,10 @@ export async function getBiocharProductEntityById(
     .leftJoin(
       deliveredMassAggregate,
       eq(deliveredMassAggregate.biocharProductId, biocharProducts.id)
+    )
+    .leftJoin(
+      sourceAllocationAggregate,
+      eq(sourceAllocationAggregate.biocharProductId, biocharProducts.id),
     )
     .where(and(eq(biocharProducts.id, id), eq(biocharProducts.organizationId, ctx.organizationId)))
     .limit(1);

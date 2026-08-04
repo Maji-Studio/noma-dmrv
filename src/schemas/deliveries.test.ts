@@ -25,11 +25,26 @@ describe("delivery range validation copy", () => {
   const baseDelivery = {
     orderId: ORDER_ID,
     deliveryDate: new Date("2026-07-31"),
+    moistureContentPercent: 20,
   };
+
+  it("requires the independently measured product moisture", () => {
+    const result = deliveryFormSchema.safeParse({
+      orderId: ORDER_ID,
+      deliveryDate: new Date("2026-07-31"),
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(
+      result.error.issues.find(
+        (issue) => issue.path[0] === "moistureContentPercent",
+      )?.message,
+    ).toBe("Biochar product moisture is required");
+  });
 
   it.each([
     ["deliveredWetMassKg", -1, "Wet mass must be 0 or more"],
-    ["massDryKg", -1, "Dry mass must be 0 or more"],
     ["distanceKmOverride", -1, "Distance must be 0 or more"],
     [
       "moistureContentPercent",

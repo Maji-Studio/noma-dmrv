@@ -357,11 +357,11 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   // transport legs and the CO2e-stored preview instead).
   delivery: [
     {
-      // The delivered wet mass is the submitted value — it becomes the
+      // The biochar product wet mass is the submitted value. It becomes the
       // auto-derived biochar distribution leg's load mass
       // (data-access/transport-legs.ts → syncBiocharProductTransportLeg).
       key: "deliveredWetMassKg",
-      label: "Delivered wet mass",
+      label: "Biochar product wet mass",
       kind: "entered",
       mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
@@ -369,17 +369,17 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   application: [
     // Carbon inputs for the CO2e-stored calculation
     // (lib/calculations/biochar-removal.ts → computeApplicationCo2eStored):
-    // dry mass derives from wet mass × the delivery's moisture, falling back
-    // to the manual dry entry when the delivery has no moisture data.
+    // dry biochar is allocated proportionally from the selected delivery's
+    // tracked dry biochar. Delivery moisture is independent evidence.
     {
       key: "biocharAppliedTons",
-      label: "Applied biochar wet mass",
+      label: "Biochar product applied",
       kind: "entered",
     },
     {
       key: "biocharAppliedDryTons",
-      label: "Applied biochar dry mass",
-      kind: "entered",
+      label: "Dry biochar applied",
+      kind: "derived",
     },
     {
       // Soil temperature feeds ONLY the 200-year (Woolf 2021) durable fraction;

@@ -322,7 +322,7 @@ export interface ApplicationCo2eStoredResult {
  * Compose Eq.2 → durability (Eq.3 or Eq.6, per `durabilityOption`) → Eq.1 for a
  * single application. Returns a structured, auditable result. When any required
  * input is absent the value is null and the gap is reported in `missingInputs`
- * (mirrors `resolveDeliveryDryMass`). Feed `organicCarbonPercent` /
+ * (mirrors other structured calculation results). Feed `organicCarbonPercent` /
  * `hToCorgRatio` from the SAME sample-weighted aggregation used for Certify
  * submission so the preview can't drift from it.
  */

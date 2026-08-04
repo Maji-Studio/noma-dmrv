@@ -66,6 +66,7 @@ async function seedFormCompleteApplication(
   await page.selectOption('select[name="status"]', "delivered");
   await selectFirstEntity(page, "Order");
   await page.fill('input[name="deliveredWetMassKg"]', "10000");
+  await page.fill('input[name="moistureContentPercent"]', "10");
   await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
   await waitForSideSheetClose(page);
 
@@ -87,7 +88,6 @@ async function seedFormCompleteApplication(
   }
 
   await page.fill('input[name="biocharAppliedTons"]', "5000");
-  await page.fill('input[name="biocharAppliedDryTons"]', "4500");
   await page.fill('input[name="fieldSizeHa"]', "2");
   await page.fill('input[name="fieldIdentifier"]', fieldIdentifier);
   await page.fill('input[name="cropType"]', "maize");

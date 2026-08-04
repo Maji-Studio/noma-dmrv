@@ -1,5 +1,3 @@
-export type DeliveryDryMassSource = 'measured' | 'derived' | 'missing';
-
 /** Tolerance for comparing kg values derived from decimal form inputs. */
 export const MASS_COMPARISON_EPSILON_KG = 0.001;
 export const DRY_MASS_EXCEEDS_WET_MESSAGE =
@@ -12,20 +10,7 @@ export function exceedsMassWithTolerance(
   return candidateMassKg > referenceMassKg + MASS_COMPARISON_EPSILON_KG;
 }
 
-export type ResolveDeliveryDryMassInput = {
-  measuredMassDryKg?: number | null;
-  deliveredWetMassKg?: number | null;
-  moisturePercent?: number | null;
-};
-
-export type ResolveDeliveryDryMassResult = {
-  massDryKg: number | null;
-  source: DeliveryDryMassSource;
-  creditReady: boolean;
-  reason?: string;
-};
-
-function roundKg(value: number): number {
+export function roundKg(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
@@ -106,49 +91,4 @@ export function dryOutputExceedsDryInput(input: {
     input.feedstockMoisturePercent,
   );
   return exceedsMassWithTolerance(biocharDryMassKg, feedstockDryMassKg);
-}
-
-export function resolveDeliveryDryMass(
-  input: ResolveDeliveryDryMassInput
-): ResolveDeliveryDryMassResult {
-  const measuredMassDryKg = input.measuredMassDryKg ?? null;
-  const deliveredWetMassKg = input.deliveredWetMassKg ?? null;
-  const moisturePercent = input.moisturePercent ?? null;
-
-  if (measuredMassDryKg != null) {
-    if (measuredMassDryKg < 0) {
-      throw new RangeError('measuredMassDryKg must be >= 0');
-    }
-
-    if (deliveredWetMassKg != null && measuredMassDryKg > deliveredWetMassKg) {
-      throw new RangeError(
-        'measuredMassDryKg must be <= deliveredWetMassKg when both are provided'
-      );
-    }
-
-    return {
-      massDryKg: roundKg(measuredMassDryKg),
-      source: 'measured',
-      creditReady: true,
-    };
-  }
-
-  if (deliveredWetMassKg != null && moisturePercent != null) {
-    return {
-      massDryKg: deriveMassDryKg(deliveredWetMassKg, moisturePercent),
-      source: 'derived',
-      creditReady: true,
-    };
-  }
-
-  const missingInputs: string[] = [];
-  if (deliveredWetMassKg == null) missingInputs.push('deliveredWetMassKg');
-  if (moisturePercent == null) missingInputs.push('moisturePercent');
-
-  return {
-    massDryKg: null,
-    source: 'missing',
-    creditReady: false,
-    reason: `Missing dry-mass inputs: ${missingInputs.join(', ')}`,
-  };
 }

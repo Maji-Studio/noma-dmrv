@@ -1,20 +1,19 @@
 /**
  * DeliveryForm component
  * Reusable delivery form with React Hook Form integration
- * Includes validation: massDryKg <= deliveredWetMassKg
+ * Dry biochar is allocated server-side from the linked product.
  */
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { numericValue } from "@/lib/form-utils";
 import { toDateInputValue } from "@/lib/date-utils";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, ScalesIcon, MapPinIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, ResolvedErrorRevalidator, StockReconciliationLink } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MoistureField, WetMassField, makeCertFieldStatus, ResolvedErrorRevalidator, StockReconciliationLink } from "@/components/forms";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
@@ -44,6 +43,8 @@ import {
   deliveryOrderBalanceMessage,
   isDeliveryOrderBalanceMessage,
 } from "@/lib/delivery-order-balance";
+import { useEntityById } from "@/hooks/use-entities";
+import { DeliveryMassPreview } from "./delivery-mass-preview";
 
 // ============================================
 // Constants for select options
@@ -122,7 +123,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     deliveryDate: toDateInputValue(delivery?.deliveryDate),
     status: defaultStatus,
     deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
-    massDryKg: delivery?.massDryKg ?? undefined,
     moistureContentPercent: delivery?.moistureContentPercent ?? undefined,
     biocharProductId: delivery?.biocharProductId ?? undefined,
     driverId: delivery?.driverId ?? undefined,
@@ -164,6 +164,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   // transport leg falls back to when this delivery has no override
   // (data-access/transport-legs.ts, map-integration plan decision 3).
   const selectedOrder = orders.find((o) => o.id === watchOrderId);
+  const { data: selectedOrderOption } = useEntityById(
+    "order",
+    watchOrderId || undefined,
+  );
   const storedDistanceKm = selectedOrder?.destinationDistanceKm ?? null;
   const storedDistanceSource = selectedOrder?.destinationDistanceSource ?? null;
 
@@ -258,16 +262,15 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     setValue("distanceNote", "");
   });
 
-  // Auto-calculate dry mass from wet mass and moisture using shared utility
-  const calculatedDryMass =
-    typeof watchWetMass === "number" &&
-    typeof watchMoisture === "number" &&
-    watchWetMass >= 0 &&
-    watchMoisture >= 0 &&
-    watchMoisture <= 100
-      ? deriveMassDryKg(watchWetMass, watchMoisture)
-      : null;
-
+  const editingSameOrder = delivery?.orderId === watchOrderId;
+  const allocationWetBasisKg = selectedOrderOption?.remainingMass?.wetKg == null
+    ? null
+    : selectedOrderOption.remainingMass.wetKg +
+      (editingSameOrder ? delivery?.deliveredWetMassKg ?? 0 : 0);
+  const selectedRemainingDryKg = selectedOrderOption?.remainingMass?.dryKg;
+  const allocationDryBasisKg = selectedRemainingDryKg == null
+    ? null
+    : selectedRemainingDryKg + (editingSameOrder ? delivery?.massDryKg ?? 0 : 0);
   const { data: deliveryAvailability } = useStockAvailability(
     watchOrderId
       ? {
@@ -313,15 +316,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     deliveryOrderBalanceError ??
     deliveryStockError ??
     routedServerError.inlineError;
-
-  // Sync calculated dry mass into the form (clear when inputs become invalid)
-  useEffect(() => {
-    if (calculatedDryMass !== null) {
-      setValue("massDryKg", calculatedDryMass);
-    } else {
-      setValue("massDryKg", undefined as unknown as number);
-    }
-  }, [calculatedDryMass, setValue]);
 
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
@@ -404,46 +398,42 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       <FormSection
         title="Mass and moisture"
         icon={<ScalesIcon size={14} weight="bold" />}
-        fields={["deliveredWetMassKg", "moistureContentPercent", "massDryKg"]}
+        fields={["deliveredWetMassKg", "moistureContentPercent"]}
       >
-        <MassMoistureFields
-          materialLabel="Biochar"
-          wetSplitLabel="Wet biochar product"
-          drySplitLabel="Dry biochar"
-          wetMassKg={watchWetMass}
-          moisturePercent={watchMoisture}
-          wet={{
-            id: "deliveredWetMassKg",
-            error: deliveredWetMassError,
-            hint: "As-received weight of the delivery, water included.",
-            required: true,
-            disabled: isSubmitting,
-            placeholder: "e.g. 1000",
-            certifyRequired: isDeliveryCertifyField("deliveredWetMassKg"),
-            certifyStatus: certStatus("deliveredWetMassKg"),
-            registration: register("deliveredWetMassKg", { setValueAs: numericValue }),
-          }}
-          moisture={{
-            id: "moistureContentPercent",
-            error: errors.moistureContentPercent?.message,
-            required: true,
-            disabled: isSubmitting,
-            placeholder: "e.g. 20",
-            registration: register("moistureContentPercent", { setValueAs: numericValue }),
-          }}
-          splitFooter={
-            (deliveryStockError || routedServerError.inlineError) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <WetMassField
+            id="deliveredWetMassKg"
+            materialLabel="Biochar product"
+            error={deliveredWetMassError}
+            hint="As-received weight of the delivery, water included."
+            required
+            disabled={isSubmitting}
+            placeholder="e.g. 1000"
+            certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
+            certifyStatus={certStatus("deliveredWetMassKg")}
+            registration={register("deliveredWetMassKg", { setValueAs: numericValue })}
+          />
+          <MoistureField
+            id="moistureContentPercent"
+            materialLabel="Biochar product"
+            error={errors.moistureContentPercent?.message}
+            required
+            disabled={isSubmitting}
+            placeholder="e.g. 20"
+            registration={register("moistureContentPercent")}
+          />
+          <DeliveryMassPreview
+            deliveredWetMassKg={watchWetMass}
+            allocationWetBasisKg={allocationWetBasisKg}
+            allocationDryBasisKg={allocationDryBasisKg}
+            moisturePercent={watchMoisture}
+          />
+          {(deliveryStockError || routedServerError.inlineError) && (
+            <div className="md:col-span-2">
               <StockReconciliationLink facilityId={contextFacilityId} />
-            )
-          }
-        />
-
-        {/* The split above is display-only; massDryKg is recomputed server-side
-            and synced through the hidden field below for submission. */}
-        {errors.massDryKg?.message && (
-          <p className="body-small text-[var(--color-status-error)]">{errors.massDryKg.message}</p>
-        )}
-        <input type="hidden" {...register("massDryKg", { setValueAs: numericValue })} />
+            </div>
+          )}
+        </div>
       </FormSection>
 
       {/* Transport Section */}

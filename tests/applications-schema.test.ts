@@ -63,81 +63,28 @@ describe("application schemas", () => {
     }
   });
 
-  it("rejects create input whose manually entered dry mass exceeds wet mass", () => {
-    const result = createApplicationSchema.safeParse({
+  it("strips submitted dry biochar so the server remains authoritative", () => {
+    const createResult = createApplicationSchema.parse({
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 100,
-      biocharAppliedDryTons: 101,
+      biocharAppliedDryTons: 1,
     });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            path: ["biocharAppliedDryTons"],
-            message: "Dry mass cannot exceed wet mass. Reduce the dry mass.",
-          }),
-        ]),
-      );
-    }
-  });
-
-  it("rejects update input whose manually entered dry mass exceeds wet mass", () => {
-    const result = updateApplicationSchema.safeParse({
+    const updateResult = updateApplicationSchema.parse({
       applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 0.1,
-      biocharAppliedDryTons: 0.101,
+      biocharAppliedDryTons: 0,
     });
-
-    expect(result.success).toBe(false);
-  });
-
-  it("applies kilogram tolerance to client form masses", () => {
-    const base = {
+    const formResult = applicationFormSchema.parse({
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 100,
-    };
+      biocharAppliedDryTons: 1,
+    });
 
-    expect(applicationFormSchema.safeParse({
-      ...base,
-      biocharAppliedDryTons: 100.0005,
-    }).success).toBe(true);
-    expect(applicationFormSchema.safeParse({
-      ...base,
-      biocharAppliedDryTons: 100.002,
-    }).success).toBe(false);
-  });
-
-  it("converts create and update tonnes before applying kilogram tolerance", () => {
-    const createBase = {
-      applicationDate: new Date("2026-06-13"),
-      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
-      biocharAppliedTons: 1,
-    };
-    const updateBase = {
-      applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
-      biocharAppliedTons: 1,
-    };
-
-    expect(createApplicationSchema.safeParse({
-      ...createBase,
-      biocharAppliedDryTons: 1.0000005,
-    }).success).toBe(true);
-    expect(createApplicationSchema.safeParse({
-      ...createBase,
-      biocharAppliedDryTons: 1.000002,
-    }).success).toBe(false);
-    expect(updateApplicationSchema.safeParse({
-      ...updateBase,
-      biocharAppliedDryTons: 1.0000005,
-    }).success).toBe(true);
-    expect(updateApplicationSchema.safeParse({
-      ...updateBase,
-      biocharAppliedDryTons: 1.000002,
-    }).success).toBe(false);
+    expect(createResult).not.toHaveProperty("biocharAppliedDryTons");
+    expect(updateResult).not.toHaveProperty("biocharAppliedDryTons");
+    expect(formResult).not.toHaveProperty("biocharAppliedDryTons");
   });
 
   it("uses kilogram bounds and copy for client form mass fields", () => {

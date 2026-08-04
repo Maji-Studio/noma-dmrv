@@ -22,7 +22,7 @@ import type { z } from "zod";
 import { PackageIcon, MapPinIcon, CameraIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
-import { MoistureSplit } from "@/components/ui/moisture-split";
+import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import {
   applicationFormSchema,
   applicationMethods,
@@ -47,7 +47,6 @@ import type { FieldPositionMode } from "./field-position-field";
 import {
   applicationKgToTons,
   applicationTonsToKg,
-  calculateDryMass,
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
   resolveApplicationPositionDefault,
@@ -59,6 +58,7 @@ import {
   formatStockLimitKg,
   isStockOverdraw,
 } from "@/lib/stock-overdraw";
+import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
 
 // ============================================
 // Constants for select options
@@ -84,43 +84,27 @@ const soilTemperatureSourceOptions: readonly { value: string; label: string }[] 
 // ============================================
 
 /**
- * The applied wet mass split into dry matter and water. Unlike the other
- * mass/moisture surfaces the operator does not type the moisture here — it
- * comes from the chosen delivery — so the panel's job is to explain where the
- * dry figure came from.
- *
- * Without a delivery moisture there is no split to draw, and the unresolved
- * state is already carried by the "Biochar applied, dry (kg)" input this form
- * swaps in — the control the operator has to act on. The panel stays silent
- * rather than restating that input's own helper text beside it.
+ * Applied product composition based on the selected delivery's tracked dry
+ * biochar. Delivery moisture is displayed as evidence only.
  */
 function AppliedMassSplit({
   appliedKg,
+  dryBiocharKg,
   moisturePercent,
 }: {
   appliedKg: number | null | undefined;
+  dryBiocharKg: number | null | undefined;
   moisturePercent: number | null | undefined;
 }) {
-  if (moisturePercent == null) return null;
-
-  const hasApplied = appliedKg != null && appliedKg > 0;
-
   return (
-    <div className="col-span-full border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
-      {!hasApplied ? (
-        <p className="body-small text-[var(--color-text-tertiary)]">
-          Enter the wet mass applied to see the dry mass this delivery&rsquo;s moisture implies.
-        </p>
-      ) : (
-        <MoistureSplit
-          wetMassKg={appliedKg}
-          moisturePercent={moisturePercent}
-          wetLabel="Wet biochar product"
-          dryLabel="Dry biochar"
-          note="Moisture from the delivery record."
-        />
-      )}
-    </div>
+    <ProductCompositionPreview
+      className="col-span-full"
+      wetMassKg={appliedKg}
+      dryBiocharKg={dryBiocharKg}
+      moisturePercent={moisturePercent}
+      wetLabel="Biochar product applied"
+      note="Dry biochar follows the selected delivery's tracked composition."
+    />
   );
 }
 
@@ -169,11 +153,6 @@ export function ApplicationForm({
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
   // removals derive durability from petrographic reflectance + TGA.
   const hideSoilTemperature = durabilityOption === "1000_year";
-  const initialDelivery = application
-    ? deliveries.find((delivery) => delivery.id === application.deliveryId)
-    : undefined;
-  const initialDeliveryHasMoisture =
-    initialDelivery?.moistureContentPercent != null;
 
   const defaultValues = {
     applicationDate: application?.applicationDate
@@ -181,13 +160,6 @@ export function ApplicationForm({
       : formatLocalDate(new Date()),
     deliveryId: application?.deliveryId ?? "",
     biocharAppliedTons: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
-    // A delivery moisture owns the dry-mass calculation. Do not seed the
-    // hidden manual field with the previously derived value: lowering wet
-    // mass on edit would otherwise fail the client dry <= wet refinement on
-    // a value the operator cannot see or change.
-    biocharAppliedDryTons: initialDeliveryHasMoisture
-      ? undefined
-      : applicationTonsToKg(application?.biocharAppliedDryTons) ?? undefined,
     fieldSizeHa: application?.fieldSizeHa ?? undefined,
     fieldIdentifier: application?.fieldIdentifier ?? "",
     cropType: application?.cropType ?? "",
@@ -327,14 +299,6 @@ export function ApplicationForm({
   ]);
 
   const moisturePercent = selectedDelivery?.moistureContentPercent ?? null;
-  useEffect(() => {
-    if (moisturePercent == null) return;
-
-    setValue("biocharAppliedDryTons", undefined, {
-      shouldDirty: false,
-      shouldValidate: true,
-    });
-  }, [moisturePercent, setValue]);
   const appliedKgNum = typeof watchedAppliedKg === "string" ? parseFloat(watchedAppliedKg) : watchedAppliedKg;
   const appliedKgValid = appliedKgNum != null && !isNaN(appliedKgNum) && appliedKgNum > 0 ? appliedKgNum : null;
 
@@ -343,7 +307,20 @@ export function ApplicationForm({
   const alreadyApplied = selectedDelivery?.alreadyAppliedWetKg ?? 0;
   const isSameDelivery = isEditMode && application?.deliveryId === selectedDeliveryId;
   const currentApplicationKg = isSameDelivery ? (applicationTonsToKg(application?.biocharAppliedTons) ?? 0) : 0;
+  const currentApplicationDryKg = isSameDelivery
+    ? applicationTonsToKg(application?.biocharAppliedDryTons) ?? 0
+    : 0;
   const availableKg = deliveryCapacityKg !== null ? deliveryCapacityKg - alreadyApplied + currentApplicationKg : null;
+  const appliedDryBiocharKg = allocateTrackedDryBiocharKg({
+    totalWetKg: deliveryCapacityKg,
+    totalDryBiocharKg: selectedDelivery?.massDryKg ?? null,
+    requestedWetKg: appliedKgValid,
+    allocatedWetKg: Math.max(0, alreadyApplied - currentApplicationKg),
+    allocatedDryBiocharKg: Math.max(
+      0,
+      (selectedDelivery?.alreadyAppliedDryKg ?? 0) - currentApplicationDryKg,
+    ),
+  });
   const applicationStockError =
     availableKg !== null &&
     appliedKgValid !== null &&
@@ -397,19 +374,14 @@ export function ApplicationForm({
 
     const biocharAppliedTons = applicationKgToTons(data.biocharAppliedTons);
 
-    // Auto-calculate dry tons from moisture, or fall back to manual entry
-    const calculatedDryKg = calculateDryMass(data.biocharAppliedTons, moisturePercent);
-    const dryKgValue = calculatedDryKg ?? data.biocharAppliedDryTons;
-    const biocharAppliedDryTons = applicationKgToTons(dryKgValue);
-
     if (biocharAppliedTons == null) {
-      throw new Error("Biochar applied mass is required");
+      throw new Error("Biochar product applied is required");
     }
 
-    if (biocharAppliedDryTons == null) {
-      setError("biocharAppliedDryTons", {
+    if (appliedDryBiocharKg == null) {
+      setError("root.serverError", {
         type: "manual",
-        message: "Dry mass is required when delivery has no moisture data",
+        message: "Tracked dry biochar is not available for this delivery. Update the delivery first.",
       });
       return;
     }
@@ -417,7 +389,6 @@ export function ApplicationForm({
     await onSubmit({
       ...data,
       biocharAppliedTons,
-      biocharAppliedDryTons,
       gisBoundary: data.evidenceMethod === "boundary" ? data.gisBoundary : null,
     });
   });
@@ -430,7 +401,7 @@ export function ApplicationForm({
       <FormSection
         title="Application details"
         icon={<PackageIcon size={14} weight="bold" />}
-        fields={["applicationDate", "deliveryId", "biocharAppliedTons", "biocharAppliedDryTons"]}
+        fields={["applicationDate", "deliveryId", "biocharAppliedTons"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="applicationDate" label="Application date" error={errors.applicationDate?.message} required>
@@ -470,7 +441,7 @@ export function ApplicationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="biocharAppliedTons"
-            label="Biochar applied, wet (kg)"
+            label="Biochar product applied (kg)"
             error={biocharAppliedError}
             required
             certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
@@ -495,32 +466,9 @@ export function ApplicationForm({
             />
           </FormField>
 
-          {/* Show manual dry input only when delivery has no moisture data */}
-          {moisturePercent == null && selectedDelivery && (
-            <FormField
-              id="biocharAppliedDryTons"
-              label="Biochar applied, dry (kg)"
-              error={errors.biocharAppliedDryTons?.message}
-              helperText="Moisture is not recorded for this delivery. Enter the dry mass."
-              certifyRequired={isApplicationCertifyField("biocharAppliedDryTons")}
-              certifyStatus={certStatus("biocharAppliedDryTons")}
-            >
-              <FormInput
-                id="biocharAppliedDryTons"
-                type="number"
-                step="any"
-                placeholder="e.g., 4500"
-                disabled={isSubmitting}
-                error={!!errors.biocharAppliedDryTons}
-                {...register("biocharAppliedDryTons", {
-                  setValueAs: numericValue,
-                })}
-              />
-            </FormField>
-          )}
-
           <AppliedMassSplit
             appliedKg={appliedKgValid}
+            dryBiocharKg={appliedDryBiocharKg}
             moisturePercent={moisturePercent}
           />
         </div>

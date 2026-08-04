@@ -180,7 +180,7 @@ describe("toBiocharProductEntityOption", () => {
     ).toEqual({ wetKg: 1_000, dryKg: 720 });
   });
 
-  it("subtracts only the source-biochar share of a blended delivery", () => {
+  it("subtracts delivery dry biochar directly without a second proportion", () => {
     expect(
       toBiocharProductEntityOption({
         id: "product-blend",
@@ -195,9 +195,29 @@ describe("toBiocharProductEntityOption", () => {
           ingredients: [{ massKg: 200, massDryKg: 180 }],
         },
         totalDeliveredKg: 500,
-        totalDeliveredDryKg: 450,
+        totalDeliveredDryKg: 360,
         unresolvedDeliveredDryCount: 0,
       }).remainingMass,
     ).toEqual({ wetKg: 500, dryKg: 360 });
+  });
+
+  it("prefers immutable source allocation dry mass over the legacy fallback", () => {
+    expect(
+      toBiocharProductEntityOption({
+        id: "product-allocated",
+        code: "PB-04",
+        name: "Allocated product bin",
+        productCode: "BP-04",
+        formulationName: "Biochar Fertilizer",
+        massKg: 4_000,
+        waterAddedKg: 0,
+        moisturePercent: 40,
+        composition: { ingredients: [{ massKg: 2_000 }] },
+        sourceAllocatedDryMassKg: 1_800,
+        totalDeliveredKg: 1_000,
+        totalDeliveredDryKg: 450,
+        unresolvedDeliveredDryCount: 0,
+      }).remainingMass,
+    ).toEqual({ wetKg: 3_000, dryKg: 1_350 });
   });
 });
