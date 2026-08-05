@@ -760,6 +760,7 @@ beforeEach(() => {
       externalFacilityId: EXTERNAL_FACILITY_ID,
       isometricFeedstockTypeId: EXTERNAL_FEEDSTOCK_TYPE_ID,
       totalDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
+      runsMissingDryMass: 0,
     },
   ]);
   vi.mocked(
