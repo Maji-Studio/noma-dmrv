@@ -209,7 +209,6 @@ export function RemovalDetailSheet({
 
             <ProductionBatchLinks
               removalId={summary.removalId}
-              facilityId={facilityId}
               isProduction={isProduction}
               enabled={open}
             />

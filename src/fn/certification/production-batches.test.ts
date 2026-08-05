@@ -97,6 +97,7 @@ function registryInput(
     creditBatchCode: "CB-2026-001",
     startDate: "2026-03-01",
     endDate: "2026-03-28",
+    externalProjectId: "prj_1K9YJ33RKSBX9FFF",
     externalFacilityId: "fcl_1G8QT5ZAB1S0XSDW",
     isometricFeedstockTypeId: "ftt_1D7KZ1P761S0G7BN",
     totalDryMassKg: 2_000,
@@ -143,6 +144,8 @@ function upsertReturning(externalProductionBatchId: string) {
     creditBatchId: CREDIT_BATCH_ID,
     externalProductionBatchId,
     supplierReference: input.supplierReference,
+    externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+    externalFacilityId: "fcl_1G8QT5ZAB1S0XSDW",
     massKg: 2_000,
     startedOn: "2026-03-01",
     endedOn: "2026-03-28",
@@ -179,6 +182,13 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(body.started_at).toBe("2026-03-01T00:00:00.000Z");
     expect(body.ended_at).toBe("2026-03-28T23:59:59.999Z");
     expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledTimes(1);
+    expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+        externalFacilityId: "fcl_1G8QT5ZAB1S0XSDW",
+      }),
+    );
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
   });
 

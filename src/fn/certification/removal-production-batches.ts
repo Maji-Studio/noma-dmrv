@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { getProductionBatchRegistrations } from "@/data-access/certifier-production-batches";
 import {
   getCertifierRemovalById,
@@ -16,7 +17,8 @@ export interface RemovalProductionBatchLink {
   creditBatchId: string;
   creditBatchCode: string;
   externalProductionBatchId: string;
-  supplierReference: string;
+  externalProjectId: string | null;
+  externalFacilityId: string | null;
 }
 
 /**
@@ -30,13 +32,14 @@ export async function loadRemovalProductionBatches(
   removalId: string,
 ): Promise<ActionResult<RemovalProductionBatchLink[]>> {
   return withAction(async (orgCtx) => {
-    const removal = await getCertifierRemovalById(orgCtx, removalId);
+    const validRemovalId = z.string().uuid().parse(removalId);
+    const removal = await getCertifierRemovalById(orgCtx, validRemovalId);
     if (!removal) throw new SafeError("Removal not found.");
 
     const membersByRemoval = await getCreditBatchSummariesByRemovalIds(orgCtx, [
-      removalId,
+      validRemovalId,
     ]);
-    const members = membersByRemoval.get(removalId) ?? [];
+    const members = membersByRemoval.get(validRemovalId) ?? [];
     if (members.length === 0) return [];
 
     const registrations = await getProductionBatchRegistrations(
@@ -53,7 +56,8 @@ export async function loadRemovalProductionBatches(
         creditBatchCode:
           codeByCreditBatchId.get(row.creditBatchId) ?? row.creditBatchId,
         externalProductionBatchId: row.externalProductionBatchId,
-        supplierReference: row.supplierReference,
+        externalProjectId: row.externalProjectId,
+        externalFacilityId: row.externalFacilityId,
       }))
       .sort((left, right) =>
         left.creditBatchCode < right.creditBatchCode
