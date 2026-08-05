@@ -8,6 +8,8 @@
 > **Observations only. No application-code changes are proposed here.** Line
 > references verified 2026-08-04 on `codex/conserve-dry-biochar`.
 
+## 7. Repository seams
+
 ### 7.1 Production Batch does not exist in the integration at all
 
 Verified by direct grep during this pass: `grep -rn "production_batches" src/`
@@ -66,7 +68,7 @@ the implementation plan, and it should be made explicitly rather than inherited.
 
 ### 7.4 `samples` already stores what the protocol requires
 
-`src/db/schema/production.ts:205+`. The schema header comment records *"Minimum
+`src/db/schema/production.ts:198-205`. The schema header comment records *"Minimum
 3 samples per production batch required"* and Method A/B cadence. `creditBatchId`
 is the primary link (DB FK added by migration 0057; no Drizzle `.references()`
 to avoid a circular import). The payload covers carbon, elemental, proximate,
