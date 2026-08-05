@@ -760,6 +760,7 @@ beforeEach(() => {
       // wiring change from passing on a coincidence.
       startDate: "2026-01-01",
       endDate: "2026-01-31",
+      externalProjectId: EXTERNAL_PROJECT_ID,
       externalFacilityId: EXTERNAL_FACILITY_ID,
       isometricFeedstockTypeId: EXTERNAL_FEEDSTOCK_TYPE_ID,
       totalDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
