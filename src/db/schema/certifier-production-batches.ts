@@ -52,6 +52,10 @@ export const certifierProductionBatches = pgTable(
     creditBatchId: uuid('credit_batch_id').notNull(),
     externalProductionBatchId: text('external_production_batch_id').notNull(),
     supplierReference: text('supplier_reference').notNull(),
+    // Immutable registration/claim-time snapshot used to address this record.
+    externalProjectId: text('external_project_id'),
+    // Immutable registration/claim-time snapshot used to address this record.
+    externalFacilityId: text('external_facility_id'),
     // Total dry biochar mass registered as `M_biochar (DM)`, in kilograms.
     massKg: massKg('mass_kg').notNull(),
     startedOn: date('started_on').notNull(),

@@ -35,6 +35,8 @@ export interface ProductionBatchRegistryInput {
   creditBatchCode: string;
   startDate: string;
   endDate: string;
+  /** Isometric project id (`prj_…`) for the batch's facility. */
+  externalProjectId: string | null;
   /** Operator-pasted Isometric facility id (`fcl_…`) for the batch's facility. */
   externalFacilityId: string | null;
   /** Isometric feedstock-type id (`ftt_…`) for the batch's declared feedstock. */
@@ -74,6 +76,7 @@ export async function getProductionBatchRegistryInputs(
       startDate: creditBatches.startDate,
       endDate: creditBatches.endDate,
       isometricFeedstockTypeId: feedstockTypes.isometricFeedstockTypeId,
+      externalProjectId: certifierProjects.externalProjectId,
       externalFacilityId: certifierProjects.externalFacilityId,
     })
     .from(creditBatches)
@@ -141,6 +144,7 @@ export async function getProductionBatchRegistryInputs(
     creditBatchCode: batch.code,
     startDate: batch.startDate,
     endDate: batch.endDate,
+    externalProjectId: batch.externalProjectId,
     externalFacilityId: batch.externalFacilityId,
     isometricFeedstockTypeId: batch.isometricFeedstockTypeId,
     totalDryMassKg: massByBatch.get(batch.id) ?? 0,
@@ -172,6 +176,8 @@ export interface UpsertProductionBatchRegistrationInput {
   creditBatchId: string;
   externalProductionBatchId: string;
   supplierReference: string;
+  externalProjectId: string | null;
+  externalFacilityId: string | null;
   massKg: number;
   startedOn: string;
   endedOn: string;
@@ -205,6 +211,8 @@ export async function upsertProductionBatchRegistration(
       creditBatchId: input.creditBatchId,
       externalProductionBatchId: input.externalProductionBatchId,
       supplierReference: input.supplierReference,
+      externalProjectId: input.externalProjectId,
+      externalFacilityId: input.externalFacilityId,
       massKg: input.massKg,
       startedOn: input.startedOn,
       endedOn: input.endedOn,
@@ -215,8 +223,10 @@ export async function upsertProductionBatchRegistration(
         certifierProductionBatches.provider,
         certifierProductionBatches.creditBatchId,
       ],
-      // Identity columns are intentionally absent: `external_production_batch_id`
-      // and `supplier_reference` are immutable once registered.
+      // Identity and mapping snapshot columns are intentionally absent:
+      // `external_production_batch_id`, `supplier_reference`,
+      // `external_project_id`, and `external_facility_id` are immutable once
+      // registered.
       set: {
         massKg: sql`excluded.mass_kg`,
         startedOn: sql`excluded.started_on`,

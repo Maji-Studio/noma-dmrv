@@ -74,6 +74,49 @@ describe("isometricRegistry.certifyProject — Certify project overview link", (
   });
 });
 
+describe("isometricRegistry.productionBatch — facility-nested Certify link", () => {
+  // The exact sandbox URL verified against a live Certify production batch on
+  // 2026-08-05 (CB-26-002's registration). Drift guard for the /facilities
+  // nesting and the "production-batches" segment.
+  it("matches the verified sandbox URL exactly", () => {
+    expect(
+      isometricRegistry.productionBatch({
+        environment: "sandbox",
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+        externalFacilityId: "fcl_1KST05ZW3SBXZCM7",
+        externalProductionBatchId: "ptb_1KZ90J63TSBX9M2P",
+      }),
+    ).toBe(
+      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7/production-batches/ptb_1KZ90J63TSBX9M2P",
+    );
+  });
+
+  it("uses the public registry host (no sandbox subdomain) in production", () => {
+    expect(
+      isometricRegistry.productionBatch({
+        environment: "production",
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+        externalFacilityId: "fcl_1KST05ZW3SBXZCM7",
+        externalProductionBatchId: "ptb_1KZ90J63TSBX9M2P",
+      }),
+    ).toBe(
+      "https://registry.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7/production-batches/ptb_1KZ90J63TSBX9M2P",
+    );
+  });
+
+  it("url-encodes all three ids", () => {
+    const url = isometricRegistry.productionBatch({
+      environment: "sandbox",
+      externalProjectId: "prj a/b",
+      externalFacilityId: "fcl c?d",
+      externalProductionBatchId: "ptb e/f",
+    });
+    expect(url).toContain("project/prj%20a%2Fb/");
+    expect(url).toContain("facilities/fcl%20c%3Fd/");
+    expect(url).toContain("production-batches/ptb%20e%2Ff");
+  });
+});
+
 describe("isometricRegistry — public registry pages", () => {
   it("normalizes versions to minor for protocol/module pages", () => {
     expect(normalizeRegistryMinorVersion("1.2.3")).toBe("1.2");

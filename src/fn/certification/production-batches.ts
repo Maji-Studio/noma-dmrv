@@ -244,6 +244,8 @@ export async function ensureProductionBatchesForCreditBatches(
           creditBatchId: submission.creditBatchId,
           externalProductionBatchId: confirmedId,
           supplierReference: submission.supplierRefId,
+          externalProjectId: input.externalProjectId,
+          externalFacilityId: input.externalFacilityId,
           massKg: submission.massKg,
           startedOn: submission.startedOn,
           endedOn: submission.endedOn,
