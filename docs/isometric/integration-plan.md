@@ -59,9 +59,13 @@ Admin-only.
 ## Facility and project mapping
 
 Each facility has a provider-aware `certifier_projects` mapping containing the
-external project, default GHG-entry template, protocol metadata, and optional
-external facility ID used by telemetry. Several noma facilities may share one
-Isometric project.
+external project, default GHG-entry template, protocol metadata, and the
+external facility ID (`fcl_…`). The facility ID is required: production-batch
+registration (issue #630) submits against it, and telemetry uses it too.
+Adopting it for the first time (null to a value) is allowed even when the
+facility already has submissions; changing or clearing an established facility
+ID, or rebinding the project, still requires superseding those submissions.
+Several noma facilities may share one Isometric project.
 
 There is no Certify facilities-list operation in the committed API surface.
 Operators therefore paste the external facility ID created in the Isometric UI.
