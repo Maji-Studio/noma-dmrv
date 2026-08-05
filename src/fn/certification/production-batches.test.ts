@@ -182,6 +182,39 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
   });
 
+  it("POSTs in credit-batch id order regardless of DB row order", async () => {
+    const secondId = "22222222-2222-4222-8222-222222222222";
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ creditBatchId: secondId, creditBatchCode: "CB-2026-002" }),
+      registryInput(),
+    ]);
+    mocks.client.post.mockImplementation(
+      async (_path: string, body: { supplier_reference_id: string }) =>
+        remoteBatch(body.supplier_reference_id, PRODUCTION_BATCH_ID),
+    );
+    mocks.upsertProductionBatchRegistration.mockImplementation(
+      async (_ctx: unknown, input: { externalProductionBatchId: string }) => ({
+        externalProductionBatchId: input.externalProductionBatchId,
+      }),
+    );
+
+    await ensureProductionBatchesForCreditBatches({
+      orgCtx,
+      removalId: "removal-1",
+      submissionRow: { id: "submission-1" },
+      resumed: false,
+      creditBatchIds: [secondId, CREDIT_BATCH_ID],
+      log,
+    });
+
+    expect(mocks.client.post).toHaveBeenCalledTimes(2);
+    expect(
+      mocks.client.post.mock.calls.map(
+        (call) => (call[1] as { display_name: string }).display_name,
+      ),
+    ).toEqual(["CB-2026-001", "CB-2026-002"]);
+  });
+
   it("reuses a persisted registration without touching the registry", async () => {
     mocks.getProductionBatchRegistrations.mockResolvedValue([
       {
