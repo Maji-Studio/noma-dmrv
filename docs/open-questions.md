@@ -1036,7 +1036,8 @@ bound); these are the decisions it deliberately did not make.
   (`complete-output-required` in `src/lib/production-runs/lifecycle.ts`) and a
   moisture of 100% is accepted, so 0 kg dry is legally reachable. The
   `runsMissingDryMass` (NULL dry mass) branch in
-  `buildProductionBatchSubmission` is unreachable from the UI — batch
+  `buildProductionBatchSubmission` (`src/fn/certification/production-batches.ts`)
+  is unreachable from the UI — batch
   membership requires `complete` runs and `complete` requires wet output — so
   that branch is defence-in-depth only.
 - **Resolve via:** decide which layers should also know. Candidates, roughly
