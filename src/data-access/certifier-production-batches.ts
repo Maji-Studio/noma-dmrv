@@ -45,6 +45,13 @@ export interface ProductionBatchRegistryInput {
    * registry batch records what was produced, not what a removal claims.
    */
   totalDryMassKg: number;
+  /**
+   * Member runs with no `biochar_dry_mass_kg` recorded. The column is nullable,
+   * so an unweighed run would otherwise shrink `M_biochar (DM)` silently — and
+   * the registry has no PATCH for a production batch, so the understated figure
+   * would be permanent. The caller refuses to register such a batch.
+   */
+  runsMissingDryMass: number;
 }
 
 /**
@@ -114,10 +121,18 @@ export async function getProductionBatchRegistryInputs(
     );
 
   const massByBatch = new Map<string, number>();
+  const unweighedRunsByBatch = new Map<string, number>();
   for (const row of runRows) {
+    if (row.biocharDryMassKg === null) {
+      unweighedRunsByBatch.set(
+        row.creditBatchId,
+        (unweighedRunsByBatch.get(row.creditBatchId) ?? 0) + 1,
+      );
+      continue;
+    }
     massByBatch.set(
       row.creditBatchId,
-      (massByBatch.get(row.creditBatchId) ?? 0) + (row.biocharDryMassKg ?? 0),
+      (massByBatch.get(row.creditBatchId) ?? 0) + row.biocharDryMassKg,
     );
   }
 
@@ -129,6 +144,7 @@ export async function getProductionBatchRegistryInputs(
     externalFacilityId: batch.externalFacilityId,
     isometricFeedstockTypeId: batch.isometricFeedstockTypeId,
     totalDryMassKg: massByBatch.get(batch.id) ?? 0,
+    runsMissingDryMass: unweighedRunsByBatch.get(batch.id) ?? 0,
   }));
 }
 

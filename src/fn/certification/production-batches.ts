@@ -97,6 +97,14 @@ function sortByCreditBatchId(
 export function buildProductionBatchSubmission(
   input: ProductionBatchRegistryInput,
 ): ProductionBatchSubmission {
+  // A run that was never weighed would shrink `M_biochar (DM)` without a trace,
+  // and the registry has no PATCH for a production batch, so the understated
+  // mass claim would stand forever. Refuse rather than under-declare.
+  if (input.runsMissingDryMass > 0) {
+    throw new SafeError(
+      `Credit batch ${input.creditBatchCode} has production runs with no dry biochar mass recorded. Record the produced mass on every run in the batch before submitting.`,
+    );
+  }
   const supplierRefId = buildProductionBatchReference({
     creditBatchId: input.creditBatchId,
   });

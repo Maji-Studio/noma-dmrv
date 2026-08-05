@@ -100,6 +100,7 @@ function registryInput(
     externalFacilityId: "fcl_1G8QT5ZAB1S0XSDW",
     isometricFeedstockTypeId: "ftt_1D7KZ1P761S0G7BN",
     totalDryMassKg: 2_000,
+    runsMissingDryMass: 0,
     ...patch,
   };
 }
@@ -278,6 +279,14 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       registryInput({ totalDryMassKg: 0 }),
     ]);
     await expect(ensure()).rejects.toThrow(/dry biochar mass/);
+  });
+
+  it("refuses a credit batch whose member run was never weighed", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ runsMissingDryMass: 1 }),
+    ]);
+    await expect(ensure()).rejects.toThrow(/no dry biochar mass recorded/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
   });
 
   it("skips the registry entirely when no credit batch needs one", async () => {
