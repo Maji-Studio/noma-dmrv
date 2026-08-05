@@ -174,7 +174,8 @@ or deferred to Isometric support.
 [Delete Production Batch](https://docs.isometric.com/api-reference/certify/delete-production-batch),
 [Modifying resources](https://docs.isometric.com/user-guides/certify/modifying-resources)
 
-Before POSTing, fail closed unless the credit batch has at least one member run,
+Noma-side policy, not an Isometric requirement (Certify gates only on
+API-schema validity): before POSTing, fail closed unless the credit batch has at least one member run,
 all member runs are complete, every member belongs to the mapped facility and
 declared production-process/feedstock identity, all required output masses are
 present and positive, and the derived physical window is coherent. After the
