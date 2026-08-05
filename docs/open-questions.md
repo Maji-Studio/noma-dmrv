@@ -1018,3 +1018,43 @@ bound); these are the decisions it deliberately did not make.
   block submission and be resolved by hand in Isometric, or be re-created after
   a DELETE. If blocking, compare the reconciled record's mass/window/facility
   and surface a conflict instead of claiming it (S).
+
+### A zero-dry-mass chain passes every readiness surface and fails only at the registry POST (`certification/zero-dry-mass-late-gate`)
+
+- Verified on staging 2026-08-05 (issue #630 negative case): a production run
+  completed with 100 kg wet biochar at 100% moisture (0 kg dry) flows through
+  product creation, delivery, application ("Ready"), the credit batch's "All
+  batch data checks passed", and the pre-submit review's "Ready to submit,
+  9 checks passed" — which simultaneously displays "You are sending 0.0 t".
+- The only gate is `buildCreateProductionBatchRequest`
+  (`src/lib/isometric/production-batches.ts`), whose `totalDryMassKg <= 0`
+  branch fails the "Sending durability measurements" step with an actionable
+  operator message. Fail-closed held: no ProductionBatch and no Removal reached
+  the registry. But the gate fires AFTER the 15 monitored-input datapoint POSTs
+  succeeded, so a refused submission leaves orphan datapoints in the registry.
+- Root enabler: run completion validates positive WET output only
+  (`complete-output-required` in `src/lib/production-runs/lifecycle.ts`) and a
+  moisture of 100% is accepted, so 0 kg dry is legally reachable. The
+  `runsMissingDryMass` (NULL dry mass) branch in
+  `buildProductionBatchSubmission` (`src/fn/certification/production-batches.ts`)
+  is unreachable from the UI — batch
+  membership requires `complete` runs and `complete` requires wet output — so
+  that branch is defence-in-depth only.
+- **Resolve via:** decide which layers should also know. Candidates, roughly
+  independent: (a) a readiness/pre-submit check that every member run has dry
+  mass > 0, so the 9-check review catches it; (b) bound moisture below 100 or
+  require dry mass > 0 at run completion; (c) run the pure production-batch
+  payload validation before any datapoint POST so a refused submission leaves
+  zero registry residue (S each).
+
+### Production-runs list header "Feedstock wet mass" renders the dry allocation (`production-runs/feedstock-mass-column-mislabel`)
+
+- The column reads `totalFeedstockMassKg`
+  (`src/components/production-runs/production-run-list.tsx`), which sums
+  `production_run_feedstocks.massUsedKg` — allocated from `computedDryMass` in
+  `createProductionRun` (`src/data-access/production-runs/mutations.ts`,
+  `allocateFeedstockMass`). A run entered as 500 kg wet @ 30% moisture lists
+  "350 kg" under the wet-mass header; the detail panel shows both figures
+  correctly.
+- **Resolve via:** either relabel the column "Feedstock dry mass" or surface
+  the run's wet figure; pick one and align the list with the detail panel (XS).
