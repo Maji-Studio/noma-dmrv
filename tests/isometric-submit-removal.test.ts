@@ -23,6 +23,8 @@ import { makeTestOrgContext } from "./helpers/test-org";
 import {
   CHANGED_BIOCHAR_MASS_KG,
   CREDIT_BATCH_ID,
+  EXTERNAL_FACILITY_ID,
+  EXTERNAL_FEEDSTOCK_TYPE_ID,
   EXTERNAL_PRODUCTION_BATCH_ID,
   EXTERNAL_PROJECT_ID,
   isometricClientFake,
@@ -790,21 +792,26 @@ describe("submitRemoval — reporting window anchored to application date (issue
     // Issue #630: the production batch is registered BEFORE the samples, in
     // kilograms with no invented standard deviation, and its `ptb_…` reaches
     // every per-batch sample body instead of the old `production_batch_id: null`.
-    const productionBatchPost = vi
-      .mocked(isometricClientFake.post)
-      .mock.calls.find(([path]) => path === "/production_batches");
-    expect(productionBatchPost).toBeDefined();
-    expect(productionBatchPost![1]).toMatchObject({
+    const postMock = vi.mocked(isometricClientFake.post);
+    const productionBatchIndex = postMock.mock.calls.findIndex(
+      ([path]) => path === "/production_batches",
+    );
+    expect(productionBatchIndex).toBeGreaterThanOrEqual(0);
+    const productionBatchPost = postMock.mock.calls[productionBatchIndex];
+    expect(productionBatchPost[1]).toMatchObject({
       kind: "biochar",
-      facility_id: "fcl_test_1",
-      feedstock_type_ids: ["ftt_test_1"],
+      facility_id: EXTERNAL_FACILITY_ID,
+      feedstock_type_ids: [EXTERNAL_FEEDSTOCK_TYPE_ID],
       mass: { magnitude: ORIGINAL_BIOCHAR_MASS_KG, unit: "kg" },
       started_at: "2026-01-01T00:00:00.000Z",
-      ended_at: "2026-01-28T23:59:59.999Z",
+      ended_at: "2026-01-31T23:59:59.999Z",
     });
-    expect("standard_deviation" in productionBatchPost![1].mass).toBe(false);
+    expect("standard_deviation" in productionBatchPost[1].mass).toBe(false);
+    // Index the ordering off the matched call, not the first POST on the shared
+    // fake: another request routed through it would otherwise silently move the
+    // assertion onto the wrong call.
     expect(
-      vi.mocked(isometricClientFake.post).mock.invocationCallOrder[0],
+      postMock.mock.invocationCallOrder[productionBatchIndex],
     ).toBeLessThan(
       vi.mocked(durabilitySamples.submitDurabilityMeasurementSamples).mock
         .invocationCallOrder[0],

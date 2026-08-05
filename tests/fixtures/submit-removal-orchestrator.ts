@@ -755,8 +755,11 @@ beforeEach(() => {
     {
       creditBatchId: CREDIT_BATCH_ID,
       creditBatchCode: "CB-TEST-001",
+      // Same window as makeBatchesWithSamples for this credit batch: nothing
+      // derives one from the other today, and matching them keeps a future
+      // wiring change from passing on a coincidence.
       startDate: "2026-01-01",
-      endDate: "2026-01-28",
+      endDate: "2026-01-31",
       externalFacilityId: EXTERNAL_FACILITY_ID,
       isometricFeedstockTypeId: EXTERNAL_FEEDSTOCK_TYPE_ID,
       totalDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
