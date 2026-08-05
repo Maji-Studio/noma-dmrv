@@ -214,5 +214,15 @@ export async function upsertProductionBatchRegistration(
       ),
     })
     .returning();
+  // A false `setWhere` makes Postgres update nothing, so `RETURNING` yields no
+  // row. The composite FK to `(credit_batches.id, organization_id)` makes that
+  // unreachable today; the guard keeps the function from ever returning a value
+  // its own signature forbids, and fails as a domain error rather than a
+  // TypeError at the caller's `row.externalProductionBatchId`.
+  if (!row) {
+    throw new Error(
+      `Production batch registration for credit batch ${input.creditBatchId} belongs to another organization`,
+    );
+  }
   return row;
 }
