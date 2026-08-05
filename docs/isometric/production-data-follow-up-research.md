@@ -544,7 +544,8 @@ pre-netted `carbon_contents` LIST and an `s_fraction` LIST of quantity kind
 types `s_fraction` as `Dimensionless Ratio` (`%`). This is recorded in-repo at
 `src/lib/isometric/transformers/sequestration-binding.ts:87` — *"referenced by
 the live template but absent from the component-blueprint catalog"* —
-independently verified during this pass.
+verified in-repo during this pass; the live-template shape is quoted from
+that code comment, not from a fresh template fetch.
 
 > **Do not port the catalogue's input names or units into the integration.**
 > The live template is authoritative for what the project must send; the
