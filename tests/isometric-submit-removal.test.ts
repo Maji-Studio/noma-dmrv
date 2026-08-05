@@ -23,7 +23,9 @@ import { makeTestOrgContext } from "./helpers/test-org";
 import {
   CHANGED_BIOCHAR_MASS_KG,
   CREDIT_BATCH_ID,
+  EXTERNAL_PRODUCTION_BATCH_ID,
   EXTERNAL_PROJECT_ID,
+  isometricClientFake,
   ORIGINAL_BIOCHAR_MASS_KG,
   REMOVAL_ID,
   RTC_PRODUCT_MASS_ID,
@@ -44,6 +46,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import * as ledger from "@/data-access/certification";
 import * as removalsDA from "@/data-access/certifier-removals";
+import * as productionBatchesDA from "@/data-access/certifier-production-batches";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
@@ -784,8 +787,37 @@ describe("submitRemoval — reporting window anchored to application date (issue
         }),
       }),
     ]);
+    // Issue #630: the production batch is registered BEFORE the samples, in
+    // kilograms with no invented standard deviation, and its `ptb_…` reaches
+    // every per-batch sample body instead of the old `production_batch_id: null`.
+    const productionBatchPost = vi
+      .mocked(isometricClientFake.post)
+      .mock.calls.find(([path]) => path === "/production_batches");
+    expect(productionBatchPost).toBeDefined();
+    expect(productionBatchPost![1]).toMatchObject({
+      kind: "biochar",
+      facility_id: "fcl_test_1",
+      feedstock_type_ids: ["ftt_test_1"],
+      mass: { magnitude: ORIGINAL_BIOCHAR_MASS_KG, unit: "kg" },
+      started_at: "2026-01-01T00:00:00.000Z",
+      ended_at: "2026-01-28T23:59:59.999Z",
+    });
+    expect("standard_deviation" in productionBatchPost![1].mass).toBe(false);
+    expect(
+      vi.mocked(isometricClientFake.post).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(durabilitySamples.submitDurabilityMeasurementSamples).mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      productionBatchesDA.upsertProductionBatchRegistration,
+    ).toHaveBeenCalledTimes(1);
+
     expect(submitArgs.submissions.length).toBeGreaterThan(0);
     for (const submission of submitArgs.submissions) {
+      expect(submission.body.production_batch_id).toBe(
+        EXTERNAL_PRODUCTION_BATCH_ID,
+      );
       expect(submission.body.measured_at).toBe("2026-01-31T23:59:59.000Z");
       expect(
         submission.body.values.filter(
