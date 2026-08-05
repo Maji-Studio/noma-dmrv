@@ -995,3 +995,26 @@ bound); these are the decisions it deliberately did not make.
 - **Resolve via:** decide whether same-URL-per-entity duplicates are ever valid
   for any document type. If not, add the partial unique index (`fileUrl is not
   null`) and switch the insert to an upsert (S).
+
+### Reconciled production batches are claimed on the supplier reference alone (`certification/production-batch-remote-drift`)
+
+- `ensureProductionBatchesForCreditBatches`
+  (`src/fn/certification/production-batches.ts`) claims an orphaned remote
+  Production Batch when `findProductionBatchBySupplierRef` matches the stable
+  `nm-ptb-…` reference, then journals the LOCALLY computed mass, window and
+  payload hash. Facility, feedstock types, kind, dates and mass on the remote
+  record are never compared, so a remote record created from different figures
+  is adopted as if it matched.
+- The same asymmetry applies after registration: drift between the registered
+  payload and current local data is recorded as a sync event and logged, never
+  applied, because `POST /production_batches` has no PATCH counterpart (verified
+  against the Certify OpenAPI snapshot: `/production_batches` exposes GET/POST,
+  `/production_batches/{id}` GET/DELETE only).
+- Deferred rather than fixed because the only remedies are a remote-vs-local
+  payload diff on every reconcile (a reconciliation engine for a path that
+  fires on crash recovery), or DELETE-and-recreate, which discards a registry
+  record verifiers may already reference.
+- **Resolve via:** decide whether a mismatched remote Production Batch should
+  block submission and be resolved by hand in Isometric, or be re-created after
+  a DELETE. If blocking, compare the reconciled record's mass/window/facility
+  and surface a conflict instead of claiming it (S).
