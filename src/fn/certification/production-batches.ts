@@ -202,7 +202,6 @@ export async function ensureProductionBatchesForCreditBatches(
     }
 
     const submission = buildProductionBatchSubmission(input);
-    let resolved: IsometricProductionBatch | null = null;
     const { externalId } = await performRegistryCreate({
       orgCtx: args.orgCtx,
       entityType: REMOVAL_ENTITY_TYPE,
@@ -215,7 +214,6 @@ export async function ensureProductionBatchesForCreditBatches(
       create: async () => {
         const batch = await createProductionBatch(client, submission.body);
         assertProductionBatchSupplierReference(batch, submission.supplierRefId);
-        resolved = batch;
         return batch.id;
       },
       reconcile: async () => {
@@ -229,7 +227,6 @@ export async function ensureProductionBatchesForCreditBatches(
             submission.supplierRefId,
           );
         }
-        resolved = batch;
         return supplierRefLookup(
           batch ? { found: true, externalId: batch.id } : { found: false },
         );
@@ -253,11 +250,6 @@ export async function ensureProductionBatchesForCreditBatches(
       failureMessagePrefix: `Registry production batch for credit batch ${submission.creditBatchCode} could not be created`,
       log: args.log,
     });
-    if (!resolved) {
-      throw new SafeError(
-        `The registry did not return a production batch for credit batch ${submission.creditBatchCode}. Check it in Isometric before submitting again.`,
-      );
-    }
     registeredByCreditBatchId.set(submission.creditBatchId, externalId);
   }
 
