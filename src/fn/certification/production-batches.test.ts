@@ -217,6 +217,25 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     );
   });
 
+  it("reuses a registration whose local data no longer builds a payload", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ externalFacilityId: null }),
+    ]);
+    mocks.getProductionBatchRegistrations.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        externalProductionBatchId: PRODUCTION_BATCH_ID,
+        payloadHash: "a-stale-hash",
+      },
+    ]);
+
+    const registered = await ensure();
+
+    expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalled();
+  });
+
   it("claims the orphaned remote record on resume instead of re-POSTing", async () => {
     mocks.client.paginate.mockImplementation(async function* () {
       yield remoteBatch(await currentSupplierRef());
