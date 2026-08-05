@@ -22,6 +22,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Applications, soil temperature measurements | `src/db/schema/application.ts` |
 | Credit batches + application/production-run membership | `src/db/schema/credits.ts` |
 | Certifier credentials, organization settings, projects, sensors, GHG statements, generated statement reports, removals, submissions, uploads, sync events | `src/db/schema/certification.ts` |
+| Registry production-batch identities (Isometric `ptb_…` per credit batch) | `src/db/schema/certifier-production-batches.ts` |
 | Stockpile events, power procurement evidence | `src/db/schema/compliance.ts` |
 | Biochar storage inventory | `src/db/schema/storage-inventory.ts` |
 | Bin movements (ledger) | `src/db/schema/bin-movements.ts` |
