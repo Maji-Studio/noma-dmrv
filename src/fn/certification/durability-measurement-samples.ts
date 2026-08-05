@@ -342,6 +342,57 @@ function creditBatchIdForSubmission(
   return creditBatchId.length > 0 ? creditBatchId : null;
 }
 
+/** Credit batches whose samples need a registered production batch (#630). */
+export function creditBatchIdsForMeasurementSamples(
+  submissions: DurabilityMeasurementSampleSubmission[],
+): string[] {
+  return Array.from(
+    new Set(
+      submissions.flatMap((submission) => {
+        const creditBatchId = creditBatchIdForSubmission(submission);
+        return creditBatchId ? [creditBatchId] : [];
+      }),
+    ),
+  );
+}
+
+/**
+ * Stamp each per-batch sample body with the Isometric production batch its
+ * credit batch was registered as (#630).
+ *
+ * Applied to the SNAPSHOT bodies at POST time rather than baked in at claim
+ * time on purpose: the `ptb_…` is minted by the registry during this very
+ * submission, so it cannot exist when the immutable snapshot is materialized,
+ * and folding it into the snapshot would make the semantic payload hash flip on
+ * the first successful submission and retire every resumable draft. The wire
+ * payload stays fully auditable — `performRegistryCreate` records the actual
+ * request body on the sync event.
+ *
+ * Fails closed: a per-batch sample with no registered production batch would
+ * silently submit `production_batch_id: null`, which is exactly the defect this
+ * replaces. The `soil` sample carries no credit batch and is passed through.
+ */
+export function applyProductionBatchIds(
+  submissions: DurabilityMeasurementSampleSubmission[],
+  productionBatchIdByCreditBatchId: Map<string, string>,
+): DurabilityMeasurementSampleSubmission[] {
+  return submissions.map((submission) => {
+    const creditBatchId = creditBatchIdForSubmission(submission);
+    if (!creditBatchId) return submission;
+    const productionBatchId =
+      productionBatchIdByCreditBatchId.get(creditBatchId);
+    if (!productionBatchId) {
+      throw new SafeError(
+        `The registry production batch for ${submission.label} is missing. Submit again once the registry record exists.`,
+      );
+    }
+    return {
+      ...submission,
+      body: { ...submission.body, production_batch_id: productionBatchId },
+    };
+  });
+}
+
 /**
  * POST each measurement-sample submission through the shared create-or-reconcile
  * choreography (idempotent on the versioned supplier ref). Sequential so the
