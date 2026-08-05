@@ -23,7 +23,11 @@ import { makeTestOrgContext } from "./helpers/test-org";
 import {
   CHANGED_BIOCHAR_MASS_KG,
   CREDIT_BATCH_ID,
+  EXTERNAL_FACILITY_ID,
+  EXTERNAL_FEEDSTOCK_TYPE_ID,
+  EXTERNAL_PRODUCTION_BATCH_ID,
   EXTERNAL_PROJECT_ID,
+  isometricClientFake,
   ORIGINAL_BIOCHAR_MASS_KG,
   REMOVAL_ID,
   RTC_PRODUCT_MASS_ID,
@@ -44,6 +48,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import * as ledger from "@/data-access/certification";
 import * as removalsDA from "@/data-access/certifier-removals";
+import * as productionBatchesDA from "@/data-access/certifier-production-batches";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
@@ -784,8 +789,42 @@ describe("submitRemoval — reporting window anchored to application date (issue
         }),
       }),
     ]);
+    // Issue #630: the production batch is registered BEFORE the samples, in
+    // kilograms with no invented standard deviation, and its `ptb_…` reaches
+    // every per-batch sample body instead of the old `production_batch_id: null`.
+    const postMock = vi.mocked(isometricClientFake.post);
+    const productionBatchIndex = postMock.mock.calls.findIndex(
+      ([path]) => path === "/production_batches",
+    );
+    expect(productionBatchIndex).toBeGreaterThanOrEqual(0);
+    const productionBatchPost = postMock.mock.calls[productionBatchIndex];
+    expect(productionBatchPost[1]).toMatchObject({
+      kind: "biochar",
+      facility_id: EXTERNAL_FACILITY_ID,
+      feedstock_type_ids: [EXTERNAL_FEEDSTOCK_TYPE_ID],
+      mass: { magnitude: ORIGINAL_BIOCHAR_MASS_KG, unit: "kg" },
+      started_at: "2026-01-01T00:00:00.000Z",
+      ended_at: "2026-01-31T23:59:59.999Z",
+    });
+    expect("standard_deviation" in productionBatchPost[1].mass).toBe(false);
+    // Index the ordering off the matched call, not the first POST on the shared
+    // fake: another request routed through it would otherwise silently move the
+    // assertion onto the wrong call.
+    expect(
+      postMock.mock.invocationCallOrder[productionBatchIndex],
+    ).toBeLessThan(
+      vi.mocked(durabilitySamples.submitDurabilityMeasurementSamples).mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      productionBatchesDA.upsertProductionBatchRegistration,
+    ).toHaveBeenCalledTimes(1);
+
     expect(submitArgs.submissions.length).toBeGreaterThan(0);
     for (const submission of submitArgs.submissions) {
+      expect(submission.body.production_batch_id).toBe(
+        EXTERNAL_PRODUCTION_BATCH_ID,
+      );
       expect(submission.body.measured_at).toBe("2026-01-31T23:59:59.000Z");
       expect(
         submission.body.values.filter(

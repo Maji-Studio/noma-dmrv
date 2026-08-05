@@ -23,6 +23,7 @@ import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durabilit
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");
+vi.mock("@/data-access/certifier-production-batches");
 vi.mock("@/fn/certification/certify-context-core");
 vi.mock("@/fn/certification/ensure-evidence-ledgers");
 // Removal submission fails closed unless every candidate document has a
@@ -75,6 +76,23 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
     reconcileRemoval: vi.fn(),
   };
 });
+// The production-batch step (#630) resolves its client from the client module
+// directly, not the barrel above, so the HTTP boundary is faked here too.
+const isometricClientFake = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  patch: vi.fn(),
+  paginate: vi.fn(),
+  paginateAll: vi.fn(),
+}));
+vi.mock("@/lib/isometric/client", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/isometric/client")>();
+  return {
+    ...actual,
+    getIsometricClientForOrg: vi.fn(async () => isometricClientFake),
+  };
+});
 // The Phase 3 measurement-samples flag is a build-time const (false while the
 // two sandbox confirms are pending). Tests that exercise the durability path
 // expose it through a mutable getter and stub the POST-ing submitter.
@@ -99,6 +117,7 @@ export function setDurabilityMeasurementSamplesEnabled(live: boolean): void {
 import * as ledger from "@/data-access/certification";
 import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as removalsDA from "@/data-access/certifier-removals";
+import * as productionBatchesDA from "@/data-access/certifier-production-batches";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
@@ -108,9 +127,11 @@ import { submitRemoval } from "@/fn/certification/submit-removal";
 import { makeClaimSubmissionDraftFake } from "./fake-claim";
 
 export {
+  isometricClientFake,
   ledger,
   ledgerClaim,
   removalsDA,
+  productionBatchesDA,
   certifyContext,
   durabilitySamples,
   evidenceLedgers,
@@ -132,6 +153,10 @@ export const PRODUCTION_RUN_ID = "pr-test-1";
 export const EXTERNAL_PROJECT_ID = "prj_test_1";
 export const TEMPLATE_ID = "rvt_test_1";
 export const RTC_PRODUCT_MASS_ID = "rtc-product-mass";
+
+export const EXTERNAL_FACILITY_ID = "fcl_test_1";
+export const EXTERNAL_FEEDSTOCK_TYPE_ID = "ftt_test_1";
+export const EXTERNAL_PRODUCTION_BATCH_ID = "ptb_test_1";
 
 export const ORIGINAL_BIOCHAR_MASS_KG = 1000;
 export const CHANGED_BIOCHAR_MASS_KG = 1500;
@@ -721,6 +746,50 @@ beforeEach(() => {
 
   vi.mocked(isometric.reconcileDatapoint).mockResolvedValue({ found: false });
   vi.mocked(isometric.reconcileRemoval).mockResolvedValue({ found: false });
+
+  // Production-batch registration (#630): unregistered by default, so a
+  // durability submit POSTs once and journals the returned `ptb_…`.
+  vi.mocked(
+    productionBatchesDA.getProductionBatchRegistryInputs,
+  ).mockResolvedValue([
+    {
+      creditBatchId: CREDIT_BATCH_ID,
+      creditBatchCode: "CB-TEST-001",
+      // Same window as makeBatchesWithSamples for this credit batch: nothing
+      // derives one from the other today, and matching them keeps a future
+      // wiring change from passing on a coincidence.
+      startDate: "2026-01-01",
+      endDate: "2026-01-31",
+      externalFacilityId: EXTERNAL_FACILITY_ID,
+      isometricFeedstockTypeId: EXTERNAL_FEEDSTOCK_TYPE_ID,
+      totalDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
+      runsMissingDryMass: 0,
+    },
+  ]);
+  vi.mocked(
+    productionBatchesDA.getProductionBatchRegistrations,
+  ).mockResolvedValue([]);
+  vi.mocked(
+    productionBatchesDA.upsertProductionBatchRegistration,
+  ).mockImplementation(
+    async (_ctx, input) =>
+      ({
+        ...input,
+        id: "cpb-test-1",
+        organizationId: "org_test_fixtures",
+        provider: "isometric",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }) as never,
+  );
+  isometricClientFake.paginate.mockImplementation(async function* () {});
+  isometricClientFake.paginateAll.mockResolvedValue([]);
+  isometricClientFake.post.mockImplementation(
+    async (_path: string, body: { supplier_reference_id: string }) => ({
+      id: EXTERNAL_PRODUCTION_BATCH_ID,
+      supplier_reference_id: body.supplier_reference_id,
+    }),
+  );
 });
 
 // Returns a unique fake external id per HTTP call so the orchestrator's
