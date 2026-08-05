@@ -27,7 +27,9 @@
  * Payload drift (mass or window changed after registration) is recorded as a
  * sync event and logged, not applied: the registry exposes no PATCH for a
  * production batch, so the registered figures stay authoritative until someone
- * resolves it in Isometric.
+ * resolves it in Isometric. Consistently with that, payload validation gates
+ * only the batches that still need a POST — a registered batch whose local
+ * facts have gone invalid is reused, never blocked.
  */
 
 import {
@@ -75,41 +77,60 @@ export interface ProductionBatchSubmission {
 }
 
 /**
+ * Deterministic credit-batch-id order for the POST sequence and audit trail, so
+ * neither depends on DB row order. Compares code units rather than
+ * `localeCompare`, whose ICU collation varies with the runtime's locale data.
+ */
+function sortByCreditBatchId(
+  inputs: ProductionBatchRegistryInput[],
+): ProductionBatchRegistryInput[] {
+  return [...inputs].sort((left, right) =>
+    left.creditBatchId < right.creditBatchId
+      ? -1
+      : left.creditBatchId > right.creditBatchId
+        ? 1
+        : 0,
+  );
+}
+
+/** Build one credit batch's submission. Pure; throws `SafeError` on bad data. */
+export function buildProductionBatchSubmission(
+  input: ProductionBatchRegistryInput,
+): ProductionBatchSubmission {
+  const supplierRefId = buildProductionBatchReference({
+    creditBatchId: input.creditBatchId,
+  });
+  const body = buildCreateProductionBatchRequest({
+    creditBatchCode: input.creditBatchCode,
+    externalFacilityId: input.externalFacilityId ?? "",
+    feedstockTypeIds: input.isometricFeedstockTypeId
+      ? [input.isometricFeedstockTypeId]
+      : [],
+    startDate: input.startDate,
+    endDate: input.endDate,
+    totalDryMassKg: input.totalDryMassKg,
+    supplierReferenceId: supplierRefId,
+  });
+  return {
+    creditBatchId: input.creditBatchId,
+    creditBatchCode: input.creditBatchCode,
+    supplierRefId,
+    body,
+    massKg: input.totalDryMassKg,
+    startedOn: input.startDate,
+    endedOn: input.endDate,
+    payloadHash: payloadHash(body),
+  };
+}
+
+/**
  * Build the production-batch submissions for a set of credit batches. Pure
- * apart from its input list, and deterministic in credit-batch id order so the
- * POST sequence and audit trail never depend on DB row order.
+ * apart from its input list, and deterministic in credit-batch id order.
  */
 export function buildProductionBatchSubmissions(
   inputs: ProductionBatchRegistryInput[],
 ): ProductionBatchSubmission[] {
-  return [...inputs]
-    .sort((left, right) => left.creditBatchId.localeCompare(right.creditBatchId))
-    .map((input) => {
-      const supplierRefId = buildProductionBatchReference({
-        creditBatchId: input.creditBatchId,
-      });
-      const body = buildCreateProductionBatchRequest({
-        creditBatchCode: input.creditBatchCode,
-        externalFacilityId: input.externalFacilityId ?? "",
-        feedstockTypeIds: input.isometricFeedstockTypeId
-          ? [input.isometricFeedstockTypeId]
-          : [],
-        startDate: input.startDate,
-        endDate: input.endDate,
-        totalDryMassKg: input.totalDryMassKg,
-        supplierReferenceId: supplierRefId,
-      });
-      return {
-        creditBatchId: input.creditBatchId,
-        creditBatchCode: input.creditBatchCode,
-        supplierRefId,
-        body,
-        massKg: input.totalDryMassKg,
-        startedOn: input.startDate,
-        endedOn: input.endDate,
-        payloadHash: payloadHash(body),
-      };
-    });
+  return sortByCreditBatchId(inputs).map(buildProductionBatchSubmission);
 }
 
 export interface EnsureProductionBatchesArgs {
@@ -151,29 +172,36 @@ export async function ensureProductionBatchesForCreditBatches(
     existingRows.map((row) => [row.creditBatchId, row]),
   );
 
-  const submissions = buildProductionBatchSubmissions(inputs);
   const client = await getIsometricClientForOrg(args.orgCtx.organizationId);
 
-  for (const submission of submissions) {
-    const existing = existingByCreditBatchId.get(submission.creditBatchId);
+  // Payloads are built INSIDE the loop, per batch that still needs a POST: an
+  // already-registered batch needs no payload, so local data that has since
+  // drifted to invalid (facility mapping cleared, feedstock link removed, a
+  // member run's mass edited away) must not block a resubmission of a batch the
+  // registry already holds. Only batches that actually reach the registry are
+  // validated.
+  for (const input of sortByCreditBatchId(inputs)) {
+    const existing = existingByCreditBatchId.get(input.creditBatchId);
     if (existing) {
-      if (existing.payloadHash !== submission.payloadHash) {
+      const current = tryBuildProductionBatchSubmission(input, args.log);
+      if (current && current.payloadHash !== existing.payloadHash) {
         await recordProductionBatchDrift({
           orgCtx: args.orgCtx,
           removalId: args.removalId,
           submissionRowId: args.submissionRow.id,
-          submission,
+          submission: current,
           registeredExternalId: existing.externalProductionBatchId,
           log: args.log,
         });
       }
       registeredByCreditBatchId.set(
-        submission.creditBatchId,
+        input.creditBatchId,
         existing.externalProductionBatchId,
       );
       continue;
     }
 
+    const submission = buildProductionBatchSubmission(input);
     let resolved: IsometricProductionBatch | null = null;
     const { externalId } = await performRegistryCreate({
       orgCtx: args.orgCtx,
@@ -259,6 +287,30 @@ export async function bindProductionBatchesToMeasurementSamples(args: {
     log: args.log,
   });
   return applyProductionBatchIds(args.submissions, registered);
+}
+
+/**
+ * Rebuild an already-registered batch's payload for the drift comparison only.
+ * A build failure here is data the registry never sees, so it is logged and the
+ * registered record is reused — consistent with drift itself being recorded,
+ * not applied.
+ */
+function tryBuildProductionBatchSubmission(
+  input: ProductionBatchRegistryInput,
+  log: Logger,
+): ProductionBatchSubmission | null {
+  try {
+    return buildProductionBatchSubmission(input);
+  } catch (err) {
+    log.warn(
+      {
+        creditBatchId: input.creditBatchId,
+        errorName: err instanceof Error ? err.name : typeof err,
+      },
+      "registered production batch could not be rebuilt for drift comparison; reusing the registered record",
+    );
+    return null;
+  }
 }
 
 function assertProductionBatchSupplierReference(
