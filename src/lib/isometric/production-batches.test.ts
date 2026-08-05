@@ -54,6 +54,22 @@ describe("buildCreateProductionBatchRequest", () => {
     expect(body.ended_at).toBe("2026-03-28T23:59:59.999Z");
   });
 
+  it("omits the display name when the credit-batch code is blank", () => {
+    const body = buildCreateProductionBatchRequest({
+      ...BASE,
+      creditBatchCode: "   ",
+    });
+    expect("display_name" in body).toBe(false);
+  });
+
+  it("truncates the display name to the registry's 100-char limit", () => {
+    const body = buildCreateProductionBatchRequest({
+      ...BASE,
+      creditBatchCode: "C".repeat(140),
+    });
+    expect(body.display_name).toHaveLength(100);
+  });
+
   it("is deterministic for the same inputs", () => {
     expect(buildCreateProductionBatchRequest(BASE)).toEqual(
       buildCreateProductionBatchRequest({
