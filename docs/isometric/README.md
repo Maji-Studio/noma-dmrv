@@ -31,6 +31,10 @@ plans may cite them; their current-applicability notes take precedence.
 | [`simple-implementation-guide.md`](./simple-implementation-guide.md) | Plain-language guide to what exists, what is derived, and what is missing |
 | [`condition-registry.md`](./condition-registry.md) | Conditional-field trigger map |
 | [`integration-plan.md`](./integration-plan.md) | Current Certify integration contract |
+| [`facility-production-data-api.md`](./facility-production-data-api.md) | Facility, Production Batch, sample, and sensor API sync decisions |
+| [`production-data-follow-up-research.md`](./production-data-follow-up-research.md) | 2026-08-04 first-party research: mass basis (open), sample→datapoint binding (resolved), reactor route (conflicted), correction lifecycle. **Corrected after an over-hardening audit + adversarial quote verification** — read its "Scope reality check" first |
+| [`production-data-follow-up-repo-seams.md`](./production-data-follow-up-repo-seams.md) | Companion: how that contract maps onto current code, and where it does not |
+| [`production-data-follow-up-support-questions.md`](./production-data-follow-up-support-questions.md) | The 32 open questions from that research, grouped and copy-pasteable for Isometric support |
 | [`openapi-index.md`](./openapi-index.md) | Committed Certify type surface and proven call sites |
 | [`sandbox-template-authoring.md`](./sandbox-template-authoring.md) | Current sandbox template contract and validation workflow |
 | [`changes.md`](./changes.md) | Dated implementation and interpretation changes |
@@ -71,5 +75,5 @@ current implementation claim. Use `implemented`, `partial`, `missing`, and
 ## Freshness
 
 - Version pin observed: 2026-07-24
-- Requirements and integration cross-check: 2026-07-29
+- Requirements and integration cross-check: 2026-08-04
 - Authority: registry URLs recorded in `versions.json`
