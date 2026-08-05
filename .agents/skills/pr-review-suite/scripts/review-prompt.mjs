@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { DEFAULT_PRACTICES } from "./review-runtime.mjs";
 import { displayPractice } from "./review-report.mjs";
 
