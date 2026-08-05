@@ -57,6 +57,12 @@ export {
   loadRemovalBreakdown,
   type RemovalBreakdownData,
 } from "./removal-breakdown";
+// DB-only registered-production-batch identities for the removal detail
+// sheet's facility-nested registry deep links.
+export {
+  loadRemovalProductionBatches,
+  type RemovalProductionBatchLink,
+} from "./removal-production-batches";
 // Statement-level read-only registry observation. Carbon renders only when the
 // exact member set is readable from Isometric.
 export {
