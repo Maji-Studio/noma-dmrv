@@ -8,7 +8,7 @@
  *   `POST /production_batches` → `CreateProductionBatchRequest`
  *   required: facility_id, feedstock_type_ids, supplier_reference_id, kind,
  *             started_at, ended_at, mass
- *   optional: display_name (1..150 chars; auto-generated when omitted)
+ *   optional: display_name (1..100 chars; auto-generated when omitted)
  *   `mass` is a `ScalarQuantity` — required `magnitude` + `unit`, OPTIONAL
  *   `standard_deviation`. `GET /production_batches` exposes NO supplier-reference
  *   filter (unlike `/sensors?reference=`), so the reconcile lookup below
@@ -31,7 +31,7 @@ export type CreateProductionBatchRequest =
   components["schemas"]["CreateProductionBatchRequest"];
 
 const CREDIT_BATCH_REF_PREFIX_LEN = 12;
-const DISPLAY_NAME_MAX_LEN = 150;
+const DISPLAY_NAME_MAX_LEN = 100;
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 /** Registry-facing day bounds for a date-only window (see below). */
 const DAY_START_SUFFIX = "T00:00:00.000Z";
@@ -122,8 +122,13 @@ export function buildCreateProductionBatchRequest(
     );
   }
 
+  // `display_name` is 1..100 chars when present, so a blank credit-batch code
+  // omits it and lets the registry auto-generate one rather than earning a
+  // generic 4xx for an empty string.
+  const displayName = args.creditBatchCode.trim().slice(0, DISPLAY_NAME_MAX_LEN);
+
   return {
-    display_name: args.creditBatchCode.slice(0, DISPLAY_NAME_MAX_LEN),
+    ...(displayName ? { display_name: displayName } : {}),
     ended_at: `${args.endDate}${DAY_END_SUFFIX}`,
     facility_id: args.externalFacilityId,
     feedstock_type_ids: feedstockTypeIds,
