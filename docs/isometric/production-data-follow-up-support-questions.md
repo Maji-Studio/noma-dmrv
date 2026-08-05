@@ -160,10 +160,11 @@ RM-1 + RM-2 (block the monitoring route), LC-1 (blocks reconciliation).
 > and produced on VVB request? If aggregated, what aggregation period is expected
 > for reactor pressure, temperature and composition?
 >
-> **RM-7.** §6.4 requires calibration certificates on Isometric's platform. Where
-> should reactor sensor calibration certificates, accuracy specifications and
-> manufacturer manuals be attached — as Sources bound to sample datapoints, as
-> Sources on the PDD, or elsewhere? Neither the Sensor nor the
+> **RM-7.** §3.4.3 sends reactor calibration records to the VVB and the PDD, and
+> §6.6 (Data Sharing) is a publication rule, not an upload gate. Where should
+> reactor sensor calibration certificates, accuracy specifications and
+> manufacturer manuals be attached in Certify — as Sources bound to sample
+> datapoints, as Sources on the PDD, or elsewhere? Neither the Sensor nor the
 > DataUploadSubmission resource exposes an evidence/source field.
 >
 > **RM-8.** Please confirm that Monitoring Submissions are **not** the channel
