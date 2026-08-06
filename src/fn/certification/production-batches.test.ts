@@ -124,12 +124,11 @@ function remoteBatch(
   };
 }
 
-function ensure(resumed = false) {
+function ensure() {
   return ensureProductionBatchesForCreditBatches({
     orgCtx,
     removalId: "removal-1",
     submissionRow: { id: "submission-1" },
-    resumed,
     creditBatchIds: [CREDIT_BATCH_ID],
     log,
   });
@@ -192,6 +191,17 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
   });
 
+  it("always reconciles by supplier reference before POSTing a missing journal", async () => {
+    await ensure();
+
+    // POST /production_batches is not idempotent: a missing journal row must
+    // trigger the pre-POST supplier-reference lookup even on a fresh,
+    // non-resumed submission version (#635).
+    expect(performRegistryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ resumed: true }),
+    );
+  });
+
   it("POSTs in credit-batch id order regardless of DB row order", async () => {
     const secondId = "22222222-2222-4222-8222-222222222222";
     mocks.getProductionBatchRegistryInputs.mockResolvedValue([
@@ -212,7 +222,6 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       orgCtx,
       removalId: "removal-1",
       submissionRow: { id: "submission-1" },
-      resumed: false,
       creditBatchIds: [secondId, CREDIT_BATCH_ID],
       log,
     });
@@ -280,20 +289,20 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(log.warn).toHaveBeenCalled();
   });
 
-  it("claims the orphaned remote record on resume instead of re-POSTing", async () => {
+  it("claims an orphaned remote record instead of re-POSTing", async () => {
     mocks.client.paginate.mockImplementation(async function* () {
       yield remoteBatch(await currentSupplierRef());
     });
 
-    const registered = await ensure(true);
+    const registered = await ensure();
 
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
     expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledTimes(1);
   });
 
-  it("POSTs on resume when no remote record carries the reference", async () => {
-    const registered = await ensure(true);
+  it("POSTs when no remote record carries the reference", async () => {
+    const registered = await ensure();
     expect(mocks.client.post).toHaveBeenCalledTimes(1);
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
   });
@@ -337,7 +346,6 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       orgCtx,
       removalId: "removal-1",
       submissionRow: { id: "submission-1" },
-      resumed: false,
       creditBatchIds: [],
       log,
     });
