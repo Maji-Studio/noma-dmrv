@@ -8,6 +8,7 @@ import {
   theme,
   v,
 } from "@/lib/certification/evidence-ledger/pdf-theme";
+import { canonicalizePdfBytes } from "./canonical-pdf";
 import type {
   GhgStatementReportEntry,
   GhgStatementReportModel,
@@ -22,6 +23,31 @@ const COL = {
   buffer: 58,
 } as const;
 const CELL_GAP = 6;
+
+/**
+ * Document metadata must be a pure function of the frozen report model.
+ *
+ * Left unset, @react-pdf/renderer defaults `creationDate` to `new Date()` and
+ * `creator`/`producer` to `"react-pdf"`, and @react-pdf/pdfkit derives the
+ * trailer `/ID` from an MD5 of exactly that info dictionary
+ * (`PDFSecurity.generateFileID`). So two renders of one model differed in the
+ * `/CreationDate` string AND in both halves of `/ID`, producing different bytes
+ * and a different `contentChecksumSha256` — the value operators and verifiers
+ * compare. @react-pdf/renderer 4.5.1 exposes no seam to set `/ID` directly;
+ * pinning every info field pins it transitively, and it is not random.
+ *
+ * These constants are part of the rendered bytes: changing one changes the
+ * checksum of every newly prepared report.
+ */
+const PDF_AUTHOR = "noma dMRV";
+const PDF_CREATOR = "noma dMRV";
+const PDF_PRODUCER = "noma dMRV GHG statement report";
+const PDF_SUBJECT = "Automatically generated GHG Statement data reconciliation";
+/**
+ * Metadata timestamp used when `preparedAt` is unparseable, so a malformed
+ * model still renders deterministically instead of silently reading the clock.
+ */
+const PDF_FALLBACK_TIMESTAMP_MS = 0;
 
 const styles = {
   ...theme,
@@ -96,6 +122,14 @@ const formatPreparedAt = (value: string): string => {
   return Number.isNaN(parsed.getTime())
     ? value
     : `${parsed.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+};
+
+/** The one timestamp the renderer may stamp: frozen on the model, never the clock. */
+const pinnedTimestamp = (preparedAt: string): Date => {
+  const parsed = new Date(preparedAt);
+  return Number.isNaN(parsed.getTime())
+    ? new Date(PDF_FALLBACK_TIMESTAMP_MS)
+    : parsed;
 };
 
 function sectionHeading(
@@ -315,12 +349,17 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
     }),
   );
 
+  const preparedAt = pinnedTimestamp(model.preparedAt);
   return h(
     Document,
     {
       title: `GHG Statement Data Summary v${model.reportVersion}`,
-      author: "noma dMRV",
-      subject: "Automatically generated GHG Statement data reconciliation",
+      author: PDF_AUTHOR,
+      subject: PDF_SUBJECT,
+      creator: PDF_CREATOR,
+      producer: PDF_PRODUCER,
+      creationDate: preparedAt,
+      modificationDate: preparedAt,
     },
     h(
       Page,
@@ -334,8 +373,14 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
   );
 }
 
+/**
+ * Render the report to byte-stable PDF bytes: the same model always yields the
+ * same buffer (and therefore the same `contentChecksumSha256`), whatever the
+ * wall clock says. See the metadata constants above and `canonical-pdf.ts` for
+ * the three drift sources this closes.
+ */
 export async function renderGhgStatementReportPdf(
   model: GhgStatementReportModel,
 ): Promise<Buffer> {
-  return renderLedgerToBuffer(buildDocument(model));
+  return canonicalizePdfBytes(await renderLedgerToBuffer(buildDocument(model)));
 }
