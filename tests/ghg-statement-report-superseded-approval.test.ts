@@ -29,7 +29,7 @@ function documentRow(id: string, reportId: string) {
     organizationId: TEST_ORG_ID,
     entityType: "ghgStatementReport",
     entityId: reportId,
-    documentType: "pdf",
+    documentType: "pdf" as const,
     storageProvider: "test",
     storageBucket: "test",
     storageKey: `org/${TEST_ORG_ID}/reports/${reportId}.pdf`,

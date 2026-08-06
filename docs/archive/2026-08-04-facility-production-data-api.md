@@ -3,7 +3,7 @@
 > **Non-authoritative implementation research.** Verified against Isometric's
 > live Certify OpenAPI and first-party documentation on 2026-08-04. The project
 > remains pinned to Biochar Production and Storage Protocol v1.1 and Biochar
-> Storage in Agricultural Soils v1.1 in [`versions.json`](./versions.json).
+> Storage in Agricultural Soils v1.1 in [`versions.json`](../isometric/versions.json).
 > Re-check the live sources and the project's live GHG-entry template before
 > implementing credit logic.
 
@@ -375,7 +375,7 @@ Current local evidence is narrower than a production-ready claim:
 
 These are repository implementation observations, not Isometric protocol
 requirements.
-[`integration-plan.md`](./integration-plan.md),
+[`integration-plan.md`](../isometric/integration-plan.md),
 [`measurement-sample.ts`](../../src/lib/isometric/transformers/measurement-sample.ts)
 
 ### Evidence is required even when the POST accepts numbers
@@ -564,7 +564,7 @@ Relevant local seams:
 [`feedstock.ts`](../../src/db/schema/feedstock.ts),
 [`submit-telemetry.ts`](../../src/fn/certification/submit-telemetry.ts),
 [`measurement-sample.ts`](../../src/lib/isometric/transformers/measurement-sample.ts),
-and [`integration-plan.md`](./integration-plan.md).
+and [`integration-plan.md`](../isometric/integration-plan.md).
 
 Having one facility simplifies operator interaction, not the data model: the
 UI may omit a facility selector once the mapping is verified, but every server

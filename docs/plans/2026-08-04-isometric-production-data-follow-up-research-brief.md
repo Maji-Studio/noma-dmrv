@@ -12,7 +12,7 @@ Read first:
 
 - [`docs/isometric/README.md`](../isometric/README.md) and its pinned
   [`versions.json`](../isometric/versions.json)
-- [`docs/isometric/facility-production-data-api.md`](../isometric/facility-production-data-api.md)
+- [`docs/archive/2026-08-04-facility-production-data-api.md`](../archive/2026-08-04-facility-production-data-api.md)
 - [`CONTEXT.md`](../../CONTEXT.md), especially Credit batch, Sample, Replicate,
   Production process, and Method A / Method B
 - the current Certify integration seams named below
@@ -203,7 +203,7 @@ include credentials, signed upload URLs, or personal data in the report.
 ## Deliverable
 
 Produce one concise Markdown research report suitable for
-`docs/isometric/production-data-follow-up-research.md`, containing:
+`docs/archive/2026-08-04-production-data-follow-up-research.md`, containing:
 
 1. an executive decision table with `resolved`, `unresolved`, or
    `source-conflicted` status for each blocker;
