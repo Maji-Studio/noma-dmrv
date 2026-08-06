@@ -1,7 +1,7 @@
 # Isometric support questions — production data follow-up
 
 > Ready-to-send questions arising from
-> [`production-data-follow-up-research.md`](./production-data-follow-up-research.md)
+> [`2026-08-04-production-data-follow-up-research.md`](./2026-08-04-production-data-follow-up-research.md)
 > (researched 2026-08-04). Each is self-contained; the evidence behind every one
 > is in the linked report. Project context to include when sending: Biochar
 > Production and Storage Protocol v1.1 (tag 1.1.1) with Biochar Storage in
@@ -220,4 +220,3 @@ RM-1 + RM-2 (block the monitoring route), LC-1 (blocks reconciliation).
 > **LC-6.** How do we correct or supersede an already-processed data upload
 > submission? What happens when a second submission covers an overlapping time
 > window for the same `sensor_reference` — replace, merge, duplicate, or error?
-

@@ -412,11 +412,11 @@ export function EntitySelect({
     [onChange]
   );
 
-  const handleSelectNone = useCallback(() => {
+  const handleSelectNone = () => {
     onChange("");
     setIsOpen(false);
     setSearchQuery("");
-  }, [onChange]);
+  };
 
   const handleClear = useCallback(
     (e: React.MouseEvent) => {

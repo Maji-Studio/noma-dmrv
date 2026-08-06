@@ -1,7 +1,7 @@
 # Isometric production-data: current repository seams
 
 > Companion to
-> [`production-data-follow-up-research.md`](./production-data-follow-up-research.md)
+> [`2026-08-04-production-data-follow-up-research.md`](./2026-08-04-production-data-follow-up-research.md)
 > (researched 2026-08-04). That doc holds the registry contract and its open
 > questions; this one maps the contract onto the code as it stands.
 >
@@ -172,7 +172,7 @@ applied before send), while the catalogue publishes `mg/kg` for
 template**, not the catalogue, governs what to send — so this needs a template
 inspection to settle, not a catalogue-driven edit.
 
-### 7.8 Corrections owed to `facility-production-data-api.md`
+### 7.8 Corrections owed to `2026-08-04-facility-production-data-api.md`
 
 That doc's API-contract claims were re-checked against the live OpenAPI and hold
 up, including `production_batch_id` being optional and the Production Batch

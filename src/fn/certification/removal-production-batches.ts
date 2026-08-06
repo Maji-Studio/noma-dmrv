@@ -32,7 +32,7 @@ export async function loadRemovalProductionBatches(
   removalId: string,
 ): Promise<ActionResult<RemovalProductionBatchLink[]>> {
   return withAction(async (orgCtx) => {
-    const validRemovalId = z.string().uuid().parse(removalId);
+    const validRemovalId = z.uuid().parse(removalId);
     const removal = await getCertifierRemovalById(orgCtx, validRemovalId);
     if (!removal) throw new SafeError("Removal not found.");
 

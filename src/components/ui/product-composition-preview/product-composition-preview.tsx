@@ -1,8 +1,9 @@
 import { formatMassKg } from "@/lib/format-utils";
-import { formatMoisturePercent } from "@/lib/mass-moisture";
-
-const PERCENT_SCALE = 100;
-const MIN_VISIBLE_SEGMENT_PERCENT = 1.5;
+import {
+  formatMoisturePercent,
+  MIN_VISIBLE_SEGMENT_PERCENT,
+  PERCENT_SCALE,
+} from "@/lib/mass-moisture";
 
 interface ProductCompositionPreviewProps {
   wetMassKg: number | null | undefined;

@@ -260,7 +260,7 @@ export async function submitGhgStatementToVerifierCore(args: {
     : null;
   if (parsed.reportId && !selectedGeneratedReport) {
     throw new SafeError(
-      "Approve the selected generated report before submitting.",
+      "Approve the latest generated report before submitting.",
     );
   }
   if (!selectedGeneratedReport && !externalReportUrl) {
@@ -306,7 +306,7 @@ export async function submitGhgStatementToVerifierCore(args: {
         : null;
       if (parsed.reportId && !generatedReport) {
         throw new SafeError(
-          "Approve the selected generated report before submitting.",
+          "Approve the latest generated report before submitting.",
         );
       }
       let remoteBefore = await getGhgStatement(
