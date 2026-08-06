@@ -18,6 +18,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
 import {
@@ -42,6 +43,93 @@ import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { formatCount } from "@/lib/copy-utils";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
+
+// Which blocking notice (if any) the list shows above the table. Precedence:
+// a failed summary beats everything, an unlinked facility beats the
+// shared-project notice. Null while loading so nothing flashes before the
+// summary settles.
+export type GhgCreateGateNotice =
+  | "mappingFailed"
+  | "unlinked"
+  | "sharedProject"
+  | null;
+
+export interface GhgCreateGate {
+  canSync: boolean;
+  canCreate: boolean;
+  notice: GhgCreateGateNotice;
+}
+
+// Pure derivation of the Sync/Create button gating from the certifier summary
+// query state. Create is additionally blocked when the Isometric project is
+// shared by more than one noma facility: a GHG Statement is project-wide, so
+// the server rejects creation late in the wizard; this gate surfaces that
+// before the operator starts (`assertDedicatedGhgStatementProject` stays the
+// authoritative backstop).
+export function deriveGhgCreateGate(summary: {
+  isLoading: boolean;
+  isError: boolean;
+  hasMapping: boolean;
+  linkedFacilityCount: number | undefined;
+}): GhgCreateGate {
+  // Keep the link state indeterminate while the lookup is in flight so we do
+  // not flash the "not linked" notice or enable Create before it settles.
+  const isLinked = summary.isLoading ? null : summary.hasMapping;
+  const isDedicatedProject = summary.isLoading
+    ? null
+    : (summary.linkedFacilityCount ?? 0) <= 1;
+  const mappingFailed = summary.isError && !summary.isLoading;
+  return {
+    canSync: isLinked === true,
+    canCreate: isLinked === true && isDedicatedProject === true,
+    notice: mappingFailed
+      ? "mappingFailed"
+      : isLinked === false
+        ? "unlinked"
+        : isDedicatedProject === false
+          ? "sharedProject"
+          : null,
+  };
+}
+
+export function CreateGateNotice({
+  notice,
+  facilityId,
+  linkedFacilityCount,
+}: {
+  notice: GhgCreateGateNotice;
+  facilityId: string;
+  linkedFacilityCount: number | undefined;
+}) {
+  if (!notice) return null;
+  return (
+    <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">
+      {notice === "mappingFailed" ? (
+        <p className="body-small text-[var(--clr-red)]">
+          Isometric project link unavailable. Refresh to retry.
+        </p>
+      ) : notice === "unlinked" ? (
+        <p className="body-small text-[var(--color-text-secondary)]">
+          Link this facility to an Isometric project in Settings before creating
+          a statement.
+        </p>
+      ) : (
+        <p className="body-small text-[var(--color-text-secondary)]">
+          This Isometric project is linked to {linkedFacilityCount} noma
+          facilities. A GHG Statement covers every facility on the project. Link
+          each facility to a dedicated Isometric project in{" "}
+          <Link
+            href={`/certification/settings?facility=${encodeURIComponent(facilityId)}`}
+            className="text-[var(--color-interaction)] underline underline-offset-2 hover:text-[var(--color-interaction-hover)]"
+          >
+            Settings
+          </Link>{" "}
+          before creating a statement.
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function GhgStatementsList() {
   const { facilityId } = useFacilityContext();
@@ -190,13 +278,12 @@ function ListBody({ facilityId }: { facilityId: string }) {
   );
 
   const isProduction = summaryQuery.data?.isProduction ?? false;
-  // Keep `isLinked` indeterminate (null) while the mapping lookup is in flight
-  // so we don't flash the "not linked" notice or disable Create on first mount
-  // before the query settles. Downstream gates on `=== true` / `=== false`.
-  const isLinked = summaryQuery.isLoading
-    ? null
-    : Boolean(summaryQuery.data?.mapping);
-  const mappingFailed = summaryQuery.isError && !summaryQuery.isLoading;
+  const gate = deriveGhgCreateGate({
+    isLoading: summaryQuery.isLoading,
+    isError: summaryQuery.isError,
+    hasMapping: Boolean(summaryQuery.data?.mapping),
+    linkedFacilityCount: summaryQuery.data?.linkedFacilityCount,
+  });
   const syncFromRegistry = async () => {
     try {
       const result = await syncMutation.mutateAsync(facilityId);
@@ -256,7 +343,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
               variant="default"
               onClick={syncFromRegistry}
               busy={syncMutation.isPending}
-              disabled={isLinked !== true}
+              disabled={!gate.canSync}
             >
               <ArrowsClockwiseIcon size={20} weight="bold" />
               Sync from registry
@@ -264,7 +351,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
             <Button
               variant="primary"
               onClick={() => setCreateOpen(true)}
-              disabled={isLinked !== true}
+              disabled={!gate.canCreate}
             >
               <PlusIcon size={20} weight="bold" />
               New GHG Statement
@@ -272,20 +359,11 @@ function ListBody({ facilityId }: { facilityId: string }) {
           </div>
         </div>
 
-        {(mappingFailed || isLinked === false) && (
-          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">
-            {mappingFailed ? (
-              <p className="body-small text-[var(--clr-red)]">
-                Isometric project link unavailable. Refresh to retry.
-              </p>
-            ) : (
-              <p className="body-small text-[var(--color-text-secondary)]">
-                Link this facility to an Isometric project in Settings before
-                creating a statement.
-              </p>
-            )}
-          </div>
-        )}
+        <CreateGateNotice
+          notice={gate.notice}
+          facilityId={facilityId}
+          linkedFacilityCount={summaryQuery.data?.linkedFacilityCount}
+        />
 
         <DataTable
           columns={columns}
@@ -317,7 +395,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
                     variant="default"
                     onClick={syncFromRegistry}
                     busy={syncMutation.isPending}
-                    disabled={isLinked !== true}
+                    disabled={!gate.canSync}
                   >
                     <ArrowsClockwiseIcon size={20} weight="bold" />
                     Sync from registry
@@ -351,7 +429,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
         />
       )}
 
-      {isLinked === true && (
+      {gate.canCreate && (
         <GhgStatementCreateDialog
           facilityId={facilityId}
           isProduction={isProduction}
