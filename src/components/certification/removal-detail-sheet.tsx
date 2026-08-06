@@ -24,6 +24,7 @@ import {
 import { formatDateRange } from "@/lib/format-utils";
 import { pluralize } from "@/lib/copy-utils";
 import { EnvBanner } from "./env-banner";
+import { ProductionBatchLinks } from "./production-batch-links";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
 import { SourcesPanel } from "./sources-panel";
@@ -205,6 +206,12 @@ export function RemovalDetailSheet({
                 />
               </Field>
             )}
+
+            <ProductionBatchLinks
+              removalId={summary.removalId}
+              isProduction={isProduction}
+              enabled={open}
+            />
 
             {summary.evidenceHealth && (
               <Field label="Evidence attachments">

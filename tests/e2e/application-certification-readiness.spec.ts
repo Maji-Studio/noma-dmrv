@@ -114,7 +114,7 @@ async function expectRemovalReadyWithoutApplicationEvidence(
   );
   const checklist = page.getByTestId("batch-health-strip");
   await expect(
-    checklist.getByText("All checks passed"),
+    checklist.getByText("All batch data checks passed"),
   ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
   await expect(
     checklist.getByText("Application evidence", { exact: true }),

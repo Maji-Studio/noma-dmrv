@@ -619,7 +619,6 @@ export function FeedstockForm({
               allowCreate
               createLabel="Add new feedstock type"
               onCreateNew={() => feedstockTypeDialog.open()}
-              filterBy={{ usage: "pyrolysis" }}
               hideSearch
             />
           </div>
@@ -786,7 +785,6 @@ export function FeedstockForm({
           setValue("feedstockTypeId", feedstockType.id, SET_VALUE_OPTS);
           feedstockTypeDialog.close();
         }}
-        defaultUsage="pyrolysis"
       />
 
       {watchedFacilityId && (
@@ -800,7 +798,6 @@ export function FeedstockForm({
           defaultBinType={defaultStorageBinType}
           allowedTypes={FEEDSTOCK_BIN_TYPES}
           defaultFeedstockTypeId={watchedFeedstockTypeId || undefined}
-          feedstockTypeUsage="pyrolysis"
           facilityId={watchedFacilityId}
         />
       )}

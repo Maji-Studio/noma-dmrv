@@ -145,6 +145,7 @@ test.describe("Transport trip type (#316)", () => {
     await page.selectOption('select[name="status"]', "upcoming");
     await selectEntityByText(page, "Order", seededData.customer.name);
     await page.fill('input[name="deliveredWetMassKg"]', "45");
+    await page.fill('input[name="moistureContentPercent"]', "10");
     await tripType.selectOption("one_way");
     await page.click('button[type="submit"]:has-text("Create Delivery")');
     await waitForSideSheetClose(page);

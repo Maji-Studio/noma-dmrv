@@ -14,6 +14,7 @@ interface DeliveryStockState {
   biocharProductId: string | null;
   status: string | null;
   deliveredWetMassKg: number | null;
+  massDryKg: number | null;
 }
 
 interface DeliveryStockUpdate {
@@ -97,6 +98,7 @@ export async function lockDeliveryUpdateStock(
       biocharProductId: deliveries.biocharProductId,
       status: deliveries.status,
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
+      massDryKg: deliveries.massDryKg,
     })
     .from(deliveries)
     .where(and(
@@ -143,6 +145,7 @@ export async function lockDeliveryUpdateStock(
     ? data.deliveredWetMassKg
     : snapshot.deliveredWetMassKg;
   const stockDerivationChanged =
+    transactionOrderId !== snapshot.orderId ||
     transactionStatus !== snapshot.status ||
     transactionWetMass !== snapshot.deliveredWetMassKg ||
     transactionProductSnapshotId !== snapshotProductId;
@@ -178,6 +181,7 @@ export async function lockDeliveryUpdateStock(
       biocharProductId: deliveries.biocharProductId,
       status: deliveries.status,
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
+      massDryKg: deliveries.massDryKg,
     })
     .from(deliveries)
     .where(and(
@@ -192,7 +196,8 @@ export async function lockDeliveryUpdateStock(
     locked.orderId === snapshot.orderId &&
       locked.biocharProductId === snapshot.biocharProductId &&
       locked.status === snapshot.status &&
-      locked.deliveredWetMassKg === snapshot.deliveredWetMassKg,
+      locked.deliveredWetMassKg === snapshot.deliveredWetMassKg &&
+      locked.massDryKg === snapshot.massDryKg,
   );
 
   if (!stockDerivationChanged) return locked;
@@ -281,6 +286,7 @@ export async function lockDeleteDeliveryStock(
       biocharProductId: deliveries.biocharProductId,
       status: deliveries.status,
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
+      massDryKg: deliveries.massDryKg,
     })
     .from(deliveries)
     .where(and(
@@ -327,6 +333,7 @@ export async function lockDeleteDeliveryStock(
       biocharProductId: deliveries.biocharProductId,
       status: deliveries.status,
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
+      massDryKg: deliveries.massDryKg,
     })
     .from(deliveries)
     .where(and(
@@ -342,7 +349,8 @@ export async function lockDeleteDeliveryStock(
     locked.orderId === snapshot.orderId &&
       locked.biocharProductId === snapshot.biocharProductId &&
       locked.status === snapshot.status &&
-      locked.deliveredWetMassKg === snapshot.deliveredWetMassKg,
+      locked.deliveredWetMassKg === snapshot.deliveredWetMassKg &&
+      locked.massDryKg === snapshot.massDryKg,
   );
 
   const [lockedOrder] = await tx

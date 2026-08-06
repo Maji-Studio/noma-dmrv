@@ -34,11 +34,7 @@ import {
   biocharProducts,
   formulations,
 } from "@/db/schema/products";
-import {
-  deriveMassDryKg,
-  DRY_MASS_EXCEEDS_WET_MESSAGE,
-  exceedsMassWithTolerance,
-} from "@/lib/calculations/mass-dry";
+import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
 import type {
@@ -94,28 +90,11 @@ type CreateApplicationInput = Omit<
   gisBoundary?: GisBoundary | null;
 };
 
+type UpdateApplicationInput = Omit<UpdateApplicationData, "applicationId">;
+
 function optionalText(value: string | null | undefined): string | null {
   const trimmed = value?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
-}
-
-async function getDeliveryMoistureContentPercent(
-  ctx: OrgContext,
-  deliveryId: string,
-  txOrDb: DbTransaction | typeof db = db,
-): Promise<number | null> {
-  const [delivery] = await txOrDb
-    .select({
-      moistureContentPercent: deliveries.moistureContentPercent,
-    })
-    .from(deliveries)
-    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
-
-  if (!delivery) {
-    throw new SafeError("Delivery not found");
-  }
-
-  return delivery.moistureContentPercent;
 }
 
 async function getDeliveryCapacityAndApplied(
@@ -123,9 +102,17 @@ async function getDeliveryCapacityAndApplied(
   deliveryId: string,
   excludeApplicationId?: string,
   txOrDb: DbTransaction | typeof db = db,
-): Promise<{ capacityKg: number | null; alreadyAppliedTons: number }> {
+): Promise<{
+  capacityKg: number | null;
+  deliveryDryBiocharKg: number | null;
+  alreadyAppliedTons: number;
+  alreadyAppliedDryTons: number;
+}> {
   const deliveryQuery = txOrDb
-    .select({ deliveredWetMassKg: deliveries.deliveredWetMassKg })
+    .select({
+      deliveredWetMassKg: deliveries.deliveredWetMassKg,
+      massDryKg: deliveries.massDryKg,
+    })
     .from(deliveries)
     .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
 
@@ -141,14 +128,19 @@ async function getDeliveryCapacityAndApplied(
     excludeApplicationId ? ne(applications.id, excludeApplicationId) : undefined,
   );
 
-  const [{ total }] = await txOrDb
-    .select({ total: sum(applications.biocharAppliedTons) })
+  const [{ total, totalDry }] = await txOrDb
+    .select({
+      total: sum(applications.biocharAppliedTons),
+      totalDry: sum(applications.biocharAppliedDryTons),
+    })
     .from(applications)
     .where(conditions);
 
   return {
     capacityKg: delivery.deliveredWetMassKg,
+    deliveryDryBiocharKg: delivery.massDryKg,
     alreadyAppliedTons: Number(total ?? 0),
+    alreadyAppliedDryTons: Number(totalDry ?? 0),
   };
 }
 
@@ -271,44 +263,28 @@ async function getLinkedCreditBatches(
   return rows;
 }
 
-async function resolveApplicationDryMassTons(
-  ctx: OrgContext,
+function resolveApplicationDryMassTons(
   input: {
-    deliveryId: string;
     biocharAppliedTons: number;
-    biocharAppliedDryTons?: number | null;
-    fallbackDryTons?: number | null;
+    deliveryWetKg: number | null;
+    deliveryDryBiocharKg: number | null;
+    alreadyAppliedTons: number;
+    alreadyAppliedDryTons: number;
   },
-  txOrDb: DbTransaction | typeof db = db,
-): Promise<number> {
-  if (input.biocharAppliedDryTons != null) {
-    if (
-      exceedsMassWithTolerance(
-        tonnesToKg(input.biocharAppliedDryTons),
-        tonnesToKg(input.biocharAppliedTons),
-      )
-    ) {
-      throw new SafeError(DRY_MASS_EXCEEDS_WET_MESSAGE);
-    }
-    return input.biocharAppliedDryTons;
-  }
-
-  const moistureContentPercent = await getDeliveryMoistureContentPercent(ctx, input.deliveryId, txOrDb);
-
-  if (moistureContentPercent != null) {
-    return kgToTonnes(
-      deriveMassDryKg(
-        tonnesToKg(input.biocharAppliedTons),
-        moistureContentPercent
-      )
+): number {
+  const allocatedDryKg = allocateTrackedDryBiocharKg({
+    totalWetKg: input.deliveryWetKg,
+    totalDryBiocharKg: input.deliveryDryBiocharKg,
+    requestedWetKg: tonnesToKg(input.biocharAppliedTons),
+    allocatedWetKg: tonnesToKg(input.alreadyAppliedTons),
+    allocatedDryBiocharKg: tonnesToKg(input.alreadyAppliedDryTons),
+  });
+  if (allocatedDryKg == null) {
+    throw new SafeError(
+      "Tracked dry biochar is not available. Complete the linked product's biochar mass and moisture, then save the delivery again.",
     );
   }
-
-  if (input.fallbackDryTons != null) {
-    return input.fallbackDryTons;
-  }
-
-  throw new SafeError("Dry mass is required when delivery has no moisture content");
+  return kgToTonnes(allocatedDryKg);
 }
 
 /**
@@ -679,15 +655,22 @@ export async function createApplication(
     // mass, so checkDeliveryCapacity skips and would silently accept them.
     await assertDeliveryAcceptsApplication(ctx, data.deliveryId, data.applicationDate, tx);
 
-    const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(ctx, data.deliveryId, undefined, tx);
+    const {
+      capacityKg,
+      deliveryDryBiocharKg,
+      alreadyAppliedTons,
+      alreadyAppliedDryTons,
+    } = await getDeliveryCapacityAndApplied(ctx, data.deliveryId, undefined, tx);
     const check = checkDeliveryCapacity({ capacityKg, alreadyAppliedTons, requestedTons: data.biocharAppliedTons });
     if (!check.ok) throw new SafeError(check.errorMessage!);
 
-    const biocharAppliedDryTons = await resolveApplicationDryMassTons(ctx, {
-      deliveryId: data.deliveryId,
+    const biocharAppliedDryTons = resolveApplicationDryMassTons({
       biocharAppliedTons: data.biocharAppliedTons,
-      biocharAppliedDryTons: data.biocharAppliedDryTons,
-    }, tx);
+      deliveryWetKg: capacityKg,
+      deliveryDryBiocharKg,
+      alreadyAppliedTons,
+      alreadyAppliedDryTons,
+    });
 
     const [application] = await tx
       .insert(applications)
@@ -725,7 +708,7 @@ export async function createApplication(
 export async function updateApplication(
   ctx: OrgContext,
   id: string,
-  data: Omit<UpdateApplicationData, "applicationId">
+  data: UpdateApplicationInput,
 ): Promise<Application> {
   requireOrgScope(ctx);
 
@@ -775,8 +758,10 @@ export async function updateApplication(
       );
     }
 
+    let deliveryMassState: Awaited<ReturnType<typeof getDeliveryCapacityAndApplied>> | null = null;
     if (data.deliveryId !== undefined || data.biocharAppliedTons !== undefined) {
-      const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(ctx, effectiveDeliveryId, id, tx);
+      deliveryMassState = await getDeliveryCapacityAndApplied(ctx, effectiveDeliveryId, id, tx);
+      const { capacityKg, alreadyAppliedTons } = deliveryMassState;
       const check = checkDeliveryCapacity({
         capacityKg,
         alreadyAppliedTons,
@@ -787,19 +772,16 @@ export async function updateApplication(
 
     const shouldRecalculateDryMass =
       data.deliveryId !== undefined ||
-      data.biocharAppliedTons !== undefined ||
-      data.biocharAppliedDryTons !== undefined;
+      data.biocharAppliedTons !== undefined;
 
-    if (shouldRecalculateDryMass) {
-      updateData.biocharAppliedDryTons = await resolveApplicationDryMassTons(ctx, {
-        deliveryId: effectiveDeliveryId,
+    if (shouldRecalculateDryMass && deliveryMassState) {
+      updateData.biocharAppliedDryTons = resolveApplicationDryMassTons({
         biocharAppliedTons: effectiveAppliedTons,
-        biocharAppliedDryTons: data.biocharAppliedDryTons,
-        fallbackDryTons:
-          data.deliveryId === undefined && data.biocharAppliedTons === undefined
-            ? existingApplication.biocharAppliedDryTons
-            : null,
-      }, tx);
+        deliveryWetKg: deliveryMassState.capacityKg,
+        deliveryDryBiocharKg: deliveryMassState.deliveryDryBiocharKg,
+        alreadyAppliedTons: deliveryMassState.alreadyAppliedTons,
+        alreadyAppliedDryTons: deliveryMassState.alreadyAppliedDryTons,
+      });
     }
 
     if (data.code !== undefined) updateData.code = data.code;

@@ -59,6 +59,9 @@ jobs:
       CREDENTIALS_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
       ISOMETRIC_ACCESS_TOKEN: migration-gate-access-token
       ISOMETRIC_CLIENT_SECRET: migration-gate-client-secret
+      # The seed script's import graph reaches src/config/env.ts, whose schema
+      # requires NODE_ENV with no default.
+      NODE_ENV: development
 
     steps:
       # Always start from the immutable base SHA: the gate's whole purpose is to

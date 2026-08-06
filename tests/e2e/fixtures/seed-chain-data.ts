@@ -189,6 +189,7 @@ export async function seedChainData(
         // draw exceeding the batch's on-hand mass, so the seeded batch must be
         // internally consistent with what the chain ships out of it.
         massKg: 100000,
+        moistureContentPercent: 10,
         productionDate,
         expiresAt,
       });

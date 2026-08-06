@@ -14,6 +14,12 @@ describe("formatRemainingMass", () => {
     );
   });
 
+  it("can show only wet mass when dry mass is not useful for the task", () => {
+    expect(formatRemainingMass({ wetKg: 3_000, dryKg: 2_900 }, false)).toBe(
+      "Remaining wet mass: 3,000kg",
+    );
+  });
+
   it("uses explicit unknown copy for unresolved dry mass", () => {
     expect(formatRemainingMass({ wetKg: 3_000, dryKg: null })).toBe(
       "Remaining wet mass: 3,000kg | dry mass: Not recorded",

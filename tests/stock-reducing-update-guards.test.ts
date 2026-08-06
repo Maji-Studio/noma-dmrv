@@ -103,7 +103,7 @@ describe("stock-reducing update guards", () => {
     }
   });
 
-  it("allows inherited deliveries to move between products in the same bin", async () => {
+  it("rejects moving inherited deliveries between products in the same bin", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
@@ -189,17 +189,19 @@ describe("stock-reducing update guards", () => {
       .returning({ id: deliveries.id });
     createdDeliveryIds.push(delivery.id);
 
-    const updated = await updateOrder(makeTestOrgContext(), order.id, {
-      biocharProductId: targetProduct.id,
-    });
-
-    expect(updated.biocharProductId).toBe(targetProduct.id);
+    await expect(
+      updateOrder(makeTestOrgContext(), order.id, {
+        biocharProductId: targetProduct.id,
+      }),
+    ).rejects.toThrow(
+      "This order already has deliveries. Create a new order instead of changing its biochar product.",
+    );
 
     const [persisted] = await db
       .select({ biocharProductId: orders.biocharProductId })
       .from(orders)
       .where(eq(orders.id, order.id));
-    expect(persisted.biocharProductId).toBe(targetProduct.id);
+    expect(persisted.biocharProductId).toBe(initialProduct.id);
   });
 
   it("rejects inherited deliveries that overdraw a different product bin", async () => {
@@ -323,7 +325,7 @@ describe("stock-reducing update guards", () => {
     expect(persisted.biocharProductId).toBe(initialProduct.id);
   });
 
-  it("rejects reducing a product below its already-delivered wet mass", async () => {
+  it("rejects reducing a product below wet mass allocated to an upcoming delivery", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const productCode = `BP-SHRINK-${tag}`;
     const [facility] = await db
@@ -395,7 +397,7 @@ describe("stock-reducing update guards", () => {
         storageLocationId: productBin.id,
         code: `DL-SHRINK-${tag}`,
         deliveryDate: new Date("2026-07-06T00:00:00Z"),
-        status: "delivered",
+        status: "upcoming",
         deliveredWetMassKg: SHRINK_PRODUCT_DELIVERED_MASS_KG,
       })
       .returning({ id: deliveries.id });

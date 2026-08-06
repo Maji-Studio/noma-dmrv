@@ -208,6 +208,11 @@ export interface CompositionIngredientDraw {
   massDryKg: number | null;
 }
 
+/**
+ * Aggregate the per-bin stock draws recorded in a composition. Ingredients
+ * without a feedstock bin are deliberately skipped: they count toward the
+ * blend mass but withdraw nothing from tracked stock.
+ */
 export function getCompositionIngredientDraws(
   composition: Record<string, unknown> | null | undefined,
 ): CompositionIngredientDraw[] {
@@ -217,11 +222,7 @@ export function getCompositionIngredientDraws(
   >();
   for (const ref of getCompositionIngredientRefs(composition)) {
     if (ref.massKg <= 0) continue;
-    if (!ref.storageLocationId) {
-      throw new SafeError(
-        "Choose a feedstock bin for every ingredient with a positive mass",
-      );
-    }
+    if (!ref.storageLocationId) continue;
     const existing = byStorageLocation.get(ref.storageLocationId);
     byStorageLocation.set(ref.storageLocationId, {
       massKg: (existing?.massKg ?? 0) + ref.massKg,
@@ -301,14 +302,9 @@ export async function resolveCompositionIngredientMassBasis(
   );
   const storageLocationIds = [
     ...new Set(
-      positiveRefs.map((ref) => {
-        if (!ref.storageLocationId) {
-          throw new SafeError(
-            "Choose a feedstock bin for every ingredient with a positive mass",
-          );
-        }
-        return ref.storageLocationId;
-      }),
+      positiveRefs.flatMap((ref) =>
+        ref.storageLocationId ? [ref.storageLocationId] : [],
+      ),
     ),
   ];
 
@@ -354,10 +350,14 @@ export async function resolveCompositionIngredientMassBasis(
         typeof ingredient.storageLocationId === "string"
           ? ingredient.storageLocationId
           : null;
+      // No bin means no stock draw: the wet mass still counts toward the
+      // blend, but there is no basis to snapshot a dry allocation from.
       if (!storageLocationId) {
-        throw new SafeError(
-          "Choose a feedstock bin for every ingredient with a positive mass",
-        );
+        return {
+          ...ingredient,
+          massDryKg: null,
+          moistureContentPercent: null,
+        };
       }
       return {
         ...ingredient,

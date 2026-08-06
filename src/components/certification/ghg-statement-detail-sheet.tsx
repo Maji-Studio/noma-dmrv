@@ -233,9 +233,6 @@ function DetailState({
               ) : undefined
             }
             canGenerate={workflowState.canGenerate}
-            autoGenerationReady={
-              remote?.status === "DRAFT" && workflowState.rollupReady
-            }
             generationUnavailableReason={
               workflowState.generationUnavailableReason
             }
@@ -354,7 +351,8 @@ function DetailState({
         onClose={() => setSubmitOpen(false)}
         isProduction={isProduction}
         isResubmit={isResubmit}
-        approvedReportId={approvedReport?.id ?? null}
+        canGenerate={workflowState.canGenerate}
+        generationUnavailableReason={workflowState.generationUnavailableReason}
       />
 
       <SlideOverPanel.Footer className="justify-stretch">

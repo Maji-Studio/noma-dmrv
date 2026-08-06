@@ -1,22 +1,22 @@
 /**
  * The one vocabulary and the one arithmetic for wet mass, moisture and dry mass.
  *
- * Every biochar entity that carries a mass carries the same three quantities in
- * the same relationship:
+ * For a single unmixed material, the three quantities have this relationship:
  *
  *     wet mass  =  dry mass  +  water
  *     moisture  =  water / wet mass        (wet basis, 0–100 %)
  *
- * Dry mass is the figure carbon accounting is built on; wet mass is what the
- * scale reads. Before this module each surface said it differently ("Moisture
+ * A blended biochar product is different: finished-product moisture cannot
+ * split dry biochar from ingredient solids, so those surfaces use tracked
+ * composition accounting instead. Before this module each moisture surface said it differently ("Moisture
  * Content (%)", "Moisture (%)", "Moisture %"), formatted it differently, and
  * derived the split inline. Labels, precision and the split now come from here
  * so a feedstock batch, a delivery and a production run all read the same.
  *
  * Presentation lives in `@/components/ui/moisture-split`; the form inputs live
  * in `@/components/forms/mass-moisture-fields`. Server-side the
- * authoritative dry mass is still recomputed from `@/lib/calculations/mass-dry`
- * — anything derived here is operator feedback, never a submitted value.
+ * authoritative unmixed-material dry mass is recomputed server-side. Anything
+ * derived here is operator feedback, never a submitted value.
  */
 
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
@@ -27,15 +27,27 @@ const MOISTURE_FRACTION_DIGITS = 1;
 
 const PERCENT_MAX = 100;
 
+/** Fraction → percent factor shared by every mass-split visualization. */
+export const PERCENT_SCALE = 100;
+/**
+ * Keep a sliver of each mass-split segment visible so a 99%/1% split still
+ * reads as two parts. Shared so the split visualizations cannot drift apart.
+ */
+export const MIN_VISIBLE_SEGMENT_PERCENT = 1.5;
+
 /**
  * Canonical user-facing names. Use these instead of retyping a label — the
  * `*_FIELD_LABEL` variants carry the unit and are what `FormField` expects.
  */
 export const MASS_MOISTURE_LABELS = {
   wet: "Wet mass",
+  finalWet: "Final wet",
   dry: "Dry mass",
   water: "Water",
+  waterBeforeAddition: "Water before addition",
+  waterAdded: "Water added",
   moisture: "Moisture",
+  finalMoisture: "Final moisture",
 } as const;
 
 export const WET_MASS_FIELD_LABEL = "Wet mass (kg)";
@@ -268,6 +280,15 @@ export function formatWetDryMass({
  */
 export function describeMassSplit(split: MassSplit): string {
   return `${formatSplitMass(split.wetKg)} wet: ${formatSplitMass(split.dryKg)} dry mass and ${formatSplitMass(split.waterKg)} water at ${formatMoisturePercent(split.moisturePercent)} moisture.`;
+}
+
+/** Screen-reader sentence for a split that distinguishes newly added water. */
+export function describeMassSplitAfterAddedWater(
+  split: MassSplit,
+  addedWaterKg: number,
+  finalSplit: MassSplit,
+): string {
+  return `${formatSplitMass(finalSplit.wetKg)} final wet mass: ${formatSplitMass(split.dryKg)} dry mass, ${formatSplitMass(split.waterKg)} water before addition, and ${formatSplitMass(addedWaterKg)} added water at ${formatMoisturePercent(finalSplit.moisturePercent)} moisture.`;
 }
 
 /** Compact one-line summary — "Wet: 1,000 kg · Dry: 800 kg". */

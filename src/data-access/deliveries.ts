@@ -103,6 +103,7 @@ import {
 } from "./transport-legs";
 import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
+import { deriveDeliveryDryBiocharKg } from "./delivery-dry-biochar";
 
 // ============================================
 // Read Operations
@@ -529,7 +530,6 @@ export async function createDelivery(
     vehicleId?: string | null;
     status?: "upcoming" | "delivered";
     deliveredWetMassKg?: number | null;
-    massDryKg?: number | null;
     moistureContentPercent?: number | null;
     distanceKmOverride?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
@@ -539,15 +539,6 @@ export async function createDelivery(
 ): Promise<Delivery> {
   requireOrgScope(ctx);
   const deliveryColumns = await getDeliveryColumnAvailability();
-
-  // Validate massDryKg <= deliveredWetMassKg
-  if (
-    data.massDryKg != null &&
-    data.deliveredWetMassKg != null &&
-    data.massDryKg > data.deliveredWetMassKg
-  ) {
-    throw new SafeError("Dry mass must be less than or equal to wet mass");
-  }
 
   const effectiveStatus = data.status ?? "upcoming";
   if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
@@ -604,6 +595,11 @@ export async function createDelivery(
       requestedWetKg: data.deliveredWetMassKg,
     });
 
+    const massDryKg = await deriveDeliveryDryBiocharKg(ctx, tx, {
+      biocharProductId: effectiveBiocharProductId,
+      deliveredWetMassKg: data.deliveredWetMassKg,
+    });
+
     const [row] = await tx
       .insert(deliveries)
       .values({
@@ -617,7 +613,7 @@ export async function createDelivery(
         vehicleId: data.vehicleId ?? null,
         status: effectiveStatus,
         deliveredWetMassKg: data.deliveredWetMassKg ?? null,
-        massDryKg: data.massDryKg ?? null,
+        massDryKg,
         moistureContentPercent: data.moistureContentPercent ?? null,
         ...(deliveryColumns.distanceKmOverride
           ? { distanceKmOverride: data.distanceKmOverride ?? null }
@@ -665,7 +661,6 @@ export async function updateDelivery(
     vehicleId?: string | null;
     status?: "upcoming" | "delivered";
     deliveredWetMassKg?: number | null;
-    massDryKg?: number | null;
     moistureContentPercent?: number | null;
     distanceKmOverride?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
@@ -684,22 +679,6 @@ export async function updateDelivery(
 
   if (!existing) {
     throw new SafeError("Delivery not found");
-  }
-
-  // Validate massDryKg <= deliveredWetMassKg with merged data
-  const finalWetMass = data.deliveredWetMassKg !== undefined
-    ? data.deliveredWetMassKg
-    : existing.deliveredWetMassKg;
-  const finalDryMass = data.massDryKg !== undefined
-    ? data.massDryKg
-    : existing.massDryKg;
-
-  if (
-    finalDryMass != null &&
-    finalWetMass != null &&
-    finalDryMass > finalWetMass
-  ) {
-    throw new SafeError("Dry mass must be less than or equal to wet mass");
   }
 
   // If code is being changed, check for duplicates
@@ -847,11 +826,44 @@ export async function updateDelivery(
         ? data.biocharProductId ?? lockedEffectiveOrder.biocharProductId
         : lockedDelivery.biocharProductId ??
           lockedEffectiveOrder.biocharProductId;
+    const dryAllocationLineageChanged =
+      lockedEffectiveOrderId !== lockedDelivery.orderId ||
+      lockedEffectiveBiocharProductId !== lockedExistingBiocharProductId ||
+      lockedEffectiveWetMass !== lockedDelivery.deliveredWetMassKg;
+    const needsDryAllocationBackfill =
+      lockedDelivery.massDryKg == null && lockedEffectiveWetMass != null;
+    if (dryAllocationLineageChanged) {
+      const [existingApplication] = await tx
+        .select({ id: applications.id })
+        .from(applications)
+        .where(and(
+          eq(applications.deliveryId, deliveryId),
+          eq(applications.organizationId, ctx.organizationId),
+        ))
+        .limit(1);
+      if (existingApplication) {
+        throw new SafeError(
+          "This delivery already has applications. Delete them before changing its order, product, or wet mass.",
+        );
+      }
+    }
+    const massDryKg =
+      (dryAllocationLineageChanged || needsDryAllocationBackfill) &&
+      lockedEffectiveBiocharProductId
+      ? await deriveDeliveryDryBiocharKg(ctx, tx, {
+          biocharProductId: lockedEffectiveBiocharProductId,
+          deliveredWetMassKg: lockedEffectiveWetMass,
+          excludeDeliveryId: deliveryId,
+        })
+      : undefined;
 
     const [row] = await tx
       .update(deliveries)
       .set({
         ...data,
+        // Dry mass remains server-derived. An unrelated save may repair a
+        // missing snapshot without treating it as a lineage mutation.
+        massDryKg,
         ...(deliveryColumns.distanceKmOverride
           ? {}
           : { distanceKmOverride: undefined }),

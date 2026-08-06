@@ -1,7 +1,7 @@
 /**
  * Deliveries Validation Schemas
  * Zod schemas for delivery forms, server actions, and filtering
- * Includes massDryKg <= deliveredWetMassKg validation from isometric.ts
+ * Delivery dry biochar is derived server-side from the linked product.
  */
 
 import { z } from "zod";
@@ -15,7 +15,8 @@ import { optionalTripType } from "./trip-type";
 import {
   emptyToNull,
   optionalMassKgSchema,
-  optionalStoredPercentValue,
+  requiredNumber,
+  storedPercentSchema,
 } from "./helpers";
 
 // ============================================
@@ -48,10 +49,16 @@ export function resolveDeliveryDistanceSource(
 
 const optionalNumber = z.number().finite().optional().nullable();
 const WET_MASS_RANGE_MESSAGE = "Wet mass must be 0 or more";
-const DRY_MASS_RANGE_MESSAGE = "Dry mass must be 0 or more";
 const DISTANCE_RANGE_MESSAGE = "Distance must be 0 or more";
 const optionalWetMassKg = optionalMassKgSchema(WET_MASS_RANGE_MESSAGE);
-const optionalDryMassKg = optionalMassKgSchema(DRY_MASS_RANGE_MESSAGE);
+const requiredProductMoisturePercent = requiredNumber(
+  "Biochar product moisture is required",
+  "Enter a valid biochar product moisture percentage",
+).pipe(
+  storedPercentSchema()
+    .min(0, "Moisture content must be 0% or more")
+    .max(100, "Moisture content must be 100% or less"),
+);
 const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
 
 function validateDistanceOverride(
@@ -85,8 +92,7 @@ const deliveryFormBaseSchema = z.object({
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalWetMassKg,
-  massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalStoredPercentValue,
+  moistureContentPercent: requiredProductMoisturePercent,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
@@ -97,30 +103,9 @@ const deliveryFormBaseSchema = z.object({
 
 /**
  * Schema for delivery form with cross-field validation
- * Validates: massDryKg <= deliveredWetMassKg
+ * Validates delivery-entered fields. Dry biochar is not a form input.
  */
 export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx) => {
-  // Reuse validation logic from isometric schema
-  if (value.massDryKg != null && value.massDryKg < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["massDryKg"],
-      message: DRY_MASS_RANGE_MESSAGE,
-    });
-  }
-
-  if (
-    value.massDryKg != null &&
-    value.deliveredWetMassKg != null &&
-    value.massDryKg > value.deliveredWetMassKg
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["massDryKg"],
-      message: "Dry mass must be less than or equal to wet mass",
-    });
-  }
-
   validateDistanceOverride(value, ctx);
 });
 
@@ -146,33 +131,12 @@ export const createDeliverySchema = z.object({
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalWetMassKg,
-  massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalStoredPercentValue,
+  moistureContentPercent: requiredProductMoisturePercent,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
-  if (value.massDryKg != null && value.massDryKg < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["massDryKg"],
-      message: DRY_MASS_RANGE_MESSAGE,
-    });
-  }
-
-  if (
-    value.massDryKg != null &&
-    value.deliveredWetMassKg != null &&
-    value.massDryKg > value.deliveredWetMassKg
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["massDryKg"],
-      message: "Dry mass must be less than or equal to wet mass",
-    });
-  }
-
   validateDistanceOverride(value, ctx);
 });
 
@@ -196,33 +160,12 @@ export const updateDeliverySchema = z.object({
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).optional(),
   deliveredWetMassKg: optionalWetMassKg,
-  massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalStoredPercentValue,
+  moistureContentPercent: requiredProductMoisturePercent.optional(),
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
-  if (value.massDryKg != null && value.massDryKg < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["massDryKg"],
-      message: DRY_MASS_RANGE_MESSAGE,
-    });
-  }
-
-  if (
-    value.massDryKg != null &&
-    value.deliveredWetMassKg != null &&
-    value.massDryKg > value.deliveredWetMassKg
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["massDryKg"],
-      message: "Dry mass must be less than or equal to wet mass",
-    });
-  }
-
   validateDistanceOverride(value, ctx);
 });
 

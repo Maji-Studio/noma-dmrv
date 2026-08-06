@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  InsufficientSourceDryMassError,
   InsufficientTraceableBiocharError,
   planBiocharProductSourceAllocations,
   UnresolvedBiocharDryMassError,
@@ -258,5 +259,119 @@ describe("planBiocharProductSourceAllocations", () => {
     expect(() =>
       planBiocharProductSourceAllocations([lot()], requestedWetMassKg),
     ).toThrow("requestedWetMassKg must be a finite number at or above 0");
+  });
+
+  it("spreads a measured dry draw across lots by wet allocation", () => {
+    const plan = planBiocharProductSourceAllocations(
+      [
+        lot({
+          productionRunId: "run-b",
+          producedAt: LATE_DATE,
+          availableWetMassKg: 100,
+          availableDryMassKg: 80,
+        }),
+        lot(),
+      ],
+      75,
+      0,
+      60,
+    );
+
+    expect(plan.allocations).toEqual([
+      {
+        productionRunId: "run-a",
+        producedAt: EARLY_DATE,
+        allocatedWetMassKg: 25,
+        allocatedDryMassKg: 20,
+      },
+      {
+        productionRunId: "run-b",
+        producedAt: LATE_DATE,
+        allocatedWetMassKg: 50,
+        allocatedDryMassKg: 40,
+      },
+    ]);
+  });
+
+  it("re-spreads dry mass past a lot capped by its remaining dry stock", () => {
+    const plan = planBiocharProductSourceAllocations(
+      [
+        lot({ availableWetMassKg: 50, availableDryMassKg: 10 }),
+        lot({
+          productionRunId: "run-b",
+          producedAt: LATE_DATE,
+          availableWetMassKg: 50,
+          availableDryMassKg: 50,
+        }),
+      ],
+      100,
+      0,
+      55,
+    );
+
+    expect(plan.allocations).toEqual([
+      {
+        productionRunId: "run-a",
+        producedAt: EARLY_DATE,
+        allocatedWetMassKg: 50,
+        allocatedDryMassKg: 10,
+      },
+      {
+        productionRunId: "run-b",
+        producedAt: LATE_DATE,
+        allocatedWetMassKg: 50,
+        allocatedDryMassKg: 45,
+      },
+    ]);
+  });
+
+  it("keeps a zero measured dry draw at zero dry per lot", () => {
+    const plan = planBiocharProductSourceAllocations([lot()], 10, 0, 0);
+
+    expect(plan.allocations).toEqual([
+      {
+        productionRunId: "run-a",
+        producedAt: EARLY_DATE,
+        allocatedWetMassKg: 10,
+        allocatedDryMassKg: 0,
+      },
+    ]);
+  });
+
+  it("rejects a measured dry draw beyond the lots' traceable dry stock", () => {
+    expect(() =>
+      planBiocharProductSourceAllocations(
+        [lot({ availableWetMassKg: 50, availableDryMassKg: 40 })],
+        50,
+        0,
+        45,
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        availableDryMassKg: 40,
+        requestedDryMassKg: 45,
+      }) as InsufficientSourceDryMassError,
+    );
+  });
+
+  it("rejects a measured dry draw above the wet draw", () => {
+    expect(() =>
+      planBiocharProductSourceAllocations([lot()], 10, 0, 11),
+    ).toThrow("requestedDryMassKg cannot exceed requestedWetMassKg");
+  });
+
+  it("blocks a measured dry draw when an allocated run has unresolved dry mass", () => {
+    expect(() =>
+      planBiocharProductSourceAllocations(
+        [lot({ availableDryMassKg: null })],
+        10,
+        0,
+        9,
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        productionRunId: "run-a",
+      }) as UnresolvedBiocharDryMassError,
+    );
   });
 });

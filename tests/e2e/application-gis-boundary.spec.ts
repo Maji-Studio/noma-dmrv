@@ -97,6 +97,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await page.locator("#status").selectOption("delivered");
   await selectFirstEntity(page, "Order");
   await page.locator("#deliveredWetMassKg").fill("100");
+  await page.locator("#moistureContentPercent").fill("10");
   await page
     .locator('[role="dialog"]')
     .getByRole("button", { name: "Create Delivery" })
@@ -117,10 +118,6 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   if (!deliveryValue) throw new Error("No delivered delivery was available");
   await deliverySelect.selectOption(deliveryValue);
   await page.locator("#biocharAppliedTons").fill("50");
-  const dryMassInput = page.locator("#biocharAppliedDryTons");
-  if (await dryMassInput.isVisible({ timeout: 1_000 })) {
-    await dryMassInput.fill("45");
-  }
   await page.locator("#fieldSizeHa").fill("2");
   await page.locator("#fieldIdentifier").fill(fieldIdentifier);
 

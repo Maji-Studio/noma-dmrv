@@ -44,6 +44,7 @@ import {
   submitDurabilityMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
+import { bindProductionBatchesToMeasurementSamples } from "./production-batches";
 import {
   readRemovalDurabilityMeasurementSamples,
 } from "./durability-measurement-sample-snapshot";
@@ -854,6 +855,16 @@ async function runRemovalSubmission({
       completed: 0,
       total: durabilityTotal,
     });
+    // Issue #630: the registry needs the Production Batch to exist before a
+    // MeasurementSample can point at it, so register (or reuse) it first and
+    // stamp the resulting `ptb_…` onto the snapshot bodies.
+    const boundSubmissions = await bindProductionBatchesToMeasurementSamples({
+      orgCtx,
+      removalId,
+      submissionRow: row,
+      submissions: durabilityMeasurementSubmissions,
+      log,
+    });
     const {
       submitted,
       datapointIdsByMeasurementProperty,
@@ -862,7 +873,7 @@ async function runRemovalSubmission({
       removalId,
       submissionRow: row,
       resumed,
-      submissions: durabilityMeasurementSubmissions,
+      submissions: boundSubmissions,
       sourceBindingPlan,
       log,
       onProgress: (completed, total) => {

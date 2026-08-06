@@ -252,6 +252,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.selectOption('select[name="status"]', "upcoming");
     await selectFirstEntity(page, "Order");
     await page.fill('input[name="deliveredWetMassKg"]', "10000");
+    await page.fill('input[name="moistureContentPercent"]', "10");
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
     await waitForSideSheetClose(page);

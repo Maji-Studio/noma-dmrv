@@ -1,32 +1,38 @@
 "use client";
 
-import { MoistureSplit } from "@/components/ui/moisture-split";
+import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
+import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { parseWatchedNumber } from "@/lib/mass-moisture";
 
 interface OrderMassPreviewProps {
   quantityKg: unknown;
-  moisturePercent: number | null | undefined;
+  productWetBasisKg: number | null | undefined;
+  productDryBiocharKg: number | null | undefined;
 }
 
 /**
- * Live split of the ordered wet product mass using the selected product's
- * authoritative moisture.
+ * Planning estimate of the dry biochar represented by an ordered wet mass.
  */
 export function OrderMassPreview({
   quantityKg,
-  moisturePercent,
+  productWetBasisKg,
+  productDryBiocharKg,
 }: OrderMassPreviewProps) {
+  const wetKg = parseWatchedNumber(quantityKg);
+  const dryBiocharKg = allocateTrackedDryBiocharKg({
+    totalWetKg: productWetBasisKg,
+    totalDryBiocharKg: productDryBiocharKg,
+    requestedWetKg: wetKg,
+  });
+
   return (
-    <div
-      data-testid="order-mass-preview"
-      className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"
-    >
-      <MoistureSplit
-        wetMassKg={parseWatchedNumber(quantityKg)}
-        moisturePercent={moisturePercent}
-        wetLabel="Wet biochar product"
-        dryLabel="Dry biochar"
-      />
-    </div>
+    <ProductCompositionPreview
+      testId="order-mass-preview"
+      wetMassKg={wetKg}
+      dryBiocharKg={dryBiocharKg}
+      wetLabel="Wet biochar product reserved"
+      estimate
+      note="The estimate assumes the recorded product mixture is homogeneous."
+    />
   );
 }

@@ -8,12 +8,13 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import {
   SOURCE_BIOCHAR_MASS_ERROR,
+  ZERO_SOURCE_BIOCHAR_ERROR,
 } from "@/lib/biochar-composition";
 import { SafeError } from "@/lib/errors";
 import { productStockOverdrawMessage } from "@/lib/stock-overdraw";
 import {
   assertBiocharDrawWithinStock,
-  deriveBiocharProductDeliveredKg,
+  deriveBiocharProductAllocatedKg,
   deriveProductAvailableKg,
   isOverdraw,
   overdrawError,
@@ -286,6 +287,9 @@ export async function assertBiocharProductUpdateDraw(
   if (requestedBiocharKg === null || requestedBiocharKg < 0) {
     throw new SafeError(SOURCE_BIOCHAR_MASS_ERROR);
   }
+  if (requestedBiocharKg === 0) {
+    throw new SafeError(ZERO_SOURCE_BIOCHAR_ERROR);
+  }
   await assertBiocharDrawWithinStock(ctx, tx, {
     biocharStorageLocationId: effectiveRun.biocharStorageLocationId,
     requestedBiocharKg,
@@ -318,12 +322,12 @@ export async function assertBiocharProductMassReductionWithinStock(
     return;
   }
 
-  const deliveredKg = await deriveBiocharProductDeliveredKg(
+  const allocatedKg = await deriveBiocharProductAllocatedKg(
     ctx,
     tx,
     productId,
   );
-  if (isOverdraw(deliveredKg, transactionTotalMassKg)) {
+  if (isOverdraw(allocatedKg, transactionTotalMassKg)) {
     throw new SafeError(productStockOverdrawMessage());
   }
 

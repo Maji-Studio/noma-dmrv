@@ -20,6 +20,7 @@ const harness = vi.hoisted(() => {
     clearDependency: undefined as string | undefined,
     formInitialized: false,
     formValues: {} as Record<string, unknown>,
+    formErrors: {} as Record<string, { message: string }>,
     browserSelect: null as ((type: IsometricFeedstockType) => void) | null,
     submit: null as (() => void) | null,
     beginRender() {
@@ -34,6 +35,7 @@ const harness = vi.hoisted(() => {
       this.clearDependency = undefined;
       this.formInitialized = false;
       this.formValues = {};
+      this.formErrors = {};
       this.browserSelect = null;
       this.submit = null;
     },
@@ -86,17 +88,39 @@ vi.mock("react-hook-form", () => ({
       },
       control: {},
       trigger: vi.fn(),
-      setValue: (name: string, value: unknown) => {
+      setValue: (
+        name: string,
+        value: unknown,
+        options?: { shouldValidate?: boolean },
+      ) => {
         harness.formValues[name] = value;
+        if (
+          name === "category" &&
+          options?.shouldValidate &&
+          !harness.formValues.category
+        ) {
+          harness.formErrors.category = { message: "Category is required" };
+        }
       },
-      formState: { errors: {} },
+      formState: { errors: harness.formErrors },
     };
   },
   useWatch: ({ name }: { name: string }) => harness.formValues[name],
 }));
 
 vi.mock("@/components/forms", () => ({
-  FormField: ({ children }: { children: React.ReactNode }) => children,
+  FormField: ({
+    children,
+    error,
+  }: {
+    children: React.ReactNode;
+    error?: string;
+  }) => (
+    <>
+      {children}
+      {error && <span>{error}</span>}
+    </>
+  ),
   FormInput: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input {...props} />
   ),
@@ -193,6 +217,20 @@ function renderForm(props: {
 beforeEach(() => harness.reset());
 
 describe("FeedstockTypeForm Isometric gate transitions", () => {
+  it("does not validate the untouched local category when selecting an Isometric feedstock", () => {
+    const onSubmit = vi.fn();
+
+    renderForm({ onSubmit });
+    harness.openIsometricSection();
+    renderForm({ onSubmit });
+    harness.browserSelect?.(isometricSelection);
+
+    const selectedMarkup = renderForm({ onSubmit });
+
+    expect(selectedMarkup).toContain("Selected from Isometric");
+    expect(selectedMarkup).not.toContain("Category is required");
+  });
+
   it("clears a create-mode Isometric link before submit when the gate closes", () => {
     const onSubmit = vi.fn();
 

@@ -15,6 +15,7 @@
 
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { isometricRegistry } from "@/lib/isometric/links";
+import { IsometricLink } from "./isometric-link";
 
 interface RegistryRecordLinkProps {
   facilityId: string;
@@ -55,16 +56,7 @@ export function RegistryRecordLink({
         {externalId}
         {version != null && ` · v${version}`}
       </span>
-      {url && (
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-        >
-          View on Isometric ↗
-        </a>
-      )}
+      {url && <IsometricLink href={url} />}
     </div>
   );
 }

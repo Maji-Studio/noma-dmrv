@@ -72,7 +72,7 @@ export function deriveVerifierStep(
           }
         : {
             status: "active",
-            detail: "Provide an external report URL to submit to the verifier.",
+            detail: "Open Submit to generate, review, and approve a report.",
           };
   }
 }

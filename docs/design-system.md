@@ -397,12 +397,17 @@ restore for free.
 
 ### Wet mass, moisture, dry mass
 
-One vocabulary, one arithmetic, one visual — all from `@/lib/mass-moisture`
+One vocabulary and one visual system for unmixed materials, all from `@/lib/mass-moisture`
 (`splitWetMass`, `formatMoisturePercent`, `formatSplitMass`, the
 `*_FIELD_LABEL` constants), `MoistureSplit`
 (`@/components/ui/moisture-split`), and `MassPair`
 (`@/components/ui/mass-pair`). **Never retype a moisture label, re-derive the
 split inline, or format a percentage by hand.**
+
+Blended biochar products use `ProductCompositionPreview` instead. It shows the
+conserved `Dry biochar` allocation and the mutually exclusive `Ingredients +
+water` remainder. Show measured finished-product moisture separately as
+delivery evidence; never use it to recalculate either composition mass.
 
 - **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
   ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
@@ -412,10 +417,13 @@ split inline, or format a percentage by hand.**
   cells, option labels). Missing moisture renders an explicit *unresolved*
   state (hatched dashed bar, "Moisture not recorded"), never nothing — dry mass
   drives certification readiness, so its absence has to be visible.
-- **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter,
-  the `.moisture-water-hatch` void for water. It does **not** take the
-  production/infrastructure/distribution accent — moisture means the same thing
-  in every area, and that is what lets one component appear across five.
+- **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter and
+  the `.moisture-water-hatch` void for water already present. When an operator
+  records a positive amount of added water, a third segment uses solid
+  `--color-moisture-added-water`. The headline and moisture value then use the
+  final wet mass, while the bar still distinguishes the original water from the
+  added water. It does **not** take the production/infrastructure/distribution
+  accent, so the same moisture concept reads consistently across every area.
 - **Split figures are always kg** (`formatSplitMass` and `MassPair`), never the
   auto-tonne `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in
   tonnes both round to "1.5 t", claiming no water was removed. The rule also
