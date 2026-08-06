@@ -862,7 +862,6 @@ async function runRemovalSubmission({
       orgCtx,
       removalId,
       submissionRow: row,
-      resumed,
       submissions: durabilityMeasurementSubmissions,
       log,
     });

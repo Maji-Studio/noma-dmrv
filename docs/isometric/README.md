@@ -31,10 +31,10 @@ plans may cite them; their current-applicability notes take precedence.
 | [`simple-implementation-guide.md`](./simple-implementation-guide.md) | Plain-language guide to what exists, what is derived, and what is missing |
 | [`condition-registry.md`](./condition-registry.md) | Conditional-field trigger map |
 | [`integration-plan.md`](./integration-plan.md) | Current Certify integration contract |
-| [`facility-production-data-api.md`](./facility-production-data-api.md) | Facility, Production Batch, sample, and sensor API sync decisions |
-| [`production-data-follow-up-research.md`](./production-data-follow-up-research.md) | 2026-08-04 first-party research: mass basis (open), sample→datapoint binding (resolved), reactor route (conflicted), correction lifecycle. **Corrected after an over-hardening audit + adversarial quote verification** — read its "Scope reality check" first |
-| [`production-data-follow-up-repo-seams.md`](./production-data-follow-up-repo-seams.md) | Companion: how that contract maps onto current code, and where it does not |
-| [`production-data-follow-up-support-questions.md`](./production-data-follow-up-support-questions.md) | The 32 open questions from that research, grouped and copy-pasteable for Isometric support |
+| [`2026-08-04-facility-production-data-api.md`](../archive/2026-08-04-facility-production-data-api.md) | **Archived research (2026-08-04).** Facility, Production Batch, sample, and sensor API sync decisions |
+| [`2026-08-04-production-data-follow-up-research.md`](../archive/2026-08-04-production-data-follow-up-research.md) | **Archived research (2026-08-04).** First-party research: mass basis (open), sample→datapoint binding (resolved), reactor route (conflicted), correction lifecycle. **Corrected after an over-hardening audit + adversarial quote verification** — read its "Scope reality check" first |
+| [`2026-08-04-production-data-follow-up-repo-seams.md`](../archive/2026-08-04-production-data-follow-up-repo-seams.md) | **Archived research (2026-08-04).** Companion: how that contract maps onto current code, and where it does not |
+| [`2026-08-04-production-data-follow-up-support-questions.md`](../archive/2026-08-04-production-data-follow-up-support-questions.md) | **Archived research (2026-08-04).** The 32 open questions from that research, grouped and copy-pasteable for Isometric support |
 | [`openapi-index.md`](./openapi-index.md) | Committed Certify type surface and proven call sites |
 | [`sandbox-template-authoring.md`](./sandbox-template-authoring.md) | Current sandbox template contract and validation workflow |
 | [`changes.md`](./changes.md) | Dated implementation and interpretation changes |

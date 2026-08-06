@@ -27,6 +27,14 @@ const MOISTURE_FRACTION_DIGITS = 1;
 
 const PERCENT_MAX = 100;
 
+/** Fraction → percent factor shared by every mass-split visualization. */
+export const PERCENT_SCALE = 100;
+/**
+ * Keep a sliver of each mass-split segment visible so a 99%/1% split still
+ * reads as two parts. Shared so the split visualizations cannot drift apart.
+ */
+export const MIN_VISIBLE_SEGMENT_PERCENT = 1.5;
+
 /**
  * Canonical user-facing names. Use these instead of retyping a label — the
  * `*_FIELD_LABEL` variants carry the unit and are what `FormField` expects.

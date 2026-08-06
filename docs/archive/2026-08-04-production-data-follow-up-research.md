@@ -6,7 +6,7 @@
 > [`docs/plans/2026-08-04-isometric-production-data-follow-up-research-brief.md`](../plans/2026-08-04-isometric-production-data-follow-up-research-brief.md).
 
 - Researched: 2026-08-04. All URLs accessed 2026-08-04.
-- Pinned versions ([`versions.json`](./versions.json)): Biochar Production and
+- Pinned versions ([`versions.json`](../isometric/versions.json)): Biochar Production and
   Storage Protocol **v1.1** (tag 1.1.1); Biochar Storage in Agricultural Soils
   **v1.1** (tag 1.1.0).
 - Method: Isometric MCP (`how_to`, `protocols_*`, `isometric_docs_*`,
@@ -790,7 +790,7 @@ management, not production-batch chemistry.
 ## 7. Implications for current repository seams
 
 Moved to its own companion doc:
-[`production-data-follow-up-repo-seams.md`](./production-data-follow-up-repo-seams.md).
+[`2026-08-04-production-data-follow-up-repo-seams.md`](./2026-08-04-production-data-follow-up-repo-seams.md).
 
 Headline findings there: Production Batch does not exist in the integration at
 all (`productionBatchId` has zero callers, so every sample we have posted carries
@@ -803,7 +803,7 @@ a schema comment citing a protocol appendix that does not exist.
 ## 8. Ready-to-send Isometric support questions
 
 All 32 questions are maintained as a separate, copy-pasteable file:
-[`production-data-follow-up-support-questions.md`](./production-data-follow-up-support-questions.md)
+[`2026-08-04-production-data-follow-up-support-questions.md`](./2026-08-04-production-data-follow-up-support-questions.md)
 — grouped as PB-1..7 (mass basis), MS-1..9 (sample binding), RM-1..10
 (reactor monitoring), and LC-1..6 (lifecycle).
 

@@ -16,7 +16,7 @@ import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionRuns } from "@/db/schema/production";
 import type { OrgContext } from "@/lib/auth/server";
-import { requireOrgScope } from "./utils";
+import { assertSameOrg, requireOrgScope } from "./utils";
 
 export type CertifierProductionBatchRow =
   typeof certifierProductionBatches.$inferSelect;
@@ -202,6 +202,7 @@ export async function upsertProductionBatchRegistration(
   input: UpsertProductionBatchRegistrationInput,
 ): Promise<CertifierProductionBatchRow> {
   requireOrgScope(ctx);
+  await assertSameOrg(ctx, creditBatches, input.creditBatchId);
   const provider = input.provider ?? DEFAULT_PROVIDER;
   const [row] = await db
     .insert(certifierProductionBatches)

@@ -35,12 +35,10 @@ import {
   MASS_MOISTURE_LABELS,
   splitWetMass,
   splitWetMassAfterAddedWater,
+  MIN_VISIBLE_SEGMENT_PERCENT,
+  PERCENT_SCALE,
   type MassSplit,
 } from "@/lib/mass-moisture";
-
-const PERCENT_SCALE = 100;
-/** Keep a sliver of each segment visible so a 99%/1% split still reads as two parts. */
-const MIN_VISIBLE_SEGMENT_PERCENT = 1.5;
 
 export type MoistureSplitVariant = "detail" | "compact" | "inline";
 

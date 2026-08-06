@@ -146,8 +146,6 @@ export interface EnsureProductionBatchesArgs {
   removalId: string;
   /** Claimed ledger row — rejected by `performRegistryCreate` on failure. */
   submissionRow: { id: string };
-  /** From the claim outcome — a resumed draft reconciles before POSTing. */
-  resumed: boolean;
   creditBatchIds: string[];
   log: Logger;
 }
@@ -218,7 +216,13 @@ export async function ensureProductionBatchesForCreditBatches(
       operation: `production-batch:create:${submission.creditBatchId}`,
       requestPayload: submission.body,
       supplierRefId: submission.supplierRefId,
-      resumed: args.resumed,
+      // A missing journal row is exactly the "did the previous attempt reach
+      // the registry?" unknown, regardless of whether THIS submission attempt
+      // is a resume: a failed attempt can leave no journal while a new
+      // submission version starts fresh with resumed=false. POST
+      // /production_batches is not idempotent, so always reconcile by the
+      // stable supplier reference before POSTing (#635).
+      resumed: true,
       create: async () => {
         const batch = await createProductionBatch(client, submission.body);
         assertProductionBatchSupplierReference(batch, submission.supplierRefId);
@@ -276,7 +280,6 @@ export async function bindProductionBatchesToMeasurementSamples(args: {
   orgCtx: OrgContext;
   removalId: string;
   submissionRow: { id: string };
-  resumed: boolean;
   submissions: DurabilityMeasurementSampleSubmission[];
   log: Logger;
 }): Promise<DurabilityMeasurementSampleSubmission[]> {
@@ -284,7 +287,6 @@ export async function bindProductionBatchesToMeasurementSamples(args: {
     orgCtx: args.orgCtx,
     removalId: args.removalId,
     submissionRow: args.submissionRow,
-    resumed: args.resumed,
     creditBatchIds: creditBatchIdsForMeasurementSamples(args.submissions),
     log: args.log,
   });

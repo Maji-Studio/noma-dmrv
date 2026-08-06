@@ -86,6 +86,15 @@ export async function getApprovedGhgStatementReport(
           "approved",
           "submitted",
         ]),
+        // A newly generated report supersedes every older approval: an
+        // approved row is only submittable while it is still the statement's
+        // latest version.
+        sql`${certifierGhgStatementReports.version} = (
+          select max(current_report.version)
+          from certifier_ghg_statement_reports current_report
+          where current_report.ghg_statement_id = ${args.ghgStatementId}
+            and current_report.organization_id = ${ctx.organizationId}
+        )`,
         eq(
           certifierGhgStatementReports.organizationId,
           ctx.organizationId,
