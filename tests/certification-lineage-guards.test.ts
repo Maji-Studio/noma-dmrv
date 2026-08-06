@@ -512,7 +512,6 @@ describe("certification lineage guards", () => {
           deliveryId: fixture.deliveryId,
           applicationDate: new Date("2026-06-17T00:00:00Z"),
           biocharAppliedTons: 0.01,
-          biocharAppliedDryTons: 0.01,
         }),
       ).rejects.toThrow(LOCKED_COPY);
     });

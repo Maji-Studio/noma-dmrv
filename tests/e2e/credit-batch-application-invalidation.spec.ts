@@ -72,6 +72,7 @@ async function createApplicationForLineage(
   await page.selectOption('select[name="status"]', "delivered");
   await selectFirstEntity(page, "Order");
   await page.fill('input[name="deliveredWetMassKg"]', "10000");
+  await page.fill('input[name="moistureContentPercent"]', "10");
   await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
   await waitForSideSheetClose(page);
 
@@ -91,7 +92,6 @@ async function createApplicationForLineage(
     await deliverySelect.selectOption(firstDeliveryValue);
   }
   await page.fill('input[name="biocharAppliedTons"]', "5000");
-  await page.fill('input[name="biocharAppliedDryTons"]', "4500");
   await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
   await waitForSideSheetClose(page);
 }
@@ -135,7 +135,6 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     await page.getByRole("button", { name: "Edit Application" }).click();
 
     await page.fill('input[name="biocharAppliedTons"]', "3000");
-    await page.fill('input[name="biocharAppliedDryTons"]', "2700");
     await page.locator('[role="dialog"]').locator('button:has-text("Update Application")').click();
     await waitForSideSheetClose(page);
 

@@ -44,14 +44,6 @@ export interface CompositionRow {
   feedstockTypeName: string;
   feedstockTypeCategory: string;
   ratio: number | null;
-  /**
-   * Recipe-implied mass for the current product mass. Orientation only: it
-   * anchors the deviation hint but never becomes a persisted mass until the
-   * operator explicitly enters it.
-   */
-  suggestedMassKg: number | null;
-  /** Signed % deviation of the entered mass vs the suggestion; null until both are known. */
-  deviationPercent: number | null;
   massKgFieldName: `ingredientBins.${number}.massKg`;
   storageLocationFieldName: `ingredientBins.${number}.storageLocationId`;
 }

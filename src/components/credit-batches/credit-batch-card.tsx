@@ -74,7 +74,11 @@ export function CreditBatchCard({
         </div>
 
         {/* Certification-relevant outputs */}
-        <div className="grid grid-cols-3 gap-12 border-t border-[var(--color-border-tertiary)] pt-20">
+        <div
+          className={`grid gap-12 border-t border-[var(--color-border-tertiary)] pt-20 ${
+            co2eStored != null ? "grid-cols-3" : "grid-cols-2"
+          }`}
+        >
           <div className="flex flex-col gap-4">
             <span className="body-caption text-[var(--color-text-tertiary)]">
               Production runs
@@ -93,18 +97,16 @@ export function CreditBatchCard({
                 : "Not recorded"}
             </span>
           </div>
-          <div className="flex flex-col gap-4">
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              CO₂e stored
-            </span>
-            <span
-              className={`title-heading-3 leading-none ${
-                co2eStored != null ? "text-[var(--st-ok)]" : ""
-              }`}
-            >
-              {co2eStored != null ? `${co2eStored.toFixed(2)} t` : "Not available"}
-            </span>
-          </div>
+          {co2eStored != null && (
+            <div className="flex flex-col gap-4">
+              <span className="body-caption text-[var(--color-text-tertiary)]">
+                CO₂e stored
+              </span>
+              <span className="title-heading-3 leading-none text-[var(--st-ok)]">
+                {co2eStored.toFixed(2)} t
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

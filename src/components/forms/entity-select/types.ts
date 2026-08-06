@@ -79,6 +79,8 @@ export interface EntitySelectProps {
   alwaysShowSearch?: boolean;
   /** Hide the search input entirely */
   hideSearch?: boolean;
+  /** Whether the selected option's remaining-mass caption includes dry mass. */
+  showRemainingDryMass?: boolean;
   /** Custom formatter for the selected value display */
   formatSelectedLabel?: (entity: EntityOption) => string;
   /**
@@ -90,6 +92,16 @@ export interface EntitySelectProps {
     message: string;
     href?: string;
     linkLabel?: string;
+  };
+  /**
+   * Renders an explicit "none" choice at the top of the list, selected while
+   * `value` is empty. Use when an empty selection is a deliberate state the
+   * operator should see named (e.g. "None (Pure biochar)"), not a blank
+   * placeholder. Selecting it calls `onChange("")`.
+   */
+  noneOption?: {
+    label: string;
+    subtitle?: string;
   };
 }
 

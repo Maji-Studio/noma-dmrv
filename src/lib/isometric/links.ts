@@ -56,6 +56,22 @@ export const isometricRegistry = {
     `${CERTIFY_HOSTS[args.environment]}/account/certify/project/${encodeURIComponent(
       args.externalProjectId,
     )}/ghg-entry/${encodeURIComponent(args.externalRemovalId)}/edit`,
+  // A production batch lives in the supplier's private Certify workspace,
+  // nested under its facility (which nests under the project) — so the link
+  // needs all three ids: project, facility, and batch. Verified against a live
+  // sandbox URL on 2026-08-05:
+  //   {host}/account/certify/project/{prj}/facilities/{fcl}/production-batches/{ptb}
+  productionBatch: (args: {
+    environment: IsometricEnvironment;
+    externalProjectId: string;
+    externalFacilityId: string;
+    externalProductionBatchId: string;
+  }) =>
+    `${CERTIFY_HOSTS[args.environment]}/account/certify/project/${encodeURIComponent(
+      args.externalProjectId,
+    )}/facilities/${encodeURIComponent(
+      args.externalFacilityId,
+    )}/production-batches/${encodeURIComponent(args.externalProductionBatchId)}`,
   // A GHG statement, like a removal, lives in the supplier's private Certify
   // workspace, nested under its project on an environment-specific host. The
   // path segment is `ghg-statement` (vs the removal's `ghg-entry`), with no

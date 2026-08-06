@@ -9,11 +9,6 @@ import {
   MASS_MAX_TONNES_MESSAGE,
 } from "./helpers";
 import { gisBoundarySchema } from "./gis-boundary";
-import {
-  DRY_MASS_EXCEEDS_WET_MESSAGE,
-  exceedsMassWithTolerance,
-} from "@/lib/calculations/mass-dry";
-import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
 // ============================================
 // Constants and Enums
@@ -56,7 +51,7 @@ export type ApplicationEvidenceMethod = (typeof applicationEvidenceMethods)[numb
 /**
  * Schema for application form (client-side validation)
  * Form sections:
- * 1. Application Details — code, applicationDate, delivery, biocharAppliedTons, biocharAppliedDryTons
+ * 1. Application Details — date, delivery, and biochar product applied
  * 2. Field Details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
  * 3. Soil Temperature — soilTemperatureSource, soilTemperatureC
  */
@@ -65,16 +60,9 @@ const applicationFormBaseSchema = z.object({
   applicationDate: z.coerce.date({ error: "Application date is required" }),
   deliveryId: z.string().min(1, "Select a delivery.").uuid("Choose a valid delivery."),
   biocharAppliedTons: z
-    .number({ error: "Biochar applied (kg) is required" })
+    .number({ error: "Biochar product applied (kg) is required" })
     .min(0, "Must be a positive number")
     .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE),
-  biocharAppliedDryTons: z
-    .number()
-    .min(0, "Must be a positive number")
-    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
-    .optional()
-    .nullable(),
-
   // === Section 2: Field Details ===
   fieldSizeHa: z
     .number()
@@ -114,55 +102,17 @@ const applicationFormBaseSchema = z.object({
 
 });
 
-type ApplicationMassFields = {
-  biocharAppliedTons?: number;
-  biocharAppliedDryTons?: number | null;
-};
-
-function addDryMassIssue(
-  data: ApplicationMassFields,
-  ctx: z.RefinementCtx,
-  unit: "kg" | "tonnes",
-): void {
-  if (
-    data.biocharAppliedTons == null ||
-    data.biocharAppliedDryTons == null
-  ) {
-    return;
-  }
-  const wetKg = unit === "tonnes"
-    ? tonnesToKg(data.biocharAppliedTons)
-    : data.biocharAppliedTons;
-  const dryKg = unit === "tonnes"
-    ? tonnesToKg(data.biocharAppliedDryTons)
-    : data.biocharAppliedDryTons;
-  if (!exceedsMassWithTolerance(dryKg, wetKg)) return;
-
-  ctx.addIssue({
-    code: "custom",
-    path: ["biocharAppliedDryTons"],
-    message: DRY_MASS_EXCEEDS_WET_MESSAGE,
-  });
-}
-
 export const applicationFormSchema = applicationFormBaseSchema.superRefine(
   (data, ctx) => {
     gpsPairSuperRefine(data, ctx);
-    addDryMassIssue(data, ctx, "kg");
   },
 );
 
 const applicationCreateBaseSchema = applicationFormBaseSchema.extend({
   biocharAppliedTons: z
-    .number({ error: "Biochar applied mass is required" })
+    .number({ error: "Biochar product applied is required" })
     .min(0, "Must be a positive number")
     .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE),
-  biocharAppliedDryTons: z
-    .number()
-    .min(0, "Must be a positive number")
-    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE)
-    .optional()
-    .nullable(),
 });
 
 // ============================================
@@ -175,7 +125,6 @@ const applicationCreateBaseSchema = applicationFormBaseSchema.extend({
 export const createApplicationSchema = applicationCreateBaseSchema.superRefine(
   (data, ctx) => {
     gpsPairSuperRefine(data, ctx);
-    addDryMassIssue(data, ctx, "tonnes");
   },
 );
 
@@ -193,7 +142,6 @@ export const updateApplicationSchema = z.object({
   applicationDate: z.coerce.date().optional(),
   deliveryId: z.string().uuid().optional(),
   biocharAppliedTons: z.number().min(0).max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE).optional(),
-  biocharAppliedDryTons: z.number().min(0).max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE).optional().nullable(),
   fieldSizeHa: z.number().min(0).optional().nullable(),
   fieldIdentifier: z.string().max(255).optional().nullable(),
   cropType: z.string().max(100).optional().nullable(),
@@ -206,7 +154,6 @@ export const updateApplicationSchema = z.object({
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
 }).superRefine((data, ctx) => {
   gpsPairSuperRefine(data, ctx);
-  addDryMassIssue(data, ctx, "tonnes");
 });
 
 /**

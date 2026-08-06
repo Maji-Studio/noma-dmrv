@@ -24,7 +24,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { FormField, FormSelect, ServerError } from "@/components/forms";
+import { FormField, FormInput, FormSelect, ServerError } from "@/components/forms";
 import {
   useFacilityCertifierMapping,
   useFacilityCertifierSummary,
@@ -72,6 +72,10 @@ export function FacilityIsometricConnector({
     useState(false);
   const [confirmProduction, setConfirmProduction] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  // Isometric facility id (fcl_…) collected at connect time — the mapping
+  // schema requires it (production batches register against it), so even this
+  // minimal connector must gather it. Advanced binding stays in Settings.
+  const [facilityIdInput, setFacilityIdInput] = useState("");
 
   if (!viewerCanManage) return null;
 
@@ -160,8 +164,13 @@ export function FacilityIsometricConnector({
     label: `${project.name}: ${project.id}`,
   }));
 
+  const trimmedFacilityId = facilityIdInput.trim();
+  const facilityIdValid =
+    trimmedFacilityId.startsWith("fcl_") && trimmedFacilityId.length >= 5;
+
   const connectBlocked =
     !isDirty ||
+    !facilityIdValid ||
     (requiresShareAck && !acknowledgeSharedProject) ||
     (isProduction && !confirmProduction) ||
     saveMutation.isPending;
@@ -181,7 +190,7 @@ export function FacilityIsometricConnector({
         externalProjectId: selected,
         protocolSlug: mapping?.protocolSlug ?? DEFAULT_PROTOCOL_SLUG,
         defaultRemovalTemplateId: null,
-        externalFacilityId: null,
+        externalFacilityId: trimmedFacilityId,
         confirmProduction,
       });
       toast.success(
@@ -190,6 +199,7 @@ export function FacilityIsometricConnector({
       setSelectedProjectId(null);
       setAcknowledgeSharedProject(false);
       setConfirmProduction(false);
+      setFacilityIdInput("");
     } catch (err) {
       setServerError(
         err instanceof Error
@@ -262,6 +272,22 @@ export function FacilityIsometricConnector({
         </div>
       )}
 
+      {isDirty && (
+        <FormField
+          id="isometric-facility-id"
+          label="Isometric facility ID"
+          hint="Needed to register production batches and submit reactor telemetry. Create the facility in Isometric Certify, then paste its fcl_… ID here."
+        >
+          <FormInput
+            id="isometric-facility-id"
+            placeholder="fcl_1K9YJQNA7SBXAG15"
+            value={facilityIdInput}
+            onChange={(event) => setFacilityIdInput(event.target.value)}
+            disabled={saveMutation.isPending}
+          />
+        </FormField>
+      )}
+
       {!mapping && availableProjects.length > 0 && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
           New connections use the {DEFAULT_PROTOCOL_LABEL} protocol by default.
@@ -271,8 +297,8 @@ export function FacilityIsometricConnector({
 
       {clearsAdvancedBinding && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Changing the project clears the default Removal template and
-          Isometric facility ID. Set them again in Certification → Settings.
+          Changing the project clears the default Removal template. Set it
+          again in Certification → Settings.
         </p>
       )}
 

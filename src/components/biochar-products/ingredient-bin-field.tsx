@@ -13,7 +13,6 @@ import {
 } from "@/components/forms/entity-select";
 import {
   COMPOSITION_BIN_TYPE,
-  INGREDIENT_MASS_DEVIATION_WARN_PERCENT,
   type CompositionRow,
 } from "@/lib/biochar-composition";
 import { WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
@@ -35,10 +34,6 @@ export function formatIngredientBinLabel(entity: {
     parts.push(entity.subtitle.replace(FEEDSTOCK_BIN_PREFIX, ""));
   }
   return parts.join(" · ");
-}
-
-function formatKgShort(value: number): string {
-  return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
 function formatIngredientMass(value: unknown): string {
@@ -145,10 +140,6 @@ export function IngredientBinField({
 }: IngredientBinFieldProps) {
   const feedstockBinDialog = useQuickAddDialog();
 
-  const showDeviation =
-    row.deviationPercent != null &&
-    Math.abs(row.deviationPercent) >= INGREDIENT_MASS_DEVIATION_WARN_PERCENT;
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-x-12 gap-y-12">
       <div className="md:col-span-2">
@@ -215,36 +206,22 @@ export function IngredientBinField({
         name={row.massKgFieldName}
         control={control}
         render={({ field, fieldState }) => (
-          <div>
-            <FormField
-              id={row.massKgFieldName}
-              label={WET_MASS_FIELD_LABEL}
-              required
-              error={fieldState.error?.message}
-              helperText={
-                row.suggestedMassKg != null
-                  ? `Suggested: ${formatKgShort(row.suggestedMassKg)} kg. Enter the mass to confirm it.`
-                  : undefined
-              }
-            >
-              <IngredientMassInput
-                name={field.name}
-                value={field.value}
-                onChange={field.onChange}
-                onBlur={field.onBlur}
-                inputRef={field.ref}
-                disabled={isSubmitting || allocationFrozen}
-                error={!!fieldState.error}
-              />
-            </FormField>
-            {showDeviation && row.deviationPercent != null && (
-              <p className="body-caption text-[var(--st-wait)] mt-4">
-                {row.deviationPercent > 0 ? "+" : ""}
-                {row.deviationPercent.toFixed(0)}% vs recipe. Recorded as
-                entered.
-              </p>
-            )}
-          </div>
+          <FormField
+            id={row.massKgFieldName}
+            label={WET_MASS_FIELD_LABEL}
+            required
+            error={fieldState.error?.message}
+          >
+            <IngredientMassInput
+              name={field.name}
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              inputRef={field.ref}
+              disabled={isSubmitting || allocationFrozen}
+              error={!!fieldState.error}
+            />
+          </FormField>
         )}
       />
     </div>

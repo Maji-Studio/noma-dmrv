@@ -225,13 +225,8 @@ export function CreditBatchList({
 
   // Keep preview query chunks stable while operators adjust filters; totals are
   // still calculated from the filtered subset below.
-  const {
-    data: co2eStoredPreviews = {},
-    isLoading: previewsLoading,
-    isFetching: previewsFetching,
-    error: previewsError,
-    refetch: refetchPreviews,
-  } = useCreditBatchCo2eStoredPreviews(allBatchIds);
+  const { data: co2eStoredPreviews = {} } =
+    useCreditBatchCo2eStoredPreviews(allBatchIds);
   const hydratedFilteredItems = filteredItems.map((batch) => {
     const preview = co2eStoredPreviews[batch.id];
     return preview
@@ -253,11 +248,10 @@ export function CreditBatchList({
   const visibleCo2ePreviews = hydratedFilteredItems
     .map((b) => b.co2eStoredPreview)
     .filter((preview): preview is NonNullable<typeof preview> => Boolean(preview));
-  const hasPendingCo2e =
-    !previewsError &&
-    (previewsLoading ||
-      visibleCo2ePreviews.length < hydratedFilteredItems.length ||
-      visibleCo2ePreviews.some((preview) => preview.missingInputs.length > 0));
+  const hasCompleteCo2eSummary =
+    hydratedFilteredItems.length > 0 &&
+    visibleCo2ePreviews.length === hydratedFilteredItems.length &&
+    visibleCo2ePreviews.every((preview) => preview.co2eStoredTonnes != null);
   const totalCo2e = visibleCo2ePreviews.reduce(
     (sum, preview) => sum + (preview.co2eStoredTonnes ?? 0),
     0
@@ -537,34 +531,10 @@ export function CreditBatchList({
               ? "Readiness unavailable"
               : `${totalFiltered} ${totalFiltered === 1 ? "batch" : "batches"}`}
         </span>
-        {previewsError ? (
-          <span
-            className="inline-flex items-center gap-8 body-small text-[var(--st-wait)]"
-            role="alert"
-          >
-            <WarningIcon size={14} weight="fill" aria-hidden />
-            CO₂e unavailable
-            <Button
-              variant="weak"
-              size="small"
-              busy={previewsFetching}
-              onClick={() => void refetchPreviews()}
-            >
-              Retry
-            </Button>
-          </span>
-        ) : (
+        {hasCompleteCo2eSummary && (
           <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
             <LeafIcon size={16} weight="bold" aria-hidden />
-            {previewsLoading
-              ? "Calculating CO₂e…"
-              : `${totalCo2e.toFixed(2)} t CO₂e stored`}
-          </span>
-        )}
-        {hasPendingCo2e && !previewsLoading && (
-          <span className="inline-flex items-center gap-6 body-caption text-[var(--st-wait)]">
-            <WarningIcon size={14} weight="fill" aria-hidden />
-            Some batches need CO₂e inputs
+            {`${totalCo2e.toFixed(2)} t CO₂e stored`}
           </span>
         )}
       </div>
@@ -720,8 +690,6 @@ export function CreditBatchList({
                   ? undefined
                   : batchHealthSummaries[sideSheetEntity.id],
                 isHealthLoading: healthLoading && !healthError,
-                isCo2ePreviewLoading: previewsLoading || previewsFetching,
-                co2ePreviewFailed: !!previewsError,
               })
             : undefined
         }

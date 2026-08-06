@@ -7,7 +7,7 @@
  * multiple batches in one bin and shows physically remaining stock.
  */
 
-import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
@@ -24,24 +24,45 @@ import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import {
   deriveEffectiveMoisturePercent,
   formatWetDryMass,
-  splitWetMass,
 } from "@/lib/mass-moisture";
+import { fromCompositionMassJsonb } from "@/lib/biochar-composition";
+import { resolveProductDryBiocharKg } from "@/lib/biochar-mass-accounting";
+import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
+import { buildSourceAllocationAggregate } from "./source-allocation-aggregate";
+
+function remainingSourceBiocharDryMassKg(
+  productDryKg: number | null,
+  deliveredDryKg: number,
+  unresolvedDeliveredDryCount: number,
+): number | null {
+  if (productDryKg == null) return null;
+  if (unresolvedDeliveredDryCount > 0) return null;
+  return Math.max(0, productDryKg - deliveredDryKg);
+}
 
 function formatStockSubtitle(
   massKg: number | null,
   waterAddedKg: number | null,
   moisturePercent: number | null,
+  composition: unknown,
   deliveredWetKg: number,
   deliveredDryKg: number,
   unresolvedDeliveredDryCount: number,
+  sourceAllocatedDryMassKg?: number | null,
 ): string {
   const remainingWetKg =
     (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg;
-  const productDryKg = splitWetMass(massKg, moisturePercent)?.dryKg;
-  const remainingDryKg =
-    productDryKg == null || unresolvedDeliveredDryCount > 0
-      ? null
-      : productDryKg - deliveredDryKg;
+  const productDryKg = resolveProductDryBiocharKg({
+    sourceAllocatedDryMassKg,
+    blendMassKg: massKg,
+    biocharMoisturePercent: moisturePercent,
+    ingredients: fromCompositionMassJsonb(composition),
+  });
+  const remainingDryKg = remainingSourceBiocharDryMassKg(
+    productDryKg,
+    deliveredDryKg,
+    unresolvedDeliveredDryCount,
+  );
   return `${formatWetDryMass({
     wetKg: remainingWetKg,
     dryKg: remainingDryKg,
@@ -95,6 +116,7 @@ function buildDeliveredMassAggregate(ctx: OrgContext) {
 
 function buildSelection(
   deliveredMassAggregate: ReturnType<typeof buildDeliveredMassAggregate>,
+  sourceAllocationAggregate: ReturnType<typeof buildSourceAllocationAggregate>,
 ) {
   return {
     id: biocharProducts.id,
@@ -105,6 +127,8 @@ function buildSelection(
     massKg: biocharProducts.massKg,
     waterAddedKg: biocharProducts.waterAddedKg,
     moisturePercent: biocharProducts.moistureContentPercent,
+    composition: biocharProducts.composition,
+    sourceAllocatedDryMassKg: sourceAllocationAggregate.allocatedDryMassKg,
     totalDeliveredKg: numericAggregate(
       sql<number>`COALESCE(${deliveredMassAggregate.totalDeliveredKg}, 0)`,
     ),
@@ -126,18 +150,26 @@ export function toBiocharProductEntityOption(r: {
   massKg: number | null;
   waterAddedKg: number | null;
   moisturePercent: number | null;
+  composition?: unknown;
   totalDeliveredKg: number;
   totalDeliveredDryKg: number;
   unresolvedDeliveredDryCount: number;
+  sourceAllocatedDryMassKg?: number | null;
 }): EntityOption {
   const productLabel = r.formulationName ?? PURE_BIOCHAR_LABEL;
   const remainingWetKg =
     (r.massKg ?? 0) + (r.waterAddedKg ?? 0) - r.totalDeliveredKg;
-  const productDryKg = splitWetMass(r.massKg, r.moisturePercent)?.dryKg;
-  const remainingDryKg =
-    productDryKg == null || r.unresolvedDeliveredDryCount > 0
-      ? null
-      : productDryKg - r.totalDeliveredDryKg;
+  const productDryKg = resolveProductDryBiocharKg({
+    sourceAllocatedDryMassKg: r.sourceAllocatedDryMassKg,
+    blendMassKg: r.massKg,
+    biocharMoisturePercent: r.moisturePercent,
+    ingredients: fromCompositionMassJsonb(r.composition),
+  });
+  const remainingDryKg = remainingSourceBiocharDryMassKg(
+    productDryKg,
+    r.totalDeliveredDryKg,
+    r.unresolvedDeliveredDryCount,
+  );
 
   return {
     id: r.id,
@@ -158,9 +190,11 @@ export function toBiocharProductEntityOption(r: {
       r.massKg,
       r.waterAddedKg,
       r.moisturePercent,
+      r.composition,
       r.totalDeliveredKg,
       r.totalDeliveredDryKg,
       r.unresolvedDeliveredDryCount,
+      r.sourceAllocatedDryMassKg,
     ),
   };
 }
@@ -172,12 +206,20 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
 }): Promise<EntityOption[]> {
   requireOrgScope(ctx);
   const deliveredMassAggregate = buildDeliveredMassAggregate(ctx);
-  const selection = buildSelection(deliveredMassAggregate);
+  const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
+  const selection = buildSelection(deliveredMassAggregate, sourceAllocationAggregate);
   const { search, facilityId, limit } = params;
   requireOrgScope(ctx);
 
   const conditions: SQL[] = [
     isNull(biocharProducts.archivedAt),
+    gt(
+      sourceBiocharMassKgSql(
+        biocharProducts.massKg,
+        biocharProducts.composition,
+      ),
+      0,
+    ),
     // Bin-less (legacy/partial) products stay orderable via their
     // product-code fallback; products whose bin is archived or not a
     // product bin stay hidden.
@@ -229,6 +271,10 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
       deliveredMassAggregate,
       eq(deliveredMassAggregate.biocharProductId, biocharProducts.id)
     )
+    .leftJoin(
+      sourceAllocationAggregate,
+      eq(sourceAllocationAggregate.biocharProductId, biocharProducts.id),
+    )
     .where(and(eq(biocharProducts.organizationId, ctx.organizationId), whereClause))
     .orderBy(desc(biocharProducts.productionDate))
     .limit(limit);
@@ -242,7 +288,8 @@ export async function getBiocharProductEntityById(
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
   const deliveredMassAggregate = buildDeliveredMassAggregate(ctx);
-  const selection = buildSelection(deliveredMassAggregate);
+  const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
+  const selection = buildSelection(deliveredMassAggregate, sourceAllocationAggregate);
   const [result] = await db
     .select(selection)
     .from(biocharProducts)
@@ -263,6 +310,10 @@ export async function getBiocharProductEntityById(
     .leftJoin(
       deliveredMassAggregate,
       eq(deliveredMassAggregate.biocharProductId, biocharProducts.id)
+    )
+    .leftJoin(
+      sourceAllocationAggregate,
+      eq(sourceAllocationAggregate.biocharProductId, biocharProducts.id),
     )
     .where(and(eq(biocharProducts.id, id), eq(biocharProducts.organizationId, ctx.organizationId)))
     .limit(1);

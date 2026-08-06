@@ -7,6 +7,8 @@ import {
 export interface MassPairProps {
   wetKg: number | null | undefined;
   dryKg: number | null | undefined;
+  wetLabel?: string;
+  dryLabel?: string;
   layout?: "columns" | "stacked";
   variant?: "summary" | "compact";
   className?: string;
@@ -16,19 +18,21 @@ export interface MassPairProps {
 export function MassPair({
   wetKg,
   dryKg,
+  wetLabel = MASS_MOISTURE_LABELS.wet,
+  dryLabel = MASS_MOISTURE_LABELS.dry,
   layout = "columns",
   variant = "summary",
   className,
 }: MassPairProps) {
   const figures = [
-    { label: MASS_MOISTURE_LABELS.wet, value: formatRecordedMass(wetKg) },
-    { label: MASS_MOISTURE_LABELS.dry, value: formatRecordedMass(dryKg) },
+    { label: wetLabel, value: formatRecordedMass(wetKg) },
+    { label: dryLabel, value: formatRecordedMass(dryKg) },
   ];
   const isCompact = variant === "compact";
 
   return (
     <dl
-      aria-label="Wet and dry mass"
+      aria-label={`${wetLabel} and ${dryLabel}`}
       className={cn(
         "grid min-w-0",
         layout === "columns"

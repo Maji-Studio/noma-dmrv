@@ -35,6 +35,7 @@ export const applications = pgTable(
 
     // --- Application Details (Isometric: Soil Storage Module) ---
     biocharAppliedTons: tonnes("biochar_applied_tons").notNull(),
+    // Server-authoritative dry biochar allocated from the linked delivery.
     biocharAppliedDryTons: tonnes("biochar_applied_dry_tons").notNull(),
     // Derived fields (compute at query time):
     //   - biochar_dry_matter_tons = biochar_applied_dry_tons × (1 - ash_content/100) via lab samples

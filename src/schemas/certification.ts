@@ -41,23 +41,19 @@ export const saveMappingSchema = z.object({
     .or(z.string().min(1))
     .nullable()
     .optional(),
-  // Phase 5 Slice A — Isometric facility id (fcl_…). Optional because
-  // it's only required for the telemetry pipeline; mapping was usable
-  // without it before Slice A and remains so for Removal/GHG flows.
-  // Enforced shape on the truthy path so an operator can't paste a
-  // project or sensor id by mistake.
-  externalFacilityId: emptyToNull
-    .or(
-      z
-        .string()
-        .startsWith("fcl_", {
-          error:
-            "Isometric facility ID must start with 'fcl_'. Copy it from Certify.",
-        })
-        .min(5),
-    )
-    .nullable()
-    .optional(),
+  // Isometric facility id (fcl_…). Required since production-batch
+  // registration (issue #630): every removal submission registers the
+  // credit batch against this facility, so a mapping without it fails at
+  // submit time. Shape-checked so an operator can't paste a project or
+  // sensor id by mistake.
+  externalFacilityId: z
+    .string()
+    .min(1, "Paste the facility's fcl_… ID from Certify.")
+    .startsWith("fcl_", {
+      error:
+        "Isometric facility ID must start with 'fcl_'. Copy it from Certify.",
+    })
+    .min(5, "Isometric facility ID looks too short. Copy it from Certify."),
   confirmProduction: z.boolean().optional(),
 });
 

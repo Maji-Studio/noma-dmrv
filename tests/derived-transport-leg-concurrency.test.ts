@@ -128,6 +128,7 @@ describe(
             facilityId: facility.id,
             code: `BP-${tag}-${index}`,
             massKg: 1_000,
+            moistureContentPercent: 0,
           })),
         )
         .returning({ id: biocharProducts.id });
@@ -423,7 +424,7 @@ describe(
       }
     });
 
-    it("moves inherited deliveries from the old product leg to the new one", async () => {
+    it("keeps inherited delivery legs unchanged when an order repoint is rejected", async () => {
       const fixture = await createFixture("REPOINT", [20], 3);
       const inherited = await createDelivered(
         fixture,
@@ -442,9 +443,13 @@ describe(
         .set({ biocharProductId: null })
         .where(eq(deliveries.id, inherited.id));
 
-      await updateOrder(ctx, fixture.orderId, {
-        biocharProductId: fixture.productIds[1],
-      });
+      await expect(
+        updateOrder(ctx, fixture.orderId, {
+          biocharProductId: fixture.productIds[1],
+        }),
+      ).rejects.toThrow(
+        "This order already has deliveries. Create a new order instead of changing its biochar product.",
+      );
 
       const legs = await db
         .select({
@@ -459,10 +464,10 @@ describe(
         ));
 
       expect(legs).toEqual(expect.arrayContaining([
-        { entityId: fixture.productIds[1], distanceKm: 20, loadMassKg: 100 },
+        { entityId: fixture.productIds[0], distanceKm: 20, loadMassKg: 100 },
         { entityId: fixture.productIds[2], distanceKm: 20, loadMassKg: 50 },
       ]));
-      expect(legs.find((leg) => leg.entityId === fixture.productIds[0])).toBeUndefined();
+      expect(legs.find((leg) => leg.entityId === fixture.productIds[1])).toBeUndefined();
 
       const [explicitAfter] = await db
         .select({ biocharProductId: deliveries.biocharProductId })

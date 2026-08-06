@@ -6,11 +6,14 @@ import { BiocharProductPageMassSummary } from "./biochar-product-list";
 function productMass(
   massKg: number,
   moistureContentPercent: number | null,
+  composition?: Record<string, unknown>,
+  waterAddedKg: number | null = null,
 ): BiocharProductWithRelations {
   return {
     massKg,
     moistureContentPercent,
-    waterAddedKg: null,
+    waterAddedKg,
+    composition,
   } as BiocharProductWithRelations;
 }
 
@@ -29,5 +32,37 @@ describe("BiocharProductPageMassSummary", () => {
     expect(html).toContain("Combined product mass on the current page");
     expect(html).toContain("150 kg");
     expect(html).toContain("Not recorded");
+  });
+
+  it("reports source dry biochar instead of drying the whole blend", () => {
+    const html = renderToStaticMarkup(
+      <BiocharProductPageMassSummary
+        products={[
+          productMass(
+            500,
+            10,
+            {
+              ingredients: [
+                {
+                  formulationIngredientId: "ingredient-1",
+                  feedstockTypeId: "feedstock-type-1",
+                  feedstockTypeName: "Chicken manure",
+                  feedstockTypeCategory: "manure",
+                  ratio: 0.5,
+                  massKg: 500,
+                  storageLocationId: null,
+                },
+              ],
+            },
+            50,
+          ),
+        ]}
+      />,
+    );
+
+    expect(html).toContain("Wet product");
+    expect(html).toContain("550 kg");
+    expect(html).toContain("Dry biochar");
+    expect(html).toContain("0 kg");
   });
 });

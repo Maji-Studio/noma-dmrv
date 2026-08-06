@@ -26,12 +26,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import {
-  CheckCircleIcon,
   ClipboardTextIcon,
-  InfoIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
@@ -47,7 +46,6 @@ import {
   useRegistryGhgStatementsForFacility,
 } from "@/hooks/use-certification";
 import type { RegistryGhgStatementView } from "@/fn/certification";
-import type { GhgStatementCreateOutcome } from "@/fn/certification/ghg-statements";
 import {
   derivePeriodStart,
   liveOverlapEnd,
@@ -62,6 +60,7 @@ import {
 import { EnvBanner } from "./env-banner";
 import { ProductionConfirmation } from "./production-confirmation";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
+import { ResultPanel } from "./ghg-statement-result-panel";
 import {
   CERTIFICATION_ACCORDION_ITEM,
   CERTIFICATION_ACCORDION_LABEL,
@@ -127,6 +126,7 @@ function DialogBody({
   const [furthest, setFurthest] = useState(0);
   const [registryStatementsExpanded, setRegistryStatementsExpanded] =
     useState(false);
+  const router = useRouter();
   const toast = useToast();
   const mutation = useCreateGhgStatement();
   const statementsQuery = useGhgStatementsForFacility(facilityId);
@@ -207,6 +207,7 @@ function DialogBody({
     }
     try {
       const result = await mutation.mutateAsync(data);
+      router.refresh();
       const linked = `${result.linkedRemovalIds.length} linked ${
         result.linkedRemovalIds.length === 1 ? "Removal" : "Removals"
       }`;
@@ -238,7 +239,11 @@ function DialogBody({
     <div className="flex flex-col gap-24">
       <header className="flex flex-col gap-4 pr-40">
         <h2 id={DIALOG_TITLE_ID} className="title-heading-3">
-          New GHG Statement
+          {result
+            ? result.outcome === "existing"
+              ? "GHG Statement already exists"
+              : "GHG Statement created"
+            : "New GHG Statement"}
         </h2>
         <p
           id={DIALOG_DESCRIPTION_ID}
@@ -246,8 +251,8 @@ function DialogBody({
         >
           {result
             ? result.outcome === "existing"
-              ? "Already in Isometric."
-              : "Created in Isometric."
+              ? "Found in Isometric and synced to noma."
+              : "Created in Isometric and saved in noma."
             : "Choose a period, preview Removals, then create."}
         </p>
       </header>
@@ -784,78 +789,6 @@ function StepConfirm({
         />
       ) : (
         <EnvBanner isProduction={false} variant="inline" />
-      )}
-    </div>
-  );
-}
-
-function ResultPanel({
-  outcome,
-  externalId,
-  linkedCount,
-  warnings,
-}: {
-  outcome: GhgStatementCreateOutcome;
-  externalId: string;
-  linkedCount: number;
-  warnings: string[];
-}) {
-  // "existing" is the ADR 0004 idempotent path: a statement for this period was
-  // already created in Isometric and this attempt resolved to it. Say that,
-  // rather than claiming a creation that did not happen.
-  const alreadyExisted = outcome === "existing";
-  const OutcomeIcon = alreadyExisted ? InfoIcon : CheckCircleIcon;
-  // Resolving to an existing statement is informational, not a success, so it
-  // takes the status ramp's in-progress step rather than the success one. The
-  // ramp is the semantic layer for feedback accents; `--clr-*` is the raw
-  // palette and must not be reached for from a component.
-  return (
-    <div className="flex flex-col gap-16">
-      <div
-        className={`flex items-start gap-8 border-l-2 pl-12 py-4 ${
-          alreadyExisted
-            ? "border-[var(--st-run)]"
-            : "border-[var(--st-ok)]"
-        }`}
-      >
-        <OutcomeIcon
-          size={18}
-          weight="fill"
-          aria-hidden
-          className={`mt-px shrink-0 ${
-            alreadyExisted
-              ? "text-[var(--st-run)]"
-              : "text-[var(--st-ok)]"
-          }`}
-        />
-        <p className="body-small text-[var(--color-text-primary)]">
-          <span className="font-mono">{externalId}</span>{" "}
-          {alreadyExisted
-            ? "already exists for this period, with"
-            : "created with"}{" "}
-          <strong className="font-medium">
-            {formatCount(linkedCount, "Removal")}
-          </strong>
-          .
-        </p>
-      </div>
-      {warnings.length > 0 && (
-        <div className="flex flex-col gap-8 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-          <span className="inline-flex items-center gap-6 body-caption uppercase tracking-wide text-[var(--color-signal-orange)]">
-            <WarningIcon size={14} weight="fill" aria-hidden />
-            {warnings.length} {warnings.length === 1 ? "warning" : "warnings"}
-          </span>
-          <ul className="flex flex-col gap-4">
-            {warnings.map((w) => (
-              <li
-                key={w}
-                className="body-caption text-[var(--color-text-secondary)]"
-              >
-                {w}
-              </li>
-            ))}
-          </ul>
-        </div>
       )}
     </div>
   );

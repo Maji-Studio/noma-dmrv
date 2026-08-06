@@ -35,7 +35,7 @@ describe("GHG Statement workflow state", () => {
   it("derives verifier status from membership, approval, and registry status", () => {
     expect(deriveVerifierStep(statement(), false, true, false)).toEqual({
       status: "active",
-      detail: "Provide an external report URL to submit to the verifier.",
+      detail: "Open Submit to generate, review, and approve a report.",
     });
     expect(deriveVerifierStep(statement(), false, true, true)).toEqual({
       status: "active",

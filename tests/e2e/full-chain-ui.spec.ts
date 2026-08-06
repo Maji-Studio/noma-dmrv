@@ -587,6 +587,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await selectFirstEntity(page, "Order");
 
       await page.fill('input[name="deliveredWetMassKg"]', "95");
+      await page.fill('input[name="moistureContentPercent"]', "10");
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
       await waitForSideSheetClose(page);
@@ -616,7 +617,6 @@ test.describe("Full Chain UI Smoke Test", () => {
       }
 
       await page.fill('input[name="biocharAppliedTons"]', "50");
-      await page.fill('input[name="biocharAppliedDryTons"]', "45");
       await page.fill('input[name="fieldIdentifier"]', `E2E-Field-${runId}`);
       await page.fill('input[name="cropType"]', "maize");
 

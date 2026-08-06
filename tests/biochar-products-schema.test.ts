@@ -44,7 +44,7 @@ describe("biocharProductFormSchema", () => {
       expect(issuePaths).toContain("massKg");
       expect(issuePaths).toContain("moistureContentPercent");
       expect(issuePaths).toContain("waterAddedKg");
-      expect(issueMessages.get("massKg")).toBe("Wet mass is required");
+      expect(issueMessages.get("massKg")).toBe("Biochar wet mass is required");
       expect(issueMessages.get("moistureContentPercent")).toBe("Required");
       expect(issueMessages.get("waterAddedKg")).toBe("Required");
     }

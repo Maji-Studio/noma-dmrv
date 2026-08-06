@@ -30,7 +30,7 @@ const NON_CARBON_MISSING_INPUTS = new Set([
 
 const CARBON_INPUT_LABELS: Record<string, string> = {
   organicCarbonPercent: "Organic carbon content",
-  dryMassTonnes: "Applied biochar dry mass",
+  dryMassTonnes: "Dry biochar applied",
   soilTemperatureC: "Soil temperature",
   hToCorgRatio: "H:Corg ratio",
   thousandYearReplicates: `At least ${MINIMUM_REPLICATES_PER_BATCH} usable 1000-year Samples`,

@@ -57,6 +57,16 @@ export class InsufficientTraceableBiocharError extends Error {
   }
 }
 
+export class InsufficientSourceDryMassError extends Error {
+  constructor(
+    public readonly availableDryMassKg: number,
+    public readonly requestedDryMassKg: number,
+  ) {
+    super("Not enough traceable dry biochar is available");
+    this.name = "InsufficientSourceDryMassError";
+  }
+}
+
 function roundMassKg(value: number): number {
   return Math.round(value * MASS_PRECISION_FACTOR) / MASS_PRECISION_FACTOR;
 }
@@ -138,6 +148,47 @@ function assertFiniteNonNegativeMass(value: number, field: string): void {
 }
 
 /**
+ * Distribute a measured dry draw across lots in proportion to each lot's wet
+ * allocation, capped by what each lot can physically supply. Overflow past a
+ * capped lot re-spreads across the remaining lots by the same wet weights.
+ * The caller must ensure `totalGrams` does not exceed the summed caps.
+ */
+function distributeDryGramsWithinCaps(
+  wetWeights: number[],
+  caps: number[],
+  totalGrams: number,
+): number[] {
+  const shares = wetWeights.map(() => 0);
+  let remainingGrams = totalGrams;
+
+  while (remainingGrams > 0) {
+    const roundWeights = wetWeights.map((weight, index) =>
+      shares[index] < caps[index] ? weight : 0,
+    );
+    const roundWeightTotal = roundWeights.reduce(
+      (total, weight) => total + weight,
+      0,
+    );
+    if (roundWeightTotal === 0) {
+      throw new RangeError(
+        "Requested dry mass cannot exceed the lots' dry capacity",
+      );
+    }
+    const grants = distributeGramsProportionally(
+      roundWeights,
+      Math.min(remainingGrams, roundWeightTotal),
+    );
+    grants.forEach((grant, index) => {
+      const applied = Math.min(grant, caps[index] - shares[index]);
+      shares[index] += applied;
+      remainingGrams -= applied;
+    });
+  }
+
+  return shares;
+}
+
+/**
  * Allocate a source-bin draw across every traceable production lot in
  * proportion to its remaining wet mass.
  *
@@ -147,17 +198,32 @@ function assertFiniteNonNegativeMass(value: number, field: string): void {
  * tie-breaking. Positive reconciliation movements are intentionally excluded
  * by the caller: without a production-run source they cannot safely acquire
  * certified provenance.
+ *
+ * `requestedDryMassKg` is the freshly measured dry mass of the draw (wet draw
+ * at the operator's entered moisture). When provided it is the authoritative
+ * dry withdrawal, spread across lots by wet allocation and capped by each
+ * lot's remaining dry mass. When null, each lot's dry draw falls back to its
+ * recorded wet/dry ratio.
  */
 export function planBiocharProductSourceAllocations(
   lots: AvailableBiocharSourceLot[],
   requestedWetMassKg: number,
   documentedLossWetMassKg = 0,
+  requestedDryMassKg: number | null = null,
 ): BiocharProductSourceAllocationPlan {
   assertFiniteNonNegativeMass(requestedWetMassKg, "requestedWetMassKg");
   assertFiniteNonNegativeMass(
     documentedLossWetMassKg,
     "documentedLossWetMassKg",
   );
+  if (requestedDryMassKg != null) {
+    assertFiniteNonNegativeMass(requestedDryMassKg, "requestedDryMassKg");
+    if (requestedDryMassKg > requestedWetMassKg) {
+      throw new RangeError(
+        "requestedDryMassKg cannot exceed requestedWetMassKg",
+      );
+    }
+  }
 
   const orderedLots = [...lots]
     .map((lot) => {
@@ -266,24 +332,61 @@ export function planBiocharProductSourceAllocations(
     availableLots.map((lot) => lot.availableWetMassGrams),
     requestedWetMassGrams,
   );
+
+  let measuredDryMassByLotGrams: number[] | null = null;
+  if (requestedDryMassKg != null) {
+    const requestedDryMassGrams = massKgToGrams(
+      requestedDryMassKg,
+      "requestedDryMassKg",
+    );
+    const dryCapsGrams = availableLots.map((lot, index) => {
+      const allocatedWetMassGrams = allocatedWetMassByLotGrams[index];
+      if (allocatedWetMassGrams === 0) return 0;
+      if (lot.availableDryMassGrams == null) {
+        throw new UnresolvedBiocharDryMassError(lot.productionRunId);
+      }
+      return Math.min(lot.availableDryMassGrams, allocatedWetMassGrams);
+    });
+    const dryCapacityGrams = dryCapsGrams.reduce(
+      (total, cap) => total + cap,
+      0,
+    );
+    if (requestedDryMassGrams > dryCapacityGrams) {
+      throw new InsufficientSourceDryMassError(
+        gramsToMassKg(dryCapacityGrams),
+        gramsToMassKg(requestedDryMassGrams),
+      );
+    }
+    measuredDryMassByLotGrams = distributeDryGramsWithinCaps(
+      allocatedWetMassByLotGrams,
+      dryCapsGrams,
+      requestedDryMassGrams,
+    );
+  }
+
   const allocations = availableLots.flatMap(
     (lot, index): BiocharProductSourceAllocationPlanItem[] => {
       const allocatedWetMassGrams =
         allocatedWetMassByLotGrams[index];
       if (allocatedWetMassGrams === 0) return [];
 
-      const availableDryMassGrams = lot.availableDryMassGrams;
-      if (availableDryMassGrams == null) {
-        throw new UnresolvedBiocharDryMassError(lot.productionRunId);
-      }
-      const allocatedDryMassGrams = Math.min(
-        availableDryMassGrams,
-        roundIntegerRatio(
+      let allocatedDryMassGrams: number;
+      if (measuredDryMassByLotGrams) {
+        allocatedDryMassGrams = measuredDryMassByLotGrams[index];
+      } else {
+        const availableDryMassGrams = lot.availableDryMassGrams;
+        if (availableDryMassGrams == null) {
+          throw new UnresolvedBiocharDryMassError(lot.productionRunId);
+        }
+        allocatedDryMassGrams = Math.min(
           availableDryMassGrams,
-          allocatedWetMassGrams,
-          lot.availableWetMassGrams,
-        ),
-      );
+          roundIntegerRatio(
+            availableDryMassGrams,
+            allocatedWetMassGrams,
+            lot.availableWetMassGrams,
+          ),
+        );
+      }
 
       return [{
         productionRunId: lot.productionRunId,
@@ -313,6 +416,8 @@ export async function buildBiocharProductSourceAllocationPlan(
     sourceStorageLocationId: string;
     facilityId: string;
     requestedWetMassKg: number;
+    /** Measured dry mass of the draw at the operator's entered moisture. */
+    requestedDryMassKg?: number | null;
   },
 ): Promise<BiocharProductSourceAllocationPlan> {
   requireOrgScope(ctx);
@@ -500,10 +605,16 @@ export async function buildBiocharProductSourceAllocationPlan(
       lots,
       input.requestedWetMassKg,
       lossRow?.wetMassKg ?? 0,
+      input.requestedDryMassKg ?? null,
     );
   } catch (error) {
     if (error instanceof InsufficientTraceableBiocharError) {
       throw overdrawError("biochar");
+    }
+    if (error instanceof InsufficientSourceDryMassError) {
+      throw new SafeError(
+        `The entered biochar moisture needs ${error.requestedDryMassKg} kg of dry biochar, but the source bin holds ${error.availableDryMassKg} kg. Increase the moisture or reduce the blend mass.`,
+      );
     }
     if (error instanceof UnresolvedBiocharDryMassError) {
       throw new SafeError(

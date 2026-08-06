@@ -17,6 +17,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowSquareOutIcon,
   CheckCircleIcon,
@@ -63,6 +64,7 @@ export function SubmitStep({
   onDone,
   submitMutation,
 }: SubmitStepProps) {
+  const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -111,6 +113,11 @@ export function SubmitStep({
       {
         onSuccess: (result) => {
           setSubmitError(null);
+          // Refresh server-rendered route data while keeping this client-owned
+          // dialog state intact. The React Query mutation also waits for its
+          // active certification queries to refetch, so the updated Removal is
+          // ready in the list when the operator closes the success view.
+          router.refresh();
           toast.success(`Removal ${result.externalId} submitted.`);
         },
         onError: (err) => {

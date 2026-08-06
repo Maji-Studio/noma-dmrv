@@ -176,6 +176,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       await expect(
         dialog.getByText("Removal submitted to the registry."),
       ).toBeVisible({ timeout: LIVE_SUBMIT_TIMEOUT_MS });
+      await expect(dialog.getByRole("button", { name: "Done" })).toBeVisible();
 
       const viewLink = dialog.getByRole("link", { name: /View on Isometric/ });
       await expect(viewLink).toBeVisible();
@@ -185,6 +186,17 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
         "href",
         /registry\.sandbox\.isometric\.com\/account\/certify\/project\/.+\/ghg-entry\/.+\/edit/,
       );
+
+      // Success remains in the wizard until the operator closes it. Closing
+      // reveals the route-refreshed list with the submitted state already
+      // visible, without a manual browser refresh.
+      await dialog.getByRole("button", { name: "Done" }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      const removalRow = page
+        .getByRole("button")
+        .filter({ hasText: code })
+        .filter({ hasText: "Submitted" });
+      await expect(removalRow).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
     } finally {
       // The wizard's deferred-create grouped the batch into a fresh removal (and,
       // on the live path, wrote a submission row); tear those down before the

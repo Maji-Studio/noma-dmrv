@@ -35,6 +35,7 @@ import {
   loadRegistrySourceVisibility,
   loadRemovalBreakdown,
   loadRemovalCompilation,
+  loadRemovalProductionBatches,
   loadRemovalCertifyContext,
   loadRemovalPreflight,
   loadRemovalsForFacility,
@@ -149,6 +150,8 @@ export const certificationKeys = {
     [...certificationKeys.all, "removals", facilityId] as const,
   removalBreakdown: (removalId: string) =>
     [...certificationKeys.all, "removal-breakdown", removalId] as const,
+  removalProductionBatches: (removalId: string) =>
+    [...certificationKeys.all, "removal-production-batches", removalId] as const,
   selectableBatches: (facilityId: string) =>
     [...certificationKeys.all, "selectable-batches", facilityId] as const,
   ghgStatementsForFacility: (facilityId: string) =>
@@ -260,6 +263,23 @@ export function useRemovalBreakdown(removalId: string, enabled = true) {
     queryKey: certificationKeys.removalBreakdown(removalId),
     queryFn: async () => {
       const result = await loadRemovalBreakdown(removalId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!removalId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+// Registered production-batch identities for one removal — DB-only journal
+// read, lazy like the breakdown: the detail sheet only enables it while open.
+// Identities are immutable once registered, so the default stale window is
+// safe; invalidated alongside the rest of `all` after a submission.
+export function useRemovalProductionBatches(removalId: string, enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.removalProductionBatches(removalId),
+    queryFn: async () => {
+      const result = await loadRemovalProductionBatches(removalId);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
@@ -610,9 +630,8 @@ export function useSubmitRemoval() {
         { kind: "removal", input: vars.input },
         vars.onProgress,
       ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
     onError: () => {
       // A Removal failure can happen after its draft was claimed. Refresh the
       // submission state before the operator returns to review so the active
@@ -822,9 +841,8 @@ export function useCreateGhgStatement() {
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
   });
 }
 
@@ -846,9 +864,8 @@ export function useSubmitGhgStatementToVerifier() {
         vars.onProgress,
       );
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
     onError: (error) => {
       if (isSubmissionStreamStalledError(error)) {
         queryClient.invalidateQueries({ queryKey: certificationKeys.all });

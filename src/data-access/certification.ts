@@ -268,10 +268,18 @@ export async function upsertCertifierProject(
         }
       }
 
+      // Adopting a facility id for the first time (null -> fcl_...) stays
+      // allowed even while submissions exist: none of them referenced any
+      // facility id, so there is no registry lineage to contradict, and
+      // production-batch registration (issue #630) cannot start until the id
+      // is set. Only rebinding away from an established identifier (project
+      // change, or a non-null facility id changing or clearing) requires
+      // superseding the submissions first.
       const mappingIdentifiersChanged =
         existing &&
         (existing.externalProjectId !== values.externalProjectId ||
-          existing.externalFacilityId !== values.externalFacilityId);
+          (existing.externalFacilityId !== null &&
+            existing.externalFacilityId !== values.externalFacilityId));
       if (mappingIdentifiersChanged) {
         const blocked = await hasBlockingFacilitySubmission(
           ctx,

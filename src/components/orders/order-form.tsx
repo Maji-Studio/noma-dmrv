@@ -322,9 +322,8 @@ export function OrderForm({
 
         <OrderMassPreview
           quantityKg={watchedQuantityKg}
-          moisturePercent={
-            selectedBiocharProduct?.mass?.moisturePercent ?? null
-          }
+          productWetBasisKg={selectedBiocharProduct?.remainingMass?.wetKg ?? null}
+          productDryBiocharKg={selectedBiocharProduct?.remainingMass?.dryKg ?? null}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
