@@ -7,6 +7,7 @@ import {
 } from "./canonical-pdf";
 import {
   buildGhgStatementReportModel,
+  GhgStatementReportReconciliationError,
   sha256Hex,
   type BuildGhgStatementReportModelInput,
   type GhgStatementReportModel,
@@ -196,15 +197,12 @@ describe("renderGhgStatementReportPdf determinism", () => {
     expect(() => canonicalizePdfBytes(mutated)).toThrow(NonCanonicalPdfError);
   });
 
-  it("falls back to a fixed timestamp when preparedAt is unparseable", async () => {
-    const model = buildModel({ preparedAt: "not-a-timestamp" });
-    vi.useFakeTimers({ toFake: ["Date"] });
-
-    vi.setSystemTime(FIRST_CLOCK);
-    const first = await renderGhgStatementReportPdf(model);
-    vi.setSystemTime(SECOND_CLOCK);
-    const second = await renderGhgStatementReportPdf(model);
-
-    expect(sha256Hex(second)).toBe(sha256Hex(first));
+  it("rejects an unparseable preparedAt instead of stamping a fallback", () => {
+    // Metadata pinned to the epoch while the page printed the raw string put
+    // two preparation times into one checksummed artifact. The model builder
+    // now fails closed, so the renderer never sees such a model.
+    expect(() => buildModel({ preparedAt: "not-a-timestamp" })).toThrow(
+      GhgStatementReportReconciliationError,
+    );
   });
 });

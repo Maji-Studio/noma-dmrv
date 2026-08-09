@@ -43,11 +43,6 @@ const PDF_AUTHOR = "noma dMRV";
 const PDF_CREATOR = "noma dMRV";
 const PDF_PRODUCER = "noma dMRV GHG statement report";
 const PDF_SUBJECT = "Automatically generated GHG Statement data reconciliation";
-/**
- * Metadata timestamp used when `preparedAt` is unparseable, so a malformed
- * model still renders deterministically instead of silently reading the clock.
- */
-const PDF_FALLBACK_TIMESTAMP_MS = 0;
 
 const styles = {
   ...theme,
@@ -117,19 +112,22 @@ const formatKg = (value: number | null): string =>
         maximumFractionDigits: 3,
       });
 
-const formatPreparedAt = (value: string): string => {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime())
-    ? value
-    : `${parsed.toISOString().slice(0, 16).replace("T", " ")} UTC`;
-};
+const formatPreparedAt = (preparedAt: Date): string =>
+  `${preparedAt.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 
-/** The one timestamp the renderer may stamp: frozen on the model, never the clock. */
+/**
+ * The one timestamp the renderer may stamp: frozen on the model, never the
+ * clock. `buildGhgStatementReportModel` rejects an unparseable `preparedAt`,
+ * so reaching the throw here means the model bypassed that builder.
+ */
 const pinnedTimestamp = (preparedAt: string): Date => {
   const parsed = new Date(preparedAt);
-  return Number.isNaN(parsed.getTime())
-    ? new Date(PDF_FALLBACK_TIMESTAMP_MS)
-    : parsed;
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(
+      "GHG statement report model preparedAt is not a parseable timestamp",
+    );
+  }
+  return parsed;
 };
 
 function sectionHeading(
@@ -265,6 +263,7 @@ function entryRow(entry: GhgStatementReportEntry): ReactElement {
 
 function buildDocument(model: GhgStatementReportModel): ReactElement {
   const control = model.documentControl;
+  const preparedAt = pinnedTimestamp(model.preparedAt);
   const masthead = v(styles.masthead, {},
     v({}, {},
       v(styles.wordmarkRow, {},
@@ -276,7 +275,7 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
     ),
     v(styles.metaCol, {},
       mastheadPair("Report version", String(model.reportVersion)),
-      mastheadPair("Prepared", formatPreparedAt(model.preparedAt)),
+      mastheadPair("Prepared", formatPreparedAt(preparedAt)),
       mastheadPair("Facility", control.facilityCode),
     ),
   );
@@ -349,7 +348,6 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
     }),
   );
 
-  const preparedAt = pinnedTimestamp(model.preparedAt);
   return h(
     Document,
     {
