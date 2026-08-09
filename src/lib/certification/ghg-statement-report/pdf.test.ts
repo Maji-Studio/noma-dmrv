@@ -19,6 +19,9 @@ const PREPARED_AT = "2026-07-28T12:00:00.000Z";
 // would differ between renders.
 const FIRST_CLOCK = new Date("2026-01-02T03:04:05.000Z");
 const SECOND_CLOCK = new Date("2031-11-12T13:14:15.000Z");
+const XREF_KEYWORD = "xref";
+/** Tail of a classic in-use xref entry: `<10 offset digits> 00000 n \n`. */
+const IN_USE_ENTRY_TAIL = " 00000 n \n";
 
 function buildModel(
   overrides: Partial<BuildGhgStatementReportModelInput> = {},
@@ -170,6 +173,27 @@ describe("renderGhgStatementReportPdf determinism", () => {
     expect(() => canonicalizePdfBytes(Buffer.from("%PDF-1.3\nbroken\n"))).toThrow(
       NonCanonicalPdfError,
     );
+  });
+
+  it("refuses to canonicalize a non-zero xref generation", async () => {
+    const bytes = await renderGhgStatementReportPdf(buildModel());
+    const text = bytes.toString("latin1");
+    const tableStart = text.lastIndexOf(`\n${XREF_KEYWORD}\n`);
+    const entryAt = text.indexOf(IN_USE_ENTRY_TAIL, tableStart);
+    expect(entryAt).toBeGreaterThan(tableStart);
+
+    // Same byte length, one legal-but-unsupported generation number: the
+    // rebuilt table would renumber it to 0 while the object header kept the
+    // original generation, so it has to throw instead.
+    const mutated = Buffer.from(
+      text.slice(0, entryAt) +
+        IN_USE_ENTRY_TAIL.replace("00000", "00001") +
+        text.slice(entryAt + IN_USE_ENTRY_TAIL.length),
+      "latin1",
+    );
+    expect(mutated.byteLength).toBe(bytes.byteLength);
+
+    expect(() => canonicalizePdfBytes(mutated)).toThrow(NonCanonicalPdfError);
   });
 
   it("falls back to a fixed timestamp when preparedAt is unparseable", async () => {

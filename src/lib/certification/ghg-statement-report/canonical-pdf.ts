@@ -32,11 +32,21 @@ const STREAM_MARKER = "\nstream\n";
 const XREF_ENTRY_BYTES = 20;
 const XREF_OFFSET_DIGITS = 10;
 const XREF_FREE_ENTRY = "0000000000 65535 f ";
+/**
+ * The only generation pdfkit writes for an in-use object (`PDFReference.gen`
+ * is always 0). The rebuilt table emits this same value, so an entry carrying
+ * any other generation is rejected rather than silently renumbered: object
+ * headers and indirect references keep their original generation, so a rewrite
+ * would pass the length check and still hand back a corrupt file.
+ */
+const XREF_IN_USE_GENERATION = "00000";
 const SUBSET_TAG_LENGTH = 6;
 const UPPERCASE_LETTER_COUNT = 26;
 const UPPERCASE_A_CODE_POINT = 65;
 
-const XREF_ENTRY_PATTERN = /^(\d{10}) \d{5} n \n$/;
+const XREF_ENTRY_PATTERN = new RegExp(
+  `^(\\d{10}) ${XREF_IN_USE_GENERATION} n \\n$`,
+);
 const XREF_SECTION_HEADER_PATTERN = /^0 (\d+)$/;
 /** `/FontName /QJGIII+DMSans-Bold` and its `/BaseFont` twin. */
 const SUBSET_TAG_PATTERN = /\/(FontName|BaseFont) \/[A-Z]{6}\+([^\s/<>[\]()]+)/g;
@@ -118,7 +128,9 @@ function readXrefOffsets(
       text.slice(entryStart, entryStart + XREF_ENTRY_BYTES),
     );
     if (!entry) {
-      throw new NonCanonicalPdfError(`unreadable xref entry for object ${index}`);
+      throw new NonCanonicalPdfError(
+        `unreadable or non-zero-generation xref entry for object ${index}`,
+      );
     }
     offsets.push(Number(entry[1]));
   }
@@ -131,7 +143,8 @@ function buildXrefTable(offsets: number[]): Buffer {
     `0 ${offsets.length + 1}`,
     XREF_FREE_ENTRY,
     ...offsets.map(
-      (offset) => `${String(offset).padStart(XREF_OFFSET_DIGITS, "0")} 00000 n `,
+      (offset) =>
+        `${String(offset).padStart(XREF_OFFSET_DIGITS, "0")} ${XREF_IN_USE_GENERATION} n `,
     ),
   ];
   return Buffer.from(`${rows.join("\n")}\n`, "latin1");
