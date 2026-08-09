@@ -28,6 +28,7 @@ import {
 import {
   loadCertifyContextForCreditBatchForUser,
 } from "@/fn/certification/certify-context-core";
+import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import {
   factsFromMockedLineages,
   satisfiedVisualEvidenceDocuments,
@@ -104,7 +105,7 @@ const CREDIT_BATCH_ID = "cb-1";
 const FACILITY_ID = "fac-1";
 const EXTERNAL_PROJECT_ID = "prj_test";
 function mockNormalizedLineageFacts(
-  memberRunStatusById: Record<string, string> = {},
+  memberRunStatusById: Record<string, ProductionRunStatus> = {},
 ): void {
   mockedLoadAccounting.mockImplementation(async (ctx, batchIds) => {
     const entries = await Promise.all(
@@ -325,7 +326,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     });
   });
 
-  it("routes a batch whose only member runs are incomplete to Production Runs", async () => {
+  // Defensive coverage: membership writes only admit complete runs, so a
+  // non-complete member run should not occur; if one ever does (legacy rows,
+  // a future membership path), routing must still point at Production Runs.
+  it("defensively routes a batch whose only member runs are incomplete to Production Runs", async () => {
     mockNormalizedLineageFacts({ "pr-draft": "draft" });
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,

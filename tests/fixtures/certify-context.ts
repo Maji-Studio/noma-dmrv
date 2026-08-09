@@ -1,6 +1,7 @@
 import type { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { CreditBatchLineageFacts } from "@/data-access/credit-batch-accounting";
 import type { DocumentRow } from "@/data-access/documents";
+import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 
 const DEFAULT_FACT_DATE = new Date("2026-01-20T00:00:00Z");
@@ -24,7 +25,7 @@ export function factsFromMockedLineages(
   // Status per member run id for runs not covered by a lineage. The real
   // membership query returns every member run regardless of status; runs
   // default to "complete" here so lineage-focused tests stay unaffected.
-  memberRunStatusById: Record<string, string> = {},
+  memberRunStatusById: Record<string, ProductionRunStatus> = {},
 ): CreditBatchLineageFacts {
   const resolved = lineages.filter(Boolean);
   const runs = resolved.flatMap((lineage) =>

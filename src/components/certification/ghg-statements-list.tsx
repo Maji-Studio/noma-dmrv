@@ -38,6 +38,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
+import { certificationSettingsHref } from "@/lib/certification/links";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { formatCount } from "@/lib/copy-utils";
@@ -124,7 +125,7 @@ export function CreateGateNotice({
           facilities. A GHG Statement covers every facility on the project. Link
           each facility to a dedicated Isometric project in{" "}
           <Link
-            href={`/certification/settings?facility=${encodeURIComponent(facilityId)}`}
+            href={certificationSettingsHref(facilityId)}
             className="text-[var(--color-interaction)] underline underline-offset-2 hover:text-[var(--color-interaction-hover)]"
           >
             Settings
@@ -434,7 +435,12 @@ function ListBody({ facilityId }: { facilityId: string }) {
         />
       )}
 
-      {gate.canCreate && (
+      {/* Keep the dialog mounted once open even if the gate flips (e.g. the
+          post-create invalidation refetch errors): unmounting mid-wizard loses
+          the operator's step state and the post-create result panel. New opens
+          still require the gate via the disabled Create button, and the server
+          backstop rejects shared-project creation regardless. */}
+      {(gate.canCreate || createOpen) && (
         <GhgStatementCreateDialog
           facilityId={facilityId}
           isProduction={isProduction}

@@ -94,7 +94,9 @@ describe("CreateGateNotice", () => {
 
     expect(html).toContain("linked to 2 noma facilities");
     expect(html).toContain("Link each facility to a dedicated Isometric project");
-    expect(html).toContain("/certification/settings?facility=fac%201");
+    expect(html).toContain(
+      "/certification/settings?section=certifier&amp;facility=fac%201",
+    );
   });
 
   it("asks the operator to link the facility when no mapping exists", () => {

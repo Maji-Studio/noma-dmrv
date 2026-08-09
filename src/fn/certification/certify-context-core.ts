@@ -74,7 +74,7 @@ import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { collectFutureDatedMeasurements } from "./future-dated-measurements";
 import { buildSubmissionWarnings } from "./submission-warnings";
-import { productionReadinessGapFromLineages } from "./production-readiness-from-lineage";
+import { productionReadinessGapFromLineages } from "@/lib/certification/production-readiness-from-lineage";
 import { loadEvidenceMirrorSummaryForScope, type EvidenceMirrorSummary } from "./evidence-mirror-summary";
 import {
   loadLinkedGhgStatementStatus,
@@ -312,7 +312,10 @@ interface RemovalScope {
     productionRunIds: string[];
     // Member runs with status "complete" — drives the readiness routing between
     // "complete a run" and "review the application chain" when nothing is
-    // submittable. Membership alone admits draft/running/failed runs.
+    // submittable. Membership writes already reject non-complete runs and block
+    // reopening a member run, so this filter is defensive (legacy rows, future
+    // membership paths); it also keeps the routing honest with the gap copy's
+    // "completed" claim.
     completedProductionRunIds: string[];
     applicationIds: string[];
     durabilityOption: DurabilityOption;
