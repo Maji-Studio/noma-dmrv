@@ -16,6 +16,15 @@ function lineage(args: {
   } as ChainOfCustodyData;
 }
 
+function multiRunLineage(runIds: string[]): ChainOfCustodyData {
+  return {
+    application: { code: "APP-BLEND" },
+    biocharProduct: { code: "BP-BLEND", linkedProductionRunId: null },
+    productionRun: null,
+    sources: runIds.map((id) => ({ productionRun: { id } })),
+  } as ChainOfCustodyData;
+}
+
 describe("productionReadinessGapForScope", () => {
   it("blocks a grouped removal when one completed member run lacks an application", () => {
     expect(
@@ -53,5 +62,15 @@ describe("productionReadinessGapForScope", () => {
       kind: "productionRunMissing",
       fixTarget: "biocharProducts",
     });
+  });
+
+  it("accepts every completed run represented by a multi-run source lineage", () => {
+    expect(
+      productionReadinessGapForScope({
+        lineages: [multiRunLineage(["pr-one", "pr-two"])],
+        completedMemberProductionRunIds: ["pr-one", "pr-two"],
+        scope: "removal",
+      }),
+    ).toBeNull();
   });
 });

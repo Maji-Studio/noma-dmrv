@@ -5,10 +5,21 @@ import {
   type ProductionReadinessGap,
 } from "@/lib/certification/production-readiness";
 
+function sourceProductionRunIds(lineage: ChainOfCustodyData): string[] {
+  return (lineage.sources ?? []).map((source) => source.productionRun.id);
+}
+
 export function productionReadinessGapFromLineages(
   lineages: ChainOfCustodyData[],
 ): ProductionReadinessGap | null {
-  if (lineages.every((lineage) => lineage.productionRun)) return null;
+  if (
+    lineages.every(
+      (lineage) =>
+        lineage.productionRun || sourceProductionRunIds(lineage).length > 0,
+    )
+  ) {
+    return null;
+  }
 
   const missingProduct = lineages.find((lineage) => !lineage.biocharProduct);
   if (missingProduct) {
@@ -21,7 +32,9 @@ export function productionReadinessGapFromLineages(
 
   const productMissingRun = lineages.find(
     (lineage) =>
-      lineage.biocharProduct && !lineage.biocharProduct.linkedProductionRunId,
+      lineage.biocharProduct &&
+      !lineage.biocharProduct.linkedProductionRunId &&
+      sourceProductionRunIds(lineage).length === 0,
   );
   if (productMissingRun?.biocharProduct) {
     return {
@@ -56,7 +69,10 @@ export function productionReadinessGapForScope(args: {
 
   const applicationRunIds = new Set(
     args.lineages
-      .map((lineage) => lineage.biocharProduct?.linkedProductionRunId)
+      .flatMap((lineage) => [
+        lineage.biocharProduct?.linkedProductionRunId,
+        ...sourceProductionRunIds(lineage),
+      ])
       .filter((id): id is string => !!id),
   );
   const hasCompletedRunWithoutApplication =
