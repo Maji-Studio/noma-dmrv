@@ -25,6 +25,17 @@ describe("deriveGhgCreateGate", () => {
     ).toEqual({ canSync: false, canCreate: false, notice: "mappingFailed" });
   });
 
+  it("fails closed when a refetch errors while cached data still looks dedicated", () => {
+    expect(
+      deriveGhgCreateGate({
+        isLoading: false,
+        isError: true,
+        hasMapping: true,
+        linkedFacilityCount: 1,
+      }),
+    ).toEqual({ canSync: false, canCreate: false, notice: "mappingFailed" });
+  });
+
   it("shows the unlinked notice when the facility has no mapping", () => {
     expect(
       deriveGhgCreateGate({

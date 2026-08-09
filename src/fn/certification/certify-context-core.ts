@@ -39,6 +39,7 @@ import {
   type ProductionReadinessGap,
 } from "@/lib/certification/production-readiness";
 import { attributeSoilTemperatureBlockers } from "@/lib/certification/member-batch-gates";
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { SafeError } from "@/lib/errors";
 import {
   aggregateTransportMassDistance,
@@ -322,11 +323,9 @@ interface RemovalScope {
   lineages: ChainOfCustodyData[];
 }
 
-const COMPLETE_RUN_STATUS = "complete";
-
 function completedRunIds(runs: BatchLineageRunFact[]): string[] {
   return runs
-    .filter((run) => run.status === COMPLETE_RUN_STATUS)
+    .filter((run) => run.status === COMPLETED_PRODUCTION_RUN_STATUS)
     .map((run) => run.id);
 }
 

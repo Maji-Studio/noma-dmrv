@@ -80,8 +80,13 @@ export function deriveGhgCreateGate(summary: {
     : (summary.linkedFacilityCount ?? 0) <= 1;
   const mappingFailed = summary.isError && !summary.isLoading;
   return {
-    canSync: isLinked === true,
-    canCreate: isLinked === true && isDedicatedProject === true,
+    // Fail closed on a failed summary even when React Query still holds cached
+    // data from an earlier success: the cached mapping/count may be stale, and
+    // enabling Create against it reintroduces the late server rejection this
+    // gate exists to prevent.
+    canSync: !mappingFailed && isLinked === true,
+    canCreate:
+      !mappingFailed && isLinked === true && isDedicatedProject === true,
     notice: mappingFailed
       ? "mappingFailed"
       : isLinked === false
