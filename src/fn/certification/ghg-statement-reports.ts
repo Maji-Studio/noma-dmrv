@@ -30,6 +30,7 @@ import {
   type GhgStatementReportModel,
   sha256Hex,
 } from "@/lib/certification/ghg-statement-report/model";
+import { NonCanonicalPdfError } from "@/lib/certification/ghg-statement-report/canonical-pdf";
 import { renderGhgStatementReportPdf } from "@/lib/certification/ghg-statement-report/pdf";
 import {
   buildVerifierReportUrl,
@@ -38,6 +39,7 @@ import {
 } from "@/lib/certification/ghg-statement-report/verifier-url";
 import { redactReportUrlSecrets } from "@/lib/certification/report-url";
 import { SafeError } from "@/lib/errors";
+import { logger } from "@/lib/log";
 import {
   getGhgEntry,
   getGhgStatement,
@@ -64,6 +66,9 @@ const PDF_MIME_TYPE = "application/pdf";
 const PINNED_STANDARD_VERSION =
   versions.certify_project_observation.current_standard_version;
 const PINNED_PROTOCOL_VERSION = versions.protocol.patch_version;
+/** Shown when the renderer emits a PDF this build cannot make byte stable. */
+const REPORT_PDF_NOT_CANONICAL_MESSAGE =
+  "The GHG Statement report PDF was not prepared because the renderer produced an unsupported PDF structure. Preparing it again will not help. Contact support with the GHG Statement ID.";
 
 export interface GhgStatementReportView {
   id: string;
@@ -96,6 +101,29 @@ function buildCheckedReportModel(
       );
     }
     throw error;
+  }
+}
+
+/**
+ * Canonicalization failures are deterministic: the same model rendered by the
+ * same build fails the same way, so the generic "Try again" that `withAction`
+ * produces for an unknown error would send the operator down a path that can
+ * never work. Surface a specific message and keep the parser's technical
+ * reason in the server log, which a `SafeError` would otherwise skip.
+ */
+async function renderCheckedReportPdf(
+  model: GhgStatementReportModel,
+  ghgStatementId: string,
+): Promise<Buffer> {
+  try {
+    return await renderGhgStatementReportPdf(model);
+  } catch (error) {
+    if (!(error instanceof NonCanonicalPdfError)) throw error;
+    logger.error(
+      { ghgStatementId, errorName: error.name, errorMessage: error.message },
+      "GHG statement report PDF could not be canonicalized",
+    );
+    throw new SafeError(REPORT_PDF_NOT_CANONICAL_MESSAGE);
   }
 }
 
@@ -353,7 +381,7 @@ export async function prepareGhgStatementReport(
         preparedAt: preparedAt.toISOString(),
       });
       const model = buildCheckedReportModel(facts.input);
-      const pdf = await renderGhgStatementReportPdf(model);
+      const pdf = await renderCheckedReportPdf(model, parsed.ghgStatementId);
       const reportId = randomUUID();
       const documentId = randomUUID();
       const checksum = sha256Hex(pdf);
