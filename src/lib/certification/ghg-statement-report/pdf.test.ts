@@ -1,3 +1,8 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import {
@@ -23,6 +28,36 @@ const SECOND_CLOCK = new Date("2031-11-12T13:14:15.000Z");
 const XREF_KEYWORD = "xref";
 /** Tail of a classic in-use xref entry: `<10 offset digits> 00000 n \n`. */
 const IN_USE_ENTRY_TAIL = " 00000 n \n";
+const CHILD_RENDER_TIMEOUT_MS = 120_000;
+const RENDERER_PATH = fileURLToPath(new URL("./pdf.ts", import.meta.url));
+const TSX_BIN = resolve(process.cwd(), "node_modules/.bin/tsx");
+/**
+ * Renders one serialized model and prints its checksum. Kept as a script run
+ * by a fresh Node process: an in-process second render shares the registered
+ * font state, the module caches and any process-level seed, so it cannot see
+ * drift that only differs between processes.
+ */
+const CHILD_SCRIPT = `
+import { createHash } from "node:crypto";
+import { renderGhgStatementReportPdf } from ${JSON.stringify(RENDERER_PATH)};
+async function main() {
+  const bytes = await renderGhgStatementReportPdf(JSON.parse(process.argv[2]));
+  process.stdout.write(createHash("sha256").update(bytes).digest("hex"));
+}
+void main();
+`;
+
+/** SHA-256 of the model rendered in a brand new Node process. */
+function renderChecksumInFreshProcess(
+  scriptPath: string,
+  model: GhgStatementReportModel,
+): string {
+  return execFileSync(TSX_BIN, [scriptPath, JSON.stringify(model)], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    timeout: CHILD_RENDER_TIMEOUT_MS,
+  }).trim();
+}
 
 function buildModel(
   overrides: Partial<BuildGhgStatementReportModelInput> = {},
@@ -119,6 +154,27 @@ describe("renderGhgStatementReportPdf determinism", () => {
     expect(sha256Hex(second)).toBe(sha256Hex(first));
     expect(second.byteLength).toBe(first.byteLength);
   });
+
+  it(
+    "produces identical bytes in two fresh processes",
+    async () => {
+      const model = buildModel();
+      const directory = mkdtempSync(join(tmpdir(), "ghg-report-determinism-"));
+      const scriptPath = join(directory, "render-checksum.ts");
+      writeFileSync(scriptPath, CHILD_SCRIPT);
+
+      try {
+        const first = renderChecksumInFreshProcess(scriptPath, model);
+        const second = renderChecksumInFreshProcess(scriptPath, model);
+
+        expect(second).toBe(first);
+        expect(first).toBe(sha256Hex(await renderGhgStatementReportPdf(model)));
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+    CHILD_RENDER_TIMEOUT_MS,
+  );
 
   it("produces identical bytes when the system clock moves between renders", async () => {
     const model = buildModel();
