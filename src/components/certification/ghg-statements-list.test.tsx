@@ -99,6 +99,23 @@ describe("CreateGateNotice", () => {
     );
   });
 
+  it.each(["mappingFailed", "unlinked", "sharedProject"] as const)(
+    "uses warning styling for the %s blocking notice",
+    (notice) => {
+      const html = renderToStaticMarkup(
+        <CreateGateNotice
+          notice={notice}
+          facilityId="fac-1"
+          linkedFacilityCount={2}
+        />,
+      );
+
+      expect(html).toContain("--color-signal-orange");
+      expect(html).toContain("--color-signal-orange-light");
+      expect(html).toContain("--color-signal-orange-strong");
+    },
+  );
+
   it("asks the operator to link the facility when no mapping exists", () => {
     const html = renderToStaticMarkup(
       <CreateGateNotice

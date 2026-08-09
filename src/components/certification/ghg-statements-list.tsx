@@ -109,18 +109,18 @@ export function CreateGateNotice({
 }) {
   if (!notice) return null;
   return (
-    <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">
+    <div className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8">
       {notice === "mappingFailed" ? (
-        <p className="body-small text-[var(--clr-red)]">
+        <p className="body-small text-[var(--color-signal-orange-strong)]">
           Isometric project link unavailable. Refresh to retry.
         </p>
       ) : notice === "unlinked" ? (
-        <p className="body-small text-[var(--color-text-secondary)]">
+        <p className="body-small text-[var(--color-signal-orange-strong)]">
           Link this facility to an Isometric project in Settings before creating
           a statement.
         </p>
       ) : (
-        <p className="body-small text-[var(--color-text-secondary)]">
+        <p className="body-small text-[var(--color-signal-orange-strong)]">
           This Isometric project is linked to {linkedFacilityCount} noma
           facilities. A GHG Statement covers every facility on the project. Link
           each facility to a dedicated Isometric project in{" "}
