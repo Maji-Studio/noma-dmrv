@@ -303,6 +303,20 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledTimes(1);
   });
 
+  it("matches an orphaned record whose timestamps express the same instants", async () => {
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
+        started_at: "2026-02-28T19:00:00-05:00",
+        ended_at: "2026-03-29T00:59:59.999+01:00",
+      });
+    });
+
+    const registered = await ensure();
+
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+  });
+
   it.each([
     ["facility", { facility_id: "fcl_other" }],
     ["mass", { mass: { magnitude: 1_999, unit: "kg" } }],

@@ -318,6 +318,12 @@ function assertProductionBatchMatchesSubmission(
   batch: IsometricProductionBatch,
   expected: CreateProductionBatchRequest,
 ): void {
+  const startedAtMatches =
+    Number.isFinite(Date.parse(batch.started_at)) &&
+    Date.parse(batch.started_at) === Date.parse(expected.started_at);
+  const endedAtMatches =
+    Number.isFinite(Date.parse(batch.ended_at)) &&
+    Date.parse(batch.ended_at) === Date.parse(expected.ended_at);
   const sameFeedstocks =
     [...batch.feedstock_type_ids].sort().join("\u0000") ===
     [...expected.feedstock_type_ids].sort().join("\u0000");
@@ -328,8 +334,8 @@ function assertProductionBatchMatchesSubmission(
     batch.kind === expected.kind &&
     batch.mass.magnitude === expected.mass.magnitude &&
     batch.mass.unit === expected.mass.unit &&
-    batch.started_at === expected.started_at &&
-    batch.ended_at === expected.ended_at
+    startedAtMatches &&
+    endedAtMatches
   ) {
     return;
   }
