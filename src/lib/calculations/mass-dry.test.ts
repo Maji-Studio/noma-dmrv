@@ -12,7 +12,7 @@ import {
 describe("mass-dry calculations", () => {
   describe("deriveMassDryKg", () => {
     it("rounds the derived mass to three decimal places", () => {
-      expect(deriveMassDryKg(123.456, 10)).toBe(111.11);
+      expect(deriveMassDryKg(1.234_6, 0)).toBe(1.235);
     });
 
     it.each([
