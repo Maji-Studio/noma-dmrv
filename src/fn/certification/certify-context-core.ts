@@ -35,7 +35,6 @@ import {
   type RemovalRunSummary,
 } from "@/lib/certification/mass-accounting";
 import {
-  missingApplicationLineageGap,
   type ProductionReadinessGap,
 } from "@/lib/certification/production-readiness";
 import { attributeSoilTemperatureBlockers } from "@/lib/certification/member-batch-gates";
@@ -74,7 +73,7 @@ import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { collectFutureDatedMeasurements } from "./future-dated-measurements";
 import { buildSubmissionWarnings } from "./submission-warnings";
-import { productionReadinessGapFromLineages } from "@/lib/certification/production-readiness-from-lineage";
+import { productionReadinessGapForScope } from "@/lib/certification/production-readiness-from-lineage";
 import { loadEvidenceMirrorSummaryForScope, type EvidenceMirrorSummary } from "./evidence-mirror-summary";
 import {
   loadLinkedGhgStatementStatus,
@@ -598,6 +597,13 @@ export async function buildRemovalContext(
     new Set(scope.memberBatches.flatMap((b) => b.applicationIds)),
   );
   const lineages = scope.lineages;
+  const productionReadinessGap = productionReadinessGapForScope({
+    lineages,
+    completedMemberProductionRunIds: scope.memberBatches.flatMap(
+      (batch) => batch.completedProductionRunIds,
+    ),
+    scope: scope.removalId ? "removal" : "creditBatch",
+  });
   const runIds = Array.from(
     new Set(
       lineages
@@ -658,12 +664,6 @@ export async function buildRemovalContext(
   // template setup does NOT gate the lineage walk; otherwise setup gaps collapse
   // into a misleading "no production data" blocker.
   if (applicationIds.length === 0) {
-    const productionReadinessGap = missingApplicationLineageGap({
-      hasCompletedMemberProductionRuns: scope.memberBatches.some(
-        (batch) => batch.completedProductionRunIds.length > 0,
-      ),
-      scope: scope.removalId ? "removal" : "creditBatch",
-    });
     return {
       facilityId: scope.facilityId,
       removalId: scope.removalId,
@@ -699,7 +699,6 @@ export async function buildRemovalContext(
     runIds.length > 0
       ? await getProductionRunsWithSamples(orgCtx, runIds)
       : [];
-  const productionReadinessGap = productionReadinessGapFromLineages(lineages);
 
   // Credit-batch-grained durability data plane (ADR 0016): pool each member
   // batch's lab Samples, scope runs to the removal's applied set, and run the D3

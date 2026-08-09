@@ -1,6 +1,7 @@
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import {
   defaultProductionReadinessGap,
+  missingApplicationLineageGap,
   type ProductionReadinessGap,
 } from "@/lib/certification/production-readiness";
 
@@ -43,4 +44,32 @@ export function productionReadinessGapFromLineages(
   }
 
   return defaultProductionReadinessGap();
+}
+
+export function productionReadinessGapForScope(args: {
+  lineages: ChainOfCustodyData[];
+  completedMemberProductionRunIds: string[];
+  scope: "creditBatch" | "removal";
+}): ProductionReadinessGap | null {
+  const lineageGap = productionReadinessGapFromLineages(args.lineages);
+  if (lineageGap) return lineageGap;
+
+  const applicationRunIds = new Set(
+    args.lineages
+      .map((lineage) => lineage.biocharProduct?.linkedProductionRunId)
+      .filter((id): id is string => !!id),
+  );
+  const hasCompletedRunWithoutApplication =
+    args.completedMemberProductionRunIds.some(
+      (runId) => !applicationRunIds.has(runId),
+    );
+  if (args.lineages.length > 0 && !hasCompletedRunWithoutApplication) {
+    return null;
+  }
+
+  return missingApplicationLineageGap({
+    hasCompletedMemberProductionRuns:
+      args.completedMemberProductionRunIds.length > 0,
+    scope: args.scope,
+  });
 }
