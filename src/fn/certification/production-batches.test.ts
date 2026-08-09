@@ -109,6 +109,7 @@ function registryInput(
 function remoteBatch(
   supplierReferenceId: string,
   id = PRODUCTION_BATCH_ID,
+  patch: Partial<IsometricProductionBatch> = {},
 ): IsometricProductionBatch {
   return {
     display_name: "CB-2026-001",
@@ -121,6 +122,7 @@ function remoteBatch(
     started_at: "2026-03-01T00:00:00.000Z",
     supplier_reference_id: supplierReferenceId,
     uploaded_at: "2026-03-29T00:00:00.000Z",
+    ...patch,
   };
 }
 
@@ -301,6 +303,27 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["facility", { facility_id: "fcl_other" }],
+    ["mass", { mass: { magnitude: 1_999, unit: "kg" } }],
+    ["window", { ended_at: "2026-03-29T23:59:59.999Z" }],
+  ])(
+    "refuses an orphaned remote record with mismatched %s identity",
+    async (_label, patch) => {
+      mocks.client.paginate.mockImplementation(async function* () {
+        yield remoteBatch(
+          await currentSupplierRef(),
+          PRODUCTION_BATCH_ID,
+          patch,
+        );
+      });
+
+      await expect(ensure()).rejects.toThrow(/does not match this credit batch/);
+      expect(mocks.client.post).not.toHaveBeenCalled();
+      expect(mocks.upsertProductionBatchRegistration).not.toHaveBeenCalled();
+    },
+  );
+
   it("POSTs when no remote record carries the reference", async () => {
     const registered = await ensure();
     expect(mocks.client.post).toHaveBeenCalledTimes(1);
@@ -309,7 +332,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
 
   it("refuses a registry record whose supplier reference is not ours", async () => {
     mocks.client.post.mockResolvedValue(remoteBatch("nm-ptb-someone-else"));
-    await expect(ensure()).rejects.toThrow(/does not match submission/);
+    await expect(ensure()).rejects.toThrow(/does not match this credit batch/);
   });
 
   it("refuses when a concurrent registration already claimed a different batch", async () => {

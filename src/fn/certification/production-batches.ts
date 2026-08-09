@@ -225,7 +225,7 @@ export async function ensureProductionBatchesForCreditBatches(
       resumed: true,
       create: async () => {
         const batch = await createProductionBatch(client, submission.body);
-        assertProductionBatchSupplierReference(batch, submission.supplierRefId);
+        assertProductionBatchMatchesSubmission(batch, submission.body);
         return batch.id;
       },
       reconcile: async () => {
@@ -234,10 +234,7 @@ export async function ensureProductionBatchesForCreditBatches(
           submission.supplierRefId,
         );
         if (batch) {
-          assertProductionBatchSupplierReference(
-            batch,
-            submission.supplierRefId,
-          );
+          assertProductionBatchMatchesSubmission(batch, submission.body);
         }
         return supplierRefLookup(
           batch ? { found: true, externalId: batch.id } : { found: false },
@@ -317,13 +314,27 @@ function tryBuildProductionBatchSubmission(
   }
 }
 
-function assertProductionBatchSupplierReference(
+function assertProductionBatchMatchesSubmission(
   batch: IsometricProductionBatch,
-  expected: string,
+  expected: CreateProductionBatchRequest,
 ): void {
-  if (batch.supplier_reference_id === expected) return;
+  const sameFeedstocks =
+    [...batch.feedstock_type_ids].sort().join("\u0000") ===
+    [...expected.feedstock_type_ids].sort().join("\u0000");
+  if (
+    batch.supplier_reference_id === expected.supplier_reference_id &&
+    batch.facility_id === expected.facility_id &&
+    sameFeedstocks &&
+    batch.kind === expected.kind &&
+    batch.mass.magnitude === expected.mass.magnitude &&
+    batch.mass.unit === expected.mass.unit &&
+    batch.started_at === expected.started_at &&
+    batch.ended_at === expected.ended_at
+  ) {
+    return;
+  }
   throw new SafeError(
-    `Registry production batch ${batch.id} does not match submission ${expected}. Ask support to check the registry record.`,
+    `Registry production batch ${batch.id} does not match this credit batch's facility, feedstock, kind, mass, or production window. Ask support to check the registry record.`,
   );
 }
 
