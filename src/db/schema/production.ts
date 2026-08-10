@@ -302,6 +302,9 @@ export const samples = pgTable('samples', {
     table.organizationId,
     table.sampleCode
   ),
+  index('samples_organization_id_credit_batch_id_sampling_time_idx')
+    .on(table.organizationId, table.creditBatchId, table.samplingTime)
+    .where(sql`${table.creditBatchId} is not null`),
   foreignKey({
     columns: [table.productionRunId, table.organizationId],
     foreignColumns: [productionRuns.id, productionRuns.organizationId],
@@ -355,7 +358,10 @@ export const productionRunFeedstocks = pgTable('production_run_feedstocks', {
   wetMassUsedKg: massKg('wet_mass_used_kg').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
-  index('production_run_feedstocks_organization_id_idx').on(table.organizationId),
+  index('production_run_feedstocks_organization_id_production_run_id_idx').on(
+    table.organizationId,
+    table.productionRunId
+  ),
   foreignKey({
     columns: [table.productionRunId, table.organizationId],
     foreignColumns: [productionRuns.id, productionRuns.organizationId],
