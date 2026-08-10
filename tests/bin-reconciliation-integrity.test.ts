@@ -34,7 +34,7 @@ import {
 const TEST_USER_ID = "test-user-bin-reconciliation";
 const BIN_STOCK_LOCK_SCOPE = "bin-stock";
 const INITIAL_FEEDSTOCK_DRY_MASS_KG = 100;
-const RECOUNTED_FEEDSTOCK_DRY_MASS_KG = 10;
+const RECOUNTED_FEEDSTOCK_WET_MASS_KG = 10;
 const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
 /**
  * These tests park real transactions on real locks, so a barrier poll can burn
@@ -219,7 +219,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         makeTestOrgContext(TEST_USER_ID),
         bin.id,
       );
-      expect(enriched.feedstockInventory.currentDryMassKg).toBe(90);
+      expect(enriched.feedstockInventory.currentWetMassKg).toBe(90);
     } finally {
       await db
         .delete(binMovements)
@@ -471,8 +471,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         recordStockTakeFn({
           storageLocationId: bin.id,
           lane: "feedstock",
-          countedMassKg: RECOUNTED_FEEDSTOCK_DRY_MASS_KG,
-          countedWetMassKg: RECOUNTED_FEEDSTOCK_DRY_MASS_KG,
+          countedMassKg: RECOUNTED_FEEDSTOCK_WET_MASS_KG,
+          countedWetMassKg: RECOUNTED_FEEDSTOCK_WET_MASS_KG,
           moistureRatioUsed: 0,
           reason: "Concurrent stock-take against production run",
         }),
@@ -545,15 +545,17 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
       const runRejectedAsOverdraw =
         productionRunResult.status === "rejected" &&
         productionRunResult.reason instanceof Error &&
-        productionRunResult.reason.message.includes("Not enough feedstock in this bin");
+        productionRunResult.reason.message.includes(
+          "Not enough wet feedstock in this bin",
+        );
       expect(runSucceeded).not.toBe(runRejectedAsOverdraw);
       expect(stockTakeSucceeded).not.toBe(runSucceeded);
 
       const enriched = await getStorageLocationWithFacility(ctx, bin.id);
-      expect(enriched.feedstockInventory.currentDryMassKg).toBe(
-        stockTakeSucceeded ? RECOUNTED_FEEDSTOCK_DRY_MASS_KG : 0,
+      expect(enriched.feedstockInventory.currentWetMassKg).toBe(
+        stockTakeSucceeded ? RECOUNTED_FEEDSTOCK_WET_MASS_KG : 0,
       );
-      expect(enriched.feedstockInventory.currentDryMassKg).toBeGreaterThanOrEqual(0);
+      expect(enriched.feedstockInventory.currentWetMassKg).toBeGreaterThanOrEqual(0);
     } finally {
       releaseWriteBarrier();
       await writeBarrierTransaction?.catch(() => undefined);

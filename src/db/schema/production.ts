@@ -349,7 +349,10 @@ export const productionRunFeedstocks = pgTable('production_run_feedstocks', {
   feedstockId: uuid('feedstock_id')
     .notNull()
     .references(() => feedstocks.id),
-  massUsedKg: massKg('mass_used_kg').notNull(),
+  // Wet/as-received mass withdrawn from this intake batch. Feedstock bins use
+  // wet kg as their native stock currency; the run-level dry mass is derived
+  // separately from the run's measured moisture.
+  wetMassUsedKg: massKg('wet_mass_used_kg').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('production_run_feedstocks_organization_id_idx').on(table.organizationId),

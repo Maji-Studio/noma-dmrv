@@ -6,9 +6,9 @@ import type { StockAvailabilityRequest } from "@/schemas/stock-availability";
 import {
   deriveBiocharAvailableKg,
   deriveBiocharProductDeliveredKg,
-  deriveFeedstockAvailableKg,
   deriveProductAvailableKg,
 } from "./bin-stock-guards";
+import { deriveFeedstockWetStockKg } from "./feedstock-wet-stock";
 import { requireOrgScope } from "./utils";
 import { deriveDeliveryOrderAvailableKg } from "./delivery-order-balance";
 
@@ -25,11 +25,11 @@ async function getProductionRunFeedstockAvailability(
   >,
 ): Promise<StockAvailability> {
   return {
-    availableKg: await deriveFeedstockAvailableKg(
+    availableKg: await deriveFeedstockWetStockKg(
       ctx,
       db,
       request.storageLocationId,
-      request.productionRunId,
+      { excludeRunId: request.productionRunId },
     ),
   };
 }

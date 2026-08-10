@@ -143,7 +143,7 @@ async function createLineageFixture(
       organizationId: TEST_ORG_ID,
       productionRunId: productionRun.id,
       feedstockId: feedstock.id,
-      massUsedKg: 900,
+      wetMassUsedKg: 900,
     });
 
     const [sample] = await tx

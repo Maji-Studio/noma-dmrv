@@ -1,15 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
-  feedstockDryStockOverdrawMessage,
+  feedstockWetStockOverdrawMessage,
   productionRunMassBalanceFeedback,
   WET_MASS_BALANCE_WARNING,
 } from "./production-run-mass-balance";
 import { DRY_MASS_BALANCE_MESSAGE } from "@/schemas/production-runs";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { isStockOverdraw } from "@/lib/stock-overdraw";
 
 describe("productionRunMassBalanceFeedback", () => {
-  it("labels dry availability and gives the equivalent wet-mass limit", () => {
-    expect(feedstockDryStockOverdrawMessage(100, 20)).toBe(
-      "Only 100 kg of dry feedstock is available. At 20% moisture, enter at most 125 kg wet mass.",
+  it("accepts the exact wet balance, derives run dry mass, and rejects 0.001 kg more", () => {
+    const availableWetKg = 3_000;
+
+    expect(isStockOverdraw(3_000, availableWetKg)).toBe(false);
+    expect(deriveMassDryKg(3_000, 20)).toBe(2_400);
+    expect(isStockOverdraw(3_000.001, availableWetKg)).toBe(true);
+    expect(isStockOverdraw(3_000.1, availableWetKg)).toBe(true);
+    expect(feedstockWetStockOverdrawMessage(availableWetKg)).toBe(
+      "Only 3,000 kg of wet feedstock is available. Reduce the wet mass.",
     );
   });
 

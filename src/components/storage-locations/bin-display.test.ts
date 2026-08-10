@@ -43,9 +43,9 @@ function makeBin(
       batchCount: 0,
       pendingBatchCount: 0,
       feedstockTypes: [],
-      currentDryMassKg: 0,
+      currentWetMassKg: 0,
+      estimatedDryMassKg: null,
       pendingDryMassKg: 0,
-      estimatedWetMassKg: null,
       estimatedMoisturePercent: null,
     },
     biocharInventory: {

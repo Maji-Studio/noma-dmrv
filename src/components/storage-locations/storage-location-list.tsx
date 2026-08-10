@@ -74,13 +74,13 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
   if (storageLocation.type === "feedstock_bin") {
     return [
       {
-        label: "Current dry mass",
-        value: formatMassKg(storageLocation.feedstockInventory.currentDryMassKg),
+        label: "Current wet stock",
+        value: formatMassKg(storageLocation.feedstockInventory.currentWetMassKg),
       },
       ...(storageLocation.feedstockInventory.pendingDryMassKg > 0
         ? [
             {
-              label: "Pending completion",
+              label: "Pending dry mass (non-binding)",
               value: formatMassKg(storageLocation.feedstockInventory.pendingDryMassKg),
             },
             {
@@ -90,8 +90,8 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
           ]
         : []),
       {
-        label: "Estimated wet mass",
-        value: formatMassKg(storageLocation.feedstockInventory.estimatedWetMassKg),
+        label: "Estimated dry mass (non-binding)",
+        value: formatMassKg(storageLocation.feedstockInventory.estimatedDryMassKg),
       },
       {
         label: "Estimated moisture",

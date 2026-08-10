@@ -79,9 +79,9 @@ export function FacilityCard({
             <p className="title-heading-3">{facility.storageLocationCount}</p>
           </div>
           <div>
-            <p className="body-caption text-[var(--color-text-tertiary)]">Feedstock</p>
+            <p className="body-caption text-[var(--color-text-tertiary)]">Feedstock, wet</p>
             <p className="body-small text-[var(--color-text-primary)]">
-              {formatMass(facility.inventorySummary.feedstockDryKg)}
+              {formatMass(facility.inventorySummary.feedstockWetKg)}
             </p>
           </div>
         </div>

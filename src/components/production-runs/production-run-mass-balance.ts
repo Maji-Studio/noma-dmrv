@@ -18,12 +18,10 @@ interface ProductionRunMassBalanceInput {
 const numberOrNull = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
-export function feedstockDryStockOverdrawMessage(
-  availableDryKg: number,
-  moisturePercent: number,
+export function feedstockWetStockOverdrawMessage(
+  availableWetKg: number,
 ): string {
-  const maximumWetKg = availableDryKg / (1 - moisturePercent / 100);
-  return `Only ${formatStockLimitKg(availableDryKg)} of dry feedstock is available. At ${moisturePercent.toLocaleString()}% moisture, enter at most ${formatStockLimitKg(maximumWetKg)} wet mass.`;
+  return `Only ${formatStockLimitKg(availableWetKg)} of wet feedstock is available. Reduce the wet mass.`;
 }
 
 export function productionRunMassBalanceFeedback(

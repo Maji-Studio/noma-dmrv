@@ -44,7 +44,7 @@ export type ProductionRunOutcomeInput = {
       }
     | {
         basis: "consumed-mass";
-        consumedFeedstockKg: number;
+        consumedFeedstockWetKg: number;
       };
 };
 
@@ -146,7 +146,7 @@ export function getProductionRunOutcomeViolations(
             input.feedstock.storageLocationId &&
             input.feedstockMoisturePercent != null
           )
-        : !(input.feedstock.consumedFeedstockKg > 0);
+        : !(input.feedstock.consumedFeedstockWetKg > 0);
 
     if (feedstockIsMissing) {
       violations.push({

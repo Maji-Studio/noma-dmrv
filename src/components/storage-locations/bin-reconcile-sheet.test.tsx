@@ -63,9 +63,9 @@ const storageLocation: StorageLocationWithFacility = {
     batchCount: 1,
     pendingBatchCount: 0,
     feedstockTypes: ["Wood chips"],
-    currentDryMassKg: 125,
+    currentWetMassKg: 150,
+    estimatedDryMassKg: 125,
     pendingDryMassKg: 0,
-    estimatedWetMassKg: 150,
     estimatedMoisturePercent: 16.7,
   },
   biocharInventory: {
@@ -100,11 +100,15 @@ describe("BinReconcileSheet", () => {
 
       expect(markup).toContain("Reconcile FB-001");
       expect(markup).toContain("North hopper");
-      expect(markup).toContain("Current derived stock");
+      expect(markup).toContain(
+        type === "feedstock_bin" ? "Current wet stock" : "Current derived stock",
+      );
       if (type === "feedstock_bin") {
         expect(markup).toContain("Current estimated moisture");
       }
-      expect(markup).toContain("Amount lost (kg)");
+      expect(markup).toContain(
+        type === "feedstock_bin" ? "Wet mass lost (kg)" : "Amount lost (kg)",
+      );
       expect(markup).toContain('id="loss-amount"');
       expect(markup).toContain('id="loss-reason"');
       expect(markup).toContain("Record loss");

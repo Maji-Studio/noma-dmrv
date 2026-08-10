@@ -75,8 +75,8 @@ const reasonSchema = z
 
 /**
  * Stock-take form. `counted` is always wet kg for feedstock and the lane's
- * native kg otherwise. Feedstock counts require a fresh moisture measurement;
- * the component previews wet → dry while the server remains authoritative.
+ * native kg otherwise. Feedstock counts may retain a moisture measurement as
+ * snapshot metadata, but the reconciliation delta remains wet kg.
  */
 export const stockTakeFormSchema = z
   .object({
@@ -127,10 +127,10 @@ export const recordStockTakeSchema = z
     storageLocationId: z.uuid("Choose a valid storage bin."),
     lane: z.enum(binMovementLanes),
     reason: reasonSchema,
-    // Preview value from the client. The data-access boundary recomputes this
-    // from the wet snapshot for feedstock stock-takes.
+    // Lane-native count. For feedstock this is the same wet value as the
+    // snapshot below; moisture does not convert the stock currency.
     countedMassKg: requiredMassKgSchema("Counted stock is required"),
-    // Feedstock-only provenance for the authoritative dry conversion.
+    // Feedstock-only snapshot provenance.
     countedWetMassKg: optionalCanonicalizableMassKgInputSchema(),
     moistureRatioUsed: z.preprocess(
       toNumberOrNull,

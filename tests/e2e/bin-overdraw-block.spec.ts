@@ -2,10 +2,9 @@
  * Bin over-draw hard block (issue #116)
  *
  * Exercises all six guarded write paths through the UI. Feedstock draws use
- * dry mass (wet × (1 − moisture%/100)); product draws use blend mass less the
- * actual recorded ingredient masses; delivery draws use the product batch's
- * own wet-mass pool. Every path proves both the hard rejection and a legitimate
- * save.
+ * the bin's wet/as-received stock; product draws use blend mass less the actual
+ * recorded ingredient masses; delivery draws use the product batch's own wet
+ * mass pool. Every path proves both the hard rejection and a legitimate save.
  */
 import type { Page } from "@playwright/test";
 import {
@@ -39,13 +38,13 @@ const DELIVERY_DATE = "2027-06-16";
 const BIOCHAR_BIN_STOCK_KG = "100";
 const ORDER_QUANTITY_KG = "200000";
 const feedstockOverdrawText =
-  /^Only .+ of dry feedstock is available\. At .+% moisture, enter at most .+ wet mass\.$/;
+  /^Only .+ of wet feedstock is available\. Reduce the wet mass\.$/;
 const biocharOverdrawText =
   /^Only .+ of biochar is available\. Reduce the mass\.$/;
 const deliveryOverdrawText =
   /^Only .+ of biochar is available\. Reduce the delivered mass\.$/;
 
-/** Open the existing draft run form against the seeded 100 kg-dry source bin. */
+/** Open the existing draft run form against the seeded 100 kg-wet source bin. */
 async function openRunFormWithSource(
   page: Page,
   seededData: SeededChainData,
@@ -431,13 +430,13 @@ async function createDeliveredDelivery(
   await waitForSideSheetClose(page);
 }
 
-/** Path 1: createProductionRun feedstock draw from 100 kg dry on hand. */
+/** Path 1: createProductionRun feedstock draw from 100 kg wet on hand. */
 test.describe("createProductionRun feedstock guard", () => {
   test("rejects a feedstock draw exceeding the bin's on-hand stock", async ({
     adminPage: page,
     seededData,
   }) => {
-    // 200 wet @ 10% moisture = 180 kg dry, exceeding the 100 kg-dry bin.
+    // 200 kg wet exceeds the bin's authoritative 100 kg wet balance.
     await openRunFormWithSource(page, seededData, {
       wetMassKg: "200",
       moisturePercent: "10",
@@ -466,7 +465,7 @@ test.describe("createProductionRun feedstock guard", () => {
     adminPage: page,
     seededData,
   }) => {
-    // 50 wet @ 10% moisture = 45 kg dry, within the 100 kg-dry bin.
+    // 50 kg wet is within the bin's authoritative 100 kg wet balance.
     await openRunFormWithSource(page, seededData, {
       wetMassKg: "50",
       moisturePercent: "10",

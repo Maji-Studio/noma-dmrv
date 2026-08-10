@@ -132,10 +132,10 @@ function createColumns(
       accessorFn: (row) => row.reactorIdentifier ?? "",
     },
     {
-      accessorKey: "totalFeedstockMassKg",
+      accessorKey: "totalFeedstockWetMassKg",
       header: "Feedstock wet mass",
       cell: ({ row }) => (
-        <span className="font-mono">{formatMassKg(row.original.totalFeedstockMassKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.totalFeedstockWetMassKg)}</span>
       ),
     },
     {

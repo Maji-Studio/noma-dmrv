@@ -134,7 +134,7 @@ export function FacilityList() {
     0
   );
   const feedstockOnHandKg = facilities.reduce(
-    (sum, facility) => sum + facility.inventorySummary.feedstockDryKg,
+    (sum, facility) => sum + facility.inventorySummary.feedstockWetKg,
     0
   );
 
@@ -308,8 +308,8 @@ export function FacilityList() {
           title: "Inventory snapshot",
           fields: [
             {
-              label: "Feedstock on hand",
-              value: formatMass(sideSheetEntity.inventorySummary.feedstockDryKg),
+              label: "Feedstock on hand (wet)",
+              value: formatMass(sideSheetEntity.inventorySummary.feedstockWetKg),
             },
             {
               label: "Biochar on hand",
@@ -359,7 +359,7 @@ export function FacilityList() {
           isLoading={isLoading}
         />
         <StatCard
-          title="Feedstock On Hand"
+          title="Wet Feedstock On Hand"
           value={formatMass(feedstockOnHandKg)}
           icon={<PackageIcon size={24} weight="bold" />}
           description={`${formatCount(totalStorageBins, "storage bin")} on this page`}

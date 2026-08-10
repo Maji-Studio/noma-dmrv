@@ -326,8 +326,8 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
     addRow(details, "Type", feedstock.feedstockTypeName);
     addRow(details, "Supplier", feedstock.supplierName);
     addRow(details, "Inbound", feedstock.feedstockDeliveryCode);
-    addRow(details, "Used", formatKg(feedstock.massUsedKg));
-    addRow(details, "Dry mass", formatKg(feedstock.massDryKg));
+    addRow(details, "Wet allocation", formatKg(feedstock.wetMassUsedKg));
+    addRow(details, "Intake dry mass", formatKg(feedstock.massDryKg));
 
     nodes.push({
       id: `feedstock:${feedstock.id}`,
@@ -546,7 +546,7 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
     for (const feedstock of source.feedstocks) {
       edges.push(
         edge(`feedstock:${feedstock.id}`, `production-run:${productionRun.id}`, {
-          mass: { value: feedstock.massUsedKg, unit: "kg" },
+          mass: { value: feedstock.wetMassUsedKg, unit: "kg" },
         })
       );
     }

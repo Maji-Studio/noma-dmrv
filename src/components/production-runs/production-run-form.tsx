@@ -39,7 +39,7 @@ import {
 } from "@/schemas/production-runs";
 import { ProcessFlowPreview } from "./production-run-process-flow-preview";
 import {
-  feedstockDryStockOverdrawMessage,
+  feedstockWetStockOverdrawMessage,
   productionRunMassBalanceFeedback,
 } from "./production-run-mass-balance";
 import {
@@ -225,14 +225,12 @@ export function ProductionRunForm({
       : null,
   );
   const feedstockStockError =
-    previewDryMass !== null &&
-    typeof watchMoisture === "number" &&
+    typeof watchWetMass === "number" &&
     feedstockAvailability &&
     feedstockAvailability.availableKg !== null &&
-    isStockOverdraw(previewDryMass, feedstockAvailability.availableKg)
-      ? feedstockDryStockOverdrawMessage(
+    isStockOverdraw(watchWetMass, feedstockAvailability.availableKg)
+      ? feedstockWetStockOverdrawMessage(
           feedstockAvailability.availableKg,
-          watchMoisture,
         )
       : undefined;
   const feedstockFieldFingerprint = [

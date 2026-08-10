@@ -103,8 +103,8 @@ export const creditBatches = pgTable(
     // (ADR 0018) — no local copies are stored (issue #285).
 
     // --- Feedstock Eligibility (Isometric: >25% ineligible-biomass cap, P0-01) ---
-    // Feedstock masses are derived on read from the run-feedstock lineage
-    // (Σ massUsedKg, split by feedstock eligibilityStatus) — never stored.
+    // Eligibility shares come from wet run-feedstock allocations; dry
+    // certification mass comes from productionRuns.feedstockMassDryKg.
 
     // --- Site Management Summary (Isometric: Section 5.2.1) ---
     // Aggregated info for GHG Statement submission

@@ -39,6 +39,7 @@ import {
   type ProductionBatchRegistryInput,
 } from "@/data-access/certifier-production-batches";
 import type { OrgContext } from "@/lib/auth/server";
+import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import { SafeError } from "@/lib/errors";
 import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import {
@@ -332,12 +333,15 @@ function productionBatchMismatchMessage(
   const sameFeedstocks =
     [...batch.feedstock_type_ids].sort().join("\u0000") ===
     [...expected.feedstock_type_ids].sort().join("\u0000");
+  const massMagnitudeMatches =
+    Math.abs(batch.mass.magnitude - expected.mass.magnitude) <=
+    MASS_COMPARISON_EPSILON_KG;
   if (
     batch.supplier_reference_id === expected.supplier_reference_id &&
     batch.facility_id === expected.facility_id &&
     sameFeedstocks &&
     batch.kind === expected.kind &&
-    batch.mass.magnitude === expected.mass.magnitude &&
+    massMagnitudeMatches &&
     batch.mass.unit === expected.mass.unit &&
     startedAtMatches &&
     endedAtMatches

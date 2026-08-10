@@ -14,7 +14,6 @@ import {
   feedstockDeliveries,
   feedstocks,
   productionRuns,
-  productionRunFeedstocks,
   biocharProducts,
   orders,
   deliveries,
@@ -29,6 +28,7 @@ import { hasBlockingFacilitySubmission } from "./certification";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
+import { deriveLaneStock } from "./lane-stock-derivation";
 
 // Individual entity archives originate from JavaScript Date values and are
 // stored at whole-millisecond precision. Facility cascades use a database
@@ -55,7 +55,7 @@ export interface FacilityWithRelations extends Facility {
     productBinCount: number;
   };
   inventorySummary: {
-    feedstockDryKg: number;
+    feedstockWetKg: number;
     biocharKg: number;
     productKg: number;
   };
@@ -195,9 +195,7 @@ export async function getFacilities(
   const [
     reactorPreviewRows,
     storageCountsByType,
-    feedstockInventoryRows,
-    feedstockConsumptionRows,
-    ingredientConsumptionRows,
+    feedstockBinRows,
     biocharOutputRows,
     biocharAllocationRows,
     productInventoryRows,
@@ -225,68 +223,15 @@ export async function getFacilities(
           .groupBy(storageLocations.facilityId, storageLocations.type),
         db
           .select({
-            facilityId: feedstocks.facilityId,
-            totalDryKg: sumNumeric(feedstocks.massDryKg),
-          })
-          .from(feedstocks)
-          .where(and(inArray(feedstocks.facilityId, facilityIds), eq(feedstocks.organizationId, ctx.organizationId)))
-          .groupBy(feedstocks.facilityId),
-        db
-          .select({
-            facilityId: productionRuns.facilityId,
-            totalConsumedKg: sumNumeric(productionRunFeedstocks.massUsedKg),
-          })
-          .from(productionRuns)
-          .leftJoin(
-            productionRunFeedstocks,
-            and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId))
-          )
-          .where(and(
-            inArray(productionRuns.facilityId, facilityIds),
-            eq(productionRuns.organizationId, ctx.organizationId),
-            ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
-          ))
-          .groupBy(productionRuns.facilityId),
-        db
-          .select({
+            id: storageLocations.id,
             facilityId: storageLocations.facilityId,
-            totalConsumedKg: numericAggregate(sql<number>`
-              COALESCE(
-                SUM(
-                  CASE
-                    WHEN jsonb_typeof(ingredient.value -> 'massDryKg') = 'number'
-                      AND (ingredient.value ->> 'massDryKg')::numeric > 0
-                    THEN (ingredient.value ->> 'massDryKg')::numeric
-                    ELSE 0
-                  END
-                ),
-                0
-              )
-            `),
           })
-          .from(biocharProducts)
-          .innerJoin(
-            sql`LATERAL jsonb_array_elements(
-              CASE
-                WHEN jsonb_typeof(${biocharProducts.composition} -> 'ingredients') = 'array'
-                THEN ${biocharProducts.composition} -> 'ingredients'
-                ELSE '[]'::jsonb
-              END
-            ) AS ingredient(value)`,
-            sql`true`,
-          )
-          .innerJoin(
-            storageLocations,
-            and(
-              sql`${storageLocations.id}::text = ingredient.value ->> 'storageLocationId'`,
-              eq(storageLocations.organizationId, ctx.organizationId),
-            ),
-          )
+          .from(storageLocations)
           .where(and(
             inArray(storageLocations.facilityId, facilityIds),
-            eq(biocharProducts.organizationId, ctx.organizationId),
-          ))
-          .groupBy(storageLocations.facilityId),
+            eq(storageLocations.type, "feedstock_bin"),
+            eq(storageLocations.organizationId, ctx.organizationId),
+          )),
         db
           .select({
             facilityId: productionRuns.facilityId,
@@ -326,7 +271,24 @@ export async function getFacilities(
           .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId)))
           .groupBy(biocharProducts.facilityId),
       ])
-    : [[], [], [], [], [], [], [], []];
+    : [[], [], [], [], [], []];
+
+  const feedstockLaneStocks = await deriveLaneStock(ctx, db, {
+    storageLocationIds: feedstockBinRows.map((bin) => bin.id),
+  });
+  const feedstockBinFacilityById = new Map(
+    feedstockBinRows.map((bin) => [bin.id, bin.facilityId]),
+  );
+  const feedstockWetStockByFacility = new Map<string, number>();
+  for (const stock of feedstockLaneStocks) {
+    const facilityId = feedstockBinFacilityById.get(stock.storageLocationId);
+    if (!facilityId) continue;
+    feedstockWetStockByFacility.set(
+      facilityId,
+      (feedstockWetStockByFacility.get(facilityId) ?? 0) +
+        stock.feedstockStockWetKg,
+    );
+  }
 
   // Derive reactor counts and preview (max 4) from preview rows
   const reactorCountMap = new Map<string, number>();
@@ -370,15 +332,6 @@ export async function getFacilities(
     storageSummaryMap.set(row.facilityId, summary);
   }
 
-  const feedstockInventoryMap = new Map(
-    feedstockInventoryRows.map((row) => [row.facilityId, row.totalDryKg])
-  );
-  const feedstockConsumptionMap = new Map(
-    feedstockConsumptionRows.map((row) => [row.facilityId, row.totalConsumedKg])
-  );
-  const ingredientConsumptionMap = new Map(
-    ingredientConsumptionRows.map((row) => [row.facilityId, row.totalConsumedKg])
-  );
   const biocharOutputMap = new Map(
     biocharOutputRows.map((row) => [row.facilityId, row.totalProducedKg])
   );
@@ -404,12 +357,7 @@ export async function getFacilities(
       productBinCount: 0,
     },
     inventorySummary: {
-      feedstockDryKg: Math.max(
-        0,
-        (feedstockInventoryMap.get(f.id) ?? 0) -
-          (feedstockConsumptionMap.get(f.id) ?? 0) -
-          (ingredientConsumptionMap.get(f.id) ?? 0)
-      ),
+      feedstockWetKg: feedstockWetStockByFacility.get(f.id) ?? 0,
       biocharKg: Math.max(
         0,
         (biocharOutputMap.get(f.id) ?? 0) -

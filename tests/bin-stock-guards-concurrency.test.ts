@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { assertFeedstockDrawWithinStock } from "@/data-access/bin-stock-guards";
+import { assertFeedstockWetDrawWithinStock } from "@/data-access/feedstock-wet-stock";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
 import {
@@ -16,7 +16,8 @@ import {
 } from "./helpers/test-org";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000423";
-const INITIAL_STOCK_KG = 100;
+const INITIAL_WET_STOCK_KG = 100;
+const INTAKE_DRY_MASS_KG = 65;
 const CONCURRENT_DRAW_KG = 60;
 
 describe("bin stock guard concurrency (issue #423)", () => {
@@ -86,7 +87,8 @@ describe("bin stock guard concurrency (issue #423)", () => {
         facilityId,
         status: "complete",
         feedstockTypeId,
-        massDryKg: INITIAL_STOCK_KG,
+        massDryKg: INTAKE_DRY_MASS_KG,
+        massWetKg: INITIAL_WET_STOCK_KG,
         storageLocationId,
       })
       .returning({ id: feedstocks.id });
@@ -152,15 +154,15 @@ describe("bin stock guard concurrency (issue #423)", () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const draw = (productionRunId: string) =>
       db.transaction(async (tx) => {
-        await assertFeedstockDrawWithinStock(ctx, tx, {
+        await assertFeedstockWetDrawWithinStock(ctx, tx, {
           storageLocationId,
-          requestedDryKg: CONCURRENT_DRAW_KG,
+          requestedWetKg: CONCURRENT_DRAW_KG,
         });
         await tx.insert(productionRunFeedstocks).values({
           organizationId: TEST_ORG_ID,
           productionRunId,
           feedstockId,
-          massUsedKg: CONCURRENT_DRAW_KG,
+          wetMassUsedKg: CONCURRENT_DRAW_KG,
         });
       });
 
@@ -176,13 +178,16 @@ describe("bin stock guard concurrency (issue #423)", () => {
 
     const [consumption] = await db
       .select({
-        total: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`,
+        total: sql<number>`COALESCE(SUM(${productionRunFeedstocks.wetMassUsedKg}), 0)`,
       })
       .from(productionRunFeedstocks)
       .where(inArray(productionRunFeedstocks.productionRunId, runIds));
-    const remainingStockKg = INITIAL_STOCK_KG - Number(consumption.total);
+    const remainingStockKg =
+      INITIAL_WET_STOCK_KG - Number(consumption.total);
 
     expect(remainingStockKg).toBeGreaterThanOrEqual(0);
-    expect(remainingStockKg).toBe(INITIAL_STOCK_KG - CONCURRENT_DRAW_KG);
+    expect(remainingStockKg).toBe(
+      INITIAL_WET_STOCK_KG - CONCURRENT_DRAW_KG,
+    );
   });
 });

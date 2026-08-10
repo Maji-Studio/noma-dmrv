@@ -45,7 +45,6 @@ import {
   deriveLaneStock,
   type LaneStockDerivation,
 } from "../lane-stock-derivation";
-import { estimateRemainingFeedstockWetMassKg } from "../storage-location-enrichment";
 import {
   productDryBiocharKgSql,
   sourceBiocharMassKgSql,
@@ -55,7 +54,7 @@ export function formatStorageLocationSubtitle(
   type: string,
   feedstockTypeName: string | null,
   feedstockTypeUsage: string | null,
-  totalStoredKg: number,
+  totalStoredWetKg: number,
   pendingStoredKg: number,
   totalConsumedKg: number,
   totalProducedWetKg: number,
@@ -75,7 +74,7 @@ export function formatStorageLocationSubtitle(
     case "feedstock_bin": {
       const typeLabel = formatStorageLocationType(type);
       const onHandKg =
-        remainingMass?.dryKg ?? Math.max(0, totalStoredKg - totalConsumedKg);
+        remainingMass?.wetKg ?? Math.max(0, totalStoredWetKg - totalConsumedKg);
       if (!feedstockTypeName && onHandKg === 0) {
         return `${typeLabel} · Empty · Feedstock type locks on first intake`;
       }
@@ -89,7 +88,9 @@ export function formatStorageLocationSubtitle(
       }
       parts.push(`${Math.round(onHandKg).toLocaleString()} kg stored`);
       if (pendingStoredKg > 0) {
-        parts.push(`${Math.round(pendingStoredKg).toLocaleString()} kg pending completion`);
+        parts.push(
+          `${Math.round(pendingStoredKg).toLocaleString()} kg pending dry estimate (non-binding)`,
+        );
       }
       return parts.join(" · ");
     }
@@ -200,7 +201,7 @@ function buildInventoryAggregates(
   const productionRunConsumptionAggregate = executor
   .select({
     storageLocationId: productionRuns.feedstockStorageLocationId,
-    totalConsumedKg: sumNumeric(productionRunFeedstocks.massUsedKg).as(
+    totalConsumedKg: sumNumeric(productionRunFeedstocks.wetMassUsedKg).as(
       "total_consumed_kg",
     ),
   })
@@ -228,9 +229,9 @@ function buildInventoryAggregates(
       COALESCE(
         SUM(
           CASE
-            WHEN jsonb_typeof(ingredient.value -> 'massDryKg') = 'number'
-              AND (ingredient.value ->> 'massDryKg')::numeric > 0
-            THEN (ingredient.value ->> 'massDryKg')::numeric
+            WHEN jsonb_typeof(ingredient.value -> 'massKg') = 'number'
+              AND (ingredient.value ->> 'massKg')::numeric > 0
+            THEN (ingredient.value ->> 'massKg')::numeric
             ELSE 0
           END
         ),
@@ -503,15 +504,11 @@ export function toStorageLocationEntityOption(
   let remainingMass: EntityOption["remainingMass"];
 
   if (row.type === "feedstock_bin") {
-    const remainingDryKg =
-      stock?.feedstockStockDryKg ?? row.totalStoredKg - row.totalConsumedKg;
     remainingMass = {
-      wetKg: estimateRemainingFeedstockWetMassKg({
-        intakeDryKg: stock?.feedstockIntakeDryKg ?? row.totalStoredKg,
-        intakeWetKg: row.totalStoredWetKg,
-        remainingDryKg,
-      }),
-      dryKg: remainingDryKg,
+      wetKg:
+        stock?.feedstockStockWetKg ??
+        row.totalStoredWetKg - row.totalConsumedKg,
+      dryKg: stock?.feedstockEstimatedDryKg ?? null,
     };
   } else if (row.type === "biochar_bin") {
     const movementDeltaKg = stock?.biocharMovementDeltaKg ?? 0;
@@ -556,7 +553,7 @@ export function toStorageLocationEntityOption(
       row.type,
       row.heldFeedstockTypeName ?? row.feedstockTypeName,
       row.heldFeedstockTypeUsage,
-      row.totalStoredKg,
+      row.totalStoredWetKg,
       row.pendingStoredKg,
       row.totalConsumedKg,
       row.totalProducedWetKg,

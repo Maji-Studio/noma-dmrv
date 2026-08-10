@@ -111,7 +111,8 @@ describe("storage-location feedstock stock", () => {
         fixture.storageLocationId,
       );
 
-      expect(storageLocation.feedstockInventory.currentDryMassKg).toBe(80);
+      expect(storageLocation.feedstockInventory.currentWetMassKg).toBe(100);
+      expect(storageLocation.feedstockInventory.estimatedDryMassKg).toBe(80);
       expect(storageLocation.feedstockInventory.batchCount).toBe(1);
       expect(storageLocation.feedstockInventory.pendingDryMassKg).toBe(120);
       expect(storageLocation.feedstockInventory.pendingBatchCount).toBe(1);
@@ -130,8 +131,10 @@ describe("storage-location feedstock stock", () => {
         fixture.storageLocationId,
       );
 
-      expect(option?.subtitle).toContain("80 kg stored");
-      expect(option?.subtitle).toContain("120 kg pending completion");
+      expect(option?.subtitle).toContain("100 kg stored");
+      expect(option?.subtitle).toContain(
+        "120 kg pending dry estimate (non-binding)",
+      );
     } finally {
       await cleanupFixture(fixture);
     }
@@ -167,7 +170,7 @@ describe("storage-location feedstock stock", () => {
       );
 
       expect(result.items).toHaveLength(1);
-      expect(result.items[0]?.inventorySummary.feedstockDryKg).toBe(176);
+      expect(result.items[0]?.inventorySummary.feedstockWetKg).toBe(70);
     } finally {
       await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
       await cleanupFixture(fixture);

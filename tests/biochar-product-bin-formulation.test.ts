@@ -488,7 +488,7 @@ beforeAll(async () => {
     ).rejects.toThrow("no complete wet-mass and moisture basis");
   });
 
-  it("stores ingredient wet mass and deducts its frozen dry-mass basis", async () => {
+  it("deducts ingredient wet mass while preserving its frozen dry basis", async () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const productBinId = await makeProductBin(formulationAId);
     const ingredientBinId = await makeStockedFeedstockBin(80, 100);
@@ -524,7 +524,7 @@ beforeAll(async () => {
       "storageLocation",
       ingredientBinId,
     );
-    expect(ingredientBin?.subtitle).toContain("40 kg stored");
+    expect(ingredientBin?.subtitle).toContain("50 kg stored");
   });
 
   it("preserves a frozen ingredient basis when later intakes change bin moisture", async () => {
@@ -565,7 +565,7 @@ beforeAll(async () => {
       "storageLocation",
       ingredientBinId,
     );
-    expect(ingredientBin?.subtitle).toContain("140 kg stored");
+    expect(ingredientBin?.subtitle).toContain("150 kg stored");
   });
 
   it("derives a new ingredient basis from mixed-history remaining stock", async () => {
@@ -607,8 +607,8 @@ beforeAll(async () => {
       }
     ).ingredients;
     expect(ingredient).toMatchObject({
-      massDryKg: 28,
-      moistureContentPercent: 6.666667,
+      massDryKg: 27,
+      moistureContentPercent: 10,
     });
   });
 
@@ -636,7 +636,7 @@ beforeAll(async () => {
       updateBiocharProduct(makeTestOrgContext(TEST_USER_ID), product.id, {
         composition: increased,
       }),
-    ).rejects.toThrow("Not enough feedstock in this bin");
+    ).rejects.toThrow("Not enough wet feedstock in this bin");
   });
 
   it("serializes concurrent ingredient draws from the same bin", async () => {
@@ -670,7 +670,9 @@ beforeAll(async () => {
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
     expect(rejected[0].reason).toBeInstanceOf(Error);
-    expect(rejected[0].reason.message).toBe("Not enough feedstock in this bin");
+    expect(rejected[0].reason.message).toBe(
+      "Not enough wet feedstock in this bin",
+    );
 
     const ingredientBin = await getEntityById(
       makeTestOrgContext(TEST_USER_ID),
