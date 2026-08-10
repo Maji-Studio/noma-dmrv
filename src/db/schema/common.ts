@@ -82,8 +82,9 @@ export const applicationMethod = pgEnum('application_method', [
 ]);
 
 export const applicationEvidenceMethod = pgEnum('application_evidence_method', [
-  'visual',
+  'location',
   'boundary',
+  'visual',
 ]);
 
 export const documentationType = pgEnum('documentation_type', [

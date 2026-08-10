@@ -688,7 +688,7 @@ export async function createApplication(
         gpsLatitude: data.gpsLatitude ?? null,
         gpsLongitude: data.gpsLongitude ?? null,
         applicationMethodType: data.applicationMethodType ?? null,
-        evidenceMethod: data.evidenceMethod ?? "visual",
+        evidenceMethod: data.evidenceMethod ?? "location",
         gisBoundary:
           data.gisBoundary === null || data.gisBoundary === undefined
             ? null

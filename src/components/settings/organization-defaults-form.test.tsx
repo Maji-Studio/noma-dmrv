@@ -12,7 +12,7 @@ const queryState = vi.hoisted(() => ({
       defaultCountry: "Kenya",
       defaultTimezone: "Africa/Nairobi",
       defaultTripType: "return" as const,
-      defaultEvidenceMethod: "visual" as const,
+      defaultEvidenceMethod: "location" as const,
       defaultPackaging: "bagged" as const,
     },
     viewerCanManage: true,

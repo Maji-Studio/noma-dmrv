@@ -54,7 +54,7 @@ export const organizationSettings = pgTable(
       .default("return"),
     defaultEvidenceMethod: applicationEvidenceMethod("default_evidence_method")
       .notNull()
-      .default("visual"),
+      .default("location"),
     defaultPackaging: packagingType("default_packaging")
       .notNull()
       .default("loose"),

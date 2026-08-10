@@ -33,10 +33,40 @@ export const applicationMethods = ["manual", "mechanical"] as const;
 export type ApplicationMethod = (typeof applicationMethods)[number];
 
 /**
- * Application evidence methods (Soil Module §9.5, either visual or boundary).
+ * Alternative proof-of-spreading methods accepted by the pinned Agricultural
+ * Soils v1.1 module.
  */
-export const applicationEvidenceMethods = ["visual", "boundary"] as const;
+export const applicationEvidenceMethods = [
+  "location",
+  "boundary",
+  "visual",
+] as const;
 export type ApplicationEvidenceMethod = (typeof applicationEvidenceMethods)[number];
+
+const CUSTOMER_LOCATION_REQUIRED_MESSAGE =
+  "Customer location coordinates are required.";
+
+function applicationEvidenceSuperRefine(
+  data: {
+    evidenceMethod?: ApplicationEvidenceMethod;
+    gpsLatitude?: number | null;
+    gpsLongitude?: number | null;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  gpsPairSuperRefine(data, ctx);
+  if (
+    data.evidenceMethod === "location" &&
+    data.gpsLatitude == null &&
+    data.gpsLongitude == null
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["gpsLatitude"],
+      message: CUSTOMER_LOCATION_REQUIRED_MESSAGE,
+    });
+  }
+}
 
 // ============================================
 // GPS Coordinate Validation
@@ -85,7 +115,7 @@ const applicationFormBaseSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z.enum(applicationMethods).optional().nullable()
   ),
-  evidenceMethod: z.enum(applicationEvidenceMethods).default("boundary"),
+  evidenceMethod: z.enum(applicationEvidenceMethods).default("location"),
   gisBoundary: gisBoundarySchema.nullable().default(null),
 
   // === Section 3: Soil Temperature ===
@@ -104,7 +134,7 @@ const applicationFormBaseSchema = z.object({
 
 export const applicationFormSchema = applicationFormBaseSchema.superRefine(
   (data, ctx) => {
-    gpsPairSuperRefine(data, ctx);
+    applicationEvidenceSuperRefine(data, ctx);
   },
 );
 
@@ -124,7 +154,7 @@ const applicationCreateBaseSchema = applicationFormBaseSchema.extend({
  */
 export const createApplicationSchema = applicationCreateBaseSchema.superRefine(
   (data, ctx) => {
-    gpsPairSuperRefine(data, ctx);
+    applicationEvidenceSuperRefine(data, ctx);
   },
 );
 
@@ -153,7 +183,7 @@ export const updateApplicationSchema = z.object({
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
 }).superRefine((data, ctx) => {
-  gpsPairSuperRefine(data, ctx);
+  applicationEvidenceSuperRefine(data, ctx);
 });
 
 /**
@@ -203,8 +233,9 @@ export function formatApplicationMethod(method: ApplicationMethod): string {
 
 export function formatApplicationEvidenceMethod(method: ApplicationEvidenceMethod): string {
   const labels: Record<ApplicationEvidenceMethod, string> = {
-    visual: "Visual evidence",
+    location: "Customer location",
     boundary: "GIS reference",
+    visual: "Visual evidence",
   };
   return labels[method];
 }

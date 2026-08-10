@@ -153,7 +153,7 @@ function createColumns(
       cell: ({ row }) => (
         <span>
           {formatApplicationEvidenceMethod(
-            (row.original.evidenceMethod ?? "visual") as ApplicationEvidenceMethod,
+            (row.original.evidenceMethod ?? "location") as ApplicationEvidenceMethod,
           )}
         </span>
       ),
@@ -733,14 +733,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               {
                 label: "Evidence method",
                 value: formatApplicationEvidenceMethod(
-                  (sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod,
+                  (sideSheetEntity.evidenceMethod ?? "location") as ApplicationEvidenceMethod,
                 ),
               },
             ],
             content: (
               <ApplicationEvidencePanel
                 applicationId={sideSheetEntity.id}
-                mode={(sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod}
+                mode={(sideSheetEntity.evidenceMethod ?? "location") as ApplicationEvidenceMethod}
                 boundary={sideSheetEntity.gisBoundary ?? null}
                 readOnly
               />
