@@ -321,7 +321,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.productionReadinessGap).toMatchObject({
       kind: "noApplications",
       detail:
-        "No applications are linked to this credit batch's production runs. Review the product, delivery, and application chain.",
+        "Some completed production runs linked to this credit batch have no application. Review the product, delivery, and application chain.",
       fixTarget: "applications",
     });
   });

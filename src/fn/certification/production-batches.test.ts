@@ -335,6 +335,12 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       await expect(ensure()).rejects.toThrow(/does not match this credit batch/);
       expect(mocks.client.post).not.toHaveBeenCalled();
       expect(mocks.upsertProductionBatchRegistration).not.toHaveBeenCalled();
+      const registryCreateArgs = vi.mocked(performRegistryCreate).mock
+        .calls[0][0];
+      await expect(registryCreateArgs.reconcile()).resolves.toMatchObject({
+        found: "refused",
+        message: expect.stringMatching(/does not match this credit batch/),
+      });
     },
   );
 

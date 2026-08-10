@@ -33,7 +33,7 @@ export function missingApplicationLineageGap(args: {
   }
   return {
     kind: "noApplications",
-    detail: `No applications are linked to ${subject}'s production runs. Review the product, delivery, and application chain.`,
+    detail: `Some completed production runs linked to ${subject} have no application. Review the product, delivery, and application chain.`,
     fixTarget: "applications",
   };
 }

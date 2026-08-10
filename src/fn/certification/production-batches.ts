@@ -225,7 +225,8 @@ export async function ensureProductionBatchesForCreditBatches(
       resumed: true,
       create: async () => {
         const batch = await createProductionBatch(client, submission.body);
-        assertProductionBatchMatchesSubmission(batch, submission.body);
+        const mismatch = productionBatchMismatchMessage(batch, submission.body);
+        if (mismatch) throw new SafeError(mismatch);
         return batch.id;
       },
       reconcile: async () => {
@@ -234,7 +235,11 @@ export async function ensureProductionBatchesForCreditBatches(
           submission.supplierRefId,
         );
         if (batch) {
-          assertProductionBatchMatchesSubmission(batch, submission.body);
+          const mismatch = productionBatchMismatchMessage(
+            batch,
+            submission.body,
+          );
+          if (mismatch) return { found: "refused", message: mismatch };
         }
         return supplierRefLookup(
           batch ? { found: true, externalId: batch.id } : { found: false },
@@ -314,10 +319,10 @@ function tryBuildProductionBatchSubmission(
   }
 }
 
-function assertProductionBatchMatchesSubmission(
+function productionBatchMismatchMessage(
   batch: IsometricProductionBatch,
   expected: CreateProductionBatchRequest,
-): void {
+): string | null {
   const startedAtMatches =
     Number.isFinite(Date.parse(batch.started_at)) &&
     Date.parse(batch.started_at) === Date.parse(expected.started_at);
@@ -337,11 +342,9 @@ function assertProductionBatchMatchesSubmission(
     startedAtMatches &&
     endedAtMatches
   ) {
-    return;
+    return null;
   }
-  throw new SafeError(
-    `Registry production batch ${batch.id} does not match this credit batch's facility, feedstock, kind, mass, or production window. Ask support to check the registry record.`,
-  );
+  return `Registry production batch ${batch.id} does not match this credit batch's facility, feedstock, kind, mass, or production window. Ask support to check the registry record.`;
 }
 
 async function recordProductionBatchDrift(args: {
