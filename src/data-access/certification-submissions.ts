@@ -29,7 +29,7 @@ import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME } from "@/lib/certification/status";
-import { SUBMISSION_METADATA_KEYS } from "@/lib/isometric/utils/submission-metadata";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { logger } from "@/lib/log";
 import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
@@ -615,6 +615,9 @@ async function resetSubmissionToDraftCas(
       status: "draft",
       lockedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
       updatedAt: sql`now()`,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb)
+        - ${SUBMISSION_METADATA_KEYS.lastError}::text
+        - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text`,
     })
     .where(
       and(

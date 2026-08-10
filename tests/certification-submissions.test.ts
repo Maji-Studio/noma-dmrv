@@ -610,8 +610,6 @@ describe("claimSubmissionDraft — resume", () => {
       semantic: { seeded: true },
     });
     expect(outcome.row.metadata).toEqual({
-      lastError: "Previous attempt failed",
-      lastAttemptOutcome: "interrupted",
       externalMutation: "possible",
       retained: true,
     });

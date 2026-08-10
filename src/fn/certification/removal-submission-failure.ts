@@ -6,15 +6,17 @@ import type { Logger } from "@/lib/log";
 import {
   getMetadataValue,
   SUBMISSION_METADATA_KEYS,
-} from "@/lib/isometric/utils/submission-metadata";
+} from "@/lib/certification/submission-metadata";
 import type { RegistryExternalMutation } from "./registry-create";
+
+export type RemovalExternalMutation = "none" | RegistryExternalMutation;
 
 const UNEXPECTED_REMOVAL_SUBMISSION_ERROR =
   "Removal submission failed unexpectedly. Retry the submission.";
 
 export function readRemovalSubmissionExternalMutation(
   metadata: unknown,
-): "none" | RegistryExternalMutation {
+): RemovalExternalMutation {
   const value = getMetadataValue(
     metadata,
     SUBMISSION_METADATA_KEYS.externalMutation,
@@ -23,7 +25,7 @@ export function readRemovalSubmissionExternalMutation(
 }
 
 export function recordRemovalExternalMutation(
-  attempt: { externalMutation: "none" | RegistryExternalMutation },
+  attempt: { externalMutation: RemovalExternalMutation },
   next: RegistryExternalMutation,
 ): void {
   if (next === "confirmed" || attempt.externalMutation === "none") {
@@ -57,7 +59,7 @@ export async function recordClaimedRemovalSubmissionFailureBestEffort(args: {
   orgCtx: OrgContext;
   submissionId: string;
   expectedLockedAt: Date;
-  externalMutation: "none" | RegistryExternalMutation;
+  externalMutation: RemovalExternalMutation;
   error: unknown;
   log: Logger;
 }): Promise<void> {

@@ -1,7 +1,6 @@
 import type { OrgContext } from "@/lib/auth/server";
 import {
   markSubmissionSubmitted,
-  retireStaleSubmissionDraft,
   stampProductionEmissionsClaim,
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
@@ -69,17 +68,18 @@ import {
   materializeRemovalSubmissionSnapshot,
   removalTemplateTierCompatibilityBlocker,
 } from "./removal-submission-build";
+import { assertClaimedRemovalPayloadFresh } from "./removal-submission-freshness";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import {
   performRegistryCreate,
   supplierRefLookup,
-  type RegistryExternalMutation,
 } from "./registry-create";
 import {
   recordClaimedRemovalSubmissionFailureBestEffort,
   recordRemovalExternalMutation,
   readRemovalSubmissionExternalMutation,
   safeRemovalSubmissionError,
+  type RemovalExternalMutation,
 } from "./removal-submission-failure";
 import {
   mirrorCandidateSourcesForSubmission,
@@ -124,8 +124,6 @@ export interface RemovalSubmissionResult {
   externalId: string;
   version: number;
 }
-
-type RemovalExternalMutation = "none" | RegistryExternalMutation;
 
 interface RemovalSubmitAttempt {
   id: string;
@@ -546,49 +544,52 @@ async function submitRemovalCore(
         version: claimed.version,
       };
     case "claimed": {
-      if (claimed.resumed) {
-        attempt.externalMutation = readRemovalSubmissionExternalMutation(
-          claimed.row.metadata,
-        );
-      }
-      // ADR 0020: never resume a snapshot from an older mapping revision.
-      if (claimed.resumed) {
-        await assertResumedSnapshotRevisionCurrent(orgCtx, claimed.row);
-      }
-      // Re-assert claims, lineage, and payload before registry I/O.
-      await assertProductionClaimGateFresh(
-        orgCtx,
-        removalId,
-        ctx.memberBatchClaims,
-      );
-      await assertClaimedRemovalPayloadFresh({
-        orgCtx,
-        removalId,
-        row: claimed.row,
-        allowPeriodInputStub,
-      });
-      if (claimed.reason === "rejected-hash-changed") {
-        log.warn(
-          { submissionId: claimed.row.id },
-          "removal retry will create a new version after rejected row with changed hash",
-        );
-      }
       const expectedLockedAt = claimed.row.lockedAt;
       if (!expectedLockedAt) {
         throw new SafeError(
           "The Removal submission lock changed while preparing the registry request. Reload and retry.",
         );
       }
-      onProgress?.({ step: "removal.preparing_evidence", state: "complete" });
-      const transport = readRemovalTransport(claimed.row);
-      const sourceBindingPlan = readRemovalSourceBindingPlan(claimed.row);
-      const effectiveFixed = claimed.resumed
-        ? readRemovalFixedInputs(claimed.row)
-        : fixed;
-      const durabilityMeasurementSubmissions = hasDurabilityComponents
-        ? readRemovalDurabilityMeasurementSamples(claimed.row)
-        : null;
+      if (claimed.resumed) {
+        attempt.externalMutation = readRemovalSubmissionExternalMutation(
+          claimed.row.metadata,
+        );
+      }
       try {
+        if (claimed.resumed) {
+          await assertResumedSnapshotRevisionCurrent(
+            orgCtx,
+            claimed.row,
+            attempt.externalMutation !== "none",
+          );
+        }
+        await assertProductionClaimGateFresh(
+          orgCtx,
+          removalId,
+          ctx.memberBatchClaims,
+        );
+        await assertClaimedRemovalPayloadFresh({
+          orgCtx,
+          removalId,
+          row: claimed.row,
+          allowPeriodInputStub,
+          preserveForReconciliation: attempt.externalMutation !== "none",
+        });
+        if (claimed.reason === "rejected-hash-changed") {
+          log.warn(
+            { submissionId: claimed.row.id },
+            "removal retry will create a new version after rejected row with changed hash",
+          );
+        }
+        onProgress?.({ step: "removal.preparing_evidence", state: "complete" });
+        const transport = readRemovalTransport(claimed.row);
+        const sourceBindingPlan = readRemovalSourceBindingPlan(claimed.row);
+        const effectiveFixed = claimed.resumed
+          ? readRemovalFixedInputs(claimed.row)
+          : fixed;
+        const durabilityMeasurementSubmissions = hasDurabilityComponents
+          ? readRemovalDurabilityMeasurementSamples(claimed.row)
+          : null;
         return await runRemovalSubmission({
           client,
           orgCtx,
@@ -643,73 +644,6 @@ function assertReviewedCompilationHash(
   if (reviewPayloadHash(compiled.semanticPayload) === expectedHash) return;
   throw new SafeError(
     "This Removal's data changed after you reviewed it. Reload the Removal and check the updated summary before submitting.",
-  );
-}
-
-async function assertClaimedRemovalPayloadFresh(args: {
-  orgCtx: OrgContext;
-  removalId: string;
-  row: CertificationSubmissionRow;
-  allowPeriodInputStub: boolean;
-}): Promise<void> {
-  const { orgCtx, removalId, row, allowPeriodInputStub } = args;
-
-  const freshCtx = await loadRemovalSubmissionContext(orgCtx, removalId);
-  if (
-    !freshCtx.mapping ||
-    freshCtx.missingDefaultTemplateId ||
-    !freshCtx.defaultTemplate ||
-    freshCtx.defaultTemplate.credit_type !== "REMOVAL" ||
-    freshCtx.unresolvedBlueprintKeys.length > 0 ||
-    freshCtx.defaultTemplate.groups.length === 0
-  ) {
-    await retireStaleSubmissionDraft(orgCtx, row.id, {
-      reason: "semantic payload rebuild failed after draft claim",
-    });
-    throw new SafeError(
-      "Removal source data or template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
-    );
-  }
-  const freshHasDurabilityComponents = freshCtx.defaultTemplate.groups.some((group) =>
-    group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
-  );
-  if (freshHasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
-    await retireStaleSubmissionDraft(orgCtx, row.id, {
-      reason: "durability measurement-sample gate changed after draft claim",
-    });
-    throw new SafeError(
-      "Removal template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
-    );
-  }
-
-  let freshBuild: Awaited<ReturnType<typeof buildRemovalSubmissionBuild>>;
-  try {
-    freshBuild = await buildRemovalSubmissionBuild({
-      orgCtx,
-      removalId,
-      ctx: freshCtx,
-      defaultTemplate: freshCtx.defaultTemplate,
-      blueprintsByKey: new Map(
-        freshCtx.blueprintsForTemplate.map((bp) => [bp.key, bp]),
-      ),
-      externalProjectId: freshCtx.mapping.externalProjectId,
-      allowPeriodInputStub,
-      hasDurabilityComponents: freshHasDurabilityComponents,
-    });
-  } catch (err) {
-    await retireStaleSubmissionDraft(orgCtx, row.id, {
-      reason: "semantic payload rebuild failed after draft claim",
-    });
-    throw err;
-  }
-  const freshHash = payloadHash(freshBuild.semanticPayload);
-  if (freshHash === row.payloadHash) return;
-
-  await retireStaleSubmissionDraft(orgCtx, row.id, {
-    reason: `semantic payload drift: snapshot ${String(row.payloadHash)} != current ${freshHash}`,
-  });
-  throw new SafeError(
-    "Removal source data changed while preparing this submission. The stale draft was retired; reload and submit again.",
   );
 }
 

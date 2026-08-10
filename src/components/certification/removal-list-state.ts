@@ -63,7 +63,7 @@ export function buildRemovalListRows(
       submissionInterrupted:
         lifecycleData?.submissionInterrupted ??
         isRemovalSubmissionInterrupted(identity.latestSubmission?.metadata),
-      readiness: enrichment.status === "available" ? (data?.readiness ?? null) : null,
+      readiness: lifecycleData?.readiness ?? null,
       evidenceHealth: data?.evidenceHealth ?? null,
       submissionWarnings: data?.submissionWarnings ?? [],
       recentSyncEvents: data?.recentSyncEvents ?? [],

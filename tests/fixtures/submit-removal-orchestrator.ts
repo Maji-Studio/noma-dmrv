@@ -14,12 +14,16 @@ import type {
   Sample,
 } from "@/db/schema";
 import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
-import { SUBMISSION_METADATA_KEYS } from "@/lib/isometric/utils/submission-metadata";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 
 const INTERRUPTION_METADATA_KEYS = new Set<string>([
   SUBMISSION_METADATA_KEYS.lastError,
   SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
   SUBMISSION_METADATA_KEYS.externalMutation,
+]);
+const RETRY_CLEARED_METADATA_KEYS = new Set<string>([
+  SUBMISSION_METADATA_KEYS.lastError,
+  SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
 ]);
 
 // ---------------------------------------------------------------------------
@@ -680,6 +684,11 @@ beforeEach(() => {
         if (!row) throw new Error(`Test ledger missing row ${rowId}`);
         row.status = "draft";
         row.lockedAt = new Date();
+        row.metadata = Object.fromEntries(
+          Object.entries(row.metadata ?? {}).filter(
+            ([key]) => !RETRY_CLEARED_METADATA_KEYS.has(key),
+          ),
+        );
         return row;
       },
     }),

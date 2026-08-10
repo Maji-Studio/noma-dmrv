@@ -13,7 +13,7 @@ import type { CertificationSubmissionRow } from "@/data-access/certification";
 import {
   getMetadataValue,
   SUBMISSION_METADATA_KEYS,
-} from "@/lib/isometric/utils/submission-metadata";
+} from "@/lib/certification/submission-metadata";
 import {
   deriveRemovalStatus,
   isRemovalSubmissionInterrupted,

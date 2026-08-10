@@ -30,7 +30,7 @@ import type { components } from "@/lib/isometric/generated/certify";
 import {
   getMetadataValue,
   SUBMISSION_METADATA_KEYS,
-} from "@/lib/isometric/utils/submission-metadata";
+} from "@/lib/certification/submission-metadata";
 import type { RemovalReadiness } from "./readiness";
 
 /**
@@ -127,6 +127,8 @@ export type RemovalWorkflowStatusKind =
   | "superseded";
 
 export const REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME = "interrupted" as const;
+export const REMOVAL_SUBMISSION_INTERRUPTED_LABEL =
+  "Submission interrupted";
 
 export function isRemovalSubmissionInterrupted(metadata: unknown): boolean {
   return (
@@ -148,10 +150,24 @@ export interface RemovalWorkflowStatus {
   canRetry: boolean;
 }
 
+function interruptedWorkflowStatus(
+  reasons: string[],
+  isActionable: boolean,
+  canRetry: boolean,
+): RemovalWorkflowStatus {
+  return {
+    kind: "interrupted",
+    value: "failed",
+    label: REMOVAL_SUBMISSION_INTERRUPTED_LABEL,
+    reasons,
+    isActionable,
+    canRetry,
+  };
+}
+
 export interface RemovalWorkflowStatusInput extends RemovalStatusInput {
   enrichmentStatus: RemovalEnrichmentStatus;
   readiness: RemovalReadiness | null;
-  submissionInterrupted?: boolean;
 }
 
 /**
@@ -167,7 +183,7 @@ export function deriveRemovalStatus({
     return {
       kind: "interrupted",
       value: "failed",
-      label: "Submission interrupted",
+      label: REMOVAL_SUBMISSION_INTERRUPTED_LABEL,
       isActionable: !lockInFlight,
       isTerminal: false,
     };
@@ -258,67 +274,45 @@ export function deriveRemovalWorkflowStatus({
 
   if (lifecycle.kind === "interrupted") {
     if (lockInFlight) {
-      return {
-        kind: "interrupted",
-        value: "failed",
-        label: "Submission interrupted",
-        reasons: [
+      return interruptedWorkflowStatus(
+        [
           "This submission was interrupted. Wait, then select Review & submit when it becomes available.",
         ],
-        isActionable: false,
-        canRetry: false,
-      };
+        false,
+        false,
+      );
     }
     if (enrichmentStatus === "loading") {
-      return {
-        kind: "interrupted",
-        value: "failed",
-        label: "Submission interrupted",
-        reasons: ["Checking whether this submission is ready to reconcile."],
-        isActionable: false,
-        canRetry: false,
-      };
+      return interruptedWorkflowStatus(
+        ["Checking whether this submission is ready to reconcile."],
+        false,
+        false,
+      );
     }
     if (enrichmentStatus === "unavailable" || !readiness) {
-      return {
-        kind: "interrupted",
-        value: "failed",
-        label: "Submission interrupted",
-        reasons: ["Status checks could not finish. Select Retry to check again."],
-        isActionable: false,
-        canRetry: true,
-      };
+      return interruptedWorkflowStatus(
+        ["Status checks could not finish. Select Retry to check again."],
+        false,
+        true,
+      );
     }
     if (readiness.state === "blocked") {
-      return {
-        kind: "interrupted",
-        value: "failed",
-        label: "Submission interrupted",
-        reasons: readiness.reasons,
-        isActionable: true,
-        canRetry: false,
-      };
+      return interruptedWorkflowStatus(readiness.reasons, true, false);
     }
     if (readiness.state === "inProgress") {
-      return {
-        kind: "interrupted",
-        value: "failed",
-        label: "Submission interrupted",
-        reasons: ["Waiting for the current submission check to finish."],
-        isActionable: false,
-        canRetry: false,
-      };
+      return interruptedWorkflowStatus(
+        ["Waiting for the current submission check to finish."],
+        false,
+        false,
+      );
     }
-    return {
-      kind: "interrupted",
-      value: "failed",
-      label: "Submission interrupted",
-      reasons: [
+    return interruptedWorkflowStatus(
+      [
         "This submission was interrupted and registry work may already exist. Select Review & submit to reconcile it.",
       ],
-      isActionable: true,
-      canRetry: false,
-    };
+      true,
+      false,
+    );
   }
 
   if (lifecycle.kind === "in-progress") {
