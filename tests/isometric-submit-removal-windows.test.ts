@@ -95,7 +95,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
     );
   }
 
-  it("rejects and unlocks a claimed draft when production-batch binding throws", async () => {
+  it("keeps the draft locked when production-batch binding fails after datapoints were created", async () => {
     prepareDurabilitySubmission();
     const originalError = new Error("production batch binding unavailable");
     vi.mocked(
@@ -111,28 +111,24 @@ describe("submitRemoval — reporting window anchored to application date (issue
 
     expect(storedRows).toHaveLength(1);
     expect(storedRows[0]).toMatchObject({
-      status: "rejected",
-      lockedAt: null,
-      metadata: {
-        lastError: "Removal submission failed unexpectedly. Retry the submission.",
-      },
+      status: "draft",
+      metadata: null,
     });
-    expect(ledger.markSubmissionRejected).toHaveBeenCalledWith(
-      makeTestOrgContext(USER_ID),
-      storedRows[0].id,
-      {
-        errorMessage:
-          "Removal submission failed unexpectedly. Retry the submission.",
-      },
-    );
+    expect(storedRows[0].lockedAt).not.toBeNull();
+    expect(isometric.createDatapoint).toHaveBeenCalled();
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
   });
 
-  it("preserves the original post-claim error when rejection cleanup fails", async () => {
+  it("preserves the submission error when no-mutation rejection cleanup fails", async () => {
     prepareDurabilitySubmission();
-    const originalError = new Error("production batch binding unavailable");
-    vi.mocked(
-      productionBatchesDA.getProductionBatchRegistryInputs,
-    ).mockRejectedValue(originalError);
+    vi.mocked(isometric.createDatapoint).mockRejectedValueOnce(
+      new isometric.IsometricApiError(
+        "422 Unprocessable",
+        422,
+        { errors: [{ detail: "invalid datapoint" }] },
+        "http",
+      ),
+    );
     vi.mocked(ledger.markSubmissionRejected).mockRejectedValueOnce(
       new Error("submission ledger unavailable"),
     );
@@ -142,10 +138,11 @@ describe("submitRemoval — reporting window anchored to application date (issue
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toBe(originalError);
+    ).rejects.toThrow("Provider rejected the request (422): invalid datapoint");
 
     expect(ledger.markSubmissionRejected).toHaveBeenCalledOnce();
     expect(storedRows[0]).toMatchObject({ status: "draft" });
+    expect(storedRows[0].lockedAt).not.toBeNull();
   });
 
   it("uses MAX(applicationDate) across lineages for completed_on while durability measured_at keeps the production end", async () => {

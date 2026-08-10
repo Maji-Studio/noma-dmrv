@@ -558,7 +558,7 @@ async function insertDraftSubmissionRow(
       status: "draft",
       payloadSnapshot: input.payloadSnapshot as Record<string, unknown>,
       payloadHash: input.payloadHash,
-      lockedAt: sql`now()`,
+      lockedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
       metadata: (input.metadata ?? null) as Record<string, unknown> | null,
     })
     .returning();
@@ -580,7 +580,7 @@ async function resetSubmissionToDraftCas(
     .update(certificationSubmissions)
     .set({
       status: "draft",
-      lockedAt: sql`now()`,
+      lockedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
       updatedAt: sql`now()`,
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - 'lastError'`,
     })

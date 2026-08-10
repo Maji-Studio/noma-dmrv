@@ -760,7 +760,7 @@ export async function retireStaleSubmissionDraft(
 export async function markSubmissionRejected(
   ctx: OrgContext,
   id: string,
-  args: { errorMessage: string },
+  args: { errorMessage: string; expectedLockedAt?: Date },
 ): Promise<void> {
   requireOrgScope(ctx);
   await db
@@ -775,6 +775,9 @@ export async function markSubmissionRejected(
       and(
         eq(certificationSubmissions.id, id),
         eq(certificationSubmissions.status, "draft"),
+        args.expectedLockedAt
+          ? eq(certificationSubmissions.lockedAt, args.expectedLockedAt)
+          : undefined,
         eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),
     );

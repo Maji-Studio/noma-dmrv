@@ -2,7 +2,7 @@ import { markSubmissionRejected } from "@/data-access/certification";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import type { Logger } from "@/lib/log";
-import { isRegistryMutationOutcomeUncertain } from "./registry-create";
+import type { RegistryExternalMutation } from "./registry-create";
 
 const UNEXPECTED_REMOVAL_SUBMISSION_ERROR =
   "Removal submission failed unexpectedly. Retry the submission.";
@@ -31,15 +31,18 @@ export function safeRemovalSubmissionError(error: unknown): {
 export async function rejectClaimedRemovalSubmissionBestEffort(args: {
   orgCtx: OrgContext;
   submissionId: string;
+  expectedLockedAt: Date;
+  externalMutation: "none" | RegistryExternalMutation;
   error: unknown;
   log: Logger;
 }): Promise<void> {
-  if (isRegistryMutationOutcomeUncertain(args.error)) return;
+  if (args.externalMutation !== "none") return;
   const safeError = safeRemovalSubmissionError(args.error);
   try {
     await markSubmissionRejected(args.orgCtx, args.submissionId, {
       errorMessage:
         safeError.errorMessage ?? UNEXPECTED_REMOVAL_SUBMISSION_ERROR,
+      expectedLockedAt: args.expectedLockedAt,
     });
   } catch (cleanupError) {
     args.log.warn(

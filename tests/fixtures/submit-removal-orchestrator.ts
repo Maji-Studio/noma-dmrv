@@ -698,7 +698,10 @@ beforeEach(() => {
   vi.mocked(ledger.markSubmissionRejected).mockImplementation(
     async (_userId, id, args) => {
       const row = storedRows.find((r) => r.id === id);
-      if (row?.status === "draft") {
+      const ownsLock =
+        !args.expectedLockedAt ||
+        row?.lockedAt?.getTime() === args.expectedLockedAt.getTime();
+      if (row?.status === "draft" && ownsLock) {
         row.status = "rejected";
         row.lockedAt = null;
         row.metadata = {
