@@ -70,13 +70,13 @@ const storageLocation: StorageLocationWithFacility = {
   },
   biocharInventory: {
     productionRunCount: 0,
-    currentMassKg: 0,
+    currentMassKg: 75,
     allocatedToProductsKg: 0,
     downstreamFormulations: [],
   },
   productInventory: {
     batchCount: 0,
-    currentMassKg: 0,
+    currentMassKg: 25,
     biocharEquivalentKg: 0,
     formulationNames: [],
     appliedApplicationCount: 0,
@@ -87,9 +87,25 @@ const storageLocation: StorageLocationWithFacility = {
 };
 
 describe("BinReconcileSheet", () => {
-  it.each(["feedstock_bin", "biochar_bin", "product_bin"] as const)(
-    "opens a %s directly on the loss form without stock-take controls",
-    (type) => {
+  it.each([
+    {
+      type: "feedstock_bin",
+      expectedStock: "125 kg dry",
+      showsMoisture: true,
+    },
+    {
+      type: "biochar_bin",
+      expectedStock: "75 kg",
+      showsMoisture: false,
+    },
+    {
+      type: "product_bin",
+      expectedStock: "25 kg",
+      showsMoisture: false,
+    },
+  ] as const)(
+    "opens a $type directly on the loss form without stock-take controls",
+    ({ type, expectedStock, showsMoisture }) => {
       const markup = renderToStaticMarkup(
         <BinReconcileSheet
           open
@@ -101,8 +117,11 @@ describe("BinReconcileSheet", () => {
       expect(markup).toContain("Reconcile FB-001");
       expect(markup).toContain("North hopper");
       expect(markup).toContain("Current derived stock");
-      if (type === "feedstock_bin") {
+      expect(markup).toContain(expectedStock);
+      if (showsMoisture) {
         expect(markup).toContain("Current estimated moisture");
+      } else {
+        expect(markup).not.toContain("Current estimated moisture");
       }
       expect(markup).toContain("Amount lost (kg)");
       expect(markup).toContain('id="loss-amount"');
