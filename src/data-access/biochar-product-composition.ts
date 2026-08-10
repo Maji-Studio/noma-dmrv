@@ -25,7 +25,7 @@ import {
   toPersistedMassGrams,
 } from "@/lib/biochar-composition";
 import type { DbTransaction } from "@/db";
-import { assertFeedstockDrawWithinStock } from "./bin-stock-guards";
+import { assertFeedstockWetDrawWithinStock } from "./feedstock-wet-stock";
 import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
 
@@ -204,7 +204,7 @@ export interface CompositionIngredientDraw {
   storageLocationId: string;
   /** Wet/as-received mass used to derive source biochar in the blend. */
   massKg: number;
-  /** Dry mass deducted from the feedstock bin. */
+  /** Dry mass snapshot retained for product composition and certification. */
   massDryKg: number | null;
 }
 
@@ -250,8 +250,8 @@ function roundPercent(value: number): number {
 }
 
 interface FeedstockMassBasis {
-  remainingWetKg: number | null;
-  remainingDryKg: number;
+  remainingWetKg: number;
+  estimatedRemainingDryKg: number | null;
 }
 
 function deriveIngredientMassSnapshot(
@@ -260,15 +260,15 @@ function deriveIngredientMassSnapshot(
 ): { massDryKg: number; moistureContentPercent: number } {
   if (
     !basis ||
-    basis.remainingWetKg === null ||
     basis.remainingWetKg <= 0 ||
-    basis.remainingDryKg <= 0 ||
-    basis.remainingDryKg > basis.remainingWetKg
+    basis.estimatedRemainingDryKg === null ||
+    basis.estimatedRemainingDryKg <= 0 ||
+    basis.estimatedRemainingDryKg > basis.remainingWetKg
   ) {
     throw new SafeError(INGREDIENT_MOISTURE_BASIS_ERROR);
   }
 
-  const dryRatio = basis.remainingDryKg / basis.remainingWetKg;
+  const dryRatio = basis.estimatedRemainingDryKg / basis.remainingWetKg;
   return {
     massDryKg: roundMassKg(wetMassKg * dryRatio),
     moistureContentPercent: roundPercent((1 - dryRatio) * 100),
@@ -317,7 +317,7 @@ export async function resolveCompositionIngredientMassBasis(
       row.storageLocationId,
       {
         remainingWetKg: row.feedstockStockWetKg,
-        remainingDryKg: row.feedstockStockDryKg,
+        estimatedRemainingDryKg: row.feedstockEstimatedDryKg,
       },
     ]),
   );
@@ -378,12 +378,9 @@ export async function assertCompositionIngredientDrawsWithinStock(
 ): Promise<void> {
   requireOrgScope(ctx);
   for (const draw of getCompositionIngredientDraws(composition)) {
-    if (draw.massDryKg === null) {
-      throw new SafeError(INGREDIENT_MOISTURE_BASIS_ERROR);
-    }
-    await assertFeedstockDrawWithinStock(ctx, tx, {
+    await assertFeedstockWetDrawWithinStock(ctx, tx, {
       storageLocationId: draw.storageLocationId,
-      requestedDryKg: draw.massDryKg,
+      requestedWetKg: draw.massKg,
       excludeProductId,
       binLockAlreadyHeld: true,
     });

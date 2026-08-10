@@ -10,13 +10,14 @@ import {
   and,
   eq,
   inArray,
-  isNotNull,
   isNull,
+  lte,
   ne,
+  or,
   sql,
-  type SQLWrapper,
 } from "drizzle-orm";
 import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
+import type { db } from "@/db";
 import {
   biocharProducts,
   biocharProductSourceAllocations,
@@ -26,10 +27,6 @@ import {
   productionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import {
-  getBinMovementLaneSums,
-  type DbReader,
-} from "./bin-movements";
 import { requireOrgScope } from "./utils";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
@@ -37,12 +34,12 @@ import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 export interface LaneStockDerivation {
   storageLocationId: string;
   feedstockIntakeDryKg: number;
-  feedstockIntakeWetKg: number | null;
-  feedstockConsumedDryKg: number;
-  feedstockConsumedWetKg: number | null;
+  feedstockIntakeWetKg: number;
+  feedstockConsumedWetKg: number;
   feedstockMovementDeltaKg: number;
-  feedstockStockDryKg: number;
-  feedstockStockWetKg: number | null;
+  feedstockStockWetKg: number;
+  /** Intake-moisture estimate only. Never use as an availability limit. */
+  feedstockEstimatedDryKg: number | null;
   biocharProducedKg: number;
   biocharAllocatedKg: number;
   biocharMovementDeltaKg: number;
@@ -54,24 +51,11 @@ export interface DeriveLaneStockOptions {
   storageLocationIds: string[];
   excludeRunId?: string;
   excludeProductId?: string;
+  /** Skip biochar-only source queries when callers need feedstock stock only. */
+  lanes?: "all" | "feedstock";
 }
 
-function latestFeedstockStockTakeAtSql(
-  storageLocationId: SQLWrapper,
-  organizationId: string,
-) {
-  // Keep this validity rule aligned with latestFeedstockStockTakeRows below.
-  return sql<Date | null>`(
-    SELECT MAX(stock_take.created_at)
-    FROM bin_movements stock_take
-    WHERE stock_take.organization_id = ${organizationId}
-      AND stock_take.storage_location_id = (${storageLocationId})::uuid
-      AND stock_take.lane = 'feedstock'
-      AND stock_take.movement_type = 'adjustment'
-      AND stock_take.counted_wet_mass_kg IS NOT NULL
-      AND stock_take.moisture_ratio_used IS NOT NULL
-  )`;
-}
+type DbReader = Pick<typeof db, "select">;
 
 export async function deriveLaneStock(
   ctx: OrgContext,
@@ -80,6 +64,7 @@ export async function deriveLaneStock(
 ): Promise<LaneStockDerivation[]> {
   requireOrgScope(ctx);
   if (options.storageLocationIds.length === 0) return [];
+  const feedstockOnly = options.lanes === "feedstock";
 
   const consumptionConditions = [
     inArray(
@@ -126,15 +111,12 @@ export async function deriveLaneStock(
 
   const [
     intakeRows,
-    consumptionRows,
-    runWetConsumptionRows,
+    runConsumptionRows,
     ingredientConsumptionRows,
     outputRows,
     legacyAllocationRows,
     sourceAllocationRows,
     movementRows,
-    latestFeedstockStockTakeRows,
-    feedstockLossRows,
   ] =
     await Promise.all([
       executor
@@ -152,34 +134,10 @@ export async function deriveLaneStock(
             and(
               eq(feedstocks.status, "complete"),
               sql`${feedstocks.massDryKg} > 0`,
-              isNull(feedstocks.massWetKg),
-            ),
-          ),
-          replayWet: sumNumeric(
-            feedstocks.massWetKg,
-            and(
-              eq(feedstocks.status, "complete"),
-              sql`${feedstocks.createdAt} > COALESCE(
-                ${latestFeedstockStockTakeAtSql(
-                  feedstocks.storageLocationId,
-                  ctx.organizationId,
-                )},
-                '-infinity'::timestamp
-              )`,
-            ),
-          ),
-          replayMissingWetMassCount: countRows(
-            and(
-              eq(feedstocks.status, "complete"),
-              sql`${feedstocks.massDryKg} > 0`,
-              isNull(feedstocks.massWetKg),
-              sql`${feedstocks.createdAt} > COALESCE(
-                ${latestFeedstockStockTakeAtSql(
-                  feedstocks.storageLocationId,
-                  ctx.organizationId,
-                )},
-                '-infinity'::timestamp
-              )`,
+              or(
+                isNull(feedstocks.massWetKg),
+                lte(feedstocks.massWetKg, 0),
+              ),
             ),
           ),
         })
@@ -194,7 +152,7 @@ export async function deriveLaneStock(
       executor
         .select({
           storageLocationId: productionRuns.feedstockStorageLocationId,
-          total: sumNumeric(productionRunFeedstocks.massUsedKg),
+          totalWet: sumNumeric(productionRunFeedstocks.wetMassUsedKg),
         })
         .from(productionRuns)
         .leftJoin(
@@ -214,71 +172,7 @@ export async function deriveLaneStock(
         .groupBy(productionRuns.feedstockStorageLocationId),
       executor
         .select({
-          storageLocationId: productionRuns.feedstockStorageLocationId,
-          totalWet: sumNumeric(productionRuns.feedstockWetMassKg),
-          missingWetMassCount: countRows(sql`
-            ${productionRuns.feedstockWetMassKg} IS NULL
-            AND (
-              COALESCE(${productionRuns.feedstockMassDryKg}, 0) > 0
-              OR EXISTS (
-                SELECT 1
-                FROM ${productionRunFeedstocks} consumed_feedstock
-                WHERE consumed_feedstock.production_run_id = ${productionRuns.id}
-                  AND consumed_feedstock.organization_id = ${ctx.organizationId}
-                  AND consumed_feedstock.mass_used_kg > 0
-              )
-            )
-          `),
-          replayWet: sumNumeric(
-            productionRuns.feedstockWetMassKg,
-            sql`${productionRuns.createdAt} > COALESCE(
-              ${latestFeedstockStockTakeAtSql(
-                productionRuns.feedstockStorageLocationId,
-                ctx.organizationId,
-              )},
-              '-infinity'::timestamp
-            )`,
-          ),
-          replayMissingWetMassCount: countRows(sql`
-            ${productionRuns.createdAt} > COALESCE(
-              ${latestFeedstockStockTakeAtSql(
-                productionRuns.feedstockStorageLocationId,
-                ctx.organizationId,
-              )},
-              '-infinity'::timestamp
-            )
-            AND ${productionRuns.feedstockWetMassKg} IS NULL
-            AND (
-              COALESCE(${productionRuns.feedstockMassDryKg}, 0) > 0
-              OR EXISTS (
-                SELECT 1
-                FROM ${productionRunFeedstocks} replay_consumed_feedstock
-                WHERE replay_consumed_feedstock.production_run_id = ${productionRuns.id}
-                  AND replay_consumed_feedstock.organization_id = ${ctx.organizationId}
-                  AND replay_consumed_feedstock.mass_used_kg > 0
-              )
-            )
-          `),
-        })
-        .from(productionRuns)
-        .where(and(...consumptionConditions))
-        .groupBy(productionRuns.feedstockStorageLocationId),
-      executor
-        .select({
           storageLocationId: sql<string>`ingredient.value ->> 'storageLocationId'`,
-          totalDry: numericAggregate(sql<number>`
-            COALESCE(
-              SUM(
-                CASE
-                  WHEN jsonb_typeof(ingredient.value -> 'massDryKg') = 'number'
-                    AND (ingredient.value ->> 'massDryKg')::numeric > 0
-                  THEN (ingredient.value ->> 'massDryKg')::numeric
-                  ELSE 0
-                END
-              ),
-              0
-            )
-          `),
           totalWet: numericAggregate(sql<number>`
             COALESCE(
               SUM(
@@ -291,43 +185,6 @@ export async function deriveLaneStock(
               ),
               0
             )
-          `),
-          missingWetMassCount: countRows(sql`
-            jsonb_typeof(ingredient.value -> 'massDryKg') = 'number'
-            AND (ingredient.value ->> 'massDryKg')::numeric > 0
-            AND jsonb_typeof(ingredient.value -> 'massKg') IS DISTINCT FROM 'number'
-          `),
-          replayWet: numericAggregate(sql<number>`
-            COALESCE(
-              SUM(
-                CASE
-                  WHEN ${biocharProducts.createdAt} > COALESCE(
-                    ${latestFeedstockStockTakeAtSql(
-                      sql`ingredient.value ->> 'storageLocationId'`,
-                      ctx.organizationId,
-                    )},
-                    '-infinity'::timestamp
-                  )
-                    AND jsonb_typeof(ingredient.value -> 'massKg') = 'number'
-                    AND (ingredient.value ->> 'massKg')::numeric > 0
-                  THEN (ingredient.value ->> 'massKg')::numeric
-                  ELSE 0
-                END
-              ),
-              0
-            )
-          `),
-          replayMissingWetMassCount: countRows(sql`
-            ${biocharProducts.createdAt} > COALESCE(
-              ${latestFeedstockStockTakeAtSql(
-                sql`ingredient.value ->> 'storageLocationId'`,
-                ctx.organizationId,
-              )},
-              '-infinity'::timestamp
-            )
-            AND jsonb_typeof(ingredient.value -> 'massDryKg') = 'number'
-            AND (ingredient.value ->> 'massDryKg')::numeric > 0
-            AND jsonb_typeof(ingredient.value -> 'massKg') IS DISTINCT FROM 'number'
           `),
         })
         .from(biocharProducts)
@@ -352,7 +209,9 @@ export async function deriveLaneStock(
             : []),
         ))
         .groupBy(sql`ingredient.value ->> 'storageLocationId'`),
-      executor
+      feedstockOnly
+        ? Promise.resolve([])
+        : executor
         .select({
           storageLocationId: productionRuns.biocharStorageLocationId,
           total: sumNumeric(productionRuns.biocharOutputKg),
@@ -372,7 +231,9 @@ export async function deriveLaneStock(
           ),
         )
         .groupBy(productionRuns.biocharStorageLocationId),
-      executor
+      feedstockOnly
+        ? Promise.resolve([])
+        : executor
         .select({
           storageLocationId: productionRuns.biocharStorageLocationId,
           total: numericAggregate(
@@ -395,7 +256,9 @@ export async function deriveLaneStock(
         )
         .where(and(...legacyAllocationConditions))
         .groupBy(productionRuns.biocharStorageLocationId),
-      executor
+      feedstockOnly
+        ? Promise.resolve([])
+        : executor
         .select({
           storageLocationId:
             biocharProductSourceAllocations.sourceStorageLocationId,
@@ -408,52 +271,23 @@ export async function deriveLaneStock(
         .groupBy(
           biocharProductSourceAllocations.sourceStorageLocationId,
         ),
-      getBinMovementLaneSums(
-        ctx,
-        options.storageLocationIds,
-        executor,
-      ),
       executor
         .select({
           storageLocationId: binMovements.storageLocationId,
-          countedWetMassKg: numericAggregate(sql<number>`
-            (ARRAY_AGG(
-              ${binMovements.countedWetMassKg}
-              ORDER BY ${binMovements.createdAt} DESC, ${binMovements.id} DESC
-            ))[1]
-          `),
+          lane: binMovements.lane,
+          totalDeltaKg: sumNumeric(binMovements.massDeltaKg),
         })
         .from(binMovements)
-        .where(and(
-          inArray(binMovements.storageLocationId, options.storageLocationIds),
-          eq(binMovements.organizationId, ctx.organizationId),
-          eq(binMovements.lane, "feedstock"),
-          eq(binMovements.movementType, "adjustment"),
-          isNotNull(binMovements.countedWetMassKg),
-          isNotNull(binMovements.moistureRatioUsed),
-        ))
-        .groupBy(binMovements.storageLocationId),
-      executor
-        .select({
-          storageLocationId: binMovements.storageLocationId,
-          hasBasislessLoss: sql<boolean>`COALESCE(BOOL_OR(
-            ${binMovements.movementType} = 'loss'
-            AND ${binMovements.createdAt} > COALESCE(
-              ${latestFeedstockStockTakeAtSql(
-                binMovements.storageLocationId,
-                ctx.organizationId,
-              )},
-              '-infinity'::timestamp
-            )
-          ), false)`,
-        })
-        .from(binMovements)
-        .where(and(
-          inArray(binMovements.storageLocationId, options.storageLocationIds),
-          eq(binMovements.organizationId, ctx.organizationId),
-          eq(binMovements.lane, "feedstock"),
-        ))
-        .groupBy(binMovements.storageLocationId),
+        .where(
+          and(
+            inArray(
+              binMovements.storageLocationId,
+              options.storageLocationIds,
+            ),
+            eq(binMovements.organizationId, ctx.organizationId),
+          ),
+        )
+        .groupBy(binMovements.storageLocationId, binMovements.lane),
     ]);
 
   const byLocation = new Map<string, LaneStockDerivation>(
@@ -463,11 +297,10 @@ export async function deriveLaneStock(
         storageLocationId,
         feedstockIntakeDryKg: 0,
         feedstockIntakeWetKg: 0,
-        feedstockConsumedDryKg: 0,
         feedstockConsumedWetKg: 0,
         feedstockMovementDeltaKg: 0,
-        feedstockStockDryKg: 0,
         feedstockStockWetKg: 0,
+        feedstockEstimatedDryKg: 0,
         biocharProducedKg: 0,
         biocharAllocatedKg: 0,
         biocharMovementDeltaKg: 0,
@@ -476,30 +309,7 @@ export async function deriveLaneStock(
       },
     ]),
   );
-  const wetReplayByLocation = new Map(
-    options.storageLocationIds.map((storageLocationId) => [
-      storageLocationId,
-      {
-        intakeWetKg: 0,
-        consumedWetKg: 0,
-        missingWetBasis: false,
-      },
-    ]),
-  );
-  const latestStockTakeByLocation = new Map<
-    string,
-    { countedWetMassKg: number }
-  >();
-
-  for (const stockTake of latestFeedstockStockTakeRows) {
-    latestStockTakeByLocation.set(stockTake.storageLocationId, {
-      countedWetMassKg: Number(stockTake.countedWetMassKg),
-    });
-  }
-  for (const lossState of feedstockLossRows) {
-    const replay = wetReplayByLocation.get(lossState.storageLocationId);
-    if (replay && lossState.hasBasislessLoss) replay.missingWetBasis = true;
-  }
+  const missingWetBasisByLocation = new Set<string>();
 
   for (const row of intakeRows) {
     const stock = row.storageLocationId
@@ -507,51 +317,24 @@ export async function deriveLaneStock(
       : undefined;
     if (stock) {
       stock.feedstockIntakeDryKg = row.total;
-      stock.feedstockIntakeWetKg =
-        row.missingWetMassCount > 0 ? null : row.totalWet;
-      const replay = wetReplayByLocation.get(stock.storageLocationId);
-      if (replay) {
-        replay.intakeWetKg = row.replayWet;
-        replay.missingWetBasis ||= row.replayMissingWetMassCount > 0;
+      stock.feedstockIntakeWetKg = row.totalWet;
+      if (row.missingWetMassCount > 0) {
+        missingWetBasisByLocation.add(stock.storageLocationId);
       }
     }
   }
-  for (const row of consumptionRows) {
+  for (const row of runConsumptionRows) {
     const stock = row.storageLocationId
       ? byLocation.get(row.storageLocationId)
       : undefined;
-    if (stock) stock.feedstockConsumedDryKg = row.total;
-  }
-  for (const row of runWetConsumptionRows) {
-    const stock = row.storageLocationId
-      ? byLocation.get(row.storageLocationId)
-      : undefined;
-    if (stock) {
-      stock.feedstockConsumedWetKg =
-        row.missingWetMassCount > 0 ? null : row.totalWet;
-      const replay = wetReplayByLocation.get(stock.storageLocationId);
-      if (replay) {
-        replay.consumedWetKg = row.replayWet;
-        replay.missingWetBasis ||= row.replayMissingWetMassCount > 0;
-      }
-    }
+    if (stock) stock.feedstockConsumedWetKg = row.totalWet;
   }
   for (const row of ingredientConsumptionRows) {
     const stock = row.storageLocationId
       ? byLocation.get(row.storageLocationId)
       : undefined;
     if (stock) {
-      stock.feedstockConsumedDryKg += row.totalDry;
-      stock.feedstockConsumedWetKg =
-        stock.feedstockConsumedWetKg === null ||
-        row.missingWetMassCount > 0
-          ? null
-          : stock.feedstockConsumedWetKg + row.totalWet;
-      const replay = wetReplayByLocation.get(row.storageLocationId);
-      if (replay) {
-        replay.consumedWetKg += row.replayWet;
-        replay.missingWetBasis ||= row.replayMissingWetMassCount > 0;
-      }
+      stock.feedstockConsumedWetKg += row.totalWet;
     }
   }
   for (const row of outputRows) {
@@ -585,20 +368,18 @@ export async function deriveLaneStock(
   }
 
   for (const stock of byLocation.values()) {
-    stock.feedstockStockDryKg =
-      stock.feedstockIntakeDryKg -
-      stock.feedstockConsumedDryKg +
-      stock.feedstockMovementDeltaKg;
-    const wetReplay = wetReplayByLocation.get(stock.storageLocationId);
-    const latestStockTake = latestStockTakeByLocation.get(
-      stock.storageLocationId,
-    );
     stock.feedstockStockWetKg =
-      wetReplay && !wetReplay.missingWetBasis
-        ? (latestStockTake?.countedWetMassKg ?? 0) +
-          wetReplay.intakeWetKg -
-          wetReplay.consumedWetKg
-        : null;
+      stock.feedstockIntakeWetKg -
+      stock.feedstockConsumedWetKg +
+      stock.feedstockMovementDeltaKg;
+    stock.feedstockEstimatedDryKg =
+      stock.feedstockStockWetKg === 0
+        ? 0
+        : stock.feedstockIntakeWetKg > 0 &&
+            !missingWetBasisByLocation.has(stock.storageLocationId)
+          ? stock.feedstockStockWetKg *
+            (stock.feedstockIntakeDryKg / stock.feedstockIntakeWetKg)
+          : null;
     stock.biocharStockKg =
       stock.biocharProducedKg -
       stock.biocharAllocatedKg +

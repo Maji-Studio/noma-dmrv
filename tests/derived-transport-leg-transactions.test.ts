@@ -285,6 +285,7 @@ describe("derived transport-leg transaction boundaries", () => {
       },
       async () => [feedstockCode],
     );
+    expect(result.feedstocks[0].status).toBe("complete");
     const feedstockId = result.feedstocks[0].id;
 
     await updateFeedstock(ctx, feedstockId, { notes: "Partial update" });

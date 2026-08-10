@@ -66,11 +66,10 @@ function CurrentStockContext({
     >
       <div className="flex items-center justify-between gap-8 px-12 py-10">
         <dt className="body-caption text-[var(--color-text-tertiary)]">
-          Current derived stock
+          {isFeedstock ? "Current wet stock" : "Current derived stock"}
         </dt>
         <dd className="body-small font-medium text-[var(--color-text-primary)]">
           {formatMassKg(binCurrentMassKg(storageLocation))}
-          {isFeedstock ? " dry" : ""}
         </dd>
       </div>
       {isFeedstock && (
@@ -167,7 +166,7 @@ function LossForm({
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormField
         id="loss-amount"
-        label="Amount lost (kg)"
+        label={lane === "feedstock" ? "Wet mass lost (kg)" : "Amount lost (kg)"}
         error={lossMassError}
         required
         helperText="The mass removed from the bin through spoilage, spillage, or write-off."

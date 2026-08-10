@@ -86,7 +86,8 @@ export interface SankeyLineage {
   } | null;
   feedstocks: {
     id: string;
-    massUsedKg: number | null;
+    /** Wet allocation. Converted proportionally against run dry mass below. */
+    wetMassUsedKg: number | null;
     eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
   }[];
   /** Multi-run product provenance; absent on legacy one-run payloads. */
@@ -129,11 +130,10 @@ export function buildBatchSankey(
   const lotById = new Map<string, NonNullable<SankeyLineage["biocharProduct"]>>();
   const feedstockIds = new Set<string>();
   const applicationIds = new Set<string>();
-  // Feedstock allocations keyed per run so a shared run's allocations count once.
-  const allocationsByRunId = new Map<string, number>();
-  // Ineligible slice of each run's allocations (issue #285): derived from the
-  // lineage's feedstock eligibility flags, deduped per run like the totals.
-  const ineligibleAllocationsByRunId = new Map<string, number>();
+  // Wet allocations are traceability facts. The Sankey itself remains dry, so
+  // their eligibility shares are applied to each run's derived dry input.
+  const wetAllocationsByRunId = new Map<string, number>();
+  const ineligibleWetAllocationsByRunId = new Map<string, number>();
 
   let appliedKg = 0;
   for (const lineage of lineages) {
@@ -151,20 +151,20 @@ export function buildBatchSankey(
     for (const source of sources) {
       const productionRun = source.productionRun;
       runById.set(productionRun.id, productionRun);
-      if (!allocationsByRunId.has(productionRun.id)) {
-        allocationsByRunId.set(
+      if (!wetAllocationsByRunId.has(productionRun.id)) {
+        wetAllocationsByRunId.set(
           productionRun.id,
           source.feedstocks.reduce(
-            (sum, feedstock) => sum + (feedstock.massUsedKg ?? 0),
+            (sum, feedstock) => sum + (feedstock.wetMassUsedKg ?? 0),
             0,
           ),
         );
-        ineligibleAllocationsByRunId.set(
+        ineligibleWetAllocationsByRunId.set(
           productionRun.id,
           source.feedstocks.reduce(
             (sum, feedstock) =>
               feedstock.eligibilityStatus === "ineligible"
-                ? sum + (feedstock.massUsedKg ?? 0)
+                ? sum + (feedstock.wetMassUsedKg ?? 0)
                 : sum,
             0,
           ),
@@ -182,10 +182,9 @@ export function buildBatchSankey(
   let feedstockInKg = 0;
   let runOutputKg = 0;
   for (const run of runById.values()) {
-    // The run's recorded feedstock input is authoritative; fall back to the
-    // sum of its allocation records when the run total was never captured.
-    feedstockInKg +=
-      run.feedstockMassDryKg ?? allocationsByRunId.get(run.id) ?? 0;
+    // The run-derived dry input is the only dry feedstock basis. Wet bin
+    // allocations must never be substituted into this dry-mass Sankey.
+    feedstockInKg += run.feedstockMassDryKg ?? 0;
     runOutputKg += run.biocharDryMassKg ?? 0;
   }
 
@@ -202,13 +201,17 @@ export function buildBatchSankey(
   }
 
   // The ineligible exit can never carry more than the column it leaves from.
-  const rawIneligibleKg = Math.max(
+  const rawIneligibleKg = Math.max(0, Array.from(runById.values()).reduce(
+    (sum, run) => {
+      const totalWetKg = wetAllocationsByRunId.get(run.id) ?? 0;
+      const ineligibleWetKg =
+        ineligibleWetAllocationsByRunId.get(run.id) ?? 0;
+      return totalWetKg > 0 && run.feedstockMassDryKg != null
+        ? sum + run.feedstockMassDryKg * (ineligibleWetKg / totalWetKg)
+        : sum;
+    },
     0,
-    Array.from(ineligibleAllocationsByRunId.values()).reduce(
-      (sum, kg) => sum + kg,
-      0,
-    ),
-  );
+  ));
   const ineligibleKg = Math.min(rawIneligibleKg, feedstockInKg);
   if (rawIneligibleKg > feedstockInKg + EXIT_EPSILON_KG) {
     warnings.push(

@@ -230,7 +230,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       id: crypto.randomUUID(),
       productionRunId: ids.productionRun,
       feedstockId: ids.feedstock,
-      massUsedKg: 400,
+      wetMassUsedKg: 400,
     });
 
     // 12. Create Sample (from production run)

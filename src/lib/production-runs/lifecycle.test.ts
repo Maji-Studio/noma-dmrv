@@ -25,7 +25,7 @@ function makeOutcomeInput(
     biocharMoisturePercent: 0,
     feedstockWetMassKg: 100,
     feedstockMoisturePercent: 20,
-    feedstock: { basis: "consumed-mass", consumedFeedstockKg: 80 },
+    feedstock: { basis: "consumed-mass", consumedFeedstockWetKg: 100 },
     ...overrides,
   };
 }
@@ -141,7 +141,7 @@ describe("production-run lifecycle", () => {
       ],
       [
         "a terminal run without consumed feedstock",
-        { feedstock: { basis: "consumed-mass", consumedFeedstockKg: 0 } },
+        { feedstock: { basis: "consumed-mass", consumedFeedstockWetKg: 0 } },
         {
           code: "feedstock-required",
           status: "complete",
@@ -213,7 +213,7 @@ describe("production-run lifecycle", () => {
         feedstock: { basis: "form-inputs", storageLocationId: null },
       });
       const consumedMassInput = makeOutcomeInput({
-        feedstock: { basis: "consumed-mass", consumedFeedstockKg: 80 },
+        feedstock: { basis: "consumed-mass", consumedFeedstockWetKg: 100 },
       });
 
       expect(getProductionRunOutcomeViolations(formInput)).toContainEqual(
@@ -231,7 +231,7 @@ describe("production-run lifecycle", () => {
           endTime: null,
           endTimePresent: false,
           biocharOutputKg: 0,
-          feedstock: { basis: "consumed-mass", consumedFeedstockKg: 0 },
+          feedstock: { basis: "consumed-mass", consumedFeedstockWetKg: 0 },
         }),
       );
 
@@ -264,7 +264,10 @@ describe("production-run lifecycle", () => {
 
   describe("assertProductionRunOutcome", () => {
     it.each([
-      [{ feedstock: { basis: "consumed-mass", consumedFeedstockKg: 0 } }, "must consume feedstock"],
+      [
+        { feedstock: { basis: "consumed-mass", consumedFeedstockWetKg: 0 } },
+        "must consume feedstock",
+      ],
       [{ biocharOutputKg: 0 }, "positive biochar output"],
       [{ endTime: null, endTimePresent: false }, "needs an end time"],
       [{ status: "running" }, "cannot have an end time"],

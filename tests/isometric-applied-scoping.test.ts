@@ -46,6 +46,16 @@ describe("aggregateProductionRuns — emission-input buckets (§8.6.2)", () => {
     expect(agg.totalElectricityKwh).toBe(200);
   });
 
+  it("aggregates the run-derived dry feedstock value for certification", () => {
+    const agg = aggregateProductionRuns([
+      run({ id: "a", feedstockMassDryKg: 2_400 }),
+    ]);
+
+    // A 3,000 kg wet draw at 20% moisture yields 2,400 kg dry. Bin stock and
+    // lineage stay wet, while certification deliberately consumes this value.
+    expect(agg.totalFeedstockDryMassKg).toBe(2_400);
+  });
+
   it("buckets preprocessing fuel with genset, not startup (generator/startup diesel split)", () => {
     // Startup = reactor-startup / plant diesel only; the generator
     // ("summarized") figure absorbs preprocessing fuel (docs/isometric/changes.md).

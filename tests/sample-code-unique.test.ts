@@ -140,7 +140,7 @@ beforeAll(async () => {
     organizationId: TEST_ORG_ID,
     productionRunId: run.id,
     feedstockId: feedstock.id,
-    massUsedKg: 400,
+    wetMassUsedKg: 400,
   });
 
   const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {

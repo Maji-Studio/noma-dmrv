@@ -1,11 +1,11 @@
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
-  assertFeedstockDrawWithinStock,
   deriveBiocharAvailableKg,
   isOverdraw,
   overdrawError,
 } from "./bin-stock-guards";
+import { assertFeedstockWetDrawWithinStock } from "./feedstock-wet-stock";
 import {
   assertStockLockSnapshot,
   lockBinStocks,
@@ -35,12 +35,12 @@ export async function assertProductionRunCreateFeedstockDrawWithinStock(
   tx: DbTransaction,
   params: {
     storageLocationId: string;
-    requestedDryKg: number;
+    requestedWetKg: number;
   },
 ): Promise<void> {
-  await assertFeedstockDrawWithinStock(ctx, tx, {
+  await assertFeedstockWetDrawWithinStock(ctx, tx, {
     storageLocationId: params.storageLocationId,
-    requestedDryKg: params.requestedDryKg,
+    requestedWetKg: params.requestedWetKg,
   });
 }
 
@@ -181,12 +181,12 @@ export async function assertProductionRunUpdateFeedstockDrawWithinStock(
   params: {
     productionRunId: string;
     storageLocationId: string;
-    requestedDryKg: number;
+    requestedWetKg: number;
   },
 ): Promise<void> {
-  await assertFeedstockDrawWithinStock(ctx, tx, {
+  await assertFeedstockWetDrawWithinStock(ctx, tx, {
     storageLocationId: params.storageLocationId,
-    requestedDryKg: params.requestedDryKg,
+    requestedWetKg: params.requestedWetKg,
     excludeRunId: params.productionRunId,
     binLockAlreadyHeld: true,
   });

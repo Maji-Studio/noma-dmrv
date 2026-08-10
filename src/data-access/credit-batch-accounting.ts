@@ -68,7 +68,7 @@ export interface BatchLineageFeedstockFact {
   status: string | null;
   deliveryDate: Date | null;
   massDryKg: number | null;
-  massUsedKg: number | null;
+  wetMassUsedKg: number | null;
   eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
   supplierName: string | null;
   feedstockTypeName: string | null;
@@ -409,7 +409,7 @@ async function loadLineageWithExecutor(
           status: feedstocks.status,
           deliveryDate: feedstocks.deliveryDate,
           massDryKg: feedstocks.massDryKg,
-          massUsedKg: productionRunFeedstocks.massUsedKg,
+          wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
           eligibilityStatus: feedstocks.eligibilityStatus,
           supplierName: suppliers.name,
           feedstockTypeName: feedstockTypes.name,
