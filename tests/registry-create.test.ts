@@ -43,6 +43,7 @@ import {
 const USER_ID = "user-test-1";
 const ENTITY_ID = "rem-test-1";
 const ROW_ID = "sub-test-1";
+const LOCKED_AT = new Date("2026-08-10T12:00:00.000Z");
 const EXTERNAL_ID = "ext_created_1";
 const ORPHAN_ID = "ext_orphan_1";
 const OPERATION = "removal:create";
@@ -57,6 +58,7 @@ function makeArgs(
     entityType: "removal",
     entityId: ENTITY_ID,
     submissionRowId: ROW_ID,
+    expectedLockedAt: LOCKED_AT,
     operation: OPERATION,
     requestPayload: REQUEST_PAYLOAD,
     resumed: false,
@@ -97,7 +99,7 @@ describe("performRegistryCreate", () => {
     expect(reconciledMutation).toHaveBeenCalledExactlyOnceWith("confirmed");
   });
 
-  it("reports possible external mutation after an ambiguous lost response", async () => {
+  it("reports possible external mutation after an ambiguous lost response without rejecting the draft", async () => {
     const onExternalMutation = vi.fn();
     await expect(
       performRegistryCreate(
@@ -116,6 +118,100 @@ describe("performRegistryCreate", () => {
     ).rejects.toThrow(/Removal POST failed/i);
 
     expect(onExternalMutation).toHaveBeenCalledExactlyOnceWith("possible");
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
+  });
+
+  it("reports possible when an ambiguous create and its reconciliation lookup both fail", async () => {
+    const onExternalMutation = vi.fn();
+    const lookupError = new Error("lookup unavailable");
+    const args = makeArgs({
+      create: vi.fn(async () => {
+        throw new IsometricApiError(
+          "network dropped",
+          undefined,
+          undefined,
+          "network",
+        );
+      }),
+      reconcile: vi.fn(async () => {
+        throw lookupError;
+      }),
+      onExternalMutation,
+    });
+
+    await expect(performRegistryCreate(args)).rejects.toBe(lookupError);
+    expect(onExternalMutation).toHaveBeenCalledExactlyOnceWith("possible");
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
+  });
+
+  it("reports possible when a resumed recovery lookup fails", async () => {
+    const onExternalMutation = vi.fn();
+    const lookupError = new Error("lookup unavailable");
+    const args = makeArgs({
+      resumed: true,
+      reconcile: vi.fn(async () => {
+        throw lookupError;
+      }),
+      onExternalMutation,
+    });
+
+    await expect(performRegistryCreate(args)).rejects.toBe(lookupError);
+    expect(onExternalMutation).toHaveBeenCalledExactlyOnceWith("possible");
+    expect(args.create).not.toHaveBeenCalled();
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
+  });
+
+  it("preserves a definitive provider refusal when its reconciliation lookup also fails", async () => {
+    const onExternalMutation = vi.fn();
+    const providerError = new IsometricApiError(
+      "422 Unprocessable",
+      422,
+      { errors: [{ detail: "quantity must be positive" }] },
+      "http",
+    );
+    const args = makeArgs({
+      create: vi.fn(async () => {
+        throw providerError;
+      }),
+      reconcile: vi.fn(async () => {
+        throw new Error("lookup unavailable");
+      }),
+      onExternalMutation,
+    });
+
+    await expect(performRegistryCreate(args)).rejects.toThrow(
+      "Provider rejected the request (422): quantity must be positive",
+    );
+    expect(ledger.markSubmissionRejected).toHaveBeenCalledExactlyOnceWith(
+      makeTestOrgContext(USER_ID),
+      ROW_ID,
+      {
+        errorMessage:
+          "Provider rejected the request (422): quantity must be positive",
+        expectedLockedAt: LOCKED_AT,
+      },
+    );
+    expect(onExternalMutation).not.toHaveBeenCalled();
+  });
+
+  it("does not mask a definitive provider refusal when rejection cleanup fails", async () => {
+    vi.mocked(ledger.markSubmissionRejected).mockRejectedValue(
+      new Error("ledger unavailable"),
+    );
+    const args = makeArgs({
+      create: vi.fn(async () => {
+        throw new IsometricApiError(
+          "422 Unprocessable",
+          422,
+          { errors: [{ detail: "quantity must be positive" }] },
+          "http",
+        );
+      }),
+    });
+
+    await expect(performRegistryCreate(args)).rejects.toThrow(
+      "Provider rejected the request (422): quantity must be positive",
+    );
   });
 
   it("runs confirmed persistence before the success audit and never retries create when persistence fails", async () => {
@@ -276,11 +372,12 @@ describe("performRegistryCreate", () => {
       {
         errorMessage:
           "Provider rejected the request (422): quantity must be positive",
+        expectedLockedAt: LOCKED_AT,
       },
     );
   });
 
-  it("omits the body but keeps mapping_revision when the failure is not an IsometricApiError", async () => {
+  it("keeps the draft locked when an ambiguous non-provider failure cannot be reconciled", async () => {
     const args = makeArgs({
       create: vi.fn(async () => {
         throw new Error("socket hang up");
@@ -297,6 +394,7 @@ describe("performRegistryCreate", () => {
         errorMessage: "Registry create failed. Try again.",
       }),
     );
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
   });
 
   it("rejects with the caller's ambiguity message when the lookup finds multiple candidates", async () => {
@@ -304,7 +402,7 @@ describe("performRegistryCreate", () => {
       "Multiple draft GHG statements exist for this project and period in Isometric.";
     const args = makeArgs({
       create: vi.fn(async () => {
-        throw new Error("network dropped");
+        throw new IsometricApiError("request refused", 422, undefined, "http");
       }),
       reconcile: vi.fn(
         async (): Promise<ReconcileLookup> => ({ found: "multiple" }),
@@ -319,7 +417,7 @@ describe("performRegistryCreate", () => {
     expect(ledger.markSubmissionRejected).toHaveBeenCalledExactlyOnceWith(
       makeTestOrgContext(USER_ID),
       ROW_ID,
-      { errorMessage: ambiguousMessage },
+      { errorMessage: ambiguousMessage, expectedLockedAt: LOCKED_AT },
     );
     // Parity with the pre-module GHG path: ambiguity rejects without a
     // failed sync event (the rejection itself carries the message).
@@ -346,7 +444,7 @@ describe("performRegistryCreate", () => {
     expect(ledger.markSubmissionRejected).toHaveBeenCalledExactlyOnceWith(
       makeTestOrgContext(USER_ID),
       ROW_ID,
-      { errorMessage: refusalMessage },
+      { errorMessage: refusalMessage, expectedLockedAt: LOCKED_AT },
     );
     expect(args.create).not.toHaveBeenCalled();
     expect(ledger.appendSyncEvent).not.toHaveBeenCalled();

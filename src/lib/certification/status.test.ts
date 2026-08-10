@@ -124,7 +124,7 @@ describe("deriveRemovalWorkflowStatus", () => {
     expect(status.isActionable).toBe(false);
   });
 
-  it("labels a recovered rejected removal as ready to resubmit", () => {
+  it("surfaces a rejected local submission as a distinct actionable failure", () => {
     const status = deriveRemovalWorkflowStatus({
       local: "rejected",
       lockInFlight: false,
@@ -132,7 +132,49 @@ describe("deriveRemovalWorkflowStatus", () => {
       readiness: { state: "ready", reasons: [], advisories: [] },
     });
 
-    expect(status.label).toBe("Ready to resubmit");
+    expect(status).toMatchObject({
+      kind: "failed",
+      value: "failed",
+      label: "Submission failed",
+      reasons: ["Review submission history, then select Review & submit."],
+      isActionable: true,
+      canRetry: false,
+    });
+  });
+
+  it("keeps readiness blockers on a rejected submission", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "rejected",
+      lockInFlight: false,
+      enrichmentStatus: "available",
+      readiness: {
+        state: "blocked",
+        reasons: ["Add the missing delivery document"],
+        advisories: [],
+      },
+    });
+
+    expect(status).toMatchObject({
+      label: "Submission failed",
+      reasons: ["Add the missing delivery document"],
+      isActionable: true,
+    });
+  });
+
+  it("keeps a live lock above the rejected failure state", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "rejected",
+      lockInFlight: true,
+      enrichmentStatus: "loading",
+      readiness: null,
+    });
+
+    expect(status).toMatchObject({
+      kind: "submitting",
+      value: "running",
+      label: "Submitting",
+      isActionable: false,
+    });
   });
 
   it("offers a fresh submit after the production gate retires a stale draft", () => {
