@@ -13,8 +13,7 @@ import { organizations } from "./auth";
 
 // ============================================
 // Applications - Field application of biochar to soil
-// Isometric Protocol: Biochar Storage in Soil Environments Module v1.2
-// Section 5: Durability of Biochar in Soils
+// Isometric Protocol: Biochar Storage in Agricultural Soils Module v1.1
 // ============================================
 
 export const applications = pgTable(
@@ -52,7 +51,7 @@ export const applications = pgTable(
     applicationMethodType: applicationMethod("application_method"), // manual/mechanical
     fieldIdentifier: text("field_identifier"), // Field name/parcel ID
     evidenceMethod: applicationEvidenceMethod("evidence_method")
-      .default("visual")
+      .default("location")
       .notNull(),
     gisBoundary: jsonb("gis_boundary").$type<GisBoundary>(),
 

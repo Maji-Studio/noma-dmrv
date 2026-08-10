@@ -137,6 +137,8 @@ export interface ApplicationEvidenceDocument {
 /** Minimal application surface required by the application-evidence rule. */
 export interface ApplicationEvidenceApplication {
   evidenceMethod?: string | null;
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
   gisBoundary?: GisBoundary | null;
 }
 
@@ -160,6 +162,7 @@ export type ApplicationEvidenceDocumentMatcher =
     };
 
 export type ApplicationEvidenceGapDescriptor =
+  | { kind: "location-reference" }
   | {
       kind: "visual-role";
       role: ApplicationVisualEvidenceRole;
@@ -176,16 +179,24 @@ export type ApplicationEvidenceRequirement =
       kind: "non-null-application-field";
       field: "gisBoundary";
       gap: ApplicationEvidenceGapDescriptor;
+    }
+  | {
+      kind: "complete-gps-pair";
+      fields: readonly ["gpsLatitude", "gpsLongitude"];
+      gap: ApplicationEvidenceGapDescriptor;
     };
 
 interface ApplicationEvidenceRuleSpec {
   dispatch: {
     kind: "evidence-method";
+    locationValue: "location";
+    locationPath: "location";
     boundaryValue: "boundary";
     boundaryPath: "boundary";
     defaultPath: "visual";
   };
   paths: {
+    location: readonly ApplicationEvidenceRequirement[];
     visual: readonly ApplicationEvidenceRequirement[];
     boundary: readonly ApplicationEvidenceRequirement[];
   };
@@ -222,18 +233,30 @@ const BOUNDARY_EVIDENCE_REQUIREMENTS = [
   },
 ] as const satisfies readonly ApplicationEvidenceRequirement[];
 
+const LOCATION_EVIDENCE_REQUIREMENTS = [
+  {
+    kind: "complete-gps-pair",
+    fields: ["gpsLatitude", "gpsLongitude"],
+    gap: { kind: "location-reference" },
+  },
+] as const satisfies readonly ApplicationEvidenceRequirement[];
+
 /**
  * Single declarative source of truth for application evidence readiness.
- * Boundary is the only selected branch; every other value defaults to visual.
+ * Location and boundary are explicit branches; legacy/unknown values default
+ * to visual so existing records retain their previous fail-closed behaviour.
  */
 export const APPLICATION_EVIDENCE_RULE_SPEC = {
   dispatch: {
     kind: "evidence-method",
+    locationValue: "location",
+    locationPath: "location",
     boundaryValue: "boundary",
     boundaryPath: "boundary",
     defaultPath: "visual",
   },
   paths: {
+    location: LOCATION_EVIDENCE_REQUIREMENTS,
     visual: VISUAL_EVIDENCE_REQUIREMENTS,
     boundary: BOUNDARY_EVIDENCE_REQUIREMENTS,
   },
@@ -275,14 +298,18 @@ export function matchesApplicationEvidenceDocument(
   }
 }
 
-/** Resolve requirements using boundary-only dispatch; all other values are visual. */
+/** Resolve requirements for the selected method; unknown values remain visual. */
 export function getApplicationEvidenceRequirements(
   evidenceMethod: string | null | undefined,
 ): readonly ApplicationEvidenceRequirement[] {
   const { dispatch, paths } = APPLICATION_EVIDENCE_RULE_SPEC;
-  return evidenceMethod === dispatch.boundaryValue
-    ? paths[dispatch.boundaryPath]
-    : paths[dispatch.defaultPath];
+  if (evidenceMethod === dispatch.locationValue) {
+    return paths[dispatch.locationPath];
+  }
+  if (evidenceMethod === dispatch.boundaryValue) {
+    return paths[dispatch.boundaryPath];
+  }
+  return paths[dispatch.defaultPath];
 }
 
 /** Pure evaluator shared by non-SQL consumers and contract tests. */
@@ -301,6 +328,11 @@ export function getMissingApplicationEvidenceRequirements(
           return (
             application[requirement.field] === null ||
             application[requirement.field] === undefined
+          );
+        case "complete-gps-pair":
+          return requirement.fields.some(
+            (field) =>
+              application[field] === null || application[field] === undefined,
           );
       }
     },
