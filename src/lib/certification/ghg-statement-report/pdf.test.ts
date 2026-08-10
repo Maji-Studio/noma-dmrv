@@ -1,42 +1,105 @@
-import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
-import { buildGhgStatementReportModel } from "./model";
+import {
+  canonicalizePdfBytes,
+  NonCanonicalPdfError,
+  subsetTag,
+} from "./canonical-pdf";
+import {
+  buildGhgStatementReportModel,
+  GhgStatementReportReconciliationError,
+  sha256Hex,
+  type BuildGhgStatementReportModelInput,
+  type GhgStatementReportModel,
+} from "./model";
 import { renderGhgStatementReportPdf } from "./pdf";
+
+const PREPARED_AT = "2026-07-28T12:00:00.000Z";
+// Two wall-clock readings far enough apart that any clock-derived metadata
+// (creation date, modification date, the PDF trailer /ID derived from them)
+// would differ between renders.
+const FIRST_CLOCK = new Date("2026-01-02T03:04:05.000Z");
+const SECOND_CLOCK = new Date("2031-11-12T13:14:15.000Z");
+const XREF_KEYWORD = "xref";
+/** Tail of a classic in-use xref entry: `<10 offset digits> 00000 n \n`. */
+const IN_USE_ENTRY_TAIL = " 00000 n \n";
+const CHILD_RENDER_TIMEOUT_MS = 120_000;
+const RENDERER_PATH = fileURLToPath(new URL("./pdf.ts", import.meta.url));
+const TSX_BIN = resolve(process.cwd(), "node_modules/.bin/tsx");
+/**
+ * Renders one serialized model and prints its checksum. Kept as a script run
+ * by a fresh Node process: an in-process second render shares the registered
+ * font state, the module caches and any process-level seed, so it cannot see
+ * drift that only differs between processes.
+ */
+const CHILD_SCRIPT = `
+import { createHash } from "node:crypto";
+import { renderGhgStatementReportPdf } from ${JSON.stringify(RENDERER_PATH)};
+async function main() {
+  const bytes = await renderGhgStatementReportPdf(JSON.parse(process.argv[2]));
+  process.stdout.write(createHash("sha256").update(bytes).digest("hex"));
+}
+void main();
+`;
+
+/** SHA-256 of the model rendered in a brand new Node process. */
+function renderChecksumInFreshProcess(
+  scriptPath: string,
+  model: GhgStatementReportModel,
+): string {
+  return execFileSync(TSX_BIN, [scriptPath, JSON.stringify(model)], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    timeout: CHILD_RENDER_TIMEOUT_MS,
+  }).trim();
+}
+
+function buildModel(
+  overrides: Partial<BuildGhgStatementReportModelInput> = {},
+): GhgStatementReportModel {
+  return buildGhgStatementReportModel({
+    reportVersion: 3,
+    preparedAt: PREPARED_AT,
+    documentControl: {
+      organizationName: "Test supplier",
+      facilityCode: "FAC-01",
+      externalProjectId: "prj_1",
+      externalGhgStatementId: "ggs_1",
+      reportingPeriodStartOn: "2026-07-01",
+      reportingPeriodEndOn: "2026-07-31",
+      standardVersion: "1.7",
+      protocolVersion: "1.1.1",
+      configuredProtocolVersion: null,
+    },
+    authoritativeStatement: {
+      externalEntryIds: ["rmv_1"],
+      pendingTotalCo2eRemovedKg: 900,
+    },
+    remoteEntries: [
+      {
+        id: "rmv_1",
+        startedOn: "2026-07-01",
+        completedOn: "2026-07-31",
+        netRemovedKg: 900,
+        netRemovedWithoutDiscountKg: 950,
+        netRemovedStandardDeviationKg: 4,
+        supplierCreditKg: 880,
+        bufferPoolKg: 20,
+        ghgStatementId: "ggs_1",
+      },
+    ],
+    ...overrides,
+  });
+}
 
 describe("renderGhgStatementReportPdf", () => {
   it("renders a readable fact-only GHG Statement summary", async () => {
-    const model = buildGhgStatementReportModel({
-      reportVersion: 3,
-      preparedAt: "2026-07-28T12:00:00.000Z",
-      documentControl: {
-        organizationName: "Test supplier",
-        facilityCode: "FAC-01",
-        externalProjectId: "prj_1",
-        externalGhgStatementId: "ggs_1",
-        reportingPeriodStartOn: "2026-07-01",
-        reportingPeriodEndOn: "2026-07-31",
-        standardVersion: "1.7",
-        protocolVersion: "1.1.1",
-        configuredProtocolVersion: null,
-      },
-      authoritativeStatement: {
-        externalEntryIds: ["rmv_1"],
-        pendingTotalCo2eRemovedKg: 900,
-      },
-      remoteEntries: [
-        {
-          id: "rmv_1",
-          startedOn: "2026-07-01",
-          completedOn: "2026-07-31",
-          netRemovedKg: 900,
-          netRemovedWithoutDiscountKg: 950,
-          netRemovedStandardDeviationKg: 4,
-          supplierCreditKg: 880,
-          bufferPoolKg: 20,
-          ghgStatementId: "ggs_1",
-        },
-      ],
-    });
+    const model = buildModel();
 
     const bytes = await renderGhgStatementReportPdf(model);
     expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
@@ -74,5 +137,128 @@ describe("renderGhgStatementReportPdf", () => {
     } finally {
       await task.destroy();
     }
+  });
+});
+
+describe("renderGhgStatementReportPdf determinism", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("produces identical bytes for two renders of the same model", async () => {
+    const model = buildModel();
+
+    const first = await renderGhgStatementReportPdf(model);
+    const second = await renderGhgStatementReportPdf(model);
+
+    expect(sha256Hex(second)).toBe(sha256Hex(first));
+    expect(second.byteLength).toBe(first.byteLength);
+  });
+
+  it(
+    "produces identical bytes in two fresh processes",
+    async () => {
+      const model = buildModel();
+      const directory = mkdtempSync(join(tmpdir(), "ghg-report-determinism-"));
+      const scriptPath = join(directory, "render-checksum.ts");
+      writeFileSync(scriptPath, CHILD_SCRIPT);
+
+      try {
+        const first = renderChecksumInFreshProcess(scriptPath, model);
+        const second = renderChecksumInFreshProcess(scriptPath, model);
+
+        expect(second).toBe(first);
+        expect(first).toBe(sha256Hex(await renderGhgStatementReportPdf(model)));
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+    CHILD_RENDER_TIMEOUT_MS,
+  );
+
+  it("produces identical bytes when the system clock moves between renders", async () => {
+    const model = buildModel();
+    // Fake only Date: faking timers wholesale would stall the renderer's
+    // stream callbacks.
+    vi.useFakeTimers({ toFake: ["Date"] });
+
+    vi.setSystemTime(FIRST_CLOCK);
+    const first = await renderGhgStatementReportPdf(model);
+    vi.setSystemTime(SECOND_CLOCK);
+    const second = await renderGhgStatementReportPdf(model);
+
+    expect(sha256Hex(second)).toBe(sha256Hex(first));
+  });
+
+  it("stamps document metadata from preparedAt, not the clock", async () => {
+    const model = buildModel();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(SECOND_CLOCK);
+
+    const bytes = await renderGhgStatementReportPdf(model);
+
+    const task = getDocument({ data: new Uint8Array(bytes), verbosity: 0 });
+    const pdf = await task.promise;
+    try {
+      const { info } = (await pdf.getMetadata()) as unknown as {
+        info: Record<string, unknown>;
+      };
+      // PDF date strings are `D:YYYYMMDDHHmmSS…`; assert the frozen preparedAt
+      // date, not the faked clock's year.
+      expect(String(info.CreationDate)).toContain("D:20260728");
+      expect(String(info.CreationDate)).not.toContain("2031");
+      expect(info.Producer).toBe("noma dMRV GHG statement report");
+      expect(info.Creator).toBe("noma dMRV");
+    } finally {
+      await task.destroy();
+    }
+  });
+
+  it("emits already-canonical bytes", async () => {
+    const bytes = await renderGhgStatementReportPdf(buildModel());
+
+    // A second pass must be a no-op: objects are already in id order and the
+    // subset tags are already the name-derived ones.
+    expect(sha256Hex(canonicalizePdfBytes(bytes))).toBe(sha256Hex(bytes));
+    // Font subset tags come from the PostScript name, not Math.random.
+    expect(bytes.toString("latin1")).toContain(
+      `/BaseFont /${subsetTag("DMSans-Bold")}+DMSans-Bold`,
+    );
+  });
+
+  it("refuses to canonicalize bytes it cannot parse", () => {
+    expect(() => canonicalizePdfBytes(Buffer.from("%PDF-1.3\nbroken\n"))).toThrow(
+      NonCanonicalPdfError,
+    );
+  });
+
+  it("refuses to canonicalize a non-zero xref generation", async () => {
+    const bytes = await renderGhgStatementReportPdf(buildModel());
+    const text = bytes.toString("latin1");
+    const tableStart = text.lastIndexOf(`\n${XREF_KEYWORD}\n`);
+    const entryAt = text.indexOf(IN_USE_ENTRY_TAIL, tableStart);
+    expect(entryAt).toBeGreaterThan(tableStart);
+
+    // Same byte length, one legal-but-unsupported generation number: the
+    // rebuilt table would renumber it to 0 while the object header kept the
+    // original generation, so it has to throw instead.
+    const mutated = Buffer.from(
+      text.slice(0, entryAt) +
+        IN_USE_ENTRY_TAIL.replace("00000", "00001") +
+        text.slice(entryAt + IN_USE_ENTRY_TAIL.length),
+      "latin1",
+    );
+    expect(mutated.byteLength).toBe(bytes.byteLength);
+
+    expect(() => canonicalizePdfBytes(mutated)).toThrow(NonCanonicalPdfError);
+  });
+
+  it("rejects an unparseable preparedAt instead of stamping a fallback", () => {
+    // Metadata pinned to the epoch while the page printed the raw string put
+    // two preparation times into one checksummed artifact. The model builder
+    // now fails closed, so the renderer never sees such a model.
+    expect(() => buildModel({ preparedAt: "not-a-timestamp" })).toThrow(
+      GhgStatementReportReconciliationError,
+    );
   });
 });
