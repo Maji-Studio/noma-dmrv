@@ -1,0 +1,2 @@
+DROP INDEX "biochar_product_source_allocations_org_production_run_idx";--> statement-breakpoint
+CREATE INDEX "biochar_product_source_allocations_org_production_run_id_idx" ON "biochar_product_source_allocations" USING btree ("organization_id","production_run_id");
