@@ -399,6 +399,22 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   forms and note the rule in [`forms.md`](./forms.md). If it is not, leave both
   and delete this entry (S).
 
+### Only the GHG statement report PDF renders deterministic bytes (`certification/ledger-pdf-determinism`, opened 2026-08-06)
+
+- **Observed:** @react-pdf/pdfkit writes each compressed object when its own
+  async deflate ends (so the threadpool permutes object order in the file) and
+  tags every embedded subset font with `Math.random()`. Neither has a seam in
+  @react-pdf/renderer 4.5.1, so `renderGhgStatementReportPdf` post-processes its
+  output through
+  `src/lib/certification/ghg-statement-report/canonical-pdf.ts`.
+- Every other document built on `renderLedgerToBuffer`
+  (`src/lib/certification/evidence-ledger/pdf-theme.ts`) is still byte-unstable.
+  That is harmless today because only the GHG statement report has a stored
+  checksum operators and verifiers compare.
+- **Resolve via:** if a second ledger ever gains a checksum or a stored-artifact
+  verification gate, move the canonicalizer next to `renderLedgerToBuffer` and
+  apply it to every ledger rather than copying it (S).
+
 ## Isometric Certify integration
 
 Registry-specific deferred decisions live in
