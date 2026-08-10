@@ -771,7 +771,13 @@ export async function markSubmissionRejected(
       updatedAt: sql`now()`,
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('lastError', ${args.errorMessage}::text)`,
     })
-    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+    .where(
+      and(
+        eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.status, "draft"),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    );
 }
 
 // Accumulates per-step recovery IDs into `payload_snapshot.journaled`

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
+import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import type { Logger } from "@/lib/log";
 import type { ProductionBatchRegistryInput } from "@/data-access/certifier-production-batches";
 import type { IsometricProductionBatch } from "@/lib/isometric/production-batches";
@@ -301,6 +302,28 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
     expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledTimes(1);
+  });
+
+  it("claims an orphaned record within the dry-mass precision tolerance", async () => {
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
+        mass: {
+          magnitude: 2_000 + MASS_COMPARISON_EPSILON_KG,
+          unit: "kg",
+        },
+      });
+    });
+
+    const registered = await ensure();
+
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+    expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        externalProductionBatchId: PRODUCTION_BATCH_ID,
+      }),
+    );
   });
 
   it("matches an orphaned record whose timestamps express the same instants", async () => {

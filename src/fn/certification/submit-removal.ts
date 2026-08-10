@@ -72,6 +72,10 @@ import {
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import {
+  rejectClaimedRemovalSubmissionBestEffort,
+  safeRemovalSubmissionError,
+} from "./removal-submission-failure";
+import {
   mirrorCandidateSourcesForSubmission,
   resolveSourceBindingCandidates,
 } from "./sources";
@@ -132,22 +136,6 @@ function recordExternalMutation(
   }
 }
 
-function safeAttemptError(error: unknown): {
-  errorClass: string | null;
-  errorMessage: string | null;
-} {
-  if (error === null) {
-    return { errorClass: null, errorMessage: null };
-  }
-  if (error instanceof SafeError) {
-    return { errorClass: "SafeError", errorMessage: error.message };
-  }
-  return {
-    errorClass: "UnexpectedError",
-    errorMessage: "Removal submission failed unexpectedly. Retry the submission.",
-  };
-}
-
 // The submission unit: one Isometric Removal == one certifierRemovals row.
 // Loads the removal's full context (every member credit batch's deduped run
 // union + applied-biochar attribution), aggregates ALL runs together with
@@ -178,7 +166,7 @@ export async function submitRemoval(
         : "failed";
     throw error;
   } finally {
-    const safeError = safeAttemptError(attemptError);
+    const safeError = safeRemovalSubmissionError(attemptError);
     // Best-effort: a failed audit insert must not mask the submission's own
     // error or turn a successful return into a throw.
     await appendSyncEventBestEffort(args.orgCtx, {
@@ -561,81 +549,91 @@ async function submitRemovalCore(
         version: claimed.version,
       };
     case "claimed": {
-      // ADR 0020 resume gate: never complete a draft whose snapshot was
-      // built under an older INPUT_MAPPING revision — retire it and fail
-      // closed instead (see production-claim-gate.ts).
-      if (claimed.resumed) {
-        await assertResumedSnapshotRevisionCurrent(orgCtx, claimed.row);
-      }
-      // §8.6.2 fresh-read re-assert (issue #349, ADR 0020): the blocking
-      // draft row now exists, so membership is frozen — a foreign claim OR a
-      // membership/run-lineage regroup that landed between context load and
-      // this point is caught HERE, before any registry POST, instead of
-      // shipping a stale payload and tripping the claim-stamp backstop after
-      // the POSTs. See production-claim-gate.ts.
-      await assertProductionClaimGateFresh(
-        orgCtx,
-        removalId,
-        ctx.memberBatchClaims,
-      );
-      await assertClaimedRemovalPayloadFresh({
-        orgCtx,
-        removalId,
-        row: claimed.row,
-        allowPeriodInputStub,
-      });
-      if (claimed.reason === "rejected-hash-changed") {
-        log.warn(
-          { submissionId: claimed.row.id },
-          "removal retry will create a new version after rejected row with changed hash",
+      try {
+        // ADR 0020 resume gate: never complete a draft whose snapshot was
+        // built under an older INPUT_MAPPING revision — retire it and fail
+        // closed instead (see production-claim-gate.ts).
+        if (claimed.resumed) {
+          await assertResumedSnapshotRevisionCurrent(orgCtx, claimed.row);
+        }
+        // §8.6.2 fresh-read re-assert (issue #349, ADR 0020): the blocking
+        // draft row now exists, so membership is frozen — a foreign claim OR a
+        // membership/run-lineage regroup that landed between context load and
+        // this point is caught HERE, before any registry POST, instead of
+        // shipping a stale payload and tripping the claim-stamp backstop after
+        // the POSTs. See production-claim-gate.ts.
+        await assertProductionClaimGateFresh(
+          orgCtx,
+          removalId,
+          ctx.memberBatchClaims,
         );
+        await assertClaimedRemovalPayloadFresh({
+          orgCtx,
+          removalId,
+          row: claimed.row,
+          allowPeriodInputStub,
+        });
+        if (claimed.reason === "rejected-hash-changed") {
+          log.warn(
+            { submissionId: claimed.row.id },
+            "removal retry will create a new version after rejected row with changed hash",
+          );
+        }
+        onProgress?.({ step: "removal.preparing_evidence", state: "complete" });
+        // The transport snapshot comes off the claimed row: on resume it is
+        // the prior attempt's stored truth; on create it carries the
+        // locked-source-id version of the datapoint bodies (which may differ
+        // from the tentative `datapointBodyByKey` if a concurrent
+        // mirror/unlink shifted the source set during lock acquisition).
+        const transport = readRemovalTransport(claimed.row);
+        const sourceBindingPlan = readRemovalSourceBindingPlan(claimed.row);
+        // On resume, the fixed bindings must come from the SAME snapshot as the
+        // transport — not the live `fixed` recomputed above, which may have
+        // drifted from the version the snapshot was built against.
+        const effectiveFixed = claimed.resumed
+          ? readRemovalFixedInputs(claimed.row)
+          : fixed;
+        // Durability measurement-sample POST bodies are snapshot truth. On create
+        // they carry the claimed versioned supplier refs; on resume they prevent a
+        // stale draft from rebuilding bodies from changed live context.
+        const durabilityMeasurementSubmissions = hasDurabilityComponents
+          ? readRemovalDurabilityMeasurementSamples(claimed.row)
+          : null;
+        return await runRemovalSubmission({
+          client,
+          orgCtx,
+          removalId,
+          row: claimed.row,
+          transport,
+          fixed: effectiveFixed,
+          template: defaultTemplate,
+          blueprintsByKey,
+          reportingWindow: {
+            startedOn: reportingWindow.startedOn,
+            completedOn: reportingWindow.completedOn,
+          },
+          externalProjectId,
+          durabilityMeasurementSubmissions,
+          sourceBindingPlan,
+          // The live member set — membership can't drift under a locked draft
+          // (assertRemovalAllowsCreditBatchMutation), so these are the batches
+          // whose production bucket this submission claims.
+          claimBatchIds: memberCreditBatchIds,
+          supersedePreviousId: claimed.supersedePreviousId,
+          resumed: claimed.resumed,
+          attempt,
+          log,
+          onProgress,
+        });
+      } catch (error) {
+        await rejectClaimedRemovalSubmissionBestEffort({
+          orgCtx,
+          submissionId: claimed.row.id,
+          error,
+          log,
+        });
+        throw error;
       }
-      onProgress?.({ step: "removal.preparing_evidence", state: "complete" });
-      // The transport snapshot comes off the claimed row: on resume it is
-      // the prior attempt's stored truth; on create it carries the
-      // locked-source-id version of the datapoint bodies (which may differ
-      // from the tentative `datapointBodyByKey` if a concurrent
-      // mirror/unlink shifted the source set during lock acquisition).
-      const transport = readRemovalTransport(claimed.row);
-      const sourceBindingPlan = readRemovalSourceBindingPlan(claimed.row);
-      // On resume, the fixed bindings must come from the SAME snapshot as the
-      // transport — not the live `fixed` recomputed above, which may have
-      // drifted from the version the snapshot was built against.
-      const effectiveFixed = claimed.resumed
-        ? readRemovalFixedInputs(claimed.row)
-        : fixed;
-      // Durability measurement-sample POST bodies are snapshot truth. On create
-      // they carry the claimed versioned supplier refs; on resume they prevent a
-      // stale draft from rebuilding bodies from changed live context.
-      const durabilityMeasurementSubmissions = hasDurabilityComponents
-        ? readRemovalDurabilityMeasurementSamples(claimed.row)
-        : null;
-      return runRemovalSubmission({
-        client,
-        orgCtx,
-        removalId,
-        row: claimed.row,
-        transport,
-        fixed: effectiveFixed,
-        template: defaultTemplate,
-        blueprintsByKey,
-        reportingWindow: {
-          startedOn: reportingWindow.startedOn,
-          completedOn: reportingWindow.completedOn,
-        },
-        externalProjectId,
-        durabilityMeasurementSubmissions,
-        sourceBindingPlan,
-        // The live member set — membership can't drift under a locked draft
-        // (assertRemovalAllowsCreditBatchMutation), so these are the batches
-        // whose production bucket this submission claims.
-        claimBatchIds: memberCreditBatchIds,
-        supersedePreviousId: claimed.supersedePreviousId,
-        resumed: claimed.resumed,
-        attempt,
-        log,
-        onProgress,
-      });
     }
   }
 }

@@ -108,6 +108,16 @@ export interface PerformRegistryCreateArgs {
 const AMBIGUOUS_FALLBACK_MESSAGE =
   "Multiple matching records exist in the registry for this submission. Resolve the duplicates in the registry before retrying.";
 
+const uncertainRegistryMutationErrors = new WeakSet<object>();
+
+export function isRegistryMutationOutcomeUncertain(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    uncertainRegistryMutationErrors.has(error)
+  );
+}
+
 export async function performRegistryCreate(
   args: PerformRegistryCreateArgs,
 ): Promise<RegistryCreateResult> {
@@ -204,7 +214,18 @@ export async function performRegistryCreate(
 async function reconcileToResult(
   args: PerformRegistryCreateArgs,
 ): Promise<RegistryCreateResult | null> {
-  const lookup = await args.reconcile();
+  let lookup: ReconcileLookup;
+  try {
+    lookup = await args.reconcile();
+  } catch (error) {
+    // A failed lookup cannot establish whether an earlier POST committed.
+    // Preserve the live draft lock so retry waits for reconciliation/TTL
+    // instead of treating an uncertain external mutation as a known failure.
+    if (typeof error === "object" && error !== null) {
+      uncertainRegistryMutationErrors.add(error);
+    }
+    throw error;
+  }
   if (lookup.found === "none") return null;
 
   if (lookup.found === "refused") {
