@@ -349,9 +349,15 @@ function productionBatchMismatchMessage(
   const sameFeedstocks =
     [...batch.feedstock_type_ids].sort().join("\u0000") ===
     [...expected.feedstock_type_ids].sort().join("\u0000");
+  const massDifferenceKg = Math.abs(
+    batch.mass.magnitude - expected.mass.magnitude,
+  );
+  const floatingPointSlackKg =
+    Number.EPSILON *
+    (Math.abs(batch.mass.magnitude) + Math.abs(expected.mass.magnitude));
   const massMagnitudeMatches =
-    Math.abs(batch.mass.magnitude - expected.mass.magnitude) <=
-    MASS_COMPARISON_EPSILON_KG;
+    massDifferenceKg <=
+    MASS_COMPARISON_EPSILON_KG + floatingPointSlackKg;
   if (
     batch.supplier_reference_id === expected.supplier_reference_id &&
     batch.facility_id === expected.facility_id &&
