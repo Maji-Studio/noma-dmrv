@@ -348,8 +348,9 @@ export function useFacilityCertifierMapping(
 
 // Read-only registry-link summary (DB-only, no Isometric API). For viewers who
 // can't manage the link — keeps the management payload (available projects,
-// templates, link hints) off the wire. Mutations invalidate
-// `certificationKeys.all`, which covers this key too.
+// templates, and facility identities) off the wire while exposing only the
+// linked-facility count needed for safe GHG Statement creation. Mutations
+// invalidate `certificationKeys.all`, which covers this key too.
 export function useFacilityCertifierSummary(
   facilityId: string,
   enabled = true,
