@@ -44,7 +44,7 @@ import {
 const SHORT_ID = 8;
 
 export function RemovalsList() {
-  const { facilityId } = useFacilityContext();
+  const { facilityId, selectedFacility } = useFacilityContext();
   const [dialogOpen, setDialogOpen] = useState(false);
   // Resume an existing draft removal in the wizard — the consolidated landing
   // for the retired `/[removalId]/review` route, which now redirects here with
@@ -95,6 +95,11 @@ export function RemovalsList() {
       {facilityId && (
         <NewRemovalDialog
           facilityId={facilityId}
+          facilityName={
+            selectedFacility?.name?.trim() ||
+            selectedFacility?.code ||
+            "Selected facility"
+          }
           isOpen={wizardOpen}
           onClose={closeWizard}
           resumeRemovalId={resume}

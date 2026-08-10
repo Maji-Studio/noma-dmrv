@@ -48,6 +48,7 @@ type StepKey = (typeof STEP_KEYS)[number];
 
 interface NewRemovalDialogProps {
   facilityId: string;
+  facilityName: string;
   isOpen: boolean;
   onClose: () => void;
   /** Reopen an existing draft removal straight at the confirm-&-submit step. */
@@ -56,6 +57,7 @@ interface NewRemovalDialogProps {
 
 export function NewRemovalDialog({
   facilityId,
+  facilityName,
   isOpen,
   onClose,
   resumeRemovalId = null,
@@ -85,6 +87,7 @@ export function NewRemovalDialog({
     >
       <WizardBody
         facilityId={facilityId}
+        facilityName={facilityName}
         onClose={closeIfIdle}
         resumeRemovalId={resumeRemovalId}
         submitMutation={submitMutation}
@@ -95,11 +98,13 @@ export function NewRemovalDialog({
 
 function WizardBody({
   facilityId,
+  facilityName,
   onClose,
   resumeRemovalId,
   submitMutation,
 }: {
   facilityId: string;
+  facilityName: string;
   onClose: () => void;
   resumeRemovalId: string | null;
   submitMutation: ReturnType<typeof useSubmitRemoval>;
@@ -221,6 +226,7 @@ function WizardBody({
               removalId={removalId}
               ctx={ctxQuery.data}
               facilityId={facilityId}
+              facilityName={facilityName}
               onDone={onClose}
               submitMutation={submitMutation}
             />

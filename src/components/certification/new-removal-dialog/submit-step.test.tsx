@@ -124,6 +124,7 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
+          facilityName="Tanzania facility"
           ctx={CONTEXT}
           onDone={onDone}
           submitMutation={
@@ -171,6 +172,7 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
+          facilityName="Tanzania facility"
           ctx={CONTEXT}
           onDone={onDone}
           submitMutation={
