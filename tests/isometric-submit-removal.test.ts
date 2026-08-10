@@ -368,7 +368,65 @@ describe("submitRemoval — happy path", () => {
     expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
   });
 
-  it("records possible for a lost GHG Entry response and confirmed when reconciliation finds it", async () => {
+  it("keeps the draft locked when a confirmed Removal write is followed by local persistence failure", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockResolvedValue({
+      id: "rmv_written",
+    } as never);
+    vi.mocked(ledger.markSubmissionSubmitted).mockRejectedValue(
+      new Error("local ledger unavailable"),
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow("local ledger unavailable");
+
+    expect(storedRows[0]).toMatchObject({
+      status: "draft",
+      externalId: null,
+    });
+    expect(storedRows[0].lockedAt).not.toBeNull();
+    expect(attemptSummaryEvents()[0]?.[1]).toMatchObject({
+      responsePayload: { ghg_entry_external_mutation: "confirmed" },
+    });
+  });
+
+  it("keeps the draft locked when a confirmed datapoint is followed by a definitive Removal refusal", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockRejectedValue(
+      new isometric.IsometricApiError(
+        "422 Unprocessable",
+        422,
+        { errors: [{ detail: "invalid Removal payload" }] },
+        "http",
+      ),
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow("invalid Removal payload");
+
+    expect(storedRows[0].status).toBe("draft");
+    expect(storedRows[0].lockedAt).not.toBeNull();
+  });
+
+  it("preserves a confirmed datapoint write through a lost Removal response and reconciliation", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),
     );
@@ -389,10 +447,14 @@ describe("submitRemoval — happy path", () => {
     expect(attemptSummaryEvents()[0]?.[1]).toMatchObject({
       responsePayload: {
         outcome: "failed",
-        ghg_entry_external_mutation: "possible",
+        ghg_entry_external_mutation: "confirmed",
       },
     });
+    expect(storedRows[0].status).toBe("draft");
+    expect(storedRows[0].lockedAt).not.toBeNull();
 
+    // Reconciliation is available after the preserved lock expires.
+    storedRows[0].lockedAt = new Date(0);
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),
     );

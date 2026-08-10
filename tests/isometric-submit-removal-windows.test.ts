@@ -24,6 +24,7 @@ import {
   storedRows,
 } from "./fixtures/submit-removal-orchestrator";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as ledger from "@/data-access/certification";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as productionBatchesDA from "@/data-access/certifier-production-batches";
 import * as certifyContext from "@/fn/certification/certify-context-core";
@@ -71,6 +72,78 @@ describe("submitRemoval — reporting window anchored to application date (issue
   function makeCombinedTemplate(): IsometricGhgEntryTemplate {
     return make1000YearSequestrationTemplate();
   }
+
+  function prepareDurabilitySubmission(): void {
+    setDurabilityMeasurementSamplesEnabled(true);
+    const baseContext = makeContext();
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...baseContext,
+      defaultTemplate: makeCombinedTemplate(),
+      durabilityGateBlockers: [],
+      batchesWithSamples: baseContext.batchesWithSamples.map((batch) => ({
+        ...batch,
+        durabilityOption: "1000_year" as const,
+        samples: batch.samples.map((sample, index) => ({
+          ...sample,
+          totalCarbonPercent: 80 + index,
+          sReflectanceFraction: 0.9 + index / 100,
+        })),
+      })),
+    });
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+  }
+
+  it("keeps the draft locked when production-batch binding fails after datapoints were created", async () => {
+    prepareDurabilitySubmission();
+    const originalError = new Error("production batch binding unavailable");
+    vi.mocked(
+      productionBatchesDA.getProductionBatchRegistryInputs,
+    ).mockRejectedValue(originalError);
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toBe(originalError);
+
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0]).toMatchObject({
+      status: "draft",
+      metadata: null,
+    });
+    expect(storedRows[0].lockedAt).not.toBeNull();
+    expect(isometric.createDatapoint).toHaveBeenCalled();
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
+  });
+
+  it("preserves the submission error when no-mutation rejection cleanup fails", async () => {
+    prepareDurabilitySubmission();
+    vi.mocked(isometric.createDatapoint).mockRejectedValueOnce(
+      new isometric.IsometricApiError(
+        "422 Unprocessable",
+        422,
+        { errors: [{ detail: "invalid datapoint" }] },
+        "http",
+      ),
+    );
+    vi.mocked(ledger.markSubmissionRejected).mockRejectedValueOnce(
+      new Error("submission ledger unavailable"),
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow("Provider rejected the request (422): invalid datapoint");
+
+    expect(ledger.markSubmissionRejected).toHaveBeenCalledOnce();
+    expect(storedRows[0]).toMatchObject({ status: "draft" });
+    expect(storedRows[0].lockedAt).not.toBeNull();
+  });
 
   it("uses MAX(applicationDate) across lineages for completed_on while durability measured_at keeps the production end", async () => {
     setDurabilityMeasurementSamplesEnabled(true);

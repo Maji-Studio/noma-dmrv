@@ -326,6 +326,38 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     );
   });
 
+  it("claims an orphaned decimal-mass record exactly 1 g apart", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ totalDryMassKg: 10.1 }),
+    ]);
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
+        mass: { magnitude: 10.101, unit: "kg" },
+      });
+    });
+
+    await expect(ensure()).resolves.toEqual(
+      new Map([[CREDIT_BATCH_ID, PRODUCTION_BATCH_ID]]),
+    );
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
+  it("refuses an orphaned decimal-mass record more than 1 g apart", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ totalDryMassKg: 10.1 }),
+    ]);
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
+        mass: { magnitude: 10.101_001, unit: "kg" },
+      });
+    });
+
+    await expect(ensure()).rejects.toThrow(
+      /does not match this credit batch/,
+    );
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
   it("matches an orphaned record whose timestamps express the same instants", async () => {
     mocks.client.paginate.mockImplementation(async function* () {
       yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {

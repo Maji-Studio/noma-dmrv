@@ -92,6 +92,16 @@ export function getRemovalCertifyRefetchInterval(
     : false;
 }
 
+type RemovalPreflightPollingData = {
+  lockInFlight: boolean;
+};
+
+export function getRemovalPreflightRefetchInterval(
+  data: RemovalPreflightPollingData | undefined,
+): number | false {
+  return data?.lockInFlight ? LOCKED_REFETCH_INTERVAL_MS : false;
+}
+
 export const certificationKeys = {
   all: ["certification"] as const,
   facilityMapping: (facilityId: string) =>
@@ -232,6 +242,10 @@ export function useRemovalPreflightSummaries(
       },
       enabled: Boolean(facilityId && removalId),
       staleTime: DEFAULT_STALE_MS,
+      refetchInterval: (query: {
+        state: { data?: RemovalPreflightPollingData };
+      }) =>
+        getRemovalPreflightRefetchInterval(query.state.data),
     })),
   });
 

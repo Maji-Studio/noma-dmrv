@@ -28,6 +28,14 @@ for process calculations and certification inputs. Certification lineage uses
 the wet allocation shares to select contributing intake batches without
 changing the dry-mass values submitted for protocol calculations.
 
+## 2026-08-10 (Removal submission recovery safety)
+
+Definitive registry refusals reject and unlock only the exact Removal draft
+claimed by an attempt that made no possible or confirmed registry write. Any
+uncertain or confirmed write keeps the draft locked for reconciliation,
+including failed lookups and local persistence failures after a successful
+create. Production Batch dry-mass comparisons keep the explicit 1 g tolerance.
+
 ## 2026-08-10 (customer location application evidence)
 
 Application records now support `location` as the first and default evidence
