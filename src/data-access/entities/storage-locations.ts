@@ -55,7 +55,7 @@ export function formatStorageLocationSubtitle(
   feedstockTypeName: string | null,
   feedstockTypeUsage: string | null,
   totalStoredWetKg: number,
-  pendingStoredKg: number,
+  pendingStoredWetKg: number,
   totalConsumedKg: number,
   totalProducedWetKg: number,
   totalProducedDryKg: number,
@@ -87,9 +87,9 @@ export function formatStorageLocationSubtitle(
         );
       }
       parts.push(`${Math.round(onHandKg).toLocaleString()} kg stored`);
-      if (pendingStoredKg > 0) {
+      if (pendingStoredWetKg > 0) {
         parts.push(
-          `${Math.round(pendingStoredKg).toLocaleString()} kg pending dry estimate (non-binding)`,
+          `${Math.round(pendingStoredWetKg).toLocaleString()} kg pending intake (wet)`,
         );
       }
       return parts.join(" · ");
@@ -181,10 +181,10 @@ function buildInventoryAggregates(
       feedstocks.massWetKg,
       sql`${feedstocks.status} = 'complete'`,
     ).as("total_stored_wet_kg"),
-    pendingStoredKg: sumNumeric(
-      feedstocks.massDryKg,
+    pendingStoredWetKg: sumNumeric(
+      feedstocks.massWetKg,
       sql`${feedstocks.status} = 'missing_data'`,
-    ).as("pending_stored_kg"),
+    ).as("pending_stored_wet_kg"),
   })
   .from(feedstocks)
   .leftJoin(
@@ -480,7 +480,7 @@ interface StorageLocationOptionRow {
   formulationName: string | null;
   totalStoredKg: number;
   totalStoredWetKg: number;
-  pendingStoredKg: number;
+  pendingStoredWetKg: number;
   totalConsumedKg: number;
   totalProducedWetKg: number;
   totalProducedDryKg: number;
@@ -554,7 +554,7 @@ export function toStorageLocationEntityOption(
       row.heldFeedstockTypeName ?? row.feedstockTypeName,
       row.heldFeedstockTypeUsage,
       row.totalStoredWetKg,
-      row.pendingStoredKg,
+      row.pendingStoredWetKg,
       row.totalConsumedKg,
       row.totalProducedWetKg,
       row.totalProducedDryKg,
@@ -692,8 +692,8 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       totalStoredWetKg: numericAggregate(
         sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredWetKg}, 0)`,
       ),
-      pendingStoredKg: numericAggregate(
-        sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
+      pendingStoredWetKg: numericAggregate(
+        sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredWetKg}, 0)`,
       ),
       totalConsumedKg: numericAggregate(
         sql<number>`
@@ -857,8 +857,8 @@ export async function getStorageLocationById(
       totalStoredWetKg: numericAggregate(
         sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredWetKg}, 0)`,
       ),
-      pendingStoredKg: numericAggregate(
-        sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
+      pendingStoredWetKg: numericAggregate(
+        sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredWetKg}, 0)`,
       ),
       totalConsumedKg: numericAggregate(
         sql<number>`

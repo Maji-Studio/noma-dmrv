@@ -77,11 +77,11 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
         label: "Current wet stock",
         value: formatMassKg(storageLocation.feedstockInventory.currentWetMassKg),
       },
-      ...(storageLocation.feedstockInventory.pendingDryMassKg > 0
+      ...(storageLocation.feedstockInventory.pendingWetMassKg > 0
         ? [
             {
-              label: "Pending dry mass (non-binding)",
-              value: formatMassKg(storageLocation.feedstockInventory.pendingDryMassKg),
+              label: "Pending intake (wet)",
+              value: formatMassKg(storageLocation.feedstockInventory.pendingWetMassKg),
             },
             {
               label: "Pending feedstocks",

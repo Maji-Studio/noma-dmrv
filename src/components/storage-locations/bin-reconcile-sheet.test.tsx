@@ -65,7 +65,7 @@ const storageLocation: StorageLocationWithFacility = {
     feedstockTypes: ["Wood chips"],
     currentWetMassKg: 150,
     estimatedDryMassKg: 125,
-    pendingDryMassKg: 0,
+    pendingWetMassKg: 0,
     estimatedMoisturePercent: 16.7,
   },
   biocharInventory: {

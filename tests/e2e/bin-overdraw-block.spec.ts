@@ -44,7 +44,7 @@ const biocharOverdrawText =
 const deliveryOverdrawText =
   /^Only .+ of biochar is available\. Reduce the delivered mass\.$/;
 
-/** Open the existing draft run form against the seeded 100 kg-wet source bin. */
+/** Open the existing draft run form against the seeded 120 kg-wet source bin. */
 async function openRunFormWithSource(
   page: Page,
   seededData: SeededChainData,
@@ -430,13 +430,13 @@ async function createDeliveredDelivery(
   await waitForSideSheetClose(page);
 }
 
-/** Path 1: createProductionRun feedstock draw from 100 kg wet on hand. */
+/** Path 1: createProductionRun feedstock draw from 120 kg wet on hand. */
 test.describe("createProductionRun feedstock guard", () => {
   test("rejects a feedstock draw exceeding the bin's on-hand stock", async ({
     adminPage: page,
     seededData,
   }) => {
-    // 200 kg wet exceeds the bin's authoritative 100 kg wet balance.
+    // 200 kg wet exceeds the bin's authoritative 120 kg wet balance.
     await openRunFormWithSource(page, seededData, {
       wetMassKg: "200",
       moisturePercent: "10",
@@ -465,7 +465,7 @@ test.describe("createProductionRun feedstock guard", () => {
     adminPage: page,
     seededData,
   }) => {
-    // 50 kg wet is within the bin's authoritative 100 kg wet balance.
+    // 50 kg wet is within the bin's authoritative 120 kg wet balance.
     await openRunFormWithSource(page, seededData, {
       wetMassKg: "50",
       moisturePercent: "10",
@@ -485,13 +485,13 @@ test.describe("updateProductionRun feedstock guard", () => {
     adminPage: page,
     seededData,
   }) => {
-    // The run owns 80 kg; replacing it with 110 kg still exceeds total stock.
+    // The run owns 80 kg; replacing it with 130 kg exceeds total wet stock.
     const runCode = await createCompleteRun(page, seededData, {
       feedstockWetMassKg: "80",
       feedstockMoisturePercent: "0",
     });
     await editRunByCode(page, runCode, "feedstockWetMassKg");
-    await page.fill('input[name="feedstockWetMassKg"]', "110");
+    await page.fill('input[name="feedstockWetMassKg"]', "130");
 
     const error = page
       .locator('[role="dialog"]')
@@ -509,7 +509,7 @@ test.describe("updateProductionRun feedstock guard", () => {
     adminPage: page,
     seededData,
   }) => {
-    // 80 → 90 kg is valid against 100 kg total, but 80 + 90 would falsely fail.
+    // 80 → 90 kg is valid against 120 kg total, but 80 + 90 would falsely fail.
     const runCode = await createCompleteRun(page, seededData, {
       feedstockWetMassKg: "80",
       feedstockMoisturePercent: "0",

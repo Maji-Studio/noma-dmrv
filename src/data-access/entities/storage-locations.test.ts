@@ -23,7 +23,7 @@ function storageRow(
     formulationName: null,
     totalStoredKg: 0,
     totalStoredWetKg: 0,
-    pendingStoredKg: 0,
+    pendingStoredWetKg: 0,
     totalConsumedKg: 0,
     totalProducedWetKg: 0,
     totalProducedDryKg: 0,

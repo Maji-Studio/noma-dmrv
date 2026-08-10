@@ -114,7 +114,7 @@ describe("storage-location feedstock stock", () => {
       expect(storageLocation.feedstockInventory.currentWetMassKg).toBe(100);
       expect(storageLocation.feedstockInventory.estimatedDryMassKg).toBe(80);
       expect(storageLocation.feedstockInventory.batchCount).toBe(1);
-      expect(storageLocation.feedstockInventory.pendingDryMassKg).toBe(120);
+      expect(storageLocation.feedstockInventory.pendingWetMassKg).toBe(150);
       expect(storageLocation.feedstockInventory.pendingBatchCount).toBe(1);
     } finally {
       await cleanupFixture(fixture);
@@ -133,7 +133,7 @@ describe("storage-location feedstock stock", () => {
 
       expect(option?.subtitle).toContain("100 kg stored");
       expect(option?.subtitle).toContain(
-        "120 kg pending dry estimate (non-binding)",
+        "150 kg pending intake (wet)",
       );
     } finally {
       await cleanupFixture(fixture);

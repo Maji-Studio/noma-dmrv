@@ -63,7 +63,7 @@ export interface StorageLocationWithFacility extends StorageLocation {
     feedstockTypes: string[];
     currentWetMassKg: number;
     estimatedDryMassKg: number | null;
-    pendingDryMassKg: number;
+    pendingWetMassKg: number;
     estimatedMoisturePercent: number | null;
   };
   biocharInventory: {
@@ -165,8 +165,8 @@ export async function enrichStorageLocationRows(
               feedstocks.massWetKg,
               sql`${feedstocks.status} = 'complete'`,
             ),
-            pendingDryKg: sumNumeric(
-              feedstocks.massDryKg,
+            pendingWetKg: sumNumeric(
+              feedstocks.massWetKg,
               sql`${feedstocks.status} = 'missing_data'`,
             ),
           })
@@ -602,7 +602,7 @@ export async function enrichStorageLocationRows(
   return rows.map((row) => {
     const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
     const laneStock = laneStockMap.get(row.id);
-    const pendingDryKg = feedstockInventoryRow?.pendingDryKg ?? 0;
+    const pendingWetKg = feedstockInventoryRow?.pendingWetKg ?? 0;
     // Unclamped wet intake minus wet withdrawals plus wet movements. A negative
     // result is a real reconciliation signal rather than a value to hide.
     const currentWetMassKg = laneStock?.feedstockStockWetKg ?? 0;
@@ -639,7 +639,7 @@ export async function enrichStorageLocationRows(
         feedstockTypes: splitAggregateLabels(feedstockInventoryRow?.feedstockTypes ?? null),
         currentWetMassKg,
         estimatedDryMassKg,
-        pendingDryMassKg: pendingDryKg,
+        pendingWetMassKg: pendingWetKg,
         estimatedMoisturePercent:
           moistureRatio != null ? moistureRatio * 100 : null,
       },

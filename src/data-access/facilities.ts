@@ -275,6 +275,7 @@ export async function getFacilities(
 
   const feedstockLaneStocks = await deriveLaneStock(ctx, db, {
     storageLocationIds: feedstockBinRows.map((bin) => bin.id),
+    lanes: "feedstock",
   });
   const feedstockBinFacilityById = new Map(
     feedstockBinRows.map((bin) => [bin.id, bin.facilityId]),
