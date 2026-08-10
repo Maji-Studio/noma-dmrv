@@ -1,10 +1,22 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { creditBatchKeys } from "./credit-batch-query-keys";
+
+const reactQueryMocks = vi.hoisted(() => ({
+  useQueries: vi.fn(),
+}));
+
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return { ...actual, useQueries: reactQueryMocks.useQueries };
+});
+
 import {
   certificationKeys,
   getRemovalCertifyRefetchInterval,
+  getRemovalPreflightRefetchInterval,
   invalidateCertificationReadiness,
+  useRemovalPreflightSummaries,
 } from "./use-certification";
 
 describe("certificationKeys", () => {
@@ -41,6 +53,44 @@ describe("getRemovalCertifyRefetchInterval", () => {
         futureDatedMeasurements: ["Application APP-1 is dated in the future."],
       }),
     ).toBe(60_000);
+  });
+});
+
+describe("getRemovalPreflightRefetchInterval", () => {
+  it("polls only while the removal submission lock is in flight", () => {
+    expect(getRemovalPreflightRefetchInterval(undefined)).toBe(false);
+    expect(
+      getRemovalPreflightRefetchInterval({ lockInFlight: false }),
+    ).toBe(false);
+    expect(getRemovalPreflightRefetchInterval({ lockInFlight: true })).toBe(
+      60_000,
+    );
+  });
+
+  it("is wired into every removal preflight query", () => {
+    reactQueryMocks.useQueries.mockReturnValue([
+      { data: undefined, isError: false, refetch: vi.fn() },
+      { data: undefined, isError: false, refetch: vi.fn() },
+    ]);
+
+    useRemovalPreflightSummaries("facility-1", ["removal-1", "removal-2"]);
+
+    const [{ queries }] = reactQueryMocks.useQueries.mock.calls[0] as [{
+      queries: Array<{
+        refetchInterval: (query: {
+          state: { data: { lockInFlight: boolean } | undefined };
+        }) => number | false;
+      }>;
+    }];
+    expect(queries).toHaveLength(2);
+    for (const query of queries) {
+      expect(
+        query.refetchInterval({ state: { data: { lockInFlight: true } } }),
+      ).toBe(60_000);
+      expect(
+        query.refetchInterval({ state: { data: { lockInFlight: false } } }),
+      ).toBe(false);
+    }
   });
 });
 

@@ -17,7 +17,10 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
  */
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
-import { markSubmissionSubmitted } from "@/data-access/certification";
+import {
+  markSubmissionRejected,
+  markSubmissionSubmitted,
+} from "@/data-access/certification";
 import { db } from "@/db";
 import {
   certificationSubmissions,
@@ -224,5 +227,36 @@ describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)
       externalId: "ext_pcw_plain",
     });
     expect(await readClaim(batchId)).toBeNull();
+  });
+});
+
+describe("markSubmissionRejected", () => {
+  it("does not downgrade a row that already reached submitted", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    const orgCtx = makeTestOrgContext(TEST_USER_ID);
+
+    await markSubmissionSubmitted(orgCtx, submissionId, {
+      externalId: "ext_pcw_submitted_guard",
+    });
+    await markSubmissionRejected(orgCtx, submissionId, {
+      errorMessage: "Later verification failed.",
+    });
+
+    const [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        externalId: certificationSubmissions.externalId,
+        metadata: certificationSubmissions.metadata,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toMatchObject({
+      status: "submitted",
+      externalId: "ext_pcw_submitted_guard",
+    });
+    expect(
+      (row.metadata as Record<string, unknown> | null)?.lastError,
+    ).toBeUndefined();
   });
 });

@@ -457,6 +457,7 @@ async function createGhgStatementRemote(args: {
     entityType: GHG_STATEMENT_ENTITY_TYPE,
     entityId: statement.id,
     submissionRowId: row.id,
+    expectedLockedAt: row.lockedAt ?? undefined,
     operation: "ghg_statement:create",
     requestPayload,
     resumed,

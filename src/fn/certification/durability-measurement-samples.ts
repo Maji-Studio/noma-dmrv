@@ -55,7 +55,11 @@ import {
   buildPerBatchDurabilityData,
   type FacilityReferenceSoilTemperature,
 } from "@/lib/isometric/utils/durability-aggregation";
-import { performRegistryCreate, supplierRefLookup } from "./registry-create";
+import {
+  performRegistryCreate,
+  supplierRefLookup,
+  type RegistryExternalMutationReporter,
+} from "./registry-create";
 import { REMOVAL_ENTITY_TYPE } from "./shared";
 import type { RemovalSourceBindingPlanEntry } from "@/lib/certification/removal-source-bindings";
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
@@ -221,6 +225,9 @@ export interface SubmitDurabilityMeasurementSamplesArgs {
     id: string;
     payloadSnapshot: unknown;
   };
+  expectedLockedAt?: Date;
+  deferRejectionToAttempt?: boolean;
+  onExternalMutation?: RegistryExternalMutationReporter;
   /** From the claim outcome — a resumed draft reconciles before POSTing. */
   resumed: boolean;
   submissions: DurabilityMeasurementSampleSubmission[];
@@ -422,6 +429,8 @@ export async function submitDurabilityMeasurementSamples(
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: args.removalId,
       submissionRowId: args.submissionRow.id,
+      expectedLockedAt: args.expectedLockedAt,
+      deferRejectionToAttempt: args.deferRejectionToAttempt,
       operation: `measurement-sample:create:${submission.operationKey}`,
       requestPayload: submission.body,
       supplierRefId: submission.supplierRefId,
@@ -483,6 +492,7 @@ export async function submitDurabilityMeasurementSamples(
         }
       },
       failureMessagePrefix: `Registry measurement for ${submission.label} could not be created`,
+      onExternalMutation: args.onExternalMutation,
       log: args.log,
     });
     if (!resolvedSample) {

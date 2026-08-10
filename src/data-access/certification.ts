@@ -760,7 +760,7 @@ export async function retireStaleSubmissionDraft(
 export async function markSubmissionRejected(
   ctx: OrgContext,
   id: string,
-  args: { errorMessage: string },
+  args: { errorMessage: string; expectedLockedAt?: Date },
 ): Promise<void> {
   requireOrgScope(ctx);
   await db
@@ -771,7 +771,16 @@ export async function markSubmissionRejected(
       updatedAt: sql`now()`,
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('lastError', ${args.errorMessage}::text)`,
     })
-    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+    .where(
+      and(
+        eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.status, "draft"),
+        args.expectedLockedAt
+          ? eq(certificationSubmissions.lockedAt, args.expectedLockedAt)
+          : undefined,
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    );
 }
 
 // Accumulates per-step recovery IDs into `payload_snapshot.journaled`

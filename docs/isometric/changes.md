@@ -17,6 +17,14 @@ reconciliation, workspace eligibility, and grouped Removal readiness are
 archived in
 [`docs/archive/2026-08-09-certification-review-corrections.md`](../archive/2026-08-09-certification-review-corrections.md).
 
+## 2026-08-10 (Removal submission recovery safety)
+
+Definitive registry refusals reject and unlock only the exact Removal draft
+claimed by an attempt that made no possible or confirmed registry write. Any
+uncertain or confirmed write keeps the draft locked for reconciliation,
+including failed lookups and local persistence failures after a successful
+create. Production Batch dry-mass comparisons keep the explicit 1 g tolerance.
+
 ## 2026-08-10 (customer location application evidence)
 
 Application records now support `location` as the first and default evidence

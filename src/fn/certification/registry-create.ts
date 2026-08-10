@@ -78,6 +78,15 @@ export interface RegistryCreateResult {
   source: "create" | "reconciliation";
 }
 
+export type RegistryExternalMutation = "possible" | "confirmed";
+export type RegistryExternalMutationReporter = (
+  state: RegistryExternalMutation,
+) => void;
+
+type ReconciliationAttempt =
+  | { kind: "result"; result: RegistryCreateResult | null }
+  | { kind: "lookup-failed"; error: unknown };
+
 export interface PerformRegistryCreateArgs {
   orgCtx: OrgContext;
   /** Sync-event identity (certifier_sync_events.entity_type / entity_id). */
@@ -85,6 +94,10 @@ export interface PerformRegistryCreateArgs {
   entityId: string;
   /** Ledger row claimed for this attempt — rejected on unrecoverable failure. */
   submissionRowId: string;
+  /** Exact draft lock owned by this attempt, for rejection compare-and-set. */
+  expectedLockedAt?: Date;
+  /** Owning pipeline performs attempt-wide definitive-failure cleanup. */
+  deferRejectionToAttempt?: boolean;
   /** Sync-event operation key; a reconciled claim appends `:reconciled`. */
   operation: string;
   requestPayload: unknown;
@@ -99,8 +112,8 @@ export interface PerformRegistryCreateArgs {
   failureMessagePrefix: string;
   /** Attempt-scoped logger (e.g. carrying submissionAttemptId). */
   log?: Logger;
-  /** Reports only the external GHG Entry mutation state to the submit wrapper. */
-  onExternalMutation?: (state: "possible" | "confirmed") => void;
+  /** Reports possible or confirmed registry mutation to the owning attempt. */
+  onExternalMutation?: RegistryExternalMutationReporter;
   /** Persists confirmed external identity before any success audit/follow-up. */
   onConfirmed?: (externalId: string) => Promise<void>;
 }
@@ -115,15 +128,22 @@ export async function performRegistryCreate(
   const log = args.log ?? logger;
 
   if (args.resumed) {
-    const reconciled = await reconcileToResult(args);
-    if (reconciled) return reconciled;
+    const reconciliation = await reconcileToResult(args, true);
+    if (reconciliation.kind === "lookup-failed") {
+      // A resumed draft exists precisely because an earlier request may have
+      // reached the registry. A failed lookup cannot resolve that uncertainty.
+      args.onExternalMutation?.("possible");
+      throw reconciliation.error;
+    }
+    if (reconciliation.result) return reconciliation.result;
   }
 
   let externalId: string;
   try {
     externalId = await args.create();
   } catch (err) {
-    if (externalMutationMayHaveOccurred(err)) {
+    const mutationPossible = externalMutationMayHaveOccurred(err);
+    if (mutationPossible) {
       args.onExternalMutation?.("possible");
     }
     log.warn(
@@ -135,8 +155,31 @@ export async function performRegistryCreate(
       },
       "registry create failed; attempting reconciliation",
     );
-    const reconciled = await reconcileToResult(args);
-    if (reconciled) return reconciled;
+    const reconciliation = await reconcileToResult(args, !mutationPossible);
+    if (reconciliation.kind === "lookup-failed") {
+      const lookupError = reconciliation.error;
+      log.warn(
+        {
+          op: args.operation,
+          entityId: args.entityId,
+          submissionId: args.submissionRowId,
+          errorName:
+            lookupError instanceof Error
+              ? lookupError.name
+              : typeof lookupError,
+        },
+        "registry reconciliation lookup failed",
+      );
+      if (mutationPossible) throw lookupError;
+      // A definitive provider refusal remains definitive even when the
+      // follow-up lookup is unavailable. Preserve the provider error below.
+    }
+    if (
+      reconciliation.kind === "result" &&
+      reconciliation.result
+    ) {
+      return reconciliation.result;
+    }
 
     const message =
       err instanceof IsometricApiError
@@ -168,9 +211,12 @@ export async function performRegistryCreate(
       },
       { submissionId: args.submissionRowId },
     );
-    await markSubmissionRejected(args.orgCtx, args.submissionRowId, {
-      errorMessage: message,
-    });
+    // A timeout/network/5xx may have committed despite the missing response.
+    // A lookup miss cannot prove otherwise, so keep the draft locked for a
+    // later reconciliation attempt. Definitive refusals may be unlocked.
+    if (!mutationPossible) {
+      await markSubmissionRejectedBestEffort(args, message);
+    }
     throw new SafeError(`${args.failureMessagePrefix}: ${message}`);
   }
 
@@ -203,22 +249,28 @@ export async function performRegistryCreate(
 // and "none" returns null so the caller proceeds.
 async function reconcileToResult(
   args: PerformRegistryCreateArgs,
-): Promise<RegistryCreateResult | null> {
-  const lookup = await args.reconcile();
-  if (lookup.found === "none") return null;
+  rejectDefinitiveOutcome: boolean,
+): Promise<ReconciliationAttempt> {
+  let lookup: ReconcileLookup;
+  try {
+    lookup = await args.reconcile();
+  } catch (error) {
+    return { kind: "lookup-failed", error };
+  }
+  if (lookup.found === "none") return { kind: "result", result: null };
 
   if (lookup.found === "refused") {
-    await markSubmissionRejected(args.orgCtx, args.submissionRowId, {
-      errorMessage: lookup.message,
-    });
+    if (rejectDefinitiveOutcome) {
+      await markSubmissionRejectedBestEffort(args, lookup.message);
+    }
     throw new SafeError(lookup.message);
   }
 
   if (lookup.found === "multiple") {
     const message = args.ambiguousMessage ?? AMBIGUOUS_FALLBACK_MESSAGE;
-    await markSubmissionRejected(args.orgCtx, args.submissionRowId, {
-      errorMessage: message,
-    });
+    if (rejectDefinitiveOutcome) {
+      await markSubmissionRejectedBestEffort(args, message);
+    }
     throw new SafeError(message);
   }
 
@@ -246,7 +298,37 @@ async function reconcileToResult(
     },
     { submissionId: args.submissionRowId },
   );
-  return { externalId: lookup.externalId, source: "reconciliation" };
+  return {
+    kind: "result",
+    result: { externalId: lookup.externalId, source: "reconciliation" },
+  };
+}
+
+async function markSubmissionRejectedBestEffort(
+  args: PerformRegistryCreateArgs,
+  errorMessage: string,
+): Promise<void> {
+  if (args.deferRejectionToAttempt) return;
+  const log = args.log ?? logger;
+  try {
+    await markSubmissionRejected(args.orgCtx, args.submissionRowId, {
+      errorMessage,
+      ...(args.expectedLockedAt
+        ? { expectedLockedAt: args.expectedLockedAt }
+        : {}),
+    });
+  } catch (cleanupError) {
+    log.warn(
+      {
+        submissionId: args.submissionRowId,
+        cleanupErrorName:
+          cleanupError instanceof Error
+            ? cleanupError.name
+            : typeof cleanupError,
+      },
+      "failed to reject registry submission draft",
+    );
+  }
 }
 
 function externalMutationMayHaveOccurred(error: unknown): boolean {
