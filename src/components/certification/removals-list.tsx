@@ -95,7 +95,11 @@ export function RemovalsList() {
       {facilityId && (
         <NewRemovalDialog
           facilityId={facilityId}
-          facilityName={selectedFacility?.name ?? "Selected facility"}
+          facilityName={
+            selectedFacility?.name?.trim() ||
+            selectedFacility?.code ||
+            "Selected facility"
+          }
           isOpen={wizardOpen}
           onClose={closeWizard}
           resumeRemovalId={resume}

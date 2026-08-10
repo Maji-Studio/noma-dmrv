@@ -171,6 +171,24 @@ describe("SubmissionSummary", () => {
     expect(html).not.toContain("registry.sandbox.isometric.com");
   });
 
+  it("keeps the facility unlinked when only the project is mapped", () => {
+    const html = render({
+      ctx: {
+        ...CONTEXT,
+        mapping: {
+          ...CONTEXT.mapping,
+          externalFacilityId: null,
+        },
+      } as unknown as RemovalCertifyContext,
+    });
+
+    expect(html).toContain(
+      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/overview",
+    );
+    expect(html).toContain("Tanzania facility");
+    expect(html).not.toContain("/facilities/");
+  });
+
   it("renders the production banner only in production", () => {
     const html = render({
       ctx: {
