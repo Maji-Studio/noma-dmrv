@@ -439,16 +439,14 @@ expected process physics, not an error or a leak.
 _Avoid_: shrinkage, waste.
 
 **Evidence method**:
-The per-application declaration of which of the certifier's two
-acceptable proofs of biochar spreading the record satisfies — *visual*
-(geotagged, timestamped photos/videos of stockpile, spreading,
-incorporation) or *boundary* (a GIS field-boundary reference plus
-logbook records). Exactly one method is declared per application;
-what counts as missing evidence follows from the declared method.
-The domain, schema, readiness logic, and document model support both paths.
-The current creation UI is deliberately GIS-first: it defaults to *boundary*
-and shows *visual* as unavailable, while missing boundary/logbook evidence is
-an advisory readiness gap rather than a blocker on creating the application.
+The per-application declaration of how the application site is evidenced under
+Agricultural Soils v1.1: *location* (the application GPS coordinates, normally
+derived from the delivery's customer), *boundary* (a GIS field-boundary
+reference), or *visual* (geotagged and dated photos/video). Exactly one method
+is declared per application. The creation UI defaults to *location*, lists GIS
+as the second alternative, and shows *visual* as unavailable. A complete GPS
+pair is required when location is selected. Evidence-health counts remain
+informational and do not gate certification submission.
 _Avoid_: proof type, documentation mode.
 
 **Geotag flag**:

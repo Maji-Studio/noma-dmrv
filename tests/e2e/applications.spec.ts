@@ -171,7 +171,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="cropType"]', "maize");
 
     await expect(
-      page.getByRole("radio", { name: /GIS reference/ }),
+      page.getByRole("radio", { name: /Customer location/ }),
     ).toBeChecked();
     await expect(
       page.getByRole("radio", { name: /Visual evidence/ }),

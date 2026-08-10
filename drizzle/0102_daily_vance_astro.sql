@@ -1,1 +1,0 @@
-ALTER TABLE "production_run_feedstocks" RENAME COLUMN "mass_used_kg" TO "wet_mass_used_kg";

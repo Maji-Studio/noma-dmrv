@@ -28,6 +28,19 @@ for process calculations and certification inputs. Certification lineage uses
 the wet allocation shares to select contributing intake batches without
 changing the dry-mass values submitted for protocol calculations.
 
+## 2026-08-10 (customer location application evidence)
+
+Application records now support `location` as the first and default evidence
+method for identifying where biochar was applied under Agricultural Soils v1.1.
+The location path uses the application's complete latitude/longitude pair,
+normally derived from the selected delivery customer's saved location. GIS
+boundary evidence remains available as an alternative, while visual evidence
+remains unavailable in the creation UI.
+
+This changes noma's local application evidence enum and defaults; it does not
+add or change an Isometric API operation. Application evidence-health counts
+remain informational and do not block certification submission.
+
 ## Live submission progress
 
 Removal and GHG Statement submission dialogs now show progress from noma's

@@ -1,6 +1,6 @@
 {
-  "id": "4b4d1ad9-5200-4960-9d0e-82b0be3d4d5a",
-  "prevId": "8f15c586-738e-44d4-aaa0-43347864bfec",
+  "id": "98f911f8-3a51-4c1f-9e0f-88e91c3d3a0f",
+  "prevId": "4b4d1ad9-5200-4960-9d0e-82b0be3d4d5a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -6724,8 +6724,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "mass_used_kg": {
-          "name": "mass_used_kg",
+        "wet_mass_used_kg": {
+          "name": "wet_mass_used_kg",
           "type": "numeric(14, 3)",
           "primaryKey": false,
           "notNull": true
