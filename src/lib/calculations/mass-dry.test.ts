@@ -60,6 +60,7 @@ describe("mass-dry calculations", () => {
     it("returns a valid dry mass without exceeding wet mass", () => {
       expect(computeClampedDryMass(1_000, 10)).toBe(900);
       expect(computeClampedDryMass(0, 0)).toBe(0);
+      expect(computeClampedDryMass(0.999_6, 0)).toBe(0.999_6);
     });
 
     it.each([
@@ -69,6 +70,7 @@ describe("mass-dry calculations", () => {
       [100, undefined],
       [Number.NaN, 10],
       [Infinity, 10],
+      [100, Number.NaN],
       [-1, 10],
       [100, -1],
       [100, 101],
