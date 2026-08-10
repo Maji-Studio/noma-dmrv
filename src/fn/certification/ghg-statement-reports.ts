@@ -67,8 +67,8 @@ const PINNED_STANDARD_VERSION =
   versions.certify_project_observation.current_standard_version;
 const PINNED_PROTOCOL_VERSION = versions.protocol.patch_version;
 /** Shown when the renderer emits a PDF this build cannot make byte stable. */
-const REPORT_PDF_NOT_CANONICAL_MESSAGE =
-  "The GHG Statement report PDF was not prepared because the renderer produced an unsupported PDF structure. Preparing it again will not help. Contact support with the GHG Statement ID.";
+const reportPdfNotCanonicalMessage = (ghgStatementId: string): string =>
+  `The GHG Statement report PDF for ${ghgStatementId} was not prepared. Preparing it again will not help. Contact support with this ID.`;
 
 export interface GhgStatementReportView {
   id: string;
@@ -123,7 +123,7 @@ async function renderCheckedReportPdf(
       { ghgStatementId, errorName: error.name, errorMessage: error.message },
       "GHG statement report PDF could not be canonicalized",
     );
-    throw new SafeError(REPORT_PDF_NOT_CANONICAL_MESSAGE);
+    throw new SafeError(reportPdfNotCanonicalMessage(ghgStatementId));
   }
 }
 
