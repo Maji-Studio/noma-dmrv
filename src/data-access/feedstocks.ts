@@ -470,6 +470,7 @@ export async function createFeedstock(
       const status = determineFeedstockStatus({
         feedstockTypeId: data.feedstockTypeId,
         massDryKg: allocatedDryMassKg,
+        massWetKg: allocation.allocatedWetMassKg,
       });
 
       const [feedstock] = await tx
