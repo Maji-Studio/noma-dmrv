@@ -136,9 +136,28 @@ describe("deriveRemovalWorkflowStatus", () => {
       kind: "failed",
       value: "failed",
       label: "Submission failed",
-      reasons: ["Review submission history, then retry."],
+      reasons: ["Review submission history, then select Review & submit."],
       isActionable: true,
       canRetry: false,
+    });
+  });
+
+  it("keeps readiness blockers on a rejected submission", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "rejected",
+      lockInFlight: false,
+      enrichmentStatus: "available",
+      readiness: {
+        state: "blocked",
+        reasons: ["Add the missing delivery document"],
+        advisories: [],
+      },
+    });
+
+    expect(status).toMatchObject({
+      label: "Submission failed",
+      reasons: ["Add the missing delivery document"],
+      isActionable: true,
     });
   });
 

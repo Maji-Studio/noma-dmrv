@@ -234,11 +234,15 @@ export function deriveRemovalWorkflowStatus({
   }
 
   if (lifecycle.kind === "rejected") {
+    const reasons =
+      enrichmentStatus === "available" && readiness?.state === "blocked"
+        ? readiness.reasons
+        : ["Review submission history, then select Review & submit."];
     return {
       kind: "failed",
       value: "failed",
       label: "Submission failed",
-      reasons: ["Review submission history, then retry."],
+      reasons,
       isActionable: true,
       canRetry: false,
     };
