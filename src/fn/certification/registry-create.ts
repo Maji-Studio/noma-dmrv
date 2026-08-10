@@ -88,7 +88,7 @@ export interface PerformRegistryCreateArgs {
   /** Sync-event operation key; a reconciled claim appends `:reconciled`. */
   operation: string;
   requestPayload: unknown;
-  /** From the claim outcome — a resumed draft reconciles before POSTing. */
+  /** Reconcile before POSTing whenever an earlier attempt may have reached the registry. */
   resumed: boolean;
   create: () => Promise<string>;
   reconcile: () => Promise<ReconcileLookup>;

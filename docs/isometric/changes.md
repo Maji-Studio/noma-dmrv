@@ -12,6 +12,11 @@ control and does not claim that structured telemetry was submitted to Certify.
 Dated implementation context is archived in
 [`docs/archive/isometric-changes-archive-2026-07-31-operational-feedback.md`](../archive/isometric-changes-archive-2026-07-31-operational-feedback.md).
 
+Certification review corrections for report serialization, Production Batch
+reconciliation, workspace eligibility, and grouped Removal readiness are
+archived in
+[`docs/archive/2026-08-09-certification-review-corrections.md`](../archive/2026-08-09-certification-review-corrections.md).
+
 ## Live submission progress
 
 Removal and GHG Statement submission dialogs now show progress from noma's
