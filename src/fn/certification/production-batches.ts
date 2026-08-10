@@ -47,6 +47,7 @@ import {
   buildProductionBatchReference,
   createProductionBatch,
   findProductionBatchBySupplierRef,
+  PRODUCTION_BATCH_MASS_UNIT,
   type CreateProductionBatchRequest,
   type IsometricProductionBatch,
 } from "@/lib/isometric/production-batches";
@@ -68,7 +69,12 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "./shared";
 
-const KILOGRAM_UNIT_ALIASES = new Set(["kg", "kilogram"]);
+// Verified from a live Certify production-batch response on 2026-08-10:
+// Isometric canonicalizes the submitted `kg` unit to `kilogram` on readback.
+const KILOGRAM_UNIT_ALIASES = new Set([
+  PRODUCTION_BATCH_MASS_UNIT,
+  "kilogram",
+]);
 
 /** One credit batch's production-batch POST: its supplier ref + request body. */
 export interface ProductionBatchSubmission {

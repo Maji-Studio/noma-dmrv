@@ -36,6 +36,14 @@ uncertain or confirmed write keeps the draft locked for reconciliation,
 including failed lookups and local persistence failures after a successful
 create. Production Batch dry-mass comparisons keep the explicit 1 g tolerance.
 
+## 2026-08-10 (Production Batch mass-unit readback)
+
+A live Certify Production Batch response was verified to return the canonical
+mass unit `kilogram` after noma submitted the request unit `kg`. Production
+Batch create-response and orphan-reconciliation identity checks therefore
+accept only those two equivalent spellings while continuing to reject other
+units without conversion.
+
 ## 2026-08-10 (customer location application evidence)
 
 Application records now support `location` as the first and default evidence
