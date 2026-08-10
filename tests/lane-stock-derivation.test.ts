@@ -322,7 +322,7 @@ describe("shared lane-stock derivation", () => {
     expect(feedstock.feedstockInventory.estimatedDryMassKg).toBeCloseTo(-21.6);
     expect(feedstock.feedstockInventory.batchCount).toBe(1);
     expect(feedstock.feedstockInventory.pendingDryMassKg).toBe(900);
-    expect(feedstock.feedstockInventory.estimatedMoisturePercent).toBeCloseTo(20);
+    expect(feedstock.feedstockInventory.estimatedMoisturePercent).toBeNull();
     expect(biochar.biocharInventory.currentMassKg).toBe(82);
     expect(biochar.biocharInventory.allocatedToProductsKg).toBe(35);
     expect(product.productInventory.currentMassKg).toBe(42);

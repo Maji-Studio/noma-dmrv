@@ -20,6 +20,7 @@ const TEST_USER_ID = "test-user-feedstock-wet-stock";
 const AVAILABLE_WET_KG = 3_000;
 const INTAKE_ESTIMATED_DRY_KG = 1_950;
 const RUN_MOISTURE_PERCENT = 20;
+const EXPECTED_RUN_DRY_KG = 2_400;
 const SMALLEST_OVERDRAW_KG = 3_000.001;
 
 describe("production-run wet feedstock stock", () => {
@@ -144,7 +145,7 @@ describe("production-run wet feedstock stock", () => {
     });
     productionRunId = created.id;
 
-    expect(created.feedstockMassDryKg).toBe(2_400);
+    expect(created.feedstockMassDryKg).toBe(EXPECTED_RUN_DRY_KG);
     expect(created.feedstocks).toEqual([
       expect.objectContaining({
         feedstockId,
@@ -159,7 +160,7 @@ describe("production-run wet feedstock stock", () => {
       feedstockWetMassKg: AVAILABLE_WET_KG,
       feedstockMoisturePercent: RUN_MOISTURE_PERCENT,
     });
-    expect(edited.feedstockMassDryKg).toBe(2_400);
+    expect(edited.feedstockMassDryKg).toBe(EXPECTED_RUN_DRY_KG);
     expect(
       await deriveFeedstockWetStockKg(ctx, db, storageLocationId),
     ).toBe(0);

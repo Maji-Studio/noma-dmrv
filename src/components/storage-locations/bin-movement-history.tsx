@@ -88,6 +88,7 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
               </>
             )}{" "}
             vs derived {formatMassKg(Number(movement.derivedMassKgAtTime))}
+            {movement.lane === "feedstock" ? " wet" : ""}
           </p>
         )}
 

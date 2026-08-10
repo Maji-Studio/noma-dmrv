@@ -1,4 +1,4 @@
-import { and, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { feedstocks } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -98,7 +98,8 @@ export async function allocateFeedstockWetMass(
         eq(feedstocks.status, "complete"),
         gt(feedstocks.massWetKg, 0),
       ),
-    );
+    )
+    .orderBy(asc(feedstocks.id));
 
   if (batches.length === 0) {
     throw new SafeError(EMPTY_FEEDSTOCK_BIN_MESSAGE);

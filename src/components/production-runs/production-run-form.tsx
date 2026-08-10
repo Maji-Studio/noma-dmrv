@@ -39,7 +39,6 @@ import {
 } from "@/schemas/production-runs";
 import { ProcessFlowPreview } from "./production-run-process-flow-preview";
 import {
-  feedstockWetStockOverdrawMessage,
   productionRunMassBalanceFeedback,
 } from "./production-run-mass-balance";
 import {
@@ -53,6 +52,7 @@ import type { StorageLocationType } from "@/schemas/storage-locations";
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import {
+  binStockOverdrawInlineMessage,
   binStockOverdrawMessage,
   isStockOverdraw,
 } from "@/lib/stock-overdraw";
@@ -229,7 +229,8 @@ export function ProductionRunForm({
     feedstockAvailability &&
     feedstockAvailability.availableKg !== null &&
     isStockOverdraw(watchWetMass, feedstockAvailability.availableKg)
-      ? feedstockWetStockOverdrawMessage(
+      ? binStockOverdrawInlineMessage(
+          "feedstock",
           feedstockAvailability.availableKg,
         )
       : undefined;

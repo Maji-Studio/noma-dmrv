@@ -8,6 +8,7 @@ import { requireOrgScope } from "./utils";
 const STOCK_LOCK_RETRY_MESSAGE =
   "Stock changed while this operation was being prepared. Refresh and retry.";
 const BIN_STOCK_LOCK_SCOPE = "bin-stock";
+const ADVISORY_LOCK_HASH_SEED = 0;
 
 /** Serialize stock read-modify-write operations for one physical bin. */
 export async function lockBinStock(
@@ -18,7 +19,7 @@ export async function lockBinStock(
   requireOrgScope(ctx);
   const lockKey = `${BIN_STOCK_LOCK_SCOPE}:${ctx.organizationId}:${storageLocationId}`;
   await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+    sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, ${ADVISORY_LOCK_HASH_SEED}))`,
   );
   const [bin] = await tx
     .select({ archivedAt: storageLocations.archivedAt })

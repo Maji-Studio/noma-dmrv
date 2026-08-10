@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  feedstockWetStockOverdrawMessage,
   productionRunMassBalanceFeedback,
   WET_MASS_BALANCE_WARNING,
 } from "./production-run-mass-balance";
@@ -12,13 +11,10 @@ describe("productionRunMassBalanceFeedback", () => {
   it("accepts the exact wet balance, derives run dry mass, and rejects 0.001 kg more", () => {
     const availableWetKg = 3_000;
 
-    expect(isStockOverdraw(3_000, availableWetKg)).toBe(false);
-    expect(deriveMassDryKg(3_000, 20)).toBe(2_400);
-    expect(isStockOverdraw(3_000.001, availableWetKg)).toBe(true);
-    expect(isStockOverdraw(3_000.1, availableWetKg)).toBe(true);
-    expect(feedstockWetStockOverdrawMessage(availableWetKg)).toBe(
-      "Only 3,000 kg of wet feedstock is available. Reduce the wet mass.",
-    );
+    expect(isStockOverdraw(availableWetKg, availableWetKg)).toBe(false);
+    expect(deriveMassDryKg(availableWetKg, 20)).toBe(2_400);
+    expect(isStockOverdraw(availableWetKg + 0.001, availableWetKg)).toBe(true);
+    expect(isStockOverdraw(availableWetKg + 0.1, availableWetKg)).toBe(true);
   });
 
   it("warns immediately when wet output exceeds wet input", () => {

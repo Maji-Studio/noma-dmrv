@@ -602,19 +602,23 @@ export async function enrichStorageLocationRows(
   return rows.map((row) => {
     const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
     const laneStock = laneStockMap.get(row.id);
-    const totalDryKg = laneStock?.feedstockIntakeDryKg ?? 0;
-    const totalWetKg = feedstockInventoryRow?.totalWetKg ?? 0;
     const pendingDryKg = feedstockInventoryRow?.pendingDryKg ?? 0;
     // Unclamped wet intake minus wet withdrawals plus wet movements. A negative
     // result is a real reconciliation signal rather than a value to hide.
     const currentWetMassKg = laneStock?.feedstockStockWetKg ?? 0;
+    const estimatedDryMassKg = laneStock?.feedstockEstimatedDryKg ?? null;
     // The moisture-ratio clamp stays — it bounds a ratio to [0, 1], it is not a
     // stock clamp.
     const moistureRatio =
-      totalWetKg > 0 && totalDryKg >= 0
-        ? Math.max(0, Math.min(1, (totalWetKg - totalDryKg) / totalWetKg))
+      currentWetMassKg > 0 && estimatedDryMassKg != null
+        ? Math.max(
+            0,
+            Math.min(
+              1,
+              (currentWetMassKg - estimatedDryMassKg) / currentWetMassKg,
+            ),
+          )
         : null;
-    const estimatedDryMassKg = laneStock?.feedstockEstimatedDryKg ?? null;
 
     const biocharOutputRow = biocharOutputMap.get(row.id);
     const allocatedKg = laneStock?.biocharAllocatedKg ?? 0;

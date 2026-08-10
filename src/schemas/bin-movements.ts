@@ -75,8 +75,8 @@ const reasonSchema = z
 
 /**
  * Stock-take form. `counted` is always wet kg for feedstock and the lane's
- * native kg otherwise. Feedstock counts may retain a moisture measurement as
- * snapshot metadata, but the reconciliation delta remains wet kg.
+ * native kg otherwise. Feedstock counts require a moisture measurement as
+ * snapshot metadata, while the reconciliation delta remains wet kg.
  */
 export const stockTakeFormSchema = z
   .object({

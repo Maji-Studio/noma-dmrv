@@ -3,7 +3,6 @@ import {
   exceedsMassWithTolerance,
 } from "@/lib/calculations/mass-dry";
 import { DRY_MASS_BALANCE_MESSAGE } from "@/lib/production-runs/lifecycle";
-import { formatStockLimitKg } from "@/lib/stock-overdraw";
 
 export const WET_MASS_BALANCE_WARNING =
   "Wet output exceeds wet input. Review the masses before continuing.";
@@ -17,12 +16,6 @@ interface ProductionRunMassBalanceInput {
 
 const numberOrNull = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
-
-export function feedstockWetStockOverdrawMessage(
-  availableWetKg: number,
-): string {
-  return `Only ${formatStockLimitKg(availableWetKg)} of wet feedstock is available. Reduce the wet mass.`;
-}
 
 export function productionRunMassBalanceFeedback(
   input: ProductionRunMassBalanceInput,
