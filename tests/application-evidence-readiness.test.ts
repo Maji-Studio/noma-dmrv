@@ -28,6 +28,8 @@ function lineage(
       id: APPLICATION_ID,
       code: APPLICATION_CODE,
       evidenceMethod: "visual",
+      gpsLatitude: null,
+      gpsLongitude: null,
       gisBoundary: null,
       ...application,
     } as ChainOfCustodyData["application"],
@@ -44,6 +46,36 @@ function lineage(
 describe("buildApplicationEvidenceGaps", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+  });
+
+  it("accepts customer location evidence with both coordinates", async () => {
+    mockedListDocuments.mockResolvedValue([]);
+
+    const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
+      lineage({
+        evidenceMethod: "location",
+        gpsLatitude: -3.245,
+        gpsLongitude: 37.425,
+      }),
+    ]);
+
+    expect(gaps).toEqual([]);
+  });
+
+  it("flags customer location evidence with an incomplete coordinate pair", async () => {
+    mockedListDocuments.mockResolvedValue([]);
+
+    const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
+      lineage({
+        evidenceMethod: "location",
+        gpsLatitude: -3.245,
+        gpsLongitude: null,
+      }),
+    ]);
+
+    expect(gaps).toEqual([
+      "Application APP-1: customer location coordinates",
+    ]);
   });
 
   it("requires all three geotagged visual evidence roles", async () => {

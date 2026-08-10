@@ -41,6 +41,6 @@ export const DEFAULT_ORGANIZATION_SETTINGS: OrganizationDefaults = {
   defaultCountry: null,
   defaultTimezone: DEFAULT_ORGANIZATION_TIMEZONE,
   defaultTripType: "return",
-  defaultEvidenceMethod: "visual",
+  defaultEvidenceMethod: "location",
   defaultPackaging: "loose",
 };

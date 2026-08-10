@@ -53,6 +53,8 @@ function missingRequirementSql(
       // fragment is spliced into correlated subqueries where an unqualified
       // Drizzle column reference resolves against the wrong relation.
       return sql`"applications"."gis_boundary" is null`;
+    case "complete-gps-pair":
+      return sql`("applications"."gps_latitude" is null or "applications"."gps_longitude" is null)`;
   }
 }
 
@@ -71,18 +73,21 @@ function evidenceGapCountSql(
 /**
  * Correlated evidence-gap count for the current `applications` row.
  *
- * Visual evidence health tracks all three geotagged photo roles. Boundary
- * evidence health tracks the GIS reference only; typed logbook attachments are
- * retained records, not Application readiness requirements.
- * Legacy null evidence methods render as visual in the application UI, so the
- * CASE deliberately treats every non-boundary value as visual too.
+ * Location evidence health tracks a complete latitude/longitude pair. Visual
+ * evidence health tracks all three geotagged photo roles. Boundary evidence
+ * health tracks the GIS reference only; typed logbook attachments are retained
+ * records, not Application readiness requirements. Unknown legacy values keep
+ * the previous visual fallback.
  */
 export function applicationEvidenceGapCountSql(): SQL<number> {
   const { dispatch, paths } = APPLICATION_EVIDENCE_RULE_SPEC;
+  const locationGapCount = evidenceGapCountSql(paths[dispatch.locationPath]);
   const boundaryGapCount = evidenceGapCountSql(paths[dispatch.boundaryPath]);
   const defaultGapCount = evidenceGapCountSql(paths[dispatch.defaultPath]);
 
   return sql<number>`case
+    when ${applications.evidenceMethod} = ${dispatch.locationValue} then
+      ${locationGapCount}
     when ${applications.evidenceMethod} = ${dispatch.boundaryValue} then
       ${boundaryGapCount}
     else ${defaultGapCount}
