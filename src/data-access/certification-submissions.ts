@@ -27,6 +27,7 @@ import {
 import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
+import { REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME } from "@/lib/certification/status";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { logger } from "@/lib/log";
 import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
@@ -65,6 +66,36 @@ export interface InsertDraftSubmissionInput extends SubmissionKey {
   payloadSnapshot: unknown;
   payloadHash: string;
   metadata?: Record<string, unknown> | null;
+}
+
+export async function markSubmissionInterrupted(
+  ctx: OrgContext,
+  id: string,
+  args: {
+    errorMessage: string;
+    expectedLockedAt: Date;
+    externalMutation: "possible" | "confirmed";
+  },
+): Promise<void> {
+  requireOrgScope(ctx);
+  await db
+    .update(certificationSubmissions)
+    .set({
+      updatedAt: sql`now()`,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object(
+        'lastError', ${args.errorMessage}::text,
+        'lastAttemptOutcome', ${REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME}::text,
+        'externalMutation', ${args.externalMutation}::text
+      )`,
+    })
+    .where(
+      and(
+        eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.status, "draft"),
+        eq(certificationSubmissions.lockedAt, args.expectedLockedAt),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    );
 }
 
 // =====================================================================
@@ -582,7 +613,10 @@ async function resetSubmissionToDraftCas(
       status: "draft",
       lockedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
       updatedAt: sql`now()`,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - 'lastError'`,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb)
+        - 'lastError'
+        - 'lastAttemptOutcome'
+        - 'externalMutation'`,
     })
     .where(
       and(

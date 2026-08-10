@@ -673,6 +673,12 @@ beforeEach(() => {
         if (!row) throw new Error(`Test ledger missing row ${rowId}`);
         row.status = "draft";
         row.lockedAt = new Date();
+        if (row.metadata) {
+          const metadata = row.metadata as Record<string, unknown>;
+          delete metadata.lastError;
+          delete metadata.lastAttemptOutcome;
+          delete metadata.externalMutation;
+        }
         return row;
       },
     }),
@@ -707,6 +713,21 @@ beforeEach(() => {
         row.metadata = {
           ...(row.metadata ?? {}),
           lastError: args.errorMessage,
+        };
+      }
+    },
+  );
+  vi.mocked(ledgerClaim.markSubmissionInterrupted).mockImplementation(
+    async (_userId, id, args) => {
+      const row = storedRows.find((r) => r.id === id);
+      const ownsLock =
+        row?.lockedAt?.getTime() === args.expectedLockedAt.getTime();
+      if (row?.status === "draft" && ownsLock) {
+        row.metadata = {
+          ...(row.metadata ?? {}),
+          lastError: args.errorMessage,
+          lastAttemptOutcome: "interrupted",
+          externalMutation: args.externalMutation,
         };
       }
     },

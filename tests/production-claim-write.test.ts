@@ -21,6 +21,7 @@ import {
   markSubmissionRejected,
   markSubmissionSubmitted,
 } from "@/data-access/certification";
+import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
 import { db } from "@/db";
 import {
   certificationSubmissions,
@@ -258,5 +259,43 @@ describe("markSubmissionRejected", () => {
     expect(
       (row.metadata as Record<string, unknown> | null)?.lastError,
     ).toBeUndefined();
+  });
+});
+
+describe("markSubmissionInterrupted", () => {
+  it("records recovery metadata without unlocking or changing draft status", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    const lockedAt = new Date();
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt })
+      .where(eq(certificationSubmissions.id, submissionId));
+
+    await markSubmissionInterrupted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      {
+        errorMessage: "Safe submission error",
+        expectedLockedAt: lockedAt,
+        externalMutation: "confirmed",
+      },
+    );
+
+    const [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        lockedAt: certificationSubmissions.lockedAt,
+        metadata: certificationSubmissions.metadata,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row.status).toBe("draft");
+    expect(row.lockedAt?.getTime()).toBe(lockedAt.getTime());
+    expect(row.metadata).toMatchObject({
+      lastError: "Safe submission error",
+      lastAttemptOutcome: "interrupted",
+      externalMutation: "confirmed",
+    });
   });
 });

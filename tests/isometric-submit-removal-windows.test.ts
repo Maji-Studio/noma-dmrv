@@ -25,6 +25,7 @@ import {
 } from "./fixtures/submit-removal-orchestrator";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as ledger from "@/data-access/certification";
+import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as productionBatchesDA from "@/data-access/certifier-production-batches";
 import * as certifyContext from "@/fn/certification/certify-context-core";
@@ -112,11 +113,16 @@ describe("submitRemoval — reporting window anchored to application date (issue
     expect(storedRows).toHaveLength(1);
     expect(storedRows[0]).toMatchObject({
       status: "draft",
-      metadata: null,
+      metadata: {
+        lastError: "Removal submission failed unexpectedly. Retry the submission.",
+        lastAttemptOutcome: "interrupted",
+        externalMutation: "confirmed",
+      },
     });
     expect(storedRows[0].lockedAt).not.toBeNull();
     expect(isometric.createDatapoint).toHaveBeenCalled();
     expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
+    expect(ledgerClaim.markSubmissionInterrupted).toHaveBeenCalledOnce();
   });
 
   it("preserves the submission error when no-mutation rejection cleanup fails", async () => {

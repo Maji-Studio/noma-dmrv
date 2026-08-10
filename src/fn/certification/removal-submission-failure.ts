@@ -1,4 +1,5 @@
 import { markSubmissionRejected } from "@/data-access/certification";
+import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import type { Logger } from "@/lib/log";
@@ -24,9 +25,10 @@ export function safeRemovalSubmissionError(error: unknown): {
 }
 
 /**
- * Releases a claimed Removal draft after any definitive orchestration error.
- * The data-access update is draft-status-guarded, so this is harmless after a
- * registry boundary already rejected the row or a later seam sees it submitted.
+ * Records a claimed Removal draft's orchestration error. Attempts with no
+ * external mutation are rejected and unlocked; possible or confirmed writes
+ * stay locked and are marked interrupted so retry can reconcile them safely.
+ * Both data-access updates are draft-status and attempt-lock guarded.
  */
 export async function rejectClaimedRemovalSubmissionBestEffort(args: {
   orgCtx: OrgContext;
@@ -36,14 +38,22 @@ export async function rejectClaimedRemovalSubmissionBestEffort(args: {
   error: unknown;
   log: Logger;
 }): Promise<void> {
-  if (args.externalMutation !== "none") return;
   const safeError = safeRemovalSubmissionError(args.error);
+  const errorMessage =
+    safeError.errorMessage ?? UNEXPECTED_REMOVAL_SUBMISSION_ERROR;
   try {
-    await markSubmissionRejected(args.orgCtx, args.submissionId, {
-      errorMessage:
-        safeError.errorMessage ?? UNEXPECTED_REMOVAL_SUBMISSION_ERROR,
-      expectedLockedAt: args.expectedLockedAt,
-    });
+    if (args.externalMutation === "none") {
+      await markSubmissionRejected(args.orgCtx, args.submissionId, {
+        errorMessage,
+        expectedLockedAt: args.expectedLockedAt,
+      });
+    } else {
+      await markSubmissionInterrupted(args.orgCtx, args.submissionId, {
+        errorMessage,
+        expectedLockedAt: args.expectedLockedAt,
+        externalMutation: args.externalMutation,
+      });
+    }
   } catch (cleanupError) {
     args.log.warn(
       {
@@ -53,7 +63,7 @@ export async function rejectClaimedRemovalSubmissionBestEffort(args: {
             ? cleanupError.name
             : typeof cleanupError,
       },
-      "failed to reject claimed removal submission",
+      "failed to persist claimed removal submission failure",
     );
   }
 }

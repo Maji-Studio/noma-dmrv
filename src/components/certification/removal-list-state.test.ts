@@ -30,6 +30,7 @@ function enrichment(
     version: null,
     local: null,
     lockInFlight: false,
+    submissionInterrupted: false,
     readiness: { state: "ready", reasons: [], advisories: [] },
     evidenceHealth: null,
     submissionWarnings: [],
@@ -77,5 +78,20 @@ describe("buildRemovalListRows", () => {
     });
 
     expect(row.lockInFlight).toBe(true);
+  });
+
+  it("preserves an interrupted attempt marker while enrichment is unavailable", () => {
+    const interrupted = identity("removal-interrupted", "CB-INTERRUPTED");
+    interrupted.latestSubmission = {
+      status: "draft",
+      lockedAt: new Date(),
+      metadata: { lastAttemptOutcome: "interrupted" },
+    } as NonNullable<RemovalHubEntry["latestSubmission"]>;
+
+    const [row] = buildRemovalListRows([interrupted], {
+      "removal-interrupted": { status: "unavailable", data: null },
+    });
+
+    expect(row.submissionInterrupted).toBe(true);
   });
 });

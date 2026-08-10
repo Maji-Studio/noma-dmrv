@@ -177,6 +177,41 @@ describe("deriveRemovalWorkflowStatus", () => {
     });
   });
 
+  it("shows a live interrupted attempt without offering an unsafe retry", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "draft",
+      lockInFlight: true,
+      submissionInterrupted: true,
+      enrichmentStatus: "available",
+      readiness: { state: "ready", reasons: [], advisories: [] },
+    });
+
+    expect(status).toMatchObject({
+      kind: "interrupted",
+      value: "failed",
+      label: "Submission interrupted",
+      isActionable: false,
+      canRetry: false,
+    });
+  });
+
+  it("makes a stale interrupted attempt actionable for reconciliation", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "draft",
+      lockInFlight: false,
+      submissionInterrupted: true,
+      enrichmentStatus: "available",
+      readiness: { state: "ready", reasons: [], advisories: [] },
+    });
+
+    expect(status).toMatchObject({
+      kind: "interrupted",
+      label: "Submission interrupted",
+      isActionable: true,
+    });
+    expect(status.reasons[0]).toMatch(/reconcile/i);
+  });
+
   it("offers a fresh submit after the production gate retires a stale draft", () => {
     const status = deriveRemovalWorkflowStatus({
       local: "superseded",

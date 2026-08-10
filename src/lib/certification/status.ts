@@ -115,9 +115,22 @@ export type RemovalWorkflowStatusKind =
   | "ready"
   | "blocked"
   | "failed"
+  | "interrupted"
   | "submitting"
   | "submitted"
   | "superseded";
+
+export const REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME = "interrupted" as const;
+
+export function isRemovalSubmissionInterrupted(metadata: unknown): boolean {
+  return (
+    metadata !== null &&
+    typeof metadata === "object" &&
+    !Array.isArray(metadata) &&
+    (metadata as Record<string, unknown>).lastAttemptOutcome ===
+      REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME
+  );
+}
 
 export interface RemovalWorkflowStatus {
   /** The single operator-facing state used by list and detail surfaces. */
@@ -133,6 +146,7 @@ export interface RemovalWorkflowStatus {
 export interface RemovalWorkflowStatusInput extends RemovalStatusInput {
   enrichmentStatus: RemovalEnrichmentStatus;
   readiness: RemovalReadiness | null;
+  submissionInterrupted?: boolean;
 }
 
 /**
@@ -208,6 +222,7 @@ export function deriveRemovalWorkflowStatus({
   lockInFlight,
   enrichmentStatus,
   readiness,
+  submissionInterrupted = false,
 }: RemovalWorkflowStatusInput): RemovalWorkflowStatus {
   const lifecycle = deriveRemovalStatus({ local, lockInFlight });
 
@@ -218,6 +233,21 @@ export function deriveRemovalWorkflowStatus({
       label: lifecycle.label,
       reasons: [],
       isActionable: false,
+      canRetry: false,
+    };
+  }
+
+  if (local === "draft" && submissionInterrupted) {
+    return {
+      kind: "interrupted",
+      value: "failed",
+      label: "Submission interrupted",
+      reasons: [
+        lockInFlight
+          ? "Registry changes may still be settling. Retry when Review & submit becomes available."
+          : "Registry work may already exist. Review & submit to reconcile it before creating anything new.",
+      ],
+      isActionable: !lockInFlight,
       canRetry: false,
     };
   }

@@ -34,7 +34,10 @@ Definitive registry refusals reject and unlock only the exact Removal draft
 claimed by an attempt that made no possible or confirmed registry write. Any
 uncertain or confirmed write keeps the draft locked for reconciliation,
 including failed lookups and local persistence failures after a successful
-create. Production Batch dry-mass comparisons keep the explicit 1 g tolerance.
+create. Those retained drafts record an interrupted attempt and appear as
+`Submission interrupted` until a safe retry claims and reconciles them. Durable
+Sources, evidence ledgers, and submission journals are retained for that retry.
+Production Batch dry-mass comparisons keep the explicit 1 g tolerance.
 
 ## 2026-08-10 (Production Batch mass-unit readback)
 
