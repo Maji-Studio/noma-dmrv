@@ -1,4 +1,9 @@
-This document holds audit-sourced deferred items split out of [open-questions.md](./open-questions.md).
+# Audit Follow-Up Open Questions
+
+This companion holds audit-sourced deferred items split out of
+[open-questions.md](./open-questions.md). Read it when reviewing cross-cutting
+audit debt; the parent document's schema, invariants, and resolution rules apply
+here.
 
 ## Audit follow-ups (opened 2026-05-25)
 
@@ -209,4 +214,3 @@ Sizing: (S) small, (M) medium, (L) large.
   `ghg-statements.ts` already uses `submissionAttemptId` consistently.
 - **Resolve via:** thread the attempt-scoped `log` child through those boundary
   logs, or include both ids (S).
-

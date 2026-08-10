@@ -4,6 +4,7 @@ import { env } from "@/config/env";
 import {
   deleteCertifierProject,
   getCertifierProjectByFacility,
+  listFacilitiesLinkedToExternal,
   listAllFacilitiesLinkedByProvider,
   updateFacilityEmissionConfig,
   upsertCertifierProject,
@@ -48,14 +49,14 @@ export interface FacilityCertifierMapping {
 
 // Read-only registry-link summary for non-managing viewers. DB-only — it
 // deliberately does NOT hit the Isometric API (`listProjects` /
-// `listGhgEntryTemplates`) or the cross-facility link query that
-// `loadFacilityCertifierMapping` does. A non-admin reading the current mapping
-// must not pull the management payload (available project list, link hints,
-// template options). The trade-off: the read-only view shows the persisted
-// identifiers on the row, not the human-friendly project/template names
-// (those are only resolvable from the management list).
+// `listGhgEntryTemplates`). A non-admin reading the current mapping receives
+// only the number of local facilities sharing its project, not their identities
+// or the management payload (available projects, link hints, template options).
+// The count lets create surfaces fail early when Isometric's project-wide GHG
+// Statements cannot be assigned safely to one noma facility.
 export interface FacilityCertifierSummary {
   mapping: CertifierProjectRow | null;
+  linkedFacilityCount: number;
   isProduction: boolean;
   viewerCanManage: boolean;
 }
@@ -70,8 +71,16 @@ export async function loadFacilityCertifierSummary(
       facilityId,
       ISOMETRIC_PROVIDER,
     );
+    const linkedFacilities = mapping
+      ? await listFacilitiesLinkedToExternal(
+          orgCtx,
+          ISOMETRIC_PROVIDER,
+          mapping.externalProjectId,
+        )
+      : [];
     return {
       mapping,
+      linkedFacilityCount: linkedFacilities.length,
       isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
       viewerCanManage:
         orgCtx.isPlatformAdmin ||

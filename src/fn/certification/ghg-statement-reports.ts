@@ -13,6 +13,7 @@ import {
   listGhgStatementReports,
   type GhgStatementReportRow,
 } from "@/data-access/ghg-statement-reports";
+import { withFacilityDurabilitySessionLock } from "@/data-access/facility-durability-lock";
 import {
   getCertifierProjectByFacility,
   getLatestSubmissionsForEntities,
@@ -349,80 +350,93 @@ export async function prepareGhgStatementReport(
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
     const parsed = prepareGhgStatementReportSchema.parse(input);
-    return withDedicatedLockConnection(async (tx) => {
-      await acquireCertificationArtifactLocksSorted(tx, [
-        {
-          provider: ISOMETRIC_PROVIDER,
-          localEntityType: "ghgStatementReport",
-          localEntityId: parsed.ghgStatementId,
-        },
-      ]);
-      const existing = await getReportByPreparationKey(orgCtx, {
-        ghgStatementId: parsed.ghgStatementId,
-        preparationKey: parsed.preparationKey,
-      });
-      if (existing) return reportView(existing);
-      if (parsed.ensureFirst) {
-        const [firstReport] = await listGhgStatementReports(
-          orgCtx,
-          parsed.ghgStatementId,
-        );
-        if (firstReport) return reportView(firstReport);
-      }
+    const statement = await getCertifierGhgStatementById(
+      orgCtx,
+      parsed.ghgStatementId,
+    );
+    if (!statement) throw new SafeError("GHG Statement not found.");
+    return withFacilityDurabilitySessionLock(
+      orgCtx,
+      statement.facilityId,
+      () =>
+        withDedicatedLockConnection(async (tx) => {
+          await acquireCertificationArtifactLocksSorted(tx, [
+            {
+              provider: ISOMETRIC_PROVIDER,
+              localEntityType: "ghgStatementReport",
+              localEntityId: parsed.ghgStatementId,
+            },
+          ]);
+          const existing = await getReportByPreparationKey(orgCtx, {
+            ghgStatementId: parsed.ghgStatementId,
+            preparationKey: parsed.preparationKey,
+          });
+          if (existing) return reportView(existing);
+          if (parsed.ensureFirst) {
+            const [firstReport] = await listGhgStatementReports(
+              orgCtx,
+              parsed.ghgStatementId,
+            );
+            if (firstReport) return reportView(firstReport);
+          }
 
-      const version = await getNextGhgStatementReportVersion(
-        orgCtx,
-        parsed.ghgStatementId,
-      );
-      const preparedAt = new Date();
-      const facts = await loadLiveReportFacts(orgCtx, {
-        ghgStatementId: parsed.ghgStatementId,
-        reportVersion: version,
-        preparedAt: preparedAt.toISOString(),
-      });
-      const model = buildCheckedReportModel(facts.input);
-      const pdf = await renderCheckedReportPdf(model, parsed.ghgStatementId);
-      const reportId = randomUUID();
-      const documentId = randomUUID();
-      const checksum = sha256Hex(pdf);
-      const storage = getStorageProvider();
-      const fileName = `ghg-statement-report-v${version}.pdf`;
-      const storageKey = `org/${orgCtx.organizationId}/${buildStorageKey({
-        entityType: "ghgStatementReport",
-        entityId: reportId,
-        documentType: "pdf",
-        fileName,
-      })}`;
-      await storage.putObject(storageKey, pdf, PDF_MIME_TYPE);
-      try {
-        const artifact = await insertPreparedGhgStatementReport(orgCtx, {
-          reportId,
-          ghgStatementId: parsed.ghgStatementId,
-          documentId,
-          version,
-          sourceFingerprint: model.sourceFingerprint,
-          contentChecksumSha256: checksum,
-          frozenInput: facts.frozenInput,
-          reportModel: model,
-          preparationKey: parsed.preparationKey,
-          // Seeded with a token nobody holds: the link stays inert until
-          // submission stages a real one via `stageVerifierReportToken`.
-          verifierTokenHash: hashVerifierToken(generateVerifierToken()),
-          preparedAt,
-          storage: {
-            provider: storage.name,
-            bucket: storage.bucket,
-            key: storageKey,
+          const version = await getNextGhgStatementReportVersion(
+            orgCtx,
+            parsed.ghgStatementId,
+          );
+          const preparedAt = new Date();
+          const facts = await loadLiveReportFacts(orgCtx, {
+            ghgStatementId: parsed.ghgStatementId,
+            reportVersion: version,
+            preparedAt: preparedAt.toISOString(),
+          });
+          const model = buildCheckedReportModel(facts.input);
+          const pdf = await renderCheckedReportPdf(
+            model,
+            parsed.ghgStatementId,
+          );
+          const reportId = randomUUID();
+          const documentId = randomUUID();
+          const checksum = sha256Hex(pdf);
+          const storage = getStorageProvider();
+          const fileName = `ghg-statement-report-v${version}.pdf`;
+          const storageKey = `org/${orgCtx.organizationId}/${buildStorageKey({
+            entityType: "ghgStatementReport",
+            entityId: reportId,
+            documentType: "pdf",
             fileName,
-            fileSizeBytes: pdf.byteLength,
-          },
-        });
-        return reportView(artifact.report);
-      } catch (error) {
-        await storage.deleteObject(storageKey).catch(() => undefined);
-        throw error;
-      }
-    });
+          })}`;
+          await storage.putObject(storageKey, pdf, PDF_MIME_TYPE);
+          try {
+            const artifact = await insertPreparedGhgStatementReport(orgCtx, {
+              reportId,
+              ghgStatementId: parsed.ghgStatementId,
+              documentId,
+              version,
+              sourceFingerprint: model.sourceFingerprint,
+              contentChecksumSha256: checksum,
+              frozenInput: facts.frozenInput,
+              reportModel: model,
+              preparationKey: parsed.preparationKey,
+              // Seeded with a token nobody holds: the link stays inert until
+              // submission stages a real one via `stageVerifierReportToken`.
+              verifierTokenHash: hashVerifierToken(generateVerifierToken()),
+              preparedAt,
+              storage: {
+                provider: storage.name,
+                bucket: storage.bucket,
+                key: storageKey,
+                fileName,
+                fileSizeBytes: pdf.byteLength,
+              },
+            });
+            return reportView(artifact.report);
+          } catch (error) {
+            await storage.deleteObject(storageKey).catch(() => undefined);
+            throw error;
+          }
+        }),
+    );
   });
 }
 
