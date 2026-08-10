@@ -14,6 +14,13 @@ import type {
   Sample,
 } from "@/db/schema";
 import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/isometric/utils/submission-metadata";
+
+const INTERRUPTION_METADATA_KEYS = new Set<string>([
+  SUBMISSION_METADATA_KEYS.lastError,
+  SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
+  SUBMISSION_METADATA_KEYS.externalMutation,
+]);
 
 // ---------------------------------------------------------------------------
 // Module mocks — declared before importing the system under test so the mocks
@@ -673,12 +680,6 @@ beforeEach(() => {
         if (!row) throw new Error(`Test ledger missing row ${rowId}`);
         row.status = "draft";
         row.lockedAt = new Date();
-        if (row.metadata) {
-          const metadata = row.metadata as Record<string, unknown>;
-          delete metadata.lastError;
-          delete metadata.lastAttemptOutcome;
-          delete metadata.externalMutation;
-        }
         return row;
       },
     }),
@@ -691,6 +692,11 @@ beforeEach(() => {
         row.externalId = args.externalId;
         row.submittedAt = new Date();
         row.lockedAt = null;
+        row.metadata = Object.fromEntries(
+          Object.entries(row.metadata ?? {}).filter(
+            ([key]) => !INTERRUPTION_METADATA_KEYS.has(key),
+          ),
+        );
       }
       if (args.supersedePreviousId) {
         const prev = storedRows.find((r) => r.id === args.supersedePreviousId);
@@ -725,9 +731,9 @@ beforeEach(() => {
       if (row?.status === "draft" && ownsLock) {
         row.metadata = {
           ...(row.metadata ?? {}),
-          lastError: args.errorMessage,
-          lastAttemptOutcome: "interrupted",
-          externalMutation: args.externalMutation,
+          [SUBMISSION_METADATA_KEYS.lastError]: args.errorMessage,
+          [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]: "interrupted",
+          [SUBMISSION_METADATA_KEYS.externalMutation]: args.externalMutation,
         };
       }
     },

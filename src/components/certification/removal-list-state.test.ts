@@ -94,4 +94,25 @@ describe("buildRemovalListRows", () => {
 
     expect(row.submissionInterrupted).toBe(true);
   });
+
+  it("ignores stale lifecycle enrichment when a refresh is unavailable", () => {
+    const interrupted = identity("removal-stale", "CB-STALE");
+    interrupted.latestSubmission = {
+      status: "draft",
+      lockedAt: new Date(),
+      metadata: { lastAttemptOutcome: "interrupted" },
+    } as NonNullable<RemovalHubEntry["latestSubmission"]>;
+    const stale = enrichment("removal-stale");
+
+    const [row] = buildRemovalListRows([interrupted], {
+      "removal-stale": { status: "unavailable", data: stale },
+    });
+
+    expect(row).toMatchObject({
+      local: "draft",
+      lockInFlight: true,
+      submissionInterrupted: true,
+      readiness: null,
+    });
+  });
 });

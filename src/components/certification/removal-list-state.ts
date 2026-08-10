@@ -43,6 +43,7 @@ export function buildRemovalListRows(
       data: null,
     };
     const data = enrichment.data;
+    const lifecycleData = enrichment.status === "available" ? data : null;
     return {
       removalId,
       startedOn: data?.startedOn ?? identity.removal.startedOn,
@@ -53,16 +54,16 @@ export function buildRemovalListRows(
       externalId:
         data?.externalId ?? identity.latestSubmission?.externalId ?? null,
       version: data?.version ?? identity.latestSubmission?.version ?? null,
-      local: data?.local ?? identity.latestSubmission?.status ?? null,
+      local: lifecycleData?.local ?? identity.latestSubmission?.status ?? null,
       lockInFlight:
-        data?.lockInFlight ??
+        lifecycleData?.lockInFlight ??
         (identity.latestSubmission
           ? isLockedInFlight(identity.latestSubmission)
           : false),
       submissionInterrupted:
-        data?.submissionInterrupted ??
+        lifecycleData?.submissionInterrupted ??
         isRemovalSubmissionInterrupted(identity.latestSubmission?.metadata),
-      readiness: data?.readiness ?? null,
+      readiness: enrichment.status === "available" ? (data?.readiness ?? null) : null,
       evidenceHealth: data?.evidenceHealth ?? null,
       submissionWarnings: data?.submissionWarnings ?? [],
       recentSyncEvents: data?.recentSyncEvents ?? [],

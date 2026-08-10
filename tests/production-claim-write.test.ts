@@ -297,5 +297,72 @@ describe("markSubmissionInterrupted", () => {
       lastAttemptOutcome: "interrupted",
       externalMutation: "confirmed",
     });
+
+    await markSubmissionSubmitted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      { externalId: "ext_interrupted_reconciled" },
+    );
+    const [submitted] = await db
+      .select({ metadata: certificationSubmissions.metadata })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(submitted.metadata).toEqual({});
+  });
+
+  it("does not mark a successor lock or a submitted row as interrupted", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    const staleLock = new Date(Date.now() - 60_000);
+    const successorLock = new Date();
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt: successorLock })
+      .where(eq(certificationSubmissions.id, submissionId));
+
+    await markSubmissionInterrupted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      {
+        errorMessage: "Stale attempt error",
+        expectedLockedAt: staleLock,
+        externalMutation: "possible",
+      },
+    );
+    let [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        lockedAt: certificationSubmissions.lockedAt,
+        metadata: certificationSubmissions.metadata,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toMatchObject({ status: "draft", metadata: null });
+    expect(row.lockedAt?.getTime()).toBe(successorLock.getTime());
+
+    await markSubmissionSubmitted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      { externalId: "ext_successor_submitted" },
+    );
+    await markSubmissionInterrupted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      {
+        errorMessage: "Late cleanup error",
+        expectedLockedAt: successorLock,
+        externalMutation: "confirmed",
+      },
+    );
+    [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        lockedAt: certificationSubmissions.lockedAt,
+        metadata: certificationSubmissions.metadata,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toMatchObject({ status: "submitted", metadata: {} });
+    expect(row.lockedAt).toBeNull();
   });
 });

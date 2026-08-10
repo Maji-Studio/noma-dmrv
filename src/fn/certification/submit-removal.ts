@@ -76,7 +76,9 @@ import {
   type RegistryExternalMutation,
 } from "./registry-create";
 import {
-  rejectClaimedRemovalSubmissionBestEffort,
+  recordClaimedRemovalSubmissionFailureBestEffort,
+  recordRemovalExternalMutation,
+  readRemovalSubmissionExternalMutation,
   safeRemovalSubmissionError,
 } from "./removal-submission-failure";
 import {
@@ -129,15 +131,6 @@ interface RemovalSubmitAttempt {
   id: string;
   attemptedAt: Date;
   externalMutation: RemovalExternalMutation;
-}
-
-function recordExternalMutation(
-  attempt: RemovalSubmitAttempt,
-  next: RegistryExternalMutation,
-): void {
-  if (next === "confirmed" || attempt.externalMutation === "none") {
-    attempt.externalMutation = next;
-  }
 }
 
 // The submission unit: one Isometric Removal == one certifierRemovals row.
@@ -553,6 +546,11 @@ async function submitRemovalCore(
         version: claimed.version,
       };
     case "claimed": {
+      if (claimed.resumed) {
+        attempt.externalMutation = readRemovalSubmissionExternalMutation(
+          claimed.row.metadata,
+        );
+      }
       // ADR 0020: never resume a snapshot from an older mapping revision.
       if (claimed.resumed) {
         await assertResumedSnapshotRevisionCurrent(orgCtx, claimed.row);
@@ -616,7 +614,7 @@ async function submitRemovalCore(
           onProgress,
         });
       } catch (error) {
-        await rejectClaimedRemovalSubmissionBestEffort({
+        await recordClaimedRemovalSubmissionFailureBestEffort({
           orgCtx,
           submissionId: claimed.row.id,
           expectedLockedAt,
@@ -814,7 +812,8 @@ async function runRemovalSubmission({
       create: () => createDatapoint(client, dp.body).then((d) => d.id),
       reconcile: () => reconcileDatapoint(client, { supplierRefId }).then(supplierRefLookup),
       failureMessagePrefix: `Datapoint POST failed for "${dp.inputKey}"`,
-      onExternalMutation: (state) => recordExternalMutation(attempt, state),
+      onExternalMutation: (state) =>
+        recordRemovalExternalMutation(attempt, state),
       log,
     });
     const rtcInputKey = `${dp.rtcId}::${dp.inputKey}`;
@@ -859,7 +858,8 @@ async function runRemovalSubmission({
       submissionRow: row,
       expectedLockedAt,
       deferRejectionToAttempt: true,
-      onExternalMutation: (state) => recordExternalMutation(attempt, state),
+      onExternalMutation: (state) =>
+        recordRemovalExternalMutation(attempt, state),
       submissions: durabilityMeasurementSubmissions,
       log,
     });
@@ -873,7 +873,8 @@ async function runRemovalSubmission({
       resumed,
       expectedLockedAt,
       deferRejectionToAttempt: true,
-      onExternalMutation: (state) => recordExternalMutation(attempt, state),
+      onExternalMutation: (state) =>
+        recordRemovalExternalMutation(attempt, state),
       submissions: boundSubmissions,
       sourceBindingPlan,
       log,
@@ -930,7 +931,7 @@ async function runRemovalSubmission({
         supplierRefLookup,
       ),
     failureMessagePrefix: "Removal POST failed",
-    onExternalMutation: (state) => recordExternalMutation(attempt, state),
+    onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
     onConfirmed: (externalId) =>
       markSubmissionSubmitted(orgCtx, row.id, {
         externalId,

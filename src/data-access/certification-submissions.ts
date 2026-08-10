@@ -11,7 +11,8 @@
  * (`decideSubmissionClaim`); this module is the I/O choreography around it.
  * It is an internal data-access seam tested DB-backed against real Postgres
  * (ADR 0008) — no port, no in-memory fake. It ends at a claimed draft row;
- * no network I/O happens inside.
+ * no network I/O happens inside. It also owns the guarded interrupted-attempt
+ * writer because that outcome must use the same exact draft-lock identity.
  *
  * Plan: docs/archive/plans/2026-06-10-certification-reliability-track.md (Phase 1).
  */
@@ -28,6 +29,7 @@ import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME } from "@/lib/certification/status";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/isometric/utils/submission-metadata";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { logger } from "@/lib/log";
 import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
@@ -83,9 +85,9 @@ export async function markSubmissionInterrupted(
     .set({
       updatedAt: sql`now()`,
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object(
-        'lastError', ${args.errorMessage}::text,
-        'lastAttemptOutcome', ${REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME}::text,
-        'externalMutation', ${args.externalMutation}::text
+        ${SUBMISSION_METADATA_KEYS.lastError}::text, ${args.errorMessage}::text,
+        ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text, ${REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME}::text,
+        ${SUBMISSION_METADATA_KEYS.externalMutation}::text, ${args.externalMutation}::text
       )`,
     })
     .where(
@@ -613,10 +615,6 @@ async function resetSubmissionToDraftCas(
       status: "draft",
       lockedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
       updatedAt: sql`now()`,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb)
-        - 'lastError'
-        - 'lastAttemptOutcome'
-        - 'externalMutation'`,
     })
     .where(
       and(

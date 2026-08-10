@@ -836,7 +836,10 @@ describe("submitRemoval boundary — definitive Removal refusal (test 4)", () =>
     expect(rows[0].status).toBe("draft");
     expect(rows[0].lockedAt).not.toBeNull();
     expect(rows[0].externalId).toBeNull();
-    expect(rows[0].metadata).toBeNull();
+    expect(rows[0].metadata).toMatchObject({
+      lastAttemptOutcome: "interrupted",
+      externalMutation: "confirmed",
+    });
 
     const failed = (await listSyncEvents(fixture.removalId)).find(
       (event) =>

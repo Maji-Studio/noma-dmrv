@@ -123,6 +123,23 @@ describe("submitRemoval — reporting window anchored to application date (issue
     expect(isometric.createDatapoint).toHaveBeenCalled();
     expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
     expect(ledgerClaim.markSubmissionInterrupted).toHaveBeenCalledOnce();
+
+    storedRows[0].lockedAt = new Date(0);
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toBe(originalError);
+    expect(storedRows[0]).toMatchObject({
+      status: "draft",
+      metadata: {
+        lastAttemptOutcome: "interrupted",
+        externalMutation: "confirmed",
+      },
+    });
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
+    expect(ledgerClaim.markSubmissionInterrupted).toHaveBeenCalledTimes(2);
   });
 
   it("preserves the submission error when no-mutation rejection cleanup fails", async () => {

@@ -27,6 +27,10 @@ import type { StatusValue } from "@/components/ui/status-badge";
 // Type-only — erased at build time, so the generated types never reach the
 // client bundle as runtime code.
 import type { components } from "@/lib/isometric/generated/certify";
+import {
+  getMetadataValue,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/isometric/utils/submission-metadata";
 import type { RemovalReadiness } from "./readiness";
 
 /**
@@ -65,6 +69,7 @@ export type RemoteGhgStatus = components["schemas"]["GhgStatementStatus"];
 
 export type DerivedStatusKind =
   | "in-progress"
+  | "interrupted"
   | "not-submitted"
   | "submitted"
   | "draft"
@@ -102,6 +107,7 @@ export interface RemovalStatusInput {
   local: LocalSubmissionStatus | null;
   /** A draft row holding a live submission lock (derive from `lock.ts`). */
   lockInFlight: boolean;
+  submissionInterrupted?: boolean;
 }
 
 export type RemovalEnrichmentStatus =
@@ -124,11 +130,10 @@ export const REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME = "interrupted" as const;
 
 export function isRemovalSubmissionInterrupted(metadata: unknown): boolean {
   return (
-    metadata !== null &&
-    typeof metadata === "object" &&
-    !Array.isArray(metadata) &&
-    (metadata as Record<string, unknown>).lastAttemptOutcome ===
-      REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME
+    getMetadataValue(
+      metadata,
+      SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
+    ) === REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME
   );
 }
 
@@ -156,7 +161,17 @@ export interface RemovalWorkflowStatusInput extends RemovalStatusInput {
 export function deriveRemovalStatus({
   local,
   lockInFlight,
+  submissionInterrupted = false,
 }: RemovalStatusInput): DerivedStatus {
+  if (local === "draft" && submissionInterrupted) {
+    return {
+      kind: "interrupted",
+      value: "failed",
+      label: "Submission interrupted",
+      isActionable: !lockInFlight,
+      isTerminal: false,
+    };
+  }
   if (lockInFlight) return IN_PROGRESS;
   if (local === null) {
     return {
@@ -224,7 +239,11 @@ export function deriveRemovalWorkflowStatus({
   readiness,
   submissionInterrupted = false,
 }: RemovalWorkflowStatusInput): RemovalWorkflowStatus {
-  const lifecycle = deriveRemovalStatus({ local, lockInFlight });
+  const lifecycle = deriveRemovalStatus({
+    local,
+    lockInFlight,
+    submissionInterrupted,
+  });
 
   if (lifecycle.kind === "submitted" || lifecycle.kind === "superseded") {
     return {
@@ -237,17 +256,67 @@ export function deriveRemovalWorkflowStatus({
     };
   }
 
-  if (local === "draft" && submissionInterrupted) {
+  if (lifecycle.kind === "interrupted") {
+    if (lockInFlight) {
+      return {
+        kind: "interrupted",
+        value: "failed",
+        label: "Submission interrupted",
+        reasons: [
+          "This submission was interrupted. Wait, then select Review & submit when it becomes available.",
+        ],
+        isActionable: false,
+        canRetry: false,
+      };
+    }
+    if (enrichmentStatus === "loading") {
+      return {
+        kind: "interrupted",
+        value: "failed",
+        label: "Submission interrupted",
+        reasons: ["Checking whether this submission is ready to reconcile."],
+        isActionable: false,
+        canRetry: false,
+      };
+    }
+    if (enrichmentStatus === "unavailable" || !readiness) {
+      return {
+        kind: "interrupted",
+        value: "failed",
+        label: "Submission interrupted",
+        reasons: ["Status checks could not finish. Select Retry to check again."],
+        isActionable: false,
+        canRetry: true,
+      };
+    }
+    if (readiness.state === "blocked") {
+      return {
+        kind: "interrupted",
+        value: "failed",
+        label: "Submission interrupted",
+        reasons: readiness.reasons,
+        isActionable: true,
+        canRetry: false,
+      };
+    }
+    if (readiness.state === "inProgress") {
+      return {
+        kind: "interrupted",
+        value: "failed",
+        label: "Submission interrupted",
+        reasons: ["Waiting for the current submission check to finish."],
+        isActionable: false,
+        canRetry: false,
+      };
+    }
     return {
       kind: "interrupted",
       value: "failed",
       label: "Submission interrupted",
       reasons: [
-        lockInFlight
-          ? "Registry changes may still be settling. Retry when Review & submit becomes available."
-          : "Registry work may already exist. Review & submit to reconcile it before creating anything new.",
+        "This submission was interrupted and registry work may already exist. Select Review & submit to reconcile it.",
       ],
-      isActionable: !lockInFlight,
+      isActionable: true,
       canRetry: false,
     };
   }

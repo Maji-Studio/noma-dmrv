@@ -609,7 +609,12 @@ describe("claimSubmissionDraft — resume", () => {
     expect(outcome.row.payloadSnapshot).toMatchObject({
       semantic: { seeded: true },
     });
-    expect(outcome.row.metadata).toEqual({ retained: true });
+    expect(outcome.row.metadata).toEqual({
+      lastError: "Previous attempt failed",
+      lastAttemptOutcome: "interrupted",
+      externalMutation: "possible",
+      retained: true,
+    });
   });
 
   it("blocks in-flight when the lock is still fresh", async () => {

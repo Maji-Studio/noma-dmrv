@@ -3,10 +3,33 @@ import { markSubmissionInterrupted } from "@/data-access/certification-submissio
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import type { Logger } from "@/lib/log";
+import {
+  getMetadataValue,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/isometric/utils/submission-metadata";
 import type { RegistryExternalMutation } from "./registry-create";
 
 const UNEXPECTED_REMOVAL_SUBMISSION_ERROR =
   "Removal submission failed unexpectedly. Retry the submission.";
+
+export function readRemovalSubmissionExternalMutation(
+  metadata: unknown,
+): "none" | RegistryExternalMutation {
+  const value = getMetadataValue(
+    metadata,
+    SUBMISSION_METADATA_KEYS.externalMutation,
+  );
+  return value === "possible" || value === "confirmed" ? value : "none";
+}
+
+export function recordRemovalExternalMutation(
+  attempt: { externalMutation: "none" | RegistryExternalMutation },
+  next: RegistryExternalMutation,
+): void {
+  if (next === "confirmed" || attempt.externalMutation === "none") {
+    attempt.externalMutation = next;
+  }
+}
 
 export function safeRemovalSubmissionError(error: unknown): {
   errorClass: string | null;
@@ -30,7 +53,7 @@ export function safeRemovalSubmissionError(error: unknown): {
  * stay locked and are marked interrupted so retry can reconcile them safely.
  * Both data-access updates are draft-status and attempt-lock guarded.
  */
-export async function rejectClaimedRemovalSubmissionBestEffort(args: {
+export async function recordClaimedRemovalSubmissionFailureBestEffort(args: {
   orgCtx: OrgContext;
   submissionId: string;
   expectedLockedAt: Date;

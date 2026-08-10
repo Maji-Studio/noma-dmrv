@@ -133,6 +133,13 @@ function removalLifecycle(
         currentStepIndex: 0,
         stepStates: buildStepStates(0),
       };
+    case "interrupted":
+      return {
+        badgeStatus: "failed",
+        label: "Submission interrupted",
+        currentStepIndex: 0,
+        stepStates: buildStepStates(0, "failed"),
+      };
     case "submitted":
       return {
         badgeStatus: "running",

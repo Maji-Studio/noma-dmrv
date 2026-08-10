@@ -35,7 +35,7 @@ claimed by an attempt that made no possible or confirmed registry write. Any
 uncertain or confirmed write keeps the draft locked for reconciliation,
 including failed lookups and local persistence failures after a successful
 create. Those retained drafts record an interrupted attempt and appear as
-`Submission interrupted` until a safe retry claims and reconciles them. Durable
+`Submission interrupted` until a safe retry reconciles them. Durable
 Sources, evidence ledgers, and submission journals are retained for that retry.
 Production Batch dry-mass comparisons keep the explicit 1 g tolerance.
 

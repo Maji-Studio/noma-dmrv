@@ -3,6 +3,9 @@ export const SUBMISSION_METADATA_KEYS = {
   pendingTotalCo2eRemovedKg: "pendingTotalCo2eRemovedKg",
   removalIds: "removalIds",
   rejectionReason: "rejectionReason",
+  lastError: "lastError",
+  lastAttemptOutcome: "lastAttemptOutcome",
+  externalMutation: "externalMutation",
 } as const;
 
 export function getMetadataValue(
