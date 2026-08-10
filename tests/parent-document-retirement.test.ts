@@ -91,12 +91,15 @@ afterEach(() => {
   __setStorageProviderForTests(null);
 });
 
-async function createReactorFixture(tag: string) {
+async function createReactorFixture(
+  tag: string,
+  organizationId = TEST_ORG_ID,
+) {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
       .values({
-        organizationId: TEST_ORG_ID,
+        organizationId,
         code: `FAC-DOC-${tag}`,
         name: `Document retirement facility ${tag}`,
       })
@@ -104,7 +107,7 @@ async function createReactorFixture(tag: string) {
     const [reactor] = await tx
       .insert(reactors)
       .values({
-        organizationId: TEST_ORG_ID,
+        organizationId,
         facilityId: facility.id,
         code: `RE-DOC-${tag}`,
         identifier: `Document retirement reactor ${tag}`,
@@ -522,20 +525,37 @@ describe("parent document retirement", () => {
 
   it("keeps partial storage failures pending and retries idempotently", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
-    const fixture = await createReactorFixture(tag);
+    const organizationId = `org_document_retry_${tag}`;
+    const ctx = {
+      ...makeTestOrgContext(TEST_USER_ID),
+      organizationId,
+    };
+    await db.insert(organizations).values({
+      id: organizationId,
+      name: `Document retry organization ${tag}`,
+      slug: `document-retry-${tag}`,
+    });
+    const fixture = await createReactorFixture(tag, organizationId);
     const keys = [
       `reactor/${fixture.reactorId}/pdf/${tag}-first.pdf`,
       `reactor/${fixture.reactorId}/pdf/${tag}-second.pdf`,
     ];
-    await insertManagedDocument("reactor", fixture.reactorId, keys[0]);
-    await insertManagedDocument("reactor", fixture.reactorId, keys[1]);
+    await insertManagedDocument(
+      "reactor",
+      fixture.reactorId,
+      keys[0],
+      organizationId,
+    );
+    await insertManagedDocument(
+      "reactor",
+      fixture.reactorId,
+      keys[1],
+      organizationId,
+    );
     provider.failKey = keys[1];
 
     try {
-      await deleteReactor(
-        makeTestOrgContext(TEST_USER_ID),
-        fixture.reactorId,
-      );
+      await deleteReactor(ctx, fixture.reactorId);
 
       expect(
         await db.select().from(reactors).where(eq(reactors.id, fixture.reactorId)),
@@ -559,25 +579,19 @@ describe("parent document retirement", () => {
 
       provider.failKey = null;
       expect(
-        await processPendingStorageObjectDeletions(
-          makeTestOrgContext(TEST_USER_ID),
-        ),
+        await processPendingStorageObjectDeletions(ctx),
       ).toEqual({ completed: 0, failed: 0 });
       await db
         .update(storageObjectDeletions)
         .set({ lastAttemptAt: RETRY_BACKOFF_ELAPSED_AT })
         .where(eq(storageObjectDeletions.storageKey, keys[1]));
-      const retryResult = await processPendingStorageObjectDeletions(
-        makeTestOrgContext(TEST_USER_ID),
-      );
+      const retryResult = await processPendingStorageObjectDeletions(ctx);
       expect(retryResult).toEqual({ completed: 1, failed: 0 });
       expect(provider.objects.has(keys[0])).toBe(false);
       expect(provider.objects.has(keys[1])).toBe(false);
       const callsAfterRetry = provider.deleteCalls.length;
       expect(
-        await processPendingStorageObjectDeletions(
-          makeTestOrgContext(TEST_USER_ID),
-        ),
+        await processPendingStorageObjectDeletions(ctx),
       ).toEqual({ completed: 0, failed: 0 });
       expect(provider.deleteCalls).toHaveLength(callsAfterRetry);
     } finally {
@@ -587,6 +601,7 @@ describe("parent document retirement", () => {
       await db.delete(documents).where(eq(documents.entityId, fixture.reactorId));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
       await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+      await db.delete(organizations).where(eq(organizations.id, organizationId));
     }
   });
 
