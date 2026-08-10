@@ -20,6 +20,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import type { MemberCreditBatch } from "@/fn/certification/certify-context";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { isometricRegistry } from "@/lib/isometric/links";
 import { EnvBanner } from "../env-banner";
 import { CompilationWarnings } from "./compilation-notices";
 import {
@@ -40,7 +41,10 @@ const VERDICT_RULE: Record<SubmitState, string> = {
   blocked: "border-[var(--st-bad)]",
 };
 
-type SubmissionSummaryProps = SubmissionFactsInput & { facilityId: string };
+type SubmissionSummaryProps = SubmissionFactsInput & {
+  facilityId: string;
+  facilityName: string;
+};
 
 function StateIcon({ state }: { state: SubmitState }) {
   if (state === "loading") {
@@ -94,6 +98,29 @@ function BatchLink({
   );
 }
 
+function RegistryFactLink({
+  href,
+  label,
+  ariaLabel,
+}: {
+  href: string;
+  label: string;
+  ariaLabel: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={ariaLabel}
+      className="inline-flex items-center gap-4 text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+    >
+      {label}
+      <ArrowSquareOutIcon size={BATCH_LINK_ICON_SIZE} aria-hidden />
+    </a>
+  );
+}
+
 /**
  * Label/value ledger row — the same idiom as `carbon-breakdown.tsx`, with the
  * hairline and padding these rows need inside a bordered panel.
@@ -111,10 +138,17 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 
 export function SubmissionSummary({
   facilityId,
+  facilityName,
   ...factsInput
 }: SubmissionSummaryProps) {
   const facts = buildSubmissionFacts(factsInput);
   const { checks } = factsInput;
+  const environment = facts.isProduction ? "production" : "sandbox";
+  const externalProjectId = factsInput.ctx.mapping?.externalProjectId ?? null;
+  const externalFacilityId = factsInput.ctx.mapping?.externalFacilityId ?? null;
+  const destinationLabel = facts.projectLabel
+    ? `${facts.projectLabel} (${facts.environmentLabel})`
+    : "Not linked";
 
   return (
     <div className="flex flex-col gap-16">
@@ -165,9 +199,33 @@ export function SubmissionSummary({
 
         <dl className="flex flex-col">
           <Fact label="Destination">
-            {facts.projectLabel
-              ? `${facts.projectLabel} (${facts.environmentLabel})`
-              : "Not linked"}
+            {externalProjectId ? (
+              <RegistryFactLink
+                href={isometricRegistry.certifyProject({
+                  environment,
+                  externalProjectId,
+                })}
+                label={destinationLabel}
+                ariaLabel={`Open destination ${destinationLabel} in Isometric in a new tab`}
+              />
+            ) : (
+              destinationLabel
+            )}
+          </Fact>
+          <Fact label="Facility">
+            {externalProjectId && externalFacilityId ? (
+              <RegistryFactLink
+                href={isometricRegistry.facility({
+                  environment,
+                  externalProjectId,
+                  externalFacilityId,
+                })}
+                label={facilityName}
+                ariaLabel={`Open facility ${facilityName} in Isometric in a new tab`}
+              />
+            ) : (
+              facilityName
+            )}
           </Fact>
           <Fact label="Reporting window">
             {facts.reportingWindowLabel ?? "Not compiled yet"}
