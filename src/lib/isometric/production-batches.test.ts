@@ -5,6 +5,7 @@ import {
   buildProductionBatchReference,
   PRODUCTION_BATCH_KIND,
   PRODUCTION_BATCH_MASS_UNIT,
+  productionBatchMassUnitsMatch,
 } from "./production-batches";
 
 const BASE = {
@@ -26,6 +27,16 @@ describe("buildProductionBatchReference", () => {
     expect(first).not.toBe(
       buildProductionBatchReference({ creditBatchId: "cb-2" }),
     );
+  });
+});
+
+describe("productionBatchMassUnitsMatch", () => {
+  it("accepts Isometric's canonical kilogram readback", () => {
+    expect(productionBatchMassUnitsMatch("kilogram", "kg")).toBe(true);
+  });
+
+  it("does not convert a different mass unit", () => {
+    expect(productionBatchMassUnitsMatch("gram", "kg")).toBe(false);
   });
 });
 

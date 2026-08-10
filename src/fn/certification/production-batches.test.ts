@@ -194,6 +194,30 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
   });
 
+  it("accepts Isometric's canonical kilogram unit on fresh-create readback", async () => {
+    mocks.client.post.mockImplementation(
+      async (_path: string, body: { supplier_reference_id: string }) =>
+        remoteBatch(body.supplier_reference_id, PRODUCTION_BATCH_ID, {
+          mass: {
+            magnitude: 2_000,
+            unit: "kilogram",
+            standard_deviation: null,
+          },
+        }),
+    );
+
+    const registered = await ensure();
+
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
+    expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        externalProductionBatchId: PRODUCTION_BATCH_ID,
+      }),
+    );
+    expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+  });
+
   it("always reconciles by supplier reference before POSTing a missing journal", async () => {
     await ensure();
 

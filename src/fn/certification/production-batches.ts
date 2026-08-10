@@ -47,7 +47,7 @@ import {
   buildProductionBatchReference,
   createProductionBatch,
   findProductionBatchBySupplierRef,
-  PRODUCTION_BATCH_MASS_UNIT,
+  productionBatchMassUnitsMatch,
   type CreateProductionBatchRequest,
   type IsometricProductionBatch,
 } from "@/lib/isometric/production-batches";
@@ -68,13 +68,6 @@ import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
 } from "./shared";
-
-// Verified from a live Certify production-batch response on 2026-08-10:
-// Isometric canonicalizes the submitted `kg` unit to `kilogram` on readback.
-const KILOGRAM_UNIT_ALIASES = new Set([
-  PRODUCTION_BATCH_MASS_UNIT,
-  "kilogram",
-]);
 
 /** One credit batch's production-batch POST: its supplier ref + request body. */
 export interface ProductionBatchSubmission {
@@ -379,17 +372,6 @@ function productionBatchMismatchMessage(
     return null;
   }
   return `Registry production batch ${batch.id} does not match this credit batch's facility, feedstock, kind, mass, or production window. Ask support to check the registry record.`;
-}
-
-function productionBatchMassUnitsMatch(
-  actual: string,
-  expected: string,
-): boolean {
-  return (
-    actual === expected ||
-    (KILOGRAM_UNIT_ALIASES.has(actual) &&
-      KILOGRAM_UNIT_ALIASES.has(expected))
-  );
 }
 
 async function recordProductionBatchDrift(args: {
