@@ -5,11 +5,14 @@ import { SafeError } from "@/lib/errors";
 import type { Logger } from "@/lib/log";
 import {
   getMetadataValue,
+  SUBMISSION_EXTERNAL_MUTATIONS,
   SUBMISSION_METADATA_KEYS,
 } from "@/lib/certification/submission-metadata";
 import type { RegistryExternalMutation } from "./registry-create";
 
-export type RemovalExternalMutation = "none" | RegistryExternalMutation;
+export type RemovalExternalMutation =
+  | typeof SUBMISSION_EXTERNAL_MUTATIONS.none
+  | RegistryExternalMutation;
 
 const UNEXPECTED_REMOVAL_SUBMISSION_ERROR =
   "Removal submission failed unexpectedly. Retry the submission.";
@@ -21,14 +24,20 @@ export function readRemovalSubmissionExternalMutation(
     metadata,
     SUBMISSION_METADATA_KEYS.externalMutation,
   );
-  return value === "possible" || value === "confirmed" ? value : "none";
+  return value === SUBMISSION_EXTERNAL_MUTATIONS.possible ||
+    value === SUBMISSION_EXTERNAL_MUTATIONS.confirmed
+    ? value
+    : SUBMISSION_EXTERNAL_MUTATIONS.none;
 }
 
 export function recordRemovalExternalMutation(
   attempt: { externalMutation: RemovalExternalMutation },
   next: RegistryExternalMutation,
 ): void {
-  if (next === "confirmed" || attempt.externalMutation === "none") {
+  if (
+    next === SUBMISSION_EXTERNAL_MUTATIONS.confirmed ||
+    attempt.externalMutation === SUBMISSION_EXTERNAL_MUTATIONS.none
+  ) {
     attempt.externalMutation = next;
   }
 }
@@ -67,7 +76,7 @@ export async function recordClaimedRemovalSubmissionFailureBestEffort(args: {
   const errorMessage =
     safeError.errorMessage ?? UNEXPECTED_REMOVAL_SUBMISSION_ERROR;
   try {
-    if (args.externalMutation === "none") {
+    if (args.externalMutation === SUBMISSION_EXTERNAL_MUTATIONS.none) {
       await markSubmissionRejected(args.orgCtx, args.submissionId, {
         errorMessage,
         expectedLockedAt: args.expectedLockedAt,

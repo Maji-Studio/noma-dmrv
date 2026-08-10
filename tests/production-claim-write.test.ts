@@ -232,6 +232,37 @@ describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)
 });
 
 describe("markSubmissionRejected", () => {
+  it("clears stale interruption markers on a definitive rejection", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    await db
+      .update(certificationSubmissions)
+      .set({
+        metadata: {
+          lastError: "Interrupted earlier.",
+          lastAttemptOutcome: "interrupted",
+          externalMutation: "possible",
+          retained: true,
+        },
+      })
+      .where(eq(certificationSubmissions.id, submissionId));
+
+    await markSubmissionRejected(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      { errorMessage: "Definitive refusal." },
+    );
+
+    const [row] = await db
+      .select({ metadata: certificationSubmissions.metadata })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row.metadata).toEqual({
+      lastError: "Definitive refusal.",
+      retained: true,
+    });
+  });
+
   it("does not downgrade a row that already reached submitted", async () => {
     const { removalAId } = await createFixture();
     const submissionId = await insertDraftSubmission(removalAId, 1);

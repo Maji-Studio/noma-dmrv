@@ -29,6 +29,7 @@ import type { StatusValue } from "@/components/ui/status-badge";
 import type { components } from "@/lib/isometric/generated/certify";
 import {
   getMetadataValue,
+  SUBMISSION_ATTEMPT_OUTCOMES,
   SUBMISSION_METADATA_KEYS,
 } from "@/lib/certification/submission-metadata";
 import type { RemovalReadiness } from "./readiness";
@@ -126,7 +127,8 @@ export type RemovalWorkflowStatusKind =
   | "submitted"
   | "superseded";
 
-export const REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME = "interrupted" as const;
+export const REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME =
+  SUBMISSION_ATTEMPT_OUTCOMES.interrupted;
 export const REMOVAL_SUBMISSION_INTERRUPTED_LABEL =
   "Submission interrupted";
 

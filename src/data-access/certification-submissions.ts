@@ -28,8 +28,10 @@ import {
 import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
-import { REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME } from "@/lib/certification/status";
-import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
+import {
+  SUBMISSION_ATTEMPT_OUTCOMES,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/certification/submission-metadata";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { logger } from "@/lib/log";
 import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
@@ -86,7 +88,7 @@ export async function markSubmissionInterrupted(
       updatedAt: sql`now()`,
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object(
         ${SUBMISSION_METADATA_KEYS.lastError}::text, ${args.errorMessage}::text,
-        ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text, ${REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME}::text,
+        ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text, ${SUBMISSION_ATTEMPT_OUTCOMES.interrupted}::text,
         ${SUBMISSION_METADATA_KEYS.externalMutation}::text, ${args.externalMutation}::text
       )`,
     })

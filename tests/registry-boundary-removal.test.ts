@@ -90,6 +90,10 @@ import * as sources from "@/fn/certification/sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { SafeError } from "@/lib/errors";
 import {
+  SUBMISSION_ATTEMPT_OUTCOMES,
+  SUBMISSION_EXTERNAL_MUTATIONS,
+} from "@/lib/certification/submission-metadata";
+import {
   buildRemovalSupplierRef,
   IsometricApiError,
   type IsometricComponentBlueprint,
@@ -837,8 +841,8 @@ describe("submitRemoval boundary — definitive Removal refusal (test 4)", () =>
     expect(rows[0].lockedAt).not.toBeNull();
     expect(rows[0].externalId).toBeNull();
     expect(rows[0].metadata).toMatchObject({
-      lastAttemptOutcome: "interrupted",
-      externalMutation: "confirmed",
+      lastAttemptOutcome: SUBMISSION_ATTEMPT_OUTCOMES.interrupted,
+      externalMutation: SUBMISSION_EXTERNAL_MUTATIONS.confirmed,
     });
 
     const failed = (await listSyncEvents(fixture.removalId)).find(

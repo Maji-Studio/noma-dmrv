@@ -14,7 +14,10 @@ import type {
   Sample,
 } from "@/db/schema";
 import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
-import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
+import {
+  SUBMISSION_ATTEMPT_OUTCOMES,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/certification/submission-metadata";
 
 const INTERRUPTION_METADATA_KEYS = new Set<string>([
   SUBMISSION_METADATA_KEYS.lastError,
@@ -741,7 +744,8 @@ beforeEach(() => {
         row.metadata = {
           ...(row.metadata ?? {}),
           [SUBMISSION_METADATA_KEYS.lastError]: args.errorMessage,
-          [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]: "interrupted",
+          [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]:
+            SUBMISSION_ATTEMPT_OUTCOMES.interrupted,
           [SUBMISSION_METADATA_KEYS.externalMutation]: args.externalMutation,
         };
       }
