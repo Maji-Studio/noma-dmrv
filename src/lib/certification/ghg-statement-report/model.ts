@@ -142,6 +142,14 @@ function optionalSum(
 export function buildGhgStatementReportModel(
   input: BuildGhgStatementReportModelInput,
 ): GhgStatementReportModel {
+  // The renderer stamps this timestamp into the PDF metadata and prints it on
+  // the page. An unparseable value would put two different preparation times
+  // into one checksummed artifact, so the model is rejected instead.
+  if (Number.isNaN(new Date(input.preparedAt).getTime())) {
+    throw new GhgStatementReportReconciliationError(
+      "Report preparation timestamp is malformed.",
+    );
+  }
   const statementEntryIds = [...input.authoritativeStatement.externalEntryIds];
   exactSet(
     "Live GHG Entry membership",
