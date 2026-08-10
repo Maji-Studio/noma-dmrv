@@ -358,7 +358,7 @@ export const productionRunFeedstocks = pgTable('production_run_feedstocks', {
   wetMassUsedKg: massKg('wet_mass_used_kg').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
-  index('production_run_feedstocks_organization_id_idx').on(
+  index('production_run_feedstocks_organization_id_production_run_id_idx').on(
     table.organizationId,
     table.productionRunId
   ),
