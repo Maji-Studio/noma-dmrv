@@ -191,6 +191,7 @@ export const biocharProductSourceAllocations = pgTable(
     ),
     index('biochar_product_source_allocations_organization_id_idx').on(
       table.organizationId,
+      table.productionRunId,
     ),
     index('biochar_product_source_allocations_source_bin_idx').on(
       table.sourceStorageLocationId,

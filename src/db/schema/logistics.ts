@@ -173,6 +173,11 @@ export const deliveries = pgTable(
   (table) => [
     unique('deliveries_organization_id_code_unique').on(table.organizationId, table.code),
     unique('deliveries_id_organization_id_unique').on(table.id, table.organizationId),
+    index('deliveries_organization_id_order_id_delivery_date_idx').on(
+      table.organizationId,
+      table.orderId,
+      table.deliveryDate
+    ),
     foreignKey({
       columns: [table.facilityId, table.organizationId],
       foreignColumns: [facilities.id, facilities.organizationId],
