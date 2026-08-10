@@ -304,6 +304,33 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledTimes(1);
   });
 
+  it("claims an orphaned record when Isometric canonicalizes kg to kilogram", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ creditBatchCode: "CB-26-001", totalDryMassKg: 990 }),
+    ]);
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
+        display_name: "CB-26-001",
+        mass: {
+          magnitude: 990,
+          unit: "kilogram",
+          standard_deviation: null,
+        },
+      });
+    });
+
+    const registered = await ensure();
+
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+    expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        externalProductionBatchId: PRODUCTION_BATCH_ID,
+      }),
+    );
+  });
+
   it("claims an orphaned record within the dry-mass precision tolerance", async () => {
     mocks.client.paginate.mockImplementation(async function* () {
       yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
@@ -375,6 +402,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
   it.each([
     ["facility", { facility_id: "fcl_other" }],
     ["mass", { mass: { magnitude: 1_999, unit: "kg" } }],
+    ["mass unit", { mass: { magnitude: 2_000, unit: "gram" } }],
     ["window", { ended_at: "2026-03-29T23:59:59.999Z" }],
   ])(
     "refuses an orphaned remote record with mismatched %s identity",

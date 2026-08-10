@@ -68,6 +68,8 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "./shared";
 
+const KILOGRAM_UNIT_ALIASES = new Set(["kg", "kilogram"]);
+
 /** One credit batch's production-batch POST: its supplier ref + request body. */
 export interface ProductionBatchSubmission {
   creditBatchId: string;
@@ -364,13 +366,24 @@ function productionBatchMismatchMessage(
     sameFeedstocks &&
     batch.kind === expected.kind &&
     massMagnitudeMatches &&
-    batch.mass.unit === expected.mass.unit &&
+    productionBatchMassUnitsMatch(batch.mass.unit, expected.mass.unit) &&
     startedAtMatches &&
     endedAtMatches
   ) {
     return null;
   }
   return `Registry production batch ${batch.id} does not match this credit batch's facility, feedstock, kind, mass, or production window. Ask support to check the registry record.`;
+}
+
+function productionBatchMassUnitsMatch(
+  actual: string,
+  expected: string,
+): boolean {
+  return (
+    actual === expected ||
+    (KILOGRAM_UNIT_ALIASES.has(actual) &&
+      KILOGRAM_UNIT_ALIASES.has(expected))
+  );
 }
 
 async function recordProductionBatchDrift(args: {
