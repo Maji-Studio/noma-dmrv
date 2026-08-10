@@ -58,6 +58,7 @@ const TIMEZONE_OPTIONS = timezones.map((zone) => ({
 }));
 
 const EVIDENCE_METHOD_LABELS: Record<ApplicationEvidenceMethod, string> = {
+  location: "Customer location",
   visual: "Visual",
   boundary: "GIS boundary",
 };

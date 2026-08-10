@@ -267,7 +267,7 @@ describe("application mutations", () => {
     }
   });
 
-  it("defaults new applications to visual evidence", async () => {
+  it("defaults new applications to customer location evidence", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
 
@@ -277,10 +277,12 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
       });
       fixture.applicationIds.push(application.id);
 
-      expect(application.evidenceMethod).toBe("visual");
+      expect(application.evidenceMethod).toBe("location");
     } finally {
       await cleanupMutationFixture(fixture);
     }

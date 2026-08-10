@@ -25,6 +25,8 @@ function applicationEvidenceMissingLabel(
   gap: ApplicationEvidenceGapDescriptor,
 ): string {
   switch (gap.kind) {
+    case "location-reference":
+      return "customer location coordinates";
     case "visual-role":
       return `geotagged ${APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[gap.role].toLowerCase()} photo`;
     case "boundary-reference":

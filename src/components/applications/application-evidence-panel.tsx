@@ -46,6 +46,12 @@ const GIS_BOUNDARY_DOC_TYPE: DocumentType = "gis_boundary";
 
 const METHOD_OPTIONS = [
   {
+    key: "location",
+    title: "Customer location",
+    description:
+      "Use the application GPS coordinates from the delivery's customer location.",
+  },
+  {
     key: "boundary",
     title: "GIS reference",
     description: "The field boundary as a GeoJSON file, drawn on a map.",
@@ -277,7 +283,7 @@ export function ApplicationEvidencePanel({
         />
       )}
 
-      {boundary ? (
+      {mode === "boundary" && (boundary ? (
         <GisReferenceSummary
           boundary={boundary}
           actions={
@@ -337,7 +343,7 @@ export function ApplicationEvidencePanel({
             className="shrink-0 text-[var(--color-text-tertiary)]"
           />
         </button>
-      )}
+      ))}
 
       <div className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
         <div className="flex items-center justify-between gap-12">
