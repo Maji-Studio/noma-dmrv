@@ -23,7 +23,7 @@ function storageRow(
     formulationName: null,
     totalStoredKg: 0,
     totalStoredWetKg: 0,
-    pendingStoredKg: 0,
+    pendingStoredWetKg: 0,
     totalConsumedKg: 0,
     totalProducedWetKg: 0,
     totalProducedDryKg: 0,
@@ -49,11 +49,10 @@ function laneStock(
     storageLocationId: "bin-1",
     feedstockIntakeDryKg: 0,
     feedstockIntakeWetKg: 0,
-    feedstockConsumedDryKg: 0,
     feedstockConsumedWetKg: 0,
     feedstockMovementDeltaKg: 0,
-    feedstockStockDryKg: 0,
-    feedstockStockWetKg: null,
+    feedstockStockWetKg: 0,
+    feedstockEstimatedDryKg: 0,
     biocharProducedKg: 0,
     biocharAllocatedKg: 0,
     biocharMovementDeltaKg: 0,
@@ -118,7 +117,7 @@ describe("formatStorageLocationSubtitle", () => {
 });
 
 describe("toStorageLocationEntityOption", () => {
-  it("converts movement-adjusted feedstock dry stock to estimated wet mass", () => {
+  it("uses wet stock as authoritative and exposes dry only as an estimate", () => {
     const option = toStorageLocationEntityOption(
       storageRow({
         type: "feedstock_bin",
@@ -126,15 +125,15 @@ describe("toStorageLocationEntityOption", () => {
         totalStoredWetKg: 3_500,
       }),
       laneStock({
-        feedstockIntakeDryKg: 2_800,
-        feedstockConsumedDryKg: 480,
-        feedstockMovementDeltaKg: 80,
-        feedstockStockDryKg: 2_400,
+        feedstockIntakeDryKg: 1_950,
+        feedstockIntakeWetKg: 3_000,
+        feedstockStockWetKg: 3_000,
+        feedstockEstimatedDryKg: 1_950,
       }),
     );
 
-    expect(option.remainingMass).toEqual({ wetKg: 3_000, dryKg: 2_400 });
-    expect(option.subtitle).toContain("2,400 kg stored");
+    expect(option.remainingMass).toEqual({ wetKg: 3_000, dryKg: 1_950 });
+    expect(option.subtitle).toContain("3,000 kg stored");
   });
 
   it("uses authoritative biochar lane stock and records dry stock", () => {

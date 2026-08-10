@@ -127,7 +127,7 @@ async function seedGeoLineage(
         id: ids.productionRunFeedstock,
         productionRunId: ids.productionRun,
         feedstockId: seededData.feedstock.id,
-        massUsedKg: 100,
+        wetMassUsedKg: 100,
       });
 
       await tx

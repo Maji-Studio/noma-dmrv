@@ -168,7 +168,7 @@ async function getStorageLocationLaneSummary(
     const stock = laneStockById.get(bin.id);
     summary[bin.type].binCount += 1;
     if (bin.type === "feedstock_bin") {
-      summary[bin.type].onHandKg += stock?.feedstockStockDryKg ?? 0;
+      summary[bin.type].onHandKg += stock?.feedstockStockWetKg ?? 0;
     } else if (bin.type === "biochar_bin") {
       summary[bin.type].onHandKg += stock?.biocharStockKg ?? 0;
     } else {

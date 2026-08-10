@@ -1017,19 +1017,19 @@ async function seedDemoData() {
           id: ids.prodFeedLink1,
           productionRunId: ids.productionRun1,
           feedstockId: ids.feedstock1,
-          massUsedKg: 3500,
+          wetMassUsedKg: 3500,
         },
         {
           id: ids.prodFeedLink2,
           productionRunId: ids.productionRun2,
           feedstockId: ids.feedstock2,
-          massUsedKg: 2500,
+          wetMassUsedKg: 2500,
         },
         {
           id: ids.prodFeedLink3,
           productionRunId: ids.productionRun3,
           feedstockId: ids.feedstock3,
-          massUsedKg: 3000,
+          wetMassUsedKg: 3000,
         },
       ]));
 

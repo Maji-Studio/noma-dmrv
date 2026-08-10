@@ -114,6 +114,7 @@ export type RemovalWorkflowStatusKind =
   | "unavailable"
   | "ready"
   | "blocked"
+  | "failed"
   | "submitting"
   | "submitted"
   | "superseded";
@@ -232,6 +233,21 @@ export function deriveRemovalWorkflowStatus({
     };
   }
 
+  if (lifecycle.kind === "rejected") {
+    const reasons =
+      enrichmentStatus === "available" && readiness?.state === "blocked"
+        ? readiness.reasons
+        : ["Review submission history, then select Review & submit."];
+    return {
+      kind: "failed",
+      value: "failed",
+      label: "Submission failed",
+      reasons,
+      isActionable: true,
+      canRetry: false,
+    };
+  }
+
   if (enrichmentStatus === "loading") {
     return {
       kind: "checking",
@@ -259,7 +275,7 @@ export function deriveRemovalWorkflowStatus({
       return {
         kind: "ready",
         value: "ready",
-        label: local === "rejected" ? "Ready to resubmit" : "Ready to submit",
+        label: "Ready to submit",
         reasons: [],
         isActionable: true,
         canRetry: false,

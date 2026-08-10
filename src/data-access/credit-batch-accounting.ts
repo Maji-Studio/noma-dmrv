@@ -68,7 +68,7 @@ export interface BatchLineageFeedstockFact {
   status: string | null;
   deliveryDate: Date | null;
   massDryKg: number | null;
-  massUsedKg: number | null;
+  wetMassUsedKg: number | null;
   eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
   supplierName: string | null;
   feedstockTypeName: string | null;
@@ -99,7 +99,9 @@ export interface BatchLineageApplicationFact {
   status: string | null;
   applicationDate: Date;
   fieldIdentifier: string | null;
-  evidenceMethod: "visual" | "boundary";
+  evidenceMethod: "location" | "boundary" | "visual";
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
   gisBoundary: GisBoundary | null;
   biocharAppliedTons: number;
   biocharAppliedDryTons: number | null;
@@ -286,6 +288,8 @@ async function loadLineageWithExecutor(
           applicationDate: applications.applicationDate,
           fieldIdentifier: applications.fieldIdentifier,
           evidenceMethod: applications.evidenceMethod,
+          gpsLatitude: applications.gpsLatitude,
+          gpsLongitude: applications.gpsLongitude,
           gisBoundary: applications.gisBoundary,
           biocharAppliedTons: applications.biocharAppliedTons,
           biocharAppliedDryTons: applications.biocharAppliedDryTons,
@@ -405,7 +409,7 @@ async function loadLineageWithExecutor(
           status: feedstocks.status,
           deliveryDate: feedstocks.deliveryDate,
           massDryKg: feedstocks.massDryKg,
-          massUsedKg: productionRunFeedstocks.massUsedKg,
+          wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
           eligibilityStatus: feedstocks.eligibilityStatus,
           supplierName: suppliers.name,
           feedstockTypeName: feedstockTypes.name,
@@ -481,6 +485,8 @@ async function loadLineageWithExecutor(
       id: row.id, code: row.code, status: row.status,
       applicationDate: row.applicationDate, fieldIdentifier: row.fieldIdentifier,
       evidenceMethod: row.evidenceMethod,
+      gpsLatitude: row.gpsLatitude,
+      gpsLongitude: row.gpsLongitude,
       gisBoundary: row.gisBoundary,
       biocharAppliedTons: row.biocharAppliedTons,
       biocharAppliedDryTons: row.biocharAppliedDryTons,

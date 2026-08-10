@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { DocumentRow } from "@/data-access/documents";
+import type { ApplicationEvidenceMethod } from "@/schemas/applications";
 
 const documentsForEntity = vi.fn();
 
@@ -54,7 +55,10 @@ function boundaryDoc(logbookEvidenceType: string | null): DocumentRow {
   } as unknown as DocumentRow;
 }
 
-function renderPanel(docs: DocumentRow[]): string {
+function renderPanel(
+  docs: DocumentRow[],
+  mode: ApplicationEvidenceMethod = "location",
+): string {
   documentsForEntity.mockReturnValue({
     data: docs,
     isLoading: false,
@@ -64,7 +68,7 @@ function renderPanel(docs: DocumentRow[]): string {
     <QueryClientProvider client={new QueryClient()}>
       <ApplicationEvidencePanel
         applicationId={APPLICATION_ID}
-        mode="boundary"
+        mode={mode}
         boundary={null}
       />
     </QueryClientProvider>,
@@ -72,6 +76,27 @@ function renderPanel(docs: DocumentRow[]): string {
 }
 
 describe("ApplicationEvidencePanel", () => {
+  it("shows customer location first and selects it by default", () => {
+    const html = renderPanel([]);
+
+    expect(html.indexOf("Customer location")).toBeLessThan(
+      html.indexOf("GIS reference"),
+    );
+    expect(html.indexOf("GIS reference")).toBeLessThan(
+      html.indexOf("Visual evidence"),
+    );
+    const selectedCard = html.match(
+      /<button[^>]*role="radio"[^>]*aria-checked="true"[^>]*>[\s\S]*?<\/button>/,
+    )?.[0];
+    expect(selectedCard).toContain("Customer location");
+    expect(html).not.toContain("Add GIS reference");
+  });
+
+  it("only shows the GIS editor for GIS reference evidence", () => {
+    expect(renderPanel([], "boundary")).toContain("Add GIS reference");
+    expect(renderPanel([], "location")).not.toContain("Add GIS reference");
+  });
+
   it("keeps visual evidence visible but locked", () => {
     const html = renderPanel([]);
 
@@ -83,7 +108,7 @@ describe("ApplicationEvidencePanel", () => {
   });
 
   it("keeps mass records without showing the obsolete type taxonomy", () => {
-    const html = renderPanel([boundaryDoc("affidavit")]);
+    const html = renderPanel([boundaryDoc("affidavit")], "boundary");
 
     expect(html).toContain("Application mass records");
     expect(html).toContain("logbook.pdf");

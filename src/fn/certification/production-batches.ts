@@ -39,6 +39,7 @@ import {
   type ProductionBatchRegistryInput,
 } from "@/data-access/certifier-production-batches";
 import type { OrgContext } from "@/lib/auth/server";
+import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import { SafeError } from "@/lib/errors";
 import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import {
@@ -56,7 +57,11 @@ import {
   creditBatchIdsForMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
-import { performRegistryCreate, supplierRefLookup } from "./registry-create";
+import {
+  performRegistryCreate,
+  supplierRefLookup,
+  type RegistryExternalMutationReporter,
+} from "./registry-create";
 import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
@@ -144,8 +149,11 @@ export function buildProductionBatchSubmissions(
 export interface EnsureProductionBatchesArgs {
   orgCtx: OrgContext;
   removalId: string;
-  /** Claimed ledger row — rejected by `performRegistryCreate` on failure. */
+  /** Claimed ledger row used for registry audit and recovery. */
   submissionRow: { id: string };
+  expectedLockedAt?: Date;
+  deferRejectionToAttempt?: boolean;
+  onExternalMutation?: RegistryExternalMutationReporter;
   creditBatchIds: string[];
   log: Logger;
 }
@@ -213,6 +221,8 @@ export async function ensureProductionBatchesForCreditBatches(
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: args.removalId,
       submissionRowId: args.submissionRow.id,
+      expectedLockedAt: args.expectedLockedAt,
+      deferRejectionToAttempt: args.deferRejectionToAttempt,
       operation: `production-batch:create:${submission.creditBatchId}`,
       requestPayload: submission.body,
       supplierRefId: submission.supplierRefId,
@@ -264,6 +274,7 @@ export async function ensureProductionBatchesForCreditBatches(
         }
       },
       failureMessagePrefix: `Registry production batch for credit batch ${submission.creditBatchCode} could not be created`,
+      onExternalMutation: args.onExternalMutation,
       log: args.log,
     });
     registeredByCreditBatchId.set(submission.creditBatchId, externalId);
@@ -282,6 +293,9 @@ export async function bindProductionBatchesToMeasurementSamples(args: {
   orgCtx: OrgContext;
   removalId: string;
   submissionRow: { id: string };
+  expectedLockedAt?: Date;
+  deferRejectionToAttempt?: boolean;
+  onExternalMutation?: RegistryExternalMutationReporter;
   submissions: DurabilityMeasurementSampleSubmission[];
   log: Logger;
 }): Promise<DurabilityMeasurementSampleSubmission[]> {
@@ -289,6 +303,9 @@ export async function bindProductionBatchesToMeasurementSamples(args: {
     orgCtx: args.orgCtx,
     removalId: args.removalId,
     submissionRow: args.submissionRow,
+    expectedLockedAt: args.expectedLockedAt,
+    deferRejectionToAttempt: args.deferRejectionToAttempt,
+    onExternalMutation: args.onExternalMutation,
     creditBatchIds: creditBatchIdsForMeasurementSamples(args.submissions),
     log: args.log,
   });
@@ -332,12 +349,21 @@ function productionBatchMismatchMessage(
   const sameFeedstocks =
     [...batch.feedstock_type_ids].sort().join("\u0000") ===
     [...expected.feedstock_type_ids].sort().join("\u0000");
+  const massDifferenceKg = Math.abs(
+    batch.mass.magnitude - expected.mass.magnitude,
+  );
+  const floatingPointSlackKg =
+    Number.EPSILON *
+    (Math.abs(batch.mass.magnitude) + Math.abs(expected.mass.magnitude));
+  const massMagnitudeMatches =
+    massDifferenceKg <=
+    MASS_COMPARISON_EPSILON_KG + floatingPointSlackKg;
   if (
     batch.supplier_reference_id === expected.supplier_reference_id &&
     batch.facility_id === expected.facility_id &&
     sameFeedstocks &&
     batch.kind === expected.kind &&
-    batch.mass.magnitude === expected.mass.magnitude &&
+    massMagnitudeMatches &&
     batch.mass.unit === expected.mass.unit &&
     startedAtMatches &&
     endedAtMatches

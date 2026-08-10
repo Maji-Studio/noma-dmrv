@@ -14,7 +14,6 @@ import {
   facilities,
   reactors,
   storageLocations,
-  feedstocks,
   feedstockTypes,
   operators,
   creditBatches,
@@ -62,6 +61,7 @@ import {
   type ProductionRunMutationOptions,
 } from "./future-time";
 import { getProductionRunDependentProduct } from "./product-dependencies";
+import { allocateFeedstockWetMass } from "../feedstock-wet-stock";
 
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
@@ -81,43 +81,6 @@ export class ProductionRunDependencyError extends SafeError {
     this.name = "ProductionRunDependencyError";
     this.conflict = conflict;
   }
-}
-
-/**
- * Proportionally allocate total mass across feedstock batches stored in a bin.
- * Mass is split by each batch's massDryKg relative to the bin total.
- * Returns array of { feedstockId, massUsedKg } for M:M insertion.
- */
-async function allocateFeedstockMass(
-  ctx: OrgContext,
-  storageLocationId: string,
-  totalMassKg: number,
-  trx: Pick<typeof db, "select">
-): Promise<Array<{ feedstockId: string; massUsedKg: number }>> {
-  const batchesInBin = await trx
-    .select({
-      id: feedstocks.id,
-      massDryKg: feedstocks.massDryKg,
-    })
-    .from(feedstocks)
-    .where(and(eq(feedstocks.storageLocationId, storageLocationId), eq(feedstocks.organizationId, ctx.organizationId)));
-
-  if (batchesInBin.length === 0) {
-    throw new SafeError("Selected feedstock bin has no feedstock batches");
-  }
-
-  const totalDryMass = batchesInBin.reduce((s, b) => s + (b.massDryKg ?? 0), 0);
-
-  if (totalDryMass === 0) {
-    throw new SafeError(
-      "The feedstock batches in this bin have no recorded dry mass. Record their weights before allocating feedstock."
-    );
-  }
-
-  return batchesInBin.map((b) => ({
-    feedstockId: b.id,
-    massUsedKg: ((b.massDryKg ?? 0) / totalDryMass) * totalMassKg,
-  }));
 }
 
 /**
@@ -330,27 +293,34 @@ export async function createProductionRun(
       .returning();
 
     // Auto-populate M:M feedstock relationships from bin contents
-    let consumedFeedstockKg = 0;
-    if (data.feedstockStorageLocationId && computedDryMass) {
+    let consumedFeedstockWetKg = 0;
+    if (
+      data.feedstockStorageLocationId &&
+      data.feedstockWetMassKg != null &&
+      data.feedstockWetMassKg > 0
+    ) {
       await assertProductionRunCreateFeedstockDrawWithinStock(ctx, tx, {
         storageLocationId: data.feedstockStorageLocationId,
-        requestedDryKg: computedDryMass,
+        requestedWetKg: data.feedstockWetMassKg,
       });
-      const allocated = await allocateFeedstockMass(
+      const allocated = await allocateFeedstockWetMass(
         ctx,
+        tx,
         data.feedstockStorageLocationId,
-        computedDryMass,
-        tx
+        data.feedstockWetMassKg,
       );
       await tx.insert(productionRunFeedstocks).values(
         allocated.map((a) => ({
           organizationId: ctx.organizationId,
           productionRunId: created.id,
           feedstockId: a.feedstockId,
-          massUsedKg: a.massUsedKg,
+          wetMassUsedKg: a.wetMassUsedKg,
         }))
       );
-      consumedFeedstockKg = allocated.reduce((total, item) => total + item.massUsedKg, 0);
+      consumedFeedstockWetKg = allocated.reduce(
+        (total, item) => total + item.wetMassUsedKg,
+        0,
+      );
     }
 
     // Unfiltered: window + dry-mass are eligible here but always pre-caught by
@@ -365,7 +335,7 @@ export async function createProductionRun(
       biocharMoisturePercent: data.biocharMoisturePercent,
       feedstockWetMassKg: data.feedstockWetMassKg,
       feedstockMoisturePercent: data.feedstockMoisturePercent,
-      feedstock: { basis: "consumed-mass", consumedFeedstockKg },
+      feedstock: { basis: "consumed-mass", consumedFeedstockWetKg },
       cancellationReason: data.cancellationReason ?? null,
     });
 
@@ -777,30 +747,36 @@ export async function updateProductionRun(
         .delete(productionRunFeedstocks)
         .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
-      const dryMassKg =
-        (transactionUpdateData.feedstockMassDryKg as number | null) ??
-        locked.feedstockMassDryKg;
+      const wetMassKg =
+        data.feedstockWetMassKg !== undefined
+          ? data.feedstockWetMassKg
+          : locked.feedstockWetMassKg;
 
-      if (effectiveFeedstockStorageId && dryMassKg) {
+      if (effectiveFeedstockStorageId && wetMassKg && wetMassKg > 0) {
         await assertProductionRunUpdateFeedstockDrawWithinStock(ctx, tx, {
           productionRunId,
           storageLocationId: effectiveFeedstockStorageId,
-          requestedDryKg: dryMassKg,
+          requestedWetKg: wetMassKg,
         });
-        const allocated = await allocateFeedstockMass(ctx, effectiveFeedstockStorageId, dryMassKg, tx);
+        const allocated = await allocateFeedstockWetMass(
+          ctx,
+          tx,
+          effectiveFeedstockStorageId,
+          wetMassKg,
+        );
         await tx.insert(productionRunFeedstocks).values(
           allocated.map((a) => ({
             organizationId: ctx.organizationId,
             productionRunId,
             feedstockId: a.feedstockId,
-            massUsedKg: a.massUsedKg,
+            wetMassUsedKg: a.wetMassUsedKg,
           }))
         );
       }
     }
 
     const [consumption] = await tx
-      .select({ total: sum(productionRunFeedstocks.massUsedKg) })
+      .select({ total: sum(productionRunFeedstocks.wetMassUsedKg) })
       .from(productionRunFeedstocks)
       .where(and(
         eq(productionRunFeedstocks.productionRunId, productionRunId),
@@ -831,7 +807,7 @@ export async function updateProductionRun(
           : locked.feedstockMoisturePercent,
       feedstock: {
         basis: "consumed-mass",
-        consumedFeedstockKg: Number(consumption?.total ?? 0),
+        consumedFeedstockWetKg: Number(consumption?.total ?? 0),
       },
       cancellationReason: lockedTargetCancellationReason,
     });

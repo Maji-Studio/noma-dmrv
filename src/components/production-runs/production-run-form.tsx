@@ -39,7 +39,6 @@ import {
 } from "@/schemas/production-runs";
 import { ProcessFlowPreview } from "./production-run-process-flow-preview";
 import {
-  feedstockDryStockOverdrawMessage,
   productionRunMassBalanceFeedback,
 } from "./production-run-mass-balance";
 import {
@@ -53,6 +52,7 @@ import type { StorageLocationType } from "@/schemas/storage-locations";
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import {
+  binStockOverdrawInlineMessage,
   binStockOverdrawMessage,
   isStockOverdraw,
 } from "@/lib/stock-overdraw";
@@ -225,14 +225,13 @@ export function ProductionRunForm({
       : null,
   );
   const feedstockStockError =
-    previewDryMass !== null &&
-    typeof watchMoisture === "number" &&
+    typeof watchWetMass === "number" &&
     feedstockAvailability &&
     feedstockAvailability.availableKg !== null &&
-    isStockOverdraw(previewDryMass, feedstockAvailability.availableKg)
-      ? feedstockDryStockOverdrawMessage(
+    isStockOverdraw(watchWetMass, feedstockAvailability.availableKg)
+      ? binStockOverdrawInlineMessage(
+          "feedstock",
           feedstockAvailability.availableKg,
-          watchMoisture,
         )
       : undefined;
   const feedstockFieldFingerprint = [

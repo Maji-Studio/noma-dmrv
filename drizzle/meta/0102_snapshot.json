@@ -1,5 +1,5 @@
 {
-  "id": "4aadffb1-4671-4e5f-80d0-3f33c1ee9362",
+  "id": "4b4d1ad9-5200-4960-9d0e-82b0be3d4d5a",
   "prevId": "8f15c586-738e-44d4-aaa0-43347864bfec",
   "version": "7",
   "dialect": "postgresql",
@@ -103,7 +103,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'visual'"
+          "default": "'location'"
         },
         "gis_boundary": {
           "name": "gis_boundary",
@@ -145,35 +145,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "applications_organization_id_delivery_id_application_date_idx": {
-          "name": "applications_organization_id_delivery_id_application_date_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "delivery_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "application_date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "applications_organization_id_organizations_id_fk": {
           "name": "applications_organization_id_organizations_id_fk",
@@ -6775,12 +6747,6 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            },
-            {
-              "expression": "production_run_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
             }
           ],
           "isUnique": false,
@@ -7852,36 +7818,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "samples_organization_id_credit_batch_id_sampling_time_idx": {
-          "name": "samples_organization_id_credit_batch_id_sampling_time_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "credit_batch_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "sampling_time",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"samples\".\"credit_batch_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "samples_organization_id_organizations_id_fk": {
           "name": "samples_organization_id_organizations_id_fk",
@@ -8166,12 +8103,6 @@
           "columns": [
             {
               "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "production_run_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -8910,35 +8841,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "deliveries_organization_id_order_id_delivery_date_idx": {
-          "name": "deliveries_organization_id_order_id_delivery_date_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "order_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "delivery_date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "deliveries_organization_id_organizations_id_fk": {
           "name": "deliveries_organization_id_organizations_id_fk",
@@ -9882,7 +9785,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'visual'"
+          "default": "'location'"
         },
         "default_packaging": {
           "name": "default_packaging",
@@ -9943,8 +9846,9 @@
       "name": "application_evidence_method",
       "schema": "public",
       "values": [
-        "visual",
-        "boundary"
+        "location",
+        "boundary",
+        "visual"
       ]
     },
     "public.application_method": {

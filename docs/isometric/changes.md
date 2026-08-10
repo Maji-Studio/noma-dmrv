@@ -17,6 +17,38 @@ reconciliation, workspace eligibility, and grouped Removal readiness are
 archived in
 [`docs/archive/2026-08-09-certification-review-corrections.md`](../archive/2026-08-09-certification-review-corrections.md).
 
+## Feedstock inventory mass basis
+
+Feedstock-bin stock, withdrawals, losses, and reconciliation now use wet,
+as-received kilograms as their authoritative physical inventory unit.
+`production_run_feedstocks.wet_mass_used_kg` records that wet allocation and
+replaces the former ambiguously named `mass_used_kg` column. Production runs
+continue to derive dry feedstock mass from their recorded wet mass and moisture
+for process calculations and certification inputs. Certification lineage uses
+the wet allocation shares to select contributing intake batches without
+changing the dry-mass values submitted for protocol calculations.
+
+## 2026-08-10 (Removal submission recovery safety)
+
+Definitive registry refusals reject and unlock only the exact Removal draft
+claimed by an attempt that made no possible or confirmed registry write. Any
+uncertain or confirmed write keeps the draft locked for reconciliation,
+including failed lookups and local persistence failures after a successful
+create. Production Batch dry-mass comparisons keep the explicit 1 g tolerance.
+
+## 2026-08-10 (customer location application evidence)
+
+Application records now support `location` as the first and default evidence
+method for identifying where biochar was applied under Agricultural Soils v1.1.
+The location path uses the application's complete latitude/longitude pair,
+normally derived from the selected delivery customer's saved location. GIS
+boundary evidence remains available as an alternative, while visual evidence
+remains unavailable in the creation UI.
+
+This changes noma's local application evidence enum and defaults; it does not
+add or change an Isometric API operation. Application evidence-health counts
+remain informational and do not block certification submission.
+
 ## Live submission progress
 
 Removal and GHG Statement submission dialogs now show progress from noma's

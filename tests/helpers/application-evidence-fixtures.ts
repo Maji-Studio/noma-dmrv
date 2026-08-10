@@ -18,6 +18,7 @@ export const NO_GAPS = 0;
 export const ALL_VISUAL_ROLE_GAPS = APPLICATION_VISUAL_EVIDENCE_ROLES.length; // 3
 export const ONE_VISUAL_ROLE_SATISFIED_GAPS = ALL_VISUAL_ROLE_GAPS - 1; // 2
 export const BOUNDARY_REFERENCE_GAPS = 1;
+export const LOCATION_REFERENCE_GAPS = 1;
 
 export const TEST_GIS_BOUNDARY: GisBoundary = {
   version: 1,
@@ -68,7 +69,9 @@ export interface ApplicationEvidenceFixtureDocument {
 
 export interface ApplicationEvidenceFixture {
   key: string;
-  evidenceMethod: "visual" | "boundary";
+  evidenceMethod: "location" | "boundary" | "visual";
+  gpsLatitude: number | null;
+  gpsLongitude: number | null;
   gisBoundary: GisBoundary | null;
   docs: ApplicationEvidenceFixtureDocument[];
   expectedGapCount: number;
@@ -76,10 +79,40 @@ export interface ApplicationEvidenceFixture {
 
 /** One application per DB-representable branch of the evidence rule. */
 export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
+  // --- Customer location: a complete application-site coordinate pair ---
+  {
+    key: "location-complete",
+    evidenceMethod: "location",
+    gpsLatitude: -3.245,
+    gpsLongitude: 37.425,
+    gisBoundary: null,
+    docs: [],
+    expectedGapCount: NO_GAPS,
+  },
+  {
+    key: "location-missing",
+    evidenceMethod: "location",
+    gpsLatitude: null,
+    gpsLongitude: null,
+    gisBoundary: null,
+    docs: [],
+    expectedGapCount: LOCATION_REFERENCE_GAPS,
+  },
+  {
+    key: "location-incomplete-pair",
+    evidenceMethod: "location",
+    gpsLatitude: -3.245,
+    gpsLongitude: null,
+    gisBoundary: null,
+    docs: [],
+    expectedGapCount: LOCATION_REFERENCE_GAPS,
+  },
   // --- Visual method (§8.5.1): all three geotagged roles required ---
   {
     key: "visual-all-roles",
     evidenceMethod: "visual",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: null,
     docs: APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => ({
       documentType: "photo" as const,
@@ -90,6 +123,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
   {
     key: "visual-one-role",
     evidenceMethod: "visual",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: null,
     docs: [
       {
@@ -102,6 +137,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
   {
     key: "visual-none",
     evidenceMethod: "visual",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: null,
     docs: [],
     expectedGapCount: ALL_VISUAL_ROLE_GAPS,
@@ -110,6 +147,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     // A photo whose geotag is absent must not satisfy its role.
     key: "visual-geotag-missing",
     evidenceMethod: "visual",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: null,
     docs: [
       {
@@ -123,6 +162,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     // A geotagged photo that has not finished uploading must not count.
     key: "visual-pending-upload",
     evidenceMethod: "visual",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: null,
     docs: [
       {
@@ -137,6 +178,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
   {
     key: "boundary-complete-weighbridge",
     evidenceMethod: "boundary",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: TEST_GIS_BOUNDARY,
     docs: [{ documentType: "weighbridge_ticket", metadata: {} }],
     expectedGapCount: NO_GAPS,
@@ -144,6 +187,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
   {
     key: "boundary-complete-affidavit",
     evidenceMethod: "boundary",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: TEST_GIS_BOUNDARY,
     docs: [{ documentType: "affidavit", metadata: {} }],
     expectedGapCount: NO_GAPS,
@@ -153,6 +198,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     // cases pin that: the GIS reference alone decides the outcome.
     key: "boundary-complete-typed-pdf",
     evidenceMethod: "boundary",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: TEST_GIS_BOUNDARY,
     docs: [{ documentType: "pdf", metadata: { logbookEvidenceType: "inventory" } }],
     expectedGapCount: NO_GAPS,
@@ -160,6 +207,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
   {
     key: "boundary-untyped-pdf",
     evidenceMethod: "boundary",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: TEST_GIS_BOUNDARY,
     docs: [{ documentType: "pdf", metadata: {} }],
     expectedGapCount: NO_GAPS,
@@ -168,6 +217,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
     // A missing GIS reference is incomplete even with a retained record.
     key: "boundary-missing-reference",
     evidenceMethod: "boundary",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: null,
     docs: [{ documentType: "affidavit", metadata: {} }],
     expectedGapCount: BOUNDARY_REFERENCE_GAPS,
@@ -175,6 +226,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
   {
     key: "boundary-ref-no-logbook",
     evidenceMethod: "boundary",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: TEST_GIS_BOUNDARY,
     docs: [],
     expectedGapCount: NO_GAPS,
@@ -182,6 +235,8 @@ export const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
   {
     key: "boundary-none",
     evidenceMethod: "boundary",
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: null,
     docs: [],
     expectedGapCount: BOUNDARY_REFERENCE_GAPS,
@@ -202,6 +257,8 @@ export const NULLISH_EVIDENCE_METHOD_FIXTURES: NullishEvidenceMethodFixture[] = 
   {
     key: "null-method-defaults-to-visual",
     evidenceMethod: null,
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: null,
     docs: [],
     expectedGapCount: ALL_VISUAL_ROLE_GAPS,
@@ -209,6 +266,8 @@ export const NULLISH_EVIDENCE_METHOD_FIXTURES: NullishEvidenceMethodFixture[] = 
   {
     key: "undefined-method-defaults-to-visual",
     evidenceMethod: undefined,
+    gpsLatitude: null,
+    gpsLongitude: null,
     gisBoundary: null,
     docs: [],
     expectedGapCount: ALL_VISUAL_ROLE_GAPS,
