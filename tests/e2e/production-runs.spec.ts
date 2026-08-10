@@ -408,7 +408,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     const moisture = dialog.locator(
       'input[name="feedstockMoisturePercent"]',
     );
-    await wetMass.fill("5000");
+    await wetMass.fill("50");
     await moisture.focus();
 
     await expect(dialog.locator("#feedstockWetMassKg-error")).toHaveCount(0);

@@ -492,11 +492,13 @@ test.describe("updateProductionRun feedstock guard", () => {
     });
     await editRunByCode(page, runCode, "feedstockWetMassKg");
     await page.fill('input[name="feedstockWetMassKg"]', "110");
-    await saveEdit(page);
 
     const error = page
       .locator('[role="dialog"]')
       .getByText(feedstockOverdrawText);
+    await expect(error).toBeVisible({ timeout: 10000 });
+    await saveEdit(page);
+
     await expect(error).toBeVisible({
       timeout: 10000,
     });
