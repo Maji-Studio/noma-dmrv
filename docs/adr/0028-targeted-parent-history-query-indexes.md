@@ -18,7 +18,8 @@ and sorts.
   indexes with `production_run_id`, retaining `organization_id` as the leading
   tenant key.
 - Name each composite index for every indexed key so schema inspection exposes
-  its intended coverage.
+  its intended coverage; abbreviate `organization_id` as `org` where the full
+  name would exceed PostgreSQL's 63-byte identifier limit.
 
 ## Consequences
 

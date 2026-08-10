@@ -1,5 +1,5 @@
 {
-  "id": "4eb2ee40-aa68-4920-a3ac-6eada2106153",
+  "id": "c16d0fe6-2493-41f2-80a7-301a5d642345",
   "prevId": "98f911f8-3a51-4c1f-9e0f-88e91c3d3a0f",
   "version": "7",
   "dialect": "postgresql",
@@ -8161,8 +8161,8 @@
         }
       },
       "indexes": {
-        "biochar_product_source_allocations_organization_id_production_run_id_idx": {
-          "name": "biochar_product_source_allocations_organization_id_production_run_id_idx",
+        "biochar_product_source_allocations_org_production_run_idx": {
+          "name": "biochar_product_source_allocations_org_production_run_idx",
           "columns": [
             {
               "expression": "organization_id",
