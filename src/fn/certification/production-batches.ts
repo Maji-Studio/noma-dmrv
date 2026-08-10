@@ -225,7 +225,8 @@ export async function ensureProductionBatchesForCreditBatches(
       resumed: true,
       create: async () => {
         const batch = await createProductionBatch(client, submission.body);
-        assertProductionBatchSupplierReference(batch, submission.supplierRefId);
+        const mismatch = productionBatchMismatchMessage(batch, submission.body);
+        if (mismatch) throw new SafeError(mismatch);
         return batch.id;
       },
       reconcile: async () => {
@@ -234,10 +235,11 @@ export async function ensureProductionBatchesForCreditBatches(
           submission.supplierRefId,
         );
         if (batch) {
-          assertProductionBatchSupplierReference(
+          const mismatch = productionBatchMismatchMessage(
             batch,
-            submission.supplierRefId,
+            submission.body,
           );
+          if (mismatch) return { found: "refused", message: mismatch };
         }
         return supplierRefLookup(
           batch ? { found: true, externalId: batch.id } : { found: false },
@@ -317,14 +319,32 @@ function tryBuildProductionBatchSubmission(
   }
 }
 
-function assertProductionBatchSupplierReference(
+function productionBatchMismatchMessage(
   batch: IsometricProductionBatch,
-  expected: string,
-): void {
-  if (batch.supplier_reference_id === expected) return;
-  throw new SafeError(
-    `Registry production batch ${batch.id} does not match submission ${expected}. Ask support to check the registry record.`,
-  );
+  expected: CreateProductionBatchRequest,
+): string | null {
+  const startedAtMatches =
+    Number.isFinite(Date.parse(batch.started_at)) &&
+    Date.parse(batch.started_at) === Date.parse(expected.started_at);
+  const endedAtMatches =
+    Number.isFinite(Date.parse(batch.ended_at)) &&
+    Date.parse(batch.ended_at) === Date.parse(expected.ended_at);
+  const sameFeedstocks =
+    [...batch.feedstock_type_ids].sort().join("\u0000") ===
+    [...expected.feedstock_type_ids].sort().join("\u0000");
+  if (
+    batch.supplier_reference_id === expected.supplier_reference_id &&
+    batch.facility_id === expected.facility_id &&
+    sameFeedstocks &&
+    batch.kind === expected.kind &&
+    batch.mass.magnitude === expected.mass.magnitude &&
+    batch.mass.unit === expected.mass.unit &&
+    startedAtMatches &&
+    endedAtMatches
+  ) {
+    return null;
+  }
+  return `Registry production batch ${batch.id} does not match this credit batch's facility, feedstock, kind, mass, or production window. Ask support to check the registry record.`;
 }
 
 async function recordProductionBatchDrift(args: {

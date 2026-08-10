@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   certifierGhgStatementReports,
@@ -23,6 +24,11 @@ export interface PreparedReportArtifact {
   report: GhgStatementReportRow;
   document: typeof documents.$inferSelect;
 }
+
+const currentGhgStatementReports = alias(
+  certifierGhgStatementReports,
+  "current_report",
+);
 
 export async function listGhgStatementReports(
   ctx: OrgContext,
@@ -90,10 +96,10 @@ export async function getApprovedGhgStatementReport(
         // approved row is only submittable while it is still the statement's
         // latest version.
         sql`${certifierGhgStatementReports.version} = (
-          select max(current_report.version)
-          from certifier_ghg_statement_reports current_report
-          where current_report.ghg_statement_id = ${args.ghgStatementId}
-            and current_report.organization_id = ${ctx.organizationId}
+          select max(${currentGhgStatementReports.version})
+          from ${certifierGhgStatementReports} as ${currentGhgStatementReports}
+          where ${currentGhgStatementReports.ghgStatementId} = ${args.ghgStatementId}
+            and ${currentGhgStatementReports.organizationId} = ${ctx.organizationId}
         )`,
         eq(
           certifierGhgStatementReports.organizationId,

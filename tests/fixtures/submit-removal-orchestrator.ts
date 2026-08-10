@@ -788,7 +788,7 @@ beforeEach(() => {
   isometricClientFake.post.mockImplementation(
     async (_path: string, body: { supplier_reference_id: string }) => ({
       id: EXTERNAL_PRODUCTION_BATCH_ID,
-      supplier_reference_id: body.supplier_reference_id,
+      ...body,
     }),
   );
 });
