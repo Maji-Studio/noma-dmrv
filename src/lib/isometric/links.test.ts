@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { isometricRegistry, normalizeRegistryMinorVersion } from "./links";
 
+const FACILITY_PROJECT_ID = "prj_1K9YJ33RKSBX9FFF";
+const FACILITY_ID = "fcl_1KST05ZW3SBXZCM7";
+const SANDBOX_FACILITY_URL =
+  "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7";
+const PRODUCTION_FACILITY_URL =
+  "https://registry.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7";
+
 describe("isometricRegistry.removal — Certify deep link (drift guard)", () => {
   // The exact sandbox URL verified against a live Certify removal on 2026-06-04
   // (see docs/open-questions.md). This assertion is the drift guard: if the
@@ -79,24 +86,20 @@ describe("isometricRegistry.facility — project-nested Certify link", () => {
     expect(
       isometricRegistry.facility({
         environment: "sandbox",
-        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
-        externalFacilityId: "fcl_1KST05ZW3SBXZCM7",
+        externalProjectId: FACILITY_PROJECT_ID,
+        externalFacilityId: FACILITY_ID,
       }),
-    ).toBe(
-      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7",
-    );
+    ).toBe(SANDBOX_FACILITY_URL);
   });
 
   it("builds the production Certify facility URL", () => {
     expect(
       isometricRegistry.facility({
         environment: "production",
-        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
-        externalFacilityId: "fcl_1KST05ZW3SBXZCM7",
+        externalProjectId: FACILITY_PROJECT_ID,
+        externalFacilityId: FACILITY_ID,
       }),
-    ).toBe(
-      "https://registry.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7",
-    );
+    ).toBe(PRODUCTION_FACILITY_URL);
   });
 
   it("url-encodes both ids", () => {
