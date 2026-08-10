@@ -1,6 +1,9 @@
 import { SafeError } from "@/lib/errors";
+import {
+  getMetadataValue,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/certification/submission-metadata";
 import type { GhgStatement } from "../ghg-statements";
-import { getMetadataValue, SUBMISSION_METADATA_KEYS } from "./submission-metadata";
 
 export type GhgSubmitMode =
   | "submit"

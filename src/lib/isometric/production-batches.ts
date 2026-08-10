@@ -40,8 +40,27 @@ const DAY_END_SUFFIX = "T23:59:59.999Z";
 /** Unit submitted for `M_biochar (DM)` — kilograms, per the approved mapping. */
 export const PRODUCTION_BATCH_MASS_UNIT = "kg";
 
+// Verified from a live Certify production-batch response on 2026-08-10:
+// Isometric canonicalizes the submitted `kg` unit to `kilogram` on readback.
+const KILOGRAM_UNIT_ALIASES = new Set([
+  PRODUCTION_BATCH_MASS_UNIT,
+  "kilogram",
+]);
+
 /** The only `ProductionBatchKind` the registry defines for this protocol. */
 export const PRODUCTION_BATCH_KIND = "biochar" as const;
+
+/** Compare the request and readback spellings without converting mass units. */
+export function productionBatchMassUnitsMatch(
+  actual: string,
+  expected: string,
+): boolean {
+  return (
+    actual === expected ||
+    (KILOGRAM_UNIT_ALIASES.has(actual) &&
+      KILOGRAM_UNIT_ALIASES.has(expected))
+  );
+}
 
 /**
  * Stable, noma-controlled production-batch supplier reference, keyed on the

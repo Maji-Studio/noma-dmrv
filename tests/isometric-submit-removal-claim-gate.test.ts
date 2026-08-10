@@ -15,6 +15,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "./helpers/test-org";
 import * as ledger from "@/data-access/certification";
+import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import * as isometric from "@/lib/isometric";
@@ -158,13 +159,14 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
     await expect(
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
     ).rejects.toThrow(/already belong to another Removal/);
-    // Blocked AFTER the draft claim (the locked draft row exists, safe —
-    // pre-flight re-fires on retry once the lock TTL passes) but BEFORE any
-    // registry POST or ledger flip.
+    // Blocked AFTER the draft claim but BEFORE any registry POST. With no
+    // external mutation to reconcile, the claimed row records a failed attempt
+    // and unlocks instead of looking perpetually in progress.
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(createGhgEntryFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(1);
-    expect(storedRows[0].status).toBe("draft");
+    expect(storedRows[0].status).toBe("rejected");
+    expect(ledger.markSubmissionRejected).toHaveBeenCalled();
     expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
   });
 
@@ -284,5 +286,53 @@ describe("submitRemoval — stale-revision resume gate (ADR 0020)", () => {
     });
     expect(retried.version).toBe(2);
     expect(createGhgEntryFake).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves an interrupted stale-revision draft when registry mutation was confirmed", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    const staleRow = newLedgerRow({
+      provider: "isometric",
+      submissionType: "removal",
+      localEntityType: "removal",
+      localEntityId: REMOVAL_ID,
+      version: 1,
+      payloadSnapshot: { __mappingRevision: "rev-obsolete" },
+      payloadHash: "hash-from-old-accounting",
+      metadata: {
+        lastAttemptOutcome: "interrupted",
+        externalMutation: "confirmed",
+      },
+    });
+    staleRow.lockedAt = new Date(0);
+    storedRows.push(staleRow);
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/ask support to reconcile/i);
+
+    expect(staleRow.status).toBe("draft");
+    expect(staleRow.metadata).toMatchObject({
+      lastAttemptOutcome: "interrupted",
+      externalMutation: "confirmed",
+    });
+    expect(ledger.retireStaleSubmissionDraft).not.toHaveBeenCalled();
+    expect(ledgerClaim.markSubmissionInterrupted).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      staleRow.id,
+      expect.objectContaining({ externalMutation: "confirmed" }),
+    );
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
   });
 });

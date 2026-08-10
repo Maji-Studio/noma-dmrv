@@ -157,6 +157,7 @@ function StatusCell({ summary }: { summary: RemovalListRow }) {
   const status = deriveRemovalWorkflowStatus({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
+    submissionInterrupted: summary.submissionInterrupted,
     enrichmentStatus: summary.enrichmentStatus,
     readiness: summary.readiness,
   });
@@ -217,6 +218,7 @@ const columns: ColumnDef<RemovalListRow>[] = [
       const status = deriveRemovalWorkflowStatus({
         local: summary.local,
         lockInFlight: summary.lockInFlight,
+        submissionInterrupted: summary.submissionInterrupted,
         enrichmentStatus: summary.enrichmentStatus,
         readiness: summary.readiness,
       });

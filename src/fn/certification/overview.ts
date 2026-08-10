@@ -30,9 +30,10 @@ import {
   type RemovalEvidenceHealth,
 } from "@/lib/certification/removal-evidence-health";
 import { SafeError } from "@/lib/errors";
-import type {
-  DerivedStatus,
-  LocalSubmissionStatus,
+import {
+  isRemovalSubmissionInterrupted,
+  type DerivedStatus,
+  type LocalSubmissionStatus,
 } from "@/lib/certification/status";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
@@ -92,6 +93,7 @@ export interface RemovalPreflightSummary {
   version: number | null;
   local: LocalSubmissionStatus | null;
   lockInFlight: boolean;
+  submissionInterrupted: boolean;
   readiness: RemovalReadiness;
   /** Post-submit verification of Sources on their intended registry targets. */
   evidenceHealth: RemovalEvidenceHealth | null;
@@ -141,6 +143,9 @@ async function buildRemovalPreflightSummary(
     version: ctx.latestSubmission?.version ?? null,
     local: facts.local,
     lockInFlight: facts.lockInFlight,
+    submissionInterrupted: isRemovalSubmissionInterrupted(
+      ctx.latestSubmission?.metadata,
+    ),
     readiness: deriveRemovalReadiness(facts),
     evidenceHealth: deriveRemovalEvidenceHealth({
       submissionId: ctx.latestSubmission?.id ?? null,

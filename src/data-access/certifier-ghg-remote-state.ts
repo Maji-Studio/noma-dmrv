@@ -4,7 +4,7 @@ import {
   getGhgStatementPeriod,
   type GhgStatement,
 } from "@/lib/isometric";
-import { SUBMISSION_METADATA_KEYS } from "@/lib/isometric/utils/submission-metadata";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import {
   clearTerminalStatusForResubmit,
   setSubmissionTerminalStatus,

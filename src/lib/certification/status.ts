@@ -27,6 +27,11 @@ import type { StatusValue } from "@/components/ui/status-badge";
 // Type-only — erased at build time, so the generated types never reach the
 // client bundle as runtime code.
 import type { components } from "@/lib/isometric/generated/certify";
+import {
+  getMetadataValue,
+  SUBMISSION_ATTEMPT_OUTCOMES,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/certification/submission-metadata";
 import type { RemovalReadiness } from "./readiness";
 
 /**
@@ -65,6 +70,7 @@ export type RemoteGhgStatus = components["schemas"]["GhgStatementStatus"];
 
 export type DerivedStatusKind =
   | "in-progress"
+  | "interrupted"
   | "not-submitted"
   | "submitted"
   | "draft"
@@ -102,6 +108,7 @@ export interface RemovalStatusInput {
   local: LocalSubmissionStatus | null;
   /** A draft row holding a live submission lock (derive from `lock.ts`). */
   lockInFlight: boolean;
+  submissionInterrupted?: boolean;
 }
 
 export type RemovalEnrichmentStatus =
@@ -115,9 +122,24 @@ export type RemovalWorkflowStatusKind =
   | "ready"
   | "blocked"
   | "failed"
+  | "interrupted"
   | "submitting"
   | "submitted"
   | "superseded";
+
+export const REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME =
+  SUBMISSION_ATTEMPT_OUTCOMES.interrupted;
+export const REMOVAL_SUBMISSION_INTERRUPTED_LABEL =
+  "Submission interrupted";
+
+export function isRemovalSubmissionInterrupted(metadata: unknown): boolean {
+  return (
+    getMetadataValue(
+      metadata,
+      SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
+    ) === REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME
+  );
+}
 
 export interface RemovalWorkflowStatus {
   /** The single operator-facing state used by list and detail surfaces. */
@@ -128,6 +150,21 @@ export interface RemovalWorkflowStatus {
   reasons: string[];
   isActionable: boolean;
   canRetry: boolean;
+}
+
+function interruptedWorkflowStatus(
+  reasons: string[],
+  isActionable: boolean,
+  canRetry: boolean,
+): RemovalWorkflowStatus {
+  return {
+    kind: "interrupted",
+    value: "failed",
+    label: REMOVAL_SUBMISSION_INTERRUPTED_LABEL,
+    reasons,
+    isActionable,
+    canRetry,
+  };
 }
 
 export interface RemovalWorkflowStatusInput extends RemovalStatusInput {
@@ -142,7 +179,17 @@ export interface RemovalWorkflowStatusInput extends RemovalStatusInput {
 export function deriveRemovalStatus({
   local,
   lockInFlight,
+  submissionInterrupted = false,
 }: RemovalStatusInput): DerivedStatus {
+  if (local === "draft" && submissionInterrupted) {
+    return {
+      kind: "interrupted",
+      value: "failed",
+      label: REMOVAL_SUBMISSION_INTERRUPTED_LABEL,
+      isActionable: !lockInFlight,
+      isTerminal: false,
+    };
+  }
   if (lockInFlight) return IN_PROGRESS;
   if (local === null) {
     return {
@@ -208,8 +255,13 @@ export function deriveRemovalWorkflowStatus({
   lockInFlight,
   enrichmentStatus,
   readiness,
+  submissionInterrupted = false,
 }: RemovalWorkflowStatusInput): RemovalWorkflowStatus {
-  const lifecycle = deriveRemovalStatus({ local, lockInFlight });
+  const lifecycle = deriveRemovalStatus({
+    local,
+    lockInFlight,
+    submissionInterrupted,
+  });
 
   if (lifecycle.kind === "submitted" || lifecycle.kind === "superseded") {
     return {
@@ -220,6 +272,49 @@ export function deriveRemovalWorkflowStatus({
       isActionable: false,
       canRetry: false,
     };
+  }
+
+  if (lifecycle.kind === "interrupted") {
+    if (lockInFlight) {
+      return interruptedWorkflowStatus(
+        [
+          "This submission was interrupted. Wait, then select Review & submit when it becomes available.",
+        ],
+        false,
+        false,
+      );
+    }
+    if (enrichmentStatus === "loading") {
+      return interruptedWorkflowStatus(
+        ["Checking whether this submission is ready to reconcile."],
+        false,
+        false,
+      );
+    }
+    if (enrichmentStatus === "unavailable" || !readiness) {
+      return interruptedWorkflowStatus(
+        ["Status checks could not finish. Select Retry to check again."],
+        false,
+        true,
+      );
+    }
+    if (readiness.state === "blocked") {
+      return interruptedWorkflowStatus(readiness.reasons, true, false);
+    }
+    if (readiness.state === "inProgress") {
+      return interruptedWorkflowStatus(
+        ["Waiting for the current submission check to finish."],
+        false,
+        false,
+      );
+    }
+    return interruptedWorkflowStatus(
+      [
+        "This submission was interrupted and registry work may already exist. Select Review & submit to reconcile it.",
+      ],
+      true,
+      false,
+    );
   }
 
   if (lifecycle.kind === "in-progress") {
