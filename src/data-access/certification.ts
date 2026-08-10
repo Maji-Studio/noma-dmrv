@@ -12,6 +12,7 @@ import { creditBatches } from "@/db/schema/credits";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
@@ -643,6 +644,7 @@ export async function markSubmissionSubmitted(
         externalId: args.externalId,
         submittedAt: sql`now()`,
         lockedAt: null,
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastError}::text - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text - ${SUBMISSION_METADATA_KEYS.externalMutation}::text`,
         updatedAt: sql`now()`,
       })
       .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
@@ -769,7 +771,7 @@ export async function markSubmissionRejected(
       status: "rejected",
       lockedAt: null,
       updatedAt: sql`now()`,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('lastError', ${args.errorMessage}::text)`,
+      metadata: sql`(coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text - ${SUBMISSION_METADATA_KEYS.externalMutation}::text) || jsonb_build_object(${SUBMISSION_METADATA_KEYS.lastError}::text, ${args.errorMessage}::text)`,
     })
     .where(
       and(

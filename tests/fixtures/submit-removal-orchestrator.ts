@@ -14,6 +14,20 @@ import type {
   Sample,
 } from "@/db/schema";
 import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
+import {
+  SUBMISSION_ATTEMPT_OUTCOMES,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/certification/submission-metadata";
+
+const INTERRUPTION_METADATA_KEYS = new Set<string>([
+  SUBMISSION_METADATA_KEYS.lastError,
+  SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
+  SUBMISSION_METADATA_KEYS.externalMutation,
+]);
+const RETRY_CLEARED_METADATA_KEYS = new Set<string>([
+  SUBMISSION_METADATA_KEYS.lastError,
+  SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
+]);
 
 // ---------------------------------------------------------------------------
 // Module mocks — declared before importing the system under test so the mocks
@@ -673,6 +687,11 @@ beforeEach(() => {
         if (!row) throw new Error(`Test ledger missing row ${rowId}`);
         row.status = "draft";
         row.lockedAt = new Date();
+        row.metadata = Object.fromEntries(
+          Object.entries(row.metadata ?? {}).filter(
+            ([key]) => !RETRY_CLEARED_METADATA_KEYS.has(key),
+          ),
+        );
         return row;
       },
     }),
@@ -685,6 +704,11 @@ beforeEach(() => {
         row.externalId = args.externalId;
         row.submittedAt = new Date();
         row.lockedAt = null;
+        row.metadata = Object.fromEntries(
+          Object.entries(row.metadata ?? {}).filter(
+            ([key]) => !INTERRUPTION_METADATA_KEYS.has(key),
+          ),
+        );
       }
       if (args.supersedePreviousId) {
         const prev = storedRows.find((r) => r.id === args.supersedePreviousId);
@@ -707,6 +731,22 @@ beforeEach(() => {
         row.metadata = {
           ...(row.metadata ?? {}),
           lastError: args.errorMessage,
+        };
+      }
+    },
+  );
+  vi.mocked(ledgerClaim.markSubmissionInterrupted).mockImplementation(
+    async (_userId, id, args) => {
+      const row = storedRows.find((r) => r.id === id);
+      const ownsLock =
+        row?.lockedAt?.getTime() === args.expectedLockedAt.getTime();
+      if (row?.status === "draft" && ownsLock) {
+        row.metadata = {
+          ...(row.metadata ?? {}),
+          [SUBMISSION_METADATA_KEYS.lastError]: args.errorMessage,
+          [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]:
+            SUBMISSION_ATTEMPT_OUTCOMES.interrupted,
+          [SUBMISSION_METADATA_KEYS.externalMutation]: args.externalMutation,
         };
       }
     },

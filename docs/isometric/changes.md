@@ -17,6 +17,10 @@ reconciliation, workspace eligibility, and grouped Removal readiness are
 archived in
 [`docs/archive/2026-08-09-certification-review-corrections.md`](../archive/2026-08-09-certification-review-corrections.md).
 
+Removal submission recovery and the observed Production Batch mass-unit
+readback are archived in
+[`docs/archive/2026-08-10-removal-submission-recovery.md`](../archive/2026-08-10-removal-submission-recovery.md).
+
 ## Feedstock inventory mass basis
 
 Feedstock-bin stock, withdrawals, losses, and reconciliation now use wet,
@@ -27,14 +31,6 @@ continue to derive dry feedstock mass from their recorded wet mass and moisture
 for process calculations and certification inputs. Certification lineage uses
 the wet allocation shares to select contributing intake batches without
 changing the dry-mass values submitted for protocol calculations.
-
-## 2026-08-10 (Removal submission recovery safety)
-
-Definitive registry refusals reject and unlock only the exact Removal draft
-claimed by an attempt that made no possible or confirmed registry write. Any
-uncertain or confirmed write keeps the draft locked for reconciliation,
-including failed lookups and local persistence failures after a successful
-create. Production Batch dry-mass comparisons keep the explicit 1 g tolerance.
 
 ## 2026-08-10 (customer location application evidence)
 

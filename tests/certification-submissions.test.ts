@@ -196,6 +196,7 @@ async function seedRow(
     payloadHash: string;
     externalId?: string | null;
     lockedAt?: Date | null;
+    metadata?: Record<string, unknown> | null;
   },
 ) {
   const [row] = await db
@@ -209,6 +210,7 @@ async function seedRow(
       externalId: args.externalId ?? null,
       lockedAt: args.lockedAt ?? null,
       payloadSnapshot: { semantic: { seeded: true } },
+      metadata: args.metadata ?? null,
     })
     .returning();
   return row;
@@ -565,6 +567,12 @@ describe("claimSubmissionDraft — resume", () => {
       status: "draft",
       payloadHash: "hash:v-original",
       lockedAt: staleLockedAt,
+      metadata: {
+        lastError: "Previous attempt failed",
+        lastAttemptOutcome: "interrupted",
+        externalMutation: "possible",
+        retained: true,
+      },
     });
 
     let resolveCalled = false;
@@ -600,6 +608,10 @@ describe("claimSubmissionDraft — resume", () => {
     expect(buildSnapshotCalled).toBe(false);
     expect(outcome.row.payloadSnapshot).toMatchObject({
       semantic: { seeded: true },
+    });
+    expect(outcome.row.metadata).toEqual({
+      externalMutation: "possible",
+      retained: true,
     });
   });
 

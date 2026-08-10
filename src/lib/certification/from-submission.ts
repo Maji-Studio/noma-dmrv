@@ -13,9 +13,10 @@ import type { CertificationSubmissionRow } from "@/data-access/certification";
 import {
   getMetadataValue,
   SUBMISSION_METADATA_KEYS,
-} from "@/lib/isometric/utils/submission-metadata";
+} from "@/lib/certification/submission-metadata";
 import {
   deriveRemovalStatus,
+  isRemovalSubmissionInterrupted,
   deriveStatementStatus,
   type DerivedStatus,
   type LocalSubmissionStatus,
@@ -62,5 +63,9 @@ export function deriveSubmissionStatus(
       remoteStatus: latest ? readRemoteStatus(latest) : null,
     });
   }
-  return deriveRemovalStatus({ local, lockInFlight: isLockedInFlight });
+  return deriveRemovalStatus({
+    local,
+    lockInFlight: isLockedInFlight,
+    submissionInterrupted: isRemovalSubmissionInterrupted(latest?.metadata),
+  });
 }

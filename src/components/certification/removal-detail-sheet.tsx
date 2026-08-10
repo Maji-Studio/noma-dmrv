@@ -137,6 +137,7 @@ export function RemovalDetailSheet({
   const workflowStatus = deriveRemovalWorkflowStatus({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
+    submissionInterrupted: summary.submissionInterrupted,
     enrichmentStatus: summary.enrichmentStatus,
     readiness: summary.readiness,
   });

@@ -24,11 +24,11 @@
  *           can regroup runs (or the batch itself) right up until the draft
  *           row exists, and the POST would otherwise ship the stale snapshot
  *           and then stamp a production claim for changed batch contents.
- *      A throw here leaves the draft locked until the lock TTL — safe
- *      (fail-closed, and the pre-flight gate re-fires loudly on retry).
- *      `submitRemoval` then compares the full semantic payload hash from a
- *      fresh rebuild against the claimed draft snapshot, catching same-ID
- *      source-data edits that lineage IDs cannot represent.
+ *      `submitRemoval` records a pre-registry failure as rejected/unlocked, or
+ *      as interrupted when a resumed attempt may already have registry state.
+ *      It then compares the full semantic payload hash from a fresh rebuild
+ *      against the claimed draft snapshot, catching same-ID source-data edits
+ *      that lineage IDs cannot represent.
  */
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -52,6 +52,23 @@ export interface MemberBatchLineage {
   code: string;
   productionRunIds: string[];
   applicationIds: string[];
+}
+
+const INTERRUPTED_REMOVAL_DRIFT_MESSAGE =
+  "This interrupted Removal may already exist in the registry, but its source data or calculation settings changed. Ask support to reconcile it before retrying.";
+
+export async function retireClaimedRemovalDraftForDrift(args: {
+  orgCtx: OrgContext;
+  submissionId: string;
+  reason: string;
+  preserveForReconciliation: boolean;
+}): Promise<void> {
+  if (args.preserveForReconciliation) {
+    throw new SafeError(INTERRUPTED_REMOVAL_DRIFT_MESSAGE);
+  }
+  await retireStaleSubmissionDraft(args.orgCtx, args.submissionId, {
+    reason: args.reason,
+  });
 }
 
 export function assertNoForeignProductionClaims(
@@ -127,19 +144,24 @@ export function assertMemberBatchLineageUnchanged(
 // accounting (e.g. pre-front-loading prorated production values). Completing
 // it would POST those stale datapoint bodies and then stamp the production
 // claim off them. Retire the draft (terminal `superseded`, non-blocking — see
-// retireStaleSubmissionDraft for why not `rejected`) and fail closed; the
-// next attempt mints a fresh version from live data under the current
-// revision. Missing `__mappingRevision` (pre-ADR-0005 snapshot) counts as
-// stale.
+// retireStaleSubmissionDraft for why not `rejected`) and fail closed; the next
+// attempt mints a fresh version from live data under the current revision. An
+// interrupted draft with possible registry state is preserved for support
+// reconciliation instead. Missing `__mappingRevision` (pre-ADR-0005 snapshot)
+// counts as stale.
 export async function assertResumedSnapshotRevisionCurrent(
   orgCtx: OrgContext,
   row: CertificationSubmissionRow,
+  preserveForReconciliation = false,
 ): Promise<void> {
   const revision = (row.payloadSnapshot as { __mappingRevision?: unknown } | null)
     ?.__mappingRevision;
   if (revision === MAPPING_REVISION) return;
-  await retireStaleSubmissionDraft(orgCtx, row.id, {
+  await retireClaimedRemovalDraftForDrift({
+    orgCtx,
+    submissionId: row.id,
     reason: `mapping revision drift: snapshot ${String(revision)} != current ${MAPPING_REVISION}`,
+    preserveForReconciliation,
   });
   throw new SafeError(
     "This Removal draft uses older calculation settings. Submit again to rebuild it with current data.",

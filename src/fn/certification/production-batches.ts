@@ -47,6 +47,7 @@ import {
   buildProductionBatchReference,
   createProductionBatch,
   findProductionBatchBySupplierRef,
+  productionBatchMassUnitsMatch,
   type CreateProductionBatchRequest,
   type IsometricProductionBatch,
 } from "@/lib/isometric/production-batches";
@@ -364,7 +365,7 @@ function productionBatchMismatchMessage(
     sameFeedstocks &&
     batch.kind === expected.kind &&
     massMagnitudeMatches &&
-    batch.mass.unit === expected.mass.unit &&
+    productionBatchMassUnitsMatch(batch.mass.unit, expected.mass.unit) &&
     startedAtMatches &&
     endedAtMatches
   ) {

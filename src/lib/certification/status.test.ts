@@ -28,6 +28,19 @@ describe("deriveRemovalStatus", () => {
     expect(s.isActionable).toBe(true);
   });
 
+  it("surfaces an interrupted draft above its live lock", () => {
+    const s = deriveRemovalStatus({
+      local: "draft",
+      lockInFlight: true,
+      submissionInterrupted: true,
+    });
+    expect(s).toMatchObject({
+      kind: "interrupted",
+      label: "Submission interrupted",
+      isActionable: false,
+    });
+  });
+
   it("marks a submitted removal terminal (no remote accept/reject exists)", () => {
     const s = deriveRemovalStatus({ local: "submitted", lockInFlight: false });
     expect(s.label).toBe("Submitted");
@@ -174,6 +187,77 @@ describe("deriveRemovalWorkflowStatus", () => {
       value: "running",
       label: "Submitting",
       isActionable: false,
+    });
+  });
+
+  it("shows a live interrupted attempt without offering an unsafe retry", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "draft",
+      lockInFlight: true,
+      submissionInterrupted: true,
+      enrichmentStatus: "available",
+      readiness: { state: "ready", reasons: [], advisories: [] },
+    });
+
+    expect(status).toMatchObject({
+      kind: "interrupted",
+      value: "failed",
+      label: "Submission interrupted",
+      isActionable: false,
+      canRetry: false,
+    });
+  });
+
+  it("makes a stale interrupted attempt actionable for reconciliation", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "draft",
+      lockInFlight: false,
+      submissionInterrupted: true,
+      enrichmentStatus: "available",
+      readiness: { state: "ready", reasons: [], advisories: [] },
+    });
+
+    expect(status).toMatchObject({
+      kind: "interrupted",
+      label: "Submission interrupted",
+      isActionable: true,
+    });
+    expect(status.reasons[0]).toMatch(/reconcile/i);
+  });
+
+  it("keeps an interrupted attempt non-actionable when enrichment is unavailable", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "draft",
+      lockInFlight: false,
+      submissionInterrupted: true,
+      enrichmentStatus: "unavailable",
+      readiness: null,
+    });
+
+    expect(status).toMatchObject({
+      kind: "interrupted",
+      isActionable: false,
+      canRetry: true,
+    });
+  });
+
+  it("keeps readiness blockers on an interrupted attempt", () => {
+    const status = deriveRemovalWorkflowStatus({
+      local: "draft",
+      lockInFlight: false,
+      submissionInterrupted: true,
+      enrichmentStatus: "available",
+      readiness: {
+        state: "blocked",
+        reasons: ["Add the missing delivery document"],
+        advisories: [],
+      },
+    });
+
+    expect(status).toMatchObject({
+      kind: "interrupted",
+      reasons: ["Add the missing delivery document"],
+      isActionable: true,
     });
   });
 

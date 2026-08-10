@@ -11,7 +11,8 @@
  * (`decideSubmissionClaim`); this module is the I/O choreography around it.
  * It is an internal data-access seam tested DB-backed against real Postgres
  * (ADR 0008) — no port, no in-memory fake. It ends at a claimed draft row;
- * no network I/O happens inside.
+ * no network I/O happens inside. It also owns the guarded interrupted-attempt
+ * writer because that outcome must use the same exact draft-lock identity.
  *
  * Plan: docs/archive/plans/2026-06-10-certification-reliability-track.md (Phase 1).
  */
@@ -27,6 +28,10 @@ import {
 import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
+import {
+  SUBMISSION_ATTEMPT_OUTCOMES,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/certification/submission-metadata";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { logger } from "@/lib/log";
 import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
@@ -65,6 +70,36 @@ export interface InsertDraftSubmissionInput extends SubmissionKey {
   payloadSnapshot: unknown;
   payloadHash: string;
   metadata?: Record<string, unknown> | null;
+}
+
+export async function markSubmissionInterrupted(
+  ctx: OrgContext,
+  id: string,
+  args: {
+    errorMessage: string;
+    expectedLockedAt: Date;
+    externalMutation: "possible" | "confirmed";
+  },
+): Promise<void> {
+  requireOrgScope(ctx);
+  await db
+    .update(certificationSubmissions)
+    .set({
+      updatedAt: sql`now()`,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object(
+        ${SUBMISSION_METADATA_KEYS.lastError}::text, ${args.errorMessage}::text,
+        ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text, ${SUBMISSION_ATTEMPT_OUTCOMES.interrupted}::text,
+        ${SUBMISSION_METADATA_KEYS.externalMutation}::text, ${args.externalMutation}::text
+      )`,
+    })
+    .where(
+      and(
+        eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.status, "draft"),
+        eq(certificationSubmissions.lockedAt, args.expectedLockedAt),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    );
 }
 
 // =====================================================================
@@ -582,7 +617,9 @@ async function resetSubmissionToDraftCas(
       status: "draft",
       lockedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
       updatedAt: sql`now()`,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - 'lastError'`,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb)
+        - ${SUBMISSION_METADATA_KEYS.lastError}::text
+        - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text`,
     })
     .where(
       and(
