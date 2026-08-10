@@ -46,7 +46,10 @@ const COMPILATION = {
 const CONTEXT = {
   memberBatches: [BATCH],
   project: { name: "Biochar project" },
-  mapping: null,
+  mapping: {
+    externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+    externalFacilityId: "fcl_1KST05ZW3SBXZCM7",
+  },
   isProduction: false,
   submissionWarnings: [],
 } as unknown as RemovalCertifyContext;
@@ -69,11 +72,13 @@ const PASSING_CHECKS: RemovalRequirementCheck[] = [
 function render(overrides: {
   ctx?: RemovalCertifyContext;
   checks?: RemovalRequirementCheck[];
+  facilityName?: string;
 } = {}) {
   return renderToStaticMarkup(
     <SubmissionSummary
       ctx={overrides.ctx ?? CONTEXT}
       facilityId="facility-1"
+      facilityName={overrides.facilityName ?? "Tanzania facility"}
       compilation={COMPILATION}
       isCompilationLoading={false}
       compilationError={null}
@@ -95,6 +100,13 @@ describe("SubmissionSummary", () => {
       "Isometric calculates stored and net CO₂e after submission.",
     );
     expect(html).toContain("Biochar project (Sandbox)");
+    expect(html).toContain("Tanzania facility");
+    expect(html).toContain(
+      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/overview",
+    );
+    expect(html).toContain(
+      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7",
+    );
     expect(html).toContain("Jul 1 to Jul 31, 2026");
     expect(html).toContain("CB-26-001");
     expect(html).toContain("1000-year (R₀ reflectance)");
@@ -144,6 +156,19 @@ describe("SubmissionSummary", () => {
     const html = render();
 
     expect(html).not.toContain("Sandbox · Isometric registry");
+  });
+
+  it("keeps destination and facility visible without broken registry links", () => {
+    const html = render({
+      ctx: {
+        ...CONTEXT,
+        mapping: null,
+      } as unknown as RemovalCertifyContext,
+    });
+
+    expect(html).toContain("Biochar project (Sandbox)");
+    expect(html).toContain("Tanzania facility");
+    expect(html).not.toContain("registry.sandbox.isometric.com");
   });
 
   it("renders the production banner only in production", () => {

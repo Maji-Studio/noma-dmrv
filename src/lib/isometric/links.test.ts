@@ -74,6 +74,42 @@ describe("isometricRegistry.certifyProject — Certify project overview link", (
   });
 });
 
+describe("isometricRegistry.facility — project-nested Certify link", () => {
+  it("builds the sandbox Certify facility URL", () => {
+    expect(
+      isometricRegistry.facility({
+        environment: "sandbox",
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+        externalFacilityId: "fcl_1KST05ZW3SBXZCM7",
+      }),
+    ).toBe(
+      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7",
+    );
+  });
+
+  it("builds the production Certify facility URL", () => {
+    expect(
+      isometricRegistry.facility({
+        environment: "production",
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+        externalFacilityId: "fcl_1KST05ZW3SBXZCM7",
+      }),
+    ).toBe(
+      "https://registry.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7",
+    );
+  });
+
+  it("url-encodes both ids", () => {
+    const url = isometricRegistry.facility({
+      environment: "sandbox",
+      externalProjectId: "prj a/b",
+      externalFacilityId: "fcl c?d",
+    });
+    expect(url).toContain("project/prj%20a%2Fb/");
+    expect(url).toContain("facilities/fcl%20c%3Fd");
+  });
+});
+
 describe("isometricRegistry.productionBatch — facility-nested Certify link", () => {
   // The exact sandbox URL verified against a live Certify production batch on
   // 2026-08-05 (CB-26-002's registration). Drift guard for the /facilities
