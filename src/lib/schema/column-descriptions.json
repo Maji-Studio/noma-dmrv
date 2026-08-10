@@ -346,7 +346,7 @@
     "id": "Unique join record identifier",
     "production_run_id": "FK to the production run",
     "feedstock_id": "FK to the feedstock batch consumed",
-    "mass_used_kg": "Mass of feedstock consumed in this run in kg",
+    "wet_mass_used_kg": "Wet mass of feedstock consumed in this run in kg",
     "createdAt": "Timestamp when the record was created"
   },
   "production_samples": {

@@ -64,6 +64,29 @@ describe("buildTrailSteps", () => {
     );
   });
 
+  it("shows feedstock lineage allocation on a wet basis", () => {
+    const data = lineage();
+    data.feedstocks = [
+      {
+        id: "feedstock-1",
+        code: "FS-1",
+        status: "complete",
+        deliveryDate: new Date("2026-05-16T00:00:00Z"),
+        massDryKg: 1_950,
+        wetMassUsedKg: 3_000,
+        eligibilityStatus: "eligible",
+        supplierName: "Supplier",
+        feedstockTypeName: "Wood chips",
+        feedstockDeliveryCode: "FD-1",
+        href: "/feedstocks",
+      },
+    ];
+
+    expect(buildTrailSteps(data)[0]?.massLine).toBe(
+      "Wet allocation: 3,000 kg",
+    );
+  });
+
   it("includes every production run contributing to a mixed-bin product", () => {
     const data = lineage();
     const firstRun = data.productionRun!;

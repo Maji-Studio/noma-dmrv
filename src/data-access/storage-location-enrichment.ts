@@ -61,9 +61,9 @@ export interface StorageLocationWithFacility extends StorageLocation {
     batchCount: number;
     pendingBatchCount: number;
     feedstockTypes: string[];
-    currentDryMassKg: number;
-    pendingDryMassKg: number;
-    estimatedWetMassKg: number | null;
+    currentWetMassKg: number;
+    estimatedDryMassKg: number | null;
+    pendingWetMassKg: number;
     estimatedMoisturePercent: number | null;
   };
   biocharInventory: {
@@ -126,34 +126,6 @@ function splitAggregateLabels(value: string | null): string[] {
     .filter(Boolean);
 }
 
-/**
- * Estimate remaining feedstock wet mass from the aggregate intake moisture
- * basis. Feedstock stock is canonically dry, so callers must never expose the
- * dry balance with a wet label when the basis is unavailable.
- */
-export function estimateRemainingFeedstockWetMassKg(params: {
-  intakeDryKg: number;
-  intakeWetKg: number;
-  remainingDryKg: number;
-}): number | null {
-  if (params.intakeWetKg === 0 && params.remainingDryKg === 0) return 0;
-
-  const moistureRatio =
-    params.intakeWetKg > 0 && params.intakeDryKg >= 0
-      ? Math.max(
-          0,
-          Math.min(
-            1,
-            (params.intakeWetKg - params.intakeDryKg) / params.intakeWetKg,
-          ),
-        )
-      : null;
-
-  return moistureRatio != null && moistureRatio < 1
-    ? params.remainingDryKg / (1 - moistureRatio)
-    : null;
-}
-
 export async function enrichStorageLocationRows(
   ctx: OrgContext,
   rows: BaseStorageLocationRow[]
@@ -193,8 +165,8 @@ export async function enrichStorageLocationRows(
               feedstocks.massWetKg,
               sql`${feedstocks.status} = 'complete'`,
             ),
-            pendingDryKg: sumNumeric(
-              feedstocks.massDryKg,
+            pendingWetKg: sumNumeric(
+              feedstocks.massWetKg,
               sql`${feedstocks.status} = 'missing_data'`,
             ),
           })
@@ -424,16 +396,19 @@ export async function enrichStorageLocationRows(
               pr.feedstock_storage_location_id,
               'out',
               pr.created_at,
-              COALESCE(SUM(prf.mass_used_kg), pr.feedstock_mass_dry_kg, 0) as mass_kg,
-              COALESCE(SUM(prf.mass_used_kg), pr.feedstock_mass_dry_kg, 0) as mass_dry_kg,
+              COALESCE(SUM(prf.wet_mass_used_kg), pr.feedstock_wet_mass_kg, 0) as mass_kg,
+              pr.feedstock_mass_dry_kg as mass_dry_kg,
               'Feedstock used'
             FROM production_runs pr
             LEFT JOIN production_run_feedstocks prf ON prf.production_run_id = pr.id AND prf.organization_id = ${ctx.organizationId}
-            WHERE pr.organization_id = ${ctx.organizationId} AND pr.feedstock_storage_location_id IN (${storageLocationIdsSql})
+            WHERE pr.organization_id = ${ctx.organizationId}
+              AND pr.status <> 'cancelled'
+              AND pr.feedstock_storage_location_id IN (${storageLocationIdsSql})
             GROUP BY
               pr.id,
               pr.feedstock_storage_location_id,
               pr.created_at,
+              pr.feedstock_wet_mass_kg,
               pr.feedstock_mass_dry_kg,
               pr.code
             UNION ALL
@@ -627,24 +602,23 @@ export async function enrichStorageLocationRows(
   return rows.map((row) => {
     const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
     const laneStock = laneStockMap.get(row.id);
-    const totalDryKg = laneStock?.feedstockIntakeDryKg ?? 0;
-    const totalWetKg = feedstockInventoryRow?.totalWetKg ?? 0;
-    const pendingDryKg = feedstockInventoryRow?.pendingDryKg ?? 0;
-    // Unclamped: intake − consumption + manual adjustments/losses. A negative
-    // result is a real signal (draws outran recorded stock), surfaced as
-    // "needs reconciliation" rather than hidden with Math.max.
-    const currentDryMassKg = laneStock?.feedstockStockDryKg ?? 0;
+    const pendingWetKg = feedstockInventoryRow?.pendingWetKg ?? 0;
+    // Unclamped wet intake minus wet withdrawals plus wet movements. A negative
+    // result is a real reconciliation signal rather than a value to hide.
+    const currentWetMassKg = laneStock?.feedstockStockWetKg ?? 0;
+    const estimatedDryMassKg = laneStock?.feedstockEstimatedDryKg ?? null;
     // The moisture-ratio clamp stays — it bounds a ratio to [0, 1], it is not a
     // stock clamp.
     const moistureRatio =
-      totalWetKg > 0 && totalDryKg >= 0
-        ? Math.max(0, Math.min(1, (totalWetKg - totalDryKg) / totalWetKg))
+      currentWetMassKg > 0 && estimatedDryMassKg != null
+        ? Math.max(
+            0,
+            Math.min(
+              1,
+              (currentWetMassKg - estimatedDryMassKg) / currentWetMassKg,
+            ),
+          )
         : null;
-    const estimatedWetMassKg = estimateRemainingFeedstockWetMassKg({
-      intakeDryKg: totalDryKg,
-      intakeWetKg: totalWetKg,
-      remainingDryKg: currentDryMassKg,
-    });
 
     const biocharOutputRow = biocharOutputMap.get(row.id);
     const allocatedKg = laneStock?.biocharAllocatedKg ?? 0;
@@ -663,15 +637,15 @@ export async function enrichStorageLocationRows(
         batchCount: feedstockInventoryRow?.batchCount ?? 0,
         pendingBatchCount: feedstockInventoryRow?.pendingBatchCount ?? 0,
         feedstockTypes: splitAggregateLabels(feedstockInventoryRow?.feedstockTypes ?? null),
-        currentDryMassKg,
-        pendingDryMassKg: pendingDryKg,
-        estimatedWetMassKg,
+        currentWetMassKg,
+        estimatedDryMassKg,
+        pendingWetMassKg: pendingWetKg,
         estimatedMoisturePercent:
           moistureRatio != null ? moistureRatio * 100 : null,
       },
       biocharInventory: {
         productionRunCount: Number(biocharOutputRow?.productionRunCount ?? 0),
-        // Unclamped, movement-inclusive (see currentDryMassKg above).
+        // Unclamped, movement-inclusive (see currentWetMassKg above).
         currentMassKg: laneStock?.biocharStockKg ?? 0,
         allocatedToProductsKg: allocatedKg,
         downstreamFormulations: [

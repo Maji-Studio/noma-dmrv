@@ -63,9 +63,9 @@ const storageLocation: StorageLocationWithFacility = {
     batchCount: 1,
     pendingBatchCount: 0,
     feedstockTypes: ["Wood chips"],
-    currentDryMassKg: 125,
-    pendingDryMassKg: 0,
-    estimatedWetMassKg: 150,
+    currentWetMassKg: 150,
+    estimatedDryMassKg: 125,
+    pendingWetMassKg: 0,
     estimatedMoisturePercent: 16.7,
   },
   biocharInventory: {
@@ -90,22 +90,34 @@ describe("BinReconcileSheet", () => {
   it.each([
     {
       type: "feedstock_bin",
-      expectedStock: "125 kg dry",
+      expectedStockLabel: "Current wet stock",
+      expectedStock: "150 kg",
+      expectedLossLabel: "Wet mass lost (kg)",
       showsMoisture: true,
     },
     {
       type: "biochar_bin",
+      expectedStockLabel: "Current derived stock",
       expectedStock: "75 kg",
+      expectedLossLabel: "Amount lost (kg)",
       showsMoisture: false,
     },
     {
       type: "product_bin",
+      expectedStockLabel: "Current derived stock",
       expectedStock: "25 kg",
+      expectedLossLabel: "Amount lost (kg)",
       showsMoisture: false,
     },
   ] as const)(
     "opens a $type directly on the loss form without stock-take controls",
-    ({ type, expectedStock, showsMoisture }) => {
+    ({
+      type,
+      expectedStockLabel,
+      expectedStock,
+      expectedLossLabel,
+      showsMoisture,
+    }) => {
       const markup = renderToStaticMarkup(
         <BinReconcileSheet
           open
@@ -116,14 +128,14 @@ describe("BinReconcileSheet", () => {
 
       expect(markup).toContain("Reconcile FB-001");
       expect(markup).toContain("North hopper");
-      expect(markup).toContain("Current derived stock");
+      expect(markup).toContain(expectedStockLabel);
       expect(markup).toContain(expectedStock);
       if (showsMoisture) {
         expect(markup).toContain("Current estimated moisture");
       } else {
         expect(markup).not.toContain("Current estimated moisture");
       }
-      expect(markup).toContain("Amount lost (kg)");
+      expect(markup).toContain(expectedLossLabel);
       expect(markup).toContain('id="loss-amount"');
       expect(markup).toContain('id="loss-reason"');
       expect(markup).toContain("Record loss");

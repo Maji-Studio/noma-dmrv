@@ -232,7 +232,7 @@ beforeAll(async () => {
       organizationId: TEST_ORG_ID,
       productionRunId,
       feedstockId: feedstock.id,
-      massUsedKg: 400,
+      wetMassUsedKg: 400,
     })),
   );
 });
@@ -417,7 +417,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
       organizationId: TEST_ORG_ID,
       productionRunId: kRun.id,
       feedstockId: tier1000Feedstock.id,
-      massUsedKg: 400,
+      wetMassUsedKg: 400,
     });
 
     const tier1000Batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {

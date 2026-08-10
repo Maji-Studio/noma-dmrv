@@ -35,9 +35,9 @@ describe("credit batch accounting", () => {
     const [reactor] = await db.insert(reactors).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-R-${tag}`, identifier: `Lineage ${tag}`, reactorType: "fixed-bed" }).returning();
     const [feedstockType] = await db.insert(feedstockTypes).values({ organizationId: TEST_ORG_ID, code: `LF-FT-${tag}`, name: `Lineage ${tag}`, category: "forestry" }).returning();
     const [process] = await db.insert(productionProcesses).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id }).returning();
-    const runs = await db.insert(productionRuns).values([1, 2].map((n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, reactorId: reactor.id, code: `LF-PR${n}-${tag}`, startTime: new Date(`2026-07-0${n}T10:00:00Z`), biocharDryMassKg: 100 * n }))).returning();
+    const runs = await db.insert(productionRuns).values([1, 2].map((n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, reactorId: reactor.id, code: `LF-PR${n}-${tag}`, startTime: new Date(`2026-07-0${n}T10:00:00Z`), feedstockMassDryKg: 2_400 * n, biocharDryMassKg: 100 * n }))).returning();
     const stocks = await db.insert(feedstocks).values(runs.map((run, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id, code: `LF-FS${n}-${tag}`, status: "complete" as const, massDryKg: 200, eligibilityStatus: "eligible" as const }))).returning();
-    await db.insert(productionRunFeedstocks).values(runs.map((run, n) => ({ organizationId: TEST_ORG_ID, productionRunId: run.id, feedstockId: stocks[n].id, massUsedKg: 100 })));
+    await db.insert(productionRunFeedstocks).values(runs.map((run, n) => ({ organizationId: TEST_ORG_ID, productionRunId: run.id, feedstockId: stocks[n].id, wetMassUsedKg: 100 })));
     const products = await db.insert(biocharProducts).values(runs.map((run, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-BP${n}-${tag}`, linkedProductionRunId: run.id, massKg: 100 }))).returning();
     const [multiRunProduct] = await db.insert(biocharProducts).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-BPM-${tag}`, sourceBiocharStorageLocationId: sourceBin.id, linkedProductionRunId: null, massKg: 400 }).returning();
     const allocationRows = await db.insert(biocharProductSourceAllocations).values([
@@ -66,6 +66,7 @@ describe("credit batch accounting", () => {
       const detail = await getCreditBatchById(makeTestOrgContext(), batch.id, { skipPreview: true });
       const chain = await getCreditBatchChainData(makeTestOrgContext(), batch.id);
       expect(facts.productionRunIds).toHaveLength(2);
+      expect(facts.runs.map((run) => run.feedstockMassDryKg).sort((a, b) => Number(a) - Number(b))).toEqual([2_400, 4_800]);
       expect(facts.applicationIds).toHaveLength(3);
       expect(facts.appliedWeightTons).toBe(7);
       expect(

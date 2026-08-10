@@ -743,7 +743,7 @@ describe("credit batch automatic production-run membership", () => {
       organizationId: TEST_ORG_ID,
       productionRunId: mixedFeedstockRun.id,
       feedstockId: alternateFeedstockId,
-      massUsedKg: 1,
+      wetMassUsedKg: 1,
     });
 
     await expect(

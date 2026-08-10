@@ -76,6 +76,15 @@ itself; an input bin has no kind of its own. Distinct from output bins,
 which hold biochar lots and products.
 _Avoid_: ingredient bin as a bin *kind*.
 
+**Feedstock wet stock**:
+The wet/as-received kilograms used for feedstock logistics, bin stock,
+withdrawals, losses, and reconciliations. A production run derives its dry
+feedstock mass from that run's wet withdrawal and measured moisture for process
+and certification calculations; that derived dry mass is not bin stock and
+never limits a withdrawal.
+_Avoid_: feedstock dry stock, dry allocation, converting a physical count to
+dry mass before updating bin stock.
+
 **Ingredient bin**:
 Descriptive shorthand for a **feedstock bin** currently holding a
 blend-usage feedstock type, drawn on when a biochar product is mixed

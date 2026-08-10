@@ -68,7 +68,10 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
       code: feedstock.feedstockTypeName ?? "Feedstock",
       status: feedstock.status,
       date: feedstock.deliveryDate,
-      massLine: formatKg(feedstock.massUsedKg ?? feedstock.massDryKg),
+      massLine:
+        feedstock.wetMassUsedKg == null
+          ? null
+          : `Wet allocation: ${formatKg(feedstock.wetMassUsedKg)}`,
       contextLine: [feedstock.supplierName]
         .filter(Boolean)
         .join(" · ") || null,

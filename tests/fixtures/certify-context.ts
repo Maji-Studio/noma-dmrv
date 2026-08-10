@@ -53,7 +53,7 @@ export function factsFromMockedLineages(
               status: feedstock.status ?? "complete",
               deliveryDate: feedstock.deliveryDate ?? DEFAULT_FACT_DATE,
               massDryKg: feedstock.massDryKg ?? 100,
-              massUsedKg: feedstock.massUsedKg ?? 100,
+              wetMassUsedKg: feedstock.wetMassUsedKg ?? 100,
               eligibilityStatus: feedstock.eligibilityStatus ?? "eligible",
               supplierName: feedstock.supplierName ?? "Supplier",
               feedstockTypeName: feedstock.feedstockTypeName ?? "Wood",

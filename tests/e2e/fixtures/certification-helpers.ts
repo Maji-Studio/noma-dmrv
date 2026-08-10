@@ -339,7 +339,7 @@ export async function seedGroupedRemovalWithChain(
         id: id.productionRunFeedstock,
         productionRunId: id.productionRun,
         feedstockId: refs.feedstockId,
-        massUsedKg: 400,
+        wetMassUsedKg: 400,
       });
       await tx.insert(schema.biocharProducts).values({
         organizationId: DEC_ORG_ID,
@@ -878,7 +878,7 @@ export async function seedUngroupedReadyBatchWithChain(
         id: id.productionRunFeedstock,
         productionRunId: id.productionRun,
         feedstockId: refs.feedstockId,
-        massUsedKg: 400,
+        wetMassUsedKg: 400,
       });
       await tx.insert(schema.biocharProducts).values({
         organizationId: DEC_ORG_ID,

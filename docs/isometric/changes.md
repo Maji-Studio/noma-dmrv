@@ -17,6 +17,17 @@ reconciliation, workspace eligibility, and grouped Removal readiness are
 archived in
 [`docs/archive/2026-08-09-certification-review-corrections.md`](../archive/2026-08-09-certification-review-corrections.md).
 
+## Feedstock inventory mass basis
+
+Feedstock-bin stock, withdrawals, losses, and reconciliation now use wet,
+as-received kilograms as their authoritative physical inventory unit.
+`production_run_feedstocks.wet_mass_used_kg` records that wet allocation and
+replaces the former ambiguously named `mass_used_kg` column. Production runs
+continue to derive dry feedstock mass from their recorded wet mass and moisture
+for process calculations and certification inputs. Certification lineage uses
+the wet allocation shares to select contributing intake batches without
+changing the dry-mass values submitted for protocol calculations.
+
 ## 2026-08-10 (Removal submission recovery safety)
 
 Definitive registry refusals reject and unlock only the exact Removal draft

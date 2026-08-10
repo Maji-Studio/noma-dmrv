@@ -856,15 +856,3 @@ bound); these are the decisions it deliberately did not make.
   require dry mass > 0 at run completion; (c) run the pure production-batch
   payload validation before any datapoint POST so a refused submission leaves
   zero registry residue (S each).
-
-### Production-runs list header "Feedstock wet mass" renders the dry allocation (`production-runs/feedstock-mass-column-mislabel`)
-
-- The column reads `totalFeedstockMassKg`
-  (`src/components/production-runs/production-run-list.tsx`), which sums
-  `production_run_feedstocks.massUsedKg` — allocated from `computedDryMass` in
-  `createProductionRun` (`src/data-access/production-runs/mutations.ts`,
-  `allocateFeedstockMass`). A run entered as 500 kg wet @ 30% moisture lists
-  "350 kg" under the wet-mass header; the detail panel shows both figures
-  correctly.
-- **Resolve via:** either relabel the column "Feedstock dry mass" or surface
-  the run's wet figure; pick one and align the list with the detail panel (XS).

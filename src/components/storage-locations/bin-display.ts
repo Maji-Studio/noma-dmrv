@@ -154,7 +154,7 @@ export function binAccentStyle(type: StorageLocationType): CSSProperties {
 
 /** Current on-hand mass for a bin, by type. */
 export function binCurrentMassKg(s: StorageLocationWithFacility): number {
-  if (s.type === "feedstock_bin") return s.feedstockInventory.currentDryMassKg;
+  if (s.type === "feedstock_bin") return s.feedstockInventory.currentWetMassKg;
   if (s.type === "biochar_bin") return s.biocharInventory.currentMassKg;
   return s.productInventory.currentMassKg;
 }

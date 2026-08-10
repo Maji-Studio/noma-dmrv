@@ -20,7 +20,7 @@ describe("stock overdraw", () => {
 
   it("builds the shared feedstock-bin message", () => {
     expect(binStockOverdrawMessage("feedstock")).toBe(
-      "Not enough feedstock in this bin",
+      "Not enough wet feedstock in this bin",
     );
   });
 
@@ -47,7 +47,7 @@ describe("stock overdraw", () => {
 
   it("keeps field-level stock messages compact", () => {
     expect(binStockOverdrawInlineMessage("feedstock", 800)).toBe(
-      "Only 800 kg of feedstock is available. Reduce the mass.",
+      "Only 800 kg of wet feedstock is available. Reduce the wet mass.",
     );
     expect(deliveryStockOverdrawInlineMessage(800)).toBe(
       "Only 800 kg of biochar is available. Reduce the delivered mass.",

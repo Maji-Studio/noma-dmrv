@@ -14,7 +14,6 @@ import {
   recordStockTakeMovement,
   StockTakeIncreaseError,
 } from "@/data-access/bin-movements";
-import { canonicalizeFeedstockStockTake } from "@/lib/calculations/bin-stock-take";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -52,7 +51,7 @@ beforeAll(async () => {
 });
 
 describe("feedstock stock-take moisture integrity", () => {
-  it("converts wet stock authoritatively and rejects increases at both boundaries", async () => {
+  it("counts wet stock authoritatively and rejects increases at both boundaries", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const [facility] = await db
@@ -110,8 +109,8 @@ describe("feedstock stock-take moisture integrity", () => {
 
       expect(recorded.success).toBe(true);
       if (!recorded.success) return;
-      expect(Number(recorded.data.countedMassKg)).toBe(80);
-      expect(Number(recorded.data.massDeltaKg)).toBe(-20);
+      expect(Number(recorded.data.countedMassKg)).toBe(100);
+      expect(Number(recorded.data.massDeltaKg)).toBe(-25);
       expect(Number(recorded.data.countedWetMassKg)).toBe(100);
       expect(Number(recorded.data.moistureRatioUsed)).toBe(0.2);
 
@@ -119,7 +118,7 @@ describe("feedstock stock-take moisture integrity", () => {
         storageLocationId: bin.id,
         lane: "feedstock",
         reason: "Confirm unchanged physical count",
-        countedMassKg: 80,
+        countedMassKg: 100,
         countedWetMassKg: 100,
         moistureRatioUsed: 0.2,
       });
@@ -173,11 +172,9 @@ describe("feedstock stock-take moisture integrity", () => {
       });
       expect(preciseSnapshot.success).toBe(true);
       if (!preciseSnapshot.success) return;
-      expect({
-        countedWetMassKg: Number(preciseSnapshot.data.countedWetMassKg),
-        moistureRatioUsed: Number(preciseSnapshot.data.moistureRatioUsed),
-        countedMassKg: Number(preciseSnapshot.data.countedMassKg),
-      }).toEqual(canonicalizeFeedstockStockTake(1.0005, 0.0001245));
+      expect(Number(preciseSnapshot.data.countedWetMassKg)).toBe(1.001);
+      expect(Number(preciseSnapshot.data.countedMassKg)).toBe(1.001);
+      expect(Number(preciseSnapshot.data.moistureRatioUsed)).toBe(0.000125);
 
       const movements = await db
         .select({ id: binMovements.id })

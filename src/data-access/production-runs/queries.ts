@@ -214,7 +214,7 @@ export async function getProductionRuns(
           id: productionRunFeedstocks.id,
           productionRunId: productionRunFeedstocks.productionRunId,
           feedstockId: productionRunFeedstocks.feedstockId,
-          massUsedKg: productionRunFeedstocks.massUsedKg,
+          wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
           feedstockCode: feedstocks.code,
           feedstockTypeName: feedstockTypes.name,
         })
@@ -239,7 +239,10 @@ export async function getProductionRuns(
       feedstockStorageLocationCode: run.feedstockStorageLocationCode ?? null,
       feedstockStorageLocationName: run.feedstockStorageLocationName ?? null,
       feedstocks: runFeedstocks,
-      totalFeedstockMassKg: runFeedstocks.reduce((s, f) => s + f.massUsedKg, 0),
+      totalFeedstockWetMassKg: runFeedstocks.reduce(
+        (sum, feedstock) => sum + feedstock.wetMassUsedKg,
+        0,
+      ),
     };
   });
 
@@ -263,7 +266,7 @@ async function getProductionRunFeedstocks(
     .select({
       id: productionRunFeedstocks.id,
       feedstockId: productionRunFeedstocks.feedstockId,
-      massUsedKg: productionRunFeedstocks.massUsedKg,
+      wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
       feedstockCode: feedstocks.code,
       feedstockTypeName: feedstockTypes.name,
     })
@@ -377,7 +380,10 @@ export async function getProductionRunById(
     feedstockStorageLocationName:
       feedstockStorageLocation?.name ?? null,
     feedstocks: runFeedstocks,
-    totalFeedstockMassKg: runFeedstocks.reduce((sum, f) => sum + f.massUsedKg, 0),
+    totalFeedstockWetMassKg: runFeedstocks.reduce(
+      (sum, feedstock) => sum + feedstock.wetMassUsedKg,
+      0,
+    ),
   };
 }
 
@@ -424,7 +430,7 @@ export async function getProductionRunStats(
   // Get total feedstock mass
   const [feedstockStats] = await db
     .select({
-      totalFeedstockKg: sum(productionRunFeedstocks.massUsedKg),
+      totalFeedstockWetKg: sum(productionRunFeedstocks.wetMassUsedKg),
     })
     .from(productionRunFeedstocks)
     .leftJoin(productionRuns, and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
@@ -452,7 +458,7 @@ export async function getProductionRunStats(
       Number(stats.unresolvedBiocharDryCount) > 0
         ? null
         : Number(stats.totalBiocharDryKg) || 0,
-    totalFeedstockKg: Number(feedstockStats.totalFeedstockKg) || 0,
+    totalFeedstockWetKg: Number(feedstockStats.totalFeedstockWetKg) || 0,
     runningCount: statusMap["running"] ?? 0,
     completedCount: statusMap["complete"] ?? 0,
     draftCount: statusMap["draft"] ?? 0,

@@ -76,12 +76,7 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
         movement.countedMassKg != null && (
           <p className="body-caption text-[var(--color-text-tertiary)]">
             Counted {formatMassKg(Number(movement.countedMassKg))}
-            {movement.countedWetMassKg != null && (
-              <>
-                {" "}
-                (from {formatMassKg(Number(movement.countedWetMassKg))} wet)
-              </>
-            )}
+            {movement.lane === "feedstock" ? " wet" : ""}
             {movement.moistureRatioUsed != null && (
               <>
                 {" "}
@@ -93,6 +88,7 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
               </>
             )}{" "}
             vs derived {formatMassKg(Number(movement.derivedMassKgAtTime))}
+            {movement.lane === "feedstock" ? " wet" : ""}
           </p>
         )}
 

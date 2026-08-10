@@ -346,7 +346,7 @@
     "id": "prf_001",
     "production_run_id": "pr_001",
     "feedstock_id": "fs_001",
-    "mass_used_kg": 2400,
+    "wet_mass_used_kg": 3000,
     "createdAt": "2025-06-12T06:00:00Z"
   },
   "production_samples": {

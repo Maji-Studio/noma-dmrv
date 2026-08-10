@@ -49,7 +49,6 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
-import { resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
@@ -132,10 +131,10 @@ function createColumns(
       accessorFn: (row) => row.reactorIdentifier ?? "",
     },
     {
-      accessorKey: "totalFeedstockMassKg",
+      accessorKey: "totalFeedstockWetMassKg",
       header: "Feedstock wet mass",
       cell: ({ row }) => (
-        <span className="font-mono">{formatMassKg(row.original.totalFeedstockMassKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.totalFeedstockWetMassKg)}</span>
       ),
     },
     {

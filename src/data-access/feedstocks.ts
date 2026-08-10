@@ -470,6 +470,7 @@ export async function createFeedstock(
       const status = determineFeedstockStatus({
         feedstockTypeId: data.feedstockTypeId,
         massDryKg: allocatedDryMassKg,
+        massWetKg: allocation.allocatedWetMassKg,
       });
 
       const [feedstock] = await tx
@@ -799,12 +800,16 @@ export async function getFeedstockOptions(
 function determineFeedstockStatus(data: {
   feedstockTypeId?: string | null;
   massDryKg?: number | null;
+  massWetKg?: number | null;
 }): "missing_data" | "complete" {
   if (
     data.feedstockTypeId &&
     data.massDryKg !== null &&
     data.massDryKg !== undefined &&
-    data.massDryKg > 0
+    data.massDryKg > 0 &&
+    data.massWetKg !== null &&
+    data.massWetKg !== undefined &&
+    data.massWetKg > 0
   ) {
     return "complete";
   }
