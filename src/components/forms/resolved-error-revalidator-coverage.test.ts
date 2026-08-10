@@ -14,7 +14,7 @@ const CROSS_FIELD_FORM_FILES = {
   "formulations/formulation-form.tsx": 1,
   "production-runs/production-run-form.tsx": 1,
   "samples/sample-form.tsx": 1,
-  "storage-locations/bin-reconcile-sheet.tsx": 2,
+  "storage-locations/bin-reconcile-sheet.tsx": 1,
   "storage-locations/storage-location-form.tsx": 1,
 } as const;
 
