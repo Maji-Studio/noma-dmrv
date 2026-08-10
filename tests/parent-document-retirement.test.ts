@@ -530,31 +530,32 @@ describe("parent document retirement", () => {
       ...makeTestOrgContext(TEST_USER_ID),
       organizationId,
     };
-    await db.insert(organizations).values({
-      id: organizationId,
-      name: `Document retry organization ${tag}`,
-      slug: `document-retry-${tag}`,
-    });
-    const fixture = await createReactorFixture(tag, organizationId);
-    const keys = [
-      `reactor/${fixture.reactorId}/pdf/${tag}-first.pdf`,
-      `reactor/${fixture.reactorId}/pdf/${tag}-second.pdf`,
-    ];
-    await insertManagedDocument(
-      "reactor",
-      fixture.reactorId,
-      keys[0],
-      organizationId,
-    );
-    await insertManagedDocument(
-      "reactor",
-      fixture.reactorId,
-      keys[1],
-      organizationId,
-    );
-    provider.failKey = keys[1];
 
     try {
+      await db.insert(organizations).values({
+        id: organizationId,
+        name: `Document retry organization ${tag}`,
+        slug: `document-retry-${tag}`,
+      });
+      const fixture = await createReactorFixture(tag, organizationId);
+      const keys = [
+        `reactor/${fixture.reactorId}/pdf/${tag}-first.pdf`,
+        `reactor/${fixture.reactorId}/pdf/${tag}-second.pdf`,
+      ];
+      await insertManagedDocument(
+        "reactor",
+        fixture.reactorId,
+        keys[0],
+        organizationId,
+      );
+      await insertManagedDocument(
+        "reactor",
+        fixture.reactorId,
+        keys[1],
+        organizationId,
+      );
+      provider.failKey = keys[1];
+
       await deleteReactor(ctx, fixture.reactorId);
 
       expect(
@@ -584,7 +585,12 @@ describe("parent document retirement", () => {
       await db
         .update(storageObjectDeletions)
         .set({ lastAttemptAt: RETRY_BACKOFF_ELAPSED_AT })
-        .where(eq(storageObjectDeletions.storageKey, keys[1]));
+        .where(
+          and(
+            eq(storageObjectDeletions.organizationId, organizationId),
+            eq(storageObjectDeletions.storageKey, keys[1]),
+          ),
+        );
       const retryResult = await processPendingStorageObjectDeletions(ctx);
       expect(retryResult).toEqual({ completed: 1, failed: 0 });
       expect(provider.objects.has(keys[0])).toBe(false);
@@ -597,10 +603,16 @@ describe("parent document retirement", () => {
     } finally {
       await db
         .delete(storageObjectDeletions)
-        .where(inArray(storageObjectDeletions.storageKey, keys));
-      await db.delete(documents).where(eq(documents.entityId, fixture.reactorId));
-      await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+        .where(eq(storageObjectDeletions.organizationId, organizationId));
+      await db
+        .delete(documents)
+        .where(eq(documents.organizationId, organizationId));
+      await db
+        .delete(reactors)
+        .where(eq(reactors.organizationId, organizationId));
+      await db
+        .delete(facilities)
+        .where(eq(facilities.organizationId, organizationId));
       await db.delete(organizations).where(eq(organizations.id, organizationId));
     }
   });
