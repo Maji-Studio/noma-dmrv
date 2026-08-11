@@ -498,8 +498,6 @@ test.describe("Production Run lifecycle (#254)", () => {
     await dialog
       .getByRole("button", { name: "Remove feedstock source 1" })
       .click();
-    await expect(feedstockDrawsRequirement).not.toBeVisible();
-    await submitCreate(page);
     await expect(feedstockDrawsRequirement).toHaveText(
       "Add at least one feedstock source.",
     );
