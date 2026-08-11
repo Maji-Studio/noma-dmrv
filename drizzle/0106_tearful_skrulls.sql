@@ -13,18 +13,4 @@ ALTER TABLE "production_run_feedstock_draws" ADD CONSTRAINT "production_run_feed
 ALTER TABLE "production_run_feedstock_draws" ADD CONSTRAINT "production_run_feedstock_draws_production_run_id_organization_id_production_runs_id_organization_id_fk" FOREIGN KEY ("production_run_id","organization_id") REFERENCES "public"."production_runs"("id","organization_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "production_run_feedstock_draws" ADD CONSTRAINT "production_run_feedstock_draws_storage_location_id_organization_id_storage_locations_id_organization_id_fk" FOREIGN KEY ("storage_location_id","organization_id") REFERENCES "public"."storage_locations"("id","organization_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "production_run_feedstock_draws_organization_run_idx" ON "production_run_feedstock_draws" USING btree ("organization_id","production_run_id");--> statement-breakpoint
-CREATE INDEX "production_run_feedstock_draws_organization_bin_idx" ON "production_run_feedstock_draws" USING btree ("organization_id","storage_location_id");--> statement-breakpoint
-INSERT INTO "production_run_feedstock_draws" (
-	"organization_id",
-	"production_run_id",
-	"storage_location_id",
-	"wet_mass_kg"
-)
-SELECT
-	"organization_id",
-	"id",
-	"feedstock_storage_location_id",
-	"feedstock_wet_mass_kg"
-FROM "production_runs"
-WHERE "feedstock_storage_location_id" IS NOT NULL
-	AND "feedstock_wet_mass_kg" > 0;
+CREATE INDEX "production_run_feedstock_draws_organization_bin_idx" ON "production_run_feedstock_draws" USING btree ("organization_id","storage_location_id");
