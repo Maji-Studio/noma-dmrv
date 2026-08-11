@@ -239,8 +239,8 @@ const productionRunFormObject = z.object({
 
   // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
   feedstockDraws: productionRunFeedstockDrawsSchema.optional(),
-  // Legacy fields remain in the form shape until the UI slice switches to the
-  // repeatable rows. Server actions and data access no longer write from them.
+  // Keep legacy fields in the parsed shape so the action schema can reject
+  // them explicitly instead of Zod silently stripping unknown keys.
   feedstockWetMassKg: z.preprocess(
     toNumberOrNull,
     massKgSchema("Wet mass must be a positive number")
@@ -419,6 +419,29 @@ export const productionRunFormSchema = makeProductionRunFormSchema(
   DEFAULT_FACILITY_TIMEZONE,
 );
 
+function rejectLegacyFeedstockFields(
+  data: {
+    feedstockWetMassKg?: number | null;
+    feedstockStorageLocationId?: string | null;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.feedstockWetMassKg !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["feedstockWetMassKg"],
+      message: "Use feedstock draws instead of the legacy wet mass field.",
+    });
+  }
+  if (data.feedstockStorageLocationId !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["feedstockStorageLocationId"],
+      message: "Use feedstock draws instead of the legacy source bin field.",
+    });
+  }
+}
+
 // ============================================
 // Server Action Schemas
 // ============================================
@@ -433,7 +456,7 @@ export const createProductionRunSchema = productionRunFormSchema.refine(
     message:
       "A new production run can only start as Draft, Running, Complete, or Cancelled.",
   },
-);
+).superRefine(rejectLegacyFeedstockFields);
 
 /**
  * Schema for updating a production run (server action)
@@ -499,7 +522,7 @@ export const updateProductionRunSchema = z.object({
     .nullable(),
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-});
+}).superRefine(rejectLegacyFeedstockFields);
 
 /**
  * Schema for deleting a production run

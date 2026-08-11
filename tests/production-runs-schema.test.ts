@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  createProductionRunSchema,
   makeProductionRunFormSchema,
   productionRunFilterSchema,
   productionRunFormSchema,
+  updateProductionRunSchema,
 } from "@/schemas/production-runs";
 
 const originalTz = process.env.TZ;
@@ -39,6 +41,44 @@ const completeProductionRunInput = {
   endTime: "12:00",
   biocharOutputKg: 10,
 };
+
+describe("production run action feedstock contract", () => {
+  it("rejects legacy feedstock fields on create", () => {
+    const result = createProductionRunSchema.safeParse({
+      ...validProductionRunInput,
+      status: "draft",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.path)).toEqual(
+        expect.arrayContaining([
+          ["feedstockWetMassKg"],
+          ["feedstockStorageLocationId"],
+        ]),
+      );
+    }
+  });
+
+  it("rejects legacy feedstock fields on update", () => {
+    const result = updateProductionRunSchema.safeParse({
+      productionRunId: "55555555-5555-4555-8555-555555555555",
+      feedstockWetMassKg: 100,
+      feedstockStorageLocationId:
+        "33333333-3333-4333-8333-333333333333",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.path)).toEqual(
+        expect.arrayContaining([
+          ["feedstockWetMassKg"],
+          ["feedstockStorageLocationId"],
+        ]),
+      );
+    }
+  });
+});
 
 describe("productionRunFormSchema mass balance", () => {
   it("rejects dry biochar output above dry feedstock input", () => {
