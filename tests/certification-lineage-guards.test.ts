@@ -22,6 +22,7 @@ import {
   updateProductionRun,
 } from "@/data-access/production-runs";
 import { deleteSample, updateSample } from "@/data-access/samples";
+import { createTransportLeg } from "@/data-access/transport-legs";
 import { db } from "@/db";
 import {
   applications,
@@ -46,7 +47,8 @@ import {
 } from "@/db/schema";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
-const LOCKED_COPY = "Create a correction instead of editing locked source data";
+const LOCKED_COPY =
+  "Submitted Removal data is locked. Removal cancellation is not available yet.";
 
 interface LineageFixture {
   applicationId: string;
@@ -468,7 +470,9 @@ describe("certification lineage guards", () => {
             moistureContentPercent: 5,
             waterAddedKg: 0,
           }),
-        ).rejects.toThrow(LOCKED_COPY);
+        ).rejects.toThrow(
+          "Cannot create this biochar product because its production run is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+        );
       } finally {
         // If the certified-lineage guard ever regresses and the create
         // succeeds, the assertion fails AND leaves an orphan product behind.
@@ -513,7 +517,25 @@ describe("certification lineage guards", () => {
           applicationDate: new Date("2026-06-17T00:00:00Z"),
           biocharAppliedTons: 0.01,
         }),
-      ).rejects.toThrow(LOCKED_COPY);
+      ).rejects.toThrow(
+        "Cannot create this application because its delivery is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+      );
+    });
+  });
+
+  it("rejects new transport legs on a submitted parent lineage", async () => {
+    await withFixture(async (fixture) => {
+      await expect(
+        createTransportLeg(makeTestOrgContext(TEST_USER_ID), {
+          entityType: "feedstock",
+          entityId: fixture.feedstockId,
+          distanceKm: 10,
+          transportMethodType: "road",
+          loadMassKg: 100,
+        }),
+      ).rejects.toThrow(
+        "Cannot create this transport leg because its feedstock is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+      );
     });
   });
 
@@ -541,7 +563,9 @@ describe("certification lineage guards", () => {
         updateCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId, {
           siteManagementNotes: "locked notes",
         }),
-      ).rejects.toThrow(LOCKED_COPY);
+      ).rejects.toThrow(
+        "Cannot update this credit batch because it is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+      );
     });
   });
 

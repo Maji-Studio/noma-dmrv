@@ -591,6 +591,7 @@ export async function createSample(
       tx,
       { entityType: "creditBatch", entityId: data.creditBatchId },
       "create",
+      "sample",
     );
 
     // Verify the batch exists and enforce its declared tier's evidence
@@ -808,6 +809,7 @@ export async function updateSample(
         tx,
         { entityType: "creditBatch", entityId: data.creditBatchId },
         "update",
+        "sample",
       );
     }
 
