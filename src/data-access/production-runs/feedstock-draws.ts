@@ -17,7 +17,6 @@ import {
   allocateFeedstockWetMass,
   assertFeedstockWetDrawWithinStock,
 } from "../feedstock-wet-stock";
-import { assertStockLockSnapshot } from "../lock-bin-stocks";
 import { requireOrgScope } from "../utils";
 
 const MASS_PRECISION_FACTOR = 1 / MASS_KG_INPUT_STEP;
@@ -73,9 +72,11 @@ export function normalizeProductionRunFeedstockDraws(
     throw new SafeError("Total feedstock wet mass is too large");
   }
 
-  return normalized.sort((left, right) =>
-    left.storageLocationId.localeCompare(right.storageLocationId),
-  );
+  return normalized.sort((left, right) => {
+    if (left.storageLocationId < right.storageLocationId) return -1;
+    if (left.storageLocationId > right.storageLocationId) return 1;
+    return 0;
+  });
 }
 
 export function sumProductionRunFeedstockDraws(
@@ -124,16 +125,6 @@ export async function getProductionRunFeedstockDrawTotal(
       ),
     );
   return Number(row?.total ?? 0);
-}
-
-export function assertProductionRunFeedstockDrawSnapshot(
-  beforeLock: readonly string[],
-  afterLock: readonly string[],
-): void {
-  assertStockLockSnapshot(
-    beforeLock.length === afterLock.length &&
-      beforeLock.every((id, index) => id === afterLock[index]),
-  );
 }
 
 /** Validate every selected bin while the complete sorted bin-lock set is held. */
