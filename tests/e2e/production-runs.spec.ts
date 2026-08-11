@@ -490,8 +490,21 @@ test.describe("Production Run lifecycle (#254)", () => {
     const feedstockRequirement = dialog.locator(
       "#feedstockMoisturePercent-error",
     );
+    const feedstockDrawsRequirement = dialog.locator(
+      "#feedstockDraws-error",
+    );
 
     await dialog.locator('select[name="status"]').selectOption("complete");
+    await dialog
+      .getByRole("button", { name: "Remove feedstock source 1" })
+      .click();
+    await expect(feedstockDrawsRequirement).not.toBeVisible();
+    await submitCreate(page);
+    await expect(feedstockDrawsRequirement).toHaveText(
+      "Add at least one feedstock source.",
+    );
+
+    await dialog.getByRole("button", { name: "Add source" }).click();
     await selectEntity(
       page,
       "Source Bin",
@@ -502,6 +515,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     await dialog.locator('input[name="feedstockMoisturePercent"]').focus();
 
     await expect(feedstockRequirement).not.toBeVisible();
+    await expect(feedstockDrawsRequirement).not.toBeVisible();
 
     await submitCreate(page);
     await expect(feedstockRequirement).toHaveText("Enter feedstock moisture.");
