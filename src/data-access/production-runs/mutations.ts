@@ -397,6 +397,15 @@ export async function updateProductionRun(
         : existingFeedstockStorageLocationIds.length === 1
           ? existingFeedstockStorageLocationIds[0]
           : null;
+    if (
+      storageLocationId === null &&
+      data.feedstockStorageLocationId === undefined &&
+      existingFeedstockStorageLocationIds.length > 1
+    ) {
+      throw new SafeError(
+        "This run draws from several bins. Send feedstockDraws to change its feedstock.",
+      );
+    }
     const wetMassKg =
       data.feedstockWetMassKg !== undefined
         ? data.feedstockWetMassKg

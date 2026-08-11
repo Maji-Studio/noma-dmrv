@@ -286,6 +286,12 @@ describe("production-run wet feedstock stock", () => {
       await deriveFeedstockWetStockKg(ctx, db, secondaryStorageLocationId),
     ).toBe(300);
 
+    await expect(
+      updateProductionRun(ctx, runId, { feedstockWetMassKg: 500 }),
+    ).rejects.toThrow(
+      "This run draws from several bins. Send feedstockDraws to change its feedstock.",
+    );
+
     const replaced = await updateProductionRun(ctx, runId, {
       feedstockDraws: [
         { storageLocationId: secondaryStorageLocationId, wetMassKg: 100 },
