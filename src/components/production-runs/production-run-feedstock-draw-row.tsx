@@ -78,6 +78,7 @@ export function ProductionRunFeedstockDrawRow({
           Feedstock source {index + 1}
         </span>
         <Button
+          type="button"
           variant="destructive"
           size="icon"
           onClick={onRemove}

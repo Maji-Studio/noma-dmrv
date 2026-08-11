@@ -21,7 +21,7 @@ import Link from "next/link";
 import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { ProductionReadingsField } from "./production-readings-field";
 import { FormSelect } from "@/components/forms/form-select";
@@ -63,6 +63,7 @@ const isProductionRunCertifyField = (field: string) =>
 const BIOCHAR_BIN_QUICK_ADD_TYPES = ["biochar_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 const EMPTY_FEEDSTOCK_DRAW = { storageLocationId: "", wetMassKg: undefined };
+const FEEDSTOCK_MASS_MAX_FRACTION_DIGITS = 3;
 
 // ============================================
 // Component
@@ -215,7 +216,9 @@ export function ProductionRunForm({
   // Watch fields for flow preview
   const watchedReactorId = useWatch({ control, name: "reactorId" });
   const watchedFeedstockDraws = useWatch({ control, name: "feedstockDraws" }) ?? [];
-  const watchedSourceBinId = watchedFeedstockDraws[0]?.storageLocationId;
+  const watchedSourceBinId = watchedFeedstockDraws.find(
+    (draw) => !!draw?.storageLocationId,
+  )?.storageLocationId;
   const selectedFeedstockDrawCount = watchedFeedstockDraws.filter(
     (draw) => !!draw?.storageLocationId,
   ).length;
@@ -545,6 +548,10 @@ export function ProductionRunForm({
             Add a source bin and the wet mass drawn from it.
           </p>
         )}
+        <FormError
+          id="feedstockDraws-error"
+          message={errors.feedstockDraws?.message}
+        />
 
         {feedstockDrawFields.map((drawField, index) => (
           <Controller
@@ -599,7 +606,7 @@ export function ProductionRunForm({
             </p>
             <p className="body-small font-medium text-[var(--color-text-primary)] mt-2">
               {watchWetMass.toLocaleString("en-US", {
-                maximumFractionDigits: 3,
+                maximumFractionDigits: FEEDSTOCK_MASS_MAX_FRACTION_DIGITS,
               })} kg from {selectedFeedstockDrawCount} {selectedFeedstockDrawCount === 1 ? "bin" : "bins"}
             </p>
           </div>
