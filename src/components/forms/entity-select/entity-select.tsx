@@ -23,6 +23,7 @@ import { VehicleQuickAddDialog } from "./vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
 import { FormulationQuickAddDialog } from "./formulation-quick-add-dialog";
 import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
+import { SupplierQuickAddDialog } from "./supplier-quick-add-dialog";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
 import { formatRemainingMass } from "./remaining-mass";
 
@@ -237,6 +238,7 @@ export function EntitySelect({
   const [isVehicleDialogOpen, setIsVehicleDialogOpen] = useState(false);
   const [isFeedstockTypeDialogOpen, setIsFeedstockTypeDialogOpen] = useState(false);
   const [isFormulationDialogOpen, setIsFormulationDialogOpen] = useState(false);
+  const [isSupplierDialogOpen, setIsSupplierDialogOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -328,6 +330,8 @@ export function EntitySelect({
         return () => setIsFeedstockTypeDialogOpen(true);
       case "formulation":
         return () => setIsFormulationDialogOpen(true);
+      case "supplier":
+        return () => setIsSupplierDialogOpen(true);
       default:
         return undefined;
     }
@@ -740,6 +744,11 @@ export function EntitySelect({
       <FormulationQuickAddDialog
         isOpen={isFormulationDialogOpen}
         onClose={() => setIsFormulationDialogOpen(false)}
+        onSuccess={handleCreatedEntity}
+      />
+      <SupplierQuickAddDialog
+        isOpen={isSupplierDialogOpen}
+        onClose={() => setIsSupplierDialogOpen(false)}
         onSuccess={handleCreatedEntity}
       />
     </div>

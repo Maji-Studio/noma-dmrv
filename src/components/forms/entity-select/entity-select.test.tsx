@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const entityState = vi.hoisted(() => ({
   options: [] as Array<{
@@ -22,6 +23,10 @@ const entityState = vi.hoisted(() => ({
   listDataUpdatedAt: 0,
   selectedDataUpdatedAt: 0,
   selectedError: null as Error | null,
+  supplierDialogOpen: false,
+  supplierDialogOnSuccess: undefined as
+    | ((entity: { id: string; code: string; name: string }) => void)
+    | undefined,
 }));
 
 vi.mock("@/hooks/use-entities", () => ({
@@ -55,12 +60,38 @@ vi.mock("./feedstock-type-quick-add-dialog", () => ({
 vi.mock("./formulation-quick-add-dialog", () => ({
   FormulationQuickAddDialog: () => null,
 }));
+vi.mock("./supplier-quick-add-dialog", () => ({
+  SupplierQuickAddDialog: ({
+    isOpen,
+    onSuccess,
+  }: {
+    isOpen: boolean;
+    onSuccess: (entity: { id: string; code: string; name: string }) => void;
+  }) => {
+    entityState.supplierDialogOpen = isOpen;
+    entityState.supplierDialogOnSuccess = onSuccess;
+    return null;
+  },
+}));
 
 import {
   EntityOptionText,
   EntitySelect,
   shouldRenderCreateAction,
 } from "./entity-select";
+
+beforeAll(() => {
+  (
+    globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT: boolean;
+    }
+  ).IS_REACT_ACT_ENVIRONMENT = true;
+
+  vi.stubGlobal("document", {
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
+});
 
 beforeEach(() => {
   entityState.options = [];
@@ -69,6 +100,8 @@ beforeEach(() => {
   entityState.listDataUpdatedAt = 0;
   entityState.selectedDataUpdatedAt = 0;
   entityState.selectedError = null;
+  entityState.supplierDialogOpen = false;
+  entityState.supplierDialogOnSuccess = undefined;
 });
 
 function render(value?: string): string {
@@ -298,6 +331,49 @@ describe("EntitySelect none option", () => {
 });
 
 describe("EntitySelect open option display", () => {
+  it("registers the default supplier quick-add while supplier options exist", async () => {
+    entityState.options = [
+      { id: "supplier-1", code: "SUP-001", name: "Existing Supplier" },
+    ];
+    const onChange = vi.fn();
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <EntitySelect
+          entityType="supplier"
+          value=""
+          onChange={onChange}
+          allowCreate
+        />,
+      );
+    });
+
+    const trigger = renderer?.root.findByProps({
+      "data-testid": "entity-select-trigger",
+    });
+    await act(async () => trigger?.props.onClick());
+
+    const createAction = renderer?.root.findByProps({
+      "data-testid": "entity-select-create",
+    });
+    expect(createAction?.props.children).toBeDefined();
+
+    await act(async () => createAction?.props.onClick());
+    expect(entityState.supplierDialogOpen).toBe(true);
+
+    await act(async () =>
+      entityState.supplierDialogOnSuccess?.({
+        id: "supplier-2",
+        code: "SUP-002",
+        name: "New Supplier",
+      }),
+    );
+    expect(onChange).toHaveBeenCalledWith("supplier-2");
+
+    await act(async () => renderer?.unmount());
+  });
+
   it("keeps an explicitly allowed create action with non-empty options", () => {
     expect(
       shouldRenderCreateAction({

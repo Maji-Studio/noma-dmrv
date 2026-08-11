@@ -4,7 +4,12 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type { Supplier, SupplierLocation } from "@/db/schema";
 
 const SUPPLIERS_STALE_TIME_MS = 60_000;
@@ -38,6 +43,7 @@ import {
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { invalidateOnboardingProgress } from "./use-onboarding";
+import { entityKeys } from "./entity-query-keys";
 
 // ============================================
 // Query Keys
@@ -56,6 +62,16 @@ export const supplierKeys = {
   codeCheck: (code: string, excludeId?: string) =>
     [...supplierKeys.all, "codeCheck", code, excludeId] as const,
 };
+
+function seedSupplierEntityCache(queryClient: QueryClient, supplier: Supplier) {
+  queryClient.setQueryData(
+    entityKeys.detail("supplier", supplier.id),
+    supplier,
+  );
+  void queryClient.invalidateQueries({
+    queryKey: entityKeys.listPrefix("supplier"),
+  });
+}
 
 // ============================================
 // Supplier Query Hooks
@@ -187,6 +203,7 @@ export function useCreateSupplier(
 
       // Pre-populate the detail cache with the new supplier
       queryClient.setQueryData(supplierKeys.detail(data.id), data);
+      seedSupplierEntityCache(queryClient, data);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -219,6 +236,7 @@ export function useCreateSupplierWithLocations(
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
       await invalidateOnboardingProgress(queryClient);
       queryClient.setQueryData(supplierKeys.detail(data.id), data);
+      seedSupplierEntityCache(queryClient, data);
 
       await callbacks?.onSuccess?.(data, variables);
     },
