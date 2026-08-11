@@ -53,9 +53,12 @@ export function SupplierQuickAddDialog({
     <QuickAddDialogShell
       isOpen={isOpen}
       onClose={onClose}
+      onOpen={() => setError(null)}
       title="New supplier"
       width="lg"
       testId="supplier-quick-add-dialog"
+      dismissOnClickOutside={false}
+      dismissible={!createSupplier.isPending}
     >
       <SupplierForm
         onSubmit={(supplier, locations) =>
