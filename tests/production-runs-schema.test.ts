@@ -18,6 +18,12 @@ const validProductionRunInput = {
   cancellationReason: "",
   startDate: "2026-07-15",
   startTime: "08:00",
+  feedstockDraws: [
+    {
+      storageLocationId: "33333333-3333-4333-8333-333333333333",
+      wetMassKg: 100,
+    },
+  ],
   feedstockStorageLocationId: "33333333-3333-4333-8333-333333333333",
   biocharStorageLocationId: "44444444-4444-4444-8444-444444444444",
   feedstockWetMassKg: 100,
@@ -64,7 +70,10 @@ describe("productionRunFormSchema mass balance", () => {
   it("rejects mass and moisture precision that storage would round", () => {
     const result = productionRunFormSchema.safeParse({
       ...validProductionRunInput,
-      feedstockWetMassKg: 100.0001,
+      feedstockDraws: [{
+        ...validProductionRunInput.feedstockDraws[0],
+        wetMassKg: 100.0001,
+      }],
       feedstockMoisturePercent: 20.1234567,
       biocharOutputKg: 80,
       biocharMoisturePercent: 0,
@@ -74,7 +83,7 @@ describe("productionRunFormSchema mass balance", () => {
     if (!result.success) {
       expect(result.error.issues).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ path: ["feedstockWetMassKg"] }),
+          expect.objectContaining({ path: ["feedstockDraws", 0, "wetMassKg"] }),
           expect.objectContaining({ path: ["feedstockMoisturePercent"] }),
         ]),
       );
@@ -85,16 +94,10 @@ describe("productionRunFormSchema mass balance", () => {
 describe("productionRunFormSchema terminal feedstock requirements", () => {
   it.each([
     {
-      label: "source bin",
-      overrides: { feedstockStorageLocationId: null },
-      path: ["feedstockStorageLocationId"],
-      message: "Select a source bin.",
-    },
-    {
-      label: "wet mass",
-      overrides: { feedstockWetMassKg: null },
-      path: ["feedstockWetMassKg"],
-      message: "Enter feedstock wet mass.",
+      label: "source rows",
+      overrides: { feedstockDraws: [] },
+      path: ["feedstockDraws"],
+      message: "Add at least one feedstock source.",
     },
     {
       label: "moisture",
@@ -122,6 +125,57 @@ describe("productionRunFormSchema terminal feedstock requirements", () => {
           message:
             "A complete run needs a source bin, moisture %, and wet mass to compute consumed feedstock.",
         }),
+      );
+    }
+  });
+
+  it("reports duplicate bins on the repeated row", () => {
+    const result = productionRunFormSchema.safeParse({
+      ...completeProductionRunInput,
+      feedstockDraws: [
+        completeProductionRunInput.feedstockDraws[0],
+        completeProductionRunInput.feedstockDraws[0],
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ["feedstockDraws", 1, "storageLocationId"],
+          message: "Each source bin can only be used once per run.",
+        }),
+      );
+    }
+  });
+
+  it.each([
+    {
+      label: "empty row",
+      draw: { storageLocationId: "", wetMassKg: "" },
+      paths: [
+        ["feedstockDraws", 0, "storageLocationId"],
+        ["feedstockDraws", 0, "wetMassKg"],
+      ],
+    },
+    {
+      label: "malformed row",
+      draw: { storageLocationId: "not-a-uuid", wetMassKg: "abc" },
+      paths: [
+        ["feedstockDraws", 0, "storageLocationId"],
+        ["feedstockDraws", 0, "wetMassKg"],
+      ],
+    },
+  ])("reports field errors for a $label", ({ draw, paths }) => {
+    const result = productionRunFormSchema.safeParse({
+      ...completeProductionRunInput,
+      feedstockDraws: [draw],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.path)).toEqual(
+        expect.arrayContaining(paths),
       );
     }
   });

@@ -9,7 +9,11 @@ import {
 import { getEntities } from "@/data-access/entities";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
-import { productionRuns, productionRunFeedstocks } from "@/db/schema/production";
+import {
+  productionRunFeedstockDraws,
+  productionRuns,
+  productionRunFeedstocks,
+} from "@/db/schema/production";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
@@ -141,6 +145,11 @@ beforeAll(async () => {
           .where(inArray(productionRunFeedstocks.productionRunId, createdRunIds)),
       );
       await cleanup(() =>
+        db
+          .delete(productionRunFeedstockDraws)
+          .where(inArray(productionRunFeedstockDraws.productionRunId, createdRunIds)),
+      );
+      await cleanup(() =>
         db.delete(productionRuns).where(inArray(productionRuns.id, createdRunIds)),
       );
     }
@@ -187,9 +196,8 @@ beforeAll(async () => {
       reactorId,
       startTime,
       endTime,
-      feedstockWetMassKg: 50,
+      feedstockDraws: [{ storageLocationId: feedstockStorageLocationId, wetMassKg: 50 }],
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId,
     };
   }
 
@@ -200,7 +208,12 @@ beforeAll(async () => {
     );
     createdRunIds.push(run.id);
 
-    expect(run.feedstockStorageLocationId).toBe(pyrolysisBinId);
+    expect(run.feedstockDraws).toEqual([
+      expect.objectContaining({
+        storageLocationId: pyrolysisBinId,
+        wetMassKg: 50,
+      }),
+    ]);
   });
 
   it("does not return archived production runs by id", async () => {

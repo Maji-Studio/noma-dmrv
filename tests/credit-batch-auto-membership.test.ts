@@ -9,6 +9,7 @@ import {
   feedstocks,
   feedstockTypes,
   productionProcesses,
+  productionRunFeedstockDraws,
   productionRunFeedstocks,
   productionRuns,
   reactors,
@@ -245,6 +246,11 @@ describe("credit batch automatic production-run membership", () => {
         .delete(productionRunFeedstocks)
         .where(
           inArray(productionRunFeedstocks.productionRunId, productionRunIds),
+        );
+      await db
+        .delete(productionRunFeedstockDraws)
+        .where(
+          inArray(productionRunFeedstockDraws.productionRunId, productionRunIds),
         );
       await db
         .delete(productionRuns)

@@ -7,11 +7,13 @@
 import { z } from "zod";
 import {
   emptyToNull,
+  MASS_INPUT_MAX_KG,
   massKgSchema,
   optionalDateOnly,
   optionalStoredPercent,
   PG_INTEGER_MAX,
   requiredDateOnly,
+  requiredPositiveMassKgSchema,
   storedPercentSchema,
   toIntOrNull,
   toNumberOrNull,
@@ -129,6 +131,53 @@ function hasEndTime(value: unknown): boolean {
 export const productionRunStatuses = PRODUCTION_RUN_STATUSES;
 export type { ProductionRunStatus };
 
+export const productionRunFeedstockDrawSchema = z.object({
+  storageLocationId: z
+    .string({
+      error: (issue) =>
+        issue.input === undefined
+          ? "Select a source bin."
+          : "Choose a valid source bin.",
+    })
+    .min(1, "Select a source bin.")
+    .uuid("Choose a valid source bin."),
+  wetMassKg: requiredPositiveMassKgSchema(
+    "Enter wet mass.",
+    "Wet mass must be a number.",
+    "Wet mass must be a positive number.",
+  ),
+});
+
+const productionRunFeedstockDrawsSchema = z
+  .array(productionRunFeedstockDrawSchema)
+  .superRefine((draws, ctx) => {
+    const firstIndexByStorageLocationId = new Map<string, number>();
+    let totalWetMassKg = 0;
+
+    for (const [index, draw] of draws.entries()) {
+      totalWetMassKg += draw.wetMassKg;
+      const firstIndex = firstIndexByStorageLocationId.get(
+        draw.storageLocationId,
+      );
+      if (firstIndex !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index, "storageLocationId"],
+          message: "Each source bin can only be used once per run.",
+        });
+      } else {
+        firstIndexByStorageLocationId.set(draw.storageLocationId, index);
+      }
+    }
+
+    if (totalWetMassKg > MASS_INPUT_MAX_KG) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Total feedstock wet mass must be ${MASS_INPUT_MAX_KG.toLocaleString("en-US")} kg or less.`,
+      });
+    }
+  });
+
 // ============================================
 // Production Run Form Schema (Client-side validation)
 // ============================================
@@ -189,6 +238,9 @@ const productionRunFormObject = z.object({
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
   // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
+  feedstockDraws: productionRunFeedstockDrawsSchema.optional(),
+  // Legacy fields remain in the form shape until the UI slice switches to the
+  // repeatable rows. Server actions and data access no longer write from them.
   feedstockWetMassKg: z.preprocess(
     toNumberOrNull,
     massKgSchema("Wet mass must be a positive number")
@@ -276,6 +328,11 @@ export function makeProductionRunFormSchema(
       });
     }
 
+    const feedstockDraws = data.feedstockDraws ?? [];
+    const totalFeedstockWetMassKg = feedstockDraws.reduce(
+      (total, draw) => total + draw.wetMassKg,
+      0,
+    );
     const violations = getProductionRunOutcomeViolations({
       status: data.status,
       startTime: start.instant,
@@ -284,11 +341,11 @@ export function makeProductionRunFormSchema(
       cancellationReason: data.cancellationReason,
       biocharOutputKg: data.biocharOutputKg,
       biocharMoisturePercent: data.biocharMoisturePercent,
-      feedstockWetMassKg: data.feedstockWetMassKg,
+      feedstockWetMassKg: totalFeedstockWetMassKg,
       feedstockMoisturePercent: data.feedstockMoisturePercent,
       feedstock: {
         basis: "form-inputs",
-        storageLocationId: data.feedstockStorageLocationId,
+        drawCount: feedstockDraws.length,
       },
     });
 
@@ -316,18 +373,11 @@ export function makeProductionRunFormSchema(
           });
           break;
         case "feedstock-required":
-          if (!data.feedstockStorageLocationId) {
+          if (feedstockDraws.length === 0) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
-              path: ["feedstockStorageLocationId"],
-              message: "Select a source bin.",
-            });
-          }
-          if (data.feedstockWetMassKg == null) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["feedstockWetMassKg"],
-              message: "Enter feedstock wet mass.",
+              path: ["feedstockDraws"],
+              message: "Add at least one feedstock source.",
             });
           }
           if (data.feedstockMoisturePercent == null) {
@@ -428,6 +478,7 @@ export const updateProductionRunSchema = z.object({
     }),
   ]).optional(),
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  feedstockDraws: productionRunFeedstockDrawsSchema.optional(),
   feedstockWetMassKg: massKgSchema().positive().optional().nullable(),
   feedstockMoisturePercent: storedPercentSchema()
     .min(0)

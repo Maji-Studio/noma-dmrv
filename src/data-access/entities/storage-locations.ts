@@ -20,7 +20,7 @@ import {
   feedstocks,
   feedstockTypes,
   productionRuns,
-  productionRunFeedstocks,
+  productionRunFeedstockDraws,
   biocharProducts,
   biocharProductSourceAllocations,
   binMovements,
@@ -200,24 +200,24 @@ function buildInventoryAggregates(
 
   const productionRunConsumptionAggregate = executor
   .select({
-    storageLocationId: productionRuns.feedstockStorageLocationId,
-    totalConsumedKg: sumNumeric(productionRunFeedstocks.wetMassUsedKg).as(
+    storageLocationId: productionRunFeedstockDraws.storageLocationId,
+    totalConsumedKg: sumNumeric(productionRunFeedstockDraws.wetMassKg).as(
       "total_consumed_kg",
     ),
   })
-  .from(productionRuns)
-  .leftJoin(
-    productionRunFeedstocks,
+  .from(productionRunFeedstockDraws)
+  .innerJoin(
+    productionRuns,
     and(
-      eq(productionRunFeedstocks.productionRunId, productionRuns.id),
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+      eq(productionRunFeedstockDraws.productionRunId, productionRuns.id),
+      eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
     ),
   )
   .where(and(
     eq(productionRuns.organizationId, ctx.organizationId),
     ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
   ))
-  .groupBy(productionRuns.feedstockStorageLocationId)
+  .groupBy(productionRunFeedstockDraws.storageLocationId)
   .as("production_run_consumption_agg");
 
   const ingredientConsumptionAggregate = executor

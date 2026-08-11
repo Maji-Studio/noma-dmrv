@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   binMovements,
@@ -10,6 +10,7 @@ import {
   feedstocks,
   feedstockTypes,
   orders,
+  productionRunFeedstockDraws,
   productionRunFeedstocks,
   productionRuns,
   reactors,
@@ -403,6 +404,20 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
       await db
         .delete(productionRunFeedstocks)
         .where(eq(productionRunFeedstocks.feedstockId, feedstock.id));
+      const runRows = await db
+        .select({ id: productionRuns.id })
+        .from(productionRuns)
+        .where(eq(productionRuns.code, runCode));
+      if (runRows.length > 0) {
+        await db
+          .delete(productionRunFeedstockDraws)
+          .where(
+            inArray(
+              productionRunFeedstockDraws.productionRunId,
+              runRows.map((run) => run.id),
+            ),
+          );
+      }
       await db.delete(productionRuns).where(eq(productionRuns.code, runCode));
       await db
         .delete(binMovements)
