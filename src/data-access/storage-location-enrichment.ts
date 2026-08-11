@@ -393,24 +393,23 @@ export async function enrichStorageLocationRows(
             FROM feedstocks WHERE organization_id = ${ctx.organizationId} AND storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
             SELECT
-              pr.feedstock_storage_location_id,
+              prfd.storage_location_id,
               'out',
               pr.created_at,
-              COALESCE(SUM(prf.wet_mass_used_kg), pr.feedstock_wet_mass_kg, 0) as mass_kg,
-              pr.feedstock_mass_dry_kg as mass_dry_kg,
+              prfd.wet_mass_kg as mass_kg,
+              CASE
+                WHEN pr.feedstock_moisture_percent IS NULL THEN NULL
+                ELSE prfd.wet_mass_kg * (1 - pr.feedstock_moisture_percent / 100.0)
+              END as mass_dry_kg,
               'Feedstock used'
-            FROM production_runs pr
-            LEFT JOIN production_run_feedstocks prf ON prf.production_run_id = pr.id AND prf.organization_id = ${ctx.organizationId}
+            FROM production_run_feedstock_draws prfd
+            JOIN production_runs pr
+              ON pr.id = prfd.production_run_id
+              AND pr.organization_id = ${ctx.organizationId}
             WHERE pr.organization_id = ${ctx.organizationId}
+              AND prfd.organization_id = ${ctx.organizationId}
               AND pr.status <> 'cancelled'
-              AND pr.feedstock_storage_location_id IN (${storageLocationIdsSql})
-            GROUP BY
-              pr.id,
-              pr.feedstock_storage_location_id,
-              pr.created_at,
-              pr.feedstock_wet_mass_kg,
-              pr.feedstock_mass_dry_kg,
-              pr.code
+              AND prfd.storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
             SELECT
               biochar_storage_location_id,

@@ -34,7 +34,10 @@ import { db } from "@/db";
 import { getStorageLocations } from "@/data-access/storage-locations";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
-import { productionRuns } from "@/db/schema/production";
+import {
+  productionRunFeedstockDraws,
+  productionRuns,
+} from "@/db/schema/production";
 import {
   biocharProducts,
   biocharProductSourceAllocations,
@@ -211,6 +214,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
           facilityId: facility.id,
           reactorId: reactor.id,
           startTime: T2_RUN_DRAW,
+          feedstockMoisturePercent: 20,
           feedstockStorageLocationId: binB.id,
           createdAt: T2_RUN_DRAW,
         },
@@ -258,6 +262,13 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
         },
       ])
       .returning({ id: productionRuns.id });
+
+    await tx.insert(productionRunFeedstockDraws).values({
+      organizationId: TEST_ORG_ID,
+      productionRunId: insertedRuns[0].id,
+      storageLocationId: binB.id,
+      wetMassKg: 100,
+    });
 
     const binDRunId = insertedRuns[2].id;
     const [binGRun1, binGRun2] = insertedRuns.slice(3);
@@ -374,6 +385,14 @@ async function cleanupFixture(fixture: ActivitySortFixture): Promise<void> {
       .delete(biocharProducts)
       .where(inArray(biocharProducts.id, fixture.biocharProductIds));
     await tx
+      .delete(productionRunFeedstockDraws)
+      .where(
+        inArray(
+          productionRunFeedstockDraws.productionRunId,
+          fixture.productionRunIds,
+        ),
+      );
+    await tx
       .delete(productionRuns)
       .where(inArray(productionRuns.id, fixture.productionRunIds));
     await tx.delete(feedstocks).where(inArray(feedstocks.id, fixture.feedstockIds));
@@ -464,6 +483,16 @@ describe("storage-location lastActivityAt sort", () => {
       const commingledBin = items.find(
         (bin) => bin.id === fixture.binIdsByAge[4],
       );
+      const feedstockBin = items.find(
+        (bin) => bin.id === fixture.binIdsByAge[1],
+      );
+
+      expect(feedstockBin?.lastActivity).toMatchObject({
+        type: "out",
+        massKg: 100,
+        massDryKg: 80,
+        label: "Feedstock used",
+      });
 
       expect(legacyBin?.lastActivity).toMatchObject({
         type: "out",
