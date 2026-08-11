@@ -73,7 +73,7 @@ async function openRunFormWithSource(
     seededData.feedstockStorageLocation.id,
     seededData.feedstockStorageLocation.name,
   );
-  await page.fill('input[name="feedstockWetMassKg"]', draw.wetMassKg);
+  await page.fill('input[name="feedstockDraws.0.wetMassKg"]', draw.wetMassKg);
   await page.fill(
     'input[name="feedstockMoisturePercent"]',
     draw.moisturePercent,
@@ -117,7 +117,7 @@ async function openCompleteRunForm(
     seededData.feedstockStorageLocation.name,
   );
   await page.fill(
-    'input[name="feedstockWetMassKg"]',
+    'input[name="feedstockDraws.0.wetMassKg"]',
     values.feedstockWetMassKg ?? "1",
   );
   await page.fill(
@@ -442,21 +442,21 @@ test.describe("createProductionRun feedstock guard", () => {
       moisturePercent: "10",
     });
 
-    const error = page.locator("#feedstockWetMassKg-error");
+    const error = page.locator("#feedstockDraws\\.0\\.wetMassKg-error");
     await expect(error).toBeVisible({
       timeout: 10000,
     });
     await expect(
-      page.locator('input[name="feedstockWetMassKg"]'),
+      page.locator('input[name="feedstockDraws.0.wetMassKg"]'),
     ).toHaveAttribute("aria-describedby", /feedstockWetMassKg-error/);
     await expect(error).toHaveText(feedstockOverdrawText);
 
     // Correcting the draw must clear the inline error without a submit.
-    await page.fill('input[name="feedstockWetMassKg"]', "50");
+    await page.fill('input[name="feedstockDraws.0.wetMassKg"]', "50");
     await expect(error).toBeHidden();
 
     // Re-entering the overdraw still blocks the write.
-    await page.fill('input[name="feedstockWetMassKg"]', "200");
+    await page.fill('input[name="feedstockDraws.0.wetMassKg"]', "200");
     await submitRunCreate(page);
     await expect(error).toBeVisible({ timeout: 10000 });
   });
@@ -490,8 +490,8 @@ test.describe("updateProductionRun feedstock guard", () => {
       feedstockWetMassKg: "80",
       feedstockMoisturePercent: "0",
     });
-    await editRunByCode(page, runCode, "feedstockWetMassKg");
-    await page.fill('input[name="feedstockWetMassKg"]', "130");
+    await editRunByCode(page, runCode, "feedstockDraws.0.wetMassKg");
+    await page.fill('input[name="feedstockDraws.0.wetMassKg"]', "130");
 
     const error = page
       .locator('[role="dialog"]')
@@ -514,8 +514,8 @@ test.describe("updateProductionRun feedstock guard", () => {
       feedstockWetMassKg: "80",
       feedstockMoisturePercent: "0",
     });
-    await editRunByCode(page, runCode, "feedstockWetMassKg");
-    await page.fill('input[name="feedstockWetMassKg"]', "90");
+    await editRunByCode(page, runCode, "feedstockDraws.0.wetMassKg");
+    await page.fill('input[name="feedstockDraws.0.wetMassKg"]', "90");
     await saveEdit(page);
 
     await waitForSideSheetClose(page);

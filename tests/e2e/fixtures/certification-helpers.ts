@@ -341,6 +341,12 @@ export async function seedGroupedRemovalWithChain(
         feedstockId: refs.feedstockId,
         wetMassUsedKg: 400,
       });
+      await tx.insert(schema.productionRunFeedstockDraws).values({
+        organizationId: DEC_ORG_ID,
+        productionRunId: id.productionRun,
+        storageLocationId: refs.feedstockStorageLocationId,
+        wetMassKg: 400,
+      });
       await tx.insert(schema.biocharProducts).values({
         organizationId: DEC_ORG_ID,
         id: id.biocharProduct,
@@ -503,6 +509,14 @@ export async function seedGroupedRemovalWithChain(
               eq(
                 schema.productionRunFeedstocks.id,
                 id.productionRunFeedstock,
+              ),
+            );
+          await tx
+            .delete(schema.productionRunFeedstockDraws)
+            .where(
+              eq(
+                schema.productionRunFeedstockDraws.productionRunId,
+                id.productionRun,
               ),
             );
           await tx
@@ -880,6 +894,12 @@ export async function seedUngroupedReadyBatchWithChain(
         feedstockId: refs.feedstockId,
         wetMassUsedKg: 400,
       });
+      await tx.insert(schema.productionRunFeedstockDraws).values({
+        organizationId: DEC_ORG_ID,
+        productionRunId: id.productionRun,
+        storageLocationId: refs.feedstockStorageLocationId,
+        wetMassKg: 400,
+      });
       await tx.insert(schema.biocharProducts).values({
         organizationId: DEC_ORG_ID,
         id: id.biocharProduct,
@@ -1124,6 +1144,14 @@ export async function seedUngroupedReadyBatchWithChain(
             .delete(schema.productionRunFeedstocks)
             .where(
               eq(schema.productionRunFeedstocks.id, id.productionRunFeedstock),
+            );
+          await tx
+            .delete(schema.productionRunFeedstockDraws)
+            .where(
+              eq(
+                schema.productionRunFeedstockDraws.productionRunId,
+                id.productionRun,
+              ),
             );
           await tx
             .delete(schema.documents)

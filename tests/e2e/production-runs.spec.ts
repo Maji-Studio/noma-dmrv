@@ -11,10 +11,22 @@ import type { Page } from "@playwright/test";
 import { test, expect, type SeededChainData } from "./fixtures";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
 import {
+  getCreatedActionCode,
   selectEntity,
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
+import { createDbConnection } from "./fixtures/db";
+import { DEC_ORG_ID } from "@/db/org-defaults";
+import {
+  feedstocks,
+  feedstockTypes,
+  productionRunFeedstockDraws,
+  productionRunFeedstocks,
+  productionRuns,
+  storageLocations,
+} from "@/db/schema";
+import { eq, inArray } from "drizzle-orm";
 
 test.describe("Production Run + Sample UI CRUD", () => {
   async function createProductionRun(page: Page, seededData: SeededChainData) {
@@ -45,7 +57,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
       seededData.feedstockStorageLocation.name
     );
 
-    await page.fill('input[name="feedstockWetMassKg"]', "50");
+    await page.fill('input[name="feedstockDraws.0.wetMassKg"]', "50");
     await page.fill('input[name="feedstockMoisturePercent"]', "15");
     await selectEntity(
       page,
@@ -71,6 +83,163 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await expect(
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("creates and edits explicit draws from two pyrolysis feedstock types", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    const { db, pool } = createDbConnection();
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const secondaryTypeId = crypto.randomUUID();
+    const secondaryBinId = crypto.randomUUID();
+    const secondaryFeedstockId = crypto.randomUUID();
+
+    try {
+      await db.insert(feedstockTypes).values({
+        id: secondaryTypeId,
+        organizationId: DEC_ORG_ID,
+        code: `E2E-FT-MULTI-${tag}`,
+        name: `E2E Secondary Pyrolysis ${tag}`,
+        category: "agricultural",
+        usage: "pyrolysis",
+      });
+      await db.insert(storageLocations).values({
+        id: secondaryBinId,
+        organizationId: DEC_ORG_ID,
+        code: `E2E-BIN-MULTI-${tag}`,
+        name: `E2E Secondary Feedstock Bin ${tag}`,
+        type: "feedstock_bin",
+        facilityId: seededData.facility.id,
+        feedstockTypeId: secondaryTypeId,
+      });
+      await db.insert(feedstocks).values({
+        id: secondaryFeedstockId,
+        organizationId: DEC_ORG_ID,
+        code: `E2E-FS-MULTI-${tag}`,
+        facilityId: seededData.facility.id,
+        status: "complete",
+        feedstockTypeId: secondaryTypeId,
+        massWetKg: 300,
+        massDryKg: 270,
+        moistureContentPercent: 10,
+        storageLocationId: secondaryBinId,
+      });
+
+      await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+      // The per-test facility is freshly seeded, so it cannot contain a run.
+      // Avoid asking the table helper for action labels while it is rendering
+      // the empty-state transition.
+      const existingCodes = new Set<string>();
+      await page.getByRole("button", { name: "New Production Run" }).click();
+      await waitForSideSheet(page);
+      await page.locator('select[name="status"]').selectOption("draft");
+      await selectEntity(
+        page,
+        "Reactor",
+        seededData.reactor.id,
+        seededData.reactor.identifier,
+      );
+      await page.locator('input[name="startDate"]').fill("2026-08-10");
+      await page.locator('input[name="startTime"]').fill("08:00");
+      await selectEntity(
+        page,
+        "Source bin",
+        seededData.feedstockStorageLocation.id,
+        seededData.feedstockStorageLocation.name,
+      );
+      await page
+        .locator('input[name="feedstockDraws.0.wetMassKg"]')
+        .fill("50");
+      await page.getByRole("button", { name: "Add source" }).click();
+      await selectEntity(
+        page,
+        "Source bin",
+        secondaryBinId,
+        `E2E Secondary Feedstock Bin ${tag}`,
+        1,
+      );
+      await page
+        .locator('input[name="feedstockDraws.1.wetMassKg"]')
+        .fill("70");
+      await page.locator('input[name="feedstockMoisturePercent"]').fill("15");
+      await expect(page.getByText("120 kg from 2 bins")).toBeVisible();
+      await submitCreate(page);
+      await waitForSideSheetClose(page);
+
+      const createdCode = await getCreatedActionCode(page, existingCodes);
+      await page
+        .locator("tbody tr")
+        .filter({ hasText: createdCode })
+        .first()
+        .click();
+      await waitForSideSheet(page);
+      const detail = page.locator('[role="dialog"]');
+      await expect(detail.getByText(seededData.feedstockStorageLocation.name)).toBeVisible();
+      await expect(detail.getByText(`E2E Secondary Feedstock Bin ${tag}: 70 kg`)).toBeVisible();
+      await expect(detail.getByText("120 kg")).toBeVisible();
+
+      await detail.getByRole("button", { name: "Edit Production Run" }).click();
+      const drawRows = detail.locator('[data-testid^="feedstock-draw-row-"]');
+      const primaryDrawRow = drawRows.filter({
+        hasText: seededData.feedstockStorageLocation.name,
+      });
+      const secondaryDrawRow = drawRows.filter({
+        hasText: `E2E Secondary Feedstock Bin ${tag}`,
+      });
+      await expect(secondaryDrawRow.locator('input[type="number"]')).toHaveValue(
+        "70",
+      );
+      await primaryDrawRow.getByRole("button", { name: /Remove feedstock source/ }).click();
+      await secondaryDrawRow.locator('input[type="number"]').fill("60");
+      await saveEdit(page);
+      await expect(
+        page.getByRole("status").filter({ hasText: "Production run updated." }),
+      ).toBeVisible();
+      await expect(
+        detail.locator('input[name^="feedstockDraws."]'),
+      ).toHaveCount(0);
+      await expect(
+        detail.getByText(`E2E Secondary Feedstock Bin ${tag}: 60 kg`),
+      ).toBeVisible();
+      await expect(detail.getByText("60 kg", { exact: true })).toBeVisible();
+      await detail
+        .getByRole("button", { name: "Edit Production Run" })
+        .click();
+      await page
+        .locator('input[name="feedstockDraws.0.wetMassKg"]')
+        .fill("301");
+      await expect(
+        page.getByText(/^Only .+ of wet feedstock is available/),
+      ).toBeVisible();
+      await saveEdit(page);
+      await expect(page.locator('[role="dialog"]')).toBeVisible();
+
+      const [createdRun] = await db
+        .select({ id: productionRuns.id })
+        .from(productionRuns)
+        .where(eq(productionRuns.code, createdCode));
+      expect(createdRun).toBeDefined();
+    } finally {
+      const draws = await db
+        .select({ productionRunId: productionRunFeedstockDraws.productionRunId })
+        .from(productionRunFeedstockDraws)
+        .where(eq(productionRunFeedstockDraws.storageLocationId, secondaryBinId));
+      const runIds = draws.map((draw) => draw.productionRunId);
+      if (runIds.length > 0) {
+        await db
+          .delete(productionRunFeedstocks)
+          .where(inArray(productionRunFeedstocks.productionRunId, runIds));
+        await db
+          .delete(productionRunFeedstockDraws)
+          .where(inArray(productionRunFeedstockDraws.productionRunId, runIds));
+        await db.delete(productionRuns).where(inArray(productionRuns.id, runIds));
+      }
+      await db.delete(feedstocks).where(eq(feedstocks.id, secondaryFeedstockId));
+      await db.delete(storageLocations).where(eq(storageLocations.id, secondaryBinId));
+      await db.delete(feedstockTypes).where(eq(feedstockTypes.id, secondaryTypeId));
+      await pool.end();
+    }
   });
 
   test("energy fields use example ('e.g.') placeholders, not bare numbers", async ({
@@ -259,7 +428,7 @@ test.describe("Production Run lifecycle (#254)", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name,
     );
-    await dialog.locator('input[name="feedstockWetMassKg"]').fill("1000");
+    await dialog.locator('input[name="feedstockDraws.0.wetMassKg"]').fill("1000");
     await dialog.locator('input[name="feedstockMoisturePercent"]').fill("20");
     await dialog.locator('input[name="biocharOutputKg"]').fill("20000");
 
@@ -326,7 +495,7 @@ test.describe("Production Run lifecycle (#254)", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name,
     );
-    await dialog.locator('input[name="feedstockWetMassKg"]').fill("1000");
+    await dialog.locator('input[name="feedstockDraws.0.wetMassKg"]').fill("1000");
     await dialog.locator('input[name="feedstockMoisturePercent"]').focus();
 
     await expect(feedstockRequirement).not.toBeVisible();
@@ -404,14 +573,14 @@ test.describe("Production Run lifecycle (#254)", () => {
     );
     await dialog.locator('input[name="biocharOutputKg"]').fill("10");
 
-    const wetMass = dialog.locator('input[name="feedstockWetMassKg"]');
+    const wetMass = dialog.locator('input[name="feedstockDraws.0.wetMassKg"]');
     const moisture = dialog.locator(
       'input[name="feedstockMoisturePercent"]',
     );
     await wetMass.fill("50");
     await moisture.focus();
 
-    await expect(dialog.locator("#feedstockWetMassKg-error")).toHaveCount(0);
+    await expect(dialog.locator("#feedstockDraws\\.0\\.wetMassKg-error")).toHaveCount(0);
     await expect(
       dialog.locator("#feedstockMoisturePercent-error"),
     ).toHaveCount(0);
@@ -457,7 +626,7 @@ test.describe("Production Run lifecycle (#254)", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name,
     );
-    await dialog.locator('input[name="feedstockWetMassKg"]').fill("50");
+    await dialog.locator('input[name="feedstockDraws.0.wetMassKg"]').fill("50");
     await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
     await dialog.locator('select[name="status"]').selectOption("failed");
     await saveEdit(page);
@@ -647,7 +816,7 @@ test.describe("Production Run end-time editing", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name,
     );
-    await page.fill('input[name="feedstockWetMassKg"]', "50");
+    await page.fill('input[name="feedstockDraws.0.wetMassKg"]', "50");
     await page.fill('input[name="feedstockMoisturePercent"]', "15");
     await selectEntity(
       page,
