@@ -28,6 +28,9 @@ import {
 } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
 
+const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
+  'input[name="feedstockDraws.0.wetMassKg"]';
+
 test.describe("Production Run + Sample UI CRUD", () => {
   async function createProductionRun(page: Page, seededData: SeededChainData) {
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
@@ -57,7 +60,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
       seededData.feedstockStorageLocation.name
     );
 
-    await page.fill('input[name="feedstockDraws.0.wetMassKg"]', "50");
+    await page.fill(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR, "50");
     await page.fill('input[name="feedstockMoisturePercent"]', "15");
     await selectEntity(
       page,
@@ -149,7 +152,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
         seededData.feedstockStorageLocation.name,
       );
       await page
-        .locator('input[name="feedstockDraws.0.wetMassKg"]')
+        .locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR)
         .fill("50");
       await page.getByRole("button", { name: "Add source" }).click();
       await selectEntity(
@@ -207,7 +210,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
         .getByRole("button", { name: "Edit Production Run" })
         .click();
       await page
-        .locator('input[name="feedstockDraws.0.wetMassKg"]')
+        .locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR)
         .fill("301");
       await expect(
         page.getByText(/^Only .+ of wet feedstock is available/),
@@ -428,7 +431,7 @@ test.describe("Production Run lifecycle (#254)", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name,
     );
-    await dialog.locator('input[name="feedstockDraws.0.wetMassKg"]').fill("1000");
+    await dialog.locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR).fill("1000");
     await dialog.locator('input[name="feedstockMoisturePercent"]').fill("20");
     await dialog.locator('input[name="biocharOutputKg"]').fill("20000");
 
@@ -495,7 +498,7 @@ test.describe("Production Run lifecycle (#254)", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name,
     );
-    await dialog.locator('input[name="feedstockDraws.0.wetMassKg"]').fill("1000");
+    await dialog.locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR).fill("1000");
     await dialog.locator('input[name="feedstockMoisturePercent"]').focus();
 
     await expect(feedstockRequirement).not.toBeVisible();
@@ -573,7 +576,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     );
     await dialog.locator('input[name="biocharOutputKg"]').fill("10");
 
-    const wetMass = dialog.locator('input[name="feedstockDraws.0.wetMassKg"]');
+    const wetMass = dialog.locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR);
     const moisture = dialog.locator(
       'input[name="feedstockMoisturePercent"]',
     );
@@ -626,7 +629,7 @@ test.describe("Production Run lifecycle (#254)", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name,
     );
-    await dialog.locator('input[name="feedstockDraws.0.wetMassKg"]').fill("50");
+    await dialog.locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR).fill("50");
     await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
     await dialog.locator('select[name="status"]').selectOption("failed");
     await saveEdit(page);
@@ -816,7 +819,7 @@ test.describe("Production Run end-time editing", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name,
     );
-    await page.fill('input[name="feedstockDraws.0.wetMassKg"]', "50");
+    await page.fill(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR, "50");
     await page.fill('input[name="feedstockMoisturePercent"]', "15");
     await selectEntity(
       page,

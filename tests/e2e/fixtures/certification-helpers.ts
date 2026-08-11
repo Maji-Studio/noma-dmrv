@@ -233,6 +233,7 @@ const PRODUCT_WET_MASS_KG = 150;
 const PRODUCT_MOISTURE_PCT = 5;
 const BIOCHAR_OUTPUT_KG = 150;
 const BIOCHAR_MOISTURE_PCT = 5;
+const FIXTURE_FEEDSTOCK_WET_MASS_KG = 400;
 const BIOCHAR_DRY_MASS_KG = deriveMassDryKg(
   BIOCHAR_OUTPUT_KG,
   BIOCHAR_MOISTURE_PCT,
@@ -339,13 +340,13 @@ export async function seedGroupedRemovalWithChain(
         id: id.productionRunFeedstock,
         productionRunId: id.productionRun,
         feedstockId: refs.feedstockId,
-        wetMassUsedKg: 400,
+        wetMassUsedKg: FIXTURE_FEEDSTOCK_WET_MASS_KG,
       });
       await tx.insert(schema.productionRunFeedstockDraws).values({
         organizationId: DEC_ORG_ID,
         productionRunId: id.productionRun,
         storageLocationId: refs.feedstockStorageLocationId,
-        wetMassKg: 400,
+        wetMassKg: FIXTURE_FEEDSTOCK_WET_MASS_KG,
       });
       await tx.insert(schema.biocharProducts).values({
         organizationId: DEC_ORG_ID,
@@ -892,13 +893,13 @@ export async function seedUngroupedReadyBatchWithChain(
         id: id.productionRunFeedstock,
         productionRunId: id.productionRun,
         feedstockId: refs.feedstockId,
-        wetMassUsedKg: 400,
+        wetMassUsedKg: FIXTURE_FEEDSTOCK_WET_MASS_KG,
       });
       await tx.insert(schema.productionRunFeedstockDraws).values({
         organizationId: DEC_ORG_ID,
         productionRunId: id.productionRun,
         storageLocationId: refs.feedstockStorageLocationId,
-        wetMassKg: 400,
+        wetMassKg: FIXTURE_FEEDSTOCK_WET_MASS_KG,
       });
       await tx.insert(schema.biocharProducts).values({
         organizationId: DEC_ORG_ID,
