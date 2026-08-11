@@ -6,13 +6,10 @@
  */
 "use client";
 
-import {
-  SupplierForm,
-  type PendingSupplierLocation,
-} from "@/components/suppliers/supplier-form";
-import { createSupplierWithLocationsFn } from "@/fn/suppliers";
-import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
-import type { SupplierFormData } from "@/schemas/suppliers";
+import { useState } from "react";
+import { SupplierForm } from "@/components/suppliers/supplier-form";
+import { useCreateSupplierWithLocations } from "@/hooks/use-suppliers";
+import type { CreateSupplierWithLocationsData } from "@/schemas/suppliers";
 import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
 
@@ -22,23 +19,35 @@ interface SupplierQuickAddDialogProps {
   onSuccess: (entity: EntityOption) => void;
 }
 
-interface SupplierQuickAddFormData {
-  supplier: SupplierFormData;
-  locations: PendingSupplierLocation[];
-}
-
 export function SupplierQuickAddDialog({
   isOpen,
   onClose,
   onSuccess,
 }: SupplierQuickAddDialogProps) {
-  const { error, isSubmitting, handleSubmit } =
-    useQuickAddSubmit<SupplierQuickAddFormData>({
-      entityType: "supplier",
-      serverFn: createSupplierWithLocationsFn,
-      onSuccess,
-      onClose,
-    });
+  const [error, setError] = useState<string | null>(null);
+  const createSupplier = useCreateSupplierWithLocations({
+    onSuccess: (supplier) => {
+      onSuccess({
+        id: supplier.id,
+        code: supplier.code,
+        name: supplier.name,
+        subtitle: supplier.location ?? undefined,
+      });
+      onClose();
+    },
+    onError: (cause) => {
+      setError(cause.message);
+    },
+  });
+
+  const handleSubmit = async (data: CreateSupplierWithLocationsData) => {
+    setError(null);
+    try {
+      await createSupplier.mutateAsync(data);
+    } catch {
+      // The mutation callback owns the operator-facing error state.
+    }
+  };
 
   return (
     <QuickAddDialogShell
@@ -53,7 +62,7 @@ export function SupplierQuickAddDialog({
           handleSubmit({ supplier, locations: locations ?? [] })
         }
         onCancel={onClose}
-        isSubmitting={isSubmitting}
+        isSubmitting={createSupplier.isPending}
         errorMessage={error ?? undefined}
         submitLabel="Create supplier"
       />

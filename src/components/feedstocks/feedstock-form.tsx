@@ -38,6 +38,7 @@ import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachme
 import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
 import { StorageLocationQuickAddDialog } from "@/components/forms/entity-select/storage-location-quick-add-dialog";
+import { SupplierQuickAddDialog } from "@/components/forms/entity-select/supplier-quick-add-dialog";
 import { useQuickAddDialog } from "@/components/forms/entity-select";
 import { BinAllocationRow } from "./bin-allocation-row";
 import { FeedstockEvidenceSection } from "./feedstock-trailing-sections";
@@ -97,6 +98,7 @@ export function FeedstockForm({
   const vehicleDialog = useQuickAddDialog();
   const feedstockTypeDialog = useQuickAddDialog();
   const storageLocationDialog = useQuickAddDialog();
+  const supplierDialog = useQuickAddDialog();
   const [storageLocationRowIndex, setStorageLocationRowIndex] = useState<number>(0);
   const [distanceSourceChoiceOverride, setDistanceSourceChoiceOverride] =
     useState<{
@@ -418,6 +420,8 @@ export function FeedstockForm({
               disabled={isSubmitting}
               required
               allowCreate
+              createLabel="Add new supplier"
+              onCreateNew={supplierDialog.open}
               // Suppliers are org-shared, so a lone one is not "the" supplier for
               // this delivery. Require an explicit pick (#379) — the default
               // auto-select-when-single would silently attribute the delivery and
@@ -770,6 +774,15 @@ export function FeedstockForm({
       </div>
 
       {/* Quick-add dialogs */}
+      <SupplierQuickAddDialog
+        isOpen={supplierDialog.isOpen}
+        onClose={supplierDialog.close}
+        onSuccess={(supplier) => {
+          setValue("supplierId", supplier.id, SET_VALUE_OPTS);
+          supplierDialog.close();
+        }}
+      />
+
       <VehicleQuickAddDialog
         isOpen={vehicleDialog.isOpen}
         onClose={vehicleDialog.close}

@@ -163,7 +163,7 @@ describe.each([
       queryClient.getQueryData(
         entityKeys.detail("supplier", createdSupplier.id),
       ),
-    ).toEqual(createdSupplier);
+    ).toEqual({ ...createdSupplier, subtitle: undefined });
     expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
 
     await act(async () => renderer?.unmount());
