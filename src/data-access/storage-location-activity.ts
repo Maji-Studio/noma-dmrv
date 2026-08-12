@@ -18,6 +18,7 @@ import {
   biocharProducts,
   binMovements,
   feedstocks,
+  productionRunFeedstockDraws,
   productionRuns,
   storageLocations,
 } from "@/db/schema";
@@ -42,9 +43,12 @@ export function storageLocationLastActivityAt(organizationId: string): SQL<Date 
       UNION ALL
 
       SELECT ${productionRuns.createdAt}
-      FROM ${productionRuns}
-      WHERE ${productionRuns.organizationId} = ${organizationId}
-        AND ${productionRuns.feedstockStorageLocationId} = ${storageLocations.id}
+      FROM ${productionRunFeedstockDraws}
+      JOIN ${productionRuns}
+        ON ${productionRunFeedstockDraws.productionRunId} = ${productionRuns.id}
+        AND ${productionRuns.organizationId} = ${organizationId}
+      WHERE ${productionRunFeedstockDraws.organizationId} = ${organizationId}
+        AND ${productionRunFeedstockDraws.storageLocationId} = ${storageLocations.id}
 
       UNION ALL
 

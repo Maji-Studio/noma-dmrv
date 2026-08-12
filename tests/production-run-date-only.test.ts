@@ -77,9 +77,11 @@ describe("production run window validation", () => {
       endDate: "2026-06-14",
       endTime: "02:00",
       status: "complete",
-      feedstockWetMassKg: 100,
+      feedstockDraws: [{
+        storageLocationId: "33333333-3333-4333-8333-333333333333",
+        wetMassKg: 100,
+      }],
       feedstockMoisturePercent: 10,
-      feedstockStorageLocationId: "33333333-3333-4333-8333-333333333333",
       biocharOutputKg: 20,
     });
     expect(parsed.success).toBe(true);

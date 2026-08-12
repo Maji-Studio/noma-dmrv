@@ -7,11 +7,13 @@
 import { z } from "zod";
 import {
   emptyToNull,
+  MASS_INPUT_MAX_KG,
   massKgSchema,
   optionalDateOnly,
   optionalStoredPercent,
   PG_INTEGER_MAX,
   requiredDateOnly,
+  requiredPositiveMassKgSchema,
   storedPercentSchema,
   toIntOrNull,
   toNumberOrNull,
@@ -129,6 +131,75 @@ function hasEndTime(value: unknown): boolean {
 export const productionRunStatuses = PRODUCTION_RUN_STATUSES;
 export type { ProductionRunStatus };
 
+export const productionRunFeedstockDrawSchema = z.object({
+  storageLocationId: z
+    .string({
+      error: (issue) =>
+        issue.input === undefined
+          ? "Select a source bin."
+          : "Choose a valid source bin.",
+    })
+    .min(1, "Select a source bin.")
+    .uuid("Choose a valid source bin."),
+  wetMassKg: requiredPositiveMassKgSchema(
+    "Enter wet mass.",
+    "Wet mass must be a number.",
+    "Wet mass must be a positive number.",
+  ),
+});
+
+const productionRunFeedstockDrawsSchema = z
+  .array(productionRunFeedstockDrawSchema)
+  .superRefine((draws, ctx) => {
+    const firstIndexByStorageLocationId = new Map<string, number>();
+    let totalWetMassKg = 0;
+
+    for (const [index, draw] of draws.entries()) {
+      totalWetMassKg += draw.wetMassKg;
+      const firstIndex = firstIndexByStorageLocationId.get(
+        draw.storageLocationId,
+      );
+      if (firstIndex !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index, "storageLocationId"],
+          message: "Each source bin can only be used once per run.",
+        });
+      } else {
+        firstIndexByStorageLocationId.set(draw.storageLocationId, index);
+      }
+    }
+
+    if (totalWetMassKg > MASS_INPUT_MAX_KG) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Total feedstock wet mass must be ${MASS_INPUT_MAX_KG.toLocaleString("en-US")} kg or less.`,
+      });
+    }
+  });
+
+function dropUntouchedFeedstockDrawRows(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+
+  return value.filter((draw) => {
+    if (!draw || typeof draw !== "object") return true;
+    const candidate = draw as {
+      storageLocationId?: unknown;
+      wetMassKg?: unknown;
+    };
+    const wetMassIsBlank =
+      candidate.wetMassKg === undefined ||
+      candidate.wetMassKg === null ||
+      candidate.wetMassKg === "";
+    return candidate.storageLocationId !== "" || !wetMassIsBlank;
+  });
+}
+
+const productionRunFeedstockDrawsFormSchema = z.preprocess(
+  dropUntouchedFeedstockDrawRows,
+  productionRunFeedstockDrawsSchema,
+);
+
 // ============================================
 // Production Run Form Schema (Client-side validation)
 // ============================================
@@ -189,6 +260,9 @@ const productionRunFormObject = z.object({
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
   // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
+  feedstockDraws: productionRunFeedstockDrawsFormSchema.optional(),
+  // Keep legacy fields in the parsed shape so the action schema can reject
+  // them explicitly instead of Zod silently stripping unknown keys.
   feedstockWetMassKg: z.preprocess(
     toNumberOrNull,
     massKgSchema("Wet mass must be a positive number")
@@ -276,6 +350,11 @@ export function makeProductionRunFormSchema(
       });
     }
 
+    const feedstockDraws = data.feedstockDraws ?? [];
+    const totalFeedstockWetMassKg = feedstockDraws.reduce(
+      (total, draw) => total + draw.wetMassKg,
+      0,
+    );
     const violations = getProductionRunOutcomeViolations({
       status: data.status,
       startTime: start.instant,
@@ -284,11 +363,11 @@ export function makeProductionRunFormSchema(
       cancellationReason: data.cancellationReason,
       biocharOutputKg: data.biocharOutputKg,
       biocharMoisturePercent: data.biocharMoisturePercent,
-      feedstockWetMassKg: data.feedstockWetMassKg,
+      feedstockWetMassKg: totalFeedstockWetMassKg,
       feedstockMoisturePercent: data.feedstockMoisturePercent,
       feedstock: {
         basis: "form-inputs",
-        storageLocationId: data.feedstockStorageLocationId,
+        drawCount: feedstockDraws.length,
       },
     });
 
@@ -316,18 +395,11 @@ export function makeProductionRunFormSchema(
           });
           break;
         case "feedstock-required":
-          if (!data.feedstockStorageLocationId) {
+          if (feedstockDraws.length === 0) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
-              path: ["feedstockStorageLocationId"],
-              message: "Select a source bin.",
-            });
-          }
-          if (data.feedstockWetMassKg == null) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["feedstockWetMassKg"],
-              message: "Enter feedstock wet mass.",
+              path: ["feedstockDraws"],
+              message: "Add at least one feedstock source.",
             });
           }
           if (data.feedstockMoisturePercent == null) {
@@ -369,6 +441,29 @@ export const productionRunFormSchema = makeProductionRunFormSchema(
   DEFAULT_FACILITY_TIMEZONE,
 );
 
+function rejectLegacyFeedstockFields(
+  data: {
+    feedstockWetMassKg?: number | null;
+    feedstockStorageLocationId?: string | null;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.feedstockWetMassKg !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["feedstockWetMassKg"],
+      message: "Use feedstock draws instead of the legacy wet mass field.",
+    });
+  }
+  if (data.feedstockStorageLocationId !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["feedstockStorageLocationId"],
+      message: "Use feedstock draws instead of the legacy source bin field.",
+    });
+  }
+}
+
 // ============================================
 // Server Action Schemas
 // ============================================
@@ -383,7 +478,7 @@ export const createProductionRunSchema = productionRunFormSchema.refine(
     message:
       "A new production run can only start as Draft, Running, Complete, or Cancelled.",
   },
-);
+).superRefine(rejectLegacyFeedstockFields);
 
 /**
  * Schema for updating a production run (server action)
@@ -428,6 +523,7 @@ export const updateProductionRunSchema = z.object({
     }),
   ]).optional(),
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  feedstockDraws: productionRunFeedstockDrawsSchema.optional(),
   feedstockWetMassKg: massKgSchema().positive().optional().nullable(),
   feedstockMoisturePercent: storedPercentSchema()
     .min(0)
@@ -448,7 +544,7 @@ export const updateProductionRunSchema = z.object({
     .nullable(),
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-});
+}).superRefine(rejectLegacyFeedstockFields);
 
 /**
  * Schema for deleting a production run

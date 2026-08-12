@@ -23,7 +23,7 @@ import {
   biocharProductSourceAllocations,
   binMovements,
   feedstocks,
-  productionRunFeedstocks,
+  productionRunFeedstockDraws,
   productionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -68,7 +68,7 @@ export async function deriveLaneStock(
 
   const consumptionConditions = [
     inArray(
-      productionRuns.feedstockStorageLocationId,
+      productionRunFeedstockDraws.storageLocationId,
       options.storageLocationIds,
     ),
     eq(productionRuns.organizationId, ctx.organizationId),
@@ -151,25 +151,25 @@ export async function deriveLaneStock(
         .groupBy(feedstocks.storageLocationId),
       executor
         .select({
-          storageLocationId: productionRuns.feedstockStorageLocationId,
-          totalWet: sumNumeric(productionRunFeedstocks.wetMassUsedKg),
+          storageLocationId: productionRunFeedstockDraws.storageLocationId,
+          totalWet: sumNumeric(productionRunFeedstockDraws.wetMassKg),
         })
-        .from(productionRuns)
-        .leftJoin(
-          productionRunFeedstocks,
+        .from(productionRunFeedstockDraws)
+        .innerJoin(
+          productionRuns,
           and(
             eq(
-              productionRunFeedstocks.productionRunId,
+              productionRunFeedstockDraws.productionRunId,
               productionRuns.id,
             ),
             eq(
-              productionRunFeedstocks.organizationId,
+              productionRunFeedstockDraws.organizationId,
               ctx.organizationId,
             ),
           ),
         )
         .where(and(...consumptionConditions))
-        .groupBy(productionRuns.feedstockStorageLocationId),
+        .groupBy(productionRunFeedstockDraws.storageLocationId),
       executor
         .select({
           storageLocationId: sql<string>`ingredient.value ->> 'storageLocationId'`,

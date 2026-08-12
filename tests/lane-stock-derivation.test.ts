@@ -7,6 +7,7 @@ import { binMovements } from "@/db/schema/bin-movements";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
 import {
+  productionRunFeedstockDraws,
   productionRunFeedstocks,
   productionRuns,
 } from "@/db/schema/production";
@@ -162,6 +163,21 @@ describe("shared lane-stock derivation", () => {
         .returning({ id: productionRuns.id });
       productionRunIds.push(...runs.map((run) => run.id));
 
+      await tx.insert(productionRunFeedstockDraws).values([
+        {
+          organizationId: TEST_ORG_ID,
+          productionRunId: productionRunIds[0],
+          storageLocationId: feedstockStorageLocationId,
+          wetMassKg: 30,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          productionRunId: productionRunIds[1],
+          storageLocationId: feedstockStorageLocationId,
+          wetMassKg: 20,
+        },
+      ]);
+
       await tx.insert(productionRunFeedstocks).values([
         {
           organizationId: TEST_ORG_ID,
@@ -261,6 +277,9 @@ describe("shared lane-stock derivation", () => {
       await tx
         .delete(productionRunFeedstocks)
         .where(inArray(productionRunFeedstocks.productionRunId, productionRunIds));
+      await tx
+        .delete(productionRunFeedstockDraws)
+        .where(inArray(productionRunFeedstockDraws.productionRunId, productionRunIds));
       await tx
         .delete(productionRuns)
         .where(inArray(productionRuns.id, productionRunIds));

@@ -25,6 +25,7 @@ import { db } from "@/db";
 import { formatLocalDate } from "@/lib/date-utils";
 import {
   productionRuns,
+  productionRunFeedstockDraws,
   productionRunFeedstocks,
   facilities,
   reactors,
@@ -43,6 +44,7 @@ import { inCreditBatchProductionRuns } from "../credit-batch-lineage-filter";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
 import type {
   ProductionRunFeedstockWithDetails,
+  ProductionRunFeedstockDrawWithDetails,
   ProductionRunWithRelations,
   PaginatedProductionRuns,
   ProductionRunStats,
@@ -223,6 +225,47 @@ export async function getProductionRuns(
         .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
         .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
     : [];
+  const allFeedstockDraws = runIds.length > 0
+    ? await db
+        .select({
+          id: productionRunFeedstockDraws.id,
+          productionRunId: productionRunFeedstockDraws.productionRunId,
+          storageLocationId: productionRunFeedstockDraws.storageLocationId,
+          wetMassKg: productionRunFeedstockDraws.wetMassKg,
+          storageLocationCode: storageLocations.code,
+          storageLocationName: storageLocations.name,
+          feedstockTypeId: storageLocations.feedstockTypeId,
+          feedstockTypeName: feedstockTypes.name,
+        })
+        .from(productionRunFeedstockDraws)
+        .innerJoin(
+          storageLocations,
+          and(
+            eq(
+              productionRunFeedstockDraws.storageLocationId,
+              storageLocations.id,
+            ),
+            eq(storageLocations.organizationId, ctx.organizationId),
+          ),
+        )
+        .leftJoin(
+          feedstockTypes,
+          and(
+            eq(storageLocations.feedstockTypeId, feedstockTypes.id),
+            eq(feedstockTypes.organizationId, ctx.organizationId),
+          ),
+        )
+        .where(
+          and(
+            inArray(productionRunFeedstockDraws.productionRunId, runIds),
+            eq(
+              productionRunFeedstockDraws.organizationId,
+              ctx.organizationId,
+            ),
+          ),
+        )
+        .orderBy(asc(storageLocations.code))
+    : [];
   // Group feedstocks by production run ID
   const feedstocksByRunId = new Map<string, ProductionRunFeedstockWithDetails[]>();
   for (const f of allFeedstocks) {
@@ -230,8 +273,18 @@ export async function getProductionRuns(
     existing.push(f);
     feedstocksByRunId.set(f.productionRunId, existing);
   }
+  const feedstockDrawsByRunId = new Map<
+    string,
+    ProductionRunFeedstockDrawWithDetails[]
+  >();
+  for (const draw of allFeedstockDraws) {
+    const existing = feedstockDrawsByRunId.get(draw.productionRunId) ?? [];
+    existing.push(draw);
+    feedstockDrawsByRunId.set(draw.productionRunId, existing);
+  }
   const items: ProductionRunWithRelations[] = runList.map((run) => {
     const runFeedstocks = feedstocksByRunId.get(run.id) ?? [];
+    const feedstockDraws = feedstockDrawsByRunId.get(run.id) ?? [];
     return {
       ...run,
       biocharStorageLocationCode: run.biocharStorageLocationCode ?? null,
@@ -239,8 +292,9 @@ export async function getProductionRuns(
       feedstockStorageLocationCode: run.feedstockStorageLocationCode ?? null,
       feedstockStorageLocationName: run.feedstockStorageLocationName ?? null,
       feedstocks: runFeedstocks,
-      totalFeedstockWetMassKg: runFeedstocks.reduce(
-        (sum, feedstock) => sum + feedstock.wetMassUsedKg,
+      feedstockDraws,
+      totalFeedstockWetMassKg: feedstockDraws.reduce(
+        (total, draw) => total + draw.wetMassKg,
         0,
       ),
     };
@@ -276,6 +330,44 @@ async function getProductionRunFeedstocks(
     .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
   return result;
+}
+
+async function getProductionRunFeedstockDraws(
+  ctx: OrgContext,
+  productionRunId: string,
+): Promise<ProductionRunFeedstockDrawWithDetails[]> {
+  return db
+    .select({
+      id: productionRunFeedstockDraws.id,
+      storageLocationId: productionRunFeedstockDraws.storageLocationId,
+      wetMassKg: productionRunFeedstockDraws.wetMassKg,
+      storageLocationCode: storageLocations.code,
+      storageLocationName: storageLocations.name,
+      feedstockTypeId: storageLocations.feedstockTypeId,
+      feedstockTypeName: feedstockTypes.name,
+    })
+    .from(productionRunFeedstockDraws)
+    .innerJoin(
+      storageLocations,
+      and(
+        eq(productionRunFeedstockDraws.storageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      feedstockTypes,
+      and(
+        eq(storageLocations.feedstockTypeId, feedstockTypes.id),
+        eq(feedstockTypes.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(productionRunFeedstockDraws.productionRunId, productionRunId),
+        eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
+      ),
+    )
+    .orderBy(asc(storageLocations.code));
 }
 
 /**
@@ -344,11 +436,13 @@ export async function getProductionRunById(
 
   const [
     runFeedstocks,
+    feedstockDraws,
     biocharStorageLocation,
     feedstockStorageLocation,
   ] =
     await Promise.all([
       getProductionRunFeedstocks(ctx, productionRunId),
+      getProductionRunFeedstockDraws(ctx, productionRunId),
       run.biocharStorageLocationId
         ? db
             .select({
@@ -380,8 +474,9 @@ export async function getProductionRunById(
     feedstockStorageLocationName:
       feedstockStorageLocation?.name ?? null,
     feedstocks: runFeedstocks,
-    totalFeedstockWetMassKg: runFeedstocks.reduce(
-      (sum, feedstock) => sum + feedstock.wetMassUsedKg,
+    feedstockDraws,
+    totalFeedstockWetMassKg: feedstockDraws.reduce(
+      (total, draw) => total + draw.wetMassKg,
       0,
     ),
   };
@@ -430,11 +525,11 @@ export async function getProductionRunStats(
   // Get total feedstock mass
   const [feedstockStats] = await db
     .select({
-      totalFeedstockWetKg: sum(productionRunFeedstocks.wetMassUsedKg),
+      totalFeedstockWetKg: sum(productionRunFeedstockDraws.wetMassKg),
     })
-    .from(productionRunFeedstocks)
-    .leftJoin(productionRuns, and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
-    .where(and(completedWhereClause, eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
+    .from(productionRunFeedstockDraws)
+    .leftJoin(productionRuns, and(eq(productionRunFeedstockDraws.productionRunId, productionRuns.id), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)))
+    .where(and(completedWhereClause, eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)));
 
   // Get status counts in a single GROUP BY query
   // org-scope-ok: whereClause includes the active organization predicate.

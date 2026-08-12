@@ -16,6 +16,7 @@ import {
   facilities,
   feedstocks,
   feedstockTypes,
+  productionRunFeedstockDraws,
   productionRunFeedstocks,
   productionRuns,
   reactors,
@@ -243,6 +244,14 @@ afterEach(async () => {
         .where(
           inArray(
             productionRunFeedstocks.productionRunId,
+            testRuns.map((run) => run.id),
+          ),
+        );
+      await db
+        .delete(productionRunFeedstockDraws)
+        .where(
+          inArray(
+            productionRunFeedstockDraws.productionRunId,
             testRuns.map((run) => run.id),
           ),
         );

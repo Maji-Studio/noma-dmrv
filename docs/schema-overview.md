@@ -15,7 +15,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
 | Feedstock deliveries, types, feedstocks | `src/db/schema/feedstock.ts` |
-| Production runs, readings, samples, production samples, incidents, run↔feedstock junction | `src/db/schema/production.ts` |
+| Production runs, readings, samples, incidents, run↔physical-bin draw ledger, run↔feedstock provenance junction | `src/db/schema/production.ts` |
 | Production processes (epochs + Method-B prerequisites) | `src/db/schema/production-processes.ts` |
 | Formulations, ingredients, biochar products | `src/db/schema/products.ts` |
 | Vehicles, orders, deliveries, transport legs | `src/db/schema/logistics.ts` |

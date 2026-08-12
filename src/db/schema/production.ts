@@ -368,6 +368,50 @@ export const productionRunFeedstocks = pgTable('production_run_feedstocks', {
   }),
 ]);
 
+// Explicit wet-mass withdrawals from physical feedstock bins. These rows are
+// the canonical source-bin attribution for a run; productionRunFeedstocks
+// remains the batch-level allocation/provenance ledger.
+export const productionRunFeedstockDraws = pgTable(
+  'production_run_feedstock_draws',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    productionRunId: uuid('production_run_id').notNull(),
+    storageLocationId: uuid('storage_location_id').notNull(),
+    wetMassKg: massKg('wet_mass_kg').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    unique('production_run_feedstock_draws_run_bin_unique').on(
+      table.organizationId,
+      table.productionRunId,
+      table.storageLocationId,
+    ),
+    index('production_run_feedstock_draws_organization_run_idx').on(
+      table.organizationId,
+      table.productionRunId,
+    ),
+    index('production_run_feedstock_draws_organization_bin_idx').on(
+      table.organizationId,
+      table.storageLocationId,
+    ),
+    foreignKey({
+      columns: [table.productionRunId, table.organizationId],
+      foreignColumns: [productionRuns.id, productionRuns.organizationId],
+    }),
+    foreignKey({
+      columns: [table.storageLocationId, table.organizationId],
+      foreignColumns: [storageLocations.id, storageLocations.organizationId],
+    }),
+    check(
+      'production_run_feedstock_draws_wet_mass_positive',
+      sql`${table.wetMassKg} > 0`,
+    ),
+  ],
+);
+
 // ============================================
 // Production Samples - In-process sampling (~every 2h)
 // Lightweight table for quick field measurements during pyrolysis
@@ -436,6 +480,7 @@ export const productionRunsRelations = relations(
     incidentReports: many(incidentReports),
     readings: many(productionRunReadings),
     productionRunFeedstocks: many(productionRunFeedstocks),
+    feedstockDraws: many(productionRunFeedstockDraws),
   })
 );
 
@@ -483,6 +528,20 @@ export const productionRunFeedstocksRelations = relations(
       references: [feedstocks.id],
     }),
   })
+);
+
+export const productionRunFeedstockDrawsRelations = relations(
+  productionRunFeedstockDraws,
+  ({ one }) => ({
+    productionRun: one(productionRuns, {
+      fields: [productionRunFeedstockDraws.productionRunId],
+      references: [productionRuns.id],
+    }),
+    storageLocation: one(storageLocations, {
+      fields: [productionRunFeedstockDraws.storageLocationId],
+      references: [storageLocations.id],
+    }),
+  }),
 );
 
 export const productionSamplesRelations = relations(
