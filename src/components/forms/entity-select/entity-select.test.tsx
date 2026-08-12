@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const entityState = vi.hoisted(() => ({
   options: [] as Array<{
@@ -60,19 +60,6 @@ import {
   EntitySelect,
   shouldRenderCreateAction,
 } from "./entity-select";
-
-beforeAll(() => {
-  (
-    globalThis as typeof globalThis & {
-      IS_REACT_ACT_ENVIRONMENT: boolean;
-    }
-  ).IS_REACT_ACT_ENVIRONMENT = true;
-
-  vi.stubGlobal("document", {
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  });
-});
 
 beforeEach(() => {
   entityState.options = [];

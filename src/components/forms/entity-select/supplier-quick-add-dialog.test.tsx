@@ -81,6 +81,12 @@ vi.mock("@/hooks/use-suppliers", () => ({
   },
 }));
 
+vi.mock("@/hooks/use-organization-settings", () => ({
+  useOrganizationDefaultValues: () => ({
+    defaults: { defaultCountry: "Switzerland" },
+  }),
+}));
+
 import { SupplierQuickAddDialog } from "./supplier-quick-add-dialog";
 
 beforeAll(() => {
@@ -161,7 +167,6 @@ describe("SupplierQuickAddDialog", () => {
     expect(rendered).not.toContain("Sourcing");
 
     await changeInput(renderer!, "supplier-quick-add-name", "New Supplier");
-    await changeInput(renderer!, "supplier-quick-add-country", "Switzerland");
     await changeInput(
       renderer!,
       "supplier-quick-add-position-latitude",
@@ -216,7 +221,7 @@ describe("SupplierQuickAddDialog", () => {
     await act(async () => renderer?.unmount());
   });
 
-  it("forwards open transitions to clear stale errors without trapping dismissal", async () => {
+  it("resets to the organization country default on every open", async () => {
     const onClose = vi.fn();
     const onSuccess = vi.fn();
     let renderer: ReactTestRenderer | undefined;
@@ -229,10 +234,10 @@ describe("SupplierQuickAddDialog", () => {
     });
 
     expect(mocks.modalProps?.dismissOnClickOutside).toBe(false);
-    expect(mocks.modalProps?.dismissible).toBeUndefined();
+    expect(mocks.modalProps?.dismissible).toBe(true);
 
     await changeInput(renderer!, "supplier-quick-add-name", "Supplier");
-    await changeInput(renderer!, "supplier-quick-add-country", "Switzerland");
+    await changeInput(renderer!, "supplier-quick-add-country", "France");
     await changeInput(
       renderer!,
       "supplier-quick-add-position-latitude",
@@ -267,7 +272,6 @@ describe("SupplierQuickAddDialog", () => {
     await act(async () => {
       renderer?.update(renderDialog({ isOpen: false, onClose, onSuccess }));
     });
-    mocks.isPending = true;
     await act(async () => {
       renderer?.update(renderDialog({ isOpen: true, onClose, onSuccess }));
     });
@@ -276,12 +280,42 @@ describe("SupplierQuickAddDialog", () => {
       "Supplier creation failed",
     );
     expect(mocks.modalProps?.dismissOnClickOutside).toBe(false);
-    expect(mocks.modalProps?.dismissible).toBeUndefined();
+    expect(mocks.modalProps?.dismissible).toBe(true);
+
+    await changeInput(renderer!, "supplier-quick-add-name", "Reset supplier");
+    await changeInput(
+      renderer!,
+      "supplier-quick-add-position-latitude",
+      "47.3769",
+    );
+    await changeInput(
+      renderer!,
+      "supplier-quick-add-position-longitude",
+      "8.5417",
+    );
+    await act(async () => {
+      await renderer?.root.findByType("form").props.onSubmit({
+        preventDefault: () => undefined,
+        persist: () => undefined,
+        stopPropagation: () => undefined,
+      });
+    });
+    expect(mocks.mutateAsync).toHaveBeenLastCalledWith({
+      supplier: { name: "Reset supplier" },
+      locations: [
+        {
+          country: "Switzerland",
+          gpsLatitude: 47.3769,
+          gpsLongitude: 8.5417,
+          isDefault: true,
+        },
+      ],
+    });
 
     await act(async () => renderer?.unmount());
   });
 
-  it("ignores a late success after the operator dismisses a pending save", async () => {
+  it("prevents modal dismissal while a save is pending", async () => {
     const onClose = vi.fn();
     const onSuccess = vi.fn();
     let renderer: ReactTestRenderer | undefined;
@@ -322,7 +356,6 @@ describe("SupplierQuickAddDialog", () => {
       renderer?.update(renderDialog({ isOpen: true, onClose, onSuccess }));
     });
     await act(async () => {
-      mocks.modalProps?.onClose?.();
       mocks.mutationCallbacks?.onSuccess?.(
         {
           id: "supplier-late",
@@ -334,9 +367,14 @@ describe("SupplierQuickAddDialog", () => {
       );
     });
 
-    expect(mocks.modalProps?.dismissible).toBeUndefined();
+    expect(mocks.modalProps?.dismissible).toBe(false);
     expect(onClose).toHaveBeenCalledOnce();
-    expect(onSuccess).not.toHaveBeenCalled();
+    expect(onSuccess).toHaveBeenCalledWith({
+      id: "supplier-late",
+      code: "SUP-LATE",
+      name: "Late supplier",
+      subtitle: undefined,
+    });
 
     await act(async () => renderer?.unmount());
   });

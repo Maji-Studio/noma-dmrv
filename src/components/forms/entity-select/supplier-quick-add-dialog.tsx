@@ -13,13 +13,15 @@ import { FormField } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
 import { PositionPicker } from "@/components/forms/position-picker";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { useCreateSupplierWithLocations } from "@/hooks/use-suppliers";
-import type { CreateSupplierWithLocationsData } from "@/schemas/suppliers";
+import { resolveLocationCountry } from "@/lib/location-defaults";
 import {
+  type CreateSupplierWithLocationsData,
   supplierQuickAddSchema,
   type SupplierQuickAddData,
   type SupplierQuickAddInput,
-} from "@/schemas/quick-add";
+} from "@/schemas/suppliers";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
 import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
@@ -37,6 +39,11 @@ export function SupplierQuickAddDialog({
 }: SupplierQuickAddDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const activePayloadRef = useRef<CreateSupplierWithLocationsData | null>(null);
+  const { defaults: organizationDefaults } = useOrganizationDefaultValues();
+  const defaultCountry = resolveLocationCountry(
+    undefined,
+    organizationDefaults.defaultCountry,
+  );
   const {
     control,
     formState: { errors },
@@ -49,7 +56,7 @@ export function SupplierQuickAddDialog({
     resolver: zodResolver(supplierQuickAddSchema),
     defaultValues: {
       name: "",
-      country: "",
+      country: defaultCountry,
       gpsLatitude: undefined,
       gpsLongitude: undefined,
     },
@@ -106,7 +113,12 @@ export function SupplierQuickAddDialog({
   const handleOpen = () => {
     activePayloadRef.current = null;
     setError(null);
-    reset();
+    reset({
+      name: "",
+      country: defaultCountry,
+      gpsLatitude: undefined,
+      gpsLongitude: undefined,
+    });
   };
 
   const handleClose = () => {
@@ -124,6 +136,7 @@ export function SupplierQuickAddDialog({
       title={`New ${entityLabel}`}
       testId="supplier-quick-add-dialog"
       dismissOnClickOutside={false}
+      dismissible={!createSupplier.isPending}
     >
       <form
         onSubmit={(event) => {

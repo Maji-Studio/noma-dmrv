@@ -9,11 +9,7 @@
 import { z } from "zod";
 import {
   emptyToNull,
-  gpsPairSuperRefine,
   positiveMassKgSchema,
-  requiredLatitudeSchema,
-  requiredLongitudeSchema,
-  toNumberOrUndefined,
 } from "./helpers";
 import {
   storageLocationTypes,
@@ -78,36 +74,6 @@ export const vehicleQuickAddSchema = z.object({
 });
 
 export type VehicleQuickAddData = z.infer<typeof vehicleQuickAddSchema>;
-
-// ============================================
-// Supplier Quick Add Schema
-// ============================================
-
-export const supplierQuickAddSchema = z
-  .object({
-    name: z
-      .string()
-      .trim()
-      .min(1, "Supplier name is required")
-      .max(255, "Supplier name must be less than 255 characters"),
-    country: z
-      .string()
-      .trim()
-      .min(1, "Country is required")
-      .max(100, "Country must be less than 100 characters"),
-    gpsLatitude: z.preprocess(
-      toNumberOrUndefined,
-      requiredLatitudeSchema,
-    ),
-    gpsLongitude: z.preprocess(
-      toNumberOrUndefined,
-      requiredLongitudeSchema,
-    ),
-  })
-  .superRefine(gpsPairSuperRefine);
-
-export type SupplierQuickAddData = z.infer<typeof supplierQuickAddSchema>;
-export type SupplierQuickAddInput = z.input<typeof supplierQuickAddSchema>;
 
 // ============================================
 // Feedstock Type Quick Add Schema

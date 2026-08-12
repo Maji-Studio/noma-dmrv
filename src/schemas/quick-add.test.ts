@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { supplierQuickAddSchema } from "./quick-add";
+import { supplierQuickAddSchema } from "./suppliers";
 
 const validSupplier = {
   name: "New Supplier",
