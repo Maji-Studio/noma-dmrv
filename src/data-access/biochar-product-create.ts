@@ -250,6 +250,8 @@ export async function createBiocharProduct(
             entityId: allocation.productionRunId,
           },
           "create",
+          "biocharProduct",
+          "linked",
         );
       }
       productionDate =
@@ -309,6 +311,7 @@ export async function createBiocharProduct(
         tx,
         { entityType: "productionRun", entityId: run.id },
         "create",
+        "biocharProduct",
       );
       if (
         lockedRun.status !==
