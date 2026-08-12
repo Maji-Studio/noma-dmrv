@@ -543,7 +543,7 @@ describe("certification lineage guards", () => {
           loadMassKg: 100,
         }),
       ).rejects.toThrow(
-        "Cannot create this transport leg because the selected feedstock is locked by a certification submission. Select a feedstock that is not locked.",
+        "Cannot create this transport leg because the linked feedstock is locked by a certification submission.",
       );
     });
   });

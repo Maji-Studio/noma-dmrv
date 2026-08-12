@@ -38,9 +38,10 @@ describe("formatCertificationLineageLockMessage", () => {
           mutation: "create",
           subjectEntityType: "transportLeg",
           lineageEntityType,
+          lineageRelationship: "linked",
         }),
       ).toBe(
-        `Cannot create this transport leg because the selected ${label} is locked by a certification submission. Select a ${label} that is not locked.`,
+        `Cannot create this transport leg because the linked ${label} is locked by a certification submission.`,
       );
     },
   );

@@ -273,6 +273,7 @@ export async function createTransportLeg(
       },
       "create",
       "transportLeg",
+      "linked",
     );
 
     return tx
