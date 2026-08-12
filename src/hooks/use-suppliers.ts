@@ -5,12 +5,14 @@
  */
 
 import {
+  type QueryClient,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import type { Supplier, SupplierLocation } from "@/db/schema";
 import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
+import type { EntityOption } from "@/components/forms/entity-select/types";
 
 const SUPPLIERS_STALE_TIME_MS = 60_000;
 import type {
@@ -61,6 +63,21 @@ export const supplierKeys = {
   codeCheck: (code: string, excludeId?: string) =>
     [...supplierKeys.all, "codeCheck", code, excludeId] as const,
 };
+
+function seedCreatedSupplierCaches(
+  queryClient: QueryClient,
+  supplier: Supplier,
+) {
+  const option: EntityOption = {
+    id: supplier.id,
+    code: supplier.code,
+    name: supplier.name,
+    subtitle: supplier.location ?? undefined,
+  };
+
+  queryClient.setQueryData(supplierKeys.detail(supplier.id), supplier);
+  seedEntityCache(queryClient, "supplier", option);
+}
 
 // ============================================
 // Supplier Query Hooks
@@ -190,14 +207,7 @@ export function useCreateSupplier(
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
       await invalidateOnboardingProgress(queryClient);
 
-      // Pre-populate the detail cache with the new supplier
-      queryClient.setQueryData(supplierKeys.detail(data.id), data);
-      seedEntityCache(queryClient, "supplier", {
-        id: data.id,
-        code: data.code,
-        name: data.name,
-        subtitle: data.location ?? undefined,
-      });
+      seedCreatedSupplierCaches(queryClient, data);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -229,13 +239,7 @@ export function useCreateSupplierWithLocations(
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(data.id) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
       await invalidateOnboardingProgress(queryClient);
-      queryClient.setQueryData(supplierKeys.detail(data.id), data);
-      seedEntityCache(queryClient, "supplier", {
-        id: data.id,
-        code: data.code,
-        name: data.name,
-        subtitle: data.location ?? undefined,
-      });
+      seedCreatedSupplierCaches(queryClient, data);
 
       await callbacks?.onSuccess?.(data, variables);
     },
