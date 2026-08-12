@@ -7,7 +7,10 @@
  */
 
 import { z } from "zod";
-import { emptyToNull, positiveMassKgSchema } from "./helpers";
+import {
+  emptyToNull,
+  positiveMassKgSchema,
+} from "./helpers";
 import {
   storageLocationTypes,
   type StorageLocationType,
