@@ -23,6 +23,7 @@ import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { Button } from "@/components/ui/button";
+import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { ProductionReadingsField } from "./production-readings-field";
 import { FormSelect } from "@/components/forms/form-select";
 import {
@@ -601,8 +602,11 @@ export function ProductionRunForm({
 
         {(selectedFeedstockDrawCount > 0 || watchWetMass > 0) && (
           <div className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
-            <p className="body-caption text-[var(--color-text-secondary)]">
+            <p className="body-caption text-[var(--color-text-secondary)] flex items-center gap-6">
               Total wet input
+              {isProductionRunCertifyField("feedstockWetMassKg") && (
+                <CertificationFieldTag status={certStatus("feedstockWetMassKg")} />
+              )}
             </p>
             <p className="body-small font-medium text-[var(--color-text-primary)] mt-2">
               {watchWetMass.toLocaleString("en-US", {

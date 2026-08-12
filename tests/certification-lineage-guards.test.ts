@@ -375,6 +375,18 @@ describe("certification lineage guards", () => {
     }, "none");
   });
 
+  it("rejects a legacy wet-mass edit when no source bin can be identified", async () => {
+    await withFixture(async (fixture) => {
+      await expect(
+        updateProductionRun(
+          makeTestOrgContext(TEST_USER_ID),
+          fixture.productionRunId,
+          { feedstockWetMassKg: 1_100 },
+        ),
+      ).rejects.toThrow("A feedstock source bin is required");
+    }, "none");
+  });
+
   it("allows application edits while the lineage has no submitted certification artifact", async () => {
     await withFixture(async (fixture) => {
       const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, {
@@ -389,7 +401,7 @@ describe("certification lineage guards", () => {
     await withFixture(async (fixture) => {
       await expect(
         updateProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId, {
-          feedstockWetMassKg: 1_100,
+          feedstockMoisturePercent: 11,
         }),
       ).rejects.toThrow(LOCKED_COPY);
     });

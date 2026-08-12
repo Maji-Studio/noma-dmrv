@@ -391,19 +391,24 @@ export async function updateProductionRun(
     (data.feedstockStorageLocationId !== undefined ||
       data.feedstockWetMassKg !== undefined)
   ) {
+    if (existingFeedstockStorageLocationIds.length > 1) {
+      throw new SafeError(
+        "This run draws from several bins. Send feedstockDraws to change its feedstock.",
+      );
+    }
     const storageLocationId =
       data.feedstockStorageLocationId !== undefined
         ? data.feedstockStorageLocationId
         : existingFeedstockStorageLocationIds.length === 1
           ? existingFeedstockStorageLocationIds[0]
-          : null;
+          : existing.feedstockStorageLocationId;
     if (
       storageLocationId === null &&
-      data.feedstockStorageLocationId === undefined &&
-      existingFeedstockStorageLocationIds.length > 1
+      data.feedstockWetMassKg !== undefined &&
+      data.feedstockWetMassKg !== null
     ) {
       throw new SafeError(
-        "This run draws from several bins. Send feedstockDraws to change its feedstock.",
+        "A feedstock source bin is required to change the wet mass.",
       );
     }
     const wetMassKg =

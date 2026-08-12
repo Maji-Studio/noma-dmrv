@@ -117,15 +117,15 @@ export function ProductionRunFeedstockDrawRow({
             )}
             autoSelectSingle={false}
           />
-          <input
-            ref={storageLocationRef as React.Ref<HTMLInputElement>}
-            type="hidden"
-            name={storageLocationName}
-            value={storageLocationId ?? ""}
-            onBlur={onStorageLocationBlur}
-            readOnly
-          />
         </FormField>
+        <input
+          ref={storageLocationRef as React.Ref<HTMLInputElement>}
+          type="hidden"
+          name={storageLocationName}
+          value={storageLocationId ?? ""}
+          onBlur={onStorageLocationBlur}
+          readOnly
+        />
 
         <div>
           <FormField
