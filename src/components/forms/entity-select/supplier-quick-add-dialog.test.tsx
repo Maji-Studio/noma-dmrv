@@ -1,67 +1,83 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReactNode } from "react";
-import type { PendingSupplierLocation } from "@/components/suppliers/supplier-form";
-import type { SupplierFormData } from "@/schemas/suppliers";
+import { useEffect, useRef, type ReactNode } from "react";
 
 const mocks = vi.hoisted(() => ({
-  mutateAsync: vi.fn(),
   isPending: false,
-  shellProps: undefined as
+  modalProps: undefined as
     | {
-        children: ReactNode;
         dismissible?: boolean;
         dismissOnClickOutside?: boolean;
-        onOpen?: () => void;
+        isOpen: boolean;
+        onClose?: () => void;
       }
     | undefined,
+  mutateAsync: vi.fn(),
   mutationCallbacks: undefined as
     | {
-        onSuccess?: (supplier: {
-          id: string;
-          code: string;
-          name: string;
-          location: string | null;
-        }) => void;
-        onError?: (error: Error) => void;
-      }
-    | undefined,
-  supplierFormProps: undefined as
-    | {
-        onSubmit: (
-          supplier: SupplierFormData,
-          locations?: PendingSupplierLocation[],
+        onSuccess?: (
+          supplier: {
+            id: string;
+            code: string;
+            name: string;
+            location: string | null;
+          },
+          variables: Record<string, unknown>,
         ) => void;
-        errorMessage?: string;
-        isSubmitting?: boolean;
-        submitLabel?: string;
+        onError?: (error: Error, variables: Record<string, unknown>) => void;
       }
     | undefined,
 }));
 
-vi.mock("@/components/suppliers/supplier-form", () => ({
-  SupplierForm: (props: NonNullable<typeof mocks.supplierFormProps>) => {
-    mocks.supplierFormProps = props;
-    return <div data-testid="canonical-supplier-form" />;
-  },
+vi.mock("@/components/ui", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/ui")>();
+
+  return {
+    ...actual,
+    Modal: ({
+      children,
+      isOpen,
+      onClose,
+      onOpen,
+      ...props
+    }: {
+      children: ReactNode;
+      dismissible?: boolean;
+      dismissOnClickOutside?: boolean;
+      isOpen: boolean;
+      onClose?: () => void;
+      onOpen?: () => void;
+    }) => {
+      const wasOpen = useRef(false);
+      useEffect(() => {
+        if (isOpen && !wasOpen.current) onOpen?.();
+        wasOpen.current = isOpen;
+      }, [isOpen, onOpen]);
+      mocks.modalProps = { ...props, isOpen, onClose };
+      return isOpen ? <div role="dialog">{children}</div> : null;
+    },
+  };
+});
+
+vi.mock("@/hooks/use-geo", () => ({
+  useGeoCapabilities: () => ({ data: { routingConfigured: true } }),
+  useGeocodeSearch: () => ({
+    data: undefined,
+    isError: false,
+    isFetching: false,
+  }),
+  useReverseGeocode: () => ({ data: null }),
 }));
 
 vi.mock("@/hooks/use-suppliers", () => ({
-  useCreateSupplierWithLocations: (callbacks: typeof mocks.mutationCallbacks) => {
+  useCreateSupplierWithLocations: (
+    callbacks: typeof mocks.mutationCallbacks,
+  ) => {
     mocks.mutationCallbacks = callbacks;
     return {
       mutateAsync: mocks.mutateAsync,
-      isSubmitting: false,
       isPending: mocks.isPending,
     };
-  },
-}));
-
-vi.mock("./quick-add-dialog-shell", () => ({
-  QuickAddDialogShell: (props: NonNullable<typeof mocks.shellProps>) => {
-    mocks.shellProps = props;
-    return props.children;
   },
 }));
 
@@ -75,99 +91,252 @@ beforeAll(() => {
   ).IS_REACT_ACT_ENVIRONMENT = true;
 });
 
-describe("SupplierQuickAddDialog", () => {
-  beforeEach(() => {
-    mocks.mutateAsync.mockReset();
-    mocks.mutateAsync.mockResolvedValue(undefined);
-    mocks.isPending = false;
-    mocks.mutationCallbacks = undefined;
-    mocks.shellProps = undefined;
-    mocks.supplierFormProps = undefined;
-  });
+beforeEach(() => {
+  mocks.isPending = false;
+  mocks.modalProps = undefined;
+  mocks.mutateAsync.mockReset();
+  mocks.mutateAsync.mockResolvedValue(undefined);
+  mocks.mutationCallbacks = undefined;
+});
 
-  it("renders the canonical SupplierForm and submits its pending locations", async () => {
+function renderDialog({
+  isOpen,
+  onClose = vi.fn(),
+  onSuccess = vi.fn(),
+}: {
+  isOpen: boolean;
+  onClose?: () => void;
+  onSuccess?: (supplier: {
+    id: string;
+    code: string;
+    name: string;
+    subtitle?: string;
+  }) => void;
+}) {
+  return (
+    <SupplierQuickAddDialog
+      isOpen={isOpen}
+      onClose={onClose}
+      onSuccess={onSuccess}
+    />
+  );
+}
+
+async function changeInput(
+  renderer: ReactTestRenderer,
+  id: string,
+  value: string,
+) {
+  await act(async () => {
+    const input = renderer.root
+      .findAllByType("input")
+      .find((node) => node.props.id === id);
+    input?.props.onChange({
+      target: { name: input.props.name, value },
+    });
+  });
+}
+
+describe("SupplierQuickAddDialog", () => {
+  it("submits only the validated supplier and required default location", async () => {
     const onClose = vi.fn();
     const onSuccess = vi.fn();
-    const html = renderToStaticMarkup(
-      <SupplierQuickAddDialog
-        isOpen
-        onClose={onClose}
-        onSuccess={onSuccess}
-      />,
-    );
-    const supplier = { name: "New Supplier" } as SupplierFormData;
-    const location = {
-      name: "Source Yard",
-      country: "Switzerland",
-      stateRegion: "",
-      city: "Zurich",
-      address: "",
-      gpsLatitude: 47,
-      gpsLongitude: 8,
-      distanceFromFacilityKm: null,
-      distanceSource: null,
-      isDefault: true,
-    } satisfies PendingSupplierLocation;
+    let renderer: ReactTestRenderer | undefined;
 
-    expect(html).toContain('data-testid="canonical-supplier-form"');
-    expect(mocks.supplierFormProps?.submitLabel).toBe("Create supplier");
-
-    await mocks.supplierFormProps?.onSubmit(supplier, [location]);
-    expect(mocks.mutateAsync).toHaveBeenCalledWith({
-      supplier,
-      locations: [location],
+    await act(async () => {
+      renderer = create(renderDialog({ isOpen: false, onClose, onSuccess }));
+    });
+    await act(async () => {
+      renderer?.update(renderDialog({ isOpen: true, onClose, onSuccess }));
     });
 
-    mocks.mutationCallbacks?.onSuccess?.({
-      id: "supplier-2",
-      code: "SUP-002",
-      name: "New Supplier",
-      location: "Zurich",
+    const rendered = JSON.stringify(renderer?.toJSON());
+    expect(rendered).toContain("New supplier");
+    expect(rendered).toContain("Create supplier");
+    expect(rendered).toContain("Supplier name");
+    expect(rendered).toContain("Country");
+    expect(rendered).toContain("GPS latitude");
+    expect(rendered).toContain("GPS longitude");
+    expect(rendered).not.toContain("Contact");
+    expect(rendered).not.toContain("Sourcing");
+
+    await changeInput(renderer!, "supplier-quick-add-name", "New Supplier");
+    await changeInput(renderer!, "supplier-quick-add-country", "Switzerland");
+    await changeInput(
+      renderer!,
+      "supplier-quick-add-position-latitude",
+      "47.3769",
+    );
+    await changeInput(
+      renderer!,
+      "supplier-quick-add-position-longitude",
+      "8.5417",
+    );
+
+    await act(async () => {
+      await renderer?.root.findByType("form").props.onSubmit({
+        preventDefault: () => undefined,
+        persist: () => undefined,
+        stopPropagation: () => undefined,
+      });
+    });
+
+    expect(mocks.mutateAsync).toHaveBeenCalledWith({
+      supplier: { name: "New Supplier" },
+      locations: [
+        {
+          country: "Switzerland",
+          gpsLatitude: 47.3769,
+          gpsLongitude: 8.5417,
+          isDefault: true,
+        },
+      ],
+    });
+    const payload = mocks.mutateAsync.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+
+    await act(async () => {
+      mocks.mutationCallbacks?.onSuccess?.({
+        id: "supplier-2",
+        code: "SUP-002",
+        name: "New Supplier",
+        location: null,
+      }, payload);
     });
     expect(onSuccess).toHaveBeenCalledWith({
       id: "supplier-2",
       code: "SUP-002",
       name: "New Supplier",
-      subtitle: "Zurich",
+      subtitle: undefined,
     });
     expect(onClose).toHaveBeenCalledOnce();
+
+    await act(async () => renderer?.unmount());
   });
 
-  it("locks dismissal while creating and clears stale errors when reopened", async () => {
-    const renderDialog = () => (
-      <SupplierQuickAddDialog
-        isOpen
-        onClose={() => undefined}
-        onSuccess={() => undefined}
-      />
-    );
+  it("forwards open transitions to clear stale errors without trapping dismissal", async () => {
+    const onClose = vi.fn();
+    const onSuccess = vi.fn();
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
-      renderer = create(renderDialog());
+      renderer = create(renderDialog({ isOpen: false, onClose, onSuccess }));
     });
-
-    expect(mocks.shellProps?.dismissOnClickOutside).toBe(false);
-    expect(mocks.shellProps?.dismissible).toBe(true);
-
-    mocks.isPending = true;
     await act(async () => {
-      renderer?.update(renderDialog());
+      renderer?.update(renderDialog({ isOpen: true, onClose, onSuccess }));
     });
-    expect(mocks.shellProps?.dismissible).toBe(false);
-    expect(mocks.supplierFormProps?.isSubmitting).toBe(true);
 
+    expect(mocks.modalProps?.dismissOnClickOutside).toBe(false);
+    expect(mocks.modalProps?.dismissible).toBeUndefined();
+
+    await changeInput(renderer!, "supplier-quick-add-name", "Supplier");
+    await changeInput(renderer!, "supplier-quick-add-country", "Switzerland");
+    await changeInput(
+      renderer!,
+      "supplier-quick-add-position-latitude",
+      "47.3769",
+    );
+    await changeInput(
+      renderer!,
+      "supplier-quick-add-position-longitude",
+      "8.5417",
+    );
     await act(async () => {
-      mocks.mutationCallbacks?.onError?.(new Error("Supplier creation failed"));
+      await renderer?.root.findByType("form").props.onSubmit({
+        preventDefault: () => undefined,
+        persist: () => undefined,
+        stopPropagation: () => undefined,
+      });
     });
-    expect(mocks.supplierFormProps?.errorMessage).toBe(
+    const activePayload = mocks.mutateAsync.mock.calls.at(-1)?.[0] as Record<
+      string,
+      unknown
+    >;
+    await act(async () => {
+      mocks.mutationCallbacks?.onError?.(
+        new Error("Supplier creation failed"),
+        activePayload,
+      );
+    });
+    expect(JSON.stringify(renderer?.toJSON())).toContain(
       "Supplier creation failed",
     );
 
     await act(async () => {
-      mocks.shellProps?.onOpen?.();
+      renderer?.update(renderDialog({ isOpen: false, onClose, onSuccess }));
     });
-    expect(mocks.supplierFormProps?.errorMessage).toBeUndefined();
+    mocks.isPending = true;
+    await act(async () => {
+      renderer?.update(renderDialog({ isOpen: true, onClose, onSuccess }));
+    });
+
+    expect(JSON.stringify(renderer?.toJSON())).not.toContain(
+      "Supplier creation failed",
+    );
+    expect(mocks.modalProps?.dismissOnClickOutside).toBe(false);
+    expect(mocks.modalProps?.dismissible).toBeUndefined();
+
+    await act(async () => renderer?.unmount());
+  });
+
+  it("ignores a late success after the operator dismisses a pending save", async () => {
+    const onClose = vi.fn();
+    const onSuccess = vi.fn();
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(renderDialog({ isOpen: false, onClose, onSuccess }));
+    });
+    await act(async () => {
+      renderer?.update(renderDialog({ isOpen: true, onClose, onSuccess }));
+    });
+
+    await changeInput(renderer!, "supplier-quick-add-name", "Late supplier");
+    await changeInput(renderer!, "supplier-quick-add-country", "Switzerland");
+    await changeInput(
+      renderer!,
+      "supplier-quick-add-position-latitude",
+      "47.3769",
+    );
+    await changeInput(
+      renderer!,
+      "supplier-quick-add-position-longitude",
+      "8.5417",
+    );
+    await act(async () => {
+      await renderer?.root.findByType("form").props.onSubmit({
+        preventDefault: () => undefined,
+        persist: () => undefined,
+        stopPropagation: () => undefined,
+      });
+    });
+    const pendingPayload = mocks.mutateAsync.mock.calls.at(-1)?.[0] as Record<
+      string,
+      unknown
+    >;
+
+    mocks.isPending = true;
+    await act(async () => {
+      renderer?.update(renderDialog({ isOpen: true, onClose, onSuccess }));
+    });
+    await act(async () => {
+      mocks.modalProps?.onClose?.();
+      mocks.mutationCallbacks?.onSuccess?.(
+        {
+          id: "supplier-late",
+          code: "SUP-LATE",
+          name: "Late supplier",
+          location: null,
+        },
+        pendingPayload,
+      );
+    });
+
+    expect(mocks.modalProps?.dismissible).toBeUndefined();
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onSuccess).not.toHaveBeenCalled();
 
     await act(async () => renderer?.unmount());
   });
