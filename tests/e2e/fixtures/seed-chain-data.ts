@@ -732,6 +732,14 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
               )
             );
           await tx
+            .delete(schema.productionRunFeedstockDraws)
+            .where(
+              inArray(
+                schema.productionRunFeedstockDraws.productionRunId,
+                facilityRunIds,
+              ),
+            );
+          await tx
             .delete(schema.productionRuns)
             .where(
               inArray(

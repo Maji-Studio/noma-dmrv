@@ -13,6 +13,16 @@ export interface ProductionRunFeedstockWithDetails {
   feedstockTypeName: string | null;
 }
 
+export interface ProductionRunFeedstockDrawWithDetails {
+  id: string;
+  storageLocationId: string;
+  wetMassKg: number;
+  storageLocationCode: string;
+  storageLocationName: string;
+  feedstockTypeId: string | null;
+  feedstockTypeName: string | null;
+}
+
 export interface ProductionRunWithRelations {
   id: string;
   code: string;
@@ -55,6 +65,8 @@ export interface ProductionRunWithRelations {
   feedstockStorageLocationName: string | null;
   // M:M feedstocks
   feedstocks: ProductionRunFeedstockWithDetails[];
+  // Canonical explicit source-bin withdrawals
+  feedstockDraws: ProductionRunFeedstockDrawWithDetails[];
   // Computed fields
   totalFeedstockWetMassKg: number;
 }
