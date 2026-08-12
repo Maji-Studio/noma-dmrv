@@ -810,6 +810,7 @@ export async function updateSample(
         { entityType: "creditBatch", entityId: data.creditBatchId },
         "update",
         "sample",
+        "selected",
       );
     }
 

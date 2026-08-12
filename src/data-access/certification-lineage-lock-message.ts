@@ -27,17 +27,25 @@ interface CertificationLineageLockMessageInput {
   mutation: CertificationLineageMutation;
   subjectEntityType: CertificationLineageLockEntityType;
   lineageEntityType: CertificationLineageLockEntityType;
+  lineageRelationship?: "linked" | "selected";
 }
 
 export function formatCertificationLineageLockMessage({
   mutation,
   subjectEntityType,
   lineageEntityType,
+  lineageRelationship,
 }: CertificationLineageLockMessageInput): string {
-  const lineageSubject =
-    subjectEntityType === lineageEntityType
-      ? "it"
-      : `its ${ENTITY_LABELS[lineageEntityType]}`;
+  if (subjectEntityType === lineageEntityType) {
+    return `Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.`;
+  }
 
-  return `Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because ${lineageSubject} is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.`;
+  const lineageLabel = ENTITY_LABELS[lineageEntityType];
+  const relationship =
+    lineageRelationship ?? (mutation === "create" ? "selected" : "linked");
+  const explanation = `Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because the ${relationship} ${lineageLabel} is locked by a certification submission.`;
+
+  return relationship === "selected"
+    ? `${explanation} Select a ${lineageLabel} that is not locked.`
+    : explanation;
 }

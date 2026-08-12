@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatCertificationLineageLockMessage } from "./certification-lineage-lock-message";
 
 describe("formatCertificationLineageLockMessage", () => {
-  it("names an application and its locked delivery", () => {
+  it("names an application and its selected locked delivery", () => {
     expect(
       formatCertificationLineageLockMessage({
         mutation: "create",
@@ -10,11 +10,11 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "delivery",
       }),
     ).toBe(
-      "Cannot create this application because its delivery is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+      "Cannot create this application because the selected delivery is locked by a certification submission. Select a delivery that is not locked.",
     );
   });
 
-  it("names a biochar product and its locked production run", () => {
+  it("names a biochar product and its selected locked production run", () => {
     expect(
       formatCertificationLineageLockMessage({
         mutation: "create",
@@ -22,7 +22,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "productionRun",
       }),
     ).toBe(
-      "Cannot create this biochar product because its production run is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+      "Cannot create this biochar product because the selected production run is locked by a certification submission. Select a production run that is not locked.",
     );
   });
 
@@ -31,7 +31,7 @@ describe("formatCertificationLineageLockMessage", () => {
     ["biocharProduct", "biochar product"],
     ["sample", "sample"],
   ] as const)(
-    "names a transport leg and its %s parent",
+    "names a transport leg and its selected %s parent",
     (lineageEntityType, label) => {
       expect(
         formatCertificationLineageLockMessage({
@@ -40,7 +40,7 @@ describe("formatCertificationLineageLockMessage", () => {
           lineageEntityType,
         }),
       ).toBe(
-        `Cannot create this transport leg because its ${label} is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.`,
+        `Cannot create this transport leg because the selected ${label} is locked by a certification submission. Select a ${label} that is not locked.`,
       );
     },
   );
@@ -53,11 +53,49 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "application",
       }),
     ).toBe(
-      "Cannot update this application because it is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+      "Cannot update this application because it is locked by a certification submission.",
     );
   });
 
-  it("uses the shared guidance for credit-batch deletion", () => {
+  it("names the linked parent of an existing child record", () => {
+    expect(
+      formatCertificationLineageLockMessage({
+        mutation: "update",
+        subjectEntityType: "transportLeg",
+        lineageEntityType: "feedstock",
+      }),
+    ).toBe(
+      "Cannot update this transport leg because the linked feedstock is locked by a certification submission.",
+    );
+  });
+
+  it("does not offer selection when a create uses a derived parent", () => {
+    expect(
+      formatCertificationLineageLockMessage({
+        mutation: "create",
+        subjectEntityType: "biocharProduct",
+        lineageEntityType: "productionRun",
+        lineageRelationship: "linked",
+      }),
+    ).toBe(
+      "Cannot create this biochar product because the linked production run is locked by a certification submission.",
+    );
+  });
+
+  it("names the selected parent for a re-parenting update", () => {
+    expect(
+      formatCertificationLineageLockMessage({
+        mutation: "update",
+        subjectEntityType: "application",
+        lineageEntityType: "delivery",
+        lineageRelationship: "selected",
+      }),
+    ).toBe(
+      "Cannot update this application because the selected delivery is locked by a certification submission. Select a delivery that is not locked.",
+    );
+  });
+
+  it("uses the shared lock explanation for credit-batch deletion", () => {
     expect(
       formatCertificationLineageLockMessage({
         mutation: "delete",
@@ -65,7 +103,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "creditBatch",
       }),
     ).toBe(
-      "Cannot delete this credit batch because it is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+      "Cannot delete this credit batch because it is locked by a certification submission.",
     );
   });
 });

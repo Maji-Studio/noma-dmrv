@@ -1,6 +1,6 @@
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   createApplication,
   deleteApplication,
@@ -44,11 +44,11 @@ import {
   reactors,
   samples,
   storageLocations,
+  transportLegs,
 } from "@/db/schema";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
-const LOCKED_COPY =
-  "Submitted Removal data is locked. Removal cancellation is not available yet.";
+const LOCKED_COPY = "is locked by a certification submission.";
 
 interface LineageFixture {
   applicationId: string;
@@ -322,6 +322,15 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
       .delete(productionRunFeedstocks)
       .where(eq(productionRunFeedstocks.productionRunId, fixture.productionRunId));
     await tx
+      .delete(transportLegs)
+      .where(
+        and(
+          eq(transportLegs.organizationId, TEST_ORG_ID),
+          eq(transportLegs.entityType, "feedstock"),
+          eq(transportLegs.entityId, fixture.feedstockId),
+        ),
+      );
+    await tx
       .delete(feedstocks)
       .where(eq(feedstocks.id, fixture.feedstockId));
     await tx
@@ -471,7 +480,7 @@ describe("certification lineage guards", () => {
             waterAddedKg: 0,
           }),
         ).rejects.toThrow(
-          "Cannot create this biochar product because its production run is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+          "Cannot create this biochar product because the selected production run is locked by a certification submission. Select a production run that is not locked.",
         );
       } finally {
         // If the certified-lineage guard ever regresses and the create
@@ -518,7 +527,7 @@ describe("certification lineage guards", () => {
           biocharAppliedTons: 0.01,
         }),
       ).rejects.toThrow(
-        "Cannot create this application because its delivery is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+        "Cannot create this application because the selected delivery is locked by a certification submission. Select a delivery that is not locked.",
       );
     });
   });
@@ -534,7 +543,7 @@ describe("certification lineage guards", () => {
           loadMassKg: 100,
         }),
       ).rejects.toThrow(
-        "Cannot create this transport leg because its feedstock is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+        "Cannot create this transport leg because the selected feedstock is locked by a certification submission. Select a feedstock that is not locked.",
       );
     });
   });
@@ -564,7 +573,7 @@ describe("certification lineage guards", () => {
           siteManagementNotes: "locked notes",
         }),
       ).rejects.toThrow(
-        "Cannot update this credit batch because it is part of a submitted Removal. Submitted Removal data is locked. Removal cancellation is not available yet.",
+        "Cannot update this credit batch because it is locked by a certification submission.",
       );
     });
   });

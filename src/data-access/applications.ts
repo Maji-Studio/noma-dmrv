@@ -748,6 +748,7 @@ export async function updateApplication(
         { entityType: "delivery", entityId: data.deliveryId },
         "update",
         "application",
+        "selected",
       );
     }
 

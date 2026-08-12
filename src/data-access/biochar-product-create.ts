@@ -251,6 +251,7 @@ export async function createBiocharProduct(
           },
           "create",
           "biocharProduct",
+          "linked",
         );
       }
       productionDate =

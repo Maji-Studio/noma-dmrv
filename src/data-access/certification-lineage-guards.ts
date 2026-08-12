@@ -196,6 +196,7 @@ export async function assertCanMutateCertifiedLineage(
   target: CertifiedLineageTarget,
   mutation: CertificationLineageMutation,
   subjectEntityType: CertificationLineageLockEntityType = target.entityType,
+  lineageRelationship?: "linked" | "selected",
 ): Promise<void> {
   requireOrgScope(ctx);
   const lineage = await lineageQuery(ctx, tx, target);
@@ -225,6 +226,7 @@ export async function assertCanMutateCertifiedLineage(
       mutation,
       subjectEntityType,
       lineageEntityType: target.entityType,
+      lineageRelationship,
     }),
   );
 }
