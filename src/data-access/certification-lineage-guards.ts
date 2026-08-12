@@ -20,17 +20,17 @@ import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/sub
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
+import {
+  formatCertificationLineageLockMessage,
+  type CertificationLineageLockEntityType,
+  type CertificationLineageMutation,
+} from "./certification-lineage-lock-message";
 import { requireOrgScope } from "./utils";
 
-export type CertifiedLineageEntityType =
-  | "creditBatch"
-  | "productionRun"
-  | "sample"
-  | "application"
-  | "delivery"
-  | "order"
-  | "biocharProduct"
-  | "feedstock";
+export type CertifiedLineageEntityType = Exclude<
+  CertificationLineageLockEntityType,
+  "transportLeg"
+>;
 
 export interface CertifiedLineageTarget {
   entityType: CertifiedLineageEntityType;
@@ -38,17 +38,6 @@ export interface CertifiedLineageTarget {
 }
 
 const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
-
-const ENTITY_LABELS: Record<CertifiedLineageEntityType, string> = {
-  creditBatch: "credit batch",
-  productionRun: "production run",
-  sample: "sample",
-  application: "application",
-  delivery: "delivery",
-  order: "order",
-  biocharProduct: "biochar product",
-  feedstock: "feedstock",
-};
 
 const removalSubmission = alias(
   certificationSubmissions,
@@ -205,7 +194,9 @@ export async function assertCanMutateCertifiedLineage(
   ctx: OrgContext,
   tx: DbTransaction,
   target: CertifiedLineageTarget,
-  mutation: "create" | "update" | "delete",
+  mutation: CertificationLineageMutation,
+  subjectEntityType: CertificationLineageLockEntityType = target.entityType,
+  lineageRelationship?: "linked" | "selected",
 ): Promise<void> {
   requireOrgScope(ctx);
   const lineage = await lineageQuery(ctx, tx, target);
@@ -231,6 +222,11 @@ export async function assertCanMutateCertifiedLineage(
   if (!hit) return;
 
   throw new SafeError(
-    `Cannot ${mutation} ${ENTITY_LABELS[target.entityType]} because it is part of a submitted certification artifact. Create a correction instead of editing locked source data.`,
+    formatCertificationLineageLockMessage({
+      mutation,
+      subjectEntityType,
+      lineageEntityType: target.entityType,
+      lineageRelationship,
+    }),
   );
 }

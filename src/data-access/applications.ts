@@ -649,6 +649,7 @@ export async function createApplication(
       tx,
       { entityType: "delivery", entityId: data.deliveryId },
       "create",
+      "application",
     );
 
     // Before the capacity check — upcoming deliveries carry no delivered
@@ -746,6 +747,8 @@ export async function updateApplication(
         tx,
         { entityType: "delivery", entityId: data.deliveryId },
         "update",
+        "application",
+        "selected",
       );
     }
 

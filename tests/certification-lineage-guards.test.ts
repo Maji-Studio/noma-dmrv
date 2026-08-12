@@ -1,6 +1,6 @@
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   createApplication,
   deleteApplication,
@@ -22,6 +22,7 @@ import {
   updateProductionRun,
 } from "@/data-access/production-runs";
 import { deleteSample, updateSample } from "@/data-access/samples";
+import { createTransportLeg } from "@/data-access/transport-legs";
 import { db } from "@/db";
 import {
   applications,
@@ -43,10 +44,11 @@ import {
   reactors,
   samples,
   storageLocations,
+  transportLegs,
 } from "@/db/schema";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
-const LOCKED_COPY = "Create a correction instead of editing locked source data";
+const LOCKED_COPY = "is locked by a certification submission.";
 
 interface LineageFixture {
   applicationId: string;
@@ -320,6 +322,15 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
       .delete(productionRunFeedstocks)
       .where(eq(productionRunFeedstocks.productionRunId, fixture.productionRunId));
     await tx
+      .delete(transportLegs)
+      .where(
+        and(
+          eq(transportLegs.organizationId, TEST_ORG_ID),
+          eq(transportLegs.entityType, "feedstock"),
+          eq(transportLegs.entityId, fixture.feedstockId),
+        ),
+      );
+    await tx
       .delete(feedstocks)
       .where(eq(feedstocks.id, fixture.feedstockId));
     await tx
@@ -468,7 +479,9 @@ describe("certification lineage guards", () => {
             moistureContentPercent: 5,
             waterAddedKg: 0,
           }),
-        ).rejects.toThrow(LOCKED_COPY);
+        ).rejects.toThrow(
+          "Cannot create this biochar product because the selected production run is locked by a certification submission. Select a production run that is not locked.",
+        );
       } finally {
         // If the certified-lineage guard ever regresses and the create
         // succeeds, the assertion fails AND leaves an orphan product behind.
@@ -513,7 +526,25 @@ describe("certification lineage guards", () => {
           applicationDate: new Date("2026-06-17T00:00:00Z"),
           biocharAppliedTons: 0.01,
         }),
-      ).rejects.toThrow(LOCKED_COPY);
+      ).rejects.toThrow(
+        "Cannot create this application because the selected delivery is locked by a certification submission. Select a delivery that is not locked.",
+      );
+    });
+  });
+
+  it("rejects new transport legs on a submitted parent lineage", async () => {
+    await withFixture(async (fixture) => {
+      await expect(
+        createTransportLeg(makeTestOrgContext(TEST_USER_ID), {
+          entityType: "feedstock",
+          entityId: fixture.feedstockId,
+          distanceKm: 10,
+          transportMethodType: "road",
+          loadMassKg: 100,
+        }),
+      ).rejects.toThrow(
+        "Cannot create this transport leg because the linked feedstock is locked by a certification submission.",
+      );
     });
   });
 
@@ -541,7 +572,9 @@ describe("certification lineage guards", () => {
         updateCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId, {
           siteManagementNotes: "locked notes",
         }),
-      ).rejects.toThrow(LOCKED_COPY);
+      ).rejects.toThrow(
+        "Cannot update this credit batch because it is locked by a certification submission.",
+      );
     });
   });
 
