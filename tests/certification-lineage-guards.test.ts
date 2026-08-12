@@ -367,11 +367,11 @@ describe("certification lineage guards", () => {
         makeTestOrgContext(TEST_USER_ID),
         fixture.productionRunId,
         {
-          feedstockWetMassKg: 1_100,
+          feedingRateKgHr: 1_100,
         },
       );
 
-      expect(updated.feedstockWetMassKg).toBe(1_100);
+      expect(updated.feedingRateKgHr).toBe(1_100);
     }, "none");
   });
 

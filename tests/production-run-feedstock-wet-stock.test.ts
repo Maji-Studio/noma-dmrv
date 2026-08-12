@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { assertFeedstockWetDrawWithinStock, deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
@@ -40,6 +40,19 @@ describe("production-run wet feedstock stock", () => {
   let secondaryFeedstockId: string;
   const productionRunIds = new Set<string>();
   const concurrencyReactorIds: string[] = [];
+
+  async function cleanupProductionRuns() {
+    const runIds = [...productionRunIds];
+    if (runIds.length === 0) return;
+    await db
+      .delete(productionRunFeedstocks)
+      .where(inArray(productionRunFeedstocks.productionRunId, runIds));
+    await db
+      .delete(productionRunFeedstockDraws)
+      .where(inArray(productionRunFeedstockDraws.productionRunId, runIds));
+    await db.delete(productionRuns).where(inArray(productionRuns.id, runIds));
+    productionRunIds.clear();
+  }
 
   beforeAll(async () => {
     await ensureTestOrg();
@@ -170,19 +183,10 @@ describe("production-run wet feedstock stock", () => {
     secondaryFeedstockId = secondaryFeedstock.id;
   });
 
+  afterEach(cleanupProductionRuns);
+
   afterAll(async () => {
-    const runIds = [...productionRunIds];
-    if (runIds.length > 0) {
-      await db
-        .delete(productionRunFeedstocks)
-        .where(inArray(productionRunFeedstocks.productionRunId, runIds));
-      await db
-        .delete(productionRunFeedstockDraws)
-        .where(inArray(productionRunFeedstockDraws.productionRunId, runIds));
-      await db
-        .delete(productionRuns)
-        .where(inArray(productionRuns.id, runIds));
-    }
+    await cleanupProductionRuns();
     await db.delete(feedstocks).where(eq(feedstocks.id, secondaryFeedstockId));
     await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
     await db
@@ -259,9 +263,18 @@ describe("production-run wet feedstock stock", () => {
 
   it("round-trips mixed pyrolysis feedstock types and restores each bin on edit", async () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
-    const [runId] = [...productionRunIds];
+    const created = await createProductionRun(ctx, {
+      code: `PR-WET-MIXED-${tag}`,
+      facilityId,
+      reactorId,
+      status: "draft",
+      startTime: new Date("2026-08-04T08:00:00Z"),
+      endTime: null,
+      feedstockDraws: [],
+    });
+    productionRunIds.add(created.id);
 
-    const mixed = await updateProductionRun(ctx, runId, {
+    const mixed = await updateProductionRun(ctx, created.id, {
       feedstockDraws: [
         { storageLocationId, wetMassKg: 1_000 },
         { storageLocationId: secondaryStorageLocationId, wetMassKg: 200 },
@@ -287,12 +300,12 @@ describe("production-run wet feedstock stock", () => {
     ).toBe(300);
 
     await expect(
-      updateProductionRun(ctx, runId, { feedstockWetMassKg: 500 }),
+      updateProductionRun(ctx, created.id, { feedstockWetMassKg: 500 }),
     ).rejects.toThrow(
       "This run draws from several bins. Send feedstockDraws to change its feedstock.",
     );
 
-    const replaced = await updateProductionRun(ctx, runId, {
+    const replaced = await updateProductionRun(ctx, created.id, {
       feedstockDraws: [
         { storageLocationId: secondaryStorageLocationId, wetMassKg: 100 },
       ],
@@ -308,10 +321,21 @@ describe("production-run wet feedstock stock", () => {
 
   it("rejects one overdrawn row without changing either saved draw", async () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
-    const [runId] = [...productionRunIds];
+    const created = await createProductionRun(ctx, {
+      code: `PR-WET-OVERDRAW-${tag}`,
+      facilityId,
+      reactorId,
+      status: "draft",
+      startTime: new Date("2026-08-05T08:00:00Z"),
+      endTime: null,
+      feedstockDraws: [
+        { storageLocationId: secondaryStorageLocationId, wetMassKg: 100 },
+      ],
+    });
+    productionRunIds.add(created.id);
 
     await expect(
-      updateProductionRun(ctx, runId, {
+      updateProductionRun(ctx, created.id, {
         feedstockDraws: [
           { storageLocationId, wetMassKg: 100 },
           {
