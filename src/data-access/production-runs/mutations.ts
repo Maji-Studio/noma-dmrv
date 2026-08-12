@@ -245,7 +245,7 @@ export async function createProductionRun(
       await validateProductionRunFeedstockDrawSources(
         ctx,
         tx,
-        [{ storageLocationId: data.feedstockStorageLocationId, wetMassKg: 1 }],
+        [{ storageLocationId: data.feedstockStorageLocationId }],
         data.facilityId,
       );
     }
@@ -716,7 +716,6 @@ export async function updateProductionRun(
         tx,
         lockedFeedstockStorageLocationIds.map((storageLocationId) => ({
           storageLocationId,
-          wetMassKg: 1,
         })),
         lockedTargetFacilityId,
       );

@@ -399,7 +399,10 @@ export async function enrichStorageLocationRows(
               prfd.wet_mass_kg as mass_kg,
               CASE
                 WHEN pr.feedstock_moisture_percent IS NULL THEN NULL
-                ELSE prfd.wet_mass_kg * (1 - pr.feedstock_moisture_percent / 100.0)
+                ELSE ROUND(
+                  (prfd.wet_mass_kg * (1 - pr.feedstock_moisture_percent / 100.0))::numeric,
+                  3
+                )
               END as mass_dry_kg,
               'Feedstock used'
             FROM production_run_feedstock_draws prfd

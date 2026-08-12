@@ -131,7 +131,7 @@ export async function getProductionRunFeedstockDrawTotal(
 export async function validateProductionRunFeedstockDrawSources(
   ctx: OrgContext,
   tx: DbTransaction,
-  draws: readonly ProductionRunFeedstockDrawInput[],
+  draws: readonly Pick<ProductionRunFeedstockDrawInput, "storageLocationId">[],
   facilityId: string,
 ): Promise<void> {
   requireOrgScope(ctx);
