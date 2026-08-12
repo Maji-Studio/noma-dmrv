@@ -130,6 +130,9 @@ test.describe("Production Run + Sample UI CRUD", () => {
       });
 
       await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+      await expect(
+        page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+      ).toBeVisible();
       // The per-test facility is freshly seeded, so it cannot contain a run.
       // Avoid asking the table helper for action labels while it is rendering
       // the empty-state transition.
@@ -363,6 +366,9 @@ async function openRunForm(
   },
 ) {
   await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+  await expect(
+    page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "New Production Run" }).click();
   await waitForSideSheet(page);
   await page.selectOption('select[name="status"]', window.status ?? "running");

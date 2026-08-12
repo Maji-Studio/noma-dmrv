@@ -127,34 +127,36 @@ export function ProductionRunFeedstockDrawRow({
           />
         </FormField>
 
-        <FormField
-          id={`feedstockDraws.${index}.wetMassKg`}
-          label="Wet mass (kg)"
-          error={resolvedWetMassError}
-          hint="As-received weight from this bin, water included."
-          required
-        >
-          <FormInput
-            ref={wetMassRef}
+        <div>
+          <FormField
             id={`feedstockDraws.${index}.wetMassKg`}
-            name={wetMassName}
-            type="number"
-            step={MASS_KG_INPUT_STEP}
-            min="0"
-            placeholder="e.g. 500"
-            disabled={disabled}
-            error={!!resolvedWetMassError}
-            value={wetMassKg ?? ""}
-            onBlur={onWetMassBlur}
-            onChange={(event) => {
-              const value = event.target.value.trim();
-              onWetMassChange(value === "" ? null : Number(value));
-            }}
-          />
+            label="Wet mass (kg)"
+            error={resolvedWetMassError}
+            hint="As-received weight from this bin, water included."
+            required
+          >
+            <FormInput
+              ref={wetMassRef}
+              id={`feedstockDraws.${index}.wetMassKg`}
+              name={wetMassName}
+              type="number"
+              step={MASS_KG_INPUT_STEP}
+              min="0"
+              placeholder="e.g. 500"
+              disabled={disabled}
+              error={!!resolvedWetMassError}
+              value={wetMassKg ?? ""}
+              onBlur={onWetMassBlur}
+              onChange={(event) => {
+                const value = event.target.value.trim();
+                onWetMassChange(value === "" ? null : Number(value));
+              }}
+            />
+          </FormField>
           {stockError && facilityId && (
             <StockReconciliationLink facilityId={facilityId} />
           )}
-        </FormField>
+        </div>
       </div>
     </div>
   );

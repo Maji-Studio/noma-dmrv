@@ -132,6 +132,27 @@ describe("productionRunFormSchema mass balance", () => {
 });
 
 describe("productionRunFormSchema terminal feedstock requirements", () => {
+  it.each(["draft", "running", "cancelled"] as const)(
+    "ignores the untouched starter draw for a %s run",
+    (status) => {
+      const result = productionRunFormSchema.safeParse({
+        facilityId: validProductionRunInput.facilityId,
+        reactorId: validProductionRunInput.reactorId,
+        status,
+        cancellationReason:
+          status === "cancelled" ? "Duplicate run entered by the operator" : "",
+        startDate: validProductionRunInput.startDate,
+        startTime: validProductionRunInput.startTime,
+        feedstockDraws: [{ storageLocationId: "", wetMassKg: null }],
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.feedstockDraws).toEqual([]);
+      }
+    },
+  );
+
   it.each([
     {
       label: "source rows",
@@ -191,14 +212,6 @@ describe("productionRunFormSchema terminal feedstock requirements", () => {
 
   it.each([
     {
-      label: "empty row",
-      draw: { storageLocationId: "", wetMassKg: "" },
-      paths: [
-        ["feedstockDraws", 0, "storageLocationId"],
-        ["feedstockDraws", 0, "wetMassKg"],
-      ],
-    },
-    {
       label: "malformed row",
       draw: { storageLocationId: "not-a-uuid", wetMassKg: "abc" },
       paths: [
@@ -216,6 +229,23 @@ describe("productionRunFormSchema terminal feedstock requirements", () => {
     if (!result.success) {
       expect(result.error.issues.map((issue) => issue.path)).toEqual(
         expect.arrayContaining(paths),
+      );
+    }
+  });
+
+  it("treats the untouched starter row as a missing terminal draw", () => {
+    const result = productionRunFormSchema.safeParse({
+      ...completeProductionRunInput,
+      feedstockDraws: [{ storageLocationId: "", wetMassKg: "" }],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ["feedstockDraws"],
+          message: "Add at least one feedstock source.",
+        }),
       );
     }
   });

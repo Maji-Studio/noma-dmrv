@@ -178,6 +178,28 @@ const productionRunFeedstockDrawsSchema = z
     }
   });
 
+function dropUntouchedFeedstockDrawRows(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+
+  return value.filter((draw) => {
+    if (!draw || typeof draw !== "object") return true;
+    const candidate = draw as {
+      storageLocationId?: unknown;
+      wetMassKg?: unknown;
+    };
+    const wetMassIsBlank =
+      candidate.wetMassKg === undefined ||
+      candidate.wetMassKg === null ||
+      candidate.wetMassKg === "";
+    return candidate.storageLocationId !== "" || !wetMassIsBlank;
+  });
+}
+
+const productionRunFeedstockDrawsFormSchema = z.preprocess(
+  dropUntouchedFeedstockDrawRows,
+  productionRunFeedstockDrawsSchema,
+);
+
 // ============================================
 // Production Run Form Schema (Client-side validation)
 // ============================================
@@ -238,7 +260,7 @@ const productionRunFormObject = z.object({
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
   // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
-  feedstockDraws: productionRunFeedstockDrawsSchema.optional(),
+  feedstockDraws: productionRunFeedstockDrawsFormSchema.optional(),
   // Keep legacy fields in the parsed shape so the action schema can reject
   // them explicitly instead of Zod silently stripping unknown keys.
   feedstockWetMassKg: z.preprocess(
