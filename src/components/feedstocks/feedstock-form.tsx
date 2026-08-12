@@ -38,8 +38,10 @@ import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachme
 import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
 import { StorageLocationQuickAddDialog } from "@/components/forms/entity-select/storage-location-quick-add-dialog";
-import { SupplierQuickAddDialog } from "@/components/forms/entity-select/supplier-quick-add-dialog";
-import { useQuickAddDialog } from "@/components/forms/entity-select";
+import {
+  SupplierQuickAddDialog,
+  useQuickAddDialog,
+} from "@/components/forms/entity-select";
 import { BinAllocationRow } from "./bin-allocation-row";
 import { FeedstockEvidenceSection } from "./feedstock-trailing-sections";
 import { WetMassWarning } from "./wet-mass-warning";
@@ -420,7 +422,6 @@ export function FeedstockForm({
               disabled={isSubmitting}
               required
               allowCreate
-              createLabel="Add new supplier"
               onCreateNew={supplierDialog.open}
               // Suppliers are org-shared, so a lone one is not "the" supplier for
               // this delivery. Require an explicit pick (#379) — the default

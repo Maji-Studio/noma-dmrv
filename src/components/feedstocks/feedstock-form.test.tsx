@@ -5,28 +5,44 @@ import type { Control, FieldValues } from "react-hook-form";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 
 const mocks = vi.hoisted(() => ({
+  supplierSelectProps: undefined as
+    | {
+        allowCreate?: boolean;
+        onCreateNew?: () => void;
+      }
+    | undefined,
   supplierDialogProps: undefined as
     | {
+        isOpen: boolean;
         onSuccess: (supplier: EntityOption) => void;
       }
     | undefined,
 }));
 
-vi.mock("@/components/forms", async () => {
+vi.mock("@/components/forms", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/forms")>();
   const { useWatch } = await vi.importActual<
     typeof import("react-hook-form")
   >("react-hook-form");
   const Wrapper = ({ children }: { children: ReactNode }) => children;
 
   return {
+    ...actual,
     FormEntitySelect: ({
       control,
       name,
+      allowCreate,
+      onCreateNew,
     }: {
       control: Control<FieldValues>;
       name: string;
+      allowCreate?: boolean;
+      onCreateNew?: () => void;
     }) => {
       const value = useWatch({ control, name });
+      if (name === "supplierId") {
+        mocks.supplierSelectProps = { allowCreate, onCreateNew };
+      }
       return name === "supplierId" ? (
         <output
           data-testid="selected-supplier-id"
@@ -54,9 +70,13 @@ vi.mock("@/components/forms/form-select", () => ({
   FormSelect: () => null,
 }));
 
-vi.mock("@/components/forms/entity-select", async () => {
+vi.mock("@/components/forms/entity-select", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@/components/forms/entity-select")
+  >();
   const { useState } = await vi.importActual<typeof import("react")>("react");
   return {
+    ...actual,
     useQuickAddDialog: () => {
       const [isOpen, setIsOpen] = useState(false);
       return {
@@ -65,18 +85,14 @@ vi.mock("@/components/forms/entity-select", async () => {
         close: () => setIsOpen(false),
       };
     },
-  };
-});
-
-vi.mock(
-  "@/components/forms/entity-select/supplier-quick-add-dialog",
-  () => ({
-    SupplierQuickAddDialog: (props: NonNullable<typeof mocks.supplierDialogProps>) => {
+    SupplierQuickAddDialog: (
+      props: NonNullable<typeof mocks.supplierDialogProps>,
+    ) => {
       mocks.supplierDialogProps = props;
       return null;
     },
-  }),
-);
+  };
+});
 
 vi.mock(
   "@/components/forms/entity-select/vehicle-quick-add-dialog",
@@ -130,10 +146,11 @@ beforeAll(() => {
 
 describe("FeedstockForm supplier quick-add wiring", () => {
   beforeEach(() => {
+    mocks.supplierSelectProps = undefined;
     mocks.supplierDialogProps = undefined;
   });
 
-  it("selects the supplier returned by the production quick-add callback", async () => {
+  it("opens the owned dialog from the production create action and selects its supplier", async () => {
     let renderer: ReactTestRenderer | undefined;
     await act(async () => {
       renderer = create(<FeedstockForm onSubmit={vi.fn()} />);
@@ -143,7 +160,16 @@ describe("FeedstockForm supplier quick-add wiring", () => {
       renderer?.root.findByProps({ "data-testid": "selected-supplier-id" });
 
     expect(selectedSupplier()?.props["data-value"]).toBe("");
+    expect(mocks.supplierSelectProps?.allowCreate).toBe(true);
+    expect(mocks.supplierSelectProps?.onCreateNew).toBeTypeOf("function");
     expect(mocks.supplierDialogProps).toBeDefined();
+    expect(mocks.supplierDialogProps?.isOpen).toBe(false);
+
+    await act(async () => {
+      mocks.supplierSelectProps?.onCreateNew?.();
+    });
+
+    expect(mocks.supplierDialogProps?.isOpen).toBe(true);
 
     await act(async () => {
       mocks.supplierDialogProps?.onSuccess({
