@@ -391,20 +391,19 @@ function productionBatchMismatchMessage(
   expected: CreateProductionBatchRequest,
   legacyWindow?: LegacyProductionBatchWindow,
 ): string | null {
-  const startedAtMatches =
-    timestampMatches(batch.started_at, expected.started_at) ||
-    (legacyWindow !== undefined &&
-      timestampMatches(
-        batch.started_at,
-        `${legacyWindow.startDate}${LEGACY_DAY_START_SUFFIX}`,
-      ));
-  const endedAtMatches =
-    timestampMatches(batch.ended_at, expected.ended_at) ||
-    (legacyWindow !== undefined &&
-      timestampMatches(
-        batch.ended_at,
-        `${legacyWindow.endDate}${LEGACY_DAY_END_SUFFIX}`,
-      ));
+  const physicalWindowMatches =
+    timestampMatches(batch.started_at, expected.started_at) &&
+    timestampMatches(batch.ended_at, expected.ended_at);
+  const legacyWindowMatches =
+    legacyWindow !== undefined &&
+    timestampMatches(
+      batch.started_at,
+      `${legacyWindow.startDate}${LEGACY_DAY_START_SUFFIX}`,
+    ) &&
+    timestampMatches(
+      batch.ended_at,
+      `${legacyWindow.endDate}${LEGACY_DAY_END_SUFFIX}`,
+    );
   const sameFeedstocks =
     [...batch.feedstock_type_ids].sort().join("\u0000") ===
     [...expected.feedstock_type_ids].sort().join("\u0000");
@@ -424,8 +423,7 @@ function productionBatchMismatchMessage(
     batch.kind === expected.kind &&
     massMagnitudeMatches &&
     productionBatchMassUnitsMatch(batch.mass.unit, expected.mass.unit) &&
-    startedAtMatches &&
-    endedAtMatches
+    (physicalWindowMatches || legacyWindowMatches)
   ) {
     return null;
   }

@@ -389,6 +389,17 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(mocks.client.post).not.toHaveBeenCalled();
   });
 
+  it("refuses an orphan with a hybrid legacy and physical window", async () => {
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
+        started_at: "2026-03-01T00:00:00.000Z",
+      });
+    });
+
+    await expect(ensure()).rejects.toThrow(/does not match this credit batch/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
   it("claims an orphaned record within the dry-mass precision tolerance", async () => {
     mocks.client.paginate.mockImplementation(async function* () {
       yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
