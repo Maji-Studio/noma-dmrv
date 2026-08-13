@@ -150,6 +150,31 @@ Earlier implementation notes are archived by date:
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
 
+## 2026-08-13 (replacement sampled 1,000-year component implemented locally)
+
+The current sampled component contract is
+`biochar_sequestration_1000_year_f_durable_max`, with paired list inputs
+`total_carbon_contents`, `inorganic_carbon_contents`, and `s_fraction`, plus
+scalar `product_mass`. Every submitted replicate requires directly measured
+inorganic carbon; noma does not derive it from total minus reported organic
+carbon on this path.
+
+The local explanatory preview now mirrors the component: calculate organic
+carbon per replicate as total minus inorganic, average it, calculate raw
+durability as the binomial lower estimate, bound credit-bearing organic carbon
+and durability at zero, cap durability at 0.95, and use the bounded value for
+stored CO2e. Evidence ledgers show the three per-replicate
+values, `s_fraction`, product mass, raw and capped durability, cap status,
+component key, and formula label. Isometric remains authoritative.
+
+The deprecated `biochar_sequestration_1000_year` remains readable and is
+labelled as legacy total-carbon/uncapped semantics. New template selection and
+submission compilation reject it. Production sampled submission remains
+blocked, and unsampled Method B remains unsupported. Protocol v1.1,
+Agricultural Soils module v1.1, and Standard v1.7 pins are unchanged. Isometric
+confirmation and external sandbox-template migration remain outstanding; no
+registry template was changed by this implementation.
+
 ## 2026-07-28 (application boundary evidence binds product mass Sources)
 
 The Removal Source classifier now maps every valid application-boundary

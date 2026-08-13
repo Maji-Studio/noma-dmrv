@@ -87,6 +87,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
         samples: batch.samples.map((sample, index) => ({
           ...sample,
           totalCarbonPercent: 80 + index,
+          inorganicCarbonPercent: 1 + index / 10,
           sReflectanceFraction: 0.9 + index / 100,
         })),
       })),
@@ -189,6 +190,10 @@ describe("submitRemoval — reporting window anchored to application date (issue
             "mass_fraction_dry_basis|total_carbon",
             ["dtp-carbon-1", "dtp-carbon-2", "dtp-carbon-3"],
           ],
+          [
+            "mass_fraction_dry_basis|total_inorganic_carbon",
+            ["dtp-inorganic-1", "dtp-inorganic-2", "dtp-inorganic-3"],
+          ],
           ["mass", ["dtp-product-mass"]],
         ]),
       } as never;
@@ -204,6 +209,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
         samples: batch.samples.map((sample, index) => ({
           ...sample,
           totalCarbonPercent: 80 + index,
+          inorganicCarbonPercent: 1 + index / 10,
           sReflectanceFraction: 0.9 + index / 100,
         })),
       })),

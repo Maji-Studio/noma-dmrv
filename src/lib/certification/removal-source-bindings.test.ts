@@ -154,6 +154,26 @@ describe("classifyRemovalSourceCandidate", () => {
       }),
     ).toBeNull();
   });
+
+  it("maps a Sample lab report to paired carbon inputs", () => {
+    expect(
+      classifyRemovalSourceCandidate({
+        documentType: "lab_report",
+        metadata: {},
+        lineage: {
+          entityType: "sample",
+          entityId: "sample-1",
+          entityLabel: "Sample SMP-001",
+        },
+      }),
+    ).toMatchObject({
+      nomaRole: "lab_report",
+      intendedTarget: { inputKey: "total_carbon_contents" },
+      additionalIntendedTargets: [
+        expect.objectContaining({ inputKey: "inorganic_carbon_contents" }),
+      ],
+    });
+  });
 });
 
 describe("buildRemovalSourceDescription", () => {
@@ -511,9 +531,10 @@ describe("buildRemovalSourceBindingPlan", () => {
           components: [
             {
               id: "component-sequestration",
-              blueprint_key: "biochar_sequestration_1000_year",
+              blueprint_key: "biochar_sequestration_1000_year_f_durable_max",
               inputs: [
-                { input_key: "carbon_contents" },
+                { input_key: "total_carbon_contents" },
+                { input_key: "inorganic_carbon_contents" },
                 { input_key: "product_mass" },
                 { input_key: "s_fraction" },
               ],
@@ -536,9 +557,10 @@ describe("buildRemovalSourceBindingPlan", () => {
     });
 
     expect(plan.map((entry) => entry.intendedTarget.inputKey)).toEqual([
-      "carbon_contents",
+      "inorganic_carbon_contents",
       "product_mass",
       "s_fraction",
+      "total_carbon_contents",
     ]);
     expect(
       plan.every((entry) =>

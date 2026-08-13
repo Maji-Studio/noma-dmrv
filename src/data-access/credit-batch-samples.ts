@@ -139,6 +139,7 @@ export async function getCreditBatchesWithSamples(
 export interface CreditBatchSampleRef {
   id: string;
   creditBatchId: string;
+  sampleCode: string;
 }
 
 /**
@@ -156,13 +157,23 @@ export async function getSamplesByCreditBatchIds(
   if (ids.length === 0) return [];
 
   const rows = await db
-    .select({ id: samples.id, creditBatchId: samples.creditBatchId })
+    .select({
+      id: samples.id,
+      creditBatchId: samples.creditBatchId,
+      sampleCode: samples.sampleCode,
+    })
     .from(samples)
     .where(and(inArray(samples.creditBatchId, ids), eq(samples.organizationId, ctx.organizationId)));
 
   return rows.flatMap((row) =>
     row.creditBatchId == null
       ? []
-      : [{ id: row.id, creditBatchId: row.creditBatchId }],
+      : [
+          {
+            id: row.id,
+            creditBatchId: row.creditBatchId,
+            sampleCode: row.sampleCode,
+          },
+        ],
   );
 }

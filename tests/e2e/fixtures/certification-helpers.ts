@@ -26,6 +26,7 @@ import * as crypto from "crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
 
@@ -103,9 +104,9 @@ export async function seedCertifierMapping(
 /**
  * Flip a seeded facility onto the 1000-year durability tier. The generic
  * facility helpers deliberately seed 200-year (the simpler soil-temp flow),
- * but the sandbox project's only fully-bound removal template carries the
- * `biochar_sequestration_1000_year` component, and the submit tier guard
- * requires facility tier ↔ template agreement (ADR 0021). No cleanup needed:
+ * but this submit flow exercises the 1,000-year path once the sandbox template
+ * migration has landed. The submit tier guard requires facility tier ↔ template
+ * agreement (ADR 0021). No cleanup needed:
  * the per-test facility row is torn down by the seed fixture itself.
  */
 export async function setFacilityDurabilityTier(
@@ -145,6 +146,7 @@ interface RawRemovalTemplate {
   id?: string;
   groups?: Array<{
     components?: Array<{
+      blueprint_key?: string;
       inputs?: Array<{ type?: string; datapoint_id?: string | null }>;
     }>;
   }>;
@@ -173,9 +175,9 @@ function templateHasUnboundFixedInput(t: RawRemovalTemplate): boolean {
  * inputs are all bound. (The `ghg_entry_templates` list returns the full nested
  * component/input tree, so no per-template fetch is needed.)
  */
-export async function fetchSubmittableSandboxRemovalTemplateId(
+export async function fetchSubmittableSandboxRemovalTemplate(
   projectId: string,
-): Promise<string | null> {
+): Promise<{ id: string; componentBlueprintKeys: string[] } | null> {
   const clientSecret = process.env.ISOMETRIC_CLIENT_SECRET;
   const accessToken = process.env.ISOMETRIC_ACCESS_TOKEN;
   if (!clientSecret || !accessToken) return null;
@@ -200,12 +202,29 @@ export async function fetchSubmittableSandboxRemovalTemplateId(
     if (!res.ok) return null;
     const json = (await res.json()) as { nodes?: RawRemovalTemplate[] };
     for (const node of json.nodes ?? []) {
-      if (node.id && !templateHasUnboundFixedInput(node)) return node.id;
+      if (node.id && !templateHasUnboundFixedInput(node)) {
+        return {
+          id: node.id,
+          componentBlueprintKeys: (node.groups ?? []).flatMap((group) =>
+            (group.components ?? []).flatMap((component) =>
+              component.blueprint_key ? [component.blueprint_key] : [],
+            ),
+          ),
+        };
+      }
     }
     return null;
   } catch {
     return null;
   }
+}
+
+export function sandboxTemplateSupportsCurrent1000YearComponent(template: {
+  componentBlueprintKeys: string[];
+}): boolean {
+  return template.componentBlueprintKeys.includes(
+    CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  );
 }
 
 /** Existing seeded chain entities the grouped-removal seed reuses (read-only). */
@@ -682,11 +701,13 @@ const READY_DIESEL_GENSET_L = 0;
 const READY_ELECTRICITY_KWH = 0;
 const SAMPLE_TOTAL_CARBON_PCT = 80;
 const SAMPLE_ORGANIC_CARBON_PCT = 78;
+const SAMPLE_INORGANIC_CARBON_PCT = 2;
 const SAMPLE_H_TO_CORG_RATIO = 0.4;
 const SAMPLE_O_TO_CORG_RATIO = 0.1;
 // 1000-year lab evidence (certify-field-registry sample descriptors +
-// computeBlueprint1000YearDurability completeness): sReflectanceFraction and
-// randomReflectanceR0Percent must be entered, plus reactive OR residual carbon.
+// computeBlueprint1000YearDurability completeness): measured inorganic carbon,
+// sReflectanceFraction, and randomReflectanceR0Percent must be entered, plus
+// reactive OR residual carbon.
 const SAMPLE_S_REFLECTANCE_FRACTION = 0.9;
 const SAMPLE_RANDOM_REFLECTANCE_R0_PCT = 2.85;
 const SAMPLE_REACTIVE_CARBON_PCT = 32.6;
@@ -1029,6 +1050,7 @@ export async function seedUngroupedReadyBatchWithChain(
           samplingTime: new Date(),
           totalCarbonPercent: SAMPLE_TOTAL_CARBON_PCT,
           organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PCT,
+          inorganicCarbonPercent: SAMPLE_INORGANIC_CARBON_PCT,
           hToCOrgRatio: SAMPLE_H_TO_CORG_RATIO,
           oToCOrgRatio: SAMPLE_O_TO_CORG_RATIO,
           sReflectanceFraction: SAMPLE_S_REFLECTANCE_FRACTION,

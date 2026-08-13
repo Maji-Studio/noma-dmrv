@@ -44,9 +44,15 @@ vi.mock("@/fn/certification/registry-create", async (importOriginal) => {
 
 import { submitDurabilityMeasurementSamples } from "@/fn/certification/durability-measurement-samples";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
-import { build1000YearSequestrationSample } from "@/lib/isometric/transformers/measurement-sample";
+import {
+  build1000YearSequestrationSample,
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+} from "@/lib/isometric/transformers/measurement-sample";
 import {
   assertSequestrationTemplateBindings,
+  assertSequestrationTemplateSelectable,
   bindSequestrationDatapointsToTemplate,
   buildDirectSequestrationDatapoints,
   RegistryMappingError,
@@ -82,7 +88,7 @@ const SOURCE_BINDING_PLAN = [
       kind: "sequestration",
       groupKey: "co2-stored",
       componentId: RTC_ID,
-      componentBlueprintKey: "biochar_sequestration_1000_year",
+      componentBlueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
       inputKey: "product_mass",
       creditBatchIds: ["batch-boundary"],
     },
@@ -110,12 +116,18 @@ function template(): IsometricGhgEntryTemplate {
         components: [
           {
             id: RTC_ID,
-            blueprint_key: "biochar_sequestration_1000_year",
+            blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
             display_name: "Biochar sequestration, 1000 year durability",
             inputs: [
               {
                 type: "monitored",
-                input_key: "carbon_contents",
+                input_key: "total_carbon_contents",
+                quantity_kind: "mass_fraction_dry_basis",
+                datapoint_id: null,
+              },
+              {
+                type: "monitored",
+                input_key: "inorganic_carbon_contents",
                 quantity_kind: "mass_fraction_dry_basis",
                 datapoint_id: null,
               },
@@ -177,17 +189,63 @@ describe("1000-year sequestration registry boundary", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(RegistryMappingError);
       expect(error).toMatchObject({
-        blueprintKey: "biochar_sequestration_1000_year",
+        blueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
         inputKey: "renamed_carbon_contents",
       });
     }
 
+    const missingInorganic = structuredClone(valid);
+    missingInorganic.groups[0].components[0].inputs =
+      missingInorganic.groups[0].components[0].inputs.filter(
+        (input) => input.input_key !== "inorganic_carbon_contents",
+      );
+    expect(() =>
+      assertSequestrationTemplateBindings(missingInorganic),
+    ).toThrow(/one value for each required durability field/);
+
     const wrongQuantityKind = structuredClone(valid);
-    wrongQuantityKind.groups[0].components[0].inputs[2].quantity_kind =
+    wrongQuantityKind.groups[0].components[0].inputs[3].quantity_kind =
       "dimensionless_ratio";
     expect(() =>
       assertSequestrationTemplateBindings(wrongQuantityKind),
     ).toThrow(/uses the wrong measurement type/);
+  });
+
+  it("rejects the deprecated component for a newly selected template with an actionable replacement", () => {
+    const deprecated = template();
+    deprecated.groups[0].components[0].blueprint_key =
+      DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR;
+    deprecated.groups[0].components[0].inputs = [
+      {
+        type: "monitored",
+        display_name: "Carbon contents",
+        input_key: "carbon_contents",
+        quantity_kind: "mass_fraction_dry_basis",
+        datapoint_id: null,
+      },
+      deprecated.groups[0].components[0].inputs[2],
+      deprecated.groups[0].components[0].inputs[3],
+    ];
+
+    expect(() => assertSequestrationTemplateBindings(deprecated)).toThrow(
+      /deprecated.*biochar_sequestration_1000_year_f_durable_max/i,
+    );
+    expect(() => assertSequestrationTemplateSelectable(deprecated)).toThrow(
+      /legacy.*total-carbon.*uncapped.*biochar_sequestration_1000_year_f_durable_max/i,
+    );
+  });
+
+  it("keeps the unsampled 1,000-year component unsupported with an actionable reason", () => {
+    const unsampled = template();
+    unsampled.groups[0].components[0].blueprint_key =
+      UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR;
+
+    expect(() => assertSequestrationTemplateBindings(unsampled)).toThrow(
+      /Unsampled Method B is not supported/i,
+    );
+    expect(() => assertSequestrationTemplateSelectable(unsampled)).toThrow(
+      /Unsampled Method B is not supported/i,
+    );
   });
 
   it("captures POSTed measurement value IDs and binds them into the GHG entry variants", async () => {
@@ -197,9 +255,9 @@ describe("1000-year sequestration registry boundary", () => {
       measuredAt: "2026-07-24T00:00:00.000Z",
       productMassKg: 1_000,
       replicates: [
-        { carbonContentFraction: 0.8, sFraction: 0.91 },
-        { carbonContentFraction: 0.82, sFraction: 0.92 },
-        { carbonContentFraction: 0.84, sFraction: 0.93 },
+        { totalCarbonContentFraction: 0.8, inorganicCarbonContentFraction: 0.01, sFraction: 0.91 },
+        { totalCarbonContentFraction: 0.82, inorganicCarbonContentFraction: 0.011, sFraction: 0.92 },
+        { totalCarbonContentFraction: 0.84, inorganicCarbonContentFraction: 0.012, sFraction: 0.93 },
       ],
     });
     expect(sampleBody).not.toBeNull();
@@ -313,11 +371,16 @@ describe("1000-year sequestration registry boundary", () => {
       datapoint_id: string;
       measurement_property: { quantity_kind: string; qualifier: string | null };
     }>;
-    const carbonIds = responseValues
+    const totalCarbonIds = responseValues
       .filter(
         (value) =>
-          value.measurement_property.quantity_kind ===
-          "mass_fraction_dry_basis",
+          value.measurement_property.qualifier === "total_carbon",
+      )
+      .map((value) => value.datapoint_id);
+    const inorganicCarbonIds = responseValues
+      .filter(
+        (value) =>
+          value.measurement_property.qualifier === "total_inorganic_carbon",
       )
       .map((value) => value.datapoint_id);
     const measurementSampleSFractionIds = responseValues
@@ -360,8 +423,13 @@ describe("1000-year sequestration registry boundary", () => {
         inputs: [
           {
             __typename: "CreateComponentListInput",
-            datapoint_ids: carbonIds,
-            input_key: "carbon_contents",
+            datapoint_ids: totalCarbonIds,
+            input_key: "total_carbon_contents",
+          },
+          {
+            __typename: "CreateComponentListInput",
+            datapoint_ids: inorganicCarbonIds,
+            input_key: "inorganic_carbon_contents",
           },
           {
             __typename: "CreateComponentScalarInput",

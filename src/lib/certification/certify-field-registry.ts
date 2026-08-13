@@ -27,11 +27,19 @@ export interface CertifySourceMapping {
   inputTuples?: readonly CertifyInputTuple[];
 }
 
-export interface CertifyFieldCondition {
-  field: string;
-  equals: string | number | boolean | null;
-  label: string;
-}
+export type CertifyFieldCondition =
+  | {
+      field: string;
+      equals: string | number | boolean | null;
+      label: string;
+    }
+  | {
+      allOf: readonly {
+        field: string;
+        equals: string | number | boolean | null;
+      }[];
+      label: string;
+    };
 
 export type CertifyFieldSatisfaction =
   | { mode: "field" }
@@ -215,6 +223,30 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     },
   ],
   sample: [
+    {
+      key: "totalCarbonPercent",
+      label: "Total carbon",
+      kind: "entered",
+      condition: {
+        allOf: [
+          { field: "durabilityOption", equals: "1000_year" },
+          { field: "sampling", equals: "sampled" },
+        ],
+        label: "sampled 1,000-year durability",
+      },
+    },
+    {
+      key: "inorganicCarbonPercent",
+      label: "Measured inorganic carbon",
+      kind: "entered",
+      condition: {
+        allOf: [
+          { field: "durabilityOption", equals: "1000_year" },
+          { field: "sampling", equals: "sampled" },
+        ],
+        label: "sampled 1,000-year durability",
+      },
+    },
     {
       key: "organicCarbonPercent",
       label: "Organic carbon",

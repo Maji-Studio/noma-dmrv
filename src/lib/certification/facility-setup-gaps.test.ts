@@ -3,6 +3,7 @@ import {
   deriveFacilitySetupGaps,
   facilityBlueprintLabel,
 } from "./facility-setup-gaps";
+import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 
 const COMPLETE = {
   hasOrgCredentials: true,
@@ -79,8 +80,10 @@ describe("deriveFacilitySetupGaps", () => {
 
 describe("facilityBlueprintLabel", () => {
   it("translates known registry keys for operators", () => {
-    expect(facilityBlueprintLabel("biochar_sequestration_1000_year")).toBe(
-      "1,000-year biochar sequestration",
+    expect(
+      facilityBlueprintLabel(DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR),
+    ).toBe(
+      "Legacy 1,000-year biochar sequestration (total-carbon basis, uncapped)",
     );
   });
 

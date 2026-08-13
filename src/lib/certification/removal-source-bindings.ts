@@ -15,7 +15,8 @@ export type NomaEvidenceRole =
   | "feedstock_bill_of_lading"
   | "delivery_bill_of_lading"
   | "transport_evidence_ledger"
-  | "durability_evidence_ledger";
+  | "durability_evidence_ledger"
+  | "lab_report";
 
 export interface RemovalSourceLineage {
   entityType: string;
@@ -78,7 +79,37 @@ interface SourceBindingRule {
   additionalIntendedTargets?: RemovalSourceIntendedTarget[];
 }
 
+export interface RemovalEvidenceTargetLookup {
+  groupKey: string;
+  componentBlueprintKey: string;
+  componentDisplayName?: string;
+  inputKey: string;
+}
+
+export interface OptionalRemovalEvidenceTarget
+  extends RemovalEvidenceTargetLookup {
+  nomaRoleLabel: string;
+}
+
 const SOURCE_BINDING_RULES = {
+  labReport: {
+    nomaRole: "lab_report",
+    nomaRoleLabel: "Sample lab report",
+    intendedTarget: {
+      kind: "sequestration",
+      groupKey: "co2-stored",
+      inputKey: "total_carbon_contents",
+      optionalInTemplate: true,
+    },
+    additionalIntendedTargets: [
+      {
+        kind: "sequestration",
+        groupKey: "co2-stored",
+        inputKey: "inorganic_carbon_contents",
+        optionalInTemplate: true,
+      },
+    ],
+  },
   inventory: {
     nomaRole: "inventory",
     nomaRoleLabel: "Inventory",
@@ -152,7 +183,16 @@ const SOURCE_BINDING_RULES = {
 } as const satisfies Record<string, SourceBindingRule>;
 
 const DURABILITY_LEDGER_TARGETS = {
-  "1000_year": ["carbon_contents", "product_mass", "s_fraction"],
+  "1000_year": [
+    "total_carbon_contents",
+    "inorganic_carbon_contents",
+    "product_mass",
+    "s_fraction",
+    // Historical deprecated removals used this total-carbon input. It remains
+    // optional so old remote records stay classifiable without making the
+    // deprecated component eligible for a newly configured template.
+    "carbon_contents",
+  ],
   "200_year": [
     "h_c_molar_ratios",
     "total_carbon_contents",
@@ -165,7 +205,7 @@ const DURABILITY_LEDGER_TARGETS = {
 // Datapoints. This makes the semantic submission hash supersede an already
 // submitted Removal whose target list is unchanged but whose wire attachment
 // behavior was corrected.
-const SOURCE_BINDING_MATERIALIZATION_REVISION = 2;
+const SOURCE_BINDING_MATERIALIZATION_REVISION = 3;
 
 export const SOURCE_BINDING_MAPPING_REVISION = payloadHash({
   rules: SOURCE_BINDING_RULES,
@@ -252,6 +292,11 @@ export function classifyRemovalSourceCandidate(
   if (isApplicationBoundaryLogbook) {
     rule = SOURCE_BINDING_RULES.inventory;
   } else if (
+    lineage.entityType === "sample" &&
+    facts.documentType === "lab_report"
+  ) {
+    rule = SOURCE_BINDING_RULES.labReport;
+  } else if (
     lineage.entityType === "feedstock" &&
     facts.documentType === "bill_of_lading"
   ) {
@@ -329,6 +374,99 @@ function matchesIntendedComponent(
 }
 
 /**
+ * Read-only description of the evidence roles that can land on one template
+ * input. The submission planner and the template diagnostic both walk the
+ * same SOURCE_BINDING_RULES table through this function, so adding a new
+ * evidence binding cannot leave the diagnostic with a second shadow map.
+ */
+export function removalEvidenceRoleLabelsForTarget(
+  target: RemovalEvidenceTargetLookup,
+): string[] {
+  const labels = new Set<string>();
+  const rules: readonly SourceBindingRule[] = Object.values(
+    SOURCE_BINDING_RULES,
+  );
+  for (const rule of rules) {
+    const intendedTargets = [
+      rule.intendedTarget,
+      ...(rule.additionalIntendedTargets ?? []),
+    ];
+    if (
+      intendedTargets.some(
+        (intendedTarget) =>
+          intendedTarget.groupKey === target.groupKey &&
+          intendedTarget.inputKey === target.inputKey &&
+          matchesIntendedComponent(
+            target.componentBlueprintKey,
+            target.componentDisplayName,
+            intendedTarget,
+          ),
+      )
+    ) {
+      labels.add(rule.nomaRoleLabel);
+    }
+  }
+
+  if (
+    target.groupKey === "co2-stored" &&
+    isSequestrationBlueprintFamily(target.componentBlueprintKey) &&
+    Object.values(DURABILITY_LEDGER_TARGETS).some((inputKeys) =>
+      (inputKeys as readonly string[]).includes(target.inputKey),
+    )
+  ) {
+    labels.add("Durability evidence ledger");
+  }
+
+  return [...labels].sort();
+}
+
+/** Optional evidence targets declared by the production binding plan. */
+export function listOptionalRemovalEvidenceTargets(): OptionalRemovalEvidenceTarget[] {
+  const targets = new Map<
+    string,
+    OptionalRemovalEvidenceTarget & { requiredElsewhere: boolean }
+  >();
+  const rules: readonly SourceBindingRule[] = Object.values(
+    SOURCE_BINDING_RULES,
+  );
+  for (const rule of rules) {
+    for (const target of [
+      rule.intendedTarget,
+      ...(rule.additionalIntendedTargets ?? []),
+    ]) {
+      if (target.kind !== "ordinary") continue;
+      const key = [
+        target.groupKey,
+        target.componentBlueprintKey,
+        normalizeComponentDisplayName(target.componentDisplayName),
+        target.inputKey,
+      ].join("::");
+      const existing = targets.get(key);
+      targets.set(key, {
+        groupKey: target.groupKey,
+        componentBlueprintKey: target.componentBlueprintKey,
+        componentDisplayName: target.componentDisplayName,
+        inputKey: target.inputKey,
+        nomaRoleLabel: existing
+          ? `${existing.nomaRoleLabel}, ${rule.nomaRoleLabel}`
+          : rule.nomaRoleLabel,
+        requiredElsewhere:
+          existing?.requiredElsewhere === true || !target.optionalInTemplate,
+      });
+    }
+  }
+  return [...targets.values()]
+    .filter((target) => !target.requiredElsewhere)
+    .map((target) => ({
+      groupKey: target.groupKey,
+      componentBlueprintKey: target.componentBlueprintKey,
+      componentDisplayName: target.componentDisplayName,
+      inputKey: target.inputKey,
+      nomaRoleLabel: target.nomaRoleLabel,
+    }));
+}
+
+/**
  * Resolves semantic targets onto the exact template component IDs that will
  * consume their Datapoints. Ambiguous or missing targets fail closed.
  */
@@ -336,6 +474,7 @@ export function buildRemovalSourceBindingPlan(args: {
   candidates: SourceBindingCandidate[];
   template: IsometricGhgEntryTemplate;
   applicationIdsByCreditBatchId: Map<string, string[]>;
+  sampleIdsByCreditBatchId?: Map<string, string[]>;
 }): RemovalSourceBindingPlanEntry[] {
   return args.candidates
     .flatMap(({ documentId, sourceId, binding }) => {
@@ -372,6 +511,13 @@ export function buildRemovalSourceBindingPlan(args: {
           target.kind === "sequestration"
             ? binding.lineage.entityType === "credit_batch"
               ? [binding.lineage.entityId]
+              : binding.lineage.entityType === "sample"
+                ? Array.from(args.sampleIdsByCreditBatchId?.entries() ?? [])
+                    .filter(([, sampleIds]) =>
+                      sampleIds.includes(binding.lineage.entityId),
+                    )
+                    .map(([creditBatchId]) => creditBatchId)
+                    .sort()
               : Array.from(args.applicationIdsByCreditBatchId.entries())
                   .filter(([, applicationIds]) =>
                     applicationIds.includes(binding.lineage.entityId),

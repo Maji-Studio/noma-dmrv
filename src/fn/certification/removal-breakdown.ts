@@ -2,11 +2,13 @@
 
 import { env } from "@/config/env";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
-import {
-  getCertifierRemovalById,
-} from "@/data-access/certifier-removals";
+import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import type { RegistryCarbonResult } from "@/lib/certification/registry-carbon-result";
 import type { RegistryObservation } from "@/lib/certification/registry-observation";
+import {
+  readRemovalDurabilityComponent,
+  type RemovalDurabilityComponentDisplay,
+} from "@/lib/certification/removal-durability-component";
 import { SafeError } from "@/lib/errors";
 import {
   getGhgEntry,
@@ -30,6 +32,7 @@ export interface RemovalBreakdownData extends RegistryCarbonResult {
   startedOn: string | null;
   completedOn: string | null;
   isProduction: boolean;
+  durabilityComponent: RemovalDurabilityComponentDisplay | null;
 }
 
 /**
@@ -110,6 +113,9 @@ export async function loadRemovalBreakdown(
         startedOn: removal.startedOn,
         completedOn: removal.completedOn,
         isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
+        durabilityComponent: readRemovalDurabilityComponent(
+          submission?.payloadSnapshot,
+        ),
       },
       message: "Registry result available.",
     };

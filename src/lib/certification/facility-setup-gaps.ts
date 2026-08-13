@@ -11,6 +11,11 @@
  * facility-certifier facts the server already loads.
  */
 
+import {
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+} from "@/lib/isometric/transformers/measurement-sample";
+
 export type FacilitySetupGap =
   | { kind: "project_link" }
   | { kind: "credentials" }
@@ -30,7 +35,10 @@ export interface FacilitySetupGapFacts {
 }
 
 const BLUEPRINT_OPERATOR_LABELS: Record<string, string> = {
-  biochar_sequestration_1000_year: "1,000-year biochar sequestration",
+  [DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR]:
+    "Legacy 1,000-year biochar sequestration (total-carbon basis, uncapped)",
+  [CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR]:
+    "1,000-year biochar sequestration",
   biochar_sequestration_200_year: "200-year biochar sequestration",
 };
 

@@ -281,7 +281,7 @@ export const samples = pgTable('samples', {
   r0MeasurementCount: integer('r0_measurement_count'),
   reactiveCarbonPercent: real('reactive_carbon_percent'),
   residualCarbonPercent: real('residual_carbon_percent'),
-  // Per-sample `s_fraction` for the live `biochar_sequestration_1000_year`
+  // Per-sample `s_fraction` for the current sampled 1,000-year component
   // blueprint (ADR 0021): the proportion (0–1) of THIS sample's R₀ readings
   // ≥ 2% — the inertinite fraction from the ISO 7404-5:2009 histogram. The
   // registry needs the full per-replicate list to compute the conservative

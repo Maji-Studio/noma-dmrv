@@ -5,6 +5,7 @@ import {
   MAPPING_REVISION,
 } from "@/lib/isometric/transformers/datapoint";
 import { SEQUESTRATION_COMPONENT_INPUT_BINDINGS } from "@/lib/isometric/transformers/sequestration-binding";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 
 describe("Isometric payload hash", () => {
   it("keeps GHG statement semantic hashes stable across property ordering", () => {
@@ -34,12 +35,14 @@ describe("Isometric payload hash", () => {
 
   it("changes the mapping revision when a sequestration binding source changes", () => {
     const binding =
-      SEQUESTRATION_COMPONENT_INPUT_BINDINGS.biochar_sequestration_1000_year;
+      SEQUESTRATION_COMPONENT_INPUT_BINDINGS[
+        CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR
+      ];
     const oldMeasurementPropertyShape = {
       inputMapping: INPUT_MAPPING,
       sequestrationComponentInputBindings: {
         ...SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
-        biochar_sequestration_1000_year: {
+        [CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR]: {
           inputs: {
             ...binding.inputs,
             s_fraction: {

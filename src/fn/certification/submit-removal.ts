@@ -252,7 +252,7 @@ async function submitRemovalCore(
   // Phase 4 template↔tier guard (ADR 0021): the removal template's sequestration
   // blueprint must match the facility's durability tier — a 200-year facility
   // submits against a `biochar_sequestration_200_year_*` template, a 1000-year
-  // facility against `biochar_sequestration_1000_year`. Fail closed EARLY with an
+  // facility against the current sampled 1,000-year component. Fail closed EARLY with an
   // actionable message on a mismatch (or an unknown sequestration variant),
   // rather than letting resolveTemplateInputs silently skip the component or the
   // generic staging gate below misdescribe a template↔tier misconfiguration as

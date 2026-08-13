@@ -52,6 +52,11 @@ export {
   loadRemovalCompilation,
   type RemovalCompilationView,
 } from "./removal-compilation";
+export {
+  loadRemovalTemplateDiagnostic,
+  type RemovalTemplateDiagnosticAvailability,
+  type RemovalTemplateDiagnosticData,
+} from "./removal-template-diagnostic";
 // On-demand read-only registry observation for the removal detail sheet.
 export {
   loadRemovalBreakdown,

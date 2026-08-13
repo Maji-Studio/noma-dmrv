@@ -162,16 +162,25 @@ sequestration blueprint against that tier.
 The sampled 1,000-year path is implemented for the Isometric sandbox:
 
 - every member batch must have at least three complete replicates;
-- total-carbon values and product mass are created through a measurement
-  sample;
+- paired total-carbon and directly measured inorganic-carbon values, plus
+  product mass, are created through a measurement sample;
 - `s_fraction` is created as an explicitly bound Datapoint;
-- the component input table binds `carbon_contents` and `s_fraction` as lists
-  and `product_mass` as a scalar;
+- the component input table binds `total_carbon_contents`,
+  `inorganic_carbon_contents`, and `s_fraction` as lists and `product_mass` as
+  a scalar on `biochar_sequestration_1000_year_f_durable_max`;
+- the component calculates organic carbon per replicate as total minus
+  inorganic, calculates the binomial lower durability estimate, and caps it at
+  0.95;
+- noma exposes the raw and capped calculation only as an explanatory preview
+  and evidence record;
 - the registry computes the credited result.
 
-This verifies sandbox wire compatibility only. Production remains blocked, and
-the live blueprint's difference from module Eq.6 remains an open governance
-question.
+The deprecated `biochar_sequestration_1000_year` remains readable as legacy
+total-carbon/uncapped history but is rejected for new template configuration and
+submission builds. Production remains blocked. External confirmation and
+sandbox-template migration are still required before end-to-end verification.
+The Protocol v1.1, Agricultural Soils module v1.1, and Standard v1.7 pins do not
+change with this component migration.
 
 ### 200-year path
 

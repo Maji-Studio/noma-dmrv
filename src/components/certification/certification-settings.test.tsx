@@ -12,6 +12,7 @@ const facilityState = vi.hoisted(() => ({
 }));
 
 const urlState = vi.hoisted(() => ({ section: null as string | null }));
+const adminState = vi.hoisted(() => ({ isPlatformAdmin: false }));
 
 const viewerState = vi.hoisted(() => ({
   canManage: true,
@@ -46,7 +47,7 @@ vi.mock("@/hooks/use-facility-context", () => ({
 }));
 
 vi.mock("@/hooks/use-is-admin", () => ({
-  useIsAdmin: () => false,
+  useIsAdmin: () => adminState.isPlatformAdmin,
 }));
 
 vi.mock("@/hooks/use-organizations", () => ({
@@ -88,12 +89,17 @@ vi.mock("./registry-source-visibility-settings", () => ({
   RegistrySourceVisibilitySettings: () => <div>Source visibility policy</div>,
 }));
 
+vi.mock("./removal-template-diagnostic-panel", () => ({
+  RemovalTemplateDiagnosticPanel: () => <div>Template diagnostic pane</div>,
+}));
+
 beforeEach(() => {
   facilityState.durabilityOption = "200_year";
   urlState.section = null;
   viewerState.canManage = true;
   viewerState.credentialsConfigured = true;
   viewerState.mapping = null;
+  adminState.isPlatformAdmin = false;
 });
 
 describe("CertificationSettings", () => {
@@ -121,6 +127,25 @@ describe("CertificationSettings", () => {
     expect(html).toContain("Emissions");
     // Platform diagnostics belong to a platform admin, and useIsAdmin is false.
     expect(html).not.toContain("Diagnostics");
+    expect(html).not.toContain("Template mapping");
+  });
+
+  it("shows Template mapping directly below Diagnostics only to Platform Admins", () => {
+    adminState.isPlatformAdmin = true;
+
+    const html = renderToStaticMarkup(<CertificationSettings />);
+    const diagnosticsIndex = html.indexOf("Diagnostics");
+    const mappingIndex = html.indexOf("Template mapping");
+
+    expect(diagnosticsIndex).toBeGreaterThan(-1);
+    expect(mappingIndex).toBeGreaterThan(diagnosticsIndex);
+    expect(html.slice(diagnosticsIndex, mappingIndex)).not.toContain("</ul>");
+
+    urlState.section = "template-mapping";
+    const mappingPane = renderToStaticMarkup(<CertificationSettings />);
+    expect(mappingPane).toContain("Template diagnostic pane");
+    expect(mappingPane).toContain("Read-only for Platform Admins.");
+    expect(mappingPane).not.toContain("Health");
   });
 
   it("resolves the retired connection and credentials keys onto the certifier pane", () => {
@@ -220,5 +245,10 @@ describe("CertificationSettings", () => {
 
     expect(html).toContain("Certifier pane");
     expect(html).not.toContain("Emission estimates form");
+
+    urlState.section = "template-mapping";
+    const platformDeepLink = renderToStaticMarkup(<CertificationSettings />);
+    expect(platformDeepLink).toContain("Certifier pane");
+    expect(platformDeepLink).not.toContain("Template diagnostic pane");
   });
 });

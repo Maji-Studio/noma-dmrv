@@ -8,6 +8,7 @@ import {
   type BatchGateFacts,
 } from "@/lib/certification/durability-submission-gates";
 import { formatFacilityDate } from "@/lib/date-utils";
+import { evaluateSampled1000YearReplicates } from "@/lib/certification/durability-1000-replicates";
 
 export interface DurabilityGateResult {
   /** Fail-closed blockers — the exact list the submit pipeline blocks on. */
@@ -105,5 +106,16 @@ export function buildDurabilityGates(
     })),
   }));
   const result = evaluateDurabilitySubmissionGates(facts);
-  return { blockers: result.blockers, warnings: result.warnings };
+  const sampled1000YearBlockers = batches.flatMap((batch) =>
+    batch.sampling === "sampled" && batch.durabilityOption === "1000_year"
+      ? evaluateSampled1000YearReplicates({
+          creditBatchCode: batch.creditBatchCode,
+          samples: batch.samples,
+        }).blockers
+      : [],
+  );
+  return {
+    blockers: [...result.blockers, ...sampled1000YearBlockers],
+    warnings: result.warnings,
+  };
 }
