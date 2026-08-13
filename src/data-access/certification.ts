@@ -452,7 +452,7 @@ export async function deleteCertifierProject(
       ))
     ) {
       throw new SafeError(
-        "Cannot unlink: this facility has registered application sites. Keep the project mapping to preserve their registry identities.",
+        "Cannot unlink: this Isometric project has registered application sites. Keep the project mapping to preserve their registry identities.",
       );
     }
 
