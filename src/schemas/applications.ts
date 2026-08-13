@@ -173,6 +173,8 @@ export const createApplicationSchema = applicationCreateBaseSchema.superRefine(
 
 /**
  * Schema for updating an application (server action)
+ * GPS pair and evidence-method invariants are deferred until updateApplication
+ * validates the payload merged with the saved evidence state.
  */
 export const updateApplicationSchema = z.object({
   applicationId: z.string().uuid("Choose a valid application."),
