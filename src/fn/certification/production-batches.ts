@@ -140,8 +140,8 @@ export function buildProductionBatchSubmission(
     supplierRefId,
     body,
     massKg: input.totalDryMassKg,
-    startedOn: input.startDate,
-    endedOn: input.endDate,
+    startedOn: body.started_at.slice(0, 10),
+    endedOn: body.ended_at.slice(0, 10),
     payloadHash: payloadHash(body),
   };
 }

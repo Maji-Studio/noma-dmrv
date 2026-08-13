@@ -195,6 +195,8 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       expect.objectContaining({
         externalProjectId: "prj_1K9YJ33RKSBX9FFF",
         externalFacilityId: "fcl_1G8QT5ZAB1S0XSDW",
+        startedOn: "2026-03-01",
+        endedOn: "2026-03-28",
       }),
     );
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
@@ -222,6 +224,34 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       }),
     );
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+  });
+
+  it("journals the UTC dates of the physical instants that were submitted", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({
+        startDate: "2026-07-01",
+        endDate: "2026-07-31",
+        startedAt: "2026-07-03T06:00:00.000Z",
+        endedAt: "2026-08-01T04:00:00.000Z",
+      }),
+    ]);
+    mocks.client.post.mockImplementation(
+      async (_path: string, body: { supplier_reference_id: string }) =>
+        remoteBatch(body.supplier_reference_id, PRODUCTION_BATCH_ID, {
+          started_at: "2026-07-03T06:00:00.000Z",
+          ended_at: "2026-08-01T04:00:00.000Z",
+        }),
+    );
+
+    await ensure();
+
+    expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        startedOn: "2026-07-03",
+        endedOn: "2026-08-01",
+      }),
+    );
   });
 
   it("always reconciles by supplier reference before POSTing a missing journal", async () => {
