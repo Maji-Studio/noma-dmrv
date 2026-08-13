@@ -806,6 +806,23 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     expect(semanticHash(changed)).not.toBe(semanticHash(original));
   });
 
+  it("changes semantic measurement identity when only product mass changes", () => {
+    const candidate = thousandYearBatch("mass", "CB-MASS");
+    const semanticHash = (attribution: number) =>
+      payloadHash(
+        normalizeMeasurementSamplesForHash(
+          buildDurabilityMeasurementSampleSubmissions({
+            ...common,
+            facilityReferenceSoilTemperature: null,
+            batches: [candidate],
+            attributionByRunId: new Map([["run-mass", attribution]]),
+          }),
+        ),
+      );
+
+    expect(semanticHash(0.6)).not.toBe(semanticHash(0.5));
+  });
+
   it("rejects 200-year before evaluating its soil-temperature payload", () => {
     expect(() =>
       buildDurabilityMeasurementSampleSubmissions({
