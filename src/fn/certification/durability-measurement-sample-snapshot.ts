@@ -14,10 +14,12 @@ export interface DurabilityMeasurementSampleClaimArgs {
   batches: CreditBatchWithSamples[];
   attributionByRunId: Map<string, number>;
   facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature | null;
-  measuredAt: string;
 }
 
 interface SemanticMeasurementSample {
+  creditBatchId: string;
+  sampleId: string;
+  creditBatchProductMassKg: number;
   operationKey: string;
   label: string;
   body: Record<string, unknown>;
@@ -27,6 +29,9 @@ const NORMALIZED_MEASUREMENT_SAMPLE_SUPPLIER_REF =
   "__versioned_measurement_sample_supplier_ref__";
 
 const measurementSampleSnapshotEntrySchema = z.object({
+  creditBatchId: z.string().min(1),
+  sampleId: z.string().min(1),
+  creditBatchProductMassKg: z.number().nonnegative(),
   operationKey: z.string().min(1),
   supplierRefId: z.string().min(1),
   label: z.string().min(1),
@@ -43,9 +48,16 @@ const durabilityMeasurementSamplesSnapshotSchema = z.object({
 function sortMeasurementSampleSubmissions(
   submissions: DurabilityMeasurementSampleSubmission[],
 ): DurabilityMeasurementSampleSubmission[] {
-  return [...submissions].sort((a, b) =>
-    a.operationKey.localeCompare(b.operationKey),
-  );
+  return [...submissions].sort((left, right) => {
+    const batchOrder = compareStableId(left.creditBatchId, right.creditBatchId);
+    return batchOrder !== 0
+      ? batchOrder
+      : compareStableId(left.sampleId, right.sampleId);
+  });
+}
+
+function compareStableId(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 export function buildVersionedMeasurementSampleSubmissions(
@@ -60,6 +72,9 @@ export function normalizeMeasurementSamplesForHash(
   submissions: DurabilityMeasurementSampleSubmission[],
 ): SemanticMeasurementSample[] {
   return sortMeasurementSampleSubmissions(submissions).map((submission) => ({
+    creditBatchId: submission.creditBatchId,
+    sampleId: submission.sampleId,
+    creditBatchProductMassKg: submission.creditBatchProductMassKg,
     operationKey: submission.operationKey,
     label: submission.label,
     body: {

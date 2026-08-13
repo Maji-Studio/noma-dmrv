@@ -56,10 +56,8 @@ import {
   getIsometricClientForOrg,
 } from "@/lib/isometric";
 import { loadGhgStatementBreakdown } from "./ghg-statement-breakdown";
-import {
-  loadRemovalBreakdown,
-  readRemovalDurabilityComponent,
-} from "./removal-breakdown";
+import { loadRemovalBreakdown } from "./removal-breakdown";
+import { readRemovalDurabilityComponent } from "@/lib/certification/removal-durability-component";
 
 const REMOVAL_ID = "removal-1";
 const STATEMENT_ID = "statement-1";

@@ -127,14 +127,16 @@ export interface BuildMeasurementSampleReferenceArgs {
   version: number;
   /** Required for the per-batch role — the credit batch id the sample is for. */
   creditBatchId?: string;
+  /** Required for production-batch Samples — the stable local Sample identity. */
+  sampleId?: string;
 }
 
 /**
  * Stable, noma-controlled measurement-sample supplier reference, versioned per
  * removal so a superseded-then-resubmitted removal claims a fresh resource. The
- * production-batch role keys on the CREDIT BATCH (the protocol production batch,
- * ADR 0016) — one measurement sample per credit batch carrying its pooled
- * mean + std-dev. The `nm-mts-` prefix never collides with the removal
+ * production-batch role keys on both the CREDIT BATCH (the protocol production
+ * batch, ADR 0016) and the independently analysed local Sample. The `nm-mts-`
+ * prefix never collides with the removal
  * (`nm-rmv-`) or sensor (`nm-snr-`) refs. Mirrors `buildRemovalSupplierRef`.
  */
 export function buildMeasurementSampleReference(
@@ -149,8 +151,14 @@ export function buildMeasurementSampleReference(
       "buildMeasurementSampleReference: creditBatchId required for the production-batch role",
     );
   }
+  if (!args.sampleId) {
+    throw new Error(
+      "buildMeasurementSampleReference: sampleId required for the production-batch role",
+    );
+  }
   const batchShort = shortHash(args.creditBatchId, ENTITY_PREFIX_LEN);
-  return `nm-mts-${short}-pb-${batchShort}-v${args.version}`;
+  const sampleShort = shortHash(args.sampleId, ENTITY_PREFIX_LEN);
+  return `nm-mts-${short}-pb-${batchShort}-s-${sampleShort}-v${args.version}`;
 }
 
 function shortHash(input: string, length: number): string {

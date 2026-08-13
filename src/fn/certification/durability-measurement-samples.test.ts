@@ -7,7 +7,10 @@ import {
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
   patchMeasurementSampleSourceBindings,
 } from "./durability-measurement-samples";
-import { normalizeMeasurementSamplesForHash } from "./durability-measurement-sample-snapshot";
+import {
+  normalizeMeasurementSamplesForHash,
+  readRemovalDurabilityMeasurementSamples,
+} from "./durability-measurement-sample-snapshot";
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
 import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
@@ -25,6 +28,7 @@ function sample(overrides: Partial<Sample>): Sample {
   return {
     id: "sample-default",
     sampleCode: "S-DEFAULT",
+    samplingTime: new Date("2026-01-01T12:00:00.000Z"),
     hToCOrgRatio: null,
     oToCOrgRatio: null,
     totalCarbonPercent: null,
@@ -77,9 +81,9 @@ const thousandYearBatch = (id: string, code: string) =>
     durabilityOption: "1000_year",
     runs: [{ id: `run-${id}`, code: `R-${id}`, biocharDryMassKg: 1000 }],
     samples: [
-      sample({ id: `sample-${id}-1`, sampleCode: `${code}-S1`, totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 }),
-      sample({ id: `sample-${id}-2`, sampleCode: `${code}-S2`, totalCarbonPercent: 82, inorganicCarbonPercent: 1.1, sReflectanceFraction: 0.92 }),
-      sample({ id: `sample-${id}-3`, sampleCode: `${code}-S3`, totalCarbonPercent: 84, inorganicCarbonPercent: 1.2, sReflectanceFraction: 0.93 }),
+      sample({ id: `sample-${id}-1`, sampleCode: `${code}-S1`, samplingTime: new Date("2026-01-03T08:30:00.000Z"), totalCarbonPercent: 77, inorganicCarbonPercent: 1, sReflectanceFraction: 0.93 }),
+      sample({ id: `sample-${id}-2`, sampleCode: `${code}-S2`, samplingTime: new Date("2026-01-05T09:45:00.000Z"), totalCarbonPercent: 75.5, inorganicCarbonPercent: 1.1, sReflectanceFraction: 0.94 }),
+      sample({ id: `sample-${id}-3`, sampleCode: `${code}-S3`, samplingTime: new Date("2026-01-07T11:15:00.000Z"), totalCarbonPercent: 78, inorganicCarbonPercent: 1.2, sReflectanceFraction: 0.93 }),
     ],
   });
 
@@ -110,7 +114,7 @@ describe("DURABILITY_MEASUREMENT_SAMPLES_ENABLED", () => {
 });
 
 describe("patchMeasurementSampleSourceBindings", () => {
-  it("binds a boundary-method weighbridge Source to the staging batch product_mass Datapoint", async () => {
+  it("does not look for standalone product mass in a MeasurementSample response", async () => {
     const creditBatchId = "01519716-f8e6-4042-886d-608792130dcc";
     const applicationId = "application-staging-1";
     const sourceId = "source-weighbridge";
@@ -168,21 +172,17 @@ describe("patchMeasurementSampleSourceBindings", () => {
         ],
         sourceBindingPlan,
       }),
-    ).resolves.toBe(1);
-
-    expect(patch).toHaveBeenCalledWith(
-      "/datapoints/datapoint-product-mass",
-      expect.objectContaining({ source_ids: [sourceId] }),
-    );
+    ).resolves.toBe(0);
+    expect(patch).not.toHaveBeenCalled();
   });
 
-  it("patches only product_mass response Datapoints with Inventory Sources", async () => {
+  it("patches carbon response Datapoints even when no Sample contains mass", async () => {
     const patch = vi.fn().mockResolvedValue({
-      id: "datapoint-product-mass",
-      source_ids: ["source-inventory"],
+      id: "datapoint-carbon",
+      source_ids: ["source-durability"],
     });
-    const productMassProperty = encodeMeasurementProperty(
-      PRODUCT_MASS_MEASUREMENT_PROPERTY,
+    const carbonProperty = encodeMeasurementProperty(
+      TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
     );
 
     await expect(
@@ -194,16 +194,15 @@ describe("patchMeasurementSampleSourceBindings", () => {
             supplierReferenceId: "sample-ref-1",
             creditBatchId: "credit-batch-1",
             datapointIdsByMeasurementProperty: new Map([
-              [productMassProperty, ["datapoint-product-mass"]],
-              ["mass_fraction_dry_basis::total_carbon", ["datapoint-carbon"]],
+              [carbonProperty, ["datapoint-carbon"]],
             ]),
           },
         ],
         sourceBindingPlan: [
           {
-            documentId: "document-inventory",
-            sourceId: "source-inventory",
-            nomaRole: "inventory",
+            documentId: "document-durability",
+            sourceId: "source-durability",
+            nomaRole: "durability_evidence_ledger",
             lineage: {
               entityType: "application",
               entityId: "application-1",
@@ -214,7 +213,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
               groupKey: "co2-stored",
               componentId: "component-sequestration",
               componentBlueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-              inputKey: "product_mass",
+              inputKey: "total_carbon_contents",
               creditBatchIds: ["credit-batch-1"],
             },
             mappingRevision: "revision-1",
@@ -225,18 +224,18 @@ describe("patchMeasurementSampleSourceBindings", () => {
 
     expect(patch).toHaveBeenCalledTimes(1);
     expect(patch).toHaveBeenCalledWith(
-      "/datapoints/datapoint-product-mass",
-      expect.objectContaining({ source_ids: ["source-inventory"] }),
+      "/datapoints/datapoint-carbon",
+      expect.objectContaining({ source_ids: ["source-durability"] }),
     );
   });
 
-  it("keeps Inventory Sources scoped to each credit batch's product_mass Datapoint", async () => {
+  it("keeps durability Sources scoped to each credit batch's carbon Datapoint", async () => {
     const patch = vi.fn(async (path: string, body: { source_ids: string[] }) => ({
       id: path.split("/").at(-1),
       source_ids: body.source_ids,
     }));
-    const productMassProperty = encodeMeasurementProperty(
-      PRODUCT_MASS_MEASUREMENT_PROPERTY,
+    const carbonProperty = encodeMeasurementProperty(
+      TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
     );
 
     await expect(
@@ -248,7 +247,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
             supplierReferenceId: "sample-ref-a",
             creditBatchId: "credit-batch-a",
             datapointIdsByMeasurementProperty: new Map([
-              [productMassProperty, ["datapoint-product-mass-a"]],
+              [carbonProperty, ["datapoint-carbon-a"]],
             ]),
           },
           {
@@ -256,7 +255,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
             supplierReferenceId: "sample-ref-b",
             creditBatchId: "credit-batch-b",
             datapointIdsByMeasurementProperty: new Map([
-              [productMassProperty, ["datapoint-product-mass-b"]],
+              [carbonProperty, ["datapoint-carbon-b"]],
             ]),
           },
         ],
@@ -275,7 +274,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
               groupKey: "co2-stored",
               componentId: "component-sequestration",
               componentBlueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-              inputKey: "product_mass",
+            inputKey: "total_carbon_contents",
               creditBatchIds: ["credit-batch-a"],
             },
             mappingRevision: "revision-1",
@@ -294,7 +293,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
               groupKey: "co2-stored",
               componentId: "component-sequestration",
               componentBlueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-              inputKey: "product_mass",
+            inputKey: "total_carbon_contents",
               creditBatchIds: ["credit-batch-b"],
             },
             mappingRevision: "revision-1",
@@ -305,12 +304,12 @@ describe("patchMeasurementSampleSourceBindings", () => {
 
     expect(patch).toHaveBeenNthCalledWith(
       1,
-      "/datapoints/datapoint-product-mass-a",
+      "/datapoints/datapoint-carbon-a",
       expect.objectContaining({ source_ids: ["source-inventory-a"] }),
     );
     expect(patch).toHaveBeenNthCalledWith(
       2,
-      "/datapoints/datapoint-product-mass-b",
+      "/datapoints/datapoint-carbon-b",
       expect.objectContaining({ source_ids: ["source-inventory-b"] }),
     );
   });
@@ -403,14 +402,8 @@ describe("patchMeasurementSampleSourceBindings", () => {
         ],
         sourceBindingPlan,
       }),
-    ).resolves.toBe(7);
+    ).resolves.toBe(6);
 
-    expect(patch).toHaveBeenCalledWith(
-      "/datapoints/datapoint-product-mass",
-      expect.objectContaining({
-        source_ids: ["source-durability-ledger"],
-      }),
-    );
     expect(patch).toHaveBeenCalledWith(
       "/datapoints/datapoint-carbon-a",
       expect.objectContaining({
@@ -466,36 +459,70 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     ).toThrow(/Unsampled Method B Removals cannot be submitted yet/i);
   });
 
-  it("emits the full per-replicate 1000-year payload without a soil sample", () => {
+  it("emits one timestamped registry Sample for each local Sample", () => {
     const submissions = buildDurabilityMeasurementSampleSubmissions({
       ...common,
       facilityReferenceSoilTemperature: null,
       batches: [thousandYearBatch("t", "CB-T")],
     });
 
-    expect(submissions).toHaveLength(1);
-    expect(submissions[0].operationKey).toBe("pb:t");
-    expect(submissions[0].body.measurement_type).toBe(
-      "biochar_production_batch",
-    );
+    expect(submissions).toHaveLength(3);
     expect(
-      submissions[0].body.values.map((value) => ({
-        qualifier: value.measurement_property.qualifier,
-        magnitude: value.value.magnitude,
-        unit: value.value.unit,
+      submissions.map((submission) => ({
+        creditBatchId: submission.creditBatchId,
+        sampleId: submission.sampleId,
+        operationKey: submission.operationKey,
+        measuredAt: submission.body.measured_at,
+        measurementType: submission.body.measurement_type,
+        values: submission.body.values.map((value) => ({
+          qualifier: value.measurement_property.qualifier,
+          magnitude: value.value.magnitude,
+          unit: value.value.unit,
+        })),
       })),
     ).toEqual([
-      { qualifier: "total_carbon", magnitude: 0.8, unit: "dimensionless" },
-      { qualifier: "total_inorganic_carbon", magnitude: 0.01, unit: "dimensionless" },
-      { qualifier: "inertinite_fraction", magnitude: 0.91, unit: "dimensionless" },
-      { qualifier: "total_carbon", magnitude: 0.82, unit: "dimensionless" },
-      { qualifier: "total_inorganic_carbon", magnitude: 0.011000000000000001, unit: "dimensionless" },
-      { qualifier: "inertinite_fraction", magnitude: 0.92, unit: "dimensionless" },
-      { qualifier: "total_carbon", magnitude: 0.84, unit: "dimensionless" },
-      { qualifier: "total_inorganic_carbon", magnitude: 0.012, unit: "dimensionless" },
-      { qualifier: "inertinite_fraction", magnitude: 0.93, unit: "dimensionless" },
-      { qualifier: null, magnitude: 1000, unit: "kg" },
+      {
+        creditBatchId: "t",
+        sampleId: "sample-t-1",
+        operationKey: "pb:t:sample:sample-t-1",
+        measuredAt: "2026-01-03T08:30:00.000Z",
+        measurementType: "biochar_production_batch",
+        values: [
+          { qualifier: "total_carbon", magnitude: 0.77, unit: "dimensionless" },
+          { qualifier: "total_inorganic_carbon", magnitude: 0.01, unit: "dimensionless" },
+          { qualifier: "inertinite_fraction", magnitude: 0.93, unit: "dimensionless" },
+        ],
+      },
+      {
+        creditBatchId: "t",
+        sampleId: "sample-t-2",
+        operationKey: "pb:t:sample:sample-t-2",
+        measuredAt: "2026-01-05T09:45:00.000Z",
+        measurementType: "biochar_production_batch",
+        values: [
+          { qualifier: "total_carbon", magnitude: 0.755, unit: "dimensionless" },
+          { qualifier: "total_inorganic_carbon", magnitude: 0.011000000000000001, unit: "dimensionless" },
+          { qualifier: "inertinite_fraction", magnitude: 0.94, unit: "dimensionless" },
+        ],
+      },
+      {
+        creditBatchId: "t",
+        sampleId: "sample-t-3",
+        operationKey: "pb:t:sample:sample-t-3",
+        measuredAt: "2026-01-07T11:15:00.000Z",
+        measurementType: "biochar_production_batch",
+        values: [
+          { qualifier: "total_carbon", magnitude: 0.78, unit: "dimensionless" },
+          { qualifier: "total_inorganic_carbon", magnitude: 0.012, unit: "dimensionless" },
+          { qualifier: "inertinite_fraction", magnitude: 0.93, unit: "dimensionless" },
+        ],
+      },
     ]);
+    expect(
+      new Set(submissions.map((submission) => submission.supplierRefId)).size,
+    ).toBe(3);
+    expect(submissions.every((submission) => submission.supplierRefId.length <= 100)).toBe(true);
+    expect(submissions.flatMap((submission) => submission.body.values).some((value) => value.measurement_property.quantity_kind === "mass")).toBe(false);
   });
 
   it("rejects multi-batch 1000-year removals before building registry requests", () => {
@@ -543,6 +570,25 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     expect(JSON.stringify(reversed)).toBe(JSON.stringify(forward));
   });
 
+  it("refuses to resume the old aggregate snapshot shape", () => {
+    expect(() =>
+      readRemovalDurabilityMeasurementSamples({
+        payloadSnapshot: {
+          durabilityMeasurementSamples: {
+            submissions: [
+              {
+                operationKey: "pb:credit-batch-1",
+                supplierRefId: "nm-mts-old-aggregate-v1",
+                label: "production batch CB-1",
+                body: { supplier_reference_id: "nm-mts-old-aggregate-v1" },
+              },
+            ],
+          },
+        },
+      } as never),
+    ).toThrow(/older durability Sample format.*cannot resume/i);
+  });
+
   it("fails closed when a 1000-year batch has fewer than three complete replicates", () => {
     expect(() =>
       buildDurabilityMeasurementSampleSubmissions({
@@ -584,6 +630,22 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
         ],
       }),
     ).toThrow(/R₀ fraction.*PARTIAL-3/);
+  });
+
+  it("fails closed when a local Sample has no valid sampling timestamp", () => {
+    const invalid = thousandYearBatch("invalid-time", "CB-INVALID-TIME");
+    invalid.samples[0] = {
+      ...invalid.samples[0],
+      samplingTime: undefined,
+    } as unknown as Sample;
+
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        facilityReferenceSoilTemperature: null,
+        batches: [invalid],
+      }),
+    ).toThrow(/Sample sample-invalid-time-1 has no valid sampling time/);
   });
 
   it("names the Sample missing measured inorganic carbon", () => {
@@ -636,17 +698,16 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     ).toThrow(/200-year Removals cannot be submitted yet/i);
   });
 
-  it("scales product mass by the per-run applied attribution", () => {
-    const [pb] = buildDurabilityMeasurementSampleSubmissions({
+  it("scales the standalone product mass by the per-run applied attribution", () => {
+    const submissions = buildDurabilityMeasurementSampleSubmissions({
       ...common,
       facilityReferenceSoilTemperature: null,
       batches: [thousandYearBatch("a", "CB-A")],
       attributionByRunId: new Map([["run-a", 0.5]]),
     });
 
-    const massValue = pb.body.values.find(
-      (v) => v.measurement_property.quantity_kind === "mass",
-    );
-    expect(massValue?.value.magnitude).toBe(500); // 1000 kg × 0.5
+    expect(
+      submissions.map((submission) => submission.creditBatchProductMassKg),
+    ).toEqual([500, 500, 500]); // one direct Datapoint is built from this batch fact
   });
 });

@@ -402,8 +402,8 @@ export function buildBiocharUnsampledBatchSample(args: {
 //
 // Built to the current `biochar_sequestration_1000_year_f_durable_max`
 // component. It subtracts paired measured inorganic carbon from total carbon
-// and caps the calculated durable fraction at 0.95. We submit only raw paired
-// replicates and product mass; the registry owns the reduction.
+// and caps the calculated durable fraction at 0.95. Each request represents one
+// independently analysed Sample; product mass travels as one direct Datapoint.
 //
 // The explicit datapoint↔input binding is implemented in
 // `sequestration-binding.ts` from the verified Certify response/component
@@ -451,9 +451,7 @@ export interface Sequestration1000YearReplicate {
 }
 
 export interface Build1000YearSequestrationSampleArgs {
-  replicates: Sequestration1000YearReplicate[];
-  /** Attribution-scaled dry biochar product mass applied (kg). */
-  productMassKg: number;
+  replicate: Sequestration1000YearReplicate;
   projectId: string;
   supplierRefId: string;
   measuredAt: string;
@@ -462,9 +460,10 @@ export interface Build1000YearSequestrationSampleArgs {
 
 /**
  * Build the `biochar_production_batch` measurement sample carrying the 1000-year
- * inputs as evidence: paired per-replicate total carbon, measured inorganic
- * carbon, and `s_fraction` values plus one `product_mass`. Carbon and mass
- * response datapoints bind their GHG inputs. The sample's
+ * inputs as evidence: paired total carbon, measured inorganic carbon, and
+ * `s_fraction` values from one local Sample. Carbon response datapoints bind
+ * their GHG inputs. Product mass is deliberately not a property of the physical
+ * Sample. The sample's
  * `dimensionless_ratio` s_fraction values remain data-quality evidence while
  * the orchestrator posts matching `dimensionless` datapoints for that LIST
  * input. Pure — no I/O. ⚠️ Sandbox-gated (see header).
@@ -472,58 +471,36 @@ export interface Build1000YearSequestrationSampleArgs {
 export function build1000YearSequestrationSample(
   args: Build1000YearSequestrationSampleArgs,
 ): CreateMeasurementSampleRequest {
-  const totalCarbonContents = args.replicates.map(
-    (replicate) => replicate.totalCarbonContentFraction,
-  );
-  const inorganicCarbonContents = args.replicates.map(
-    (replicate) => replicate.inorganicCarbonContentFraction,
-  );
-  const sFractions = args.replicates.map((replicate) => replicate.sFraction);
-  assert1000YearInputListInvariants({
-    totalCarbonContents,
-    inorganicCarbonContents,
-    sFractions,
-  });
-
-  const values: CreateMeasurementSampleValueRequest[] = [];
-  for (let index = 0; index < totalCarbonContents.length; index += 1) {
-    values.push({
+  const { replicate } = args;
+  assert1000YearReplicate(replicate);
+  const values: CreateMeasurementSampleValueRequest[] = [
+    {
       measurement_property:
         TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
       value: {
-        magnitude: totalCarbonContents[index],
+        magnitude: replicate.totalCarbonContentFraction,
         standard_deviation: null,
         unit: CARBON_CONTENTS_1000_YEAR_UNIT,
       },
-    });
-    values.push({
+    },
+    {
       measurement_property:
         INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
       value: {
-        magnitude: inorganicCarbonContents[index],
+        magnitude: replicate.inorganicCarbonContentFraction,
         standard_deviation: null,
         unit: CARBON_CONTENTS_1000_YEAR_UNIT,
       },
-    });
-    values.push({
+    },
+    {
       measurement_property: S_FRACTION_MEASUREMENT_PROPERTY,
       value: {
-        magnitude: sFractions[index],
+        magnitude: replicate.sFraction,
         standard_deviation: null,
         unit: S_FRACTION_UNIT,
       },
-    });
-  }
-
-  // Product mass (kg) — a single per-batch scalar, no std-dev.
-  values.push({
-    measurement_property: PRODUCT_MASS_MEASUREMENT_PROPERTY,
-    value: {
-      magnitude: args.productMassKg,
-      standard_deviation: null,
-      unit: PRODUCT_MASS_UNIT,
     },
-  });
+  ];
 
   return {
     feedstock_batch_id: null,
@@ -547,6 +524,23 @@ const CARBON_RECONCILIATION_TOLERANCE_FRACTION =
 function assertFraction(value: number, label: string): void {
   if (!Number.isFinite(value) || value < FRACTION_MIN || value > FRACTION_MAX) {
     throw new SafeError(`${label} must be a number from 0 to 1.`);
+  }
+}
+
+function assert1000YearReplicate(
+  replicate: Sequestration1000YearReplicate,
+): void {
+  assertFraction(replicate.totalCarbonContentFraction, "Total carbon");
+  assertFraction(replicate.inorganicCarbonContentFraction, "Inorganic carbon");
+  assertFraction(replicate.sFraction, "R₀ fraction");
+  if (
+    replicate.inorganicCarbonContentFraction -
+      replicate.totalCarbonContentFraction >
+    CARBON_RECONCILIATION_TOLERANCE_FRACTION
+  ) {
+    throw new SafeError(
+      `Inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points.`,
+    );
   }
 }
 

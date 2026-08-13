@@ -28,21 +28,21 @@ const DRY_MASS_TONNES = 12.5;
 
 /** The current component reduction, recomputed from its four-input payload. */
 function currentPreviewFigureFromPayload(dryMassTonnes: number): number {
-  const body = build1000YearSequestrationSample({
-    replicates: REPLICATES.map((r) => ({
-      totalCarbonContentFraction: r.totalCarbonPercent / 100,
-      inorganicCarbonContentFraction: r.inorganicCarbonPercent / 100,
-      sFraction: r.sReflectanceFraction,
-    })),
-    productMassKg: dryMassTonnes * 1000,
-    projectId: "prj_X",
-    supplierRefId: "nm-mts-test-pb-cb-v1",
-    measuredAt: "2026-01-31T00:00:00.000Z",
-  });
-  expect(body).not.toBeNull();
+  const bodies = REPLICATES.map((r, index) =>
+    build1000YearSequestrationSample({
+      replicate: {
+        totalCarbonContentFraction: r.totalCarbonPercent / 100,
+        inorganicCarbonContentFraction: r.inorganicCarbonPercent / 100,
+        sFraction: r.sReflectanceFraction,
+      },
+      projectId: "prj_X",
+      supplierRefId: `nm-mts-test-pb-cb-s${index + 1}-v1`,
+      measuredAt: `2026-01-0${index + 1}T00:00:00.000Z`,
+    }),
+  );
 
   const magnitudesOf = (qualifier: string | null) =>
-    body!.values
+    bodies.flatMap((body) => body.values)
       .filter((v) => v.measurement_property.qualifier === qualifier)
       .map((v) => v.value.magnitude);
   const carbons = magnitudesOf(

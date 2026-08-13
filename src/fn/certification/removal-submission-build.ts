@@ -779,7 +779,6 @@ export async function buildRemovalSubmissionBuild(args: {
           attributionByRunId: ctx.attributionByRunId,
           facilityReferenceSoilTemperature:
             ctx.facilityReferenceSoilTemperature ?? null,
-          measuredAt: agg.latestEndTime.toISOString(),
         }
       : null;
   const semanticMeasurementSamples = durabilityMeasurementSampleArgs

@@ -75,20 +75,25 @@ const baseReportingWindow = {
 };
 
 describe("1000-year sequestration input sources", () => {
-  it("builds one direct dimensionless datapoint per s_fraction replicate", () => {
-    const sample = build1000YearSequestrationSample({
-      projectId: PROJECT_ID,
-      supplierRefId: "nm-mts-sample-v2",
-      measuredAt: "2026-01-31T23:59:59.000Z",
-      productMassKg: 1_000,
-      replicates: [
-        { totalCarbonContentFraction: 0.8, inorganicCarbonContentFraction: 0.01, sFraction: 0.91 },
-        { totalCarbonContentFraction: 0.82, inorganicCarbonContentFraction: 0.011, sFraction: 0.92 },
-        { totalCarbonContentFraction: 0.84, inorganicCarbonContentFraction: 0.012, sFraction: 0.93 },
-      ],
-    });
-    expect(sample).not.toBeNull();
-    if (!sample) return;
+  it("builds three direct s_fraction datapoints and one standalone product-mass datapoint", () => {
+    const replicates = [
+      { totalCarbonContentFraction: 0.77, inorganicCarbonContentFraction: 0.01, sFraction: 0.93 },
+      { totalCarbonContentFraction: 0.755, inorganicCarbonContentFraction: 0.011, sFraction: 0.94 },
+      { totalCarbonContentFraction: 0.78, inorganicCarbonContentFraction: 0.012, sFraction: 0.93 },
+    ];
+    const measurementSampleSubmissions = replicates.map((replicate, index) => ({
+      creditBatchId: "cb-1",
+      sampleId: `sample-${index + 1}`,
+      creditBatchProductMassKg: 1_970,
+      operationKey: `pb:cb-1:sample:sample-${index + 1}`,
+      supplierRefId: `nm-mts-sample-${index + 1}-v2`,
+      body: build1000YearSequestrationSample({
+        projectId: PROJECT_ID,
+        supplierRefId: `nm-mts-sample-${index + 1}-v2`,
+        measuredAt: `2026-01-0${index + 1}T12:00:00.000Z`,
+        replicate,
+      }),
+    }));
 
     const direct = buildDirectSequestrationDatapoints({
       template: template([
@@ -103,13 +108,7 @@ describe("1000-year sequestration input sources", () => {
           ],
         },
       ]),
-      measurementSampleSubmissions: [
-        {
-          operationKey: "pb:cb-1",
-          supplierRefId: "nm-mts-sample-v2",
-          body: sample,
-        },
-      ],
+      measurementSampleSubmissions,
       projectId: PROJECT_ID,
       removalId: "rem-test",
       version: 2,
@@ -124,19 +123,28 @@ describe("1000-year sequestration input sources", () => {
       quantityKind: "dimensionless",
       unit: "dimensionless",
     });
-    expect(direct).toHaveLength(3);
-    expect(direct.map((entry) => entry.body.quantity)).toEqual([
-      { magnitude: 0.91, unit: "dimensionless" },
-      { magnitude: 0.92, unit: "dimensionless" },
-      { magnitude: 0.93, unit: "dimensionless" },
+    expect(getSequestrationInputBinding(
+      CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+      "product_mass",
+    )).toMatchObject({
+      source: "direct-datapoint",
+      valueSource: "credit-batch-product-mass",
+      quantityKind: "mass",
+      unit: "kg",
+    });
+    expect(direct).toHaveLength(4);
+    expect(direct.map((entry) => [entry.inputKey, entry.body.quantity])).toEqual([
+      ["product_mass", { magnitude: 1_970, unit: "kg" }],
+      ["s_fraction", { magnitude: 0.93, unit: "dimensionless" }],
+      ["s_fraction", { magnitude: 0.94, unit: "dimensionless" }],
+      ["s_fraction", { magnitude: 0.93, unit: "dimensionless" }],
     ]);
-    expect(direct.every((entry) => entry.inputKey === "s_fraction")).toBe(true);
     expect(direct.every((entry) => entry.body.source_ids[0] === "src-evidence")).toBe(
       true,
     );
     expect(
       new Set(direct.map((entry) => entry.body.supplier_reference_id)).size,
-    ).toBe(3);
+    ).toBe(4);
     expect(
       direct.every((entry) => entry.body.supplier_reference_id.endsWith("-v2")),
     ).toBe(true);
@@ -149,19 +157,17 @@ describe("1000-year sequestration input sources", () => {
             inputs: [{ input_key: "s_fraction" }],
           },
         ]),
-        measurementSampleSubmissions: [
-          {
-            operationKey: "pb:cb-1",
-            supplierRefId: "nm-mts-sample-v2",
-            body: sample,
-          },
-        ],
+        measurementSampleSubmissions,
         projectId: PROJECT_ID,
         removalId: "rem-test",
         version: 2,
         sourceIds: ["src-evidence"],
       }).map((entry) => entry.body.supplier_reference_id),
-    ).toEqual(direct.map((entry) => entry.body.supplier_reference_id));
+    ).toEqual(
+      direct
+        .filter((entry) => entry.inputKey === "s_fraction")
+        .map((entry) => entry.body.supplier_reference_id),
+    );
   });
 
   it("binds s_fraction only from direct datapoints, not measurement-sample IDs", () => {
@@ -194,6 +200,7 @@ describe("1000-year sequestration input sources", () => {
         ],
       ]),
       datapointIdsByRtcInput: new Map([
+        ["rtc_SEQ::product_mass", ["dtp-product-mass"]],
         [
           "rtc_SEQ::s_fraction",
           ["dtp-direct-s-1", "dtp-direct-s-2", "dtp-direct-s-3"],

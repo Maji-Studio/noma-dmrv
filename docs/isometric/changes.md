@@ -21,6 +21,29 @@ Removal submission recovery and the observed Production Batch mass-unit
 readback are archived in
 [`docs/archive/2026-08-10-removal-submission-recovery.md`](../archive/2026-08-10-removal-submission-recovery.md).
 
+## 2026-08-13 (measurement Samples preserve local Sample grain)
+
+Sampled 1,000-year submission now creates one Isometric
+`MeasurementSample` for each independently analysed noma Sample. Each request
+uses a deterministic versioned reference containing the stable local Sample
+identity, the Sample's own sampling instant, and only its paired total-carbon,
+inorganic-carbon, and `s_fraction` values. Input row ordering does not change
+the semantic snapshot or supplier references.
+
+Batch product mass no longer appears as a property of an aggregate physical
+Sample. It is materialized once as a standalone direct `REPORTED` kg Datapoint,
+with the existing inventory and durability Sources. The GHG Entry continues to
+receive three ordered IDs for each chemistry/reflectance list and one scalar
+mass ID. Measurement Sample source patching processes every capture even though
+none carries mass.
+
+The snapshot schema and mapping revision reject the former aggregate shape.
+Supplier-reference journaling and collection reconciliation resume after one or
+two successful Sample creates, and a source-patching retry reconciles all three
+without duplicate POSTs. This is code-implemented and hermetically verified;
+fresh sandbox verification is still pending. No production enablement or
+external-record remediation is included.
+
 ## Feedstock inventory mass basis
 
 Feedstock-bin stock, withdrawals, losses, and reconciliation now use wet,
