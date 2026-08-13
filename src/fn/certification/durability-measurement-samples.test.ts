@@ -115,6 +115,70 @@ describe("DURABILITY_MEASUREMENT_SAMPLES_ENABLED", () => {
 });
 
 describe("patchMeasurementSampleSourceBindings", () => {
+  it("attaches each Sample lab report only to its own carbon datapoints", async () => {
+    const creditBatchId = "credit-batch-1";
+    const sourceBindingPlan = buildRemovalSourceBindingPlan({
+      candidates: ["sample-a", "sample-b"].map((sampleId) => ({
+        documentId: `document-${sampleId}`,
+        sourceId: `source-${sampleId}`,
+        binding: classifyRemovalSourceCandidate({
+          documentType: "lab_report",
+          metadata: {},
+          lineage: {
+            entityType: "sample",
+            entityId: sampleId,
+            entityLabel: `Sample ${sampleId}`,
+          },
+        })!,
+      })),
+      template: {
+        groups: [{
+          key: "co2-stored",
+          components: [{
+            id: "component-sequestration",
+            blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+            inputs: [
+              { input_key: "total_carbon_contents" },
+              { input_key: "inorganic_carbon_contents" },
+            ],
+          }],
+        }],
+      } as never,
+      applicationIdsByCreditBatchId: new Map(),
+      sampleIdsByCreditBatchId: new Map([
+        [creditBatchId, ["sample-a", "sample-b"]],
+      ]),
+    });
+    const patch = vi.fn(
+      async (path: string, body: { source_ids: string[] }) => ({
+        id: path,
+        source_ids: body.source_ids,
+      }),
+    );
+    const carbonProperty = encodeMeasurementProperty(
+      TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
+    );
+
+    await patchMeasurementSampleSourceBindings({
+      client: { patch } as never,
+      captures: ["sample-a", "sample-b"].map((sampleId) => ({
+        measurementSampleId: `measurement-${sampleId}`,
+        supplierReferenceId: `reference-${sampleId}`,
+        creditBatchId,
+        sampleId,
+        datapointIdsByMeasurementProperty: new Map([
+          [carbonProperty, [`datapoint-${sampleId}`]],
+        ]),
+      })),
+      sourceBindingPlan,
+    });
+
+    expect(patch.mock.calls.map(([path, body]) => [path, body.source_ids])).toEqual([
+      ["/datapoints/datapoint-sample-a", ["source-sample-a"]],
+      ["/datapoints/datapoint-sample-b", ["source-sample-b"]],
+    ]);
+  });
+
   it("does not look for standalone product mass in a MeasurementSample response", async () => {
     const creditBatchId = "01519716-f8e6-4042-886d-608792130dcc";
     const applicationId = "application-staging-1";
@@ -544,13 +608,12 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     // order flows into the body's `values` list — a reorder of unchanged rows
     // must NOT flip the semantic change-detection hash.
     const orderedSamples = [
-      sample({ id: "smp-1", sampleCode: "S-1", totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 }),
-      sample({ id: "smp-2", sampleCode: "S-2", totalCarbonPercent: 82, inorganicCarbonPercent: 1.1, sReflectanceFraction: 0.92 }),
-      sample({ id: "smp-3", sampleCode: "S-3", totalCarbonPercent: 84, inorganicCarbonPercent: 1.2, sReflectanceFraction: 0.93 }),
+      sample({ id: "smp-1", sampleCode: "S-1", samplingTime: new Date("2026-01-01T10:00:00.000Z"), totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 }),
+      sample({ id: "smp-2", sampleCode: "S-2", samplingTime: new Date("2026-01-02T11:00:00.000Z"), totalCarbonPercent: 82, inorganicCarbonPercent: 1.1, sReflectanceFraction: 0.92 }),
+      sample({ id: "smp-3", sampleCode: "S-3", samplingTime: new Date("2026-01-03T12:00:00.000Z"), totalCarbonPercent: 84, inorganicCarbonPercent: 1.2, sReflectanceFraction: 0.93 }),
     ];
-    const buildNormalized = (samples: Sample[]) =>
-      normalizeMeasurementSamplesForHash(
-        buildDurabilityMeasurementSampleSubmissions({
+    const build = (samples: Sample[]) =>
+      buildDurabilityMeasurementSampleSubmissions({
           ...common,
           facilityReferenceSoilTemperature: null,
           batches: [
@@ -562,13 +625,17 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
               samples,
             }),
           ],
-        }),
-      );
+        });
 
-    const forward = buildNormalized(orderedSamples);
-    const reversed = buildNormalized([...orderedSamples].reverse());
+    const forwardSubmissions = build(orderedSamples);
+    const reversedSubmissions = build([...orderedSamples].reverse());
+    const forward = normalizeMeasurementSamplesForHash(forwardSubmissions);
+    const reversed = normalizeMeasurementSamplesForHash(reversedSubmissions);
 
     expect(JSON.stringify(reversed)).toBe(JSON.stringify(forward));
+    expect(reversedSubmissions.map((submission) => submission.supplierRefId)).toEqual(
+      forwardSubmissions.map((submission) => submission.supplierRefId),
+    );
   });
 
   it("refuses to resume the old aggregate snapshot shape", () => {
@@ -646,7 +713,23 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
         facilityReferenceSoilTemperature: null,
         batches: [invalid],
       }),
-    ).toThrow(/Sample sample-invalid-time-1 has no valid sampling time/);
+    ).toThrow(/Sample CB-INVALID-TIME-S1 has no valid sampling time/);
+  });
+
+  it("fails closed when a local Sample has a future sampling timestamp", () => {
+    const future = thousandYearBatch("future-time", "CB-FUTURE-TIME");
+    future.samples[0] = {
+      ...future.samples[0],
+      samplingTime: new Date("2999-01-01T00:00:00.000Z"),
+    };
+
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        facilityReferenceSoilTemperature: null,
+        batches: [future],
+      }),
+    ).toThrow(/Sample CB-FUTURE-TIME-S1 has a sampling time in the future/);
   });
 
   it("names the Sample missing measured inorganic carbon", () => {
@@ -675,6 +758,40 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
       ...changed.samples[1],
       inorganicCarbonPercent: 1.3,
     };
+    const semanticHash = (candidate: CreditBatchWithSamples) =>
+      payloadHash(
+        normalizeMeasurementSamplesForHash(
+          buildDurabilityMeasurementSampleSubmissions({
+            ...common,
+            facilityReferenceSoilTemperature: null,
+            batches: [candidate],
+          }),
+        ),
+      );
+
+    expect(semanticHash(changed)).not.toBe(semanticHash(original));
+  });
+
+  it.each([
+    ["Sample code", (candidate: CreditBatchWithSamples) => {
+      candidate.samples[1] = { ...candidate.samples[1], sampleCode: "LAB-NEW" };
+    }],
+    ["sampling time", (candidate: CreditBatchWithSamples) => {
+      candidate.samples[1] = {
+        ...candidate.samples[1],
+        samplingTime: new Date("2026-01-06T09:45:00.000Z"),
+      };
+    }],
+    ["total carbon", (candidate: CreditBatchWithSamples) => {
+      candidate.samples[1] = { ...candidate.samples[1], totalCarbonPercent: 76 };
+    }],
+    ["R₀ fraction", (candidate: CreditBatchWithSamples) => {
+      candidate.samples[1] = { ...candidate.samples[1], sReflectanceFraction: 0.95 };
+    }],
+  ] as const)("changes semantic measurement identity when only %s changes", (_field, mutate) => {
+    const original = thousandYearBatch("semantic", "CB-SEMANTIC");
+    const changed = thousandYearBatch("semantic", "CB-SEMANTIC");
+    mutate(changed);
     const semanticHash = (candidate: CreditBatchWithSamples) =>
       payloadHash(
         normalizeMeasurementSamplesForHash(

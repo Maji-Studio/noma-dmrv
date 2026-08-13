@@ -36,7 +36,6 @@ import type {
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
 import { SafeError } from "@/lib/errors";
-import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 
 type CreateMeasurementSampleRequest =
   components["schemas"]["CreateMeasurementSampleRequest"];
@@ -541,42 +540,6 @@ function assert1000YearReplicate(
     throw new SafeError(
       `Inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points.`,
     );
-  }
-}
-
-/** Final wire-boundary assertion for the replacement component's paired lists. */
-export function assert1000YearInputListInvariants(args: {
-  totalCarbonContents: number[];
-  inorganicCarbonContents: number[];
-  sFractions: number[];
-}): void {
-  const lengths = [
-    args.totalCarbonContents.length,
-    args.inorganicCarbonContents.length,
-    args.sFractions.length,
-  ];
-  if (new Set(lengths).size !== 1) {
-    throw new SafeError(
-      "The 1,000-year total-carbon, inorganic-carbon, and R₀ lists must have equal lengths.",
-    );
-  }
-  if (lengths[0] < MINIMUM_REPLICATES_PER_BATCH) {
-    throw new SafeError(
-      `A 1,000-year Removal requires at least ${MINIMUM_REPLICATES_PER_BATCH} complete replicates.`,
-    );
-  }
-  for (let index = 0; index < lengths[0]; index += 1) {
-    const total = args.totalCarbonContents[index];
-    const inorganic = args.inorganicCarbonContents[index];
-    const sFraction = args.sFractions[index];
-    assertFraction(total, `Total carbon replicate ${index + 1}`);
-    assertFraction(inorganic, `Inorganic carbon replicate ${index + 1}`);
-    assertFraction(sFraction, `R₀ fraction replicate ${index + 1}`);
-    if (inorganic - total > CARBON_RECONCILIATION_TOLERANCE_FRACTION) {
-      throw new SafeError(
-        `Inorganic carbon replicate ${index + 1} cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points.`,
-      );
-    }
   }
 }
 

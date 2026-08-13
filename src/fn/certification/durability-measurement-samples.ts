@@ -175,10 +175,11 @@ export function buildDurabilityMeasurementSampleSubmissions(
         sourceBatch.samples.map((sample) => [sample.id, sample]),
       );
       for (const replicate of replicateEvaluation.replicates) {
+        const sampleLabel = replicate.sampleCode || replicate.sampleId;
         const sourceSample = sampleById.get(replicate.sampleId);
         if (!sourceSample) {
           throw new SafeError(
-            `Sample ${replicate.sampleId} could not be loaded for production batch ${batch.creditBatchCode}. Refresh the Removal and try again.`,
+            `Sample ${sampleLabel} could not be loaded for production batch ${batch.creditBatchCode}. Refresh the Removal and try again.`,
           );
         }
         if (
@@ -186,7 +187,12 @@ export function buildDurabilityMeasurementSampleSubmissions(
           Number.isNaN(sourceSample.samplingTime.getTime())
         ) {
           throw new SafeError(
-            `Sample ${replicate.sampleId} has no valid sampling time. Record the sampling event before submitting.`,
+            `Sample ${sampleLabel} has no valid sampling time. Record the sampling event before submitting.`,
+          );
+        }
+        if (sourceSample.samplingTime.getTime() > Date.now()) {
+          throw new SafeError(
+            `Sample ${sampleLabel} has a sampling time in the future. Correct the sampling event before submitting.`,
           );
         }
         const supplierRefId = buildMeasurementSampleReference({
@@ -209,7 +215,7 @@ export function buildDurabilityMeasurementSampleSubmissions(
           operationKey: `pb:${batch.creditBatchId}:sample:${replicate.sampleId}`,
           supplierRefId,
           body,
-          label: `Sample ${replicate.sampleId} in production batch ${batch.creditBatchCode}`,
+          label: `Sample ${sampleLabel} in production batch ${batch.creditBatchCode}`,
         });
       }
       continue;
@@ -249,6 +255,7 @@ const PATCH_UNDEFINED = { __typename: "Undefined" } as const;
 interface MeasurementSampleSourceBindingCapture
   extends MeasurementSampleDatapointCapture {
   creditBatchId: string | null;
+  sampleId?: string;
   replicateSampleIds?: string[];
 }
 
@@ -323,7 +330,8 @@ export async function patchMeasurementSampleSourceBindings(args: {
       );
 
       for (const [index, datapointId] of datapointIds.entries()) {
-        const replicateSampleId = capture.replicateSampleIds?.[index] ?? null;
+        const replicateSampleId =
+          capture.sampleId ?? capture.replicateSampleIds?.[index] ?? null;
         const sourceIds = Array.from(
           new Set(
             inputBindings
@@ -363,11 +371,7 @@ export function creditBatchIdsForMeasurementSamples(
   submissions: DurabilityMeasurementSampleSubmission[],
 ): string[] {
   return Array.from(
-    new Set(
-      submissions.flatMap((submission) => {
-        return [submission.creditBatchId];
-      }),
-    ),
+    new Set(submissions.map((submission) => submission.creditBatchId)),
   );
 }
 
@@ -383,9 +387,9 @@ export function creditBatchIdsForMeasurementSamples(
  * payload stays fully auditable — `performRegistryCreate` records the actual
  * request body on the sync event.
  *
- * Fails closed: a per-batch sample with no registered production batch would
+ * Fails closed: a per-Sample request with no registered production batch would
  * silently submit `production_batch_id: null`, which is exactly the defect this
- * replaces. The `soil` sample carries no credit batch and is passed through.
+ * replaces. Every supported submission is linked to a credit batch.
  */
 export function applyProductionBatchIds(
   submissions: DurabilityMeasurementSampleSubmission[],
@@ -515,6 +519,7 @@ export async function submitDurabilityMeasurementSamples(
     sourceBindingCaptures.push({
       ...capture,
       creditBatchId: submission.creditBatchId,
+      sampleId: submission.sampleId,
     });
     submitted += 1;
     args.onProgress?.(submitted, args.submissions.length);
