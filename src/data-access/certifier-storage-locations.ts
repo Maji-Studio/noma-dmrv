@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, withDedicatedSessionAdvisoryLock } from "@/db";
 import { applications } from "@/db/schema/application";
 import { certifierProjects } from "@/db/schema/certification";
 import {
@@ -9,11 +9,35 @@ import {
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customerLocations } from "@/db/schema/parties";
 import type { OrgContext } from "@/lib/auth/server";
+import { certifierExternalProjectLockKey } from "@/lib/certification/certifier-project-lock";
 import type { CreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
 type CertifierProvider = CertifierStorageLocation["provider"];
 const DEFAULT_PROVIDER: CertifierProvider = "isometric";
+
+export async function withCertifierExternalProjectLocks<T>(
+  ctx: OrgContext,
+  provider: CertifierProvider,
+  externalProjectIds: string[],
+  fn: () => Promise<T>,
+): Promise<T> {
+  requireOrgScope(ctx);
+  const keys = [...new Set(externalProjectIds)]
+    .sort()
+    .map((externalProjectId) =>
+      certifierExternalProjectLockKey({
+        organizationId: ctx.organizationId,
+        provider,
+        externalProjectId,
+      }),
+    );
+  const acquire = (index: number): Promise<T> =>
+    index >= keys.length
+      ? fn()
+      : withDedicatedSessionAdvisoryLock(keys[index], () => acquire(index + 1));
+  return acquire(0);
+}
 
 export interface StorageLocationRegistryInput {
   applicationId: string;

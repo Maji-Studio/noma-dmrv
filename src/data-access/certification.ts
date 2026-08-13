@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
-import { db, withDedicatedSessionAdvisoryLock } from "@/db";
+import { db } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import {
   certifierGhgStatements,
@@ -19,14 +19,13 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
 import { SafeError } from "@/lib/errors";
-import {
-  certifierExternalProjectLockKey,
-  certifierProjectLockKey,
-} from "@/lib/certification/certifier-project-lock";
 import { pluralize } from "@/lib/copy-utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
-import { hasStorageLocationRegistrationForExternalProject } from "./certifier-storage-locations";
+import {
+  hasStorageLocationRegistrationForExternalProject,
+} from "./certifier-storage-locations";
+import { withCertifierProjectMappingLocks } from "./certifier-project-mapping-locks";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 export type CertifierProjectRow = typeof certifierProjects.$inferSelect;
@@ -209,28 +208,6 @@ async function withExternalFacilityConflictGuard<T>(
   }
 }
 
-async function withExternalProjectLocks<T>(
-  ctx: OrgContext,
-  provider: CertifierProvider,
-  externalProjectIds: string[],
-  fn: () => Promise<T>,
-): Promise<T> {
-  const keys = [...new Set(externalProjectIds)]
-    .sort()
-    .map((externalProjectId) =>
-      certifierExternalProjectLockKey({
-        organizationId: ctx.organizationId,
-        provider,
-        externalProjectId,
-      }),
-    );
-  const acquire = (index: number): Promise<T> =>
-    index >= keys.length
-      ? fn()
-      : withDedicatedSessionAdvisoryLock(keys[index], () => acquire(index + 1));
-  return acquire(0);
-}
-
 export async function upsertCertifierProject(
   ctx: OrgContext,
   input: UpsertCertifierProjectInput,
@@ -368,31 +345,14 @@ export async function upsertCertifierProject(
       return row;
     });
 
-  return withDedicatedSessionAdvisoryLock(
-    certifierProjectLockKey({
-      organizationId: ctx.organizationId,
+  return withCertifierProjectMappingLocks(
+    ctx,
+    {
       facilityId: input.facilityId,
       provider: input.provider,
-    }),
-    async () => {
-      const [current] = await db
-        .select({ externalProjectId: certifierProjects.externalProjectId })
-        .from(certifierProjects)
-        .where(
-          and(
-            eq(certifierProjects.facilityId, input.facilityId),
-            eq(certifierProjects.provider, input.provider),
-            eq(certifierProjects.organizationId, ctx.organizationId),
-          ),
-        )
-        .limit(1);
-      return withExternalProjectLocks(
-        ctx,
-        input.provider,
-        [values.externalProjectId, ...(current ? [current.externalProjectId] : [])],
-        () => withExternalFacilityConflictGuard(values.externalFacilityId, runUpsert),
-      );
+      targetExternalProjectId: values.externalProjectId,
     },
+    () => withExternalFacilityConflictGuard(values.externalFacilityId, runUpsert),
   );
 }
 
@@ -448,25 +408,13 @@ export async function deleteCertifierProject(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  await withDedicatedSessionAdvisoryLock(
-    certifierProjectLockKey({
-      organizationId: ctx.organizationId,
+  await withCertifierProjectMappingLocks(
+    ctx,
+    {
       facilityId,
       provider,
-    }),
-    async () => {
-      const [current] = await db
-        .select({ externalProjectId: certifierProjects.externalProjectId })
-        .from(certifierProjects)
-        .where(
-          and(
-            eq(certifierProjects.facilityId, facilityId),
-            eq(certifierProjects.provider, provider),
-            eq(certifierProjects.organizationId, ctx.organizationId),
-          ),
-        )
-        .limit(1);
-      const runDelete = () => db.transaction(async (tx) => {
+    },
+    () => db.transaction(async (tx) => {
     // Lock the mapping row so a concurrent submission insert that depends on
     // this mapping cannot race the unlink check.
     const [mapping] = await tx
@@ -517,14 +465,7 @@ export async function deleteCertifierProject(
           eq(certifierProjects.organizationId, ctx.organizationId),
         ),
       );
-      });
-      return withExternalProjectLocks(
-        ctx,
-        provider,
-        current ? [current.externalProjectId] : [],
-        runDelete,
-      );
-    },
+    }),
   );
 }
 
