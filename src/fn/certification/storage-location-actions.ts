@@ -9,6 +9,10 @@ import {
 } from "@/data-access/certifier-storage-locations";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import {
+  describeIsometricApiError,
+  IsometricApiError,
+} from "@/lib/isometric";
 import { logger } from "@/lib/log";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
@@ -23,6 +27,7 @@ import {
   STORAGE_LOCATION_ENTITY_TYPE,
   STORAGE_LOCATION_OPERATION_PREFIX,
   STORAGE_LOCATION_SYNC_OPERATION,
+  storageLocationEventEntityId,
 } from "./storage-locations";
 
 const applicationIdSchema = z.uuid();
@@ -80,6 +85,7 @@ export async function syncApplicationStorageLocation(
       op: "storage-location:sync",
       applicationId: parsedApplicationId,
     });
+    const eventEntityId = storageLocationEventEntityId(input);
 
     try {
       const result = await ensureStorageLocation({
@@ -90,7 +96,7 @@ export async function syncApplicationStorageLocation(
       await appendSyncEventBestEffort(orgCtx, {
         provider: ISOMETRIC_PROVIDER,
         entityType: STORAGE_LOCATION_ENTITY_TYPE,
-        entityId: input.customerLocationId,
+        entityId: eventEntityId,
         operation: STORAGE_LOCATION_SYNC_OPERATION,
         status: "succeeded",
         responsePayload: {
@@ -103,11 +109,13 @@ export async function syncApplicationStorageLocation(
       const message =
         error instanceof SafeError
           ? error.message
+          : error instanceof IsometricApiError
+            ? describeIsometricApiError(error, error.message)
           : "Storage Location synchronization failed. Try again.";
       await appendSyncEventBestEffort(orgCtx, {
         provider: ISOMETRIC_PROVIDER,
         entityType: STORAGE_LOCATION_ENTITY_TYPE,
-        entityId: input.customerLocationId,
+        entityId: eventEntityId,
         operation: STORAGE_LOCATION_SYNC_OPERATION,
         status: "failed",
         errorMessage: message,
@@ -147,7 +155,7 @@ async function loadApplicationStorageLocationSyncForOrg(
 
   const events = await listRecentSyncEvents(orgCtx, {
     entityType: STORAGE_LOCATION_ENTITY_TYPE,
-    entityId: input.customerLocationId,
+    entityId: storageLocationEventEntityId(input),
     limit: STORAGE_LOCATION_EVENT_LIMIT,
   });
   const latestStorageLocationAttempt = events.find((event) =>

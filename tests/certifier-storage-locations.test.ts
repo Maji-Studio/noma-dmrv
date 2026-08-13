@@ -428,4 +428,70 @@ describe("certifier Storage Location data access", () => {
       await cleanupFixture(fixture);
     }
   });
+
+  it("blocks every facility mapping that shares a registered external project", async () => {
+    const fixture = await createFixture();
+    let sharedFacilityId: string | null = null;
+    try {
+      const ctx = makeTestOrgContext();
+      const input = await getStorageLocationRegistryInput(
+        ctx,
+        fixture.applicationId,
+      );
+      if (!input?.externalProjectId || !input.name) {
+        throw new Error("Storage Location fixture did not resolve");
+      }
+      const runId = crypto.randomUUID().slice(0, 8);
+      const [sharedFacility] = await db
+        .insert(facilities)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `FAC-SLC-SHARED-${runId}`,
+          name: `Storage Location Shared Facility ${runId}`,
+        })
+        .returning({ id: facilities.id });
+      sharedFacilityId = sharedFacility.id;
+      await upsertCertifierProject(ctx, {
+        facilityId: sharedFacility.id,
+        provider: "isometric",
+        externalProjectId: input.externalProjectId,
+      });
+
+      const supplierReference = `nm-slc-shared-guard-${runId}`;
+      await persistStorageLocationRegistration(ctx, {
+        customerLocationId: fixture.customerLocationId,
+        certifierProjectId: fixture.certifierProjectId,
+        externalProjectId: input.externalProjectId,
+        externalStorageLocationId: `slc-shared-guard-${runId}`,
+        supplierReference,
+        submittedPayload: buildCreateStorageLocationRequest({
+          externalProjectId: input.externalProjectId,
+          name: input.name,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          supplierReferenceId: supplierReference,
+        }),
+        payloadHash: `shared-guard-hash-${runId}`,
+      });
+
+      await expect(
+        upsertCertifierProject(ctx, {
+          facilityId: sharedFacility.id,
+          provider: "isometric",
+          externalProjectId: `prj_rebound_${runId}`,
+        }),
+      ).rejects.toThrow(/registered application sites/);
+      await expect(
+        deleteCertifierProject(ctx, sharedFacility.id, "isometric"),
+      ).rejects.toThrow(/registered application sites/);
+    } finally {
+      await cleanupFixture(fixture);
+      if (sharedFacilityId) {
+        await db
+          .delete(certifierProjects)
+          .where(eq(certifierProjects.facilityId, sharedFacilityId));
+        await db.delete(facilities).where(eq(facilities.id, sharedFacilityId));
+      }
+    }
+  });
 });

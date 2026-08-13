@@ -54,6 +54,10 @@ vi.mock("./storage-locations", () => ({
     input.latitude == null ? "latitude" : null,
     input.longitude == null ? "longitude" : null,
   ].filter(Boolean),
+  storageLocationEventEntityId: (input: ReturnType<typeof registryInput>) =>
+    input.externalProjectId
+      ? `${input.externalProjectId}:${input.customerLocationId}`
+      : `unmapped:${input.facilityId}:${input.customerLocationId}`,
   STORAGE_LOCATION_ENTITY_TYPE: "customerLocation",
   STORAGE_LOCATION_OPERATION_PREFIX: "storage-location:",
   STORAGE_LOCATION_SYNC_OPERATION: "storage-location:sync",
@@ -68,6 +72,7 @@ import {
   loadApplicationStorageLocationSync,
   syncApplicationStorageLocation,
 } from "./storage-location-actions";
+import { IsometricApiError } from "@/lib/isometric/client";
 
 function registryInput(overrides: Record<string, unknown> = {}) {
   return {
@@ -183,6 +188,36 @@ describe("application Storage Location actions", () => {
       success: true,
       data: { state: "synced", externalStorageLocationId: "slc-test" },
     });
+    expect(mocks.appendEvent).toHaveBeenCalledWith(
+      ORG_CTX,
+      expect.objectContaining({
+        entityId: `prj-test:${CUSTOMER_LOCATION_ID}`,
+      }),
+    );
+  });
+
+  it("preserves actionable provider diagnostics in the failed event", async () => {
+    mocks.ensure.mockRejectedValue(
+      new IsometricApiError(
+        "The registry connection is not configured for this Organization. Ask an Owner or Admin to add the connection credentials.",
+        undefined,
+        undefined,
+        "not_configured",
+      ),
+    );
+
+    await expect(
+      syncApplicationStorageLocation(APPLICATION_ID),
+    ).resolves.toMatchObject({ success: false });
+
+    expect(mocks.appendEvent).toHaveBeenCalledWith(
+      ORG_CTX,
+      expect.objectContaining({
+        entityId: `prj-test:${CUSTOMER_LOCATION_ID}`,
+        status: "failed",
+        errorMessage: expect.stringMatching(/Owner or Admin/),
+      }),
+    );
   });
 
   it("shows a failed check when its site event is newer than the registration", async () => {
@@ -209,5 +244,16 @@ describe("application Storage Location actions", () => {
         lastError: "Registry unavailable",
       },
     });
+  });
+
+  it("loads only the current project-and-location event history", async () => {
+    await loadApplicationStorageLocationSync(APPLICATION_ID);
+
+    expect(mocks.listEvents).toHaveBeenCalledWith(
+      ORG_CTX,
+      expect.objectContaining({
+        entityId: `prj-test:${CUSTOMER_LOCATION_ID}`,
+      }),
+    );
   });
 });

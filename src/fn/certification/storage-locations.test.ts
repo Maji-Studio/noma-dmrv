@@ -245,6 +245,18 @@ describe("ensureStorageLocation", () => {
     expect(result.source).toBe("journal");
   });
 
+  it("revalidates customer-location identity and facts under both locks before POSTing", async () => {
+    mocks.getInput
+      .mockResolvedValueOnce(input())
+      .mockResolvedValueOnce(input({ name: "South Field" }));
+
+    await expect(ensure()).rejects.toThrow(/application site changed/);
+
+    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.persistRegistration).not.toHaveBeenCalled();
+  });
+
   it("serializes concurrent first syncs so only one caller can POST", async () => {
     const lockTails = new Map<string, Promise<void>>();
     mocks.withLock.mockImplementation(
@@ -313,6 +325,44 @@ describe("ensureStorageLocation", () => {
     expect(mocks.persistRegistration).not.toHaveBeenCalled();
   });
 
+  it("preserves a confirmed POST identity and marks provider-normalized facts as drift", async () => {
+    mocks.client.post.mockImplementation(
+      async (_path: string, body: { supplier_reference_id: string }) => ({
+        ...remote(body.supplier_reference_id),
+        latitude: -3.2,
+      }),
+    );
+
+    const result = await ensure();
+
+    expect(result).toMatchObject({
+      externalStorageLocationId: "slc-test",
+      source: "create",
+      drifted: true,
+    });
+    expect(mocks.persistRegistration).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({ externalStorageLocationId: "slc-test" }),
+    );
+    expect(mocks.setDrift).toHaveBeenCalledWith(
+      orgCtx,
+      "registration-1",
+      expect.objectContaining({
+        status: "drifted",
+        details: expect.objectContaining({
+          remoteDriftReason: expect.stringMatching(/conflicts/),
+        }),
+      }),
+    );
+    expect(mocks.appendEvent).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        entityId: expect.stringMatching(/^nm-slc-/),
+        responsePayload: expect.objectContaining({ id: "slc-test" }),
+      }),
+    );
+  });
+
   it("reuses an existing identity and journals local coordinate drift", async () => {
     mocks.getRegistration.mockResolvedValue(registration());
     const result = await ensure();
@@ -325,6 +375,43 @@ describe("ensureStorageLocation", () => {
     );
     expect(mocks.appendEvent).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ source: "journal", drifted: true });
+  });
+
+  it("marks matching local and remote facts in sync", async () => {
+    const {
+      buildCreateStorageLocationRequest,
+      buildStorageLocationReference,
+    } = await import("@/lib/isometric/storage-locations");
+    const { payloadHash } = await import("@/lib/isometric/utils/payload-hash");
+    const supplierReference = buildStorageLocationReference({
+      customerLocationId: CUSTOMER_LOCATION_ID,
+      externalProjectId: "prj-test",
+    });
+    const submittedPayload = buildCreateStorageLocationRequest({
+      externalProjectId: "prj-test",
+      name: "North Field",
+      latitude: -3.25,
+      longitude: 37.42,
+      supplierReferenceId: supplierReference,
+    });
+    mocks.getRegistration.mockResolvedValue(
+      registration({
+        supplierReference,
+        submittedPayload,
+        payloadHash: payloadHash(submittedPayload),
+      }),
+    );
+    mocks.client.get.mockResolvedValue(remote(supplierReference));
+
+    const result = await ensure();
+
+    expect(result).toMatchObject({ source: "journal", drifted: false });
+    expect(mocks.setDrift).toHaveBeenCalledWith(
+      orgCtx,
+      "registration-1",
+      { status: "in_sync" },
+    );
+    expect(mocks.appendEvent).not.toHaveBeenCalled();
   });
 
   it("reuses an existing identity when mutable site facts become incomplete", async () => {

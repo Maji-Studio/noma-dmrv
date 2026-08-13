@@ -59,6 +59,22 @@ export interface EnsureStorageLocationResult {
   drifted: boolean;
 }
 
+/** Event identity follows the same project-scoped grain as the registry row. */
+export function storageLocationEventEntityId(
+  input: Pick<
+    StorageLocationRegistryInput,
+    "customerLocationId" | "externalProjectId" | "facilityId"
+  >,
+): string {
+  if (input.customerLocationId && input.externalProjectId) {
+    return buildStorageLocationReference({
+      customerLocationId: input.customerLocationId,
+      externalProjectId: input.externalProjectId,
+    });
+  }
+  return `unmapped:${input.facilityId}:${input.customerLocationId ?? "none"}`;
+}
+
 export async function ensureStorageLocation(
   args: EnsureStorageLocationArgs,
 ): Promise<EnsureStorageLocationResult> {
@@ -157,11 +173,23 @@ async function createStorageLocationUnderLocks(input: {
     input.args.applicationId,
   );
   if (
+    !lockedInput ||
+    lockedInput.facilityId !== input.input.facilityId ||
+    lockedInput.customerLocationId !== input.customerLocationId ||
     lockedInput?.certifierProjectId !== input.certifierProjectId ||
     lockedInput.externalProjectId !== input.externalProjectId
   ) {
     throw new SafeError(
       "The application's certifier project changed while its Storage Location was being prepared. Reload the application and try again.",
+    );
+  }
+  const lockedCurrent = tryBuildCurrentStorageLocationPayload(lockedInput);
+  if (
+    !lockedCurrent.body ||
+    payloadHash(lockedCurrent.body) !== input.currentPayloadHash
+  ) {
+    throw new SafeError(
+      "The application site changed while its Storage Location was being prepared. Reload the application and try again.",
     );
   }
 
@@ -186,10 +214,11 @@ async function createStorageLocationUnderLocks(input: {
     input.args.orgCtx.organizationId,
   );
   let registration: CertifierStorageLocation | null = null;
+  let createdRemoteDriftReason: string | null = null;
   const createResult = await performRegistryCreate({
     orgCtx: input.args.orgCtx,
     entityType: STORAGE_LOCATION_ENTITY_TYPE,
-    entityId: input.customerLocationId,
+    entityId: input.supplierReference,
     operation: STORAGE_LOCATION_CREATE_OPERATION,
     requestPayload: input.body,
     supplierRefId: input.supplierReference,
@@ -200,7 +229,13 @@ async function createStorageLocationUnderLocks(input: {
         input.externalProjectId,
         input.body,
       );
-      assertMatchingRemoteStorageLocation(remote, input.body);
+      // A successful POST has already minted the remote identity. Preserve its
+      // ID even if the provider normalized echoed facts, then surface the
+      // discrepancy through the durable drift workflow instead of orphaning it.
+      createdRemoteDriftReason = storageLocationMismatchMessage(
+        remote,
+        input.body,
+      );
       return remote.id;
     },
     reconcile: async () => {
@@ -246,16 +281,45 @@ async function createStorageLocationUnderLocks(input: {
     log: input.args.log,
   });
 
-  if (!registration) {
+  // The callback runs before performRegistryCreate resolves, but TypeScript
+  // does not model assignments performed through an awaited callback.
+  const confirmedRegistration = registration as CertifierStorageLocation | null;
+  if (!confirmedRegistration) {
     throw new Error(
       `Storage Location ${createResult.externalId} was confirmed without a local registration`,
     );
   }
+  if (createdRemoteDriftReason) {
+    await setStorageLocationDrift(input.args.orgCtx, confirmedRegistration.id, {
+      status: "drifted",
+      details: {
+        registeredPayloadHash: input.currentPayloadHash,
+        currentPayloadHash: input.currentPayloadHash,
+        registeredExternalProjectId: input.externalProjectId,
+        currentExternalProjectId: input.externalProjectId,
+        missingFacts: [],
+        remoteDriftReason: createdRemoteDriftReason,
+      },
+    });
+    await appendSyncEventBestEffort(input.args.orgCtx, {
+      provider: ISOMETRIC_PROVIDER,
+      entityType: STORAGE_LOCATION_ENTITY_TYPE,
+      entityId: input.supplierReference,
+      operation: STORAGE_LOCATION_DRIFT_OPERATION,
+      status: "succeeded",
+      requestPayload: input.body,
+      responsePayload: {
+        id: createResult.externalId,
+        remote_drift_reason: createdRemoteDriftReason,
+        action: "operator_review_required",
+      },
+    });
+  }
   return {
     externalStorageLocationId: createResult.externalId,
-    registration,
+    registration: confirmedRegistration,
     source: createResult.source,
-    drifted: false,
+    drifted: createdRemoteDriftReason !== null,
   };
 }
 
@@ -321,7 +385,7 @@ async function reuseStorageLocationRegistration(
       {
         provider: ISOMETRIC_PROVIDER,
         entityType: STORAGE_LOCATION_ENTITY_TYPE,
-        entityId: args.existing.customerLocationId,
+        entityId: args.existing.supplierReference,
         operation: STORAGE_LOCATION_DRIFT_OPERATION,
         status: "succeeded",
         requestPayload: args.body ?? {
@@ -384,14 +448,6 @@ function tryBuildCurrentStorageLocationPayload(
     if (!(error instanceof SafeError)) throw error;
     return { body: null, missingFacts: ["invalid_site_facts"] };
   }
-}
-
-function assertMatchingRemoteStorageLocation(
-  remote: IsometricStorageLocation,
-  expected: CreateStorageLocationRequest,
-): void {
-  const mismatch = storageLocationMismatchMessage(remote, expected);
-  if (mismatch) throw new SafeError(mismatch);
 }
 
 export function storageLocationMismatchMessage(

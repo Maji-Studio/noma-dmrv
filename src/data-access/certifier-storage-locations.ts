@@ -117,10 +117,11 @@ export async function getStorageLocationRegistration(
   return row ?? null;
 }
 
-export async function hasStorageLocationRegistrationForProject(
+export async function hasStorageLocationRegistrationForExternalProject(
   ctx: OrgContext,
   executor: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
-  certifierProjectId: string,
+  provider: CertifierProvider,
+  externalProjectId: string,
 ): Promise<boolean> {
   requireOrgScope(ctx);
   const rows = await executor
@@ -128,8 +129,9 @@ export async function hasStorageLocationRegistrationForProject(
     .from(certifierStorageLocations)
     .where(
       and(
-        eq(certifierStorageLocations.certifierProjectId, certifierProjectId),
         eq(certifierStorageLocations.organizationId, ctx.organizationId),
+        eq(certifierStorageLocations.provider, provider),
+        eq(certifierStorageLocations.externalProjectId, externalProjectId),
       ),
     )
     .limit(1);

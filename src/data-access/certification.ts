@@ -23,7 +23,7 @@ import { certifierProjectLockKey } from "@/lib/certification/certifier-project-l
 import { pluralize } from "@/lib/copy-utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
-import { hasStorageLocationRegistrationForProject } from "./certifier-storage-locations";
+import { hasStorageLocationRegistrationForExternalProject } from "./certifier-storage-locations";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 export type CertifierProjectRow = typeof certifierProjects.$inferSelect;
@@ -299,10 +299,15 @@ export async function upsertCertifierProject(
         }
         if (
           existing.externalProjectId !== values.externalProjectId &&
-          (await hasStorageLocationRegistrationForProject(ctx, tx, existing.id))
+          (await hasStorageLocationRegistrationForExternalProject(
+            ctx,
+            tx,
+            existing.provider,
+            existing.externalProjectId,
+          ))
         ) {
           throw new SafeError(
-            "Cannot change the certifier project: this mapping owns registered application sites. Keep the current project mapping to preserve their registry identities.",
+            "Cannot change the certifier project: this Isometric project has registered application sites. Keep the current project mapping to preserve their registry identities.",
           );
         }
       }
@@ -410,7 +415,10 @@ export async function deleteCertifierProject(
     // Lock the mapping row so a concurrent submission insert that depends on
     // this mapping cannot race the unlink check.
     const [mapping] = await tx
-      .select({ id: certifierProjects.id })
+      .select({
+        externalProjectId: certifierProjects.externalProjectId,
+        provider: certifierProjects.provider,
+      })
       .from(certifierProjects)
       .where(
         and(
@@ -433,7 +441,12 @@ export async function deleteCertifierProject(
 
     if (
       mapping &&
-      (await hasStorageLocationRegistrationForProject(ctx, tx, mapping.id))
+      (await hasStorageLocationRegistrationForExternalProject(
+        ctx,
+        tx,
+        mapping.provider,
+        mapping.externalProjectId,
+      ))
     ) {
       throw new SafeError(
         "Cannot unlink: this facility has registered application sites. Keep the project mapping to preserve their registry identities.",
