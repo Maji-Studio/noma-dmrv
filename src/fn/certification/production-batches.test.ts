@@ -114,7 +114,7 @@ function remoteBatch(
 ): IsometricProductionBatch {
   return {
     display_name: "CB-2026-001",
-    ended_at: "2026-03-28T23:59:59.999Z",
+    ended_at: "2026-03-28T00:00:00.000Z",
     facility_id: "fcl_1G8QT5ZAB1S0XSDW",
     feedstock_type_ids: ["ftt_1D7KZ1P761S0G7BN"],
     id,
@@ -182,7 +182,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect("standard_deviation" in body.mass).toBe(false);
     expect(body.feedstock_type_ids).toEqual(["ftt_1D7KZ1P761S0G7BN"]);
     expect(body.started_at).toBe("2026-03-01T00:00:00.000Z");
-    expect(body.ended_at).toBe("2026-03-28T23:59:59.999Z");
+    expect(body.ended_at).toBe("2026-03-28T00:00:00.000Z");
     expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledTimes(1);
     expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledWith(
       orgCtx,
@@ -413,7 +413,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     mocks.client.paginate.mockImplementation(async function* () {
       yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
         started_at: "2026-02-28T19:00:00-05:00",
-        ended_at: "2026-03-29T00:59:59.999+01:00",
+        ended_at: "2026-03-28T01:00:00.000+01:00",
       });
     });
 
@@ -427,7 +427,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     ["facility", { facility_id: "fcl_other" }],
     ["mass", { mass: { magnitude: 1_999, unit: "kg" } }],
     ["mass unit", { mass: { magnitude: 2_000, unit: "gram" } }],
-    ["window", { ended_at: "2026-03-29T23:59:59.999Z" }],
+    ["window", { ended_at: "2026-03-29T00:00:00.000Z" }],
   ])(
     "refuses an orphaned remote record with mismatched %s identity",
     async (_label, patch) => {

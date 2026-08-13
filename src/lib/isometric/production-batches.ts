@@ -33,9 +33,8 @@ export type CreateProductionBatchRequest =
 const CREDIT_BATCH_REF_PREFIX_LEN = 12;
 const DISPLAY_NAME_MAX_LEN = 100;
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-/** Registry-facing day bounds for a date-only window (see below). */
+/** Registry-facing timestamp for date-only credit-batch bounds (see below). */
 const DAY_START_SUFFIX = "T00:00:00.000Z";
-const DAY_END_SUFFIX = "T23:59:59.999Z";
 
 /** Unit submitted for `M_biochar (DM)` — kilograms, per the approved mapping. */
 export const PRODUCTION_BATCH_MASS_UNIT = "kg";
@@ -100,9 +99,10 @@ export interface BuildProductionBatchRequestArgs {
  * Build the `POST /production_batches` body. Pure — no I/O.
  *
  * Date-only windows are pinned to the UTC calendar (the repo-wide rule for
- * date-only columns, see `date-utils.ts`): `started_at` is the UTC start of the
- * first production day and `ended_at` the UTC end of the last, so the registry
- * window covers every instant the batch's runs can fall in.
+ * date-only columns, see `date-utils.ts`). Both bounds use the UTC start of
+ * their selected day so Isometric's local-date display preserves the calendar
+ * dates the operator entered instead of shifting an end-of-day instant into
+ * the following day in positive UTC offsets.
  *
  * `mass.standard_deviation` is OMITTED, never zeroed: the batch total is a
  * calibrated-scale sum, not a sampled estimate, and inventing a spread would
@@ -148,7 +148,7 @@ export function buildCreateProductionBatchRequest(
 
   return {
     ...(displayName ? { display_name: displayName } : {}),
-    ended_at: `${args.endDate}${DAY_END_SUFFIX}`,
+    ended_at: `${args.endDate}${DAY_START_SUFFIX}`,
     facility_id: args.externalFacilityId,
     feedstock_type_ids: feedstockTypeIds,
     kind: PRODUCTION_BATCH_KIND,
