@@ -209,6 +209,9 @@ export const deleteApplicationSchema = z.object({
 // ============================================
 
 export type ApplicationFormData = z.infer<typeof applicationFormSchema>;
+export type ApplicationEvidenceState = z.infer<
+  typeof applicationEvidenceStateSchema
+>;
 export type CreateApplicationData = z.infer<typeof createApplicationSchema>;
 export type UpdateApplicationData = z.infer<typeof updateApplicationSchema>;
 export type DeleteApplicationData = z.infer<typeof deleteApplicationSchema>;
