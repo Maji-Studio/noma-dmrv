@@ -216,6 +216,8 @@ async function createLineageFixture(
         applicationDate: new Date("2026-06-16T00:00:00Z"),
         biocharAppliedTons: 0.3,
         biocharAppliedDryTons: 0.285,
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
       })
       .returning({ id: applications.id });
 
