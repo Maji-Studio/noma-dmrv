@@ -78,6 +78,18 @@ interface SourceBindingRule {
   additionalIntendedTargets?: RemovalSourceIntendedTarget[];
 }
 
+export interface RemovalEvidenceTargetLookup {
+  groupKey: string;
+  componentBlueprintKey: string;
+  componentDisplayName?: string;
+  inputKey: string;
+}
+
+export interface OptionalRemovalEvidenceTarget
+  extends RemovalEvidenceTargetLookup {
+  nomaRoleLabel: string;
+}
+
 const SOURCE_BINDING_RULES = {
   inventory: {
     nomaRole: "inventory",
@@ -335,6 +347,99 @@ function matchesIntendedComponent(
         (target.componentDisplayName === undefined ||
           normalizeComponentDisplayName(componentDisplayName) ===
             normalizeComponentDisplayName(target.componentDisplayName));
+}
+
+/**
+ * Read-only description of the evidence roles that can land on one template
+ * input. The submission planner and the template diagnostic both walk the
+ * same SOURCE_BINDING_RULES table through this function, so adding a new
+ * evidence binding cannot leave the diagnostic with a second shadow map.
+ */
+export function removalEvidenceRoleLabelsForTarget(
+  target: RemovalEvidenceTargetLookup,
+): string[] {
+  const labels = new Set<string>();
+  const rules: readonly SourceBindingRule[] = Object.values(
+    SOURCE_BINDING_RULES,
+  );
+  for (const rule of rules) {
+    const intendedTargets = [
+      rule.intendedTarget,
+      ...(rule.additionalIntendedTargets ?? []),
+    ];
+    if (
+      intendedTargets.some(
+        (intendedTarget) =>
+          intendedTarget.groupKey === target.groupKey &&
+          intendedTarget.inputKey === target.inputKey &&
+          matchesIntendedComponent(
+            target.componentBlueprintKey,
+            target.componentDisplayName,
+            intendedTarget,
+          ),
+      )
+    ) {
+      labels.add(rule.nomaRoleLabel);
+    }
+  }
+
+  if (
+    target.groupKey === "co2-stored" &&
+    isSequestrationBlueprintFamily(target.componentBlueprintKey) &&
+    Object.values(DURABILITY_LEDGER_TARGETS).some((inputKeys) =>
+      (inputKeys as readonly string[]).includes(target.inputKey),
+    )
+  ) {
+    labels.add("Durability evidence ledger");
+  }
+
+  return [...labels].sort();
+}
+
+/** Optional evidence targets declared by the production binding plan. */
+export function listOptionalRemovalEvidenceTargets(): OptionalRemovalEvidenceTarget[] {
+  const targets = new Map<
+    string,
+    OptionalRemovalEvidenceTarget & { requiredElsewhere: boolean }
+  >();
+  const rules: readonly SourceBindingRule[] = Object.values(
+    SOURCE_BINDING_RULES,
+  );
+  for (const rule of rules) {
+    for (const target of [
+      rule.intendedTarget,
+      ...(rule.additionalIntendedTargets ?? []),
+    ]) {
+      if (target.kind !== "ordinary") continue;
+      const key = [
+        target.groupKey,
+        target.componentBlueprintKey,
+        normalizeComponentDisplayName(target.componentDisplayName),
+        target.inputKey,
+      ].join("::");
+      const existing = targets.get(key);
+      targets.set(key, {
+        groupKey: target.groupKey,
+        componentBlueprintKey: target.componentBlueprintKey,
+        componentDisplayName: target.componentDisplayName,
+        inputKey: target.inputKey,
+        nomaRoleLabel: existing
+          ? `${existing.nomaRoleLabel}, ${rule.nomaRoleLabel}`
+          : rule.nomaRoleLabel,
+        requiredElsewhere:
+          existing?.requiredElsewhere === true || !target.optionalInTemplate,
+      });
+    }
+  }
+  return [...targets.values()]
+    .filter((target) => !target.requiredElsewhere)
+    .map((target) => ({
+      groupKey: target.groupKey,
+      componentBlueprintKey: target.componentBlueprintKey,
+      componentDisplayName: target.componentDisplayName,
+      inputKey: target.inputKey,
+      nomaRoleLabel: target.nomaRoleLabel,
+    }));
 }
 
 /**

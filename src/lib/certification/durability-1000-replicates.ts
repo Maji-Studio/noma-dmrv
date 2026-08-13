@@ -1,6 +1,8 @@
 import { pluralize } from "@/lib/copy-utils";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { transformSequestrationSourceValue } from "@/lib/isometric/transformers/sequestration-binding";
 
 export interface Sampled1000YearMeasurement {
   id: string;
@@ -130,9 +132,21 @@ export function evaluateSampled1000YearReplicates(args: {
       {
         sampleId: sample.id,
         sampleCode: sample.sampleCode,
-        totalCarbonContentFraction: sample.totalCarbonPercent / 100,
-        inorganicCarbonContentFraction: sample.inorganicCarbonPercent / 100,
-        sFraction: sample.sReflectanceFraction,
+        totalCarbonContentFraction: transformSequestrationSourceValue(
+          CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+          "total_carbon_contents",
+          sample.totalCarbonPercent,
+        ),
+        inorganicCarbonContentFraction: transformSequestrationSourceValue(
+          CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+          "inorganic_carbon_contents",
+          sample.inorganicCarbonPercent,
+        ),
+        sFraction: transformSequestrationSourceValue(
+          CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+          "s_fraction",
+          sample.sReflectanceFraction,
+        ),
       },
     ];
   });

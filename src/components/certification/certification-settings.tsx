@@ -16,7 +16,7 @@
  *
  *   ORGANIZATION   Certifier · Sources
  *   FACILITY       Emissions
- *   PLATFORM       Diagnostics          (platform admin only)
+ *   PLATFORM       Diagnostics · Template mapping  (platform admin only)
  *
  * Three consequences of that shape worth knowing before editing:
  *
@@ -50,6 +50,7 @@ import {
   GlobeIcon,
   PlugsIcon,
   PulseIcon,
+  TreeStructureIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { EmissionEstimatesForm } from "@/components/admin/emission-estimates-form";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -67,17 +68,21 @@ import {
   CERTIFICATION_SETTINGS_LEGACY_CONNECTION_SECTION,
   CERTIFICATION_SETTINGS_SECTION_PARAM,
   CERTIFICATION_SETTINGS_SOURCES_SECTION,
+  CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION,
 } from "@/lib/certification/links";
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { CertifierSettingsPanel } from "./certifier-settings-panel";
 import { EnvBanner } from "./env-banner";
 import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-settings";
 import { SettingsRail, type SettingsSectionMeta } from "@/components/ui";
+import { RemovalTemplateDiagnosticPanel } from "./removal-template-diagnostic-panel";
 
 const SECTION_CERTIFIER = CERTIFICATION_SETTINGS_CERTIFIER_SECTION;
 const SECTION_SOURCES = CERTIFICATION_SETTINGS_SOURCES_SECTION;
 const SECTION_EMISSIONS = CERTIFICATION_SETTINGS_EMISSIONS_SECTION;
 const SECTION_DIAGNOSTICS = CERTIFICATION_SETTINGS_DIAGNOSTICS_SECTION;
+const SECTION_TEMPLATE_MAPPING =
+  CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION;
 
 /** Section keys that were retired, mapped to the pane that absorbed them. */
 const LEGACY_SECTION_KEYS: Record<string, string> = {
@@ -93,6 +98,7 @@ interface ConsoleSection extends SettingsSectionMeta {
   caption: string;
   /** Who may change what is in this pane, for the pane footnote. */
   access: string;
+  readOnly?: boolean;
   content: ReactNode;
 }
 
@@ -256,6 +262,19 @@ export function CertificationSettings() {
       access: "Platform Admins",
       content: <CertificationHealthPanel />,
     });
+    sections.push({
+      key: SECTION_TEMPLATE_MAPPING,
+      tier: "platform",
+      label: "Template mapping",
+      icon: TreeStructureIcon,
+      caption:
+        "Read-only mapping, lineage, and Removal compilation traces for this facility's active Isometric Removal template.",
+      access: "Platform Admins",
+      readOnly: true,
+      content: facilityId ? (
+        <RemovalTemplateDiagnosticPanel facilityId={facilityId} />
+      ) : null,
+    });
   }
 
   // Resolve the selection against what this viewer can actually see: a deep
@@ -324,7 +343,9 @@ export function CertificationSettings() {
 
             <div className="border-t-[1px] border-[var(--clr-dark-purple-10)] px-24 py-16">
               <span className="body-caption text-[var(--color-text-tertiary)]">
-                {selected.access} can change these.
+                {selected.readOnly
+                  ? `Read-only for ${selected.access}.`
+                  : `${selected.access} can change these.`}
               </span>
             </div>
           </section>
