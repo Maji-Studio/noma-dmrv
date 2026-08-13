@@ -69,6 +69,9 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "./shared";
 
+const LEGACY_DAY_START_SUFFIX = "T00:00:00.000Z";
+const LEGACY_DAY_END_SUFFIX = "T23:59:59.999Z";
+
 /** One credit batch's production-batch POST: its supplier ref + request body. */
 export interface ProductionBatchSubmission {
   creditBatchId: string;
@@ -111,6 +114,11 @@ export function buildProductionBatchSubmission(
       `Credit batch ${input.creditBatchCode} has production runs with no dry biochar mass recorded. Record the produced mass on every run in the batch before submitting.`,
     );
   }
+  if (input.runsMissingEndTime > 0) {
+    throw new SafeError(
+      `Credit batch ${input.creditBatchCode} has production runs that are still open. Close every run in the batch before submitting.`,
+    );
+  }
   const supplierRefId = buildProductionBatchReference({
     creditBatchId: input.creditBatchId,
   });
@@ -120,8 +128,8 @@ export function buildProductionBatchSubmission(
     feedstockTypeIds: input.isometricFeedstockTypeId
       ? [input.isometricFeedstockTypeId]
       : [],
-    startDate: input.startDate,
-    endDate: input.endDate,
+    startedAt: input.startedAt ?? "",
+    endedAt: input.endedAt ?? "",
     totalDryMassKg: input.totalDryMassKg,
     supplierReferenceId: supplierRefId,
   });
@@ -199,7 +207,15 @@ export async function ensureProductionBatchesForCreditBatches(
     const existing = existingByCreditBatchId.get(input.creditBatchId);
     if (existing) {
       const current = tryBuildProductionBatchSubmission(input, args.log);
-      if (current && current.payloadHash !== existing.payloadHash) {
+      if (
+        current &&
+        current.payloadHash !== existing.payloadHash &&
+        !matchesLegacyDateBoundPayloadHash(
+          input,
+          current,
+          existing.payloadHash,
+        )
+      ) {
         await recordProductionBatchDrift({
           orgCtx: args.orgCtx,
           removalId: args.removalId,
@@ -249,6 +265,7 @@ export async function ensureProductionBatchesForCreditBatches(
           const mismatch = productionBatchMismatchMessage(
             batch,
             submission.body,
+            input,
           );
           if (mismatch) return { found: "refused", message: mismatch };
         }
@@ -337,16 +354,57 @@ function tryBuildProductionBatchSubmission(
   }
 }
 
+/**
+ * Before physical member-run instants were submitted, noma encoded the same
+ * date-only credit-batch window as UTC day-start/day-end timestamps. Treat a
+ * stored hash of that exact legacy body as a representation migration rather
+ * than permanent business-data drift. Any mass, facility, feedstock, kind or
+ * supplier-reference change still produces a different hash and is reported.
+ */
+function matchesLegacyDateBoundPayloadHash(
+  input: ProductionBatchRegistryInput,
+  current: ProductionBatchSubmission,
+  storedHash: string,
+): boolean {
+  const legacyBody: CreateProductionBatchRequest = {
+    ...current.body,
+    started_at: `${input.startDate}${LEGACY_DAY_START_SUFFIX}`,
+    ended_at: `${input.endDate}${LEGACY_DAY_END_SUFFIX}`,
+  };
+  return payloadHash(legacyBody) === storedHash;
+}
+
+type LegacyProductionBatchWindow = Pick<
+  ProductionBatchRegistryInput,
+  "startDate" | "endDate"
+>;
+
+function timestampMatches(actual: string, expected: string): boolean {
+  const actualMs = Date.parse(actual);
+  return (
+    Number.isFinite(actualMs) && actualMs === Date.parse(expected)
+  );
+}
+
 function productionBatchMismatchMessage(
   batch: IsometricProductionBatch,
   expected: CreateProductionBatchRequest,
+  legacyWindow?: LegacyProductionBatchWindow,
 ): string | null {
   const startedAtMatches =
-    Number.isFinite(Date.parse(batch.started_at)) &&
-    Date.parse(batch.started_at) === Date.parse(expected.started_at);
+    timestampMatches(batch.started_at, expected.started_at) ||
+    (legacyWindow !== undefined &&
+      timestampMatches(
+        batch.started_at,
+        `${legacyWindow.startDate}${LEGACY_DAY_START_SUFFIX}`,
+      ));
   const endedAtMatches =
-    Number.isFinite(Date.parse(batch.ended_at)) &&
-    Date.parse(batch.ended_at) === Date.parse(expected.ended_at);
+    timestampMatches(batch.ended_at, expected.ended_at) ||
+    (legacyWindow !== undefined &&
+      timestampMatches(
+        batch.ended_at,
+        `${legacyWindow.endDate}${LEGACY_DAY_END_SUFFIX}`,
+      ));
   const sameFeedstocks =
     [...batch.feedstock_type_ids].sort().join("\u0000") ===
     [...expected.feedstock_type_ids].sort().join("\u0000");

@@ -4,11 +4,13 @@
  * ActionResult — mirroring `sensors.ts`. `fn/certification/production-batches.ts`
  * composes these with the ledger/journal writes.
  *
- * ─── VERIFIED AGAINST THE REGISTRY (Certify OpenAPI, 2026-08-05) ─────────────
+ * ─── VERIFIED AGAINST THE REGISTRY (Certify OpenAPI, 2026-08-13) ─────────────
  *   `POST /production_batches` → `CreateProductionBatchRequest`
  *   required: facility_id, feedstock_type_ids, supplier_reference_id, kind,
  *             started_at, ended_at, mass
  *   optional: display_name (1..100 chars; auto-generated when omitted)
+ *   `started_at` / `ended_at` are the physical instants at which production
+ *   started and completed, respectively.
  *   `mass` is a `ScalarQuantity` — required `magnitude` + `unit`, OPTIONAL
  *   `standard_deviation`. `GET /production_batches` exposes NO supplier-reference
  *   filter (unlike `/sensors?reference=`), so the reconcile lookup below
@@ -32,9 +34,6 @@ export type CreateProductionBatchRequest =
 
 const CREDIT_BATCH_REF_PREFIX_LEN = 12;
 const DISPLAY_NAME_MAX_LEN = 100;
-const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-/** Registry-facing timestamp for date-only credit-batch bounds (see below). */
-const DAY_START_SUFFIX = "T00:00:00.000Z";
 
 /** Unit submitted for `M_biochar (DM)` — kilograms, per the approved mapping. */
 export const PRODUCTION_BATCH_MASS_UNIT = "kg";
@@ -87,9 +86,9 @@ export interface BuildProductionBatchRequestArgs {
   externalFacilityId: string;
   /** Isometric feedstock-type ids (`ftt_…`) used by this batch. */
   feedstockTypeIds: string[];
-  /** Credit-batch window, date-only (`YYYY-MM-DD`). */
-  startDate: string;
-  endDate: string;
+  /** Earliest member-run start instant and latest completed-run end instant. */
+  startedAt: string;
+  endedAt: string;
   /** Total dry biochar mass produced in the batch (kg) — `M_biochar (DM)`. */
   totalDryMassKg: number;
   supplierReferenceId: string;
@@ -98,11 +97,10 @@ export interface BuildProductionBatchRequestArgs {
 /**
  * Build the `POST /production_batches` body. Pure — no I/O.
  *
- * Date-only windows are pinned to the UTC calendar (the repo-wide rule for
- * date-only columns, see `date-utils.ts`). Both bounds use the UTC start of
- * their selected day so Isometric's local-date display preserves the calendar
- * dates the operator entered instead of shifting an end-of-day instant into
- * the following day in positive UTC offsets.
+ * Registry bounds are physical instants, not date-only display carriers. They
+ * come from the earliest start and latest end of the credit batch's member
+ * production runs, matching Certify's `started_at` / `ended_at` field contract
+ * and keeping every member run inside the immutable remote window.
  *
  * `mass.standard_deviation` is OMITTED, never zeroed: the batch total is a
  * calibrated-scale sum, not a sampled estimate, and inventing a spread would
@@ -122,15 +120,14 @@ export function buildCreateProductionBatchRequest(
       `Credit batch ${args.creditBatchCode} uses a feedstock type that is not linked to an Isometric feedstock type. Link it under Feedstock types before submitting.`,
     );
   }
-  if (
-    !DATE_ONLY_PATTERN.test(args.startDate) ||
-    !DATE_ONLY_PATTERN.test(args.endDate)
-  ) {
+  const startedAtMs = Date.parse(args.startedAt);
+  const endedAtMs = Date.parse(args.endedAt);
+  if (!Number.isFinite(startedAtMs) || !Number.isFinite(endedAtMs)) {
     throw new SafeError(
-      `Credit batch ${args.creditBatchCode} has no production start and end date. Set both dates before submitting.`,
+      `Credit batch ${args.creditBatchCode} has no complete production-run window. Close every production run before submitting.`,
     );
   }
-  if (args.endDate < args.startDate) {
+  if (endedAtMs <= startedAtMs) {
     throw new SafeError(
       `Credit batch ${args.creditBatchCode} ends before it starts. Correct the production dates before submitting.`,
     );
@@ -148,7 +145,7 @@ export function buildCreateProductionBatchRequest(
 
   return {
     ...(displayName ? { display_name: displayName } : {}),
-    ended_at: `${args.endDate}${DAY_START_SUFFIX}`,
+    ended_at: new Date(endedAtMs).toISOString(),
     facility_id: args.externalFacilityId,
     feedstock_type_ids: feedstockTypeIds,
     kind: PRODUCTION_BATCH_KIND,
@@ -156,7 +153,7 @@ export function buildCreateProductionBatchRequest(
       magnitude: args.totalDryMassKg,
       unit: PRODUCTION_BATCH_MASS_UNIT,
     },
-    started_at: `${args.startDate}${DAY_START_SUFFIX}`,
+    started_at: new Date(startedAtMs).toISOString(),
     supplier_reference_id: args.supplierReferenceId,
   };
 }

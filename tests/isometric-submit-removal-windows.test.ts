@@ -327,7 +327,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
       feedstock_type_ids: [EXTERNAL_FEEDSTOCK_TYPE_ID],
       mass: { magnitude: ORIGINAL_BIOCHAR_MASS_KG, unit: "kg" },
       started_at: "2026-01-01T00:00:00.000Z",
-      ended_at: "2026-01-31T00:00:00.000Z",
+      ended_at: "2026-01-31T23:59:59.000Z",
     });
     expect("standard_deviation" in productionBatchPost[1].mass).toBe(false);
     // Index the ordering off the matched call, not the first POST on the shared

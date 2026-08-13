@@ -35,6 +35,10 @@ export interface ProductionBatchRegistryInput {
   creditBatchCode: string;
   startDate: string;
   endDate: string;
+  /** Earliest physical start instant across the batch's member runs. */
+  startedAt: string | null;
+  /** Latest physical completion instant across the batch's member runs. */
+  endedAt: string | null;
   /** Isometric project id (`prj_…`) for the batch's facility. */
   externalProjectId: string | null;
   /** Operator-pasted Isometric facility id (`fcl_…`) for the batch's facility. */
@@ -54,6 +58,8 @@ export interface ProductionBatchRegistryInput {
    * would be permanent. The caller refuses to register such a batch.
    */
   runsMissingDryMass: number;
+  /** Member runs that are still open and therefore have no completion instant. */
+  runsMissingEndTime: number;
 }
 
 /**
@@ -107,6 +113,8 @@ export async function getProductionBatchRegistryInputs(
     .select({
       creditBatchId: creditBatchProductionRuns.creditBatchId,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
+      startTime: productionRuns.startTime,
+      endTime: productionRuns.endTime,
     })
     .from(creditBatchProductionRuns)
     .innerJoin(
@@ -125,7 +133,25 @@ export async function getProductionBatchRegistryInputs(
 
   const massByBatch = new Map<string, number>();
   const unweighedRunsByBatch = new Map<string, number>();
+  const earliestStartByBatch = new Map<string, Date>();
+  const latestEndByBatch = new Map<string, Date>();
+  const openRunsByBatch = new Map<string, number>();
   for (const row of runRows) {
+    const earliestStart = earliestStartByBatch.get(row.creditBatchId);
+    if (!earliestStart || row.startTime < earliestStart) {
+      earliestStartByBatch.set(row.creditBatchId, row.startTime);
+    }
+    if (row.endTime === null) {
+      openRunsByBatch.set(
+        row.creditBatchId,
+        (openRunsByBatch.get(row.creditBatchId) ?? 0) + 1,
+      );
+    } else {
+      const latestEnd = latestEndByBatch.get(row.creditBatchId);
+      if (!latestEnd || row.endTime > latestEnd) {
+        latestEndByBatch.set(row.creditBatchId, row.endTime);
+      }
+    }
     if (row.biocharDryMassKg === null) {
       unweighedRunsByBatch.set(
         row.creditBatchId,
@@ -144,11 +170,15 @@ export async function getProductionBatchRegistryInputs(
     creditBatchCode: batch.code,
     startDate: batch.startDate,
     endDate: batch.endDate,
+    startedAt:
+      earliestStartByBatch.get(batch.id)?.toISOString() ?? null,
+    endedAt: latestEndByBatch.get(batch.id)?.toISOString() ?? null,
     externalProjectId: batch.externalProjectId,
     externalFacilityId: batch.externalFacilityId,
     isometricFeedstockTypeId: batch.isometricFeedstockTypeId,
     totalDryMassKg: massByBatch.get(batch.id) ?? 0,
     runsMissingDryMass: unweighedRunsByBatch.get(batch.id) ?? 0,
+    runsMissingEndTime: openRunsByBatch.get(batch.id) ?? 0,
   }));
 }
 
