@@ -44,7 +44,9 @@ export function captureMeasurementSampleDatapointIds(
 ): MeasurementSampleDatapointCapture {
   const datapointIdsByMeasurementProperty = new Map<string, string[]>();
   const expectedCountByMeasurementProperty = new Map<string, number>();
+  const expectedValuesByMeasurementProperty = new Map<string, unknown[]>();
   const returnedCountByMeasurementProperty = new Map<string, number>();
+  const returnedValuesByMeasurementProperty = new Map<string, unknown[]>();
   const returnedDatapointIds = new Set<string>();
 
   for (const value of request.values) {
@@ -53,6 +55,10 @@ export function captureMeasurementSampleDatapointIds(
       propertyKey,
       (expectedCountByMeasurementProperty.get(propertyKey) ?? 0) + 1,
     );
+    expectedValuesByMeasurementProperty.set(propertyKey, [
+      ...(expectedValuesByMeasurementProperty.get(propertyKey) ?? []),
+      value.value,
+    ]);
   }
 
   for (const value of sample.values) {
@@ -81,6 +87,10 @@ export function captureMeasurementSampleDatapointIds(
       propertyKey,
       (returnedCountByMeasurementProperty.get(propertyKey) ?? 0) + 1,
     );
+    returnedValuesByMeasurementProperty.set(propertyKey, [
+      ...(returnedValuesByMeasurementProperty.get(propertyKey) ?? []),
+      value.value,
+    ]);
     const existing = datapointIdsByMeasurementProperty.get(propertyKey) ?? [];
     existing.push(value.datapoint_id);
     datapointIdsByMeasurementProperty.set(propertyKey, existing);
@@ -92,6 +102,14 @@ export function captureMeasurementSampleDatapointIds(
     if (returnedCount !== expectedCount) {
       throw new SafeError(
         `Registry measurement ${sample.id} returned ${returnedCount} ${pluralize(returnedCount, "value")} for one durability field, but ${expectedCount} ${expectedCount === 1 ? "is" : "are"} required. Refresh the registry data and try again.`,
+      );
+    }
+    if (
+      JSON.stringify(returnedValuesByMeasurementProperty.get(propertyKey)) !==
+      JSON.stringify(expectedValuesByMeasurementProperty.get(propertyKey))
+    ) {
+      throw new SafeError(
+        `Registry measurement ${sample.id} returned durability values in a different order. Ask support to check the registry response before submitting.`,
       );
     }
   }

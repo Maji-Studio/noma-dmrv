@@ -158,6 +158,32 @@ describe("captureMeasurementSampleDatapointIds", () => {
     ).toThrow(/returned 1 value.*2 are required/);
   });
 
+  it("fails closed when the registry reorders replicate values", () => {
+    const response = measurementSample("mts_reordered", [
+      {
+        datapoint_id: "dtp_c2",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: { magnitude: 0.82, standard_deviation: null, unit: "dimensionless" },
+      },
+      {
+        datapoint_id: "dtp_c1",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: { magnitude: 0.8, standard_deviation: null, unit: "dimensionless" },
+      },
+    ]);
+    const request = requestForSample(response, [...response.values].reverse());
+
+    expect(() => captureMeasurementSampleDatapointIds(response, request)).toThrow(
+      /values in a different order/,
+    );
+  });
+
   it("fails closed on an unexpected response property", () => {
     const response = measurementSample("mts_extra", [
       {
