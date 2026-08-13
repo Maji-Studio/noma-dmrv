@@ -247,11 +247,11 @@ function GisReferenceField({
   }
 
   return (
-    <button
-      type="button"
+    <Button
+      width="full"
       disabled={disabled}
       onClick={onEdit}
-      className="flex w-full items-center gap-12 border border-[var(--color-border-primary)] bg-[var(--paper)] px-16 py-16 text-left transition-colors duration-300 hover:bg-[var(--color-surface-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] disabled:opacity-40"
+      className="h-auto justify-start gap-12 whitespace-normal bg-[var(--paper)] px-16 py-16 text-left"
     >
       <span className="flex size-40 shrink-0 items-center justify-center border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]">
         <MapTrifoldIcon size={20} weight="bold" />
@@ -271,7 +271,7 @@ function GisReferenceField({
         aria-hidden
         className="shrink-0 text-[var(--color-text-tertiary)]"
       />
-    </button>
+    </Button>
   );
 }
 
