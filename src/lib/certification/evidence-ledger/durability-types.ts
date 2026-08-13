@@ -156,6 +156,11 @@ export interface ThousandYearLedgerBatch {
   formulaLabel: string;
   /** Visible carbon-basis/cap semantics, especially for deprecated evidence. */
   semanticsLabel: string;
+  /** Mean raw Total minus Inorganic before the local zero floor. */
+  rawMeanOrganicCarbonFraction: number | null;
+  /** Mean organic-carbon fraction used by the local preview after the floor. */
+  creditedMeanOrganicCarbonFraction: number | null;
+  organicCarbonFloorApplied: boolean;
   /** Binomial lower estimate before any component cap. */
   rawDurability: number;
   /** Durability used locally after bounding the raw estimate to 0 through 0.95. */

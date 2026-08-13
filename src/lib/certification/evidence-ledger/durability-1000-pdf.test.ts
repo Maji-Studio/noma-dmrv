@@ -25,6 +25,9 @@ describe("renderThousandYearDurabilityLedgerPdf", () => {
             "Organic-carbon binomial lower estimate bounded from 0 to 0.95",
           semanticsLabel:
             "Current organic-carbon basis with durability bounded from 0 to 0.95",
+          rawMeanOrganicCarbonFraction: 0.7817,
+          creditedMeanOrganicCarbonFraction: 0.7817,
+          organicCarbonFloorApplied: false,
           rawDurability: 1,
           cappedDurability: 0.95,
           capApplied: true,
@@ -92,7 +95,12 @@ describe("renderThousandYearDurabilityLedgerPdf", () => {
         "organic-carbon basis with durability bounded from 0 to 0.95",
       );
       expect(text).toContain("Submitted directly measured dry-basis fraction");
-      expect(text).toContain("Calculated row by row as Total C minus Inorganic C");
+      expect(text).toContain(
+        "Raw row value is Total C minus Inorganic C; the credited aggregate mean is floored at zero",
+      );
+      expect(text).toContain("Raw mean organic carbon 0.7817");
+      expect(text).toContain("Credited mean organic carbon 0.7817");
+      expect(text).toContain("zero floor applied no");
       expect(text).toContain("Raw durability 1.000");
       expect(text).toContain("Capped durability 0.950");
       expect(text).toContain("0.010");

@@ -165,6 +165,13 @@ export function buildThousandYearDurabilityLedgerModel(
       const rawDurability = isLegacy
         ? legacyDurability(replicates)
         : currentDurability!.rawDurability;
+      const rawMeanOrganicCarbonFraction = isLegacy
+        ? null
+        : replicates.reduce(
+            (sum, replicate) =>
+              sum + (replicate.calculatedOrganicCarbonFraction ?? 0),
+            0,
+          ) / replicates.length;
       return {
         creditBatchId: batch.creditBatchId,
         creditBatchCode: batch.creditBatchCode,
@@ -184,6 +191,13 @@ export function buildThousandYearDurabilityLedgerModel(
         semanticsLabel: isLegacy
           ? LEGACY_1000_YEAR_SEMANTICS_LABEL
           : CURRENT_1000_YEAR_SEMANTICS_LABEL,
+        rawMeanOrganicCarbonFraction,
+        creditedMeanOrganicCarbonFraction: isLegacy
+          ? null
+          : currentDurability!.meanOrganicCarbonFraction,
+        organicCarbonFloorApplied:
+          rawMeanOrganicCarbonFraction != null &&
+          rawMeanOrganicCarbonFraction < 0,
         rawDurability,
         cappedDurability: isLegacy
           ? rawDurability
