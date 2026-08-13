@@ -29,6 +29,7 @@ import {
   type ThousandYearDurabilityLedgerModel,
 } from "@/lib/certification/evidence-ledger/durability-types";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
 import { logger } from "@/lib/log";
 import {
   loadRemovalSubmissionContext,
@@ -158,6 +159,12 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
     kind: DURABILITY_EVIDENCE_LEDGER_KIND,
     removalId,
     durabilityOption,
+    ...(durabilityOption === "1000_year"
+      ? {
+          componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+          formulaVersion: CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION,
+        }
+      : {}),
     contentHash,
   };
 

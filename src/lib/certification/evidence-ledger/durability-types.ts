@@ -32,6 +32,10 @@ export interface DurabilityEvidenceLedgerDocMetadata {
   removalId: string;
   /** Facility-scoped tier determines the registry inputs this Source evidences. */
   durabilityOption: "200_year" | "1000_year";
+  /** Exact registry component evidenced by a generated 1,000-year ledger. */
+  componentKey?: string;
+  /** Exact local explanatory formula version used by that ledger. */
+  formulaVersion?: string;
   /** Semantic fingerprint of the ledger (batches/figures, excluding render time). */
   contentHash: string;
 }

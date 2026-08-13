@@ -81,6 +81,10 @@ describe("renderThousandYearDurabilityLedgerPdf", () => {
       expect(text).toContain("CB-26-001");
       expect(text).toContain("400 kg product mass");
       expect(text).toContain("Current 1,000-year durability component");
+      expect(text).toContain(CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR);
+      expect(text).toContain(
+        "isometric-1000-year-organic-carbon-binomial-lower-bounded-v2",
+      );
       expect(text).toContain(
         "Organic-carbon binomial lower estimate bounded from 0 to 0.95",
       );

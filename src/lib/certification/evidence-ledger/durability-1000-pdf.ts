@@ -250,7 +250,9 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
         styles.calculation,
         {},
         t(styles.calculationLine, `Component: ${batch.componentLabel}`),
+        t(styles.calculationLine, `Component key: ${batch.componentKey}`),
         t(styles.calculationLine, `Formula: ${batch.formulaLabel}`),
+        t(styles.calculationLine, `Formula version: ${batch.formulaVersion}`),
         t(styles.calculationLine, `Semantics: ${batch.semanticsLabel}`),
         t(
           styles.calculationLine,
