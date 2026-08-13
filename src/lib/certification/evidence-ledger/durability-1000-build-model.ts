@@ -172,9 +172,15 @@ export function buildThousandYearDurabilityLedgerModel(
         replicateCount: replicates.length,
         productMassKg: productMassByBatchId.get(batch.creditBatchId) ?? 0,
         componentKey,
+        componentLabel: isLegacy
+          ? "Legacy 1,000-year durability component"
+          : "Current 1,000-year durability component",
         formulaVersion: isLegacy
           ? LEGACY_1000_YEAR_PREVIEW_FORMULA_VERSION
           : CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION,
+        formulaLabel: isLegacy
+          ? "Binomial lower estimate without a durability cap"
+          : "Organic-carbon binomial lower estimate with a 0.95 durability cap",
         semanticsLabel: isLegacy
           ? LEGACY_1000_YEAR_SEMANTICS_LABEL
           : CURRENT_1000_YEAR_SEMANTICS_LABEL,

@@ -213,7 +213,7 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
       ),
       t(
         [styles.mono, { width: COL.day }],
-        replicate.samplingDay ?? "—",
+        replicate.samplingDay ?? "Not recorded",
       ),
       t(
         [styles.mono, { width: COL.carbon, textAlign: "right" }],
@@ -222,13 +222,13 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
       t(
         [styles.mono, { width: COL.carbon, textAlign: "right" }],
         replicate.inorganicCarbonFraction == null
-          ? "—"
+          ? "Not recorded"
           : fraction(replicate.inorganicCarbonFraction),
       ),
       t(
         [styles.mono, { width: COL.carbon, textAlign: "right" }],
         replicate.calculatedOrganicCarbonFraction == null
-          ? "—"
+          ? "Not available"
           : fraction(replicate.calculatedOrganicCarbonFraction),
       ),
       t(
@@ -249,8 +249,8 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
       v(
         styles.calculation,
         {},
-        t(styles.calculationLine, `Component: ${batch.componentKey}`),
-        t(styles.calculationLine, `Formula/version: ${batch.formulaVersion}`),
+        t(styles.calculationLine, `Component: ${batch.componentLabel}`),
+        t(styles.calculationLine, `Formula: ${batch.formulaLabel}`),
         t(styles.calculationLine, `Semantics: ${batch.semanticsLabel}`),
         t(
           styles.calculationLine,

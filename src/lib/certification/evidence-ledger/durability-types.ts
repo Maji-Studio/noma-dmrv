@@ -144,8 +144,12 @@ export interface ThousandYearLedgerBatch {
   productMassKg: number;
   /** Registry component whose inputs and local explanation this batch records. */
   componentKey: string;
+  /** Operator-facing description of the registry component. */
+  componentLabel: string;
   /** Explicit formula/version label for historical interpretation. */
   formulaVersion: string;
+  /** Operator-facing description of the local explanatory calculation. */
+  formulaLabel: string;
   /** Visible carbon-basis/cap semantics, especially for deprecated evidence. */
   semanticsLabel: string;
   /** Binomial lower estimate before any component cap. */
