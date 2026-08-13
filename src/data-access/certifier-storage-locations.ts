@@ -17,6 +17,7 @@ const DEFAULT_PROVIDER: CertifierProvider = "isometric";
 
 export interface StorageLocationRegistryInput {
   applicationId: string;
+  facilityId: string;
   customerLocationId: string | null;
   certifierProjectId: string | null;
   externalProjectId: string | null;
@@ -39,6 +40,7 @@ export async function getStorageLocationRegistryInput(
   const [row] = await db
     .select({
       applicationId: applications.id,
+      facilityId: deliveries.facilityId,
       customerLocationId: customerLocations.id,
       certifierProjectId: certifierProjects.id,
       externalProjectId: certifierProjects.externalProjectId,
@@ -96,6 +98,7 @@ export async function getStorageLocationRegistryInput(
 export async function getStorageLocationRegistration(
   ctx: OrgContext,
   customerLocationId: string,
+  externalProjectId: string,
   provider: CertifierProvider = DEFAULT_PROVIDER,
 ): Promise<CertifierStorageLocation | null> {
   requireOrgScope(ctx);
@@ -106,11 +109,31 @@ export async function getStorageLocationRegistration(
       and(
         eq(certifierStorageLocations.organizationId, ctx.organizationId),
         eq(certifierStorageLocations.provider, provider),
+        eq(certifierStorageLocations.externalProjectId, externalProjectId),
         eq(certifierStorageLocations.customerLocationId, customerLocationId),
       ),
     )
     .limit(1);
   return row ?? null;
+}
+
+export async function hasStorageLocationRegistrationForProject(
+  ctx: OrgContext,
+  executor: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
+  certifierProjectId: string,
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const rows = await executor
+    .select({ id: certifierStorageLocations.id })
+    .from(certifierStorageLocations)
+    .where(
+      and(
+        eq(certifierStorageLocations.certifierProjectId, certifierProjectId),
+        eq(certifierStorageLocations.organizationId, ctx.organizationId),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
 }
 
 export interface PersistStorageLocationRegistrationInput {
@@ -133,10 +156,24 @@ export async function persistStorageLocationRegistration(
   input: PersistStorageLocationRegistrationInput,
 ): Promise<CertifierStorageLocation> {
   requireOrgScope(ctx);
-  await Promise.all([
-    assertSameOrg(ctx, customerLocations, input.customerLocationId),
-    assertSameOrg(ctx, certifierProjects, input.certifierProjectId),
-  ]);
+  await assertSameOrg(ctx, customerLocations, input.customerLocationId);
+  const [project] = await db
+    .select({ id: certifierProjects.id })
+    .from(certifierProjects)
+    .where(
+      and(
+        eq(certifierProjects.id, input.certifierProjectId),
+        eq(certifierProjects.provider, input.provider ?? DEFAULT_PROVIDER),
+        eq(certifierProjects.externalProjectId, input.externalProjectId),
+        eq(certifierProjects.organizationId, ctx.organizationId),
+      ),
+    )
+    .limit(1);
+  if (!project) {
+    throw new Error(
+      "Storage Location registration project no longer matches its certifier mapping",
+    );
+  }
   if (
     input.submittedPayload.project_id !== input.externalProjectId ||
     input.submittedPayload.supplier_reference_id !== input.supplierReference
@@ -162,6 +199,7 @@ export async function persistStorageLocationRegistration(
     .onConflictDoNothing({
       target: [
         certifierStorageLocations.provider,
+        certifierStorageLocations.externalProjectId,
         certifierStorageLocations.customerLocationId,
       ],
     })
@@ -171,6 +209,7 @@ export async function persistStorageLocationRegistration(
   const winner = await getStorageLocationRegistration(
     ctx,
     input.customerLocationId,
+    input.externalProjectId,
     provider,
   );
   if (!winner) {

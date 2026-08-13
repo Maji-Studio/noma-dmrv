@@ -6,6 +6,7 @@ import type { Logger } from "@/lib/log";
 import type { PerformRegistryCreateArgs } from "./registry-create";
 
 const mocks = vi.hoisted(() => ({
+  env: { ISOMETRIC_ENVIRONMENT: "sandbox" as "sandbox" | "production" },
   getInput: vi.fn(),
   getRegistration: vi.fn(),
   persistRegistration: vi.fn(),
@@ -15,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   withLock: vi.fn(async (_key: string, fn: () => Promise<unknown>) => fn()),
   client: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
 }));
+
+vi.mock("@/config/env", () => ({ env: mocks.env }));
 
 vi.mock("@/data-access/certifier-storage-locations", () => ({
   getStorageLocationRegistryInput: mocks.getInput,
@@ -34,6 +37,7 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 vi.mock("./shared", () => ({
   appendSyncEventBestEffort: mocks.appendEvent,
+  ISOMETRIC_PROVIDER: "isometric",
 }));
 vi.mock("./registry-create", () => ({
   supplierRefLookup: (
@@ -77,6 +81,7 @@ function input(
 ): StorageLocationRegistryInput {
   return {
     applicationId: "app-1",
+    facilityId: "facility-1",
     customerLocationId: CUSTOMER_LOCATION_ID,
     certifierProjectId: "mapping-1",
     externalProjectId: "prj-test",
@@ -99,7 +104,15 @@ function registration(
     externalProjectId: "prj-test",
     externalStorageLocationId: "slc-test",
     supplierReference: "nm-slc-placeholder",
-    submittedPayload: {} as never,
+    submittedPayload: {
+      description: { __typename: "Undefined" },
+      latitude: -3.25,
+      longitude: 37.42,
+      name: "North Field",
+      project_id: "prj-test",
+      storage_method: "biochar_field",
+      supplier_reference_id: "nm-slc-placeholder",
+    },
     payloadHash: "hash",
     driftStatus: "in_sync",
     driftDetails: null,
@@ -127,13 +140,13 @@ function ensure() {
   return ensureStorageLocation({
     orgCtx,
     applicationId: "app-1",
-    submissionRow: { id: "submission-1" },
     log,
   });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.env.ISOMETRIC_ENVIRONMENT = "sandbox";
   mocks.withLock.mockImplementation(
     async (_key: string, fn: () => Promise<unknown>) => fn(),
   );
@@ -142,16 +155,20 @@ beforeEach(() => {
   mocks.getRegistration.mockResolvedValue(null);
   mocks.setDrift.mockResolvedValue(undefined);
   mocks.appendEvent.mockResolvedValue(undefined);
-  mocks.client.get.mockResolvedValue({
-    nodes: [],
-    page_info: {
-      end_cursor: null,
-      has_next_page: false,
-      has_previous_page: false,
-      start_cursor: null,
-    },
-    total_count: 0,
-  });
+  mocks.client.get.mockImplementation(async (path: string) =>
+    path.endsWith("/slc-test")
+      ? remote("nm-slc-placeholder")
+      : {
+          nodes: [],
+          page_info: {
+            end_cursor: null,
+            has_next_page: false,
+            has_previous_page: false,
+            start_cursor: null,
+          },
+          total_count: 0,
+        },
+  );
   mocks.client.post.mockImplementation(async (_path: string, body: { supplier_reference_id: string }) =>
     remote(body.supplier_reference_id),
   );
@@ -195,6 +212,7 @@ describe("ensureStorageLocation", () => {
   it("claims a matching remote record without POSTing", async () => {
     const reference = (await import("@/lib/isometric/storage-locations")).buildStorageLocationReference({
       customerLocationId: CUSTOMER_LOCATION_ID,
+      externalProjectId: "prj-test",
     });
     mocks.client.get.mockResolvedValue({
       nodes: [remote(reference)],
@@ -219,10 +237,10 @@ describe("ensureStorageLocation", () => {
     const result = await ensure();
 
     expect(mocks.withLock).toHaveBeenCalledWith(
-      `certifier-storage-location:isometric:${CUSTOMER_LOCATION_ID}`,
+      `certifier-storage-location:isometric:prj-test:${CUSTOMER_LOCATION_ID}`,
       expect.any(Function),
     );
-    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.get).toHaveBeenCalledTimes(1);
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(result.source).toBe("journal");
   });
@@ -278,6 +296,7 @@ describe("ensureStorageLocation", () => {
   it("refuses a remote record whose stable reference points at conflicting site facts", async () => {
     const reference = (await import("@/lib/isometric/storage-locations")).buildStorageLocationReference({
       customerLocationId: CUSTOMER_LOCATION_ID,
+      externalProjectId: "prj-test",
     });
     mocks.client.get.mockResolvedValue({
       nodes: [{ ...remote(reference), latitude: -4.5 }],
@@ -297,7 +316,7 @@ describe("ensureStorageLocation", () => {
   it("reuses an existing identity and journals local coordinate drift", async () => {
     mocks.getRegistration.mockResolvedValue(registration());
     const result = await ensure();
-    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.get).toHaveBeenCalledTimes(1);
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(mocks.setDrift).toHaveBeenCalledWith(
       orgCtx,
@@ -311,8 +330,6 @@ describe("ensureStorageLocation", () => {
   it("reuses an existing identity when mutable site facts become incomplete", async () => {
     mocks.getInput.mockResolvedValue(
       input({
-        certifierProjectId: null,
-        externalProjectId: null,
         latitude: null,
       }),
     );
@@ -327,11 +344,42 @@ describe("ensureStorageLocation", () => {
       expect.objectContaining({
         status: "drifted",
         details: expect.objectContaining({
-          missingFacts: ["project_mapping", "latitude"],
+          missingFacts: ["latitude"],
         }),
       }),
     );
-    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.get).toHaveBeenCalledTimes(1);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
+  it("surfaces remote coordinate drift without patching the registry", async () => {
+    mocks.getRegistration.mockResolvedValue(registration());
+    mocks.client.get.mockResolvedValue({
+      ...remote("nm-slc-placeholder"),
+      latitude: -4.5,
+    });
+
+    const result = await ensure();
+
+    expect(result.drifted).toBe(true);
+    expect(mocks.setDrift).toHaveBeenCalledWith(
+      orgCtx,
+      "registration-1",
+      expect.objectContaining({
+        status: "drifted",
+        details: expect.objectContaining({
+          remoteDriftReason: expect.stringMatching(/conflicts/),
+        }),
+      }),
+    );
+    expect(mocks.client.patch).not.toHaveBeenCalled();
+  });
+
+  it("refuses production writes at the registry seam", async () => {
+    mocks.env.ISOMETRIC_ENVIRONMENT = "production";
+
+    await expect(ensure()).rejects.toThrow(/not enabled for production/);
+    expect(mocks.getInput).not.toHaveBeenCalled();
     expect(mocks.client.post).not.toHaveBeenCalled();
   });
 

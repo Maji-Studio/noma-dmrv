@@ -98,15 +98,23 @@ describe("Storage Location contract", () => {
     ).toThrow(message);
   });
 
-  it("derives a stable reference from only the customer-location identity", () => {
+  it("derives a stable reference from the project and customer-location identity", () => {
     const first = buildStorageLocationReference({
       customerLocationId: "11111111-1111-4111-8111-111111111111",
+      externalProjectId: "prj_test",
     });
     const afterMutableSiteDrift = buildStorageLocationReference({
       customerLocationId: "11111111-1111-4111-8111-111111111111",
+      externalProjectId: "prj_test",
     });
     expect(first).toBe(afterMutableSiteDrift);
     expect(first).toMatch(/^nm-slc-[a-f0-9]{16}$/);
+    expect(
+      buildStorageLocationReference({
+        customerLocationId: "11111111-1111-4111-8111-111111111111",
+        externalProjectId: "prj_other",
+      }),
+    ).not.toBe(first);
   });
 
   it("paginates until it finds one matching supplier reference", async () => {

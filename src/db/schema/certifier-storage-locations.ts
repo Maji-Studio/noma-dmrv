@@ -4,7 +4,6 @@ import {
   foreignKey,
   index,
   jsonb,
-  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -14,13 +13,11 @@ import {
 import type { CreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import { organizations } from "./auth";
 import { certifierProjects } from "./certification";
-import { certifierProvider } from "./common";
+import {
+  certifierProvider,
+  certifierStorageLocationDriftStatus,
+} from "./common";
 import { customerLocations } from "./parties";
-
-export const certifierStorageLocationDriftStatus = pgEnum(
-  "certifier_storage_location_drift_status",
-  ["in_sync", "drifted"],
-);
 
 /**
  * Immutable registry identity for one reusable agricultural application site.
@@ -68,8 +65,9 @@ export const certifierStorageLocations = pgTable(
       columns: [table.certifierProjectId, table.organizationId],
       foreignColumns: [certifierProjects.id, certifierProjects.organizationId],
     }),
-    unique("certifier_storage_locations_provider_customer_location_unique").on(
+    unique("certifier_storage_locations_provider_project_location_unique").on(
       table.provider,
+      table.externalProjectId,
       table.customerLocationId,
     ),
     unique("certifier_storage_locations_provider_reference_unique").on(

@@ -1,0 +1,2 @@
+ALTER TABLE "certifier_storage_locations" DROP CONSTRAINT "certifier_storage_locations_provider_customer_location_unique";--> statement-breakpoint
+ALTER TABLE "certifier_storage_locations" ADD CONSTRAINT "certifier_storage_locations_provider_project_location_unique" UNIQUE("provider","certifier_project_id","customer_location_id");

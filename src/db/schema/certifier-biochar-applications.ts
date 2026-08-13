@@ -4,7 +4,6 @@ import {
   foreignKey,
   index,
   jsonb,
-  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -14,20 +13,14 @@ import {
 import type { CreateBiocharApplicationRequest } from "@/lib/isometric/biochar-applications";
 import { applications } from "./application";
 import { organizations } from "./auth";
-import { certifierProvider } from "./common";
+import {
+  certifierBiocharApplicationCorrectionStatus,
+  certifierBiocharApplicationLifecycleStatus,
+  certifierProvider,
+} from "./common";
 import { certifierProductionBatches } from "./certifier-production-batches";
 import { certifierStorageLocations } from "./certifier-storage-locations";
 import { creditBatches } from "./credits";
-
-export const certifierBiocharApplicationLifecycleStatus = pgEnum(
-  "certifier_biochar_application_lifecycle_status",
-  ["gated", "confirmed", "deleted"],
-);
-
-export const certifierBiocharApplicationCorrectionStatus = pgEnum(
-  "certifier_biochar_application_correction_status",
-  ["none", "review_required", "replacement_required"],
-);
 
 /**
  * Allocation-slice journal for future Isometric Biochar Applications.

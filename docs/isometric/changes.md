@@ -3,11 +3,12 @@
 ## 2026-08-13 (Storage Location traceability staged)
 
 One customer location now represents one reusable agricultural application
-site. Organization Owners/Admins can explicitly synchronize that site from an
+site per Isometric project. Organization Owners/Admins can explicitly synchronize that site from an
 Application detail sheet. The action reconciles by a stable supplier reference
 before creating an Isometric `biochar_field` Storage Location, journals the
-confirmed `slc_...` identity, and surfaces not-synced, synced, drifted, and
-failed states with a safe retry. Application create and update actions do not
+confirmed `slc_...` identity, checks the remote record for drift, and surfaces
+not-synced, synced, drifted, and failed states with an explicit retry. Project
+mapping changes are blocked after a site is registered. Application create and update actions do not
 perform registry writes, and local name or coordinate drift never triggers an
 automatic PATCH.
 
@@ -21,9 +22,9 @@ correction lifecycle.
 
 This traceability layer does not change the GHG Entry `CO2 stored` component,
 its payload hash, or the existing sequestration calculation. Measurement
-Locations remain out of scope. The migration chain and local tenant/concurrency
-tests are verified; live sandbox Storage Location behavior and any registry UI
-URL remain unverified.
+Locations remain out of scope. The migration chain and focused local
+tenant/concurrency tests are verified independently of the live provider; live
+sandbox Storage Location behavior and any registry UI URL remain unverified.
 
 Certification-readiness, transport-evidence, supporting-source, and sampling
 correction notes are archived in

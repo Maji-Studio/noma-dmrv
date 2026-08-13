@@ -14,6 +14,10 @@ import {
   getStorageLocationRegistryInput,
   persistStorageLocationRegistration,
 } from "@/data-access/certifier-storage-locations";
+import {
+  deleteCertifierProject,
+  upsertCertifierProject,
+} from "@/data-access/certification";
 import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -206,6 +210,7 @@ describe("certifier Storage Location data access", () => {
         ),
       ).resolves.toMatchObject({
         applicationId: fixture.applicationId,
+        facilityId: fixture.facilityId,
         customerLocationId: fixture.customerLocationId,
         certifierProjectId: fixture.certifierProjectId,
         latitude: -3.25,
@@ -270,6 +275,7 @@ describe("certifier Storage Location data access", () => {
         getStorageLocationRegistration(
           FOREIGN_CONTEXT,
           fixture.customerLocationId,
+          common.externalProjectId,
         ),
       ).resolves.toBeNull();
       await expect(
@@ -281,6 +287,143 @@ describe("certifier Storage Location data access", () => {
           payloadHash: "payload-hash-a",
         }),
       ).rejects.toThrow();
+    } finally {
+      await cleanupFixture(fixture);
+    }
+  });
+
+  it("keeps separate identities for one site used under two certifier projects", async () => {
+    const fixture = await createFixture();
+    let secondFacilityId: string | null = null;
+    let secondProjectId: string | null = null;
+    try {
+      const registryInput = await getStorageLocationRegistryInput(
+        makeTestOrgContext(),
+        fixture.applicationId,
+      );
+      if (!registryInput?.externalProjectId) {
+        throw new Error("Storage Location fixture did not resolve its project");
+      }
+      const runId = crypto.randomUUID().slice(0, 8);
+      const [secondFacility] = await db
+        .insert(facilities)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `FAC-SLC-P2-${runId}`,
+          name: `Storage Location Facility P2 ${runId}`,
+        })
+        .returning({ id: facilities.id });
+      secondFacilityId = secondFacility.id;
+      const [secondProject] = await db
+        .insert(certifierProjects)
+        .values({
+          organizationId: TEST_ORG_ID,
+          facilityId: secondFacility.id,
+          provider: "isometric",
+          externalProjectId: `prj_slc_p2_${runId}`,
+        })
+        .returning({ id: certifierProjects.id });
+      secondProjectId = secondProject.id;
+
+      const firstBody = buildCreateStorageLocationRequest({
+        externalProjectId: registryInput.externalProjectId,
+        name: "Shared Site",
+        latitude: -3.25,
+        longitude: 37.42,
+        supplierReferenceId: `nm-slc-first-${runId}`,
+      });
+      const secondBody = buildCreateStorageLocationRequest({
+        externalProjectId: `prj_slc_p2_${runId}`,
+        name: "Shared Site",
+        latitude: -3.25,
+        longitude: 37.42,
+        supplierReferenceId: `nm-slc-second-${runId}`,
+      });
+      const first = await persistStorageLocationRegistration(
+        makeTestOrgContext(),
+        {
+          customerLocationId: fixture.customerLocationId,
+          certifierProjectId: fixture.certifierProjectId,
+          externalProjectId: registryInput.externalProjectId,
+          externalStorageLocationId: `slc-first-${runId}`,
+          supplierReference: `nm-slc-first-${runId}`,
+          submittedPayload: firstBody,
+          payloadHash: `hash-first-${runId}`,
+        },
+      );
+      const second = await persistStorageLocationRegistration(
+        makeTestOrgContext(),
+        {
+          customerLocationId: fixture.customerLocationId,
+          certifierProjectId: secondProject.id,
+          externalProjectId: `prj_slc_p2_${runId}`,
+          externalStorageLocationId: `slc-second-${runId}`,
+          supplierReference: `nm-slc-second-${runId}`,
+          submittedPayload: secondBody,
+          payloadHash: `hash-second-${runId}`,
+        },
+      );
+
+      expect(second.id).not.toBe(first.id);
+      await expect(
+        getStorageLocationRegistration(
+          makeTestOrgContext(),
+          fixture.customerLocationId,
+          `prj_slc_p2_${runId}`,
+        ),
+      ).resolves.toMatchObject({ id: second.id });
+    } finally {
+      await cleanupFixture(fixture);
+      if (secondProjectId) {
+        await db
+          .delete(certifierProjects)
+          .where(eq(certifierProjects.id, secondProjectId));
+      }
+      if (secondFacilityId) {
+        await db.delete(facilities).where(eq(facilities.id, secondFacilityId));
+      }
+    }
+  });
+
+  it("blocks project rebinding and unlink after a site is registered", async () => {
+    const fixture = await createFixture();
+    try {
+      const ctx = makeTestOrgContext();
+      const input = await getStorageLocationRegistryInput(
+        ctx,
+        fixture.applicationId,
+      );
+      if (!input?.externalProjectId || !input.name) {
+        throw new Error("Storage Location fixture did not resolve");
+      }
+      const supplierReference = `nm-slc-map-guard-${crypto.randomUUID().slice(0, 8)}`;
+      const body = buildCreateStorageLocationRequest({
+        externalProjectId: input.externalProjectId,
+        name: input.name,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        supplierReferenceId: supplierReference,
+      });
+      await persistStorageLocationRegistration(ctx, {
+        customerLocationId: fixture.customerLocationId,
+        certifierProjectId: fixture.certifierProjectId,
+        externalProjectId: input.externalProjectId,
+        externalStorageLocationId: `slc-map-guard-${crypto.randomUUID().slice(0, 8)}`,
+        supplierReference,
+        submittedPayload: body,
+        payloadHash: "map-guard-hash",
+      });
+
+      await expect(
+        upsertCertifierProject(ctx, {
+          facilityId: fixture.facilityId,
+          provider: "isometric",
+          externalProjectId: "prj_rebound",
+        }),
+      ).rejects.toThrow(/registered application sites/);
+      await expect(
+        deleteCertifierProject(ctx, fixture.facilityId, "isometric"),
+      ).rejects.toThrow(/registered application sites/);
     } finally {
       await cleanupFixture(fixture);
     }

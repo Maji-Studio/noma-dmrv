@@ -32,13 +32,18 @@ export interface BuildStorageLocationRequestArgs {
 /** Stable across every mutable customer-location field. */
 export function buildStorageLocationReference(args: {
   customerLocationId: string;
+  externalProjectId: string;
 }): string {
-  const stableKey = args.customerLocationId.trim();
-  if (!stableKey) {
+  const customerLocationId = args.customerLocationId.trim();
+  const externalProjectId = args.externalProjectId.trim();
+  if (!customerLocationId) {
     throw new SafeError("The application site has no stable customer-location ID.");
   }
+  if (!externalProjectId) {
+    throw new SafeError("The application site has no stable Isometric project ID.");
+  }
   const digest = createHash("sha256")
-    .update(stableKey)
+    .update(`${externalProjectId}:${customerLocationId}`)
     .digest("hex")
     .slice(0, REFERENCE_HASH_LENGTH);
   return `nm-slc-${digest}`;
