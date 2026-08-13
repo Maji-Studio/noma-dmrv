@@ -202,6 +202,34 @@ export async function getProductionBatchRegistrations(
     );
 }
 
+/**
+ * Replace an exact legacy payload hash with the current physical-window hash.
+ * The compare-and-set keeps concurrent submissions safe and ensures a later
+ * physical-window edit differs from the migrated baseline and emits drift.
+ */
+export async function migrateProductionBatchPayloadHash(
+  ctx: OrgContext,
+  args: {
+    creditBatchId: string;
+    expectedPayloadHash: string;
+    nextPayloadHash: string;
+  },
+  provider: CertifierProvider = DEFAULT_PROVIDER,
+): Promise<void> {
+  requireOrgScope(ctx);
+  await db
+    .update(certifierProductionBatches)
+    .set({ payloadHash: args.nextPayloadHash, updatedAt: new Date() })
+    .where(
+      and(
+        eq(certifierProductionBatches.provider, provider),
+        eq(certifierProductionBatches.creditBatchId, args.creditBatchId),
+        eq(certifierProductionBatches.payloadHash, args.expectedPayloadHash),
+        eq(certifierProductionBatches.organizationId, ctx.organizationId),
+      ),
+    );
+}
+
 export interface UpsertProductionBatchRegistrationInput {
   creditBatchId: string;
   externalProductionBatchId: string;

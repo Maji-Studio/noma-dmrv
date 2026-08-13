@@ -11,6 +11,7 @@ import type { DurabilityMeasurementSampleSubmission } from "./durability-measure
 const mocks = vi.hoisted(() => ({
   getProductionBatchRegistryInputs: vi.fn(),
   getProductionBatchRegistrations: vi.fn(),
+  migrateProductionBatchPayloadHash: vi.fn(),
   upsertProductionBatchRegistration: vi.fn(),
   appendSyncEventBestEffort: vi.fn(),
   client: {
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/data-access/certifier-production-batches", () => ({
   getProductionBatchRegistryInputs: mocks.getProductionBatchRegistryInputs,
   getProductionBatchRegistrations: mocks.getProductionBatchRegistrations,
+  migrateProductionBatchPayloadHash: mocks.migrateProductionBatchPayloadHash,
   upsertProductionBatchRegistration: mocks.upsertProductionBatchRegistration,
 }));
 
@@ -315,6 +317,51 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       new Map([[CREDIT_BATCH_ID, PRODUCTION_BATCH_ID]]),
     );
     expect(mocks.appendSyncEventBestEffort).not.toHaveBeenCalled();
+    expect(mocks.migrateProductionBatchPayloadHash).toHaveBeenCalledWith(
+      orgCtx,
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        expectedPayloadHash: payloadHash(current),
+        nextPayloadHash: await currentPayloadHash(),
+      },
+    );
+  });
+
+  it("reports physical-window drift after the legacy hash was migrated", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ endedAt: "2026-03-28T19:45:00.000Z" }),
+    ]);
+    mocks.getProductionBatchRegistrations.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        externalProductionBatchId: PRODUCTION_BATCH_ID,
+        payloadHash: await currentPayloadHash(),
+      },
+    ]);
+
+    await ensure();
+
+    expect(mocks.migrateProductionBatchPayloadHash).not.toHaveBeenCalled();
+    expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports real payload drift instead of migrating a legacy hash", async () => {
+    const legacyBody = buildLegacyDateBoundBody(await currentSupplierRef());
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ totalDryMassKg: 1_999 }),
+    ]);
+    mocks.getProductionBatchRegistrations.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        externalProductionBatchId: PRODUCTION_BATCH_ID,
+        payloadHash: payloadHash(legacyBody),
+      },
+    ]);
+
+    await ensure();
+
+    expect(mocks.migrateProductionBatchPayloadHash).not.toHaveBeenCalled();
+    expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledTimes(1);
   });
 
   it("reuses a registration whose local data no longer builds a payload", async () => {

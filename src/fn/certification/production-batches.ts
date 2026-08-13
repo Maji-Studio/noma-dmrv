@@ -35,6 +35,7 @@
 import {
   getProductionBatchRegistrations,
   getProductionBatchRegistryInputs,
+  migrateProductionBatchPayloadHash,
   upsertProductionBatchRegistration,
   type ProductionBatchRegistryInput,
 } from "@/data-access/certifier-production-batches";
@@ -207,23 +208,29 @@ export async function ensureProductionBatchesForCreditBatches(
     const existing = existingByCreditBatchId.get(input.creditBatchId);
     if (existing) {
       const current = tryBuildProductionBatchSubmission(input, args.log);
-      if (
-        current &&
-        current.payloadHash !== existing.payloadHash &&
-        !matchesLegacyDateBoundPayloadHash(
-          input,
-          current,
-          existing.payloadHash,
-        )
-      ) {
-        await recordProductionBatchDrift({
-          orgCtx: args.orgCtx,
-          removalId: args.removalId,
-          submissionRowId: args.submissionRow.id,
-          submission: current,
-          registeredExternalId: existing.externalProductionBatchId,
-          log: args.log,
-        });
+      if (current && current.payloadHash !== existing.payloadHash) {
+        if (
+          matchesLegacyDateBoundPayloadHash(
+            input,
+            current,
+            existing.payloadHash,
+          )
+        ) {
+          await migrateProductionBatchPayloadHash(args.orgCtx, {
+            creditBatchId: input.creditBatchId,
+            expectedPayloadHash: existing.payloadHash,
+            nextPayloadHash: current.payloadHash,
+          });
+        } else {
+          await recordProductionBatchDrift({
+            orgCtx: args.orgCtx,
+            removalId: args.removalId,
+            submissionRowId: args.submissionRow.id,
+            submission: current,
+            registeredExternalId: existing.externalProductionBatchId,
+            log: args.log,
+          });
+        }
       }
       registeredByCreditBatchId.set(
         input.creditBatchId,
