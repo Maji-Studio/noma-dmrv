@@ -28,7 +28,8 @@ import {
   SANDBOX_PROJECT_ID,
   type SeededMapping,
   type SeededReadyBatch,
-  fetchSubmittableSandboxRemovalTemplateId,
+  fetchSubmittableSandboxRemovalTemplate,
+  sandboxTemplateSupportsCurrent1000YearComponent,
   seedCertifierMapping,
   seedUngroupedReadyBatchWithChain,
   setFacilityDurabilityTier,
@@ -70,16 +71,23 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
     // not merely the first one, which may pass the wizard's Requirements step
     // yet fail the live submit on an unbound fixed input. null ⇒ skip rather
     // than fail (mirrors the wizard spec's creds-gated stance).
-    const defaultRemovalTemplateId =
-      await fetchSubmittableSandboxRemovalTemplateId(projectId);
+    const defaultRemovalTemplate =
+      await fetchSubmittableSandboxRemovalTemplate(projectId);
     test.skip(
-      !defaultRemovalTemplateId,
+      !defaultRemovalTemplate,
       "sandbox project has no fully-bound (submittable) removal template",
+    );
+    test.skip(
+      !defaultRemovalTemplate ||
+        !sandboxTemplateSupportsCurrent1000YearComponent(
+          defaultRemovalTemplate,
+        ),
+      "sandbox template migration to the current 1,000-year component is pending (plan Phase 5)",
     );
 
     const mapping: SeededMapping = await seedCertifierMapping(facilityId, {
       externalProjectId: projectId,
-      defaultRemovalTemplateId,
+      defaultRemovalTemplateId: defaultRemovalTemplate?.id,
       // A live submit reads these; harmless for the committed (no-submit) path.
       emissionConfig: DEFAULT_FACILITY_EMISSION_CONFIG,
     });

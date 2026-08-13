@@ -26,6 +26,7 @@ import * as crypto from "crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
 
@@ -145,6 +146,7 @@ interface RawRemovalTemplate {
   id?: string;
   groups?: Array<{
     components?: Array<{
+      blueprint_key?: string;
       inputs?: Array<{ type?: string; datapoint_id?: string | null }>;
     }>;
   }>;
@@ -173,9 +175,9 @@ function templateHasUnboundFixedInput(t: RawRemovalTemplate): boolean {
  * inputs are all bound. (The `ghg_entry_templates` list returns the full nested
  * component/input tree, so no per-template fetch is needed.)
  */
-export async function fetchSubmittableSandboxRemovalTemplateId(
+export async function fetchSubmittableSandboxRemovalTemplate(
   projectId: string,
-): Promise<string | null> {
+): Promise<{ id: string; componentBlueprintKeys: string[] } | null> {
   const clientSecret = process.env.ISOMETRIC_CLIENT_SECRET;
   const accessToken = process.env.ISOMETRIC_ACCESS_TOKEN;
   if (!clientSecret || !accessToken) return null;
@@ -200,12 +202,29 @@ export async function fetchSubmittableSandboxRemovalTemplateId(
     if (!res.ok) return null;
     const json = (await res.json()) as { nodes?: RawRemovalTemplate[] };
     for (const node of json.nodes ?? []) {
-      if (node.id && !templateHasUnboundFixedInput(node)) return node.id;
+      if (node.id && !templateHasUnboundFixedInput(node)) {
+        return {
+          id: node.id,
+          componentBlueprintKeys: (node.groups ?? []).flatMap((group) =>
+            (group.components ?? []).flatMap((component) =>
+              component.blueprint_key ? [component.blueprint_key] : [],
+            ),
+          ),
+        };
+      }
     }
     return null;
   } catch {
     return null;
   }
+}
+
+export function sandboxTemplateSupportsCurrent1000YearComponent(template: {
+  componentBlueprintKeys: string[];
+}): boolean {
+  return template.componentBlueprintKeys.includes(
+    CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  );
 }
 
 /** Existing seeded chain entities the grouped-removal seed reuses (read-only). */
