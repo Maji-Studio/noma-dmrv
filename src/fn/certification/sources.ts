@@ -24,6 +24,7 @@ import {
   getCreditBatchesByRemovalId,
 } from "@/data-access/certifier-removals";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
+import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import {
   getDocumentById,
   listDocumentsForEntity,
@@ -123,6 +124,10 @@ async function collectLineageEntities(
     orgCtx,
     memberBatchIds,
   );
+  const memberSamples = await getSamplesByCreditBatchIds(
+    orgCtx,
+    memberBatchIds,
+  );
   const seen = new Map<string, CandidateLineageEntity>();
   const add = (e: CandidateLineageEntity) => {
     const k = `${e.entityType}:${e.entityId}`;
@@ -163,7 +168,14 @@ async function collectLineageEntities(
         });
       }
     }
+  }
 
+  for (const sample of memberSamples) {
+    add({
+      entityType: "sample",
+      entityId: sample.id,
+      entityLabel: `Sample ${sample.id}`,
+    });
   }
 
   return Array.from(seen.values());
