@@ -161,8 +161,9 @@ carbon on this path.
 
 The local explanatory preview now mirrors the component: calculate organic
 carbon per replicate as total minus inorganic, average it, calculate raw
-durability as the binomial lower estimate, cap durability at 0.95, and use the
-capped value for stored CO2e. Evidence ledgers show the three per-replicate
+durability as the binomial lower estimate, bound credit-bearing organic carbon
+and durability at zero, cap durability at 0.95, and use the bounded value for
+stored CO2e. Evidence ledgers show the three per-replicate
 values, `s_fraction`, product mass, raw and capped durability, cap status,
 component key, and formula label. Isometric remains authoritative.
 

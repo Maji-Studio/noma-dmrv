@@ -154,7 +154,7 @@ export interface ThousandYearLedgerBatch {
   semanticsLabel: string;
   /** Binomial lower estimate before any component cap. */
   rawDurability: number;
-  /** Durability used locally after the current component's 0.95 cap. */
+  /** Durability used locally after bounding the raw estimate to 0 through 0.95. */
   cappedDurability: number;
   capApplied: boolean;
 }

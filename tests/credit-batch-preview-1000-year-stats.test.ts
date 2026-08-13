@@ -122,6 +122,18 @@ describe("computeBlueprint1000YearDurability", () => {
     });
   });
 
+  it("floors a negative binomial lower estimate at zero", () => {
+    const durability = computeBlueprint1000YearDurability(
+      REPLICATES.map((replicate) => ({
+        ...replicate,
+        sReflectanceFraction: 0.1,
+      })),
+    );
+    expect(durability?.rawDurability).toBeLessThan(0);
+    expect(durability?.cappedDurability).toBe(0);
+    expect(durability?.capApplied).toBe(false);
+  });
+
   it("returns null on empty or non-finite input", () => {
     expect(computeBlueprint1000YearDurability([])).toBeNull();
     expect(

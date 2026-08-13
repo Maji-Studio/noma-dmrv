@@ -20,10 +20,11 @@ describe("renderThousandYearDurabilityLedgerPdf", () => {
           componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
           componentLabel: "Current 1,000-year durability component",
           formulaVersion:
-            "isometric-1000-year-organic-carbon-binomial-lower-cap-v1",
+            "isometric-1000-year-organic-carbon-binomial-lower-bounded-v2",
           formulaLabel:
-            "Organic-carbon binomial lower estimate with a 0.95 durability cap",
-          semanticsLabel: "Current organic-carbon basis with 0.95 durability cap",
+            "Organic-carbon binomial lower estimate bounded from 0 to 0.95",
+          semanticsLabel:
+            "Current organic-carbon basis with durability bounded from 0 to 0.95",
           rawDurability: 1,
           cappedDurability: 0.95,
           capApplied: true,
@@ -81,9 +82,11 @@ describe("renderThousandYearDurabilityLedgerPdf", () => {
       expect(text).toContain("400 kg product mass");
       expect(text).toContain("Current 1,000-year durability component");
       expect(text).toContain(
-        "Organic-carbon binomial lower estimate with a 0.95 durability cap",
+        "Organic-carbon binomial lower estimate bounded from 0 to 0.95",
       );
-      expect(text).toContain("organic-carbon basis with 0.95 durability cap");
+      expect(text).toContain(
+        "organic-carbon basis with durability bounded from 0 to 0.95",
+      );
       expect(text).toContain("Submitted directly measured dry-basis fraction");
       expect(text).toContain("Calculated row by row as Total C minus Inorganic C");
       expect(text).toContain("Raw durability 1.000");
