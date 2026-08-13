@@ -560,7 +560,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedListTemplates.mockResolvedValue([
       template("rvt_resolved", [
         "key_known",
-        "biochar_sequestration_1000_year",
+        "biochar_sequestration_1000_year_f_durable_max",
       ]),
     ]);
     mockedListBlueprints.mockResolvedValue([blueprint("key_known")]);
@@ -970,7 +970,7 @@ describe("requiredTransportCategories", () => {
     );
 
     expect(result.entityReadinessGaps).toEqual([
-      "Sample S-1: TGA non-reactive carbon data · R0 reflectance · R₀ readings at or above 2%",
+      "Sample S-1: Total carbon · Measured inorganic carbon · TGA non-reactive carbon data · R0 reflectance · R₀ readings at or above 2%",
     ]);
   });
 

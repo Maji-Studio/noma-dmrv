@@ -24,6 +24,7 @@ import {
   getCreditBatchesByRemovalId,
 } from "@/data-access/certifier-removals";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
+import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import {
   getDocumentById,
   listDocumentsForEntity,
@@ -79,7 +80,8 @@ type LineageEntityType =
   | "application"
   | "delivery"
   | "feedstock"
-  | "credit_batch";
+  | "credit_batch"
+  | "sample";
 
 export interface CandidateLineageEntity {
   entityType: LineageEntityType;
@@ -119,6 +121,10 @@ async function collectLineageEntities(
   if (memberBatchIds.length === 0) return [];
 
   const accountingByBatch = await loadCreditBatchRollups(
+    orgCtx,
+    memberBatchIds,
+  );
+  const memberSamples = await getSamplesByCreditBatchIds(
     orgCtx,
     memberBatchIds,
   );
@@ -162,7 +168,14 @@ async function collectLineageEntities(
         });
       }
     }
+  }
 
+  for (const sample of memberSamples) {
+    add({
+      entityType: "sample",
+      entityId: sample.id,
+      entityLabel: `Sample ${sample.sampleCode || sample.id}`,
+    });
   }
 
   return Array.from(seen.values());
@@ -845,6 +858,7 @@ export async function collectCandidateSourceDocumentsForRemoval(
     removalId?: string;
     lineages: SourceCandidateLineage[];
     memberBatches?: Array<{ id: string; code?: string | null }>;
+    memberSamples?: Array<{ id: string; code?: string | null }>;
   },
 ): Promise<CandidateSourceDocument[]> {
   const entities = new Map<string, CandidateLineageEntity>();
@@ -876,6 +890,13 @@ export async function collectCandidateSourceDocumentsForRemoval(
       entityType: "credit_batch",
       entityId: batch.id,
       entityLabel: `Credit batch ${batch.code ?? batch.id}`,
+    });
+  }
+  for (const sample of args.memberSamples ?? []) {
+    add({
+      entityType: "sample",
+      entityId: sample.id,
+      entityLabel: `Sample ${sample.code ?? sample.id}`,
     });
   }
 

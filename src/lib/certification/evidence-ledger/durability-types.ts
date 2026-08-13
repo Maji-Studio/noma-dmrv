@@ -32,6 +32,10 @@ export interface DurabilityEvidenceLedgerDocMetadata {
   removalId: string;
   /** Facility-scoped tier determines the registry inputs this Source evidences. */
   durabilityOption: "200_year" | "1000_year";
+  /** Exact registry component evidenced by a generated 1,000-year ledger. */
+  componentKey?: string;
+  /** Exact local explanatory formula version used by that ledger. */
+  formulaVersion?: string;
   /** Semantic fingerprint of the ledger (batches/figures, excluding render time). */
   contentHash: string;
 }
@@ -126,7 +130,11 @@ export interface ThousandYearLedgerReplicate {
   samplingDay: string | null;
   labName: string | null;
   /** Registry wire value: total carbon dry-basis fraction in the 0 to 1 range. */
-  carbonContentFraction: number;
+  totalCarbonFraction: number;
+  /** Directly measured inorganic-carbon fraction; never derived on this path. */
+  inorganicCarbonFraction: number | null;
+  /** Per-replicate Total − measured Inorganic; null for unreadable legacy evidence. */
+  calculatedOrganicCarbonFraction: number | null;
   /** Registry wire value: fraction of R0 readings at or above 2%. */
   sFraction: number;
 }
@@ -138,6 +146,26 @@ export interface ThousandYearLedgerBatch {
   replicateCount: number;
   /** Attribution-scaled dry biochar mass submitted for this credit batch. */
   productMassKg: number;
+  /** Registry component whose inputs and local explanation this batch records. */
+  componentKey: string;
+  /** Operator-facing description of the registry component. */
+  componentLabel: string;
+  /** Explicit formula/version label for historical interpretation. */
+  formulaVersion: string;
+  /** Operator-facing description of the local explanatory calculation. */
+  formulaLabel: string;
+  /** Visible carbon-basis/cap semantics, especially for deprecated evidence. */
+  semanticsLabel: string;
+  /** Mean raw Total minus Inorganic before the local zero floor. */
+  rawMeanOrganicCarbonFraction: number | null;
+  /** Mean organic-carbon fraction used by the local preview after the floor. */
+  creditedMeanOrganicCarbonFraction: number | null;
+  organicCarbonFloorApplied: boolean;
+  /** Binomial lower estimate before any component cap. */
+  rawDurability: number;
+  /** Durability used locally after bounding the raw estimate to 0 through 0.95. */
+  cappedDurability: number;
+  capApplied: boolean;
 }
 
 export interface ThousandYearDurabilityLedgerModel {

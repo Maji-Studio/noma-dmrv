@@ -14,6 +14,10 @@ import type {
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 import { classifyRemovalSourceCandidate } from "@/lib/certification/removal-source-bindings";
 import {
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+} from "@/lib/isometric/transformers/measurement-sample";
+import {
   buildRemovalSubmissionBuild,
   compileRemovalSubmission,
   materializeRemovalSubmissionSnapshot,
@@ -32,7 +36,7 @@ describe("buildRemovalSubmissionBuild", () => {
         groups: [
           {
             components: [
-              { blueprint_key: "biochar_sequestration_1000_year" },
+              { blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR },
             ],
           },
         ],
@@ -41,6 +45,29 @@ describe("buildRemovalSubmissionBuild", () => {
 
     expect(blocker).toMatch(/uses 200-year durability/i);
     expect(blocker).toMatch(/biochar_sequestration_1000_year/);
+  });
+
+  it("does not accept the deprecated key for a newly configured 1,000-year template", () => {
+    const blocker = removalTemplateTierCompatibilityBlocker(
+      {
+        batchesWithSamples: [{ durabilityOption: "1000_year" }],
+      } as RemovalSubmissionContext,
+      {
+        groups: [
+          {
+            components: [
+              {
+                blueprint_key:
+                  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+              },
+            ],
+          },
+        ],
+      } as never,
+    );
+
+    expect(blocker).toMatch(/incompatible storage component/i);
+    expect(blocker).toContain(DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR);
   });
 
   it("returns compile blockers instead of constructing transport for missing readiness", async () => {
@@ -100,7 +127,7 @@ describe("buildRemovalSubmissionBuild", () => {
           components: [
             {
               id: "rtc_1",
-              blueprint_key: "biochar_sequestration_1000_year",
+              blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
               inputs: [
                 {
                   input_key: "product_mass",
@@ -109,7 +136,7 @@ describe("buildRemovalSubmissionBuild", () => {
                   datapoint_id: null,
                 },
                 {
-                  input_key: "carbon_contents",
+                  input_key: "total_carbon_contents",
                   type: "monitored",
                   quantity_kind: "mass_fraction_dry_basis",
                   datapoint_id: null,
@@ -441,7 +468,7 @@ describe("buildRemovalSubmissionBuild", () => {
           kind: "sequestration",
           groupKey: "co2-stored",
           componentId: "component-sequestration",
-          componentBlueprintKey: "biochar_sequestration_1000_year",
+          componentBlueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
           inputKey: "s_fraction",
           creditBatchIds: ["batch-1"],
         },
@@ -478,17 +505,26 @@ describe("buildRemovalSubmissionBuild", () => {
               samples: [
                 {
                   id: "sample-1",
+                  sampleCode: "SAMPLE-1",
+                  samplingTime: new Date("2026-07-21T08:00:00.000Z"),
                   totalCarbonPercent: 80,
+                  inorganicCarbonPercent: 1,
                   sReflectanceFraction: 0.91,
                 },
                 {
                   id: "sample-2",
+                  sampleCode: "SAMPLE-2",
+                  samplingTime: new Date("2026-07-22T09:00:00.000Z"),
                   totalCarbonPercent: 82,
+                  inorganicCarbonPercent: 1.1,
                   sReflectanceFraction: 0.92,
                 },
                 {
                   id: "sample-3",
+                  sampleCode: "SAMPLE-3",
+                  samplingTime: new Date("2026-07-23T10:00:00.000Z"),
                   totalCarbonPercent: 84,
+                  inorganicCarbonPercent: 1.2,
                   sReflectanceFraction: 0.93,
                 },
               ],
@@ -506,7 +542,7 @@ describe("buildRemovalSubmissionBuild", () => {
             components: [
               {
                 id: "component-sequestration",
-                blueprint_key: "biochar_sequestration_1000_year",
+                blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
                 inputs: [{ input_key: "s_fraction" }],
               },
             ],

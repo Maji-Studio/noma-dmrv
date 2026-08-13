@@ -22,6 +22,7 @@ import {
   type IsometricProject,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
+import { assertSequestrationTemplateSelectable } from "@/lib/isometric/transformers/sequestration-binding";
 import {
   facilityEmissionConfigSchema,
   saveMappingSchema,
@@ -198,6 +199,7 @@ export async function saveFacilityCertifierMapping(
           "Selected template is not a REMOVAL template. Only REMOVAL templates can be used for biochar submissions.",
         );
       }
+      assertSequestrationTemplateSelectable(selectedTemplate);
     }
 
     return upsertCertifierProject(orgCtx, {

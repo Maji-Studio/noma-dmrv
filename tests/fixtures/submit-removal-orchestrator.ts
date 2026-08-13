@@ -14,6 +14,7 @@ import type {
   Sample,
 } from "@/db/schema";
 import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import {
   SUBMISSION_ATTEMPT_OUTCOMES,
   SUBMISSION_METADATA_KEYS,
@@ -323,12 +324,18 @@ export function make1000YearSequestrationTemplate(): IsometricGhgEntryTemplate {
       ...group,
       components: group.components.map((component) => ({
         ...component,
-        blueprint_key: "biochar_sequestration_1000_year",
+        blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
         display_name: "1000-year sequestration",
         inputs: [
           {
             type: "monitored",
-            input_key: "carbon_contents",
+            input_key: "total_carbon_contents",
+            quantity_kind: "mass_fraction_dry_basis",
+            datapoint_id: null,
+          },
+          {
+            type: "monitored",
+            input_key: "inorganic_carbon_contents",
             quantity_kind: "mass_fraction_dry_basis",
             datapoint_id: null,
           },
@@ -414,8 +421,13 @@ export function makeRun(
     samples: [
       {
         id: "smp-test-1",
+        sampleCode: "SMP-TEST-1",
+        samplingTime: new Date("2026-01-10T08:00:00.000Z"),
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.91,
         hToCOrgRatio: 0.4,
         oToCOrgRatio: 0.15,
         ashContentPercent: 5,
@@ -423,8 +435,13 @@ export function makeRun(
       } as unknown as Sample,
       {
         id: "smp-test-2",
+        sampleCode: "SMP-TEST-2",
+        samplingTime: new Date("2026-01-11T09:00:00.000Z"),
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.92,
         hToCOrgRatio: 0.41,
         oToCOrgRatio: 0.16,
         ashContentPercent: 5,
@@ -432,8 +449,13 @@ export function makeRun(
       } as unknown as Sample,
       {
         id: "smp-test-3",
+        sampleCode: "SMP-TEST-3",
+        samplingTime: new Date("2026-01-12T10:00:00.000Z"),
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.93,
         hToCOrgRatio: 0.39,
         oToCOrgRatio: 0.14,
         ashContentPercent: 5,

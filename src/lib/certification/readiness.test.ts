@@ -652,6 +652,9 @@ describe("future-dated measurement dates", () => {
   const FUTURE_APPLICATION =
     "Application APP-0003 is dated 2099-02-14. " +
     "Change the application date or wait until then.";
+  const FUTURE_SAMPLE =
+    "Sample LAB-0003 is dated 2099-02-14. " +
+    "Change the sampling time or wait until then.";
 
   it("blocks submission instead of failing only at submit time", () => {
     const readiness = deriveRemovalReadiness(
@@ -711,9 +714,25 @@ describe("future-dated measurement dates", () => {
     const applicationCheck = buildRemovalRequirementsChecklist(
       ready({ futureDatedMeasurements: [FUTURE_APPLICATION] }),
     ).find((c) => c.key === "measurementDates");
+    const sampleCheck = buildRemovalRequirementsChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_SAMPLE] }),
+    ).find((c) => c.key === "measurementDates");
 
     expect(runCheck?.fixTarget).toBe("productionRuns");
     expect(applicationCheck?.fixTarget).toBe("applications");
+    expect(sampleCheck?.fixTarget).toBe("labSamples");
+  });
+
+  it("preserves the Sample target alongside each mixed future-date category", () => {
+    const runAndSample = buildRemovalRequirementsChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_RUN, FUTURE_SAMPLE] }),
+    ).find((c) => c.key === "measurementDates");
+    const applicationAndSample = buildRemovalRequirementsChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_APPLICATION, FUTURE_SAMPLE] }),
+    ).find((c) => c.key === "measurementDates");
+
+    expect(runAndSample?.fixTarget).toBe("productionRunsAndLabSamples");
+    expect(applicationAndSample?.fixTarget).toBe("applicationsAndLabSamples");
   });
 
   it("renders red in the pre-flight checklist too", () => {
