@@ -14,8 +14,6 @@ const REFERENCE_HASH_LENGTH = 16;
 const MAX_LOOKUP_PAGE_SIZE = 50;
 const DEFAULT_LOOKUP_PAGE_SIZE = MAX_LOOKUP_PAGE_SIZE;
 const DEFAULT_LOOKUP_MAX_PAGES = 20;
-const DEFAULT_LOOKUP_MAX_RECORDS =
-  DEFAULT_LOOKUP_PAGE_SIZE * DEFAULT_LOOKUP_MAX_PAGES;
 const UNDEFINED = { __typename: "Undefined" } as const;
 
 export const BIOCHAR_FIELD_STORAGE_METHOD = "biochar_field" as const;
@@ -182,6 +180,6 @@ export async function findStorageLocationBySupplierReference(
   }
 
   throw new SafeError(
-    `The Isometric Storage Location lookup exceeded its safety limit after ${DEFAULT_LOOKUP_MAX_RECORDS.toLocaleString("en-US")} records. Contact support to raise the reconciliation limit before retrying.`,
+    `The Isometric Storage Location lookup exceeded its safety limit after ${(pageSize * maxPages).toLocaleString("en-US")} records. Contact support to raise the reconciliation limit before retrying.`,
   );
 }

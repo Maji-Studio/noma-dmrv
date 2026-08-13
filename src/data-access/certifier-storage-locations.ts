@@ -238,13 +238,13 @@ export async function setStorageLocationDrift(
             driftStatus: "drifted",
             driftDetails: input.details,
             driftDetectedAt: new Date(),
-            updatedAt: new Date(),
+            updatedAt: sql`now()`,
           }
         : {
             driftStatus: "in_sync",
             driftDetails: null,
             driftDetectedAt: null,
-            updatedAt: new Date(),
+            updatedAt: sql`now()`,
           },
     )
     .where(

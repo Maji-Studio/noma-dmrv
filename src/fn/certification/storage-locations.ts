@@ -246,7 +246,20 @@ async function createStorageLocationUnderLocks(input: {
       );
       if (remote) {
         const mismatch = storageLocationMismatchMessage(remote, input.body);
-        if (mismatch) return { found: "refused" as const, message: mismatch };
+        if (
+          remote.project_id !== input.body.project_id ||
+          remote.supplier_reference_id !== input.body.supplier_reference_id
+        ) {
+          return {
+            found: "refused" as const,
+            message:
+              "The matching Isometric Storage Location conflicts with this application's project-scoped identity. Resolve the remote identity before retrying.",
+          };
+        }
+        // A deterministic supplier-reference match is our previously minted
+        // identity even when the original POST response was lost. Adopt it and
+        // surface mutable provider normalization or later edits as drift.
+        createdRemoteDriftReason = mismatch;
       }
       return supplierRefLookup(
         remote ? { found: true, externalId: remote.id } : { found: false },

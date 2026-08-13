@@ -285,6 +285,12 @@ independently shippable when its upstream primitives and operator demand exist.
   and zero as departure. The gated journal keeps one local identity per
   Application and credit-batch allocation slice until that contract is fixed.
 
+- **Deleted Storage Location recovery** (`isometric/storage-location-recovery`).
+  If an already-journaled remote Storage Location returns 404, noma marks its
+  immutable registration drifted and does not recreate it automatically. A
+  future operator recovery flow must explicitly decide whether to forget and
+  replace that identity; sandbox sync currently requires manual registry review.
+
 - **Slice C — `MonitoringSubmission`** (`isometric/phase-5-slice-c`).
   `POST /projects/{project_id}/monitoring_requirements/{id}/submissions` —
   structured-by-requirement submissions, parallel to the bulk Parquet path.

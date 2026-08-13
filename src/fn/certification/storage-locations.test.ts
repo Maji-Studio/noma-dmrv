@@ -305,7 +305,7 @@ describe("ensureStorageLocation", () => {
     expect([first.source, second.source].sort()).toEqual(["create", "journal"]);
   });
 
-  it("refuses a remote record whose stable reference points at conflicting site facts", async () => {
+  it("adopts an orphaned remote identity and records changed site facts as drift", async () => {
     const reference = (await import("@/lib/isometric/storage-locations")).buildStorageLocationReference({
       customerLocationId: CUSTOMER_LOCATION_ID,
       externalProjectId: "prj-test",
@@ -320,9 +320,24 @@ describe("ensureStorageLocation", () => {
       },
       total_count: 1,
     });
-    await expect(ensure()).rejects.toThrow(/conflicts with this customer location/);
+    const result = await ensure();
+
     expect(mocks.client.post).not.toHaveBeenCalled();
-    expect(mocks.persistRegistration).not.toHaveBeenCalled();
+    expect(mocks.persistRegistration).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({ externalStorageLocationId: "slc-test" }),
+    );
+    expect(mocks.setDrift).toHaveBeenCalledWith(
+      orgCtx,
+      "registration-1",
+      expect.objectContaining({
+        status: "drifted",
+        details: expect.objectContaining({
+          remoteDriftReason: expect.stringMatching(/conflicts/),
+        }),
+      }),
+    );
+    expect(result).toMatchObject({ source: "reconciliation", drifted: true });
   });
 
   it("preserves a confirmed POST identity and marks provider-normalized facts as drift", async () => {
@@ -460,6 +475,29 @@ describe("ensureStorageLocation", () => {
       }),
     );
     expect(mocks.client.patch).not.toHaveBeenCalled();
+  });
+
+  it("marks a deleted remote registration as drift without creating a replacement", async () => {
+    const { IsometricApiError } = await import("@/lib/isometric/client");
+    mocks.getRegistration.mockResolvedValue(registration());
+    mocks.client.get.mockRejectedValue(
+      new IsometricApiError("not found", 404, undefined, "http"),
+    );
+
+    const result = await ensure();
+
+    expect(result).toMatchObject({ source: "journal", drifted: true });
+    expect(mocks.setDrift).toHaveBeenCalledWith(
+      orgCtx,
+      "registration-1",
+      expect.objectContaining({
+        status: "drifted",
+        details: expect.objectContaining({
+          remoteDriftReason: expect.stringMatching(/no longer exists/),
+        }),
+      }),
+    );
+    expect(mocks.client.post).not.toHaveBeenCalled();
   });
 
   it("refuses production writes at the registry seam", async () => {
