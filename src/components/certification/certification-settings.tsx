@@ -260,6 +260,7 @@ export function CertificationSettings() {
       caption:
         "Read-only environment, credential and allowlist status. Never exposes tokens.",
       access: "Platform Admins",
+      readOnly: true,
       content: <CertificationHealthPanel />,
     });
     sections.push({
