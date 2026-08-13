@@ -631,6 +631,44 @@ describe("application mutations", () => {
     }
   });
 
+  it("rejects clearing only one saved location coordinate", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+        code: `AP-AM-${runId}-GPS-HALF-CLEAR`,
+        deliveryId: fixture.deliveryIds[0],
+        applicationDate: new Date("2025-07-08"),
+        biocharAppliedTons: 2,
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
+      });
+      fixture.applicationIds.push(application.id);
+
+      await expect(
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+          gpsLongitude: null,
+        }),
+      ).rejects.toThrow("Longitude is required when a latitude is entered.");
+
+      const [persisted] = await db
+        .select({
+          gpsLatitude: applications.gpsLatitude,
+          gpsLongitude: applications.gpsLongitude,
+        })
+        .from(applications)
+        .where(eq(applications.id, application.id));
+
+      expect(persisted).toEqual({
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
+      });
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
   it("allows a coordinate-only partial update for boundary evidence", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
