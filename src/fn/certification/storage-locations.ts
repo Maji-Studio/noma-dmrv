@@ -36,7 +36,8 @@ const STORAGE_LOCATION_LOCK_SCOPE = "certifier-storage-location:isometric";
 export interface EnsureStorageLocationArgs {
   orgCtx: OrgContext;
   applicationId: string;
-  submissionRow: { id: string };
+  /** Optional Removal ledger when invoked inside that submission workflow. */
+  submissionRow?: { id: string };
   log: Logger;
 }
 
@@ -127,7 +128,7 @@ export async function ensureStorageLocation(
         orgCtx: args.orgCtx,
         entityType: STORAGE_LOCATION_ENTITY_TYPE,
         entityId: args.applicationId,
-        submissionRowId: args.submissionRow.id,
+        submissionRowId: args.submissionRow?.id,
         operation: "storage-location:create",
         requestPayload: body,
         supplierRefId: supplierReference,
@@ -257,7 +258,9 @@ async function reuseStorageLocationRegistration(
         errorMessage:
           "The customer location no longer matches the registered Isometric Storage Location. Review the name or coordinates; noma did not update the registry record.",
       },
-      { submissionId: args.submissionRow.id },
+      args.submissionRow
+        ? { submissionId: args.submissionRow.id }
+        : undefined,
     );
   }
   return {

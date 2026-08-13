@@ -84,6 +84,20 @@ IDs.
 These operations are used by the sampled 1,000-year sandbox path. Their
 presence is not evidence of a live 200-year or production path.
 
+## Production and storage traceability operations
+
+| Method and path | Status | Use | Current call site |
+|---|---|---|---|
+| `GET /production_batches` | wired | Supplier-reference reconciliation through client-side pagination | `src/lib/isometric/production-batches.ts` → `findProductionBatchBySupplierRef`; consumer in `src/fn/certification/production-batches.ts` |
+| `POST /production_batches` | wired | Register one Isometric Production Batch per noma credit batch | `src/lib/isometric/production-batches.ts` → `createProductionBatch`; consumer in `src/fn/certification/production-batches.ts` |
+| `GET /projects/{project_id}/storage_locations` | wired, sandbox verification pending | Bounded supplier-reference reconciliation before an explicit sync | `src/lib/isometric/storage-locations.ts` → `findStorageLocationBySupplierReference`; consumer in `src/fn/certification/storage-locations.ts` |
+| `POST /projects/{project_id}/storage_locations` | wired, sandbox verification pending | Explicitly register a customer location as a reusable `biochar_field` site | `src/lib/isometric/storage-locations.ts` → `createStorageLocation`; consumers in `src/fn/certification/storage-locations.ts` and `storage-location-actions.ts` |
+
+`GET /projects/{project_id}/storage_locations/{id}` and PATCH have typed
+wrappers but no application caller. Drift is intentionally surfaced for
+operator review instead of being patched automatically. Biochar Application
+POST remains hard-gated and has no request-producing or HTTP call path.
+
 ## Telemetry operations
 
 | Method and path | Status | Use | Current call site |
@@ -104,8 +118,8 @@ The following operation families have no current application call site:
 
 - organization identity;
 - monitoring requirements and MonitoringSubmissions;
-- storage locations and storage units;
-- production batches and feedstock batches;
+- storage units;
+- feedstock batches;
 - biochar applications;
 - measurement locations;
 - standalone project/GHG-statement Components and attribution mutations;

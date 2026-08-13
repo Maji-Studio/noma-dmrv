@@ -397,6 +397,23 @@ describe("performRegistryCreate", () => {
     expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
   });
 
+  it("keeps standalone sync failures audited without rejecting an unrelated ledger", async () => {
+    const args = makeArgs({
+      submissionRowId: undefined,
+      create: vi.fn(async () => {
+        throw new Error("socket hang up");
+      }),
+    });
+
+    await expect(performRegistryCreate(args)).rejects.toThrowError(SafeError);
+
+    expect(ledger.appendSyncEvent).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      expect.objectContaining({ status: "failed" }),
+    );
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
+  });
+
   it("rejects with the caller's ambiguity message when the lookup finds multiple candidates", async () => {
     const ambiguousMessage =
       "Multiple draft GHG statements exist for this project and period in Isometric.";
