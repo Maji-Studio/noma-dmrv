@@ -4,12 +4,14 @@ import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import type { Logger } from "@/lib/log";
 import type { ProductionBatchRegistryInput } from "@/data-access/certifier-production-batches";
 import type { IsometricProductionBatch } from "@/lib/isometric/production-batches";
+import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { PerformRegistryCreateArgs } from "./registry-create";
 import type { DurabilityMeasurementSampleSubmission } from "./durability-measurement-samples";
 
 const mocks = vi.hoisted(() => ({
   getProductionBatchRegistryInputs: vi.fn(),
   getProductionBatchRegistrations: vi.fn(),
+  migrateProductionBatchPayloadHash: vi.fn(),
   upsertProductionBatchRegistration: vi.fn(),
   appendSyncEventBestEffort: vi.fn(),
   client: {
@@ -24,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/data-access/certifier-production-batches", () => ({
   getProductionBatchRegistryInputs: mocks.getProductionBatchRegistryInputs,
   getProductionBatchRegistrations: mocks.getProductionBatchRegistrations,
+  migrateProductionBatchPayloadHash: mocks.migrateProductionBatchPayloadHash,
   upsertProductionBatchRegistration: mocks.upsertProductionBatchRegistration,
 }));
 
@@ -98,11 +101,14 @@ function registryInput(
     creditBatchCode: "CB-2026-001",
     startDate: "2026-03-01",
     endDate: "2026-03-28",
+    startedAt: "2026-03-01T07:15:00.000Z",
+    endedAt: "2026-03-28T18:45:00.000Z",
     externalProjectId: "prj_1K9YJ33RKSBX9FFF",
     externalFacilityId: "fcl_1G8QT5ZAB1S0XSDW",
     isometricFeedstockTypeId: "ftt_1D7KZ1P761S0G7BN",
     totalDryMassKg: 2_000,
     runsMissingDryMass: 0,
+    runsMissingEndTime: 0,
     ...patch,
   };
 }
@@ -114,13 +120,13 @@ function remoteBatch(
 ): IsometricProductionBatch {
   return {
     display_name: "CB-2026-001",
-    ended_at: "2026-03-28T23:59:59.999Z",
+    ended_at: "2026-03-28T18:45:00.000Z",
     facility_id: "fcl_1G8QT5ZAB1S0XSDW",
     feedstock_type_ids: ["ftt_1D7KZ1P761S0G7BN"],
     id,
     kind: "biochar",
     mass: { magnitude: 2_000, unit: "kg" },
-    started_at: "2026-03-01T00:00:00.000Z",
+    started_at: "2026-03-01T07:15:00.000Z",
     supplier_reference_id: supplierReferenceId,
     uploaded_at: "2026-03-29T00:00:00.000Z",
     ...patch,
@@ -181,14 +187,16 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(body.mass).toEqual({ magnitude: 2_000, unit: "kg" });
     expect("standard_deviation" in body.mass).toBe(false);
     expect(body.feedstock_type_ids).toEqual(["ftt_1D7KZ1P761S0G7BN"]);
-    expect(body.started_at).toBe("2026-03-01T00:00:00.000Z");
-    expect(body.ended_at).toBe("2026-03-28T23:59:59.999Z");
+    expect(body.started_at).toBe("2026-03-01T07:15:00.000Z");
+    expect(body.ended_at).toBe("2026-03-28T18:45:00.000Z");
     expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledTimes(1);
     expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledWith(
       orgCtx,
       expect.objectContaining({
         externalProjectId: "prj_1K9YJ33RKSBX9FFF",
         externalFacilityId: "fcl_1G8QT5ZAB1S0XSDW",
+        startedOn: "2026-03-01",
+        endedOn: "2026-03-28",
       }),
     );
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
@@ -216,6 +224,34 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       }),
     );
     expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+  });
+
+  it("journals the UTC dates of the physical instants that were submitted", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({
+        startDate: "2026-07-01",
+        endDate: "2026-07-31",
+        startedAt: "2026-07-03T06:00:00.000Z",
+        endedAt: "2026-08-01T04:00:00.000Z",
+      }),
+    ]);
+    mocks.client.post.mockImplementation(
+      async (_path: string, body: { supplier_reference_id: string }) =>
+        remoteBatch(body.supplier_reference_id, PRODUCTION_BATCH_ID, {
+          started_at: "2026-07-03T06:00:00.000Z",
+          ended_at: "2026-08-01T04:00:00.000Z",
+        }),
+    );
+
+    await ensure();
+
+    expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        startedOn: "2026-07-03",
+        endedOn: "2026-08-01",
+      }),
+    );
   });
 
   it("always reconciles by supplier reference before POSTing a missing journal", async () => {
@@ -297,6 +333,86 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     );
   });
 
+  it("does not report drift when only the legacy date-bound representation changed", async () => {
+    const current = buildLegacyDateBoundBody(await currentSupplierRef());
+    mocks.getProductionBatchRegistrations.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        externalProductionBatchId: PRODUCTION_BATCH_ID,
+        payloadHash: payloadHash(current),
+      },
+    ]);
+
+    await expect(ensure()).resolves.toEqual(
+      new Map([[CREDIT_BATCH_ID, PRODUCTION_BATCH_ID]]),
+    );
+    expect(mocks.appendSyncEventBestEffort).not.toHaveBeenCalled();
+    expect(mocks.migrateProductionBatchPayloadHash).toHaveBeenCalledWith(
+      orgCtx,
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        expectedPayloadHash: payloadHash(current),
+        nextPayloadHash: await currentPayloadHash(),
+      },
+    );
+  });
+
+  it("reports physical-window drift after the legacy hash was migrated", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ endedAt: "2026-03-28T19:45:00.000Z" }),
+    ]);
+    mocks.getProductionBatchRegistrations.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        externalProductionBatchId: PRODUCTION_BATCH_ID,
+        payloadHash: await currentPayloadHash(),
+      },
+    ]);
+
+    await ensure();
+
+    expect(mocks.migrateProductionBatchPayloadHash).not.toHaveBeenCalled();
+    expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports drift when the physical window outgrows the stored legacy bounds", async () => {
+    const legacyBody = buildLegacyDateBoundBody(await currentSupplierRef());
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ endedAt: "2026-03-29T00:00:00.000Z" }),
+    ]);
+    mocks.getProductionBatchRegistrations.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        externalProductionBatchId: PRODUCTION_BATCH_ID,
+        payloadHash: payloadHash(legacyBody),
+      },
+    ]);
+
+    await ensure();
+
+    expect(mocks.migrateProductionBatchPayloadHash).not.toHaveBeenCalled();
+    expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports real payload drift instead of migrating a legacy hash", async () => {
+    const legacyBody = buildLegacyDateBoundBody(await currentSupplierRef());
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ totalDryMassKg: 1_999 }),
+    ]);
+    mocks.getProductionBatchRegistrations.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        externalProductionBatchId: PRODUCTION_BATCH_ID,
+        payloadHash: payloadHash(legacyBody),
+      },
+    ]);
+
+    await ensure();
+
+    expect(mocks.migrateProductionBatchPayloadHash).not.toHaveBeenCalled();
+    expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledTimes(1);
+  });
+
   it("reuses a registration whose local data no longer builds a payload", async () => {
     mocks.getProductionBatchRegistryInputs.mockResolvedValue([
       registryInput({ externalFacilityId: null }),
@@ -353,6 +469,43 @@ describe("ensureProductionBatchesForCreditBatches", () => {
         externalProductionBatchId: PRODUCTION_BATCH_ID,
       }),
     );
+  });
+
+  it("claims a legacy date-bound orphan without re-POSTing", async () => {
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
+        started_at: "2026-03-01T00:00:00.000Z",
+        ended_at: "2026-03-28T23:59:59.999Z",
+      });
+    });
+
+    await expect(ensure()).resolves.toEqual(
+      new Map([[CREDIT_BATCH_ID, PRODUCTION_BATCH_ID]]),
+    );
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        operation: `production-batch:legacy-window-claimed:${CREDIT_BATCH_ID}`,
+        responsePayload: expect.objectContaining({
+          id: PRODUCTION_BATCH_ID,
+          started_at: "2026-03-01T00:00:00.000Z",
+          ended_at: "2026-03-28T23:59:59.999Z",
+        }),
+      }),
+      { submissionId: "submission-1" },
+    );
+  });
+
+  it("refuses an orphan with a hybrid legacy and physical window", async () => {
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
+        started_at: "2026-03-01T00:00:00.000Z",
+      });
+    });
+
+    await expect(ensure()).rejects.toThrow(/does not match this credit batch/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
   });
 
   it("claims an orphaned record within the dry-mass precision tolerance", async () => {
@@ -412,8 +565,8 @@ describe("ensureProductionBatchesForCreditBatches", () => {
   it("matches an orphaned record whose timestamps express the same instants", async () => {
     mocks.client.paginate.mockImplementation(async function* () {
       yield remoteBatch(await currentSupplierRef(), PRODUCTION_BATCH_ID, {
-        started_at: "2026-02-28T19:00:00-05:00",
-        ended_at: "2026-03-29T00:59:59.999+01:00",
+        started_at: "2026-03-01T02:15:00-05:00",
+        ended_at: "2026-03-28T19:45:00.000+01:00",
       });
     });
 
@@ -427,7 +580,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     ["facility", { facility_id: "fcl_other" }],
     ["mass", { mass: { magnitude: 1_999, unit: "kg" } }],
     ["mass unit", { mass: { magnitude: 2_000, unit: "gram" } }],
-    ["window", { ended_at: "2026-03-29T23:59:59.999Z" }],
+    ["window", { ended_at: "2026-03-29T18:45:00.000Z" }],
   ])(
     "refuses an orphaned remote record with mismatched %s identity",
     async (_label, patch) => {
@@ -491,6 +644,24 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(mocks.client.post).not.toHaveBeenCalled();
   });
 
+  it("refuses a credit batch whose member run is still open", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ runsMissingEndTime: 1, endedAt: null }),
+    ]);
+    await expect(ensure()).rejects.toThrow(/still open/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
+  it("asks the operator to add runs when the batch has no production window", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ startedAt: null, endedAt: null }),
+    ]);
+
+    await expect(ensure()).rejects.toThrow(
+      /Add and close its production runs before submitting/,
+    );
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
   it("skips the registry entirely when no credit batch needs one", async () => {
     const registered = await ensureProductionBatchesForCreditBatches({
       orgCtx,
@@ -556,4 +727,17 @@ async function currentPayloadHash(): Promise<string> {
     "./production-batches"
   );
   return buildProductionBatchSubmissions([registryInput()])[0].payloadHash;
+}
+
+function buildLegacyDateBoundBody(supplierReferenceId: string) {
+  return {
+    display_name: "CB-2026-001",
+    ended_at: "2026-03-28T23:59:59.999Z",
+    facility_id: "fcl_1G8QT5ZAB1S0XSDW",
+    feedstock_type_ids: ["ftt_1D7KZ1P761S0G7BN"],
+    kind: "biochar" as const,
+    mass: { magnitude: 2_000, unit: "kg" },
+    started_at: "2026-03-01T00:00:00.000Z",
+    supplier_reference_id: supplierReferenceId,
+  };
 }
