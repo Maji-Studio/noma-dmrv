@@ -196,6 +196,24 @@ export async function ensureProductionBatchesForCreditBatches(
     existingRows.map((row) => [row.creditBatchId, row]),
   );
 
+  // Validate every batch that still needs a POST before the first external
+  // mutation. Otherwise a valid earlier batch could be created before a later
+  // open or otherwise invalid batch aborts the same Removal submission.
+  // Existing registrations deliberately skip this preflight and are reused
+  // even when their live local facts no longer build a valid payload.
+  const missingSubmissionsByCreditBatchId = new Map<
+    string,
+    ProductionBatchSubmission
+  >();
+  for (const input of sortByCreditBatchId(inputs)) {
+    if (!existingByCreditBatchId.has(input.creditBatchId)) {
+      missingSubmissionsByCreditBatchId.set(
+        input.creditBatchId,
+        buildProductionBatchSubmission(input),
+      );
+    }
+  }
+
   const client = await getIsometricClientForOrg(args.orgCtx.organizationId);
 
   // Payloads are built INSIDE the loop, per batch that still needs a POST: an
@@ -239,7 +257,9 @@ export async function ensureProductionBatchesForCreditBatches(
       continue;
     }
 
-    const submission = buildProductionBatchSubmission(input);
+    const submission = missingSubmissionsByCreditBatchId.get(
+      input.creditBatchId,
+    )!;
     const { externalId } = await performRegistryCreate({
       orgCtx: args.orgCtx,
       entityType: REMOVAL_ENTITY_TYPE,
