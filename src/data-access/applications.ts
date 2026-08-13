@@ -62,6 +62,7 @@ import { parseGisBoundary } from "@/schemas/gis-boundary";
 
 const DEFAULT_PAGE_SIZE = 100;
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
+const INVALID_APPLICATION_EVIDENCE_MESSAGE = "Application evidence is invalid.";
 
 export interface ApplicationDeliveryOptionData {
   id: string;
@@ -732,7 +733,7 @@ export async function updateApplication(
       "update",
     );
 
-    applicationEvidenceStateSchema.parse({
+    const evidenceState = applicationEvidenceStateSchema.safeParse({
       evidenceMethod:
         data.evidenceMethod ?? existingApplication.evidenceMethod,
       gpsLatitude:
@@ -744,6 +745,12 @@ export async function updateApplication(
           ? existingApplication.gpsLongitude
           : data.gpsLongitude,
     });
+    if (!evidenceState.success) {
+      throw new SafeError(
+        evidenceState.error.issues[0]?.message ??
+          INVALID_APPLICATION_EVIDENCE_MESSAGE,
+      );
+    }
 
     const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
