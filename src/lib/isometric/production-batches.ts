@@ -124,7 +124,7 @@ export function buildCreateProductionBatchRequest(
   const endedAtMs = Date.parse(args.endedAt);
   if (!Number.isFinite(startedAtMs) || !Number.isFinite(endedAtMs)) {
     throw new SafeError(
-      `Credit batch ${args.creditBatchCode} has no complete production-run window. Close every production run before submitting.`,
+      `Credit batch ${args.creditBatchCode} has no production runs with a recorded time window. Add and close its production runs before submitting.`,
     );
   }
   if (endedAtMs <= startedAtMs) {

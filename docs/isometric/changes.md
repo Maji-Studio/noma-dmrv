@@ -13,9 +13,11 @@ positive- and negative-offset facility timezones.
 
 Reconciliation accepts the former UTC day-start/day-end representation for a
 remote batch carrying the same stable supplier reference and otherwise matching
-identity. Stored payload hashes from that exact legacy representation do not
-emit permanent drift events; changes to mass, facility, feedstock, kind, or
-supplier reference still do. Open member runs fail before any registry POST.
+identity and records that compatibility claim in the sync audit trail. Stored
+payload hashes from that exact legacy representation migrate once to the
+physical-window hash; changes to mass, facility, feedstock, kind, supplier
+reference, or a later physical window still emit drift. Open member runs fail
+before that batch's registry POST.
 The behavior is covered hermetically; fresh sandbox verification is pending.
 
 ## 2026-08-13 (Storage Location traceability staged)
