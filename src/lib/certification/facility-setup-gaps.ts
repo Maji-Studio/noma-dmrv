@@ -30,7 +30,10 @@ export interface FacilitySetupGapFacts {
 }
 
 const BLUEPRINT_OPERATOR_LABELS: Record<string, string> = {
-  biochar_sequestration_1000_year: "1,000-year biochar sequestration",
+  biochar_sequestration_1000_year:
+    "Legacy 1,000-year biochar sequestration (total-carbon basis, uncapped)",
+  biochar_sequestration_1000_year_f_durable_max:
+    "1,000-year biochar sequestration",
   biochar_sequestration_200_year: "200-year biochar sequestration",
 };
 

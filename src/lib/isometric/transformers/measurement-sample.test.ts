@@ -8,8 +8,10 @@ import {
   buildBiocharProductionBatchSample,
   buildBiocharSoilSample,
   CARBON_CONTENT_UNIT,
-  CARBON_CONTENTS_MEASUREMENT_PROPERTY,
-  CARBON_CONTENTS_UNIT,
+  CARBON_CONTENTS_1000_YEAR_UNIT,
+  classifySequestration1000YearComponent,
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   expectedSequestrationBlueprintKeys,
   H_C_MOLAR_RATIO_PERCENT_SCALE,
   H_TO_C_ORG_MEASUREMENT_PROPERTY,
@@ -20,7 +22,9 @@ import {
   PRODUCT_MASS_UNIT,
   S_FRACTION_MEASUREMENT_PROPERTY,
   S_FRACTION_UNIT,
-  SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
+  INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
+  UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   SEQUESTRATION_BLUEPRINT_SAMPLED,
   SEQUESTRATION_BLUEPRINT_UNSAMPLED,
   SOIL_TEMPERATURE_MEASUREMENT_PROPERTY,
@@ -233,7 +237,10 @@ describe("isSequestrationBlueprintKey + carbon scale", () => {
     expect(isSequestrationBlueprintKey(SEQUESTRATION_BLUEPRINT_UNSAMPLED)).toBe(
       true,
     );
-    expect(isSequestrationBlueprintKey(SEQUESTRATION_BLUEPRINT_1000_YEAR)).toBe(
+    expect(isSequestrationBlueprintKey(CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR)).toBe(
+      true,
+    );
+    expect(isSequestrationBlueprintKey(DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR)).toBe(
       true,
     );
     expect(isSequestrationBlueprintKey("carbon_rich_substance_sequestration")).toBe(
@@ -251,7 +258,7 @@ describe("isSequestrationBlueprintFamily (prefix — catches unknown variants)",
     expect(isSequestrationBlueprintFamily(SEQUESTRATION_BLUEPRINT_SAMPLED)).toBe(
       true,
     );
-    expect(isSequestrationBlueprintFamily(SEQUESTRATION_BLUEPRINT_1000_YEAR)).toBe(
+    expect(isSequestrationBlueprintFamily(CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR)).toBe(
       true,
     );
     // A future variant we don't yet carry inputs for is still recognised, so the
@@ -266,14 +273,35 @@ describe("isSequestrationBlueprintFamily (prefix — catches unknown variants)",
 describe("expectedSequestrationBlueprintKeys (tier → template blueprint, ADR 0021)", () => {
   it("maps 1000-year to the single 1000-year blueprint", () => {
     const keys = expectedSequestrationBlueprintKeys("1000_year");
-    expect([...keys]).toEqual([SEQUESTRATION_BLUEPRINT_1000_YEAR]);
+    expect([...keys]).toEqual([CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR]);
+    expect(keys.has(DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR)).toBe(false);
   });
 
   it("maps 200-year to the sampled + Method-B unsampled blueprints", () => {
     const keys = expectedSequestrationBlueprintKeys("200_year");
     expect(keys.has(SEQUESTRATION_BLUEPRINT_SAMPLED)).toBe(true);
     expect(keys.has(SEQUESTRATION_BLUEPRINT_UNSAMPLED)).toBe(true);
-    expect(keys.has(SEQUESTRATION_BLUEPRINT_1000_YEAR)).toBe(false);
+    expect(keys.has(CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR)).toBe(false);
+  });
+});
+
+describe("1,000-year component classification", () => {
+  it("distinguishes current, deprecated historical, and unsupported unsampled keys", () => {
+    expect(
+      classifySequestration1000YearComponent(
+        CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+      ),
+    ).toBe("current");
+    expect(
+      classifySequestration1000YearComponent(
+        DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+      ),
+    ).toBe("deprecated");
+    expect(
+      classifySequestration1000YearComponent(
+        UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+      ),
+    ).toBe("unsupported-unsampled");
   });
 });
 
@@ -284,24 +312,29 @@ describe("build1000YearSequestrationSample (⚠️ sandbox-gated blueprint, ADR 
     measuredAt: "2026-05-31T00:00:00.000Z",
   };
 
-  it("submits per-replicate carbon_contents + s_fraction LISTS and one product_mass SCALAR", () => {
+  it("submits paired total-carbon, inorganic-carbon, and s_fraction lists plus scalar mass", () => {
     const sample = build1000YearSequestrationSample({
       ...baseArgs,
       productMassKg: 8000,
       replicates: [
-        { carbonContentFraction: 0.792, sFraction: 0.92 },
-        { carbonContentFraction: 0.778, sFraction: 0.9 },
-        { carbonContentFraction: 0.804, sFraction: 0.93 },
+        { totalCarbonContentFraction: 0.792, inorganicCarbonContentFraction: 0.012, sFraction: 0.92 },
+        { totalCarbonContentFraction: 0.778, inorganicCarbonContentFraction: 0.011, sFraction: 0.9 },
+        { totalCarbonContentFraction: 0.804, inorganicCarbonContentFraction: 0.013, sFraction: 0.93 },
       ],
     });
     expect(sample).not.toBeNull();
     if (!sample) return;
 
     // Two list values per replicate (carbon + s_fraction) + one product mass.
-    const carbon = sample.values.filter(
+    const totalCarbon = sample.values.filter(
       (v) =>
         v.measurement_property.qualifier ===
-        CARBON_CONTENTS_MEASUREMENT_PROPERTY.qualifier,
+        TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY.qualifier,
+    );
+    const inorganicCarbon = sample.values.filter(
+      (v) =>
+        v.measurement_property.qualifier ===
+        INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY.qualifier,
     );
     const sFraction = sample.values.filter(
       (v) =>
@@ -312,7 +345,8 @@ describe("build1000YearSequestrationSample (⚠️ sandbox-gated blueprint, ADR 
       (v) => v.measurement_property.qualifier === null,
     );
 
-    expect(carbon).toHaveLength(3);
+    expect(totalCarbon).toHaveLength(3);
+    expect(inorganicCarbon).toHaveLength(3);
     expect(sFraction).toHaveLength(3);
     expect(mass).toHaveLength(1);
     // Per-replicate values are submitted RAW — the registry computes the
@@ -322,20 +356,36 @@ describe("build1000YearSequestrationSample (⚠️ sandbox-gated blueprint, ADR 
       quantity_kind: "dimensionless_ratio",
       qualifier: "inertinite_fraction",
     });
-    expect(carbon[0].value.unit).toBe(CARBON_CONTENTS_UNIT);
+    expect(totalCarbon.map((v) => v.value.magnitude)).toEqual([0.792, 0.778, 0.804]);
+    expect(inorganicCarbon.map((v) => v.value.magnitude)).toEqual([0.012, 0.011, 0.013]);
+    expect(totalCarbon[0].value.unit).toBe(CARBON_CONTENTS_1000_YEAR_UNIT);
     expect(sFraction[0].value.unit).toBe(S_FRACTION_UNIT);
     expect(mass[0].value.magnitude).toBe(8000);
     expect(mass[0].value.unit).toBe(PRODUCT_MASS_UNIT);
     expect(sample.measurement_type).toBe("biochar_production_batch");
   });
 
-  it("returns null when the batch pooled no replicate", () => {
-    expect(
+  it("fails closed when fewer than three complete replicates reach serialization", () => {
+    expect(() =>
       build1000YearSequestrationSample({
         ...baseArgs,
         productMassKg: 8000,
         replicates: [],
       }),
-    ).toBeNull();
+    ).toThrow(/at least 3 complete replicates/);
+  });
+
+  it("rejects inorganic carbon above total beyond the shared tolerance", () => {
+    expect(() =>
+      build1000YearSequestrationSample({
+        ...baseArgs,
+        productMassKg: 8000,
+        replicates: [
+          { totalCarbonContentFraction: 0.01, inorganicCarbonContentFraction: 0.02, sFraction: 0.9 },
+          { totalCarbonContentFraction: 0.8, inorganicCarbonContentFraction: 0.01, sFraction: 0.91 },
+          { totalCarbonContentFraction: 0.8, inorganicCarbonContentFraction: 0.01, sFraction: 0.92 },
+        ],
+      }),
+    ).toThrow(/Inorganic carbon replicate 1 cannot exceed total carbon/);
   });
 });

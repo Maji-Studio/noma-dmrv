@@ -152,7 +152,16 @@ const SOURCE_BINDING_RULES = {
 } as const satisfies Record<string, SourceBindingRule>;
 
 const DURABILITY_LEDGER_TARGETS = {
-  "1000_year": ["carbon_contents", "product_mass", "s_fraction"],
+  "1000_year": [
+    "total_carbon_contents",
+    "inorganic_carbon_contents",
+    "product_mass",
+    "s_fraction",
+    // Historical deprecated removals used this total-carbon input. It remains
+    // optional so old remote records stay classifiable without making the
+    // deprecated component eligible for a newly configured template.
+    "carbon_contents",
+  ],
   "200_year": [
     "h_c_molar_ratios",
     "total_carbon_contents",

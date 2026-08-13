@@ -3,11 +3,13 @@ import type { components } from "../generated/certify";
 import { buildRemovalSupplierRef } from "../utils/supplier-ref";
 import { encodeMeasurementProperty } from "../utils/measurement-property";
 import {
-  CARBON_CONTENTS_MEASUREMENT_PROPERTY,
+  classifySequestration1000YearComponent,
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
   isSequestrationBlueprintFamily,
   PRODUCT_MASS_MEASUREMENT_PROPERTY,
   S_FRACTION_MEASUREMENT_PROPERTY,
-  SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
 } from "./measurement-sample";
 
 type GhgEntryTemplate = components["schemas"]["GhgEntryTemplate"];
@@ -84,16 +86,23 @@ export interface DirectSequestrationDatapoint {
  * template. Each input declares whether the GHG entry consumes a datapoint
  * returned by a measurement sample or a direct datapoint posted by the removal
  * orchestrator. This table deliberately owns the input shapes because
- * `biochar_sequestration_1000_year` is referenced by the live template but
- * absent from the component-blueprint catalog.
+ * The replacement component is absent from some component-blueprint catalog
+ * responses, so this local contract must be exact and fail closed on drift.
  */
 export const SEQUESTRATION_COMPONENT_INPUT_BINDINGS = {
-  [SEQUESTRATION_BLUEPRINT_1000_YEAR]: {
+  [CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR]: {
     inputs: {
-      carbon_contents: {
+      total_carbon_contents: {
         dataShape: "LIST",
         source: "measurement-property",
-        measurementProperty: CARBON_CONTENTS_MEASUREMENT_PROPERTY,
+        measurementProperty:
+          TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
+      },
+      inorganic_carbon_contents: {
+        dataShape: "LIST",
+        source: "measurement-property",
+        measurementProperty:
+          INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
       },
       product_mass: {
         dataShape: "SCALAR",
@@ -120,6 +129,31 @@ export function hasExplicitSequestrationBinding(
   blueprintKey: string,
 ): boolean {
   return blueprintKey in SEQUESTRATION_COMPONENT_INPUT_BINDINGS;
+}
+
+/**
+ * Configuration-time guard for newly selected templates. Historical snapshots
+ * remain readable, but operators cannot bind a deprecated or unsupported
+ * Method-B 1,000-year component as the facility default.
+ */
+export function assertSequestrationTemplateSelectable(
+  template: GhgEntryTemplate,
+): void {
+  for (const component of template.groups.flatMap((group) => group.components)) {
+    const classification = classifySequestration1000YearComponent(
+      component.blueprint_key,
+    );
+    if (classification === "deprecated") {
+      throw new SafeError(
+        "The selected template uses the legacy 1,000-year component with total-carbon and uncapped durability semantics. Select a template using biochar_sequestration_1000_year_f_durable_max.",
+      );
+    }
+    if (classification === "unsupported-unsampled") {
+      throw new SafeError(
+        "The selected template uses the unsampled 1,000-year component. Unsampled Method B is not supported; select the sampled 1,000-year template.",
+      );
+    }
+  }
 }
 
 export function getSequestrationInputBinding(
@@ -380,6 +414,26 @@ export function bindSequestrationDatapointsToTemplate(args: {
 
         datapointIdsByRtcInput.set(rtcInputKey, [...datapointIds]);
       }
+
+      if (
+        component.blueprint_key === CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR
+      ) {
+        const listInputKeys = [
+          "total_carbon_contents",
+          "inorganic_carbon_contents",
+          "s_fraction",
+        ] as const;
+        const listLengths = listInputKeys.map(
+          (inputKey) =>
+            datapointIdsByRtcInput.get(`${component.id}::${inputKey}`)?.length ??
+            0,
+        );
+        if (new Set(listLengths).size !== 1 || listLengths[0] < 3) {
+          throw new SafeError(
+            "The current 1,000-year durability component requires equal total-carbon, inorganic-carbon, and R₀ lists with at least three values. Refresh the Sample data and try again.",
+          );
+        }
+      }
     }
   }
 
@@ -388,6 +442,17 @@ export function bindSequestrationDatapointsToTemplate(args: {
 
 function assertSupportedSequestrationBlueprint(blueprintKey: string): void {
   if (hasExplicitSequestrationBinding(blueprintKey)) return;
+  const classification = classifySequestration1000YearComponent(blueprintKey);
+  if (classification === "deprecated") {
+    throw new SafeError(
+      "The selected Removal template uses the deprecated 1,000-year durability component. Ask an Admin to select a template using biochar_sequestration_1000_year_f_durable_max.",
+    );
+  }
+  if (classification === "unsupported-unsampled") {
+    throw new SafeError(
+      "The selected Removal template uses the unsampled 1,000-year durability component. Unsampled Method B is not supported; choose the sampled 1,000-year template.",
+    );
+  }
   throw new SafeError(
     "The selected Removal template has an unsupported durability component. Choose a template for this facility's durability tier.",
   );

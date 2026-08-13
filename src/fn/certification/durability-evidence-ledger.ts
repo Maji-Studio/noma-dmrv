@@ -7,8 +7,9 @@
  * `ensureLedgerSource`.
  *
  * The 200-year PDF reconciles H/C, carbon, product mass, and the facility soil
- * reference. The 1000-year PDF records the exact per-replicate carbon and R0
- * fractions plus attributed product mass that the active sandbox path sends.
+ * reference. The 1000-year PDF records per-replicate total carbon, directly
+ * measured inorganic carbon, calculated organic carbon, s_fraction, attributed
+ * product mass, and the current component's raw/capped durability explanation.
  * The document attaches to a member credit batch so candidate discovery binds
  * its Source to the matching measurement-sample Datapoints.
  *
@@ -27,6 +28,7 @@ import {
   type DurabilityEvidenceLedgerDocMetadata,
   type ThousandYearDurabilityLedgerModel,
 } from "@/lib/certification/evidence-ledger/durability-types";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import { logger } from "@/lib/log";
 import {
   loadRemovalSubmissionContext,
@@ -128,7 +130,10 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
   let render: () => Promise<Buffer>;
   if (durabilityOption === "1000_year") {
     const thousandYearModel =
-      buildThousandYearDurabilityLedgerModel(commonModelArgs);
+      buildThousandYearDurabilityLedgerModel({
+        ...commonModelArgs,
+        componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+      });
     model = thousandYearModel;
     render = () =>
       renderThousandYearDurabilityLedgerPdf(thousandYearModel);

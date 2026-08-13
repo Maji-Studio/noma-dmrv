@@ -104,7 +104,7 @@ export async function seedCertifierMapping(
  * Flip a seeded facility onto the 1000-year durability tier. The generic
  * facility helpers deliberately seed 200-year (the simpler soil-temp flow),
  * but the sandbox project's only fully-bound removal template carries the
- * `biochar_sequestration_1000_year` component, and the submit tier guard
+ * `biochar_sequestration_1000_year_f_durable_max` component, and the submit tier guard
  * requires facility tier ↔ template agreement (ADR 0021). No cleanup needed:
  * the per-test facility row is torn down by the seed fixture itself.
  */

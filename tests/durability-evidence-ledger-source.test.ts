@@ -101,6 +101,8 @@ import { renderDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/d
 import { renderThousandYearDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-1000-pdf";
 import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources";
 import { ensureDurabilityEvidenceLedgerSourceFromContext } from "@/fn/certification/durability-evidence-ledger";
+import { buildThousandYearDurabilityLedgerModel } from "@/lib/certification/evidence-ledger/durability-1000-build-model";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 
 function context(args: {
   durabilityOption: "200_year" | "1000_year";
@@ -178,6 +180,11 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
     expect(result).toMatchObject({ status: "created", documentId: "doc-new" });
     expect(renderDurabilityLedgerPdf).not.toHaveBeenCalled();
     expect(renderThousandYearDurabilityLedgerPdf).toHaveBeenCalledOnce();
+    expect(buildThousandYearDurabilityLedgerModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+      }),
+    );
     expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(
       makeTestOrgContext(USER),
       {

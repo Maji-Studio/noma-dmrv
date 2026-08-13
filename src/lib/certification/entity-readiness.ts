@@ -51,6 +51,12 @@ function conditionApplies(
   entity: EntityReadinessRecord,
 ): boolean {
   if (!descriptor.condition) return true;
+  if ("allOf" in descriptor.condition) {
+    return descriptor.condition.allOf.every(
+      (condition) =>
+        fieldValue(entity, condition.field) === condition.equals,
+    );
+  }
   return (
     fieldValue(entity, descriptor.condition.field) === descriptor.condition.equals
   );

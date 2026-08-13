@@ -80,7 +80,7 @@ describe("deriveFacilitySetupGaps", () => {
 describe("facilityBlueprintLabel", () => {
   it("translates known registry keys for operators", () => {
     expect(facilityBlueprintLabel("biochar_sequestration_1000_year")).toBe(
-      "1,000-year biochar sequestration",
+      "Legacy 1,000-year biochar sequestration (total-carbon basis, uncapped)",
     );
   });
 

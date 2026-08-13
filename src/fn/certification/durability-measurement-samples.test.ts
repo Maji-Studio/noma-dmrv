@@ -10,9 +10,11 @@ import {
 import { normalizeMeasurementSamplesForHash } from "./durability-measurement-sample-snapshot";
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
 import {
-  CARBON_CONTENTS_MEASUREMENT_PROPERTY,
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
   PRODUCT_MASS_MEASUREMENT_PROPERTY,
   S_FRACTION_MEASUREMENT_PROPERTY,
+  TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
 } from "@/lib/isometric/transformers/measurement-sample";
 import {
   buildRemovalSourceBindingPlan,
@@ -21,6 +23,8 @@ import {
 
 function sample(overrides: Partial<Sample>): Sample {
   return {
+    id: "sample-default",
+    sampleCode: "S-DEFAULT",
     hToCOrgRatio: null,
     oToCOrgRatio: null,
     totalCarbonPercent: null,
@@ -73,9 +77,9 @@ const thousandYearBatch = (id: string, code: string) =>
     durabilityOption: "1000_year",
     runs: [{ id: `run-${id}`, code: `R-${id}`, biocharDryMassKg: 1000 }],
     samples: [
-      sample({ totalCarbonPercent: 80, sReflectanceFraction: 0.91 }),
-      sample({ totalCarbonPercent: 82, sReflectanceFraction: 0.92 }),
-      sample({ totalCarbonPercent: 84, sReflectanceFraction: 0.93 }),
+      sample({ id: `sample-${id}-1`, sampleCode: `${code}-S1`, totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 }),
+      sample({ id: `sample-${id}-2`, sampleCode: `${code}-S2`, totalCarbonPercent: 82, inorganicCarbonPercent: 1.1, sReflectanceFraction: 0.92 }),
+      sample({ id: `sample-${id}-3`, sampleCode: `${code}-S3`, totalCarbonPercent: 84, inorganicCarbonPercent: 1.2, sReflectanceFraction: 0.93 }),
     ],
   });
 
@@ -130,7 +134,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
             components: [
               {
                 id: "component-sequestration",
-                blueprint_key: "biochar_sequestration_1000_year",
+                blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
                 inputs: [{ input_key: "product_mass" }],
               },
             ],
@@ -209,7 +213,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
               kind: "sequestration",
               groupKey: "co2-stored",
               componentId: "component-sequestration",
-              componentBlueprintKey: "biochar_sequestration_1000_year",
+              componentBlueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
               inputKey: "product_mass",
               creditBatchIds: ["credit-batch-1"],
             },
@@ -270,7 +274,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
               kind: "sequestration",
               groupKey: "co2-stored",
               componentId: "component-sequestration",
-              componentBlueprintKey: "biochar_sequestration_1000_year",
+              componentBlueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
               inputKey: "product_mass",
               creditBatchIds: ["credit-batch-a"],
             },
@@ -289,7 +293,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
               kind: "sequestration",
               groupKey: "co2-stored",
               componentId: "component-sequestration",
-              componentBlueprintKey: "biochar_sequestration_1000_year",
+              componentBlueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
               inputKey: "product_mass",
               creditBatchIds: ["credit-batch-b"],
             },
@@ -348,9 +352,10 @@ describe("patchMeasurementSampleSourceBindings", () => {
             components: [
               {
                 id: "component-sequestration",
-                blueprint_key: "biochar_sequestration_1000_year",
+                blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
                 inputs: [
-                  { input_key: "carbon_contents" },
+                  { input_key: "total_carbon_contents" },
+                  { input_key: "inorganic_carbon_contents" },
                   { input_key: "product_mass" },
                   { input_key: "s_fraction" },
                 ],
@@ -379,9 +384,15 @@ describe("patchMeasurementSampleSourceBindings", () => {
               ],
               [
                 encodeMeasurementProperty(
-                  CARBON_CONTENTS_MEASUREMENT_PROPERTY,
+                  TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
                 ),
                 ["datapoint-carbon-a", "datapoint-carbon-b"],
+              ],
+              [
+                encodeMeasurementProperty(
+                  INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
+                ),
+                ["datapoint-inorganic-a", "datapoint-inorganic-b"],
               ],
               [
                 encodeMeasurementProperty(S_FRACTION_MEASUREMENT_PROPERTY),
@@ -392,7 +403,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
         ],
         sourceBindingPlan,
       }),
-    ).resolves.toBe(5);
+    ).resolves.toBe(7);
 
     expect(patch).toHaveBeenCalledWith(
       "/datapoints/datapoint-product-mass",
@@ -402,6 +413,12 @@ describe("patchMeasurementSampleSourceBindings", () => {
     );
     expect(patch).toHaveBeenCalledWith(
       "/datapoints/datapoint-carbon-a",
+      expect.objectContaining({
+        source_ids: ["source-durability-ledger"],
+      }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "/datapoints/datapoint-inorganic-a",
       expect.objectContaining({
         source_ids: ["source-durability-ledger"],
       }),
@@ -469,10 +486,13 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
       })),
     ).toEqual([
       { qualifier: "total_carbon", magnitude: 0.8, unit: "dimensionless" },
+      { qualifier: "total_inorganic_carbon", magnitude: 0.01, unit: "dimensionless" },
       { qualifier: "inertinite_fraction", magnitude: 0.91, unit: "dimensionless" },
       { qualifier: "total_carbon", magnitude: 0.82, unit: "dimensionless" },
+      { qualifier: "total_inorganic_carbon", magnitude: 0.011000000000000001, unit: "dimensionless" },
       { qualifier: "inertinite_fraction", magnitude: 0.92, unit: "dimensionless" },
       { qualifier: "total_carbon", magnitude: 0.84, unit: "dimensionless" },
+      { qualifier: "total_inorganic_carbon", magnitude: 0.012, unit: "dimensionless" },
       { qualifier: "inertinite_fraction", magnitude: 0.93, unit: "dimensionless" },
       { qualifier: null, magnitude: 1000, unit: "kg" },
     ]);
@@ -496,9 +516,9 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     // order flows into the body's `values` list — a reorder of unchanged rows
     // must NOT flip the semantic change-detection hash.
     const orderedSamples = [
-      sample({ id: "smp-1", totalCarbonPercent: 80, sReflectanceFraction: 0.91 }),
-      sample({ id: "smp-2", totalCarbonPercent: 82, sReflectanceFraction: 0.92 }),
-      sample({ id: "smp-3", totalCarbonPercent: 84, sReflectanceFraction: 0.93 }),
+      sample({ id: "smp-1", sampleCode: "S-1", totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 }),
+      sample({ id: "smp-2", sampleCode: "S-2", totalCarbonPercent: 82, inorganicCarbonPercent: 1.1, sReflectanceFraction: 0.92 }),
+      sample({ id: "smp-3", sampleCode: "S-3", totalCarbonPercent: 84, inorganicCarbonPercent: 1.2, sReflectanceFraction: 0.93 }),
     ];
     const buildNormalized = (samples: Sample[]) =>
       normalizeMeasurementSamplesForHash(
@@ -535,13 +555,13 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
             durabilityOption: "1000_year",
             runs: [{ id: "run-t", code: "R-T", biocharDryMassKg: 1000 }],
             samples: [
-              sample({ totalCarbonPercent: 80, sReflectanceFraction: 0.91 }),
-              sample({ totalCarbonPercent: 82, sReflectanceFraction: 0.92 }),
+              sample({ id: "short-1", sampleCode: "SHORT-1", totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 }),
+              sample({ id: "short-2", sampleCode: "SHORT-2", totalCarbonPercent: 82, inorganicCarbonPercent: 1, sReflectanceFraction: 0.92 }),
             ],
           }),
         ],
       }),
-    ).toThrow(/2 complete 1000-year replicate/);
+    ).toThrow(/2 complete 1,000-year replicate/);
   });
 
   it("fails closed instead of silently dropping an incomplete 1000-year sample", () => {
@@ -556,14 +576,54 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
             durabilityOption: "1000_year",
             runs: [{ id: "run-t", code: "R-T", biocharDryMassKg: 1000 }],
             samples: [
-              sample({ totalCarbonPercent: 80, sReflectanceFraction: 0.91 }),
-              sample({ totalCarbonPercent: 82, sReflectanceFraction: 0.92 }),
-              sample({ totalCarbonPercent: 84, sReflectanceFraction: null }),
+              sample({ id: "partial-1", sampleCode: "PARTIAL-1", totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 }),
+              sample({ id: "partial-2", sampleCode: "PARTIAL-2", totalCarbonPercent: 82, inorganicCarbonPercent: 1, sReflectanceFraction: 0.92 }),
+              sample({ id: "partial-3", sampleCode: "PARTIAL-3", totalCarbonPercent: 84, inorganicCarbonPercent: 1, sReflectanceFraction: null }),
             ],
           }),
         ],
       }),
-    ).toThrow(/1 Sample.*without total carbon or the R₀/);
+    ).toThrow(/R₀ fraction.*PARTIAL-3/);
+  });
+
+  it("names the Sample missing measured inorganic carbon", () => {
+    const missingInorganic = thousandYearBatch("missing", "CB-MISSING");
+    missingInorganic.samples[1] = sample({
+      id: "missing-inorganic",
+      sampleCode: "LAB-IC-002",
+      totalCarbonPercent: 82,
+      inorganicCarbonPercent: null,
+      sReflectanceFraction: 0.92,
+    });
+
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        facilityReferenceSoilTemperature: null,
+        batches: [missingInorganic],
+      }),
+    ).toThrow(/measured inorganic carbon.*LAB-IC-002/);
+  });
+
+  it("changes semantic measurement identity when only inorganic carbon changes", () => {
+    const original = thousandYearBatch("identity", "CB-IDENTITY");
+    const changed = thousandYearBatch("identity", "CB-IDENTITY");
+    changed.samples[1] = {
+      ...changed.samples[1],
+      inorganicCarbonPercent: 1.3,
+    };
+    const normalized = (candidate: CreditBatchWithSamples) =>
+      JSON.stringify(
+        normalizeMeasurementSamplesForHash(
+          buildDurabilityMeasurementSampleSubmissions({
+            ...common,
+            facilityReferenceSoilTemperature: null,
+            batches: [candidate],
+          }),
+        ),
+      );
+
+    expect(normalized(changed)).not.toBe(normalized(original));
   });
 
   it("rejects 200-year before evaluating its soil-temperature payload", () => {

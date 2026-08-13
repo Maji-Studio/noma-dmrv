@@ -126,7 +126,11 @@ export interface ThousandYearLedgerReplicate {
   samplingDay: string | null;
   labName: string | null;
   /** Registry wire value: total carbon dry-basis fraction in the 0 to 1 range. */
-  carbonContentFraction: number;
+  totalCarbonFraction: number;
+  /** Directly measured inorganic-carbon fraction; never derived on this path. */
+  inorganicCarbonFraction: number | null;
+  /** Per-replicate Total − measured Inorganic; null for unreadable legacy evidence. */
+  calculatedOrganicCarbonFraction: number | null;
   /** Registry wire value: fraction of R0 readings at or above 2%. */
   sFraction: number;
 }
@@ -138,6 +142,17 @@ export interface ThousandYearLedgerBatch {
   replicateCount: number;
   /** Attribution-scaled dry biochar mass submitted for this credit batch. */
   productMassKg: number;
+  /** Registry component whose inputs and local explanation this batch records. */
+  componentKey: string;
+  /** Explicit formula/version label for historical interpretation. */
+  formulaVersion: string;
+  /** Visible carbon-basis/cap semantics, especially for deprecated evidence. */
+  semanticsLabel: string;
+  /** Binomial lower estimate before any component cap. */
+  rawDurability: number;
+  /** Durability used locally after the current component's 0.95 cap. */
+  cappedDurability: number;
+  capApplied: boolean;
 }
 
 export interface ThousandYearDurabilityLedgerModel {

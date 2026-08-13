@@ -368,8 +368,12 @@ function makeRun(
     samples: [
       {
         id: "smp-bd-1",
+        sampleCode: "SMP-BD-1",
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.91,
         hToCOrgRatio: 0.4,
         oToCOrgRatio: 0.15,
         ashContentPercent: 5,
@@ -377,8 +381,12 @@ function makeRun(
       } as unknown as Sample,
       {
         id: "smp-bd-2",
+        sampleCode: "SMP-BD-2",
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.92,
         hToCOrgRatio: 0.41,
         oToCOrgRatio: 0.16,
         ashContentPercent: 5,
@@ -386,8 +394,12 @@ function makeRun(
       } as unknown as Sample,
       {
         id: "smp-bd-3",
+        sampleCode: "SMP-BD-3",
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.93,
         hToCOrgRatio: 0.39,
         oToCOrgRatio: 0.14,
         ashContentPercent: 5,

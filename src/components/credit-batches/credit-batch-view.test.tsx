@@ -55,7 +55,9 @@ function makePreview(
   return {
     provider: null,
     co2eStoredTonnes,
+    componentKey: null,
     moduleVersion: null,
+    formulaVersion: null,
     applicationResults: [],
     missingInputs,
     warnings: [],

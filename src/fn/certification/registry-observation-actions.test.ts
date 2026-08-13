@@ -56,7 +56,10 @@ import {
   getIsometricClientForOrg,
 } from "@/lib/isometric";
 import { loadGhgStatementBreakdown } from "./ghg-statement-breakdown";
-import { loadRemovalBreakdown } from "./removal-breakdown";
+import {
+  loadRemovalBreakdown,
+  readRemovalDurabilityComponent,
+} from "./removal-breakdown";
 
 const REMOVAL_ID = "removal-1";
 const STATEMENT_ID = "statement-1";
@@ -97,6 +100,23 @@ beforeEach(() => {
 });
 
 describe("Removal RegistryObservation", () => {
+  it("labels deprecated snapshot components with legacy total-carbon uncapped semantics", () => {
+    expect(
+      readRemovalDurabilityComponent({
+        semantic: {
+          sequestrationTemplate: [
+            { blueprintKey: "biochar_sequestration_1000_year" },
+          ],
+        },
+      }),
+    ).toEqual({
+      key: "biochar_sequestration_1000_year",
+      label:
+        "Legacy 1,000-year calculation: total-carbon basis, uncapped durability",
+      deprecated: true,
+    });
+  });
+
   it("returns pending without an external ID and makes no registry request", async () => {
     vi.mocked(getLatestSubmission).mockResolvedValue(null);
 
