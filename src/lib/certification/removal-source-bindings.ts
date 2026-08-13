@@ -15,7 +15,8 @@ export type NomaEvidenceRole =
   | "feedstock_bill_of_lading"
   | "delivery_bill_of_lading"
   | "transport_evidence_ledger"
-  | "durability_evidence_ledger";
+  | "durability_evidence_ledger"
+  | "lab_report";
 
 export interface RemovalSourceLineage {
   entityType: string;
@@ -91,6 +92,24 @@ export interface OptionalRemovalEvidenceTarget
 }
 
 const SOURCE_BINDING_RULES = {
+  labReport: {
+    nomaRole: "lab_report",
+    nomaRoleLabel: "Sample lab report",
+    intendedTarget: {
+      kind: "sequestration",
+      groupKey: "co2-stored",
+      inputKey: "total_carbon_contents",
+      optionalInTemplate: true,
+    },
+    additionalIntendedTargets: [
+      {
+        kind: "sequestration",
+        groupKey: "co2-stored",
+        inputKey: "inorganic_carbon_contents",
+        optionalInTemplate: true,
+      },
+    ],
+  },
   inventory: {
     nomaRole: "inventory",
     nomaRoleLabel: "Inventory",
@@ -186,7 +205,7 @@ const DURABILITY_LEDGER_TARGETS = {
 // Datapoints. This makes the semantic submission hash supersede an already
 // submitted Removal whose target list is unchanged but whose wire attachment
 // behavior was corrected.
-const SOURCE_BINDING_MATERIALIZATION_REVISION = 2;
+const SOURCE_BINDING_MATERIALIZATION_REVISION = 3;
 
 export const SOURCE_BINDING_MAPPING_REVISION = payloadHash({
   rules: SOURCE_BINDING_RULES,
@@ -272,6 +291,11 @@ export function classifyRemovalSourceCandidate(
 
   if (isApplicationBoundaryLogbook) {
     rule = SOURCE_BINDING_RULES.inventory;
+  } else if (
+    lineage.entityType === "sample" &&
+    facts.documentType === "lab_report"
+  ) {
+    rule = SOURCE_BINDING_RULES.labReport;
   } else if (
     lineage.entityType === "feedstock" &&
     facts.documentType === "bill_of_lading"
@@ -450,6 +474,7 @@ export function buildRemovalSourceBindingPlan(args: {
   candidates: SourceBindingCandidate[];
   template: IsometricGhgEntryTemplate;
   applicationIdsByCreditBatchId: Map<string, string[]>;
+  sampleIdsByCreditBatchId?: Map<string, string[]>;
 }): RemovalSourceBindingPlanEntry[] {
   return args.candidates
     .flatMap(({ documentId, sourceId, binding }) => {
@@ -486,6 +511,13 @@ export function buildRemovalSourceBindingPlan(args: {
           target.kind === "sequestration"
             ? binding.lineage.entityType === "credit_batch"
               ? [binding.lineage.entityId]
+              : binding.lineage.entityType === "sample"
+                ? Array.from(args.sampleIdsByCreditBatchId?.entries() ?? [])
+                    .filter(([, sampleIds]) =>
+                      sampleIds.includes(binding.lineage.entityId),
+                    )
+                    .map(([creditBatchId]) => creditBatchId)
+                    .sort()
               : Array.from(args.applicationIdsByCreditBatchId.entries())
                   .filter(([, applicationIds]) =>
                     applicationIds.includes(binding.lineage.entityId),

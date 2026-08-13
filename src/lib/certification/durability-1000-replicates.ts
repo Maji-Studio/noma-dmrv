@@ -30,7 +30,15 @@ function isUsableNumber(value: number | null): value is number {
   return value != null && Number.isFinite(value);
 }
 
-function isCompleteReplicate(sample: Sampled1000YearMeasurement): boolean {
+type CompleteSampled1000YearMeasurement = Sampled1000YearMeasurement & {
+  totalCarbonPercent: number;
+  inorganicCarbonPercent: number;
+  sReflectanceFraction: number;
+};
+
+function isCompleteReplicate(
+  sample: Sampled1000YearMeasurement,
+): sample is CompleteSampled1000YearMeasurement {
   return (
     isUsableNumber(sample.totalCarbonPercent) &&
     isUsableNumber(sample.inorganicCarbonPercent) &&

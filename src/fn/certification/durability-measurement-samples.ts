@@ -90,6 +90,8 @@ export interface DurabilityMeasurementSampleSubmission {
   body: CreateMeasurementSampleRequest;
   /** Human label for logs / failure messages. */
   label: string;
+  /** Ordered Sample identities for the paired replicate values in this body. */
+  replicateSampleIds?: string[];
 }
 
 export interface BuildDurabilityMeasurementSampleSubmissionsArgs {
@@ -192,6 +194,9 @@ export function buildDurabilityMeasurementSampleSubmissions(
         supplierRefId,
         body,
         label: `production batch ${batch.creditBatchCode}`,
+        replicateSampleIds: replicateEvaluation.replicates.map(
+          (replicate) => replicate.sampleId,
+        ),
       });
       continue;
     }
@@ -230,6 +235,7 @@ const PATCH_UNDEFINED = { __typename: "Undefined" } as const;
 interface MeasurementSampleSourceBindingCapture
   extends MeasurementSampleDatapointCapture {
   creditBatchId: string | null;
+  replicateSampleIds?: string[];
 }
 
 /**
@@ -307,16 +313,24 @@ export async function patchMeasurementSampleSourceBindings(args: {
           capture.datapointIdsByMeasurementProperty.get(propertyKey) ?? [],
       );
       if (datapointIds.length === 0) continue;
-      const sourceIds = Array.from(
-        new Set(
-          batchBindings
-            .filter((entry) => entry.intendedTarget.inputKey === inputKey)
-            .map((entry) => entry.sourceId),
-        ),
-      ).sort();
-      if (sourceIds.length === 0) continue;
+      const inputBindings = batchBindings.filter(
+        (entry) => entry.intendedTarget.inputKey === inputKey,
+      );
 
-      for (const datapointId of datapointIds) {
+      for (const [index, datapointId] of datapointIds.entries()) {
+        const replicateSampleId = capture.replicateSampleIds?.[index] ?? null;
+        const sourceIds = Array.from(
+          new Set(
+            inputBindings
+              .filter(
+                (entry) =>
+                  entry.lineage.entityType !== "sample" ||
+                  entry.lineage.entityId === replicateSampleId,
+              )
+              .map((entry) => entry.sourceId),
+          ),
+        ).sort();
+        if (sourceIds.length === 0) continue;
         const patched = await patchDatapoint(args.client, datapointId, {
           description: PATCH_UNDEFINED,
           display_name: PATCH_UNDEFINED,
@@ -507,6 +521,7 @@ export async function submitDurabilityMeasurementSamples(
     sourceBindingCaptures.push({
       ...capture,
       creditBatchId: creditBatchIdForSubmission(submission),
+      replicateSampleIds: submission.replicateSampleIds ?? [],
     });
     submitted += 1;
     args.onProgress?.(submitted, args.submissions.length);

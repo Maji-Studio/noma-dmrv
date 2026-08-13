@@ -110,6 +110,71 @@ describe("DURABILITY_MEASUREMENT_SAMPLES_ENABLED", () => {
 });
 
 describe("patchMeasurementSampleSourceBindings", () => {
+  it("attaches each Sample lab report only to its paired carbon datapoints", async () => {
+    const creditBatchId = "01519716-f8e6-4042-886d-608792130dcc";
+    const bindings = ["sample-a", "sample-b"].flatMap((sampleId) => {
+      const binding = classifyRemovalSourceCandidate({
+        documentType: "lab_report",
+        metadata: {},
+        lineage: {
+          entityType: "sample",
+          entityId: sampleId,
+          entityLabel: `Sample ${sampleId}`,
+        },
+      });
+      return binding
+        ? [{ documentId: `document-${sampleId}`, sourceId: `source-${sampleId}`, binding }]
+        : [];
+    });
+    const sourceBindingPlan = buildRemovalSourceBindingPlan({
+      candidates: bindings,
+      template: {
+        groups: [{
+          key: "co2-stored",
+          components: [{
+            id: "component-sequestration",
+            blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+            inputs: [
+              { input_key: "total_carbon_contents" },
+              { input_key: "inorganic_carbon_contents" },
+            ],
+          }],
+        }],
+      } as never,
+      applicationIdsByCreditBatchId: new Map(),
+      sampleIdsByCreditBatchId: new Map([
+        [creditBatchId, ["sample-a", "sample-b"]],
+      ]),
+    });
+    const patch = vi.fn().mockImplementation(
+      (_path: string, body: { source_ids: string[] }) =>
+        Promise.resolve({ id: _path, source_ids: body.source_ids }),
+    );
+
+    await patchMeasurementSampleSourceBindings({
+      client: { patch } as never,
+      captures: [{
+        measurementSampleId: "measurement-sample-1",
+        supplierReferenceId: "sample-ref-1",
+        creditBatchId,
+        replicateSampleIds: ["sample-a", "sample-b"],
+        datapointIdsByMeasurementProperty: new Map([
+          [encodeMeasurementProperty(PRODUCT_MASS_MEASUREMENT_PROPERTY), ["mass"]],
+          [encodeMeasurementProperty(TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY), ["total-a", "total-b"]],
+          [encodeMeasurementProperty(INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY), ["inorganic-a", "inorganic-b"]],
+        ]),
+      }],
+      sourceBindingPlan,
+    });
+
+    expect(patch.mock.calls.map(([path, body]) => [path, body.source_ids])).toEqual([
+      ["/datapoints/total-a", ["source-sample-a"]],
+      ["/datapoints/total-b", ["source-sample-b"]],
+      ["/datapoints/inorganic-a", ["source-sample-a"]],
+      ["/datapoints/inorganic-b", ["source-sample-b"]],
+    ]);
+  });
+
   it("binds a boundary-method weighbridge Source to the staging batch product_mass Datapoint", async () => {
     const creditBatchId = "01519716-f8e6-4042-886d-608792130dcc";
     const applicationId = "application-staging-1";
