@@ -174,7 +174,7 @@ async function collectLineageEntities(
     add({
       entityType: "sample",
       entityId: sample.id,
-      entityLabel: `Sample ${sample.id}`,
+      entityLabel: `Sample ${sample.sampleCode || sample.id}`,
     });
   }
 

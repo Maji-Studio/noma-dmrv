@@ -120,6 +120,7 @@ import * as uploadsDA from "@/data-access/certifier-document-uploads";
 import * as organizationSettingsDA from "@/data-access/certifier-organization-settings";
 import * as isometric from "@/lib/isometric";
 import {
+  loadCandidateDocumentsForRemovalForUser,
   mirrorCandidateSourcesForSubmission,
   mirrorDocumentToSource,
 } from "@/fn/certification/sources";
@@ -246,7 +247,13 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
 
   it("authorizes a Sample lab report discovered for the member batch", async () => {
     vi.mocked(creditBatchSamplesDA.getSamplesByCreditBatchIds).mockResolvedValue(
-      [{ id: SAMPLE_ID, creditBatchId: CREDIT_BATCH_ID }],
+      [
+        {
+          id: SAMPLE_ID,
+          creditBatchId: CREDIT_BATCH_ID,
+          sampleCode: "LAB-001",
+        },
+      ],
     );
     vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
       async (_userId, entityType, entityId) =>
@@ -285,6 +292,13 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       makeTestOrgContext(USER_ID),
       expect.objectContaining({ documentId: DOCUMENT_ID }),
       expect.anything(),
+    );
+    const candidates = await loadCandidateDocumentsForRemovalForUser(
+      makeTestOrgContext(USER_ID),
+      REMOVAL_ID,
+    );
+    expect(candidates.candidates[0]?.lineageEntity.entityLabel).toBe(
+      "Sample LAB-001",
     );
   });
 
