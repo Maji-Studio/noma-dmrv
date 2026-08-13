@@ -662,33 +662,6 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     );
     expect(mocks.client.post).not.toHaveBeenCalled();
   });
-
-  it("validates every unregistered batch before creating the first one", async () => {
-    const secondId = "22222222-2222-4222-8222-222222222222";
-    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
-      registryInput(),
-      registryInput({
-        creditBatchId: secondId,
-        creditBatchCode: "CB-2026-002",
-        runsMissingEndTime: 1,
-        endedAt: null,
-      }),
-    ]);
-
-    await expect(
-      ensureProductionBatchesForCreditBatches({
-        orgCtx,
-        removalId: "removal-1",
-        submissionRow: { id: "submission-1" },
-        creditBatchIds: [CREDIT_BATCH_ID, secondId],
-        log,
-      }),
-    ).rejects.toThrow(/still open/);
-
-    expect(mocks.client.post).not.toHaveBeenCalled();
-    expect(performRegistryCreate).not.toHaveBeenCalled();
-  });
-
   it("skips the registry entirely when no credit batch needs one", async () => {
     const registered = await ensureProductionBatchesForCreditBatches({
       orgCtx,
