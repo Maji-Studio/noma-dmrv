@@ -21,7 +21,10 @@ import { formatUtcDate } from "@/lib/date-utils";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 
 type FutureDateRun = Pick<ProductionRunWithSamples, "code" | "endTime">;
-type FutureDateSample = { sampleCode: string; samplingTime: Date };
+type FutureDateSample = {
+  sampleCode: string;
+  samplingTime?: Date | null;
+};
 type FutureDateLineage = {
   application: { applicationDate: Date; code: string };
 };
@@ -53,9 +56,10 @@ export function collectFutureDatedMeasurements(args: {
   }
 
   for (const sample of samples) {
-    if (sample.samplingTime.getTime() > nowMs) {
+    const { samplingTime } = sample;
+    if (samplingTime && samplingTime.getTime() > nowMs) {
       blockers.push(
-        `Sample ${sample.sampleCode} is dated ${formatUtcDate(sample.samplingTime)}. ` +
+        `Sample ${sample.sampleCode} is dated ${formatUtcDate(samplingTime)}. ` +
           "Change the sampling time or wait until then.",
       );
     }

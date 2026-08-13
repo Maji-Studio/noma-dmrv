@@ -109,6 +109,17 @@ describe("collectFutureDatedMeasurements", () => {
     ).toEqual([]);
   });
 
+  it("ignores a Sample with no sampling time — Sample readiness owns that blocker", () => {
+    expect(
+      collectFutureDatedMeasurements({
+        runs: [],
+        samples: [{ sampleCode: "LAB-0042" }],
+        lineages: [],
+        now: NOW,
+      }),
+    ).toEqual([]);
+  });
+
   it("does not repeat a record reached through several lineages", () => {
     const applicationDate = new Date("2026-08-14T00:00:00.000Z");
     expect(
