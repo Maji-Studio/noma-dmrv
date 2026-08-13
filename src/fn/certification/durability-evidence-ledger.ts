@@ -29,6 +29,7 @@ import {
   type ThousandYearDurabilityLedgerModel,
 } from "@/lib/certification/evidence-ledger/durability-types";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { readRemovalDurabilityComponent } from "@/lib/certification/removal-durability-component";
 import { logger } from "@/lib/log";
 import {
   loadRemovalSubmissionContext,
@@ -129,10 +130,15 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
   let model: DurabilityLedgerModel | ThousandYearDurabilityLedgerModel;
   let render: () => Promise<Buffer>;
   if (durabilityOption === "1000_year") {
+    const snapshotComponent = readRemovalDurabilityComponent(
+      ctx.latestSubmission?.payloadSnapshot,
+    );
     const thousandYearModel =
       buildThousandYearDurabilityLedgerModel({
         ...commonModelArgs,
-        componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+        componentKey:
+          snapshotComponent?.key ??
+          CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
       });
     model = thousandYearModel;
     render = () =>

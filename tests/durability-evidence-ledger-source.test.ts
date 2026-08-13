@@ -102,7 +102,10 @@ import { renderThousandYearDurabilityLedgerPdf } from "@/lib/certification/evide
 import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources";
 import { ensureDurabilityEvidenceLedgerSourceFromContext } from "@/fn/certification/durability-evidence-ledger";
 import { buildThousandYearDurabilityLedgerModel } from "@/lib/certification/evidence-ledger/durability-1000-build-model";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import {
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+} from "@/lib/isometric/transformers/measurement-sample";
 
 function context(args: {
   durabilityOption: "200_year" | "1000_year";
@@ -191,6 +194,31 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
         removalId: REMOVAL,
         documentId: "doc-new",
       },
+    );
+  });
+
+  it("uses the historical component semantics retained in the submission snapshot", async () => {
+    const ctx = context({ durabilityOption: "1000_year", hasSoilReference: false });
+    ctx.latestSubmission = {
+      payloadSnapshot: {
+        semantic: {
+          sequestrationTemplate: [
+            { blueprintKey: DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR },
+          ],
+        },
+      },
+    } as never;
+
+    await ensureDurabilityEvidenceLedgerSourceFromContext(
+      makeTestOrgContext(USER),
+      REMOVAL,
+      ctx,
+    );
+
+    expect(buildThousandYearDurabilityLedgerModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentKey: DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+      }),
     );
   });
 
