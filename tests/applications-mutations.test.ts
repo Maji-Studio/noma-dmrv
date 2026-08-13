@@ -669,6 +669,40 @@ describe("application mutations", () => {
     }
   });
 
+  it("rejects switching coordinate-less boundary evidence to location", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(
+        makeTestOrgContext(TEST_USER_ID),
+        {
+          code: `AP-AM-${runId}-LOCATION-WITHOUT-GPS`,
+          deliveryId: fixture.deliveryIds[0],
+          applicationDate: new Date("2025-07-08"),
+          biocharAppliedTons: 2,
+          evidenceMethod: "boundary",
+        },
+      );
+      fixture.applicationIds.push(application.id);
+
+      await expect(
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+          evidenceMethod: "location",
+        }),
+      ).rejects.toThrow("Customer location coordinates are required.");
+
+      const [persisted] = await db
+        .select({ evidenceMethod: applications.evidenceMethod })
+        .from(applications)
+        .where(eq(applications.id, application.id));
+
+      expect(persisted.evidenceMethod).toBe("boundary");
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
   it("allows a coordinate-only partial update for boundary evidence", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
