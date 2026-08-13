@@ -1,4 +1,5 @@
 import { SafeError } from "@/lib/errors";
+import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import type { components } from "../generated/certify";
 import { buildRemovalSupplierRef } from "../utils/supplier-ref";
 import { encodeMeasurementProperty } from "../utils/measurement-property";
@@ -481,9 +482,12 @@ export function bindSequestrationDatapointsToTemplate(args: {
             datapointIdsByRtcInput.get(`${component.id}::${inputKey}`)?.length ??
             0,
         );
-        if (new Set(listLengths).size !== 1 || listLengths[0] < 3) {
+        if (
+          new Set(listLengths).size !== 1 ||
+          listLengths[0] < MINIMUM_REPLICATES_PER_BATCH
+        ) {
           throw new SafeError(
-            "The current 1,000-year durability component requires equal total-carbon, inorganic-carbon, and R₀ lists with at least three values. Refresh the Sample data and try again.",
+            `The current 1,000-year durability component requires equal total-carbon, inorganic-carbon, and R₀ lists with at least ${MINIMUM_REPLICATES_PER_BATCH} values. Refresh the Sample data and try again.`,
           );
         }
       }
