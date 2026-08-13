@@ -558,10 +558,7 @@ function buildCo2eStoredPreview(
     };
   }
 
-  if (
-    batch.durabilityOption !== "1000_year" &&
-    !SOIL_STORAGE_PREVIEW_REVERIFIED
-  ) {
+  if (!SOIL_STORAGE_PREVIEW_REVERIFIED) {
     return {
       provider,
       co2eStoredTonnes: null,
