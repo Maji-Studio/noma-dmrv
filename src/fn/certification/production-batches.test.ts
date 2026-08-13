@@ -375,6 +375,25 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledTimes(1);
   });
 
+  it("reports drift when the physical window outgrows the stored legacy bounds", async () => {
+    const legacyBody = buildLegacyDateBoundBody(await currentSupplierRef());
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ endedAt: "2026-03-29T00:00:00.000Z" }),
+    ]);
+    mocks.getProductionBatchRegistrations.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        externalProductionBatchId: PRODUCTION_BATCH_ID,
+        payloadHash: payloadHash(legacyBody),
+      },
+    ]);
+
+    await ensure();
+
+    expect(mocks.migrateProductionBatchPayloadHash).not.toHaveBeenCalled();
+    expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledTimes(1);
+  });
+
   it("reports real payload drift instead of migrating a legacy hash", async () => {
     const legacyBody = buildLegacyDateBoundBody(await currentSupplierRef());
     mocks.getProductionBatchRegistryInputs.mockResolvedValue([
@@ -464,6 +483,18 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       new Map([[CREDIT_BATCH_ID, PRODUCTION_BATCH_ID]]),
     );
     expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        operation: `production-batch:legacy-window-claimed:${CREDIT_BATCH_ID}`,
+        responsePayload: expect.objectContaining({
+          id: PRODUCTION_BATCH_ID,
+          started_at: "2026-03-01T00:00:00.000Z",
+          ended_at: "2026-03-28T23:59:59.999Z",
+        }),
+      }),
+      { submissionId: "submission-1" },
+    );
   });
 
   it("refuses an orphan with a hybrid legacy and physical window", async () => {
@@ -618,6 +649,17 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       registryInput({ runsMissingEndTime: 1, endedAt: null }),
     ]);
     await expect(ensure()).rejects.toThrow(/still open/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
+  it("asks the operator to add runs when the batch has no production window", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ startedAt: null, endedAt: null }),
+    ]);
+
+    await expect(ensure()).rejects.toThrow(
+      /Add and close its production runs before submitting/,
+    );
     expect(mocks.client.post).not.toHaveBeenCalled();
   });
 

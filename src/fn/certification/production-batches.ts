@@ -260,6 +260,7 @@ export async function ensureProductionBatchesForCreditBatches(
     const submission = missingSubmissionsByCreditBatchId.get(
       input.creditBatchId,
     )!;
+    let reconciledLegacyBatch: IsometricProductionBatch | null = null;
     const { externalId } = await performRegistryCreate({
       orgCtx: args.orgCtx,
       entityType: REMOVAL_ENTITY_TYPE,
@@ -295,6 +296,12 @@ export async function ensureProductionBatchesForCreditBatches(
             input,
           );
           if (mismatch) return { found: "refused", message: mismatch };
+          if (
+            productionBatchWindowKind(batch, submission.body, input) ===
+            "legacy"
+          ) {
+            reconciledLegacyBatch = batch;
+          }
         }
         return supplierRefLookup(
           batch ? { found: true, externalId: batch.id } : { found: false },
@@ -316,6 +323,15 @@ export async function ensureProductionBatchesForCreditBatches(
           throw new SafeError(
             `Credit batch ${submission.creditBatchCode} is already registered as a different production batch in Isometric. Check the registry record before submitting again.`,
           );
+        }
+        if (reconciledLegacyBatch) {
+          await recordLegacyProductionBatchClaim({
+            orgCtx: args.orgCtx,
+            removalId: args.removalId,
+            submissionRowId: args.submissionRow.id,
+            submission,
+            batch: reconciledLegacyBatch,
+          });
         }
       },
       failureMessagePrefix: `Registry production batch for credit batch ${submission.creditBatchCode} could not be created`,
@@ -398,7 +414,15 @@ function matchesLegacyDateBoundPayloadHash(
     started_at: `${input.startDate}${LEGACY_DAY_START_SUFFIX}`,
     ended_at: `${input.endDate}${LEGACY_DAY_END_SUFFIX}`,
   };
-  return payloadHash(legacyBody) === storedHash;
+  const physicalStartMs = Date.parse(current.body.started_at);
+  const physicalEndMs = Date.parse(current.body.ended_at);
+  const legacyStartMs = Date.parse(legacyBody.started_at);
+  const legacyEndMs = Date.parse(legacyBody.ended_at);
+  const physicalWindowFitsLegacyBounds =
+    physicalStartMs >= legacyStartMs && physicalEndMs <= legacyEndMs;
+  return (
+    physicalWindowFitsLegacyBounds && payloadHash(legacyBody) === storedHash
+  );
 }
 
 type LegacyProductionBatchWindow = Pick<
@@ -418,19 +442,11 @@ function productionBatchMismatchMessage(
   expected: CreateProductionBatchRequest,
   legacyWindow?: LegacyProductionBatchWindow,
 ): string | null {
-  const physicalWindowMatches =
-    timestampMatches(batch.started_at, expected.started_at) &&
-    timestampMatches(batch.ended_at, expected.ended_at);
-  const legacyWindowMatches =
-    legacyWindow !== undefined &&
-    timestampMatches(
-      batch.started_at,
-      `${legacyWindow.startDate}${LEGACY_DAY_START_SUFFIX}`,
-    ) &&
-    timestampMatches(
-      batch.ended_at,
-      `${legacyWindow.endDate}${LEGACY_DAY_END_SUFFIX}`,
-    );
+  const windowKind = productionBatchWindowKind(
+    batch,
+    expected,
+    legacyWindow,
+  );
   const sameFeedstocks =
     [...batch.feedstock_type_ids].sort().join("\u0000") ===
     [...expected.feedstock_type_ids].sort().join("\u0000");
@@ -450,11 +466,60 @@ function productionBatchMismatchMessage(
     batch.kind === expected.kind &&
     massMagnitudeMatches &&
     productionBatchMassUnitsMatch(batch.mass.unit, expected.mass.unit) &&
-    (physicalWindowMatches || legacyWindowMatches)
+    windowKind !== "mismatch"
   ) {
     return null;
   }
   return `Registry production batch ${batch.id} does not match this credit batch's facility, feedstock, kind, mass, or production window. Ask support to check the registry record.`;
+}
+
+function productionBatchWindowKind(
+  batch: IsometricProductionBatch,
+  expected: CreateProductionBatchRequest,
+  legacyWindow?: LegacyProductionBatchWindow,
+): "physical" | "legacy" | "mismatch" {
+  const physicalWindowMatches =
+    timestampMatches(batch.started_at, expected.started_at) &&
+    timestampMatches(batch.ended_at, expected.ended_at);
+  if (physicalWindowMatches) return "physical";
+  const legacyWindowMatches =
+    legacyWindow !== undefined &&
+    timestampMatches(
+      batch.started_at,
+      `${legacyWindow.startDate}${LEGACY_DAY_START_SUFFIX}`,
+    ) &&
+    timestampMatches(
+      batch.ended_at,
+      `${legacyWindow.endDate}${LEGACY_DAY_END_SUFFIX}`,
+    );
+  return legacyWindowMatches ? "legacy" : "mismatch";
+}
+
+async function recordLegacyProductionBatchClaim(args: {
+  orgCtx: OrgContext;
+  removalId: string;
+  submissionRowId: string;
+  submission: ProductionBatchSubmission;
+  batch: IsometricProductionBatch;
+}): Promise<void> {
+  await appendSyncEventBestEffort(
+    args.orgCtx,
+    {
+      provider: ISOMETRIC_PROVIDER,
+      entityType: REMOVAL_ENTITY_TYPE,
+      entityId: args.removalId,
+      operation: `production-batch:legacy-window-claimed:${args.submission.creditBatchId}`,
+      status: "succeeded",
+      requestPayload: args.submission.body,
+      responsePayload: {
+        id: args.batch.id,
+        supplier_reference_id: args.batch.supplier_reference_id,
+        started_at: args.batch.started_at,
+        ended_at: args.batch.ended_at,
+      },
+    },
+    { submissionId: args.submissionRowId },
+  );
 }
 
 async function recordProductionBatchDrift(args: {
