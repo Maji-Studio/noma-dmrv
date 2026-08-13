@@ -93,6 +93,7 @@ const APPLICATION_ID = "44444444-4444-4444-8444-444444444444";
 const DELIVERY_ID = "55555555-5555-4555-8555-555555555555";
 const CREDIT_BATCH_ID = "66666666-6666-4666-8666-666666666666";
 const PRODUCTION_RUN_ID = "77777777-7777-4777-8777-777777777777";
+const SAMPLE_ID = "88888888-8888-4888-8888-888888888888";
 const PROJECT_ID = "prj_TEST";
 const EXISTING_SOURCE_ID = "src_recovered";
 
@@ -119,6 +120,7 @@ import * as uploadsDA from "@/data-access/certifier-document-uploads";
 import * as organizationSettingsDA from "@/data-access/certifier-organization-settings";
 import * as isometric from "@/lib/isometric";
 import {
+  loadCandidateDocumentsForRemovalForUser,
   mirrorCandidateSourcesForSubmission,
   mirrorDocumentToSource,
 } from "@/fn/certification/sources";
@@ -240,6 +242,63 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
         externalDocumentId: EXISTING_SOURCE_ID,
       }),
       expect.anything(),
+    );
+  });
+
+  it("authorizes a Sample lab report discovered for the member batch", async () => {
+    vi.mocked(creditBatchSamplesDA.getSamplesByCreditBatchIds).mockResolvedValue(
+      [
+        {
+          id: SAMPLE_ID,
+          creditBatchId: CREDIT_BATCH_ID,
+          sampleCode: "LAB-001",
+        },
+      ],
+    );
+    vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
+      async (_userId, entityType, entityId) =>
+        entityType === "sample" && entityId === SAMPLE_ID
+          ? [
+              {
+                ...DOCUMENT_FIXTURE,
+                fileName: "sample-lab-report.pdf",
+                documentType: "lab_report",
+              },
+            ] as never
+          : [] as never,
+    );
+    vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue({
+      id: EXISTING_SOURCE_ID,
+      is_public: false,
+    } as never);
+    vi.mocked(isometric.requestSignedUploadUrl).mockResolvedValue({
+      kind: "already_uploaded",
+    });
+
+    await mirrorCandidateSourcesForSubmission(
+      makeTestOrgContext(USER_ID),
+      {
+        removalId: REMOVAL_ID,
+        candidateDocumentIds: [DOCUMENT_ID],
+      },
+    );
+
+    expect(documentsDA.listDocumentsForEntity).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      "sample",
+      SAMPLE_ID,
+    );
+    expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      expect.objectContaining({ documentId: DOCUMENT_ID }),
+      expect.anything(),
+    );
+    const candidates = await loadCandidateDocumentsForRemovalForUser(
+      makeTestOrgContext(USER_ID),
+      REMOVAL_ID,
+    );
+    expect(candidates.candidates[0]?.lineageEntity.entityLabel).toBe(
+      "Sample LAB-001",
     );
   });
 

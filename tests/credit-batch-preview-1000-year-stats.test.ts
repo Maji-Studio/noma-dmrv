@@ -10,10 +10,6 @@ import {
   type Blueprint1000YearReplicate,
 } from "@/lib/calculations/biochar-removal";
 import {
-  extract1000YearBlueprintReplicates,
-  independentPreviewMissingInputs,
-} from "@/data-access/credit-batch-accounting";
-import {
   build1000YearSequestrationSample,
   TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
   S_FRACTION_MEASUREMENT_PROPERTY,
@@ -101,6 +97,29 @@ describe("computeBlueprint1000YearDurability", () => {
     expect(durability?.meanOrganicCarbonFraction).toBeCloseTo(0.82, 12);
   });
 
+  it("does not credit negative organic carbon within the reconciliation tolerance", () => {
+    const durability = computeBlueprint1000YearDurability(
+      REPLICATES.map((replicate) => ({
+        ...replicate,
+        totalCarbonPercent: 1,
+        inorganicCarbonPercent: 1.25,
+      })),
+    );
+    expect(durability?.meanOrganicCarbonFraction).toBe(0);
+  });
+
+  it("floors the aggregate mean rather than each registry replicate", () => {
+    const durability = computeBlueprint1000YearDurability([
+      { ...REPLICATES[0], totalCarbonPercent: 1, inorganicCarbonPercent: 1.25 },
+      { ...REPLICATES[1], totalCarbonPercent: 1, inorganicCarbonPercent: 1.25 },
+      { ...REPLICATES[2], totalCarbonPercent: 2, inorganicCarbonPercent: 1 },
+    ]);
+    expect(durability?.meanOrganicCarbonFraction).toBeCloseTo(
+      ((-0.25 - 0.25 + 1) / 3) / 100,
+      12,
+    );
+  });
+
   it("caps a raw durability above 0.95", () => {
     const durability = computeBlueprint1000YearDurability(
       REPLICATES.map((replicate) => ({
@@ -115,6 +134,18 @@ describe("computeBlueprint1000YearDurability", () => {
     });
   });
 
+  it("floors a negative binomial lower estimate at zero", () => {
+    const durability = computeBlueprint1000YearDurability(
+      REPLICATES.map((replicate) => ({
+        ...replicate,
+        sReflectanceFraction: 0.1,
+      })),
+    );
+    expect(durability?.rawDurability).toBeLessThan(0);
+    expect(durability?.cappedDurability).toBe(0);
+    expect(durability?.capApplied).toBe(false);
+  });
+
   it("returns null on empty or non-finite input", () => {
     expect(computeBlueprint1000YearDurability([])).toBeNull();
     expect(
@@ -123,6 +154,17 @@ describe("computeBlueprint1000YearDurability", () => {
       ]),
     ).toBeNull();
   });
+
+  it.each([-0.01, 1.01])(
+    "returns null for an R₀ fraction outside the unit interval (%s)",
+    (sReflectanceFraction) => {
+      expect(
+        computeBlueprint1000YearDurability([
+          { ...REPLICATES[0], sReflectanceFraction },
+        ]),
+      ).toBeNull();
+    },
+  );
 });
 
 describe("computeApplicationCo2eStoredBlueprint1000", () => {
@@ -187,63 +229,5 @@ describe("computeApplicationCo2eStoredBlueprint1000", () => {
 
     expect(preview.co2eStoredTonnes).toBeNull();
     expect(preview.missingInputs).toEqual(["dryMassTonnes"]);
-  });
-});
-
-describe("extract1000YearBlueprintReplicates", () => {
-  it("keeps only samples with total, measured inorganic, and s_fraction", () => {
-    expect(
-      extract1000YearBlueprintReplicates([
-        { totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 },
-        { totalCarbonPercent: null, inorganicCarbonPercent: 1, sReflectanceFraction: 0.92 },
-        { totalCarbonPercent: 84, inorganicCarbonPercent: null, sReflectanceFraction: 0.93 },
-        { totalCarbonPercent: 84, inorganicCarbonPercent: 1, sReflectanceFraction: null },
-      ]),
-    ).toEqual([{ totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 }]);
-  });
-});
-
-describe("independentPreviewMissingInputs", () => {
-  it("reports sampled 1000-year chemistry even with no application calculation", () => {
-    expect(
-      independentPreviewMissingInputs(
-        { durabilityOption: "1000_year", sampling: "sampled" },
-        [
-          { totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 },
-          { totalCarbonPercent: null, inorganicCarbonPercent: 1, sReflectanceFraction: 0.92 },
-        ],
-      ),
-    ).toEqual([BLUEPRINT_1000_YEAR_REPLICATES_INPUT]);
-  });
-
-  it("blocks when one of four selected Samples lacks measured inorganic carbon", () => {
-    expect(
-      independentPreviewMissingInputs(
-        { durabilityOption: "1000_year", sampling: "sampled" },
-        [
-          ...REPLICATES,
-          {
-            totalCarbonPercent: 85,
-            inorganicCarbonPercent: null,
-            sReflectanceFraction: 0.94,
-          },
-        ],
-      ),
-    ).toEqual([BLUEPRINT_1000_YEAR_REPLICATES_INPUT]);
-  });
-
-  it("preserves Method-B and 200-year behavior", () => {
-    expect(
-      independentPreviewMissingInputs(
-        { durabilityOption: "1000_year", sampling: "unsampled" },
-        [],
-      ),
-    ).toEqual([]);
-    expect(
-      independentPreviewMissingInputs(
-        { durabilityOption: "200_year", sampling: "sampled" },
-        [],
-      ),
-    ).toEqual([]);
   });
 });

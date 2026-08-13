@@ -12,6 +12,7 @@ import {
   readRemovalDurabilityMeasurementSamples,
 } from "./durability-measurement-sample-snapshot";
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
+import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
@@ -674,8 +675,8 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
       ...changed.samples[1],
       inorganicCarbonPercent: 1.3,
     };
-    const normalized = (candidate: CreditBatchWithSamples) =>
-      JSON.stringify(
+    const semanticHash = (candidate: CreditBatchWithSamples) =>
+      payloadHash(
         normalizeMeasurementSamplesForHash(
           buildDurabilityMeasurementSampleSubmissions({
             ...common,
@@ -685,7 +686,7 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
         ),
       );
 
-    expect(normalized(changed)).not.toBe(normalized(original));
+    expect(semanticHash(changed)).not.toBe(semanticHash(original));
   });
 
   it("rejects 200-year before evaluating its soil-temperature payload", () => {

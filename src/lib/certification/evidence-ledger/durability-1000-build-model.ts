@@ -32,7 +32,7 @@ export const LEGACY_1000_YEAR_PREVIEW_FORMULA_VERSION =
   "isometric-1000-year-total-carbon-binomial-lower-uncapped-v1";
 
 export const CURRENT_1000_YEAR_SEMANTICS_LABEL =
-  "Current organic-carbon basis with 0.95 durability cap";
+  "Current organic-carbon basis with durability bounded from 0 to 0.95";
 export const LEGACY_1000_YEAR_SEMANTICS_LABEL =
   "Legacy total-carbon basis with uncapped durability";
 
@@ -165,6 +165,13 @@ export function buildThousandYearDurabilityLedgerModel(
       const rawDurability = isLegacy
         ? legacyDurability(replicates)
         : currentDurability!.rawDurability;
+      const rawMeanOrganicCarbonFraction = isLegacy
+        ? null
+        : replicates.reduce(
+            (sum, replicate) =>
+              sum + (replicate.calculatedOrganicCarbonFraction ?? 0),
+            0,
+          ) / replicates.length;
       return {
         creditBatchId: batch.creditBatchId,
         creditBatchCode: batch.creditBatchCode,
@@ -172,12 +179,25 @@ export function buildThousandYearDurabilityLedgerModel(
         replicateCount: replicates.length,
         productMassKg: productMassByBatchId.get(batch.creditBatchId) ?? 0,
         componentKey,
+        componentLabel: isLegacy
+          ? "Legacy 1,000-year durability component"
+          : "Current 1,000-year durability component",
         formulaVersion: isLegacy
           ? LEGACY_1000_YEAR_PREVIEW_FORMULA_VERSION
           : CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION,
+        formulaLabel: isLegacy
+          ? "Binomial lower estimate without a durability cap"
+          : "Organic-carbon binomial lower estimate bounded from 0 to 0.95",
         semanticsLabel: isLegacy
           ? LEGACY_1000_YEAR_SEMANTICS_LABEL
           : CURRENT_1000_YEAR_SEMANTICS_LABEL,
+        rawMeanOrganicCarbonFraction,
+        creditedMeanOrganicCarbonFraction: isLegacy
+          ? null
+          : currentDurability!.meanOrganicCarbonFraction,
+        organicCarbonFloorApplied:
+          rawMeanOrganicCarbonFraction != null &&
+          rawMeanOrganicCarbonFraction < 0,
         rawDurability,
         cappedDurability: isLegacy
           ? rawDurability

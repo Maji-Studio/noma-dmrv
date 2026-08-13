@@ -82,6 +82,34 @@ describe("buildThousandYearDurabilityLedgerModel", () => {
     expect(model.totalReplicates).toBe(3);
   });
 
+  it("discloses when the credited aggregate organic-carbon mean is floored", () => {
+    const model = buildThousandYearDurabilityLedgerModel({
+      batches: [
+        {
+          creditBatchId: "batch-floor",
+          creditBatchCode: "CB-FLOOR",
+          runs: [{ id: "run-1", biocharDryMassKg: 100 }],
+          samples: [
+            sample("a", 1, 1.25, 0.9),
+            sample("b", 1, 1.25, 0.9),
+            sample("c", 1, 1.25, 0.9),
+          ],
+        },
+      ],
+      attributionByRunId: new Map([["run-1", 1]]),
+      memberBatchCodes: "CB-FLOOR",
+      facilityName: null,
+      externalProjectId: null,
+      generatedAtIso: "2026-08-13T00:00:00.000Z",
+    });
+
+    expect(model.batches[0]).toMatchObject({
+      rawMeanOrganicCarbonFraction: -0.0025,
+      creditedMeanOrganicCarbonFraction: 0,
+      organicCarbonFloorApplied: true,
+    });
+  });
+
   it("does not derive missing inorganic carbon on the current path", () => {
     const model = buildThousandYearDurabilityLedgerModel({
       batches: [
@@ -136,6 +164,9 @@ describe("buildThousandYearDurabilityLedgerModel", () => {
     expect(model.batches[0]).toMatchObject({
       componentKey: DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
       semanticsLabel: LEGACY_1000_YEAR_SEMANTICS_LABEL,
+      rawMeanOrganicCarbonFraction: null,
+      creditedMeanOrganicCarbonFraction: null,
+      organicCarbonFloorApplied: false,
       rawDurability: 1,
       cappedDurability: 1,
       capApplied: false,

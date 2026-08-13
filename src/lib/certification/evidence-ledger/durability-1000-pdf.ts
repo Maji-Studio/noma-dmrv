@@ -213,7 +213,7 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
       ),
       t(
         [styles.mono, { width: COL.day }],
-        replicate.samplingDay ?? "—",
+        replicate.samplingDay ?? "Not recorded",
       ),
       t(
         [styles.mono, { width: COL.carbon, textAlign: "right" }],
@@ -222,13 +222,13 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
       t(
         [styles.mono, { width: COL.carbon, textAlign: "right" }],
         replicate.inorganicCarbonFraction == null
-          ? "—"
+          ? "Not recorded"
           : fraction(replicate.inorganicCarbonFraction),
       ),
       t(
         [styles.mono, { width: COL.carbon, textAlign: "right" }],
         replicate.calculatedOrganicCarbonFraction == null
-          ? "—"
+          ? "Not available"
           : fraction(replicate.calculatedOrganicCarbonFraction),
       ),
       t(
@@ -249,9 +249,22 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
       v(
         styles.calculation,
         {},
-        t(styles.calculationLine, `Component: ${batch.componentKey}`),
-        t(styles.calculationLine, `Formula/version: ${batch.formulaVersion}`),
+        t(styles.calculationLine, `Component: ${batch.componentLabel}`),
+        t(styles.calculationLine, `Component key: ${batch.componentKey}`),
+        t(styles.calculationLine, `Formula: ${batch.formulaLabel}`),
+        t(styles.calculationLine, `Formula version: ${batch.formulaVersion}`),
         t(styles.calculationLine, `Semantics: ${batch.semanticsLabel}`),
+        ...(batch.rawMeanOrganicCarbonFraction != null &&
+        batch.creditedMeanOrganicCarbonFraction != null
+          ? [
+              t(
+                styles.calculationLine,
+                `Raw mean organic carbon ${fraction(batch.rawMeanOrganicCarbonFraction)} · ` +
+                  `Credited mean organic carbon ${fraction(batch.creditedMeanOrganicCarbonFraction)} · ` +
+                  `zero floor applied ${batch.organicCarbonFloorApplied ? "yes" : "no"}`,
+              ),
+            ]
+          : []),
         t(
           styles.calculationLine,
           `Raw durability ${fraction(batch.rawDurability)} · ` +
@@ -272,6 +285,7 @@ function apparatus(): ReactElement {
       styles.noteBody,
       "Each row is one complete laboratory replicate sent in the registry measurement sample. " +
         "Organic carbon is calculated within each row as total minus directly measured inorganic carbon. " +
+        "The local preview averages those raw differences, then floors a negative mean at zero; both the raw and credited means are disclosed. " +
         "No total-minus-organic fallback supplies inorganic carbon on the current path. The registry " +
         "combines the submitted lists with product mass and remains authoritative. This local math is " +
         "explanatory and does not replace the laboratory certificate of analysis.",
@@ -290,7 +304,10 @@ function apparatus(): ReactElement {
     t(styles.noteH, "Submitted fields"),
     legendRow("Total C", "Submitted total carbon dry-basis fraction."),
     legendRow("Inorganic C", "Submitted directly measured dry-basis fraction."),
-    legendRow("Organic C", "Calculated row by row as Total C minus Inorganic C."),
+    legendRow(
+      "Organic C",
+      "Raw row value is Total C minus Inorganic C; the credited aggregate mean is floored at zero.",
+    ),
     legendRow("s_fraction", "Reflectance readings at or above 2%, from 0 to 1."),
     legendRow("Product mass", "Applied dry biochar mass in kilograms."),
   );

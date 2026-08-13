@@ -1,13 +1,18 @@
 import { SafeError } from "@/lib/errors";
+import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import type { components } from "../generated/certify";
 import { buildRemovalSupplierRef } from "../utils/supplier-ref";
 import { encodeMeasurementProperty } from "../utils/measurement-property";
 import {
   classifySequestration1000YearComponent,
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  CARBON_CONTENTS_1000_YEAR_UNIT,
   INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
   isSequestrationBlueprintFamily,
+  PRODUCT_MASS_MEASUREMENT_PROPERTY,
+  PRODUCT_MASS_UNIT,
   S_FRACTION_MEASUREMENT_PROPERTY,
+  S_FRACTION_UNIT,
   TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
 } from "./measurement-sample";
 
@@ -45,6 +50,7 @@ interface MeasurementPropertyInputBinding {
   dataShape: InputDataShape;
   source: "measurement-property";
   measurementProperty: MeasurementProperty;
+  sourceContract: SequestrationSourceContract;
 }
 
 interface SampleEvidenceDirectDatapointInputBinding {
@@ -59,6 +65,14 @@ interface SampleEvidenceDirectDatapointInputBinding {
   quantityKind: QuantityKind;
   unit: string;
   datapointType: DatapointType;
+  sourceContract: SequestrationSourceContract;
+}
+
+interface SequestrationSourceContract {
+  nomaSource: string;
+  transformRevision: "identity-v1" | "percent-to-fraction-v1";
+  wireUnit: string;
+  confirmation: "confirmed" | "externally-unconfirmed";
 }
 
 interface CreditBatchMassDirectDatapointInputBinding {
@@ -68,6 +82,7 @@ interface CreditBatchMassDirectDatapointInputBinding {
   quantityKind: QuantityKind;
   unit: string;
   datapointType: DatapointType;
+  sourceContract: SequestrationSourceContract;
 }
 
 export type SequestrationInputBinding =
@@ -110,20 +125,38 @@ export const SEQUESTRATION_COMPONENT_INPUT_BINDINGS = {
         source: "measurement-property",
         measurementProperty:
           TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
+        sourceContract: {
+          nomaSource: "Sample totalCarbonPercent[]",
+          transformRevision: "percent-to-fraction-v1",
+          wireUnit: CARBON_CONTENTS_1000_YEAR_UNIT,
+          confirmation: "confirmed",
+        },
       },
       inorganic_carbon_contents: {
         dataShape: "LIST",
         source: "measurement-property",
         measurementProperty:
           INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
+        sourceContract: {
+          nomaSource: "Sample inorganicCarbonPercent[]",
+          transformRevision: "percent-to-fraction-v1",
+          wireUnit: CARBON_CONTENTS_1000_YEAR_UNIT,
+          confirmation: "externally-unconfirmed",
+        },
       },
       product_mass: {
         dataShape: "SCALAR",
         source: "direct-datapoint",
         valueSource: "credit-batch-product-mass",
         quantityKind: "mass",
-        unit: "kg",
+        unit: PRODUCT_MASS_UNIT,
         datapointType: "REPORTED",
+        sourceContract: {
+          nomaSource: "Attribution-scaled dry applied biochar mass",
+          transformRevision: "identity-v1",
+          wireUnit: PRODUCT_MASS_UNIT,
+          confirmation: "confirmed",
+        },
       },
       s_fraction: {
         dataShape: "LIST",
@@ -135,8 +168,14 @@ export const SEQUESTRATION_COMPONENT_INPUT_BINDINGS = {
         // `dimensionless` kind, unlike the sample property's
         // `dimensionless_ratio` kind.
         quantityKind: "dimensionless",
-        unit: "dimensionless",
+        unit: S_FRACTION_UNIT,
         datapointType: "REPORTED",
+        sourceContract: {
+          nomaSource: "Sample sReflectanceFraction[]",
+          transformRevision: "identity-v1",
+          wireUnit: S_FRACTION_UNIT,
+          confirmation: "confirmed",
+        },
       },
     },
   },
@@ -183,6 +222,23 @@ export function getSequestrationInputBinding(
     >
   )[blueprintKey];
   return blueprintBinding?.inputs[inputKey] ?? null;
+}
+
+const PERCENT_TO_FRACTION_DIVISOR = 100;
+
+/** Applies the declarative source transform used by the active binding. */
+export function transformSequestrationSourceValue(
+  blueprintKey: string,
+  inputKey: string,
+  value: number,
+): number {
+  const binding = getSequestrationInputBinding(blueprintKey, inputKey);
+  if (!binding) {
+    throw missingInputBindingError(blueprintKey, inputKey);
+  }
+  return binding.sourceContract.transformRevision === "percent-to-fraction-v1"
+    ? value / PERCENT_TO_FRACTION_DIVISOR
+    : value;
 }
 
 /**
@@ -497,9 +553,12 @@ export function bindSequestrationDatapointsToTemplate(args: {
             datapointIdsByRtcInput.get(`${component.id}::${inputKey}`)?.length ??
             0,
         );
-        if (new Set(listLengths).size !== 1 || listLengths[0] < 3) {
+        if (
+          new Set(listLengths).size !== 1 ||
+          listLengths[0] < MINIMUM_REPLICATES_PER_BATCH
+        ) {
           throw new SafeError(
-            "The current 1,000-year durability component requires equal total-carbon, inorganic-carbon, and R₀ lists with at least three values. Refresh the Sample data and try again.",
+            `The current 1,000-year durability component requires equal total-carbon, inorganic-carbon, and R₀ lists with at least ${MINIMUM_REPLICATES_PER_BATCH} values. Refresh the Sample data and try again.`,
           );
         }
       }

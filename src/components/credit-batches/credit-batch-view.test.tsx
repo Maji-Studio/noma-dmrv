@@ -111,6 +111,35 @@ describe("credit batch CO₂e stored", () => {
       }),
     ).toContain("12.50 t CO₂e");
   });
+
+  it("discloses the raw and capped 1000-year durability calculation", () => {
+    const preview = makePreview(12.5, []);
+    preview.componentKey = "biochar_sequestration_1000_year_f_durable_max";
+    preview.formulaVersion = "organic-carbon-cap-v1";
+    preview.applicationResults = [{
+      applicationId: "application-1",
+      applicationCode: "APP-001",
+      co2eStoredTonnes: 12.5,
+      rawFDurable: 0.97,
+      fDurable: 0.95,
+      durabilityCapped: true,
+      organicCarbonPercent: 79,
+      effectiveSoilTemperatureC: null,
+      missingInputs: [],
+      warnings: [],
+    }];
+    const fields = creditBatchSheetSections({
+      ...baseOptions,
+      creditBatch: makeBatch({ co2eStoredPreview: preview }),
+    }).find((section) => section.title === "Batch definition")?.fields;
+
+    expect(fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Raw durability estimate", value: "97.0%" }),
+      expect.objectContaining({ label: "Capped durability estimate", value: "95.0%" }),
+      expect.objectContaining({ label: "Durability cap applied", value: "Yes" }),
+      expect.objectContaining({ label: "Preview formula", value: "organic-carbon-cap-v1" }),
+    ]));
+  });
 });
 
 describe("credit batch production-run preview", () => {

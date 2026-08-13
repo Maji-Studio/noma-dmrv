@@ -154,6 +154,26 @@ describe("classifyRemovalSourceCandidate", () => {
       }),
     ).toBeNull();
   });
+
+  it("maps a Sample lab report to paired carbon inputs", () => {
+    expect(
+      classifyRemovalSourceCandidate({
+        documentType: "lab_report",
+        metadata: {},
+        lineage: {
+          entityType: "sample",
+          entityId: "sample-1",
+          entityLabel: "Sample SMP-001",
+        },
+      }),
+    ).toMatchObject({
+      nomaRole: "lab_report",
+      intendedTarget: { inputKey: "total_carbon_contents" },
+      additionalIntendedTargets: [
+        expect.objectContaining({ inputKey: "inorganic_carbon_contents" }),
+      ],
+    });
+  });
 });
 
 describe("buildRemovalSourceDescription", () => {

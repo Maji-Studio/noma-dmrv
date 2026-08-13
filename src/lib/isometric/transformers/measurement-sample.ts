@@ -36,6 +36,7 @@ import type {
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
 import { SafeError } from "@/lib/errors";
+import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 
 type CreateMeasurementSampleRequest =
   components["schemas"]["CreateMeasurementSampleRequest"];
@@ -515,7 +516,6 @@ export function build1000YearSequestrationSample(
   };
 }
 
-const MINIMUM_1000_YEAR_REPLICATES = 3;
 const FRACTION_MIN = 0;
 const FRACTION_MAX = 1;
 const CARBON_RECONCILIATION_TOLERANCE_FRACTION =
@@ -560,9 +560,9 @@ export function assert1000YearInputListInvariants(args: {
       "The 1,000-year total-carbon, inorganic-carbon, and R₀ lists must have equal lengths.",
     );
   }
-  if (lengths[0] < MINIMUM_1000_YEAR_REPLICATES) {
+  if (lengths[0] < MINIMUM_REPLICATES_PER_BATCH) {
     throw new SafeError(
-      `A 1,000-year Removal requires at least ${MINIMUM_1000_YEAR_REPLICATES} complete replicates.`,
+      `A 1,000-year Removal requires at least ${MINIMUM_REPLICATES_PER_BATCH} complete replicates.`,
     );
   }
   for (let index = 0; index < lengths[0]; index += 1) {

@@ -61,19 +61,14 @@ import {
 } from "./biochar-product-application-allocation";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
-import {
-  type CertifierProvider,
-  type CreditBatchCo2eStoredPreview,
-} from "./credit-batch-preview";
-
-export {
-  extract1000YearBlueprintReplicates,
-  independentPreviewMissingInputs,
-} from "./credit-batch-preview";
+import type {
+  CertifierProvider,
+  CreditBatchCo2eStoredPreview,
+} from "./credit-batch-accounting-types";
 export type {
   ApplicationCo2eStoredPreview,
   CreditBatchCo2eStoredPreview,
-} from "./credit-batch-preview";
+} from "./credit-batch-accounting-types";
 
 type Executor = DbTransaction | typeof db;
 
@@ -158,7 +153,7 @@ export interface CreditBatchLineageFacts {
   appliedWeightTons: number;
 }
 
-interface CreditBatchChemistry extends WeightedBatchChemistry {
+export interface CreditBatchChemistry extends WeightedBatchChemistry {
   blueprint1000YearReplicates: Blueprint1000YearReplicate[];
   blueprint1000YearInputsComplete: boolean;
 }
@@ -537,7 +532,7 @@ async function loadLineageWithExecutor(
   }));
 }
 
-function buildCo2eStoredPreview(
+export function buildCo2eStoredPreview(
   batch: CreditBatch & { durabilityOption: DurabilityOption },
   provider: CertifierProvider | null,
   facts: CreditBatchLineageFacts,

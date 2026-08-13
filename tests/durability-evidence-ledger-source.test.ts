@@ -95,6 +95,7 @@ vi.mock("@/lib/storage", () => ({
 
 import {
   deleteDocumentRow,
+  insertDocument,
   listDocumentsByKindForRemoval,
 } from "@/data-access/documents";
 import { renderDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-pdf";
@@ -102,7 +103,11 @@ import { renderThousandYearDurabilityLedgerPdf } from "@/lib/certification/evide
 import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources";
 import { ensureDurabilityEvidenceLedgerSourceFromContext } from "@/fn/certification/durability-evidence-ledger";
 import { buildThousandYearDurabilityLedgerModel } from "@/lib/certification/evidence-ledger/durability-1000-build-model";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import {
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+} from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
 
 function context(args: {
   durabilityOption: "200_year" | "1000_year";
@@ -185,12 +190,46 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
         componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
       }),
     );
+    expect(insertDocument).toHaveBeenCalledWith(
+      makeTestOrgContext(USER),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+          formulaVersion: CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION,
+        }),
+      }),
+    );
     expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(
       makeTestOrgContext(USER),
       {
         removalId: REMOVAL,
         documentId: "doc-new",
       },
+    );
+  });
+
+  it("uses current semantics when superseding a historical submission", async () => {
+    const ctx = context({ durabilityOption: "1000_year", hasSoilReference: false });
+    ctx.latestSubmission = {
+      payloadSnapshot: {
+        semantic: {
+          sequestrationTemplate: [
+            { blueprintKey: DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR },
+          ],
+        },
+      },
+    } as never;
+
+    await ensureDurabilityEvidenceLedgerSourceFromContext(
+      makeTestOrgContext(USER),
+      REMOVAL,
+      ctx,
+    );
+
+    expect(buildThousandYearDurabilityLedgerModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+      }),
     );
   });
 

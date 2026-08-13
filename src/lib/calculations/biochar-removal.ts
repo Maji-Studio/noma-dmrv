@@ -475,19 +475,21 @@ function computeApplicationCo2eStored1000(
 // authoritative; noma uses the same input-by-input reduction only for local
 // review and evidence. The current reduction is
 //
-//   organic_i = total_carbon_i − inorganic_carbon_i
+//   mean_organic = max(0, mean(total_carbon_i − inorganic_carbon_i))
 //   F_raw = mean(s_fraction) − √(mean·(1−mean)/n)
-//   F_capped = min(F_raw, 0.95)
-//   CO₂e = product_mass × mean(organic_i) × F_capped × 44.01/12.01
+//   F_bounded = min(max(F_raw, 0), 0.95)
+//   CO₂e = product_mass × mean_organic × F_bounded × 44.01/12.01
 //
 // from paired per-replicate total carbon, directly measured inorganic carbon,
 // and `s_fraction`. Do not derive missing inorganic carbon from total minus a
 // separately reported organic-carbon value. This is the live component
 // contract, not module Eq.6 and not the deprecated component's total-carbon,
-// uncapped semantics.
+// uncapped semantics. The zero floors are local fail-closed guards against
+// tolerance and low-reflectance edge cases producing negative stored CO₂e;
+// the raw durability remains visible for diagnostics.
 
 export const CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION =
-  "isometric-1000-year-organic-carbon-binomial-lower-cap-v1";
+  "isometric-1000-year-organic-carbon-binomial-lower-bounded-v3";
 
 /**
  * One complete 1,000-year lab replicate — mirrors the completeness filter the
@@ -504,7 +506,7 @@ export interface Blueprint1000YearReplicate {
 }
 
 export interface Blueprint1000YearDurabilityResult {
-  /** mean(total_i − measured_inorganic_i), as a 0–1 dry-basis fraction. */
+  /** max(0, mean(total_i − measured_inorganic_i)), as a 0–1 dry-basis fraction. */
   meanOrganicCarbonFraction: number;
   /** Mean of the paired replicate `s_fraction` values. */
   meanSFraction: number;
@@ -516,6 +518,11 @@ export interface Blueprint1000YearDurabilityResult {
   capApplied: boolean;
   /** n — replicates the reduction ran over. */
   replicateCount: number;
+}
+
+/** True for finite proportions accepted by the 1,000-year durability formula. */
+export function isUnitFraction(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
 }
 
 /**
@@ -533,13 +540,14 @@ export function computeBlueprint1000YearDurability(
       (replicate) =>
         !Number.isFinite(replicate.totalCarbonPercent) ||
         !Number.isFinite(replicate.inorganicCarbonPercent) ||
-        !Number.isFinite(replicate.sReflectanceFraction),
+        !isUnitFraction(replicate.sReflectanceFraction),
     )
   ) {
     return null;
   }
 
-  const meanOrganicCarbonFraction =
+  const meanOrganicCarbonFraction = Math.max(
+    0,
     replicates.reduce(
       (sum, replicate) =>
         sum +
@@ -547,14 +555,18 @@ export function computeBlueprint1000YearDurability(
         replicate.inorganicCarbonPercent,
       0,
     ) /
-    n /
-    PERCENT_DENOMINATOR;
+      n /
+      PERCENT_DENOMINATOR,
+  );
   const meanSFraction =
     replicates.reduce((sum, r) => sum + r.sReflectanceFraction, 0) / n;
   const rawDurability =
     meanSFraction - Math.sqrt((meanSFraction * (1 - meanSFraction)) / n);
   const capApplied = rawDurability > F_DURABLE_1000_CAP;
-  const cappedDurability = Math.min(rawDurability, F_DURABLE_1000_CAP);
+  const cappedDurability = Math.min(
+    Math.max(rawDurability, 0),
+    F_DURABLE_1000_CAP,
+  );
 
   return {
     meanOrganicCarbonFraction,
