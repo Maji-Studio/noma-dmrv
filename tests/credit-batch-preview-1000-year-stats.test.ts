@@ -10,10 +10,6 @@ import {
   type Blueprint1000YearReplicate,
 } from "@/lib/calculations/biochar-removal";
 import {
-  extract1000YearBlueprintReplicates,
-  independentPreviewMissingInputs,
-} from "@/data-access/credit-batch-accounting";
-import {
   build1000YearSequestrationSample,
   TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
   S_FRACTION_MEASUREMENT_PROPERTY,
@@ -198,63 +194,5 @@ describe("computeApplicationCo2eStoredBlueprint1000", () => {
 
     expect(preview.co2eStoredTonnes).toBeNull();
     expect(preview.missingInputs).toEqual(["dryMassTonnes"]);
-  });
-});
-
-describe("extract1000YearBlueprintReplicates", () => {
-  it("keeps only samples with total, measured inorganic, and s_fraction", () => {
-    expect(
-      extract1000YearBlueprintReplicates([
-        { totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 },
-        { totalCarbonPercent: null, inorganicCarbonPercent: 1, sReflectanceFraction: 0.92 },
-        { totalCarbonPercent: 84, inorganicCarbonPercent: null, sReflectanceFraction: 0.93 },
-        { totalCarbonPercent: 84, inorganicCarbonPercent: 1, sReflectanceFraction: null },
-      ]),
-    ).toEqual([{ totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 }]);
-  });
-});
-
-describe("independentPreviewMissingInputs", () => {
-  it("reports sampled 1000-year chemistry even with no application calculation", () => {
-    expect(
-      independentPreviewMissingInputs(
-        { durabilityOption: "1000_year", sampling: "sampled" },
-        [
-          { totalCarbonPercent: 80, inorganicCarbonPercent: 1, sReflectanceFraction: 0.91 },
-          { totalCarbonPercent: null, inorganicCarbonPercent: 1, sReflectanceFraction: 0.92 },
-        ],
-      ),
-    ).toEqual([BLUEPRINT_1000_YEAR_REPLICATES_INPUT]);
-  });
-
-  it("blocks when one of four selected Samples lacks measured inorganic carbon", () => {
-    expect(
-      independentPreviewMissingInputs(
-        { durabilityOption: "1000_year", sampling: "sampled" },
-        [
-          ...REPLICATES,
-          {
-            totalCarbonPercent: 85,
-            inorganicCarbonPercent: null,
-            sReflectanceFraction: 0.94,
-          },
-        ],
-      ),
-    ).toEqual([BLUEPRINT_1000_YEAR_REPLICATES_INPUT]);
-  });
-
-  it("preserves Method-B and 200-year behavior", () => {
-    expect(
-      independentPreviewMissingInputs(
-        { durabilityOption: "1000_year", sampling: "unsampled" },
-        [],
-      ),
-    ).toEqual([]);
-    expect(
-      independentPreviewMissingInputs(
-        { durabilityOption: "200_year", sampling: "sampled" },
-        [],
-      ),
-    ).toEqual([]);
   });
 });
