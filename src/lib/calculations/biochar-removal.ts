@@ -548,8 +548,10 @@ export function computeBlueprint1000YearDurability(
     replicates.reduce(
       (sum, replicate) =>
         sum +
-        replicate.totalCarbonPercent -
-        replicate.inorganicCarbonPercent,
+        Math.max(
+          0,
+          replicate.totalCarbonPercent - replicate.inorganicCarbonPercent,
+        ),
       0,
     ) /
     n /

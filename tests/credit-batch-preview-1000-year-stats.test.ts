@@ -97,6 +97,17 @@ describe("computeBlueprint1000YearDurability", () => {
     expect(durability?.meanOrganicCarbonFraction).toBeCloseTo(0.82, 12);
   });
 
+  it("does not credit negative organic carbon within the reconciliation tolerance", () => {
+    const durability = computeBlueprint1000YearDurability(
+      REPLICATES.map((replicate) => ({
+        ...replicate,
+        totalCarbonPercent: 1,
+        inorganicCarbonPercent: 1.25,
+      })),
+    );
+    expect(durability?.meanOrganicCarbonFraction).toBe(0);
+  });
+
   it("caps a raw durability above 0.95", () => {
     const durability = computeBlueprint1000YearDurability(
       REPLICATES.map((replicate) => ({
