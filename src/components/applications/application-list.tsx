@@ -28,6 +28,7 @@ import {
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { ApplicationForm } from "./application-form";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
+import { ApplicationStorageLocationSync } from "./application-storage-location-sync";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import {
   formatApplicationKgFromTons,
@@ -743,6 +744,15 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 mode={(sideSheetEntity.evidenceMethod ?? "location") as ApplicationEvidenceMethod}
                 boundary={sideSheetEntity.gisBoundary ?? null}
                 readOnly
+              />
+            ),
+          },
+          {
+            title: "Application site",
+            fields: [],
+            content: (
+              <ApplicationStorageLocationSync
+                applicationId={sideSheetEntity.id}
               />
             ),
           },

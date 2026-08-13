@@ -92,8 +92,11 @@ export interface PerformRegistryCreateArgs {
   /** Sync-event identity (certifier_sync_events.entity_type / entity_id). */
   entityType: string;
   entityId: string;
-  /** Ledger row claimed for this attempt — rejected on unrecoverable failure. */
-  submissionRowId: string;
+  /**
+   * Ledger row claimed for this attempt, rejected on unrecoverable failure.
+   * Explicit standalone syncs may omit it while retaining sync-event audit.
+   */
+  submissionRowId?: string;
   /** Exact draft lock owned by this attempt, for rejection compare-and-set. */
   expectedLockedAt?: Date;
   /** Owning pipeline performs attempt-wide definitive-failure cleanup. */
@@ -308,7 +311,7 @@ async function markSubmissionRejectedBestEffort(
   args: PerformRegistryCreateArgs,
   errorMessage: string,
 ): Promise<void> {
-  if (args.deferRejectionToAttempt) return;
+  if (args.deferRejectionToAttempt || !args.submissionRowId) return;
   const log = args.log ?? logger;
   try {
     await markSubmissionRejected(args.orgCtx, args.submissionRowId, {

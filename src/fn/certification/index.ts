@@ -102,6 +102,12 @@ export {
   loadRegistryGhgStatements,
   reconcileGhgStatementsFromRegistry,
 } from "./ghg-statement-sync";
+export {
+  loadApplicationStorageLocationSync,
+  syncApplicationStorageLocation,
+  type ApplicationStorageLocationSyncState,
+  type ApplicationStorageLocationSyncView,
+} from "./storage-location-actions";
 // Phase 3.5 — mirror noma documents to Isometric Sources + attach
 // source_ids to Datapoint payloads. Server-side proxy, no client blob
 // handling.

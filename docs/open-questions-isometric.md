@@ -274,11 +274,22 @@ independently shippable when its upstream primitives and operator demand exist.
 - **Slice B — `POST /biochar_applications`** (`isometric/phase-5-slice-b`).
   Per-spread-event JSON submission (`application_date`,
   `truck_mass_on_arrival/departure`, `average_application_rate`) that verifiers
-  use to inspect individual delivery records. Deferred because it requires two
-  upstream primitives noma does not post — `POST /production_batches` and
-  `POST /projects/{id}/storage_locations` — which doubles the scope vs. Slice A.
-  Per-application `supplier_reference_id` IS supported by the create request, so
-  the standard reconciliation pattern applies (no ADR 0006-style departure).
+  use to inspect individual delivery records. The upstream Production Batch and
+  Storage Location create/reconcile paths are now implemented, including stable
+  supplier references and local identity journals. POST remains disabled
+  because noma has net delivered/applied mass, while the request requires two
+  separate observed truck masses and offers no net-mass alternative. Isometric
+  must confirm the exact mass encoding or another route, the average-rate unit
+  and wet/dry basis, multi-batch allocation, correction behavior, and
+  `ghg_entry_id` lifecycle. No implementation may encode net mass as arrival
+  and zero as departure. The gated journal keeps one local identity per
+  Application and credit-batch allocation slice until that contract is fixed.
+
+- **Deleted Storage Location recovery** (`isometric/storage-location-recovery`).
+  If an already-journaled remote Storage Location returns 404, noma marks its
+  immutable registration drifted and does not recreate it automatically. A
+  future operator recovery flow must explicitly decide whether to forget and
+  replace that identity; sandbox sync currently requires manual registry review.
 
 - **Slice C — `MonitoringSubmission`** (`isometric/phase-5-slice-c`).
   `POST /projects/{project_id}/monitoring_requirements/{id}/submissions` —
