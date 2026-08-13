@@ -126,6 +126,10 @@ export const customerLocations = pgTable(
   (table) => [
     index('customer_locations_organization_id_idx').on(table.organizationId),
     index('customer_locations_customer_id_idx').on(table.customerId),
+    uniqueIndex('customer_locations_id_organization_id_unique').on(
+      table.id,
+      table.organizationId
+    ),
     // One default location per customer (partial — only default rows are unique).
     uniqueIndex('customer_locations_one_default_per_customer')
       .on(table.customerId)

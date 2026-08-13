@@ -274,6 +274,13 @@ more locations; a customer location is a GPS-pinned application site
 carrying per-site defaults. Distinct from **Supplier**.
 _Avoid_: client (collides with client components / API clients), buyer.
 
+**Application site**:
+The reusable agricultural destination represented by one **Customer** location.
+Repeated applications at that location share the same site identity; an
+application's field identifier and coordinates describe that application event,
+not another site.
+_Avoid_: treating an application event or facility inventory bin as the site.
+
 ### Submission & registry
 
 **Credit batch**:

@@ -90,6 +90,24 @@ export {
   canonicalJson,
 } from "./utils/payload-hash";
 export {
+  buildCreateStorageLocationRequest,
+  buildStorageLocationReference,
+  createStorageLocation,
+  getStorageLocation,
+  patchStorageLocation,
+  findStorageLocationBySupplierReference,
+  type CreateStorageLocationRequest,
+  type PatchStorageLocationRequest,
+  type IsometricStorageLocation,
+} from "./storage-locations";
+export {
+  buildBiocharApplicationRequestIfReady,
+  type CreateBiocharApplicationRequest,
+  type BiocharApplicationBuildResult,
+  type BiocharApplicationGateReason,
+  type NetMassBiocharApplicationInput,
+} from "./biochar-applications";
+export {
   decideSubmissionClaim,
   type SubmissionClaim,
   type SubmissionClaimInput,
