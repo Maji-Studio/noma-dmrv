@@ -197,7 +197,7 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
     );
   });
 
-  it("uses the historical component semantics retained in the submission snapshot", async () => {
+  it("uses current semantics when superseding a historical submission", async () => {
     const ctx = context({ durabilityOption: "1000_year", hasSoilReference: false });
     ctx.latestSubmission = {
       payloadSnapshot: {
@@ -217,7 +217,7 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
 
     expect(buildThousandYearDurabilityLedgerModel).toHaveBeenCalledWith(
       expect.objectContaining({
-        componentKey: DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+        componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
       }),
     );
   });
