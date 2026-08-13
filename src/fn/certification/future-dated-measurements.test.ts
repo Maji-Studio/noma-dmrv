@@ -12,6 +12,10 @@ function lineage(code: string, applicationDate: Date) {
   return { application: { code, applicationDate } };
 }
 
+function sample(sampleCode: string, samplingTime: Date) {
+  return { sampleCode, samplingTime };
+}
+
 describe("collectFutureDatedMeasurements", () => {
   it("reports nothing when every date has already happened", () => {
     expect(
@@ -62,6 +66,21 @@ describe("collectFutureDatedMeasurements", () => {
     expect(blocker).not.toMatch(EN_OR_EM_DASH);
   });
 
+  it("names the Sample whose sampling time is in the future", () => {
+    const [blocker] = collectFutureDatedMeasurements({
+      runs: [],
+      samples: [sample("LAB-0042", new Date("2026-08-14T09:30:00.000Z"))],
+      lineages: [],
+      now: NOW,
+    });
+
+    expect(blocker).toBe(
+      "Sample LAB-0042 is dated 2026-08-14. " +
+        "Change the sampling time or wait until then.",
+    );
+    expect(blocker).not.toMatch(EN_OR_EM_DASH);
+  });
+
   it("reports every offending record, runs before applications", () => {
     const blockers = collectFutureDatedMeasurements({
       runs: [
@@ -84,6 +103,17 @@ describe("collectFutureDatedMeasurements", () => {
     expect(
       collectFutureDatedMeasurements({
         runs: [run("PR-0009", null)],
+        lineages: [],
+        now: NOW,
+      }),
+    ).toEqual([]);
+  });
+
+  it("ignores a Sample with no sampling time — Sample readiness owns that blocker", () => {
+    expect(
+      collectFutureDatedMeasurements({
+        runs: [],
+        samples: [{ sampleCode: "LAB-0042" }],
         lineages: [],
         now: NOW,
       }),

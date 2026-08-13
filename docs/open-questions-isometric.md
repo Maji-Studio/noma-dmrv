@@ -41,6 +41,11 @@ retired questions do not belong in this file.
   governs this Protocol v1.1 project, confirm the expected inorganic-carbon
   measurement property/unit and acceptable direct methods, confirm pairing by
   Sample/index, and resolve the component-versus-module governance discrepancy.
+- **Still open — needs-registry-check:** confirm the current component accepts
+  standalone direct `product_mass`, confirm `measured_at` should be the physical
+  sampling instant, and verify that three local Samples appear as three remote
+  Production batch Sample rows with one scalar mass binding. The code implements
+  this preferred contract but has not yet written fresh sandbox data.
 - **Still open — external action:** migrate the sandbox template without
   deleting historical templates, then verify one complete submission and
   supersession. No external system was mutated by the code implementation.

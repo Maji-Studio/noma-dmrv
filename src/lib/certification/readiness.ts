@@ -74,7 +74,7 @@ export interface RemovalReadinessFacts {
    */
   durabilityGateBlockers?: string[];
   /**
-   * Production-run end times / biochar application dates that still lie in the
+   * Production-run ends, Sample times, or application dates that still lie in the
    * future, already phrased as blocker sentences. Computed SERVER-SIDE (this
    * module is deliberately clock-free and deterministic) by
    * `collectFutureDatedMeasurements`, which mirrors the submit-time guard
@@ -302,8 +302,12 @@ export type PreflightCheckStatus =
 
 export type RemovalMeasurementDateFixTarget =
   | "productionRuns"
+  | "labSamples"
   | "applications"
-  | "productionRunsAndApplications";
+  | "productionRunsAndApplications"
+  | "productionRunsAndLabSamples"
+  | "applicationsAndLabSamples"
+  | "productionRunsApplicationsAndLabSamples";
 
 export interface PreflightCheck {
   key:
@@ -326,8 +330,7 @@ export interface PreflightCheck {
   /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
   whyDetail?: string;
   /**
-   * Typed destination for repairing a future measurement date. Mixed blocker
-   * kinds intentionally leave this unset rather than linking to the wrong list.
+   * Typed destinations for repairing every future measurement date category.
    */
   fixTarget?: RemovalMeasurementDateFixTarget;
   status: PreflightCheckStatus;
@@ -382,6 +385,21 @@ function measurementDateFixTarget(
   const hasApplications = measurements.some((measurement) =>
     measurement.startsWith("Application "),
   );
+  const hasSamples = measurements.some((measurement) =>
+    measurement.startsWith("Sample "),
+  );
+  if (hasProductionRuns && hasApplications && hasSamples) {
+    return "productionRunsApplicationsAndLabSamples";
+  }
+  if (hasProductionRuns && hasSamples) {
+    return "productionRunsAndLabSamples";
+  }
+  if (hasApplications && hasSamples) {
+    return "applicationsAndLabSamples";
+  }
+  if (hasSamples) {
+    return "labSamples";
+  }
   if (hasProductionRuns && hasApplications) {
     return "productionRunsAndApplications";
   }

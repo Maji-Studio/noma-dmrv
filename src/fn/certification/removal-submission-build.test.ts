@@ -506,6 +506,7 @@ describe("buildRemovalSubmissionBuild", () => {
                 {
                   id: "sample-1",
                   sampleCode: "SAMPLE-1",
+                  samplingTime: new Date("2026-07-21T08:00:00.000Z"),
                   totalCarbonPercent: 80,
                   inorganicCarbonPercent: 1,
                   sReflectanceFraction: 0.91,
@@ -513,6 +514,7 @@ describe("buildRemovalSubmissionBuild", () => {
                 {
                   id: "sample-2",
                   sampleCode: "SAMPLE-2",
+                  samplingTime: new Date("2026-07-22T09:00:00.000Z"),
                   totalCarbonPercent: 82,
                   inorganicCarbonPercent: 1.1,
                   sReflectanceFraction: 0.92,
@@ -520,6 +522,7 @@ describe("buildRemovalSubmissionBuild", () => {
                 {
                   id: "sample-3",
                   sampleCode: "SAMPLE-3",
+                  samplingTime: new Date("2026-07-23T10:00:00.000Z"),
                   totalCarbonPercent: 84,
                   inorganicCarbonPercent: 1.2,
                   sReflectanceFraction: 0.93,

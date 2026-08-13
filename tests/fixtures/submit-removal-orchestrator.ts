@@ -422,6 +422,7 @@ export function makeRun(
       {
         id: "smp-test-1",
         sampleCode: "SMP-TEST-1",
+        samplingTime: new Date("2026-01-10T08:00:00.000Z"),
         productionRunId: PRODUCTION_RUN_ID,
         totalCarbonPercent: 81,
         organicCarbonPercent: 80,
@@ -435,6 +436,7 @@ export function makeRun(
       {
         id: "smp-test-2",
         sampleCode: "SMP-TEST-2",
+        samplingTime: new Date("2026-01-11T09:00:00.000Z"),
         productionRunId: PRODUCTION_RUN_ID,
         totalCarbonPercent: 81,
         organicCarbonPercent: 80,
@@ -448,6 +450,7 @@ export function makeRun(
       {
         id: "smp-test-3",
         sampleCode: "SMP-TEST-3",
+        samplingTime: new Date("2026-01-12T10:00:00.000Z"),
         productionRunId: PRODUCTION_RUN_ID,
         totalCarbonPercent: 81,
         organicCarbonPercent: 80,

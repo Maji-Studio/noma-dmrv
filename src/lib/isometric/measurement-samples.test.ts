@@ -1,11 +1,41 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildMeasurementSampleReference,
   captureMeasurementSampleDatapointIds,
   findMeasurementSampleBySupplierRef,
   mergeMeasurementSampleDatapointIds,
   type CreateMeasurementSampleRequest,
   type IsometricMeasurementSample,
 } from "./measurement-samples";
+
+describe("buildMeasurementSampleReference", () => {
+  it("is deterministic, versioned, and unique at local-Sample grain", () => {
+    const build = (sampleId: string, version = 2) =>
+      buildMeasurementSampleReference({
+        removalId: "removal-1",
+        role: "production-batch",
+        version,
+        creditBatchId: "credit-batch-1",
+        sampleId,
+      });
+
+    expect(build("sample-1")).toBe(build("sample-1"));
+    expect(build("sample-1")).not.toBe(build("sample-2"));
+    expect(build("sample-1", 3)).not.toBe(build("sample-1", 2));
+    expect(build("sample-1").length).toBeLessThanOrEqual(100);
+  });
+
+  it("requires a stable Sample id for a production-batch reference", () => {
+    expect(() =>
+      buildMeasurementSampleReference({
+        removalId: "removal-1",
+        role: "production-batch",
+        version: 1,
+        creditBatchId: "credit-batch-1",
+      }),
+    ).toThrow(/sampleId required/);
+  });
+});
 
 function measurementSample(
   id: string,

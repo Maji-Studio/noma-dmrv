@@ -505,36 +505,39 @@ describe("ensureProductionBatchesForCreditBatches", () => {
 });
 
 describe("measurement-sample binding", () => {
-  const perBatch = {
-    operationKey: `pb:${CREDIT_BATCH_ID}`,
-    supplierRefId: "nm-mts-x-pb-y-v1",
-    label: "production batch CB-2026-001",
-    body: { production_batch_id: null },
-  } as unknown as DurabilityMeasurementSampleSubmission;
-  const soil = {
-    operationKey: "soil",
-    supplierRefId: "nm-mts-x-soil-v1",
-    label: "soil",
-    body: { production_batch_id: null },
-  } as unknown as DurabilityMeasurementSampleSubmission;
+  const perSample = [1, 2, 3].map(
+    (index) =>
+      ({
+        creditBatchId: CREDIT_BATCH_ID,
+        sampleId: `sample-${index}`,
+        creditBatchProductMassKg: 1_970,
+        operationKey: `pb:${CREDIT_BATCH_ID}:sample:sample-${index}`,
+        supplierRefId: `nm-mts-x-pb-y-s-${index}-v1`,
+        label: `Sample sample-${index}`,
+        body: { production_batch_id: null },
+      }) as unknown as DurabilityMeasurementSampleSubmission,
+  );
 
-  it("collects only the credit batches that have a per-batch sample", () => {
-    expect(creditBatchIdsForMeasurementSamples([perBatch, soil])).toEqual([
+  it("collects one credit batch for all of its local Samples", () => {
+    expect(creditBatchIdsForMeasurementSamples(perSample)).toEqual([
       CREDIT_BATCH_ID,
     ]);
   });
 
-  it("stamps the registered production batch onto the per-batch sample", () => {
-    const [bound, untouched] = applyProductionBatchIds(
-      [perBatch, soil],
+  it("stamps the same registered production batch onto every local Sample", () => {
+    const bound = applyProductionBatchIds(
+      perSample,
       new Map([[CREDIT_BATCH_ID, PRODUCTION_BATCH_ID]]),
     );
-    expect(bound.body.production_batch_id).toBe(PRODUCTION_BATCH_ID);
-    expect(untouched.body.production_batch_id).toBeNull();
+    expect(bound.map((submission) => submission.body.production_batch_id)).toEqual([
+      PRODUCTION_BATCH_ID,
+      PRODUCTION_BATCH_ID,
+      PRODUCTION_BATCH_ID,
+    ]);
   });
 
   it("fails closed rather than submitting a null production batch", () => {
-    expect(() => applyProductionBatchIds([perBatch], new Map())).toThrow(
+    expect(() => applyProductionBatchIds(perSample, new Map())).toThrow(
       /production batch/,
     );
   });

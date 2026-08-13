@@ -746,7 +746,11 @@ export async function buildRemovalContext(
     entityReadinessGaps: entityReadiness.gaps,
     entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
-    futureDatedMeasurements: collectFutureDatedMeasurements({ runs, lineages }),
+    futureDatedMeasurements: collectFutureDatedMeasurements({
+      runs,
+      samples: batchesWithSamples.flatMap((batch) => batch.samples),
+      lineages,
+    }),
     submissionWarnings,
     supportingDocuments,
     runSummary,

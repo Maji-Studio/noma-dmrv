@@ -184,17 +184,16 @@ describe("buildRemovalTemplateDiagnostic", () => {
                   },
                   value: { magnitude: 0.01, unit: "dimensionless" },
                 },
-                {
-                  measurement_property: {
-                    quantity_kind: "mass",
-                    qualifier: null,
-                  },
-                  value: { magnitude: 900, unit: "kg" },
-                },
               ],
             },
           ],
           directSequestrationDatapoints: [
+            {
+              componentId: "rtc-test",
+              inputKey: "product_mass",
+              magnitude: 900,
+              unit: "kg",
+            },
             {
               componentId: "rtc-test",
               inputKey: "s_fraction",
@@ -235,7 +234,7 @@ describe("buildRemovalTemplateDiagnostic", () => {
     expect(inputs.product_mass).toMatchObject({
       nomaSource: "Attribution-scaled dry applied biochar mass",
       transform: "Unchanged",
-      resolved: { binding: "measurement-sample", count: 1, magnitudes: [900] },
+      resolved: { binding: "datapoint", count: 1, magnitudes: [900] },
     });
     expect(diagnostic.aggregateStatus).toBe("drift");
   });

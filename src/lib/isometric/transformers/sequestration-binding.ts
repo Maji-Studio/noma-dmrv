@@ -9,7 +9,6 @@ import {
   CARBON_CONTENTS_1000_YEAR_UNIT,
   INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
   isSequestrationBlueprintFamily,
-  PRODUCT_MASS_MEASUREMENT_PROPERTY,
   PRODUCT_MASS_UNIT,
   S_FRACTION_MEASUREMENT_PROPERTY,
   S_FRACTION_UNIT,
@@ -45,6 +44,8 @@ const S_FRACTION_MIN = 0;
 const S_FRACTION_MAX = 1;
 const LEGACY_SEQUESTRATION_BLUEPRINT_KEY =
   "carbon_rich_substance_sequestration";
+const MISSING_DURABILITY_EVIDENCE_MESSAGE =
+  "The selected Removal template has no value from the durability evidence. Check the Samples before submitting.";
 
 interface MeasurementPropertyInputBinding {
   dataShape: InputDataShape;
@@ -53,9 +54,10 @@ interface MeasurementPropertyInputBinding {
   sourceContract: SequestrationSourceContract;
 }
 
-interface DirectDatapointInputBinding {
+interface SampleEvidenceDirectDatapointInputBinding {
   dataShape: InputDataShape;
   source: "direct-datapoint";
+  valueSource: "sample-evidence";
   /**
    * The measurement-sample property carrying the same raw replicate magnitude.
    * The sample remains data-quality evidence; it is not the GHG-entry binding.
@@ -74,15 +76,29 @@ interface SequestrationSourceContract {
   confirmation: "confirmed" | "externally-unconfirmed";
 }
 
+interface CreditBatchMassDirectDatapointInputBinding {
+  dataShape: InputDataShape;
+  source: "direct-datapoint";
+  valueSource: "credit-batch-product-mass";
+  quantityKind: QuantityKind;
+  unit: string;
+  datapointType: DatapointType;
+  sourceContract: SequestrationSourceContract;
+}
+
 export type SequestrationInputBinding =
   | MeasurementPropertyInputBinding
-  | DirectDatapointInputBinding;
+  | SampleEvidenceDirectDatapointInputBinding
+  | CreditBatchMassDirectDatapointInputBinding;
 
 interface SequestrationBlueprintBinding {
   inputs: Readonly<Record<string, SequestrationInputBinding>>;
 }
 
 interface MeasurementSampleSubmission {
+  creditBatchId: string;
+  sampleId: string;
+  creditBatchProductMassKg: number;
   operationKey: string;
   supplierRefId: string;
   body: CreateMeasurementSampleRequest;
@@ -131,8 +147,11 @@ export const SEQUESTRATION_COMPONENT_INPUT_BINDINGS = {
       },
       product_mass: {
         dataShape: "SCALAR",
-        source: "measurement-property",
-        measurementProperty: PRODUCT_MASS_MEASUREMENT_PROPERTY,
+        source: "direct-datapoint",
+        valueSource: "credit-batch-product-mass",
+        quantityKind: "mass",
+        unit: PRODUCT_MASS_UNIT,
+        datapointType: "REPORTED",
         sourceContract: {
           nomaSource: "Attribution-scaled dry applied biochar mass",
           transformRevision: "identity-v1",
@@ -143,6 +162,7 @@ export const SEQUESTRATION_COMPONENT_INPUT_BINDINGS = {
       s_fraction: {
         dataShape: "LIST",
         source: "direct-datapoint",
+        valueSource: "sample-evidence",
         evidenceMeasurementProperty: S_FRACTION_MEASUREMENT_PROPERTY,
         // CreateDatapointRequest expresses quantity kind through its unit. The
         // literal `dimensionless` unit resolves to the template's
@@ -295,9 +315,9 @@ export function assertSequestrationTemplateBindings(
 }
 
 /**
- * Builds the direct-datapoint sources declared by the binding table. Values are
- * read from their matching measurement-sample evidence entries so the direct
- * datapoint magnitude and retained evidence cannot diverge. Supplier refs use
+ * Builds the direct-datapoint sources declared by the binding table. Replicate
+ * values are read from matching measurement-sample evidence, while credit-batch
+ * product mass is transported independently of any physical Sample. Supplier refs use
  * the same versioned per-removal scheme as ordinary emissions datapoints.
  */
 export function buildDirectSequestrationDatapoints(args: {
@@ -327,6 +347,61 @@ export function buildDirectSequestrationDatapoints(args: {
           );
         }
         if (binding.source !== "direct-datapoint") continue;
+
+        if (binding.valueSource === "credit-batch-product-mass") {
+          if (args.measurementSampleSubmissions.length === 0) {
+            throw new SafeError(MISSING_DURABILITY_EVIDENCE_MESSAGE);
+          }
+          const massByCreditBatchId = new Map<string, number>();
+          for (const submission of args.measurementSampleSubmissions) {
+            const existing = massByCreditBatchId.get(submission.creditBatchId);
+            if (
+              existing !== undefined &&
+              existing !== submission.creditBatchProductMassKg
+            ) {
+              throw new SafeError(
+                `Credit batch ${submission.creditBatchId} has inconsistent product mass across its Samples. Refresh the Removal and try again.`,
+              );
+            }
+            massByCreditBatchId.set(
+              submission.creditBatchId,
+              submission.creditBatchProductMassKg,
+            );
+          }
+          for (const [creditBatchId, magnitude] of Array.from(
+            massByCreditBatchId,
+          ).sort(([left], [right]) => left.localeCompare(right))) {
+            if (!Number.isFinite(magnitude) || magnitude < 0) {
+              throw new SafeError(
+                `Credit batch ${creditBatchId} has invalid product mass. Correct the applied mass before submitting.`,
+              );
+            }
+            directDatapoints.push({
+              rtcId: component.id,
+              inputKey: rtcInput.input_key,
+              body: {
+                description: `Direct product mass for credit batch ${creditBatchId}`,
+                display_name: rtcInput.input_key,
+                project_id: args.projectId,
+                quantity: { magnitude, unit: binding.unit },
+                source_ids: [...args.sourceIds],
+                supplier_reference_id: buildRemovalSupplierRef({
+                  removalId: args.removalId,
+                  role: "datapoint",
+                  version: args.version,
+                  inputKey: `${component.id}-${rtcInput.input_key}-${creditBatchId}`,
+                }),
+                type: binding.datapointType,
+              },
+            });
+          }
+          if (massByCreditBatchId.size !== 1) {
+            throw new SafeError(
+              `A durability field accepts one value but received ${massByCreditBatchId.size}. Ask support to check the registry mapping.`,
+            );
+          }
+          continue;
+        }
 
         const propertyKey = encodeMeasurementProperty(
           binding.evidenceMeasurementProperty,
@@ -390,9 +465,7 @@ export function buildDirectSequestrationDatapoints(args: {
         }
 
         if (directIndex === 0) {
-          throw new SafeError(
-            "The selected Removal template has no value from the durability evidence. Check the Samples before submitting.",
-          );
+          throw new SafeError(MISSING_DURABILITY_EVIDENCE_MESSAGE);
         }
         if (binding.dataShape === "SCALAR" && directIndex !== 1) {
           throw new SafeError(

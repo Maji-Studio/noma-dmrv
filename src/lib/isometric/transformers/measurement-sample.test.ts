@@ -312,15 +312,10 @@ describe("build1000YearSequestrationSample (⚠️ sandbox-gated blueprint, ADR 
     measuredAt: "2026-05-31T00:00:00.000Z",
   };
 
-  it("submits paired total-carbon, inorganic-carbon, and s_fraction lists plus scalar mass", () => {
+  it("submits one local Sample's paired chemistry without batch product mass", () => {
     const sample = build1000YearSequestrationSample({
       ...baseArgs,
-      productMassKg: 8000,
-      replicates: [
-        { totalCarbonContentFraction: 0.792, inorganicCarbonContentFraction: 0.012, sFraction: 0.92 },
-        { totalCarbonContentFraction: 0.778, inorganicCarbonContentFraction: 0.011, sFraction: 0.9 },
-        { totalCarbonContentFraction: 0.804, inorganicCarbonContentFraction: 0.013, sFraction: 0.93 },
-      ],
+      replicate: { totalCarbonContentFraction: 0.792, inorganicCarbonContentFraction: 0.012, sFraction: 0.92 },
     });
     expect(sample).not.toBeNull();
     if (!sample) return;
@@ -345,47 +340,37 @@ describe("build1000YearSequestrationSample (⚠️ sandbox-gated blueprint, ADR 
       (v) => v.measurement_property.qualifier === null,
     );
 
-    expect(totalCarbon).toHaveLength(3);
-    expect(inorganicCarbon).toHaveLength(3);
-    expect(sFraction).toHaveLength(3);
-    expect(mass).toHaveLength(1);
-    // Per-replicate values are submitted RAW — the registry computes the
-    // −binomial-SE durable fraction from the full list (no local reduction).
-    expect(sFraction.map((v) => v.value.magnitude)).toEqual([0.92, 0.9, 0.93]);
+    expect(totalCarbon).toHaveLength(1);
+    expect(inorganicCarbon).toHaveLength(1);
+    expect(sFraction).toHaveLength(1);
+    expect(mass).toHaveLength(0);
+    expect(sFraction.map((v) => v.value.magnitude)).toEqual([0.92]);
     expect(sFraction[0].measurement_property).toEqual({
       quantity_kind: "dimensionless_ratio",
       qualifier: "inertinite_fraction",
     });
-    expect(totalCarbon.map((v) => v.value.magnitude)).toEqual([0.792, 0.778, 0.804]);
-    expect(inorganicCarbon.map((v) => v.value.magnitude)).toEqual([0.012, 0.011, 0.013]);
+    expect(totalCarbon.map((v) => v.value.magnitude)).toEqual([0.792]);
+    expect(inorganicCarbon.map((v) => v.value.magnitude)).toEqual([0.012]);
     expect(totalCarbon[0].value.unit).toBe(CARBON_CONTENTS_1000_YEAR_UNIT);
     expect(sFraction[0].value.unit).toBe(S_FRACTION_UNIT);
-    expect(mass[0].value.magnitude).toBe(8000);
-    expect(mass[0].value.unit).toBe(PRODUCT_MASS_UNIT);
     expect(sample.measurement_type).toBe("biochar_production_batch");
   });
 
-  it("fails closed when fewer than three complete replicates reach serialization", () => {
+  it("fails closed when a Sample has an invalid fraction", () => {
     expect(() =>
       build1000YearSequestrationSample({
         ...baseArgs,
-        productMassKg: 8000,
-        replicates: [],
+        replicate: { totalCarbonContentFraction: 0.8, inorganicCarbonContentFraction: 0.01, sFraction: 1.1 },
       }),
-    ).toThrow(/at least 3 complete replicates/);
+    ).toThrow(/R₀ fraction must be a number from 0 to 1/);
   });
 
   it("rejects inorganic carbon above total beyond the shared tolerance", () => {
     expect(() =>
       build1000YearSequestrationSample({
         ...baseArgs,
-        productMassKg: 8000,
-        replicates: [
-          { totalCarbonContentFraction: 0.01, inorganicCarbonContentFraction: 0.02, sFraction: 0.9 },
-          { totalCarbonContentFraction: 0.8, inorganicCarbonContentFraction: 0.01, sFraction: 0.91 },
-          { totalCarbonContentFraction: 0.8, inorganicCarbonContentFraction: 0.01, sFraction: 0.92 },
-        ],
+        replicate: { totalCarbonContentFraction: 0.01, inorganicCarbonContentFraction: 0.02, sFraction: 0.9 },
       }),
-    ).toThrow(/Inorganic carbon replicate 1 cannot exceed total carbon/);
+    ).toThrow(/Inorganic carbon cannot exceed total carbon/);
   });
 });

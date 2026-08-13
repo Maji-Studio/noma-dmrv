@@ -21,7 +21,6 @@ export function readRemovalDurabilityComponent(
   } | null;
   const components = snapshot?.semantic?.sequestrationTemplate;
   if (!Array.isArray(components)) return null;
-
   for (const component of components) {
     if (typeof component.blueprintKey !== "string") continue;
     const classification = classifySequestration1000YearComponent(
