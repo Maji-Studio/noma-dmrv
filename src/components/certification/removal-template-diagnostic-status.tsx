@@ -24,15 +24,15 @@ const STATUS_CLASSES: Record<RemovalTemplateDiagnosticStatus, string> = {
   "optional-not-present":
     "border-[var(--color-border-secondary)] bg-[var(--color-surface-light)] text-[var(--color-text-tertiary)]",
   "missing-noma-mapping":
-    "border-[var(--st-bad-border)] bg-[var(--st-bad-bg)] text-[var(--st-bad)]",
+    "border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] text-[var(--st-wait)]",
   "unsupported-component":
-    "border-[var(--st-bad-border)] bg-[var(--st-bad-bg)] text-[var(--st-bad)]",
+    "border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] text-[var(--st-wait)]",
   "template-contract-drift":
     "border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] text-[var(--st-wait)]",
   "externally-unconfirmed-contract":
     "border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] text-[var(--st-wait)]",
   "deprecated-incompatible":
-    "border-[var(--st-bad-border)] bg-[var(--st-bad-bg)] text-[var(--st-bad)]",
+    "border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] text-[var(--st-wait)]",
 };
 
 export function RemovalTemplateDiagnosticStatusBadge({
