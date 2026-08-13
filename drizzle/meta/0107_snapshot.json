@@ -1,5 +1,5 @@
 {
-  "id": "9b7e8c25-0ab0-434b-8bd4-1856af752308",
+  "id": "9f0d4b2d-8cea-449c-b570-72b241e78eaf",
   "prevId": "bb9cdc0e-5814-4798-9424-b131b42732eb",
   "version": "7",
   "dialect": "postgresql",
@@ -3437,11 +3437,12 @@
             "organization_id"
           ]
         },
-        "certifier_storage_locations_provider_customer_location_unique": {
-          "name": "certifier_storage_locations_provider_customer_location_unique",
+        "certifier_storage_locations_provider_project_location_unique": {
+          "name": "certifier_storage_locations_provider_project_location_unique",
           "nullsNotDistinct": false,
           "columns": [
             "provider",
+            "external_project_id",
             "customer_location_id"
           ]
         },
@@ -6264,27 +6265,6 @@
           "method": "btree",
           "with": {}
         },
-        "customer_locations_id_organization_id_unique": {
-          "name": "customer_locations_id_organization_id_unique",
-          "columns": [
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "customer_locations_one_default_per_customer": {
           "name": "customer_locations_one_default_per_customer",
           "columns": [
@@ -6331,7 +6311,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "customer_locations_id_organization_id_unique": {
+          "name": "customer_locations_id_organization_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "organization_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "customer_locations_gps_latitude_range": {
@@ -10608,32 +10597,6 @@
     }
   },
   "enums": {
-    "public.certifier_biochar_application_correction_status": {
-      "name": "certifier_biochar_application_correction_status",
-      "schema": "public",
-      "values": [
-        "none",
-        "review_required",
-        "replacement_required"
-      ]
-    },
-    "public.certifier_biochar_application_lifecycle_status": {
-      "name": "certifier_biochar_application_lifecycle_status",
-      "schema": "public",
-      "values": [
-        "gated",
-        "confirmed",
-        "deleted"
-      ]
-    },
-    "public.certifier_storage_location_drift_status": {
-      "name": "certifier_storage_location_drift_status",
-      "schema": "public",
-      "values": [
-        "in_sync",
-        "drifted"
-      ]
-    },
     "public.application_evidence_method": {
       "name": "application_evidence_method",
       "schema": "public",
@@ -10697,6 +10660,24 @@
         "superseded"
       ]
     },
+    "public.certifier_biochar_application_correction_status": {
+      "name": "certifier_biochar_application_correction_status",
+      "schema": "public",
+      "values": [
+        "none",
+        "review_required",
+        "replacement_required"
+      ]
+    },
+    "public.certifier_biochar_application_lifecycle_status": {
+      "name": "certifier_biochar_application_lifecycle_status",
+      "schema": "public",
+      "values": [
+        "gated",
+        "confirmed",
+        "deleted"
+      ]
+    },
     "public.certifier_provider": {
       "name": "certifier_provider",
       "schema": "public",
@@ -10704,6 +10685,14 @@
         "isometric",
         "puro_earth",
         "verra"
+      ]
+    },
+    "public.certifier_storage_location_drift_status": {
+      "name": "certifier_storage_location_drift_status",
+      "schema": "public",
+      "values": [
+        "in_sync",
+        "drifted"
       ]
     },
     "public.credit_batch_sampling": {
