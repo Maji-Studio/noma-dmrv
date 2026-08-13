@@ -829,11 +829,14 @@ beforeEach(() => {
       // wiring change from passing on a coincidence.
       startDate: "2026-01-01",
       endDate: "2026-01-31",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      endedAt: "2026-01-31T23:59:59.000Z",
       externalProjectId: EXTERNAL_PROJECT_ID,
       externalFacilityId: EXTERNAL_FACILITY_ID,
       isometricFeedstockTypeId: EXTERNAL_FEEDSTOCK_TYPE_ID,
       totalDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
       runsMissingDryMass: 0,
+      runsMissingEndTime: 0,
     },
   ]);
   vi.mocked(

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { formatFacilityDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import {
   buildCreateProductionBatchRequest,
@@ -12,8 +13,8 @@ const BASE = {
   creditBatchCode: "CB-2026-001",
   externalFacilityId: "fcl_1G8QT5ZAB1S0XSDW",
   feedstockTypeIds: ["ftt_1D7KZ1P761S0G7BN"],
-  startDate: "2026-03-01",
-  endDate: "2026-03-28",
+  startedAt: "2026-03-01T07:15:00.000Z",
+  endedAt: "2026-03-28T18:45:00.000Z",
   totalDryMassKg: 12_345.678,
   supplierReferenceId: "nm-ptb-abc123def456",
 };
@@ -52,7 +53,7 @@ describe("buildCreateProductionBatchRequest", () => {
     expect(body.kind).toBe(PRODUCTION_BATCH_KIND);
   });
 
-  it("maps facility, feedstock types, reference and the date-only window", () => {
+  it("maps facility, feedstock types, reference and the physical window", () => {
     const body = buildCreateProductionBatchRequest({
       ...BASE,
       feedstockTypeIds: ["ftt_b", "ftt_a", "ftt_b"],
@@ -61,8 +62,49 @@ describe("buildCreateProductionBatchRequest", () => {
     expect(body.feedstock_type_ids).toEqual(["ftt_a", "ftt_b"]);
     expect(body.supplier_reference_id).toBe(BASE.supplierReferenceId);
     expect(body.display_name).toBe(BASE.creditBatchCode);
-    expect(body.started_at).toBe("2026-03-01T00:00:00.000Z");
-    expect(body.ended_at).toBe("2026-03-28T23:59:59.999Z");
+    expect(body.started_at).toBe(BASE.startedAt);
+    expect(body.ended_at).toBe(BASE.endedAt);
+  });
+
+  it.each([
+    {
+      timeZone: "Europe/Zurich",
+      startedAt: "2026-07-31T22:15:00.000Z",
+      endedAt: "2026-08-31T19:45:00.000Z",
+    },
+    {
+      timeZone: "America/Los_Angeles",
+      startedAt: "2026-08-01T07:15:00.000Z",
+      endedAt: "2026-09-01T05:45:00.000Z",
+    },
+  ])(
+    "keeps the physical August production window in $timeZone",
+    ({ timeZone, startedAt, endedAt }) => {
+      const body = buildCreateProductionBatchRequest({
+        ...BASE,
+        startedAt,
+        endedAt,
+      });
+
+      expect(formatFacilityDate(new Date(body.started_at), timeZone)).toBe(
+        "2026-08-01",
+      );
+      expect(formatFacilityDate(new Date(body.ended_at), timeZone)).toBe(
+        "2026-08-31",
+      );
+    },
+  );
+
+  it("keeps a same-day batch as a non-zero physical window", () => {
+    const body = buildCreateProductionBatchRequest({
+      ...BASE,
+      startedAt: "2026-08-31T06:00:00.000Z",
+      endedAt: "2026-08-31T14:00:00.000Z",
+    });
+
+    expect(Date.parse(body.ended_at)).toBeGreaterThan(
+      Date.parse(body.started_at),
+    );
   });
 
   it("omits the display name when the credit-batch code is blank", () => {
@@ -93,8 +135,21 @@ describe("buildCreateProductionBatchRequest", () => {
   it.each([
     ["no Isometric facility id", { externalFacilityId: "" }],
     ["no mapped feedstock type", { feedstockTypeIds: [] }],
-    ["a malformed date", { startDate: "not-a-date" }],
-    ["an inverted window", { startDate: "2026-03-28", endDate: "2026-03-01" }],
+    ["a malformed timestamp", { startedAt: "not-a-date" }],
+    [
+      "an inverted window",
+      {
+        startedAt: "2026-03-28T12:00:00.000Z",
+        endedAt: "2026-03-01T12:00:00.000Z",
+      },
+    ],
+    [
+      "a zero-length window",
+      {
+        startedAt: "2026-03-28T12:00:00.000Z",
+        endedAt: "2026-03-28T12:00:00.000Z",
+      },
+    ],
     ["no recorded dry mass", { totalDryMassKg: 0 }],
     ["a negative dry mass", { totalDryMassKg: -1 }],
     ["a non-finite dry mass", { totalDryMassKg: Number.NaN }],
