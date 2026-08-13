@@ -36,16 +36,17 @@ module v1.1, and Standard v1.7 pins are unchanged. Written Isometric
 confirmation and migration of the sandbox template to the replacement component
 remain outstanding external work.
 
-Each independently analysed noma Sample is now represented by its own Isometric
-`MeasurementSample`. Its versioned supplier reference includes the stable local
-Sample ID, `measured_at` is the local sampling instant, and its body contains
-only that Sample's paired total carbon, inorganic carbon, and `s_fraction`.
-The registry still receives three ordered Datapoint IDs for each replicate
-list. Batch product mass is submitted once as a standalone direct `REPORTED`
-Datapoint in kg, with its existing Sources, rather than being presented as a
-property of a physical Sample. Partial retries reconcile each Sample reference
-independently. Fresh sandbox validation of this corrected grain remains
-outstanding; this amendment does not authorize production submission.
+The local submission code currently builds one Isometric `MeasurementSample`
+request for each independently analysed noma Sample. Its versioned supplier
+reference includes the stable local Sample ID, `measured_at` is the local
+sampling instant, and its body contains only that Sample's paired total carbon,
+inorganic carbon, and `s_fraction`. The payload builder supplies three ordered
+Datapoint IDs for each replicate list and submits batch product mass once as a
+standalone direct `REPORTED` Datapoint in kg, with its existing Sources, rather
+than as a property of a physical Sample. Partial retries reconcile each Sample
+reference independently. The remote record grain remains unconfirmed pending
+fresh sandbox validation; this amendment does not authorize production
+submission.
 
 Historical status: accepted (2026-06-18); amended 2026-07-03 (issue #142)
 
