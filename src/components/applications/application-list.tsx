@@ -748,7 +748,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ),
           },
           {
-            title: "Isometric Storage Location",
+            title: "Application site",
             fields: [],
             content: (
               <ApplicationStorageLocationSync

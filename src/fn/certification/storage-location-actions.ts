@@ -12,12 +12,22 @@ import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { appendSyncEventBestEffort } from "./shared";
-import { ensureStorageLocation } from "./storage-locations";
+import {
+  appendSyncEventBestEffort,
+  ISOMETRIC_PROVIDER,
+  submitRateLimit,
+} from "./shared";
+import {
+  ensureStorageLocation,
+  missingStorageLocationFacts,
+  STORAGE_LOCATION_ENTITY_TYPE,
+  STORAGE_LOCATION_OPERATION_PREFIX,
+  STORAGE_LOCATION_SYNC_OPERATION,
+} from "./storage-locations";
 
 const applicationIdSchema = z.uuid();
 const STORAGE_LOCATION_EVENT_LIMIT = 20;
-const STORAGE_LOCATION_OPERATION_PREFIX = "storage-location:";
+const STORAGE_LOCATION_RATE_LIMIT_KEY = "cert:sync-storage-location";
 
 export type ApplicationStorageLocationSyncState =
   | "not_synced"
@@ -51,6 +61,16 @@ export async function syncApplicationStorageLocation(
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
     const parsedApplicationId = applicationIdSchema.parse(applicationId);
+    const input = await getStorageLocationRegistryInput(
+      orgCtx,
+      parsedApplicationId,
+    );
+    if (!input) throw new SafeError("Application not found.");
+    if (!input.customerLocationId) {
+      throw new SafeError(
+        "Select a customer location on the delivery before synchronizing.",
+      );
+    }
     if (env.ISOMETRIC_ENVIRONMENT === "production") {
       throw new SafeError(
         "Storage Location synchronization is not enabled for production yet.",
@@ -68,10 +88,10 @@ export async function syncApplicationStorageLocation(
         log,
       });
       await appendSyncEventBestEffort(orgCtx, {
-        provider: "isometric",
-        entityType: "application",
-        entityId: parsedApplicationId,
-        operation: "storage-location:sync",
+        provider: ISOMETRIC_PROVIDER,
+        entityType: STORAGE_LOCATION_ENTITY_TYPE,
+        entityId: input.customerLocationId,
+        operation: STORAGE_LOCATION_SYNC_OPERATION,
         status: "succeeded",
         responsePayload: {
           id: result.externalStorageLocationId,
@@ -85,10 +105,10 @@ export async function syncApplicationStorageLocation(
           ? error.message
           : "Storage Location synchronization failed. Try again.";
       await appendSyncEventBestEffort(orgCtx, {
-        provider: "isometric",
-        entityType: "application",
-        entityId: parsedApplicationId,
-        operation: "storage-location:sync",
+        provider: ISOMETRIC_PROVIDER,
+        entityType: STORAGE_LOCATION_ENTITY_TYPE,
+        entityId: input.customerLocationId,
+        operation: STORAGE_LOCATION_SYNC_OPERATION,
         status: "failed",
         errorMessage: message,
       });
@@ -99,7 +119,7 @@ export async function syncApplicationStorageLocation(
       orgCtx,
       parsedApplicationId,
     );
-  });
+  }, { rateLimit: submitRateLimit(STORAGE_LOCATION_RATE_LIMIT_KEY) });
 }
 
 async function loadApplicationStorageLocationSyncForOrg(
@@ -114,9 +134,20 @@ async function loadApplicationStorageLocationSyncForOrg(
     orgCtx.isPlatformAdmin ||
     orgCtx.orgRole === "owner" ||
     orgCtx.orgRole === "admin";
+  if (!input.customerLocationId) {
+    return {
+      state: "not_synced",
+      externalStorageLocationId: null,
+      lastError: null,
+      attemptedAt: null,
+      blocker: "Select a customer location on the delivery before synchronizing.",
+      viewerCanManage,
+    };
+  }
+
   const events = await listRecentSyncEvents(orgCtx, {
-    entityType: "application",
-    entityId: applicationId,
+    entityType: STORAGE_LOCATION_ENTITY_TYPE,
+    entityId: input.customerLocationId,
     limit: STORAGE_LOCATION_EVENT_LIMIT,
   });
   const latestStorageLocationAttempt = events.find((event) =>
@@ -127,27 +158,28 @@ async function loadApplicationStorageLocationSyncForOrg(
       ? latestStorageLocationAttempt
       : null;
 
-  if (!input.customerLocationId) {
-    return {
-      state: latestFailedAttempt ? "failed" : "not_synced",
-      externalStorageLocationId: null,
-      lastError: latestFailedAttempt?.errorMessage ?? null,
-      attemptedAt: latestFailedAttempt?.attemptedAt ?? null,
-      blocker: "Select a customer location on the delivery before synchronizing.",
-      viewerCanManage,
-    };
-  }
-
-  const registration = await getStorageLocationRegistration(
-    orgCtx,
-    input.customerLocationId,
-  );
+  const registration = input.externalProjectId
+    ? await getStorageLocationRegistration(
+        orgCtx,
+        input.customerLocationId,
+        input.externalProjectId,
+      )
+    : null;
   if (registration) {
+    const failureIsLatest =
+      latestFailedAttempt &&
+      latestFailedAttempt.attemptedAt > registration.updatedAt;
     return {
-      state: registration.driftStatus === "drifted" ? "drifted" : "synced",
+      state: failureIsLatest
+        ? "failed"
+        : registration.driftStatus === "drifted"
+          ? "drifted"
+          : "synced",
       externalStorageLocationId: registration.externalStorageLocationId,
-      lastError: null,
-      attemptedAt: registration.updatedAt,
+      lastError: failureIsLatest ? latestFailedAttempt.errorMessage : null,
+      attemptedAt: failureIsLatest
+        ? latestFailedAttempt.attemptedAt
+        : registration.updatedAt,
       blocker:
         env.ISOMETRIC_ENVIRONMENT === "production"
           ? "Storage Location synchronization is not enabled for production yet."
@@ -170,13 +202,17 @@ function storageLocationBlocker(
   input: Awaited<ReturnType<typeof getStorageLocationRegistryInput>>,
 ): string | null {
   if (!input) return "Application not found.";
-  if (!input.certifierProjectId || !input.externalProjectId) {
+  const missingFacts = missingStorageLocationFacts(input);
+  if (missingFacts.includes("project_mapping")) {
     return "Link this facility to an Isometric project before synchronizing.";
   }
-  if (!input.name?.trim()) {
+  if (missingFacts.includes("site_name")) {
     return "Name the customer location before synchronizing.";
   }
-  if (input.latitude === null || input.longitude === null) {
+  if (
+    missingFacts.includes("latitude") ||
+    missingFacts.includes("longitude")
+  ) {
     return "Add customer-location coordinates before synchronizing.";
   }
   if (env.ISOMETRIC_ENVIRONMENT === "production") {

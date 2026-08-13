@@ -46,9 +46,22 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 vi.mock("./storage-locations", () => ({
   ensureStorageLocation: mocks.ensure,
+  missingStorageLocationFacts: (input: ReturnType<typeof registryInput>) => [
+    !input.certifierProjectId || !input.externalProjectId
+      ? "project_mapping"
+      : null,
+    typeof input.name === "string" && input.name.trim() ? null : "site_name",
+    input.latitude == null ? "latitude" : null,
+    input.longitude == null ? "longitude" : null,
+  ].filter(Boolean),
+  STORAGE_LOCATION_ENTITY_TYPE: "customerLocation",
+  STORAGE_LOCATION_OPERATION_PREFIX: "storage-location:",
+  STORAGE_LOCATION_SYNC_OPERATION: "storage-location:sync",
 }));
 vi.mock("./shared", () => ({
   appendSyncEventBestEffort: mocks.appendEvent,
+  ISOMETRIC_PROVIDER: "isometric",
+  submitRateLimit: (key: string) => ({ key, max: 5, windowMs: 60_000 }),
 }));
 
 import {
@@ -59,6 +72,7 @@ import {
 function registryInput(overrides: Record<string, unknown> = {}) {
   return {
     applicationId: APPLICATION_ID,
+    facilityId: "55555555-5555-4555-8555-555555555555",
     customerLocationId: CUSTOMER_LOCATION_ID,
     certifierProjectId: "33333333-3333-4333-8333-333333333333",
     externalProjectId: "prj-test",
@@ -168,6 +182,32 @@ describe("application Storage Location actions", () => {
     expect(result).toMatchObject({
       success: true,
       data: { state: "synced", externalStorageLocationId: "slc-test" },
+    });
+  });
+
+  it("shows a failed check when its site event is newer than the registration", async () => {
+    mocks.getRegistration.mockResolvedValue(
+      registration({ updatedAt: new Date("2026-08-13T10:00:00Z") }),
+    );
+    mocks.listEvents.mockResolvedValue([
+      {
+        id: "event-newer-failure",
+        operation: "storage-location:sync",
+        status: "failed",
+        errorMessage: "Registry unavailable",
+        attemptedAt: new Date("2026-08-13T11:00:00Z"),
+      },
+    ]);
+
+    await expect(
+      loadApplicationStorageLocationSync(APPLICATION_ID),
+    ).resolves.toMatchObject({
+      success: true,
+      data: {
+        state: "failed",
+        externalStorageLocationId: "slc-test",
+        lastError: "Registry unavailable",
+      },
     });
   });
 });

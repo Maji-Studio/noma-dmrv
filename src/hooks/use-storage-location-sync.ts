@@ -3,9 +3,10 @@ import {
   loadApplicationStorageLocationSync,
   syncApplicationStorageLocation,
 } from "@/fn/certification";
+import { certificationKeys } from "./use-certification";
 
 const storageLocationSyncKeys = {
-  all: ["certification", "storage-location-sync"] as const,
+  all: [...certificationKeys.all, "storage-location-sync"] as const,
   application: (applicationId: string) =>
     [...storageLocationSyncKeys.all, applicationId] as const,
 };
@@ -19,7 +20,6 @@ export function useApplicationStorageLocationSync(applicationId: string) {
       return result.data;
     },
     enabled: Boolean(applicationId),
-    staleTime: 30_000,
   });
 }
 
@@ -37,5 +37,7 @@ export function useSyncApplicationStorageLocation() {
         view,
       );
     },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: storageLocationSyncKeys.all }),
   });
 }

@@ -18,7 +18,7 @@ const STATE_PRESENTATION: Record<
   not_synced: {
     badge: "draft",
     label: "Not synced",
-    action: "Sync storage site",
+    action: "Sync application site",
   },
   synced: { badge: "complete", label: "Synced", action: "Check for drift" },
   drifted: { badge: "pending", label: "Drifted", action: "Check again" },
@@ -36,7 +36,7 @@ export function ApplicationStorageLocationSync({
   if (query.isLoading) {
     return (
       <p className="body-small text-[var(--color-text-tertiary)]">
-        Loading Storage Location status...
+        Loading application site status...
       </p>
     );
   }
@@ -46,7 +46,7 @@ export function ApplicationStorageLocationSync({
         message={
           query.error instanceof Error
             ? query.error.message
-            : "Storage Location status could not be loaded."
+            : "Application site status could not be loaded."
         }
       />
     );
@@ -100,13 +100,14 @@ export function ApplicationStorageLocationSync({
       )}
       {view.attemptedAt && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Last checked {formatDateTime(view.attemptedAt)}
+          Last checked {formatDateTime(new Date(view.attemptedAt))}
         </p>
       )}
       {view.state === "drifted" && (
         <p className="body-small text-[var(--color-text-secondary)]">
-          The current customer-location details differ from the registered site.
-          Review the name and coordinates. noma did not update Isometric.
+          The current Application site differs from its registered Isometric
+          Storage Location. Review the name and coordinates. noma did not update
+          Isometric.
         </p>
       )}
     </div>
