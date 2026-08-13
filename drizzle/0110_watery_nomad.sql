@@ -1,0 +1,2 @@
+DROP INDEX "customer_locations_id_organization_id_unique";--> statement-breakpoint
+ALTER TABLE "customer_locations" ADD CONSTRAINT "customer_locations_id_organization_id_unique" UNIQUE("id","organization_id");

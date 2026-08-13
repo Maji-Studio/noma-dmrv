@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { boolean, check, doublePrecision, index, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, doublePrecision, index, pgTable, real, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { organizations, users } from './auth';
 import { distanceSource } from './common';
 
@@ -126,7 +126,7 @@ export const customerLocations = pgTable(
   (table) => [
     index('customer_locations_organization_id_idx').on(table.organizationId),
     index('customer_locations_customer_id_idx').on(table.customerId),
-    uniqueIndex('customer_locations_id_organization_id_unique').on(
+    unique('customer_locations_id_organization_id_unique').on(
       table.id,
       table.organizationId
     ),
