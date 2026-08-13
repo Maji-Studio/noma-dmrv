@@ -94,10 +94,8 @@ export {
   buildStorageLocationReference,
   createStorageLocation,
   getStorageLocation,
-  patchStorageLocation,
   findStorageLocationBySupplierReference,
   type CreateStorageLocationRequest,
-  type PatchStorageLocationRequest,
   type IsometricStorageLocation,
 } from "./storage-locations";
 export {

@@ -6,9 +6,7 @@ import {
   createStorageLocation,
   findStorageLocationBySupplierReference,
   getStorageLocation,
-  patchStorageLocation,
   type IsometricStorageLocation,
-  type PatchStorageLocationRequest,
 } from "./storage-locations";
 
 function client(overrides: Partial<IsometricClient> = {}): IsometricClient {
@@ -190,13 +188,8 @@ describe("Storage Location contract", () => {
       longitude: 37.42,
       supplierReferenceId: "nm-slc-stable",
     });
-    const patchBody = body as PatchStorageLocationRequest;
-
     await expect(createStorageLocation(api, "prj_test", body)).rejects.toBe(error);
     await expect(getStorageLocation(api, "prj_test", "slc_test")).rejects.toBe(error);
-    await expect(
-      patchStorageLocation(api, "prj_test", "slc_test", patchBody),
-    ).rejects.toBe(error);
     await expect(
       findStorageLocationBySupplierReference(api, "prj_test", "nm-slc-stable"),
     ).rejects.toBe(error);
