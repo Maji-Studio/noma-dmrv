@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCertificationLineageLockMessage } from "./certification-lineage-lock-message";
+import { formatCertificationLineageLockMessage } from "./lineage-lock-message";
 
 describe("formatCertificationLineageLockMessage", () => {
   it("names an application and its selected locked delivery", () => {

@@ -37,11 +37,12 @@ import {
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
-import type {
-  ApplicationEvidenceMethod,
-  ApplicationStatus,
-  CreateApplicationData,
-  UpdateApplicationData,
+import {
+  applicationEvidenceStateSchema,
+  type ApplicationEvidenceMethod,
+  type ApplicationStatus,
+  type CreateApplicationData,
+  type UpdateApplicationData,
 } from "@/schemas/applications";
 import type { GisBoundary } from "@/schemas/gis-boundary";
 import type { DeliveryStatus } from "@/schemas/deliveries";
@@ -730,6 +731,19 @@ export async function updateApplication(
       { entityType: "application", entityId: id },
       "update",
     );
+
+    applicationEvidenceStateSchema.parse({
+      evidenceMethod:
+        data.evidenceMethod ?? existingApplication.evidenceMethod,
+      gpsLatitude:
+        data.gpsLatitude === undefined
+          ? existingApplication.gpsLatitude
+          : data.gpsLatitude,
+      gpsLongitude:
+        data.gpsLongitude === undefined
+          ? existingApplication.gpsLongitude
+          : data.gpsLongitude,
+    });
 
     const updateData: Record<string, unknown> = {
       updatedAt: new Date(),

@@ -191,6 +191,90 @@ function EvidenceDocumentList({
   );
 }
 
+function GisReferenceField({
+  boundary,
+  disabled,
+  readOnly,
+  onEdit,
+  onRemove,
+}: {
+  boundary: GisBoundary | null;
+  disabled: boolean;
+  readOnly: boolean;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  if (boundary) {
+    return (
+      <GisReferenceSummary
+        boundary={boundary}
+        actions={
+          !readOnly ? (
+            <div className="flex items-center gap-8">
+              <Button
+                size="small"
+                variant="weak"
+                disabled={disabled}
+                onClick={onEdit}
+              >
+                Replace
+              </Button>
+              <Button
+                size="small"
+                variant="destructive"
+                disabled={disabled}
+                onClick={onRemove}
+              >
+                <TrashIcon size={14} weight="bold" />
+                Remove
+              </Button>
+            </div>
+          ) : undefined
+        }
+      />
+    );
+  }
+
+  if (readOnly) {
+    return (
+      <EmptyState
+        icon={<MapTrifoldIcon size={32} weight="bold" />}
+        title="No GIS reference"
+        description="Choose Edit to add the field boundary."
+        padding="sm"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onEdit}
+      className="flex w-full items-center gap-12 border border-[var(--color-border-primary)] bg-[var(--paper)] px-16 py-16 text-left transition-colors duration-300 hover:bg-[var(--color-surface-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] disabled:opacity-40"
+    >
+      <span className="flex size-40 shrink-0 items-center justify-center border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]">
+        <MapTrifoldIcon size={20} weight="bold" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-2">
+        <span className="body-medium font-medium text-[var(--color-text-primary)]">
+          Add GIS reference
+        </span>
+        <span className="body-small text-[var(--color-text-tertiary)]">
+          Upload a .geojson file or paste the text. The boundary appears on a
+          map here.
+        </span>
+      </span>
+      <PlusIcon
+        size={16}
+        weight="bold"
+        aria-hidden
+        className="shrink-0 text-[var(--color-text-tertiary)]"
+      />
+    </button>
+  );
+}
+
 export function ApplicationEvidencePanel({
   applicationId,
   mode,
@@ -283,67 +367,15 @@ export function ApplicationEvidencePanel({
         />
       )}
 
-      {mode === "boundary" && (boundary ? (
-        <GisReferenceSummary
+      {mode === "boundary" && (
+        <GisReferenceField
           boundary={boundary}
-          actions={
-            !readOnly ? (
-              <div className="flex items-center gap-8">
-                <Button
-                  size="small"
-                  variant="weak"
-                  disabled={disabled}
-                  onClick={() => setDialogOpen(true)}
-                >
-                  Replace
-                </Button>
-                <Button
-                  size="small"
-                  variant="destructive"
-                  disabled={disabled}
-                  onClick={removeBoundary}
-                >
-                  <TrashIcon size={14} weight="bold" />
-                  Remove
-                </Button>
-              </div>
-            ) : undefined
-          }
-        />
-      ) : readOnly ? (
-        <EmptyState
-          icon={<MapTrifoldIcon size={32} weight="bold" />}
-          title="No GIS reference"
-          description="Choose Edit to add the field boundary."
-          padding="sm"
-        />
-      ) : (
-        <button
-          type="button"
           disabled={disabled}
-          onClick={() => setDialogOpen(true)}
-          className="flex w-full items-center gap-12 border border-[var(--color-border-primary)] bg-[var(--paper)] px-16 py-16 text-left transition-colors duration-300 hover:bg-[var(--color-surface-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] disabled:opacity-40"
-        >
-          <span className="flex size-40 shrink-0 items-center justify-center border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]">
-            <MapTrifoldIcon size={20} weight="bold" />
-          </span>
-          <span className="flex min-w-0 flex-1 flex-col gap-2">
-            <span className="body-medium font-medium text-[var(--color-text-primary)]">
-              Add GIS reference
-            </span>
-            <span className="body-small text-[var(--color-text-tertiary)]">
-              Upload a .geojson file or paste the text. The boundary appears on
-              a map here.
-            </span>
-          </span>
-          <PlusIcon
-            size={16}
-            weight="bold"
-            aria-hidden
-            className="shrink-0 text-[var(--color-text-tertiary)]"
-          />
-        </button>
-      ))}
+          readOnly={readOnly}
+          onEdit={() => setDialogOpen(true)}
+          onRemove={removeBoundary}
+        />
+      )}
 
       <div className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
         <div className="flex items-center justify-between gap-12">

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applicationEvidenceStateSchema,
   applicationFormSchema,
   createApplicationSchema,
   updateApplicationSchema,
@@ -97,24 +98,30 @@ describe("application schemas", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects clearing only one GPS coordinate through the update action", () => {
+  it("allows a partial coordinate payload before it is merged with saved state", () => {
     const result = updateApplicationSchema.safeParse({
       applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       gpsLatitude: null,
-      gpsLongitude: 37.3404,
     });
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            path: ["gpsLatitude"],
-            message: "Latitude is required when a longitude is entered.",
-          }),
-        ]),
-      );
-    }
+    expect(result.success).toBe(true);
+  });
+
+  it("validates the merged evidence state for partial updates", () => {
+    expect(
+      applicationEvidenceStateSchema.safeParse({
+        evidenceMethod: "location",
+        gpsLatitude: null,
+        gpsLongitude: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      applicationEvidenceStateSchema.safeParse({
+        evidenceMethod: "boundary",
+        gpsLatitude: null,
+        gpsLongitude: null,
+      }).success,
+    ).toBe(true);
   });
 
   it("strips submitted dry biochar so the server remains authoritative", () => {
