@@ -428,6 +428,8 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
+          gpsLatitude: -3.3349,
+          gpsLongitude: 37.3404,
         },
       );
       fixture.applicationIds.push(application.id);
@@ -518,6 +520,8 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
       });
       fixture.applicationIds.push(application.id);
 
@@ -541,6 +545,8 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
       });
       fixture.applicationIds.push(application.id);
 
@@ -568,6 +574,8 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
       });
       fixture.applicationIds.push(application.id);
 
@@ -584,7 +592,7 @@ describe("application mutations", () => {
     }
   });
 
-  it("clears both GPS coordinates when they are explicitly set to null", async () => {
+  it("rejects clearing coordinates when the saved evidence method is location", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
 
@@ -599,13 +607,12 @@ describe("application mutations", () => {
       });
       fixture.applicationIds.push(application.id);
 
-      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
-        gpsLatitude: null,
-        gpsLongitude: null,
-      });
-
-      expect(updated.gpsLatitude).toBeNull();
-      expect(updated.gpsLongitude).toBeNull();
+      await expect(
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+          gpsLatitude: null,
+          gpsLongitude: null,
+        }),
+      ).rejects.toThrow("Customer location coordinates are required.");
 
       const [persisted] = await db
         .select({
@@ -616,6 +623,116 @@ describe("application mutations", () => {
         .where(eq(applications.id, application.id));
 
       expect(persisted).toEqual({
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
+      });
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("rejects clearing only one saved location coordinate", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
+        code: `AP-AM-${runId}-GPS-HALF-CLEAR`,
+        deliveryId: fixture.deliveryIds[0],
+        applicationDate: new Date("2025-07-08"),
+        biocharAppliedTons: 2,
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
+      });
+      fixture.applicationIds.push(application.id);
+
+      await expect(
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+          gpsLongitude: null,
+        }),
+      ).rejects.toThrow("Longitude is required when a latitude is entered.");
+
+      const [persisted] = await db
+        .select({
+          gpsLatitude: applications.gpsLatitude,
+          gpsLongitude: applications.gpsLongitude,
+        })
+        .from(applications)
+        .where(eq(applications.id, application.id));
+
+      expect(persisted).toEqual({
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
+      });
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("rejects switching coordinate-less boundary evidence to location", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(
+        makeTestOrgContext(TEST_USER_ID),
+        {
+          code: `AP-AM-${runId}-LOCATION-WITHOUT-GPS`,
+          deliveryId: fixture.deliveryIds[0],
+          applicationDate: new Date("2025-07-08"),
+          biocharAppliedTons: 2,
+          evidenceMethod: "boundary",
+        },
+      );
+      fixture.applicationIds.push(application.id);
+
+      await expect(
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+          evidenceMethod: "location",
+        }),
+      ).rejects.toThrow("Customer location coordinates are required.");
+
+      const [persisted] = await db
+        .select({ evidenceMethod: applications.evidenceMethod })
+        .from(applications)
+        .where(eq(applications.id, application.id));
+
+      expect(persisted.evidenceMethod).toBe("boundary");
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("allows a coordinate-only partial update for boundary evidence", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(
+        makeTestOrgContext(TEST_USER_ID),
+        {
+          code: `AP-AM-${runId}-BOUNDARY-GPS-CLEAR`,
+          deliveryId: fixture.deliveryIds[0],
+          applicationDate: new Date("2025-07-08"),
+          biocharAppliedTons: 2,
+          evidenceMethod: "boundary",
+          gpsLatitude: -3.3349,
+          gpsLongitude: 37.3404,
+        },
+      );
+      fixture.applicationIds.push(application.id);
+
+      const updated = await updateApplication(
+        makeTestOrgContext(TEST_USER_ID),
+        application.id,
+        {
+          gpsLatitude: null,
+          gpsLongitude: null,
+        },
+      );
+
+      expect(updated).toMatchObject({
+        evidenceMethod: "boundary",
         gpsLatitude: null,
         gpsLongitude: null,
       });
@@ -634,6 +751,8 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
       });
       fixture.applicationIds.push(application.id);
 

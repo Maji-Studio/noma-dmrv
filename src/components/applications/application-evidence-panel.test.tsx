@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { DocumentRow } from "@/data-access/documents";
 import type { ApplicationEvidenceMethod } from "@/schemas/applications";
+import type { GisBoundary } from "@/schemas/gis-boundary";
+import { TEST_GIS_BOUNDARY } from "../../../tests/helpers/application-evidence-fixtures";
 
 const documentsForEntity = vi.fn();
 
@@ -58,6 +60,8 @@ function boundaryDoc(logbookEvidenceType: string | null): DocumentRow {
 function renderPanel(
   docs: DocumentRow[],
   mode: ApplicationEvidenceMethod = "location",
+  boundary: GisBoundary | null = null,
+  readOnly = false,
 ): string {
   documentsForEntity.mockReturnValue({
     data: docs,
@@ -69,7 +73,8 @@ function renderPanel(
       <ApplicationEvidencePanel
         applicationId={APPLICATION_ID}
         mode={mode}
-        boundary={null}
+        boundary={boundary}
+        readOnly={readOnly}
       />
     </QueryClientProvider>,
   );
@@ -95,6 +100,21 @@ describe("ApplicationEvidencePanel", () => {
   it("only shows the GIS editor for GIS reference evidence", () => {
     expect(renderPanel([], "boundary")).toContain("Add GIS reference");
     expect(renderPanel([], "location")).not.toContain("Add GIS reference");
+  });
+
+  it("keeps the saved GIS reference actions in edit mode", () => {
+    const html = renderPanel([], "boundary", TEST_GIS_BOUNDARY);
+
+    expect(html).toContain("Replace");
+    expect(html).toContain("Remove");
+    expect(html).not.toContain("Add GIS reference");
+  });
+
+  it("keeps the missing GIS reference empty state in read mode", () => {
+    const html = renderPanel([], "boundary", null, true);
+
+    expect(html).toContain("No GIS reference");
+    expect(html).not.toContain("Add GIS reference");
   });
 
   it("keeps visual evidence visible but locked", () => {

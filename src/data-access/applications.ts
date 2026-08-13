@@ -37,11 +37,12 @@ import {
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
-import type {
-  ApplicationEvidenceMethod,
-  ApplicationStatus,
-  CreateApplicationData,
-  UpdateApplicationData,
+import {
+  applicationEvidenceStateSchema,
+  type ApplicationEvidenceMethod,
+  type ApplicationStatus,
+  type CreateApplicationData,
+  type UpdateApplicationData,
 } from "@/schemas/applications";
 import type { GisBoundary } from "@/schemas/gis-boundary";
 import type { DeliveryStatus } from "@/schemas/deliveries";
@@ -61,6 +62,7 @@ import { parseGisBoundary } from "@/schemas/gis-boundary";
 
 const DEFAULT_PAGE_SIZE = 100;
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
+const INVALID_APPLICATION_EVIDENCE_MESSAGE = "Application evidence is invalid.";
 
 export interface ApplicationDeliveryOptionData {
   id: string;
@@ -730,6 +732,25 @@ export async function updateApplication(
       { entityType: "application", entityId: id },
       "update",
     );
+
+    const evidenceState = applicationEvidenceStateSchema.safeParse({
+      evidenceMethod:
+        data.evidenceMethod ?? existingApplication.evidenceMethod,
+      gpsLatitude:
+        data.gpsLatitude === undefined
+          ? existingApplication.gpsLatitude
+          : data.gpsLatitude,
+      gpsLongitude:
+        data.gpsLongitude === undefined
+          ? existingApplication.gpsLongitude
+          : data.gpsLongitude,
+    });
+    if (!evidenceState.success) {
+      throw new SafeError(
+        evidenceState.error.issues[0]?.message ??
+          INVALID_APPLICATION_EVIDENCE_MESSAGE,
+      );
+    }
 
     const updateData: Record<string, unknown> = {
       updatedAt: new Date(),

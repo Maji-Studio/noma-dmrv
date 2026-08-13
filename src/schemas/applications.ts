@@ -68,6 +68,19 @@ function applicationEvidenceSuperRefine(
   }
 }
 
+/**
+ * Validates the effective evidence state after a partial update has been
+ * merged with the saved application. A partial payload cannot enforce this
+ * invariant by itself because omitted fields retain their stored values.
+ */
+export const applicationEvidenceStateSchema = z
+  .object({
+    evidenceMethod: z.enum(applicationEvidenceMethods),
+    gpsLatitude: latitudeSchema,
+    gpsLongitude: longitudeSchema,
+  })
+  .superRefine(applicationEvidenceSuperRefine);
+
 // ============================================
 // GPS Coordinate Validation
 // ============================================
@@ -160,6 +173,8 @@ export const createApplicationSchema = applicationCreateBaseSchema.superRefine(
 
 /**
  * Schema for updating an application (server action)
+ * GPS pair and evidence-method invariants are deferred until updateApplication
+ * validates the payload merged with the saved evidence state.
  */
 export const updateApplicationSchema = z.object({
   applicationId: z.string().uuid("Choose a valid application."),
@@ -182,8 +197,6 @@ export const updateApplicationSchema = z.object({
   gisBoundary: gisBoundarySchema.optional().nullable(),
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
-}).superRefine((data, ctx) => {
-  applicationEvidenceSuperRefine(data, ctx);
 });
 
 /**
@@ -198,6 +211,9 @@ export const deleteApplicationSchema = z.object({
 // ============================================
 
 export type ApplicationFormData = z.infer<typeof applicationFormSchema>;
+export type ApplicationEvidenceState = z.infer<
+  typeof applicationEvidenceStateSchema
+>;
 export type CreateApplicationData = z.infer<typeof createApplicationSchema>;
 export type UpdateApplicationData = z.infer<typeof updateApplicationSchema>;
 export type DeleteApplicationData = z.infer<typeof deleteApplicationSchema>;

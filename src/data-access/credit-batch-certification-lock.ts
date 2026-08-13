@@ -5,10 +5,10 @@ import {
   certifierRemovals,
 } from "@/db/schema/certification";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
+import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import { formatCertificationLineageLockMessage } from "./certification-lineage-lock-message";
 
 const CERTIFIER_PROVIDER = "isometric" as const;
 const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
