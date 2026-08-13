@@ -18,13 +18,13 @@ import {
 } from "@/db/schema";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
-import { SafeError } from "@/lib/errors";
-import type { OrgContext } from "@/lib/auth/server";
 import {
   formatCertificationLineageLockMessage,
   type CertificationLineageLockEntityType,
   type CertificationLineageMutation,
-} from "./certification-lineage-lock-message";
+} from "@/lib/certification/lineage-lock-message";
+import { SafeError } from "@/lib/errors";
+import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 
 export type CertifiedLineageEntityType = Exclude<

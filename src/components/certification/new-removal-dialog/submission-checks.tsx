@@ -41,6 +41,10 @@ function fixLinksFor(
     label: "Review applications",
     href: `/applications?facility=${facilityId}`,
   };
+  const labSamples = {
+    label: "Review Samples",
+    href: `/samples?facility=${facilityId}`,
+  };
 
   switch (check.key) {
     case "mapping":
@@ -50,9 +54,19 @@ function fixLinksFor(
       ];
     case "measurementDates":
       if (check.fixTarget === "productionRuns") return [productionRuns];
+      if (check.fixTarget === "labSamples") return [labSamples];
       if (check.fixTarget === "applications") return [applications];
       if (check.fixTarget === "productionRunsAndApplications") {
         return [productionRuns, applications];
+      }
+      if (check.fixTarget === "productionRunsAndLabSamples") {
+        return [productionRuns, labSamples];
+      }
+      if (check.fixTarget === "applicationsAndLabSamples") {
+        return [applications, labSamples];
+      }
+      if (check.fixTarget === "productionRunsApplicationsAndLabSamples") {
+        return [productionRuns, applications, labSamples];
       }
       return [];
     case "transportUniformity":

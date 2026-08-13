@@ -5,7 +5,9 @@ import { resolveCreditBatchCo2ePreviews } from "./use-credit-batches";
 const preview = {
   provider: "isometric",
   co2eStoredTonnes: 1.25,
+  componentKey: null,
   moduleVersion: "1.0",
+  formulaVersion: null,
   applicationResults: [],
   missingInputs: [],
   warnings: [],

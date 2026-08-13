@@ -46,6 +46,29 @@ Removal submission recovery and the observed Production Batch mass-unit
 readback are archived in
 [`docs/archive/2026-08-10-removal-submission-recovery.md`](../archive/2026-08-10-removal-submission-recovery.md).
 
+## 2026-08-13 (measurement Samples preserve local Sample grain)
+
+Sampled 1,000-year submission now creates one Isometric
+`MeasurementSample` for each independently analysed noma Sample. Each request
+uses a deterministic versioned reference containing the stable local Sample
+identity, the Sample's own sampling instant, and only its paired total-carbon,
+inorganic-carbon, and `s_fraction` values. Input row ordering does not change
+the semantic snapshot or supplier references.
+
+Batch product mass no longer appears as a property of an aggregate physical
+Sample. It is materialized once as a standalone direct `REPORTED` kg Datapoint,
+with the existing inventory and durability Sources. The GHG Entry continues to
+receive three ordered IDs for each chemistry/reflectance list and one scalar
+mass ID. Measurement Sample source patching processes every capture even though
+none carries mass.
+
+The snapshot schema and mapping revision reject the former aggregate shape.
+Supplier-reference journaling and collection reconciliation resume after one or
+two successful Sample creates, and a source-patching retry reconciles all three
+without duplicate POSTs. This is code-implemented and hermetically verified;
+fresh sandbox verification is still pending. No production enablement or
+external-record remediation is included.
+
 ## Feedstock inventory mass basis
 
 Feedstock-bin stock, withdrawals, losses, and reconciliation now use wet,
@@ -174,6 +197,31 @@ Earlier implementation notes are archived by date:
 - [`2026-06-10 to 2026-06-20`](../archive/isometric-changes-archive-2026-06-10-to-06-20.md)
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
+
+## 2026-08-13 (replacement sampled 1,000-year component implemented locally)
+
+The current sampled component contract is
+`biochar_sequestration_1000_year_f_durable_max`, with paired list inputs
+`total_carbon_contents`, `inorganic_carbon_contents`, and `s_fraction`, plus
+scalar `product_mass`. Every submitted replicate requires directly measured
+inorganic carbon; noma does not derive it from total minus reported organic
+carbon on this path.
+
+The local explanatory preview now mirrors the component: calculate organic
+carbon per replicate as total minus inorganic, average it, calculate raw
+durability as the binomial lower estimate, bound credit-bearing organic carbon
+and durability at zero, cap durability at 0.95, and use the bounded value for
+stored CO2e. Evidence ledgers show the three per-replicate
+values, `s_fraction`, product mass, raw and capped durability, cap status,
+component key, and formula label. Isometric remains authoritative.
+
+The deprecated `biochar_sequestration_1000_year` remains readable and is
+labelled as legacy total-carbon/uncapped semantics. New template selection and
+submission compilation reject it. Production sampled submission remains
+blocked, and unsampled Method B remains unsupported. Protocol v1.1,
+Agricultural Soils module v1.1, and Standard v1.7 pins are unchanged. Isometric
+confirmation and external sandbox-template migration remain outstanding; no
+registry template was changed by this implementation.
 
 ## 2026-07-28 (application boundary evidence binds product mass Sources)
 

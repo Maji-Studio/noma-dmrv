@@ -35,6 +35,7 @@ import {
   loadRegistrySourceVisibility,
   loadRemovalBreakdown,
   loadRemovalCompilation,
+  loadRemovalTemplateDiagnostic,
   loadRemovalProductionBatches,
   loadRemovalCertifyContext,
   loadRemovalPreflight,
@@ -155,6 +156,12 @@ export const certificationKeys = {
       "removal-compilation",
       facilityId,
       removalId,
+    ] as const,
+  removalTemplateDiagnostic: (facilityId: string) =>
+    [
+      ...certificationKeys.all,
+      "removal-template-diagnostic",
+      facilityId,
     ] as const,
   removalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "removals", facilityId] as const,
@@ -598,6 +605,22 @@ export function useRemovalCompilation(
     },
     enabled: enabled && !!facilityId && !!removalId,
     staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+export function useRemovalTemplateDiagnostic(
+  facilityId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.removalTemplateDiagnostic(facilityId),
+    queryFn: async () => {
+      const result = await loadRemovalTemplateDiagnostic(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId,
+    staleTime: PROJECT_TEMPLATES_STALE_MS,
   });
 }
 

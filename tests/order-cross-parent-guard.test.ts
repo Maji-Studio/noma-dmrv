@@ -287,11 +287,19 @@ beforeAll(async () => {
       signalProductUpdateReady();
       await productUpdateRelease;
     });
-    let orderWritePromise: Promise<unknown> | undefined;
+    let orderWriteOutcome:
+      | Promise<
+          | { status: "fulfilled"; value: unknown }
+          | { status: "rejected"; reason: unknown }
+        >
+      | undefined;
 
     try {
       await productUpdateReady;
-      orderWritePromise = orderWrite();
+      orderWriteOutcome = orderWrite().then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (reason: unknown) => ({ status: "rejected" as const, reason }),
+      );
       await expect.poll(async () => {
         const blocked = await db.execute<{ waiting: boolean }>(sql`
           select exists (
@@ -305,11 +313,13 @@ beforeAll(async () => {
 
       releaseProductUpdate();
       await productUpdate;
-      return await orderWritePromise;
+      const outcome = await orderWriteOutcome;
+      if (outcome.status === "rejected") throw outcome.reason;
+      return outcome.value;
     } finally {
       releaseProductUpdate();
       await productUpdate.catch(() => undefined);
-      await orderWritePromise?.catch(() => undefined);
+      await orderWriteOutcome;
     }
   }
 

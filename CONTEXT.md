@@ -375,15 +375,17 @@ result idempotently, or block.
 _Avoid_: lock (the claim is a decision; the lock is one of its inputs).
 
 **Measurement-sample submission**:
-The Isometric API object noma POSTs to carry a credit batch's durability
-chemistry — **one per credit batch**, bearing the batch's **mean +
-standard deviation** (its ≥3 **Samples** reduced to a summary; the raw
-replicate values are evidenced by the attached COA and the durability
-evidence ledger). The registry aggregates the per-batch list server-side.
-Deliberately distinct from a noma **Sample**: ≥3 Samples in, **one**
-measurement-sample submission out. _Avoid_: calling it a "sample"
-unqualified (collides with the lab Sample); submitting raw replicates in
-place of the mean + std-dev.
+The Isometric API object noma's sandbox-only submission path currently builds
+to carry durability chemistry: **one per noma Sample**, with that Sample's
+stable identity, sampling instant, and paired raw chemistry values. A sampled
+credit batch therefore builds ≥3 measurement-sample submissions; their ordered
+Datapoint IDs feed the registry component's replicate lists. Batch product mass
+is transported separately as one direct Datapoint, never repeated as a property
+of each physical Sample. This remote record grain remains externally
+unconfirmed pending fresh sandbox validation, and production submission stays
+blocked. _Avoid_: calling it a "sample" unqualified (collides with the lab
+Sample); aggregating the ≥3 Samples into one mean + standard-deviation request;
+presenting the pending remote grain as registry-confirmed.
 
 **Noma evidence role**:
 The per-source classification that maps an evidence document or generated
