@@ -56,6 +56,7 @@ import {
   getIsometricClientForOrg,
 } from "@/lib/isometric";
 import { readRemovalDurabilityComponent } from "@/lib/certification/removal-durability-component";
+import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import { loadGhgStatementBreakdown } from "./ghg-statement-breakdown";
 import { loadRemovalBreakdown } from "./removal-breakdown";
 
@@ -103,12 +104,12 @@ describe("Removal RegistryObservation", () => {
       readRemovalDurabilityComponent({
         semantic: {
           sequestrationTemplate: [
-            { blueprintKey: "biochar_sequestration_1000_year" },
+            { blueprintKey: DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR },
           ],
         },
       }),
     ).toEqual({
-      key: "biochar_sequestration_1000_year",
+      key: DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
       label:
         "Legacy 1,000-year calculation: total-carbon basis, uncapped durability",
       deprecated: true,
