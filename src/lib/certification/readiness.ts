@@ -74,7 +74,7 @@ export interface RemovalReadinessFacts {
    */
   durabilityGateBlockers?: string[];
   /**
-   * Production-run end times / biochar application dates that still lie in the
+   * Production-run ends, Sample times, or application dates that still lie in the
    * future, already phrased as blocker sentences. Computed SERVER-SIDE (this
    * module is deliberately clock-free and deterministic) by
    * `collectFutureDatedMeasurements`, which mirrors the submit-time guard
@@ -302,6 +302,7 @@ export type PreflightCheckStatus =
 
 export type RemovalMeasurementDateFixTarget =
   | "productionRuns"
+  | "labSamples"
   | "applications"
   | "productionRunsAndApplications";
 
@@ -382,6 +383,12 @@ function measurementDateFixTarget(
   const hasApplications = measurements.some((measurement) =>
     measurement.startsWith("Application "),
   );
+  const hasSamples = measurements.some((measurement) =>
+    measurement.startsWith("Sample "),
+  );
+  if (hasSamples && !hasProductionRuns && !hasApplications) {
+    return "labSamples";
+  }
   if (hasProductionRuns && hasApplications) {
     return "productionRunsAndApplications";
   }

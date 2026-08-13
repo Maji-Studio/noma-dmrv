@@ -50,6 +50,14 @@ function fixLinksFor(
       ];
     case "measurementDates":
       if (check.fixTarget === "productionRuns") return [productionRuns];
+      if (check.fixTarget === "labSamples") {
+        return [
+          {
+            label: "Review Samples",
+            href: `/samples?facility=${facilityId}`,
+          },
+        ];
+      }
       if (check.fixTarget === "applications") return [applications];
       if (check.fixTarget === "productionRunsAndApplications") {
         return [productionRuns, applications];

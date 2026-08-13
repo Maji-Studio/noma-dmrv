@@ -12,6 +12,10 @@ function lineage(code: string, applicationDate: Date) {
   return { application: { code, applicationDate } };
 }
 
+function sample(sampleCode: string, samplingTime: Date) {
+  return { sampleCode, samplingTime };
+}
+
 describe("collectFutureDatedMeasurements", () => {
   it("reports nothing when every date has already happened", () => {
     expect(
@@ -58,6 +62,21 @@ describe("collectFutureDatedMeasurements", () => {
     expect(blocker).toBe(
       "Application APP-0003 is dated 2026-08-14. " +
         "Change the application date or wait until then.",
+    );
+    expect(blocker).not.toMatch(EN_OR_EM_DASH);
+  });
+
+  it("names the Sample whose sampling time is in the future", () => {
+    const [blocker] = collectFutureDatedMeasurements({
+      runs: [],
+      samples: [sample("LAB-0042", new Date("2026-08-14T09:30:00.000Z"))],
+      lineages: [],
+      now: NOW,
+    });
+
+    expect(blocker).toBe(
+      "Sample LAB-0042 is dated 2026-08-14. " +
+        "Change the sampling time or wait until then.",
     );
     expect(blocker).not.toMatch(EN_OR_EM_DASH);
   });

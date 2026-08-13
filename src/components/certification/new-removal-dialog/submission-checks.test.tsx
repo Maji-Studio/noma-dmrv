@@ -91,6 +91,12 @@ describe("SubmissionChecks", () => {
         facilityId="facility-1"
       />,
     );
+    const sampleHtml = renderToStaticMarkup(
+      <SubmissionChecks
+        checks={withUnmet("measurementDates", { fixTarget: "labSamples" })}
+        facilityId="facility-1"
+      />,
+    );
     const bothHtml = renderToStaticMarkup(
       <SubmissionChecks
         checks={withUnmet("measurementDates", {
@@ -108,6 +114,7 @@ describe("SubmissionChecks", () => {
       'href="/applications?facility=facility-1"',
     );
     expect(applicationHtml).not.toContain('href="/production-runs');
+    expect(sampleHtml).toContain('href="/samples?facility=facility-1"');
 
     expect(bothHtml).toContain('href="/production-runs?facility=facility-1"');
     expect(bothHtml).toContain('href="/applications?facility=facility-1"');
