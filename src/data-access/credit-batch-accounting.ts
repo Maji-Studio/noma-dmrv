@@ -153,7 +153,7 @@ export interface CreditBatchLineageFacts {
   appliedWeightTons: number;
 }
 
-interface CreditBatchChemistry extends WeightedBatchChemistry {
+export interface CreditBatchChemistry extends WeightedBatchChemistry {
   blueprint1000YearReplicates: Blueprint1000YearReplicate[];
   blueprint1000YearInputsComplete: boolean;
 }
@@ -532,7 +532,7 @@ async function loadLineageWithExecutor(
   }));
 }
 
-function buildCo2eStoredPreview(
+export function buildCo2eStoredPreview(
   batch: CreditBatch & { durabilityOption: DurabilityOption },
   provider: CertifierProvider | null,
   facts: CreditBatchLineageFacts,
@@ -553,7 +553,10 @@ function buildCo2eStoredPreview(
     };
   }
 
-  if (!SOIL_STORAGE_PREVIEW_REVERIFIED) {
+  if (
+    batch.durabilityOption !== "1000_year" &&
+    !SOIL_STORAGE_PREVIEW_REVERIFIED
+  ) {
     return {
       provider,
       co2eStoredTonnes: null,
