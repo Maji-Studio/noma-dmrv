@@ -44,9 +44,9 @@ export function captureMeasurementSampleDatapointIds(
 ): MeasurementSampleDatapointCapture {
   const datapointIdsByMeasurementProperty = new Map<string, string[]>();
   const expectedCountByMeasurementProperty = new Map<string, number>();
-  const expectedValuesByMeasurementProperty = new Map<string, unknown[]>();
+  const expectedMagnitudesByMeasurementProperty = new Map<string, number[]>();
   const returnedCountByMeasurementProperty = new Map<string, number>();
-  const returnedValuesByMeasurementProperty = new Map<string, unknown[]>();
+  const returnedMagnitudesByMeasurementProperty = new Map<string, number[]>();
   const returnedDatapointIds = new Set<string>();
 
   for (const value of request.values) {
@@ -55,9 +55,9 @@ export function captureMeasurementSampleDatapointIds(
       propertyKey,
       (expectedCountByMeasurementProperty.get(propertyKey) ?? 0) + 1,
     );
-    expectedValuesByMeasurementProperty.set(propertyKey, [
-      ...(expectedValuesByMeasurementProperty.get(propertyKey) ?? []),
-      value.value,
+    expectedMagnitudesByMeasurementProperty.set(propertyKey, [
+      ...(expectedMagnitudesByMeasurementProperty.get(propertyKey) ?? []),
+      value.value.magnitude,
     ]);
   }
 
@@ -87,9 +87,9 @@ export function captureMeasurementSampleDatapointIds(
       propertyKey,
       (returnedCountByMeasurementProperty.get(propertyKey) ?? 0) + 1,
     );
-    returnedValuesByMeasurementProperty.set(propertyKey, [
-      ...(returnedValuesByMeasurementProperty.get(propertyKey) ?? []),
-      value.value,
+    returnedMagnitudesByMeasurementProperty.set(propertyKey, [
+      ...(returnedMagnitudesByMeasurementProperty.get(propertyKey) ?? []),
+      value.value.magnitude,
     ]);
     const existing = datapointIdsByMeasurementProperty.get(propertyKey) ?? [];
     existing.push(value.datapoint_id);
@@ -104,9 +104,14 @@ export function captureMeasurementSampleDatapointIds(
         `Registry measurement ${sample.id} returned ${returnedCount} ${pluralize(returnedCount, "value")} for one durability field, but ${expectedCount} ${expectedCount === 1 ? "is" : "are"} required. Refresh the registry data and try again.`,
       );
     }
+    const expectedMagnitudes =
+      expectedMagnitudesByMeasurementProperty.get(propertyKey) ?? [];
+    const returnedMagnitudes =
+      returnedMagnitudesByMeasurementProperty.get(propertyKey) ?? [];
     if (
-      JSON.stringify(returnedValuesByMeasurementProperty.get(propertyKey)) !==
-      JSON.stringify(expectedValuesByMeasurementProperty.get(propertyKey))
+      returnedMagnitudes.some(
+        (magnitude, index) => magnitude !== expectedMagnitudes[index],
+      )
     ) {
       throw new SafeError(
         `Registry measurement ${sample.id} returned durability values in a different order. Ask support to check the registry response before submitting.`,

@@ -184,6 +184,40 @@ describe("captureMeasurementSampleDatapointIds", () => {
     );
   });
 
+  it("accepts equivalent scalar response shapes while preserving magnitude order", () => {
+    const response = measurementSample("mts_normalized", [
+      {
+        datapoint_id: "dtp_c1",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: { unit: "dimensionless", magnitude: 0.8 },
+      },
+      {
+        datapoint_id: "dtp_c2",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: { unit: "dimensionless", magnitude: 0.82 },
+      },
+    ]);
+    const request = requestForSample(response);
+    request.values = request.values.map((value) => ({
+      ...value,
+      value: {
+        magnitude: value.value.magnitude,
+        standard_deviation: null,
+        unit: value.value.unit,
+      },
+    }));
+
+    expect(() =>
+      captureMeasurementSampleDatapointIds(response, request),
+    ).not.toThrow();
+  });
+
   it("fails closed on an unexpected response property", () => {
     const response = measurementSample("mts_extra", [
       {
