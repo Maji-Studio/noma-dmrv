@@ -108,6 +108,18 @@ describe("computeBlueprint1000YearDurability", () => {
     expect(durability?.meanOrganicCarbonFraction).toBe(0);
   });
 
+  it("floors the aggregate mean rather than each registry replicate", () => {
+    const durability = computeBlueprint1000YearDurability([
+      { ...REPLICATES[0], totalCarbonPercent: 1, inorganicCarbonPercent: 1.25 },
+      { ...REPLICATES[1], totalCarbonPercent: 1, inorganicCarbonPercent: 1.25 },
+      { ...REPLICATES[2], totalCarbonPercent: 2, inorganicCarbonPercent: 1 },
+    ]);
+    expect(durability?.meanOrganicCarbonFraction).toBeCloseTo(
+      ((-0.25 - 0.25 + 1) / 3) / 100,
+      12,
+    );
+  });
+
   it("caps a raw durability above 0.95", () => {
     const durability = computeBlueprint1000YearDurability(
       REPLICATES.map((replicate) => ({

@@ -475,10 +475,10 @@ function computeApplicationCo2eStored1000(
 // authoritative; noma uses the same input-by-input reduction only for local
 // review and evidence. The current reduction is
 //
-//   organic_i = max(0, total_carbon_i − inorganic_carbon_i)
+//   mean_organic = max(0, mean(total_carbon_i − inorganic_carbon_i))
 //   F_raw = mean(s_fraction) − √(mean·(1−mean)/n)
 //   F_bounded = min(max(F_raw, 0), 0.95)
-//   CO₂e = product_mass × mean(organic_i) × F_bounded × 44.01/12.01
+//   CO₂e = product_mass × mean_organic × F_bounded × 44.01/12.01
 //
 // from paired per-replicate total carbon, directly measured inorganic carbon,
 // and `s_fraction`. Do not derive missing inorganic carbon from total minus a
@@ -489,7 +489,7 @@ function computeApplicationCo2eStored1000(
 // the raw durability remains visible for diagnostics.
 
 export const CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION =
-  "isometric-1000-year-organic-carbon-binomial-lower-bounded-v2";
+  "isometric-1000-year-organic-carbon-binomial-lower-bounded-v3";
 
 /**
  * One complete 1,000-year lab replicate — mirrors the completeness filter the
@@ -506,7 +506,7 @@ export interface Blueprint1000YearReplicate {
 }
 
 export interface Blueprint1000YearDurabilityResult {
-  /** mean(max(0, total_i − measured_inorganic_i)), as a 0–1 dry-basis fraction. */
+  /** max(0, mean(total_i − measured_inorganic_i)), as a 0–1 dry-basis fraction. */
   meanOrganicCarbonFraction: number;
   /** Mean of the paired replicate `s_fraction` values. */
   meanSFraction: number;
@@ -546,18 +546,18 @@ export function computeBlueprint1000YearDurability(
     return null;
   }
 
-  const meanOrganicCarbonFraction =
+  const meanOrganicCarbonFraction = Math.max(
+    0,
     replicates.reduce(
       (sum, replicate) =>
         sum +
-        Math.max(
-          0,
-          replicate.totalCarbonPercent - replicate.inorganicCarbonPercent,
-        ),
+        replicate.totalCarbonPercent -
+        replicate.inorganicCarbonPercent,
       0,
     ) /
-    n /
-    PERCENT_DENOMINATOR;
+      n /
+      PERCENT_DENOMINATOR,
+  );
   const meanSFraction =
     replicates.reduce((sum, r) => sum + r.sReflectanceFraction, 0) / n;
   const rawDurability =

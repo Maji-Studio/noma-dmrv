@@ -20,7 +20,7 @@ describe("renderThousandYearDurabilityLedgerPdf", () => {
           componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
           componentLabel: "Current 1,000-year durability component",
           formulaVersion:
-            "isometric-1000-year-organic-carbon-binomial-lower-bounded-v2",
+            "isometric-1000-year-organic-carbon-binomial-lower-bounded-v3",
           formulaLabel:
             "Organic-carbon binomial lower estimate bounded from 0 to 0.95",
           semanticsLabel:
@@ -83,7 +83,7 @@ describe("renderThousandYearDurabilityLedgerPdf", () => {
       expect(text).toContain("Current 1,000-year durability component");
       expect(text).toContain(CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR);
       expect(text).toContain(
-        "isometric-1000-year-organic-carbon-binomial-lower-bounded-v2",
+        "isometric-1000-year-organic-carbon-binomial-lower-bounded-v3",
       );
       expect(text).toContain(
         "Organic-carbon binomial lower estimate bounded from 0 to 0.95",
