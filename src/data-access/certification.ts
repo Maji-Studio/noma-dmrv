@@ -19,7 +19,10 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
 import { SafeError } from "@/lib/errors";
-import { certifierProjectLockKey } from "@/lib/certification/certifier-project-lock";
+import {
+  certifierExternalProjectLockKey,
+  certifierProjectLockKey,
+} from "@/lib/certification/certifier-project-lock";
 import { pluralize } from "@/lib/copy-utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
@@ -206,6 +209,28 @@ async function withExternalFacilityConflictGuard<T>(
   }
 }
 
+async function withExternalProjectLocks<T>(
+  ctx: OrgContext,
+  provider: CertifierProvider,
+  externalProjectIds: string[],
+  fn: () => Promise<T>,
+): Promise<T> {
+  const keys = [...new Set(externalProjectIds)]
+    .sort()
+    .map((externalProjectId) =>
+      certifierExternalProjectLockKey({
+        organizationId: ctx.organizationId,
+        provider,
+        externalProjectId,
+      }),
+    );
+  const acquire = (index: number): Promise<T> =>
+    index >= keys.length
+      ? fn()
+      : withDedicatedSessionAdvisoryLock(keys[index], () => acquire(index + 1));
+  return acquire(0);
+}
+
 export async function upsertCertifierProject(
   ctx: OrgContext,
   input: UpsertCertifierProjectInput,
@@ -349,7 +374,25 @@ export async function upsertCertifierProject(
       facilityId: input.facilityId,
       provider: input.provider,
     }),
-    () => withExternalFacilityConflictGuard(values.externalFacilityId, runUpsert),
+    async () => {
+      const [current] = await db
+        .select({ externalProjectId: certifierProjects.externalProjectId })
+        .from(certifierProjects)
+        .where(
+          and(
+            eq(certifierProjects.facilityId, input.facilityId),
+            eq(certifierProjects.provider, input.provider),
+            eq(certifierProjects.organizationId, ctx.organizationId),
+          ),
+        )
+        .limit(1);
+      return withExternalProjectLocks(
+        ctx,
+        input.provider,
+        [values.externalProjectId, ...(current ? [current.externalProjectId] : [])],
+        () => withExternalFacilityConflictGuard(values.externalFacilityId, runUpsert),
+      );
+    },
   );
 }
 
@@ -411,7 +454,19 @@ export async function deleteCertifierProject(
       facilityId,
       provider,
     }),
-    () => db.transaction(async (tx) => {
+    async () => {
+      const [current] = await db
+        .select({ externalProjectId: certifierProjects.externalProjectId })
+        .from(certifierProjects)
+        .where(
+          and(
+            eq(certifierProjects.facilityId, facilityId),
+            eq(certifierProjects.provider, provider),
+            eq(certifierProjects.organizationId, ctx.organizationId),
+          ),
+        )
+        .limit(1);
+      const runDelete = () => db.transaction(async (tx) => {
     // Lock the mapping row so a concurrent submission insert that depends on
     // this mapping cannot race the unlink check.
     const [mapping] = await tx
@@ -462,7 +517,14 @@ export async function deleteCertifierProject(
           eq(certifierProjects.organizationId, ctx.organizationId),
         ),
       );
-    }),
+      });
+      return withExternalProjectLocks(
+        ctx,
+        provider,
+        current ? [current.externalProjectId] : [],
+        runDelete,
+      );
+    },
   );
 }
 

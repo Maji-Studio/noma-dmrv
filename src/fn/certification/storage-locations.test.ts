@@ -378,6 +378,27 @@ describe("ensureStorageLocation", () => {
     );
   });
 
+  it("marks facts changed during POST as drift before reporting the result", async () => {
+    mocks.getInput
+      .mockResolvedValueOnce(input())
+      .mockResolvedValueOnce(input())
+      .mockResolvedValueOnce(input({ name: "South Field" }));
+
+    const result = await ensure();
+
+    expect(result).toMatchObject({ source: "create", drifted: true });
+    expect(mocks.setDrift).toHaveBeenCalledWith(
+      orgCtx,
+      "registration-1",
+      expect.objectContaining({
+        status: "drifted",
+        details: expect.objectContaining({
+          remoteDriftReason: expect.stringMatching(/changed while/),
+        }),
+      }),
+    );
+  });
+
   it("reuses an existing identity and journals local coordinate drift", async () => {
     mocks.getRegistration.mockResolvedValue(registration());
     const result = await ensure();

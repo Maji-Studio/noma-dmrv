@@ -208,7 +208,10 @@ describe("application Storage Location actions", () => {
 
     await expect(
       syncApplicationStorageLocation(APPLICATION_ID),
-    ).resolves.toMatchObject({ success: false });
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringMatching(/Owner or Admin/),
+    });
 
     expect(mocks.appendEvent).toHaveBeenCalledWith(
       ORG_CTX,

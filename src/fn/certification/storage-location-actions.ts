@@ -120,7 +120,7 @@ export async function syncApplicationStorageLocation(
         status: "failed",
         errorMessage: message,
       });
-      throw error;
+      throw new SafeError(message);
     }
 
     return loadApplicationStorageLocationSyncForOrg(

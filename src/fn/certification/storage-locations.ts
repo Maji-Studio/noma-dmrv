@@ -16,7 +16,10 @@ import { withDedicatedSessionAdvisoryLock } from "@/db";
 import type { CertifierStorageLocation } from "@/db/schema/certifier-storage-locations";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import { certifierProjectLockKey } from "@/lib/certification/certifier-project-lock";
+import {
+  certifierExternalProjectLockKey,
+  certifierProjectLockKey,
+} from "@/lib/certification/certifier-project-lock";
 import {
   getIsometricClientForOrg,
   IsometricApiError,
@@ -138,22 +141,30 @@ export async function ensureStorageLocation(
     `${STORAGE_LOCATION_LOCK_SCOPE}:${externalProjectId}:${customerLocationId}`,
     () =>
       withDedicatedSessionAdvisoryLock(
-        certifierProjectLockKey({
+        certifierExternalProjectLockKey({
           organizationId: args.orgCtx.organizationId,
-          facilityId: input.facilityId,
+          externalProjectId,
           provider: ISOMETRIC_PROVIDER,
         }),
         () =>
-          createStorageLocationUnderLocks({
-            args,
-            input,
-            customerLocationId,
-            certifierProjectId,
-            externalProjectId,
-            supplierReference,
-            body,
-            currentPayloadHash,
-          }),
+          withDedicatedSessionAdvisoryLock(
+            certifierProjectLockKey({
+              organizationId: args.orgCtx.organizationId,
+              facilityId: input.facilityId,
+              provider: ISOMETRIC_PROVIDER,
+            }),
+            () =>
+              createStorageLocationUnderLocks({
+                args,
+                input,
+                customerLocationId,
+                certifierProjectId,
+                externalProjectId,
+                supplierReference,
+                body,
+                currentPayloadHash,
+              }),
+          ),
       ),
   );
 }
@@ -301,6 +312,22 @@ async function createStorageLocationUnderLocks(input: {
     throw new Error(
       `Storage Location ${createResult.externalId} was confirmed without a local registration`,
     );
+  }
+  const confirmedInput = await getStorageLocationRegistryInput(
+    input.args.orgCtx,
+    input.args.applicationId,
+  );
+  const confirmedCurrent = confirmedInput
+    ? tryBuildCurrentStorageLocationPayload(confirmedInput)
+    : { body: null, missingFacts: ["application_missing"] };
+  if (
+    confirmedInput?.customerLocationId !== input.customerLocationId ||
+    confirmedInput.externalProjectId !== input.externalProjectId ||
+    !confirmedCurrent.body ||
+    payloadHash(confirmedCurrent.body) !== input.currentPayloadHash
+  ) {
+    createdRemoteDriftReason =
+      "The application site changed while the registry identity was being confirmed.";
   }
   if (createdRemoteDriftReason) {
     await setStorageLocationDrift(input.args.orgCtx, confirmedRegistration.id, {

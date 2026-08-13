@@ -92,11 +92,12 @@ presence is not evidence of a live 200-year or production path.
 | `POST /production_batches` | wired | Register one Isometric Production Batch per noma credit batch | `src/lib/isometric/production-batches.ts` → `createProductionBatch`; consumer in `src/fn/certification/production-batches.ts` |
 | `GET /projects/{project_id}/storage_locations` | wired, sandbox verification pending | Bounded supplier-reference reconciliation before an explicit sync | `src/lib/isometric/storage-locations.ts` → `findStorageLocationBySupplierReference`; consumer in `src/fn/certification/storage-locations.ts` |
 | `POST /projects/{project_id}/storage_locations` | wired, sandbox verification pending | Explicitly register a customer location as a reusable `biochar_field` site | `src/lib/isometric/storage-locations.ts` → `createStorageLocation`; consumers in `src/fn/certification/storage-locations.ts` and `storage-location-actions.ts` |
+| `GET /projects/{project_id}/storage_locations/{id}` | wired, sandbox verification pending | Explicit drift check against the immutable submitted snapshot | `src/lib/isometric/storage-locations.ts` → `getStorageLocation`; consumer in `src/fn/certification/storage-locations.ts` |
 
-`GET /projects/{project_id}/storage_locations/{id}` and PATCH have typed
-wrappers but no application caller. Drift is intentionally surfaced for
-operator review instead of being patched automatically. Biochar Application
-POST remains hard-gated and has no request-producing or HTTP call path.
+PATCH remains present only in the generated API types and is intentionally
+unwired. Drift is surfaced for operator review instead of being patched
+automatically. Biochar Application POST remains hard-gated and has no
+request-producing or HTTP call path.
 
 ## Telemetry operations
 
