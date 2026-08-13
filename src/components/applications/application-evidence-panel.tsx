@@ -251,7 +251,7 @@ function GisReferenceField({
       width="full"
       disabled={disabled}
       onClick={onEdit}
-      className="h-auto justify-start gap-12 whitespace-normal bg-[var(--paper)] px-16 py-16 text-left"
+      className="h-auto justify-start gap-12 whitespace-normal bg-[var(--paper)] px-16 py-16 text-left normal-case tracking-normal"
     >
       <span className="flex size-40 shrink-0 items-center justify-center border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]">
         <MapTrifoldIcon size={20} weight="bold" />
