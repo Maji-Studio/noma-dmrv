@@ -44,6 +44,8 @@ const S_FRACTION_MIN = 0;
 const S_FRACTION_MAX = 1;
 const LEGACY_SEQUESTRATION_BLUEPRINT_KEY =
   "carbon_rich_substance_sequestration";
+const MISSING_DURABILITY_EVIDENCE_MESSAGE =
+  "The selected Removal template has no value from the durability evidence. Check the Samples before submitting.";
 
 interface MeasurementPropertyInputBinding {
   dataShape: InputDataShape;
@@ -347,6 +349,9 @@ export function buildDirectSequestrationDatapoints(args: {
         if (binding.source !== "direct-datapoint") continue;
 
         if (binding.valueSource === "credit-batch-product-mass") {
+          if (args.measurementSampleSubmissions.length === 0) {
+            throw new SafeError(MISSING_DURABILITY_EVIDENCE_MESSAGE);
+          }
           const massByCreditBatchId = new Map<string, number>();
           for (const submission of args.measurementSampleSubmissions) {
             const existing = massByCreditBatchId.get(submission.creditBatchId);
@@ -460,9 +465,7 @@ export function buildDirectSequestrationDatapoints(args: {
         }
 
         if (directIndex === 0) {
-          throw new SafeError(
-            "The selected Removal template has no value from the durability evidence. Check the Samples before submitting.",
-          );
+          throw new SafeError(MISSING_DURABILITY_EVIDENCE_MESSAGE);
         }
         if (binding.dataShape === "SCALAR" && directIndex !== 1) {
           throw new SafeError(

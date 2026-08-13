@@ -76,6 +76,25 @@ const baseReportingWindow = {
 };
 
 describe("1000-year sequestration input sources", () => {
+  it("directs an empty durability submission back to Samples", () => {
+    expect(() =>
+      buildDirectSequestrationDatapoints({
+        template: template([
+          {
+            id: "rtc_SEQ",
+            blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+            inputs: [{ input_key: "product_mass" }],
+          },
+        ]),
+        measurementSampleSubmissions: [],
+        projectId: PROJECT_ID,
+        removalId: "rem-test",
+        version: 2,
+        sourceIds: [],
+      }),
+    ).toThrow(/no value from the durability evidence.*Check the Samples/);
+  });
+
   it("builds three direct s_fraction datapoints and one standalone product-mass datapoint", () => {
     const replicates = [
       { totalCarbonContentFraction: 0.77, inorganicCarbonContentFraction: 0.01, sFraction: 0.93 },
