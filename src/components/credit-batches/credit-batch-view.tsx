@@ -159,6 +159,10 @@ export function creditBatchSheetSections({
   healthSummary,
   isHealthLoading,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
+  const preview = creditBatch.co2eStoredPreview;
+  const durabilityResult = preview?.applicationResults.find(
+    (result) => result.fDurable != null,
+  );
   return [
     {
       title: "Certification progress",
@@ -204,6 +208,35 @@ export function creditBatchSheetSections({
                 { unit: "t CO₂e" },
               ),
             }]
+          : []),
+        ...(durabilityResult?.rawFDurable != null &&
+        durabilityResult.fDurable != null
+          ? [
+              {
+                label: "Raw durability estimate",
+                value: `${(durabilityResult.rawFDurable * 100).toFixed(1)}%`,
+              },
+              {
+                label: "Capped durability estimate",
+                value: `${(durabilityResult.fDurable * 100).toFixed(1)}%`,
+              },
+              {
+                label: "Durability cap applied",
+                value: durabilityResult.durabilityCapped ? "Yes" : "No",
+              },
+              {
+                label: "Preview component",
+                value: preview?.componentKey ?? "Not available",
+              },
+              {
+                label: "Preview formula",
+                value: preview?.formulaVersion ?? "Not available",
+              },
+              {
+                label: "Preview authority",
+                value: "Local estimate. The registry result remains authoritative.",
+              },
+            ]
           : []),
       ],
     },

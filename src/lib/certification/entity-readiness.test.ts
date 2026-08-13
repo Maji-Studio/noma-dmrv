@@ -210,6 +210,27 @@ describe("deriveEntityCertifyReadiness", () => {
     ]);
   });
 
+  it("reports paired carbon gaps for a sampled 1000-year Sample", () => {
+    const readiness = deriveEntityCertifyReadiness("sample", {
+      durabilityOption: "1000_year",
+      sampling: "sampled",
+      totalCarbonPercent: null,
+      inorganicCarbonPercent: null,
+      organicCarbonPercent: 80,
+      hToCOrgRatio: 0.4,
+      oToCOrgRatio: 0.15,
+      randomReflectanceR0Percent: 1.2,
+      sReflectanceFraction: 0.85,
+      reactiveCarbonPercent: null,
+      residualCarbonPercent: 85,
+    });
+
+    expect(readiness.gaps.map((gap) => gap.key)).toEqual([
+      "totalCarbonPercent",
+      "inorganicCarbonPercent",
+    ]);
+  });
+
   it("accepts either reactive or residual carbon for 1000-year samples", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
       durabilityOption: "1000_year",

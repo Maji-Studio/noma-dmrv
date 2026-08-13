@@ -11,7 +11,10 @@ import {
   buildDirectSequestrationDatapoints,
   getSequestrationInputBinding,
 } from "@/lib/isometric/transformers/sequestration-binding";
-import { build1000YearSequestrationSample } from "@/lib/isometric/transformers/measurement-sample";
+import {
+  build1000YearSequestrationSample,
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+} from "@/lib/isometric/transformers/measurement-sample";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 
 type ComponentBlueprint = components["schemas"]["ComponentBlueprint"];
@@ -79,9 +82,9 @@ describe("1000-year sequestration input sources", () => {
       measuredAt: "2026-01-31T23:59:59.000Z",
       productMassKg: 1_000,
       replicates: [
-        { carbonContentFraction: 0.8, sFraction: 0.91 },
-        { carbonContentFraction: 0.82, sFraction: 0.92 },
-        { carbonContentFraction: 0.84, sFraction: 0.93 },
+        { totalCarbonContentFraction: 0.8, inorganicCarbonContentFraction: 0.01, sFraction: 0.91 },
+        { totalCarbonContentFraction: 0.82, inorganicCarbonContentFraction: 0.011, sFraction: 0.92 },
+        { totalCarbonContentFraction: 0.84, inorganicCarbonContentFraction: 0.012, sFraction: 0.93 },
       ],
     });
     expect(sample).not.toBeNull();
@@ -91,9 +94,10 @@ describe("1000-year sequestration input sources", () => {
       template: template([
         {
           id: "rtc_SEQ",
-          blueprint_key: "biochar_sequestration_1000_year",
+          blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
           inputs: [
-            { input_key: "carbon_contents" },
+            { input_key: "total_carbon_contents" },
+            { input_key: "inorganic_carbon_contents" },
             { input_key: "product_mass" },
             { input_key: "s_fraction" },
           ],
@@ -113,7 +117,7 @@ describe("1000-year sequestration input sources", () => {
     });
 
     expect(getSequestrationInputBinding(
-      "biochar_sequestration_1000_year",
+      CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
       "s_fraction",
     )).toMatchObject({
       source: "direct-datapoint",
@@ -141,7 +145,7 @@ describe("1000-year sequestration input sources", () => {
         template: template([
           {
             id: "rtc_SEQ",
-            blueprint_key: "biochar_sequestration_1000_year",
+            blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
             inputs: [{ input_key: "s_fraction" }],
           },
         ]),
@@ -165,9 +169,10 @@ describe("1000-year sequestration input sources", () => {
       template: template([
         {
           id: "rtc_SEQ",
-          blueprint_key: "biochar_sequestration_1000_year",
+          blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
           inputs: [
-            { input_key: "carbon_contents" },
+            { input_key: "total_carbon_contents" },
+            { input_key: "inorganic_carbon_contents" },
             { input_key: "product_mass" },
             { input_key: "s_fraction" },
           ],
@@ -177,6 +182,10 @@ describe("1000-year sequestration input sources", () => {
         [
           "mass_fraction_dry_basis|total_carbon",
           ["dtp-carbon-1", "dtp-carbon-2", "dtp-carbon-3"],
+        ],
+        [
+          "mass_fraction_dry_basis|total_inorganic_carbon",
+          ["dtp-inorganic-1", "dtp-inorganic-2", "dtp-inorganic-3"],
         ],
         ["mass", ["dtp-product-mass"]],
         [
@@ -192,10 +201,15 @@ describe("1000-year sequestration input sources", () => {
       ]),
     });
 
-    expect(bound.get("rtc_SEQ::carbon_contents")).toEqual([
+    expect(bound.get("rtc_SEQ::total_carbon_contents")).toEqual([
       "dtp-carbon-1",
       "dtp-carbon-2",
       "dtp-carbon-3",
+    ]);
+    expect(bound.get("rtc_SEQ::inorganic_carbon_contents")).toEqual([
+      "dtp-inorganic-1",
+      "dtp-inorganic-2",
+      "dtp-inorganic-3",
     ]);
     expect(bound.get("rtc_SEQ::product_mass")).toEqual(["dtp-product-mass"]);
     expect(bound.get("rtc_SEQ::s_fraction")).toEqual([
@@ -211,7 +225,7 @@ describe("1000-year sequestration input sources", () => {
         template: template([
           {
             id: "rtc_SEQ",
-            blueprint_key: "biochar_sequestration_1000_year",
+            blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
             inputs: [{ input_key: "s_fraction" }],
           },
         ]),
@@ -755,9 +769,10 @@ describe("buildCreateGhgEntryRequest", () => {
     const tmpl = template([
       {
         id: "rtc_SEQ",
-        blueprint_key: "biochar_sequestration_1000_year",
+        blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
         inputs: [
-          { input_key: "carbon_contents" },
+          { input_key: "total_carbon_contents" },
+          { input_key: "inorganic_carbon_contents" },
           { input_key: "product_mass" },
           { input_key: "s_fraction" },
         ],
@@ -766,7 +781,8 @@ describe("buildCreateGhgEntryRequest", () => {
     ]);
     const blueprints = new Map([["mass_blueprint", blueprintMass]]);
     const datapointIds = new Map([
-      ["rtc_SEQ::carbon_contents", ["dtp_c1", "dtp_c2", "dtp_c3"]],
+      ["rtc_SEQ::total_carbon_contents", ["dtp_c1", "dtp_c2", "dtp_c3"]],
+      ["rtc_SEQ::inorganic_carbon_contents", ["dtp_i1", "dtp_i2", "dtp_i3"]],
       ["rtc_SEQ::product_mass", ["dtp_mass"]],
       ["rtc_SEQ::s_fraction", ["dtp_s1", "dtp_s2", "dtp_s3"]],
       ["rtc_A::mass", ["dtp_1"]],
@@ -789,7 +805,12 @@ describe("buildCreateGhgEntryRequest", () => {
         {
           __typename: "CreateComponentListInput",
           datapoint_ids: ["dtp_c1", "dtp_c2", "dtp_c3"],
-          input_key: "carbon_contents",
+          input_key: "total_carbon_contents",
+        },
+        {
+          __typename: "CreateComponentListInput",
+          datapoint_ids: ["dtp_i1", "dtp_i2", "dtp_i3"],
+          input_key: "inorganic_carbon_contents",
         },
         {
           __typename: "CreateComponentScalarInput",
@@ -830,7 +851,7 @@ describe("buildCreateGhgEntryRequest", () => {
     const tmpl = template([
       {
         id: "rtc_SEQ",
-        blueprint_key: "biochar_sequestration_1000_year",
+        blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
         inputs: [{ input_key: "product_mass" }],
       },
     ]);

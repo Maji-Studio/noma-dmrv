@@ -22,7 +22,6 @@
  * the versioned supplier reference, mirroring the datapoint/removal/sensor flows.
  */
 import type { OrgContext } from "@/lib/auth/server";
-import { pluralize } from "@/lib/copy-utils";
 import { appendSubmissionJournal } from "@/data-access/certification";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { env } from "@/config/env";
@@ -42,15 +41,16 @@ import {
 } from "@/lib/isometric/measurement-samples";
 import {
   build1000YearSequestrationSample,
-  CARBON_CONTENTS_MEASUREMENT_PROPERTY,
   H_TO_C_ORG_MEASUREMENT_PROPERTY,
+  INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
   INORGANIC_CARBON_MEASUREMENT_PROPERTY,
   PRODUCT_MASS_MEASUREMENT_PROPERTY,
   S_FRACTION_MEASUREMENT_PROPERTY,
+  TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
   TOTAL_CARBON_MEASUREMENT_PROPERTY,
 } from "@/lib/isometric/transformers/measurement-sample";
-import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { SafeError } from "@/lib/errors";
+import { evaluateSampled1000YearReplicates } from "@/lib/certification/durability-1000-replicates";
 import {
   buildPerBatchDurabilityData,
   type FacilityReferenceSoilTemperature,
@@ -90,6 +90,8 @@ export interface DurabilityMeasurementSampleSubmission {
   body: CreateMeasurementSampleRequest;
   /** Human label for logs / failure messages. */
   label: string;
+  /** Ordered Sample identities for the paired replicate values in this body. */
+  replicateSampleIds?: string[];
 }
 
 export interface BuildDurabilityMeasurementSampleSubmissionsArgs {
@@ -171,45 +173,31 @@ export function buildDurabilityMeasurementSampleSubmissions(
       // not within one body). Sort by sample id so this builder is a
       // deterministic function of its inputs regardless of how the caller's
       // DB read happened to order the rows.
-      const orderedSamples = [...sourceBatch.samples].sort((a, b) =>
-        String(a.id).localeCompare(String(b.id)),
-      );
-      const replicates = orderedSamples.flatMap((sample) =>
-        sample.totalCarbonPercent == null || sample.sReflectanceFraction == null
-          ? []
-          : [
-              {
-                carbonContentFraction: sample.totalCarbonPercent / 100,
-                sFraction: sample.sReflectanceFraction,
-              },
-            ],
-      );
-      const incompleteReplicates = sourceBatch.samples.length - replicates.length;
-      if (incompleteReplicates > 0) {
+      const replicateEvaluation = evaluateSampled1000YearReplicates({
+        creditBatchCode: batch.creditBatchCode,
+        samples: sourceBatch.samples,
+      });
+      if (replicateEvaluation.blockers.length > 0) {
         throw new SafeError(
-          `Credit batch ${batch.creditBatchCode} has ${incompleteReplicates} ${pluralize(incompleteReplicates, "Sample")} without total carbon or the R₀ fraction at or above 2%. Record both values before submitting a 1000-year Removal.`,
-        );
-      }
-      if (replicates.length < MINIMUM_REPLICATES_PER_BATCH) {
-        throw new SafeError(
-          `Credit batch ${batch.creditBatchCode} has ${replicates.length} complete 1000-year ${pluralize(replicates.length, "replicate")}. Record at least ${MINIMUM_REPLICATES_PER_BATCH} before submitting.`,
+          replicateEvaluation.blockers.join("\n"),
         );
       }
       const body = build1000YearSequestrationSample({
-        replicates,
+        replicates: replicateEvaluation.replicates,
         productMassKg: batch.productMassKg,
         projectId: args.externalProjectId,
         supplierRefId,
         measuredAt: args.measuredAt,
       });
-      if (body) {
-        submissions.push({
-          operationKey: `pb:${batch.creditBatchId}`,
-          supplierRefId,
-          body,
-          label: `production batch ${batch.creditBatchCode}`,
-        });
-      }
+      submissions.push({
+        operationKey: `pb:${batch.creditBatchId}`,
+        supplierRefId,
+        body,
+        label: `production batch ${batch.creditBatchCode}`,
+        replicateSampleIds: replicateEvaluation.replicates.map(
+          (replicate) => replicate.sampleId,
+        ),
+      });
       continue;
     }
   }
@@ -247,6 +235,7 @@ const PATCH_UNDEFINED = { __typename: "Undefined" } as const;
 interface MeasurementSampleSourceBindingCapture
   extends MeasurementSampleDatapointCapture {
   creditBatchId: string | null;
+  replicateSampleIds?: string[];
 }
 
 /**
@@ -259,37 +248,51 @@ export async function patchMeasurementSampleSourceBindings(args: {
   captures: MeasurementSampleSourceBindingCapture[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
 }): Promise<number> {
-  const propertyKeyByInput = new Map([
+  const propertyKeysByInput = new Map<string, string[]>([
     [
       "product_mass",
-      encodeMeasurementProperty(PRODUCT_MASS_MEASUREMENT_PROPERTY),
+      [encodeMeasurementProperty(PRODUCT_MASS_MEASUREMENT_PROPERTY)],
     ],
     [
       "carbon_contents",
-      encodeMeasurementProperty(CARBON_CONTENTS_MEASUREMENT_PROPERTY),
-    ],
-    [
-      "s_fraction",
-      encodeMeasurementProperty(S_FRACTION_MEASUREMENT_PROPERTY),
-    ],
-    [
-      "h_c_molar_ratios",
-      encodeMeasurementProperty(H_TO_C_ORG_MEASUREMENT_PROPERTY),
+      [
+        encodeMeasurementProperty(
+          TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
+        ),
+      ],
     ],
     [
       "total_carbon_contents",
-      encodeMeasurementProperty(TOTAL_CARBON_MEASUREMENT_PROPERTY),
+      [
+        encodeMeasurementProperty(
+          TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
+        ),
+        encodeMeasurementProperty(TOTAL_CARBON_MEASUREMENT_PROPERTY),
+      ],
     ],
     [
       "inorganic_carbon_contents",
-      encodeMeasurementProperty(INORGANIC_CARBON_MEASUREMENT_PROPERTY),
+      [
+        encodeMeasurementProperty(
+          INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
+        ),
+        encodeMeasurementProperty(INORGANIC_CARBON_MEASUREMENT_PROPERTY),
+      ],
+    ],
+    [
+      "s_fraction",
+      [encodeMeasurementProperty(S_FRACTION_MEASUREMENT_PROPERTY)],
+    ],
+    [
+      "h_c_molar_ratios",
+      [encodeMeasurementProperty(H_TO_C_ORG_MEASUREMENT_PROPERTY)],
     ],
   ]);
   let patchedCount = 0;
   for (const capture of args.captures) {
     const productMassDatapointIds =
       capture.datapointIdsByMeasurementProperty.get(
-        propertyKeyByInput.get("product_mass")!,
+        propertyKeysByInput.get("product_mass")![0],
       ) ?? [];
     if (productMassDatapointIds.length === 0) continue;
     if (!capture.creditBatchId) {
@@ -304,20 +307,30 @@ export async function patchMeasurementSampleSourceBindings(args: {
         entry.intendedTarget.creditBatchIds.includes(creditBatchId),
     );
 
-    for (const [inputKey, propertyKey] of propertyKeyByInput) {
-      const datapointIds =
-        capture.datapointIdsByMeasurementProperty.get(propertyKey) ?? [];
+    for (const [inputKey, propertyKeys] of propertyKeysByInput) {
+      const datapointIds = propertyKeys.flatMap(
+        (propertyKey) =>
+          capture.datapointIdsByMeasurementProperty.get(propertyKey) ?? [],
+      );
       if (datapointIds.length === 0) continue;
-      const sourceIds = Array.from(
-        new Set(
-          batchBindings
-            .filter((entry) => entry.intendedTarget.inputKey === inputKey)
-            .map((entry) => entry.sourceId),
-        ),
-      ).sort();
-      if (sourceIds.length === 0) continue;
+      const inputBindings = batchBindings.filter(
+        (entry) => entry.intendedTarget.inputKey === inputKey,
+      );
 
-      for (const datapointId of datapointIds) {
+      for (const [index, datapointId] of datapointIds.entries()) {
+        const replicateSampleId = capture.replicateSampleIds?.[index] ?? null;
+        const sourceIds = Array.from(
+          new Set(
+            inputBindings
+              .filter(
+                (entry) =>
+                  entry.lineage.entityType !== "sample" ||
+                  entry.lineage.entityId === replicateSampleId,
+              )
+              .map((entry) => entry.sourceId),
+          ),
+        ).sort();
+        if (sourceIds.length === 0) continue;
         const patched = await patchDatapoint(args.client, datapointId, {
           description: PATCH_UNDEFINED,
           display_name: PATCH_UNDEFINED,
@@ -508,6 +521,7 @@ export async function submitDurabilityMeasurementSamples(
     sourceBindingCaptures.push({
       ...capture,
       creditBatchId: creditBatchIdForSubmission(submission),
+      replicateSampleIds: submission.replicateSampleIds ?? [],
     });
     submitted += 1;
     args.onProgress?.(submitted, args.submissions.length);

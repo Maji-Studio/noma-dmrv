@@ -14,7 +14,12 @@ import type {
   ThousandYearLedgerBatch,
 } from "./durability-types";
 
-const COL = { ref: 28, day: 64, carbon: 92, sFraction: 92 };
+const COL = {
+  ref: 24,
+  day: 54,
+  carbon: 66,
+  sFraction: 62,
+};
 
 const styles = {
   ...theme,
@@ -56,6 +61,18 @@ const styles = {
       marginTop: 3,
     },
     legendKey: { ...theme.legendKey, width: 82 },
+    calculation: {
+      borderTopWidth: 1,
+      borderTopColor: C.ink12,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+    },
+    calculationLine: {
+      fontFamily: MONO,
+      fontSize: 7,
+      color: C.ink70,
+      marginTop: 2,
+    },
   }),
 };
 
@@ -165,11 +182,19 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
     t([styles.thText, { width: COL.day }], "Sampling day"),
     t(
       [styles.thText, { width: COL.carbon, textAlign: "right" }],
-      "Total carbon fraction",
+      "Total C",
+    ),
+    t(
+      [styles.thText, { width: COL.carbon, textAlign: "right" }],
+      "Measured inorganic C",
+    ),
+    t(
+      [styles.thText, { width: COL.carbon, textAlign: "right" }],
+      "Calculated organic C",
     ),
     t(
       [styles.thText, { width: COL.sFraction, textAlign: "right" }],
-      "R0 at or above 2%",
+      "s_fraction",
     ),
   );
   const rows = batch.replicates.map((replicate, index) =>
@@ -188,11 +213,23 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
       ),
       t(
         [styles.mono, { width: COL.day }],
-        replicate.samplingDay ?? "—",
+        replicate.samplingDay ?? "Not recorded",
       ),
       t(
         [styles.mono, { width: COL.carbon, textAlign: "right" }],
-        fraction(replicate.carbonContentFraction),
+        fraction(replicate.totalCarbonFraction),
+      ),
+      t(
+        [styles.mono, { width: COL.carbon, textAlign: "right" }],
+        replicate.inorganicCarbonFraction == null
+          ? "Not recorded"
+          : fraction(replicate.inorganicCarbonFraction),
+      ),
+      t(
+        [styles.mono, { width: COL.carbon, textAlign: "right" }],
+        replicate.calculatedOrganicCarbonFraction == null
+          ? "Not available"
+          : fraction(replicate.calculatedOrganicCarbonFraction),
       ),
       t(
         [styles.mono, { width: COL.sFraction, textAlign: "right" }],
@@ -204,7 +241,38 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
     styles.section,
     {},
     header,
-    v(styles.table, {}, tableHead, ...rows),
+    v(
+      styles.table,
+      {},
+      tableHead,
+      ...rows,
+      v(
+        styles.calculation,
+        {},
+        t(styles.calculationLine, `Component: ${batch.componentLabel}`),
+        t(styles.calculationLine, `Component key: ${batch.componentKey}`),
+        t(styles.calculationLine, `Formula: ${batch.formulaLabel}`),
+        t(styles.calculationLine, `Formula version: ${batch.formulaVersion}`),
+        t(styles.calculationLine, `Semantics: ${batch.semanticsLabel}`),
+        ...(batch.rawMeanOrganicCarbonFraction != null &&
+        batch.creditedMeanOrganicCarbonFraction != null
+          ? [
+              t(
+                styles.calculationLine,
+                `Raw mean organic carbon ${fraction(batch.rawMeanOrganicCarbonFraction)} · ` +
+                  `Credited mean organic carbon ${fraction(batch.creditedMeanOrganicCarbonFraction)} · ` +
+                  `zero floor applied ${batch.organicCarbonFloorApplied ? "yes" : "no"}`,
+              ),
+            ]
+          : []),
+        t(
+          styles.calculationLine,
+          `Raw durability ${fraction(batch.rawDurability)} · ` +
+            `Capped durability ${fraction(batch.cappedDurability)} · ` +
+            `0.95 cap applied ${batch.capApplied ? "yes" : "no"}`,
+        ),
+      ),
+    ),
   );
 }
 
@@ -216,10 +284,11 @@ function apparatus(): ReactElement {
     t(
       styles.noteBody,
       "Each row is one complete laboratory replicate sent in the registry measurement sample. " +
-        "Total carbon is shown as the submitted dry-basis fraction. The R0 fraction is the " +
-        "share of reflectance readings at or above 2%. The registry combines the full lists " +
-        "with the product mass. This ledger records noma's inputs and does not replace the " +
-        "laboratory certificate of analysis.",
+        "Organic carbon is calculated within each row as total minus directly measured inorganic carbon. " +
+        "The local preview averages those raw differences, then floors a negative mean at zero; both the raw and credited means are disclosed. " +
+        "No total-minus-organic fallback supplies inorganic carbon on the current path. The registry " +
+        "combines the submitted lists with product mass and remains authoritative. This local math is " +
+        "explanatory and does not replace the laboratory certificate of analysis.",
     ),
   );
   const legendRow = (key: string, description: string) =>
@@ -233,8 +302,13 @@ function apparatus(): ReactElement {
     styles.legendCol,
     {},
     t(styles.noteH, "Submitted fields"),
-    legendRow("Carbon", "Total carbon dry-basis fraction, from 0 to 1."),
-    legendRow("R0 fraction", "Reflectance readings at or above 2%, from 0 to 1."),
+    legendRow("Total C", "Submitted total carbon dry-basis fraction."),
+    legendRow("Inorganic C", "Submitted directly measured dry-basis fraction."),
+    legendRow(
+      "Organic C",
+      "Raw row value is Total C minus Inorganic C; the credited aggregate mean is floored at zero.",
+    ),
+    legendRow("s_fraction", "Reflectance readings at or above 2%, from 0 to 1."),
     legendRow("Product mass", "Applied dry biochar mass in kilograms."),
   );
   return v(styles.apparatus, {}, note, legend);
@@ -271,7 +345,7 @@ function buildDocument(
       title: `1000-Year Durability Evidence Ledger${model.memberBatchCodes ? ` · ${model.memberBatchCodes}` : ""}`,
       author: "noma dMRV",
       subject:
-        "Per-replicate total carbon and reflectance fractions submitted for 1000-year durability",
+        "Per-replicate total, measured inorganic, calculated organic carbon, and reflectance fractions for 1000-year durability",
     },
     h(
       Page,
