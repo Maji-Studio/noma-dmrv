@@ -103,9 +103,9 @@ export async function seedCertifierMapping(
 /**
  * Flip a seeded facility onto the 1000-year durability tier. The generic
  * facility helpers deliberately seed 200-year (the simpler soil-temp flow),
- * but the sandbox project's only fully-bound removal template carries the
- * `biochar_sequestration_1000_year_f_durable_max` component, and the submit tier guard
- * requires facility tier ↔ template agreement (ADR 0021). No cleanup needed:
+ * but this submit flow exercises the 1,000-year path once the sandbox template
+ * migration has landed. The submit tier guard requires facility tier ↔ template
+ * agreement (ADR 0021). No cleanup needed:
  * the per-test facility row is torn down by the seed fixture itself.
  */
 export async function setFacilityDurabilityTier(
@@ -682,11 +682,13 @@ const READY_DIESEL_GENSET_L = 0;
 const READY_ELECTRICITY_KWH = 0;
 const SAMPLE_TOTAL_CARBON_PCT = 80;
 const SAMPLE_ORGANIC_CARBON_PCT = 78;
+const SAMPLE_INORGANIC_CARBON_PCT = 2;
 const SAMPLE_H_TO_CORG_RATIO = 0.4;
 const SAMPLE_O_TO_CORG_RATIO = 0.1;
 // 1000-year lab evidence (certify-field-registry sample descriptors +
-// computeBlueprint1000YearDurability completeness): sReflectanceFraction and
-// randomReflectanceR0Percent must be entered, plus reactive OR residual carbon.
+// computeBlueprint1000YearDurability completeness): measured inorganic carbon,
+// sReflectanceFraction, and randomReflectanceR0Percent must be entered, plus
+// reactive OR residual carbon.
 const SAMPLE_S_REFLECTANCE_FRACTION = 0.9;
 const SAMPLE_RANDOM_REFLECTANCE_R0_PCT = 2.85;
 const SAMPLE_REACTIVE_CARBON_PCT = 32.6;
@@ -1029,6 +1031,7 @@ export async function seedUngroupedReadyBatchWithChain(
           samplingTime: new Date(),
           totalCarbonPercent: SAMPLE_TOTAL_CARBON_PCT,
           organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PCT,
+          inorganicCarbonPercent: SAMPLE_INORGANIC_CARBON_PCT,
           hToCOrgRatio: SAMPLE_H_TO_CORG_RATIO,
           oToCOrgRatio: SAMPLE_O_TO_CORG_RATIO,
           sReflectanceFraction: SAMPLE_S_REFLECTANCE_FRACTION,
