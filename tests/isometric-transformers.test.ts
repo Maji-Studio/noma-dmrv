@@ -14,6 +14,7 @@ import {
 import {
   build1000YearSequestrationSample,
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  PRODUCT_MASS_UNIT,
 } from "@/lib/isometric/transformers/measurement-sample";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 
@@ -130,11 +131,11 @@ describe("1000-year sequestration input sources", () => {
       source: "direct-datapoint",
       valueSource: "credit-batch-product-mass",
       quantityKind: "mass",
-      unit: "kg",
+      unit: PRODUCT_MASS_UNIT,
     });
     expect(direct).toHaveLength(4);
     expect(direct.map((entry) => [entry.inputKey, entry.body.quantity])).toEqual([
-      ["product_mass", { magnitude: 1_970, unit: "kg" }],
+      ["product_mass", { magnitude: 1_970, unit: PRODUCT_MASS_UNIT }],
       ["s_fraction", { magnitude: 0.93, unit: "dimensionless" }],
       ["s_fraction", { magnitude: 0.94, unit: "dimensionless" }],
       ["s_fraction", { magnitude: 0.93, unit: "dimensionless" }],
