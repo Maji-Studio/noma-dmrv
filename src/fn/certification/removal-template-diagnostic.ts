@@ -10,6 +10,9 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { loadFacilityCertifierFacts } from "./certify-context-core";
+import { z } from "zod";
+
+const facilityIdSchema = z.uuid("Choose a valid facility.");
 
 export type RemovalTemplateDiagnosticAvailability =
   | "ready"
@@ -41,8 +44,9 @@ export async function loadRemovalTemplateDiagnostic(
 ): Promise<ActionResult<RemovalTemplateDiagnosticData>> {
   return withAction(async (orgCtx) => {
     await requireAdminAction();
-    await requireOrgFacility(orgCtx, facilityId);
-    const facts = await loadFacilityCertifierFacts(orgCtx, facilityId);
+    const parsedFacilityId = facilityIdSchema.parse(facilityId);
+    await requireOrgFacility(orgCtx, parsedFacilityId);
+    const facts = await loadFacilityCertifierFacts(orgCtx, parsedFacilityId);
     const selectedTemplateId = facts.mapping?.defaultRemovalTemplateId ?? null;
 
     let availability: RemovalTemplateDiagnosticAvailability = "ready";

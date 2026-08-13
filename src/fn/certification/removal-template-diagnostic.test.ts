@@ -32,6 +32,8 @@ vi.mock("../with-action", () => ({
 
 import { loadRemovalTemplateDiagnostic } from "./removal-template-diagnostic";
 
+const FACILITY_ID = "00000000-0000-4000-8000-000000000001";
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.loadFacilityCertifierFacts.mockResolvedValue({
@@ -61,23 +63,23 @@ describe("loadRemovalTemplateDiagnostic", () => {
     );
 
     await expect(
-      loadRemovalTemplateDiagnostic("facility-1"),
+      loadRemovalTemplateDiagnostic(FACILITY_ID),
     ).rejects.toThrow("Admin access is required");
     expect(mocks.requireOrgFacility).not.toHaveBeenCalled();
     expect(mocks.loadFacilityCertifierFacts).not.toHaveBeenCalled();
   });
 
   it("enforces Platform Admin and facility authorization before loading registry facts", async () => {
-    const result = await loadRemovalTemplateDiagnostic("facility-1");
+    const result = await loadRemovalTemplateDiagnostic(FACILITY_ID);
 
     expect(mocks.requireAdminAction).toHaveBeenCalledOnce();
     expect(mocks.requireOrgFacility).toHaveBeenCalledWith(
       expect.objectContaining({ isPlatformAdmin: true }),
-      "facility-1",
+      FACILITY_ID,
     );
     expect(mocks.loadFacilityCertifierFacts).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "organization-1" }),
-      "facility-1",
+      FACILITY_ID,
     );
     expect(result).toMatchObject({
       success: true,
