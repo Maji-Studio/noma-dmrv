@@ -108,6 +108,22 @@ describe("SubmissionChecks", () => {
         facilityId="facility-1"
       />,
     );
+    const runAndSampleHtml = renderToStaticMarkup(
+      <SubmissionChecks
+        checks={withUnmet("measurementDates", {
+          fixTarget: "productionRunsAndLabSamples",
+        })}
+        facilityId="facility-1"
+      />,
+    );
+    const applicationAndSampleHtml = renderToStaticMarkup(
+      <SubmissionChecks
+        checks={withUnmet("measurementDates", {
+          fixTarget: "applicationsAndLabSamples",
+        })}
+        facilityId="facility-1"
+      />,
+    );
 
     expect(runHtml).toContain('href="/production-runs?facility=facility-1"');
     expect(applicationHtml).toContain(
@@ -115,6 +131,16 @@ describe("SubmissionChecks", () => {
     );
     expect(applicationHtml).not.toContain('href="/production-runs');
     expect(sampleHtml).toContain('href="/samples?facility=facility-1"');
+    expect(runAndSampleHtml).toContain(
+      'href="/production-runs?facility=facility-1"',
+    );
+    expect(runAndSampleHtml).toContain('href="/samples?facility=facility-1"');
+    expect(applicationAndSampleHtml).toContain(
+      'href="/applications?facility=facility-1"',
+    );
+    expect(applicationAndSampleHtml).toContain(
+      'href="/samples?facility=facility-1"',
+    );
 
     expect(bothHtml).toContain('href="/production-runs?facility=facility-1"');
     expect(bothHtml).toContain('href="/applications?facility=facility-1"');

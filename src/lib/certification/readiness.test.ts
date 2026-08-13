@@ -723,6 +723,18 @@ describe("future-dated measurement dates", () => {
     expect(sampleCheck?.fixTarget).toBe("labSamples");
   });
 
+  it("preserves the Sample target alongside each mixed future-date category", () => {
+    const runAndSample = buildRemovalRequirementsChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_RUN, FUTURE_SAMPLE] }),
+    ).find((c) => c.key === "measurementDates");
+    const applicationAndSample = buildRemovalRequirementsChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_APPLICATION, FUTURE_SAMPLE] }),
+    ).find((c) => c.key === "measurementDates");
+
+    expect(runAndSample?.fixTarget).toBe("productionRunsAndLabSamples");
+    expect(applicationAndSample?.fixTarget).toBe("applicationsAndLabSamples");
+  });
+
   it("renders red in the pre-flight checklist too", () => {
     const checks = buildRemovalPreflightChecklist(
       ready({ futureDatedMeasurements: [FUTURE_APPLICATION] }),
