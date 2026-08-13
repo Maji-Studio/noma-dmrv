@@ -518,6 +518,11 @@ export interface Blueprint1000YearDurabilityResult {
   replicateCount: number;
 }
 
+/** True for finite proportions accepted by the 1,000-year durability formula. */
+export function isUnitFraction(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
 /**
  * Reproduce the current registry component reduction for explanatory review.
  * Returns null on empty or non-finite input. The registry result remains
@@ -533,7 +538,7 @@ export function computeBlueprint1000YearDurability(
       (replicate) =>
         !Number.isFinite(replicate.totalCarbonPercent) ||
         !Number.isFinite(replicate.inorganicCarbonPercent) ||
-        !Number.isFinite(replicate.sReflectanceFraction),
+        !isUnitFraction(replicate.sReflectanceFraction),
     )
   ) {
     return null;

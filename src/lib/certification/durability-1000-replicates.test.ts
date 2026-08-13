@@ -90,4 +90,23 @@ describe("evaluateSampled1000YearReplicates", () => {
 
     expect(result.blockers.join("\n")).toMatch(/negative inorganic carbon.*LAB-a/);
   });
+
+  it.each([-0.01, 1.01])(
+    "rejects an R₀ fraction outside the unit interval (%s)",
+    (sFraction) => {
+      const result = evaluateSampled1000YearReplicates({
+        creditBatchCode: "CB-1",
+        samples: [
+          sample({ id: "a", sFraction }),
+          sample({ id: "b" }),
+          sample({ id: "c" }),
+        ],
+      });
+
+      expect(result.blockers.join("\n")).toMatch(
+        /R₀ fraction outside 0 to 1.*LAB-a/,
+      );
+      expect(result.replicates).toHaveLength(2);
+    },
+  );
 });

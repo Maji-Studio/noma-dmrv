@@ -3,6 +3,7 @@ import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibi
 import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import { transformSequestrationSourceValue } from "@/lib/isometric/transformers/sequestration-binding";
+import { isUnitFraction } from "@/lib/calculations/biochar-removal";
 
 export interface Sampled1000YearMeasurement {
   id: string;
@@ -27,6 +28,17 @@ export interface Sampled1000YearReplicateEvaluation {
 
 function isUsableNumber(value: number | null): value is number {
   return value != null && Number.isFinite(value);
+}
+
+function isCompleteReplicate(sample: Sampled1000YearMeasurement): boolean {
+  return (
+    isUsableNumber(sample.totalCarbonPercent) &&
+    isUsableNumber(sample.inorganicCarbonPercent) &&
+    isUnitFraction(sample.sReflectanceFraction) &&
+    sample.inorganicCarbonPercent >= 0 &&
+    sample.inorganicCarbonPercent - sample.totalCarbonPercent <=
+      CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
+  );
 }
 
 function sampleLabels(
@@ -117,15 +129,20 @@ export function evaluateSampled1000YearReplicates(args: {
     );
   }
 
+  const invalidSFractionLabels = sampleLabels(
+    orderedSamples,
+    (sample) =>
+      isUsableNumber(sample.sReflectanceFraction) &&
+      !isUnitFraction(sample.sReflectanceFraction),
+  );
+  if (invalidSFractionLabels.length > 0) {
+    blockers.push(
+      `Credit batch ${args.creditBatchCode} has an R₀ fraction outside 0 to 1 on ${invalidSFractionLabels.join(", ")}. Correct the measured value before submitting.`,
+    );
+  }
+
   const replicates = orderedSamples.flatMap((sample) => {
-    if (
-      !isUsableNumber(sample.totalCarbonPercent) ||
-      !isUsableNumber(sample.inorganicCarbonPercent) ||
-      !isUsableNumber(sample.sReflectanceFraction) ||
-      sample.inorganicCarbonPercent < 0 ||
-      sample.inorganicCarbonPercent - sample.totalCarbonPercent >
-        CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
-    ) {
+    if (!isCompleteReplicate(sample)) {
       return [];
     }
     return [

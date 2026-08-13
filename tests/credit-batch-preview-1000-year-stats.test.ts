@@ -123,6 +123,17 @@ describe("computeBlueprint1000YearDurability", () => {
       ]),
     ).toBeNull();
   });
+
+  it.each([-0.01, 1.01])(
+    "returns null for an R₀ fraction outside the unit interval (%s)",
+    (sReflectanceFraction) => {
+      expect(
+        computeBlueprint1000YearDurability([
+          { ...REPLICATES[0], sReflectanceFraction },
+        ]),
+      ).toBeNull();
+    },
+  );
 });
 
 describe("computeApplicationCo2eStoredBlueprint1000", () => {
