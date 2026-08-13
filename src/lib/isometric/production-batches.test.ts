@@ -53,7 +53,7 @@ describe("buildCreateProductionBatchRequest", () => {
     expect(body.kind).toBe(PRODUCTION_BATCH_KIND);
   });
 
-  it("maps facility, feedstock types, reference and the date-only window", () => {
+  it("maps facility, feedstock types, reference and the physical window", () => {
     const body = buildCreateProductionBatchRequest({
       ...BASE,
       feedstockTypeIds: ["ftt_b", "ftt_a", "ftt_b"],
