@@ -45,8 +45,16 @@ export function captureMeasurementSampleDatapointIds(
   const datapointIdsByMeasurementProperty = new Map<string, string[]>();
   const expectedCountByMeasurementProperty = new Map<string, number>();
   const expectedMagnitudesByMeasurementProperty = new Map<string, number[]>();
+  const expectedUnitsByMeasurementProperty = new Map<
+    string,
+    Array<string | null>
+  >();
   const returnedCountByMeasurementProperty = new Map<string, number>();
   const returnedMagnitudesByMeasurementProperty = new Map<string, number[]>();
+  const returnedUnitsByMeasurementProperty = new Map<
+    string,
+    Array<string | null>
+  >();
   const returnedDatapointIds = new Set<string>();
 
   for (const value of request.values) {
@@ -58,6 +66,10 @@ export function captureMeasurementSampleDatapointIds(
     expectedMagnitudesByMeasurementProperty.set(propertyKey, [
       ...(expectedMagnitudesByMeasurementProperty.get(propertyKey) ?? []),
       value.value.magnitude,
+    ]);
+    expectedUnitsByMeasurementProperty.set(propertyKey, [
+      ...(expectedUnitsByMeasurementProperty.get(propertyKey) ?? []),
+      value.value.unit,
     ]);
   }
 
@@ -91,6 +103,10 @@ export function captureMeasurementSampleDatapointIds(
       ...(returnedMagnitudesByMeasurementProperty.get(propertyKey) ?? []),
       value.value.magnitude,
     ]);
+    returnedUnitsByMeasurementProperty.set(propertyKey, [
+      ...(returnedUnitsByMeasurementProperty.get(propertyKey) ?? []),
+      value.value.unit,
+    ]);
     const existing = datapointIdsByMeasurementProperty.get(propertyKey) ?? [];
     existing.push(value.datapoint_id);
     datapointIdsByMeasurementProperty.set(propertyKey, existing);
@@ -108,6 +124,10 @@ export function captureMeasurementSampleDatapointIds(
       expectedMagnitudesByMeasurementProperty.get(propertyKey) ?? [];
     const returnedMagnitudes =
       returnedMagnitudesByMeasurementProperty.get(propertyKey) ?? [];
+    const expectedUnits =
+      expectedUnitsByMeasurementProperty.get(propertyKey) ?? [];
+    const returnedUnits =
+      returnedUnitsByMeasurementProperty.get(propertyKey) ?? [];
     if (
       returnedMagnitudes.some(
         (magnitude, index) => magnitude !== expectedMagnitudes[index],
@@ -115,6 +135,17 @@ export function captureMeasurementSampleDatapointIds(
     ) {
       throw new SafeError(
         `Registry measurement ${sample.id} returned durability values in a different order. Ask support to check the registry response before submitting.`,
+      );
+    }
+    if (
+      returnedUnits.some(
+        (unit, index) =>
+          (unit ?? "").toLocaleLowerCase() !==
+          (expectedUnits[index] ?? "").toLocaleLowerCase(),
+      )
+    ) {
+      throw new SafeError(
+        `Registry measurement ${sample.id} returned a durability value in a different unit. Ask support to check the registry response before submitting.`,
       );
     }
   }

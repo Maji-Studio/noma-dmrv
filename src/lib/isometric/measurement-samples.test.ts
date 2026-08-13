@@ -218,6 +218,28 @@ describe("captureMeasurementSampleDatapointIds", () => {
     ).not.toThrow();
   });
 
+  it("fails closed when the registry echoes a different unit", () => {
+    const response = measurementSample("mts_unit", [
+      {
+        datapoint_id: "dtp_c1",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: { magnitude: 0.8, unit: "%" },
+      },
+    ]);
+    const request = requestForSample(response);
+    request.values[0] = {
+      ...request.values[0],
+      value: { ...request.values[0].value, unit: "dimensionless" },
+    };
+
+    expect(() =>
+      captureMeasurementSampleDatapointIds(response, request),
+    ).toThrow(/value in a different unit/);
+  });
+
   it("fails closed on an unexpected response property", () => {
     const response = measurementSample("mts_extra", [
       {
