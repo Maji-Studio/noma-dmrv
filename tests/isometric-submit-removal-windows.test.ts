@@ -211,6 +211,10 @@ describe("submitRemoval — reporting window anchored to application date (issue
             "mass_fraction_dry_basis|total_inorganic_carbon",
             ["dtp-inorganic-1", "dtp-inorganic-2", "dtp-inorganic-3"],
           ],
+          [
+            "dimensionless_ratio|inertinite_fraction",
+            ["dtp-s-1", "dtp-s-2", "dtp-s-3"],
+          ],
         ]),
       } as never;
     });
@@ -387,14 +391,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
       unit: "kg",
     });
     expect(productMassDatapoints[0].source_ids).toEqual(["src-test-1"]);
-    expect(sFractionDatapoints.map((body) => body.quantity)).toEqual([
-      { magnitude: 0.9, unit: "dimensionless" },
-      { magnitude: 0.91, unit: "dimensionless" },
-      { magnitude: 0.92, unit: "dimensionless" },
-    ]);
-    expect(
-      new Set(sFractionDatapoints.map((body) => body.supplier_reference_id)).size,
-    ).toBe(3);
+    expect(sFractionDatapoints).toHaveLength(0);
 
     const sequestrationComponent =
       removalBody.ghg_entry_template_components?.find(
@@ -406,7 +403,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
     );
     expect(sFractionInput).toEqual({
       __typename: "CreateComponentListInput",
-      datapoint_ids: ["dp_2", "dp_3", "dp_4"],
+      datapoint_ids: ["dtp-s-1", "dtp-s-2", "dtp-s-3"],
       input_key: "s_fraction",
     });
     expect(

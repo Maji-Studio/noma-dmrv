@@ -162,9 +162,11 @@ sequestration blueprint against that tier.
 The sampled 1,000-year path is implemented for the Isometric sandbox:
 
 - every member batch must have at least three complete replicates;
-- paired total-carbon and directly measured inorganic-carbon values, plus
-  product mass, are created through a measurement sample;
-- `s_fraction` is created as an explicitly bound Datapoint;
+- paired total-carbon, directly measured inorganic-carbon, and reflectance
+  fraction values are created through a measurement sample;
+- `s_fraction` binds the measurement sample's
+  `dimensionless_ratio/inertinite_fraction` response Datapoints, while
+  `product_mass` is created as a standalone direct Datapoint;
 - the component input table binds `total_carbon_contents`,
   `inorganic_carbon_contents`, and `s_fraction` as lists and `product_mass` as
   a scalar on `biochar_sequestration_1000_year_f_durable_max`;

@@ -147,7 +147,7 @@ function template(): IsometricGhgEntryTemplate {
               {
                 type: "monitored",
                 input_key: "s_fraction",
-                quantity_kind: "dimensionless",
+                quantity_kind: "dimensionless_ratio",
                 datapoint_id: null,
               },
             ],
@@ -212,7 +212,7 @@ describe("1000-year sequestration registry boundary", () => {
 
     const wrongQuantityKind = structuredClone(valid);
     wrongQuantityKind.groups[0].components[0].inputs[3].quantity_kind =
-      "dimensionless_ratio";
+      "dimensionless";
     expect(() =>
       assertSequestrationTemplateBindings(wrongQuantityKind),
     ).toThrow(/uses the wrong measurement type/);
@@ -296,18 +296,13 @@ describe("1000-year sequestration registry boundary", () => {
       ]);
     }
 
-    expect(registry.requestCount("POST", "/datapoints")).toBe(4);
+    expect(registry.requestCount("POST", "/datapoints")).toBe(1);
     expect(
       registry.datapoints.map((datapoint) => datapoint.quantity),
-    ).toEqual([
-      { magnitude: 1_970, unit: "kg" },
-      { magnitude: 0.93, unit: "dimensionless" },
-      { magnitude: 0.94, unit: "dimensionless" },
-      { magnitude: 0.93, unit: "dimensionless" },
-    ]);
+    ).toEqual([{ magnitude: 1_970, unit: "kg" }]);
     expect(
       registry.datapoints.map((datapoint) => datapoint.display_name),
-    ).toEqual(["product_mass", "s_fraction", "s_fraction", "s_fraction"]);
+    ).toEqual(["product_mass"]);
 
     const submitted = await submitDurabilityMeasurementSamples({
       orgCtx: makeTestOrgContext("user-boundary-sequestration"),
@@ -388,9 +383,8 @@ describe("1000-year sequestration registry boundary", () => {
       (value) => value.measurement_property.quantity_kind === "mass",
     )).toBe(false);
     const productMassIds = directIdsByInput.get("product_mass") ?? [];
-    const sFractionIds = directIdsByInput.get("s_fraction") ?? [];
     expect(productMassIds).toHaveLength(1);
-    expect(sFractionIds).toHaveLength(3);
+    expect(measurementSampleSFractionIds).toHaveLength(3);
 
     const datapointIdsByRtcInput = bindSequestrationDatapointsToTemplate({
       template: template(),
@@ -398,7 +392,6 @@ describe("1000-year sequestration registry boundary", () => {
         submitted.datapointIdsByMeasurementProperty,
       datapointIdsByRtcInput: new Map([
         [`${RTC_ID}::product_mass`, productMassIds],
-        [`${RTC_ID}::s_fraction`, sFractionIds],
       ]),
     });
     const body = buildCreateGhgEntryRequest({
@@ -437,12 +430,11 @@ describe("1000-year sequestration registry boundary", () => {
           },
           {
             __typename: "CreateComponentListInput",
-            datapoint_ids: sFractionIds,
+            datapoint_ids: measurementSampleSFractionIds,
             input_key: "s_fraction",
           },
         ],
       },
     ]);
-    expect(sFractionIds).not.toEqual(measurementSampleSFractionIds);
   });
 });

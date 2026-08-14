@@ -767,10 +767,9 @@ async function runRemovalSubmission({
 
   // Phase 3: POST the sampled 1000-year durability measurement sample after
   // the datapoint loop, before the removal body.
-  // Measurement-property inputs bind response datapoints; direct-datapoint
-  // inputs (currently 1000-year s_fraction) were already posted through the
-  // same idempotent loop above and remain duplicated in the sample as
-  // data-quality evidence. The gate is already open whenever submissions are
+  // Measurement-property inputs (carbon lists and s_fraction) bind response
+  // datapoints; the direct product_mass input was already posted through the
+  // idempotent loop above. The gate is already open whenever submissions are
   // present; the explicit guard is defence-in-depth for future callers.
   if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
     throw new SafeError(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);

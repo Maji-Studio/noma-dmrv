@@ -453,7 +453,7 @@ describe("buildRemovalSubmissionBuild", () => {
     );
   });
 
-  it("materializes the durability ledger Source on direct s_fraction Datapoints", () => {
+  it("does not duplicate measurement-backed s_fraction as direct Datapoints", () => {
     const sourceBindingPlan = [
       {
         documentId: "document-durability-ledger",
@@ -554,17 +554,10 @@ describe("buildRemovalSubmissionBuild", () => {
       nextVersion: 2,
     });
 
-    const directDatapoints =
+    const directSFractionDatapoints =
       snapshot.payloadSnapshot.transport.datapointBodies.filter(
         (datapoint) => datapoint.inputKey === "s_fraction",
       );
-    expect(directDatapoints).toHaveLength(3);
-    expect(
-      directDatapoints.map((datapoint) => datapoint.body.source_ids),
-    ).toEqual([
-      ["source-durability-ledger"],
-      ["source-durability-ledger"],
-      ["source-durability-ledger"],
-    ]);
+    expect(directSFractionDatapoints).toHaveLength(0);
   });
 });

@@ -348,7 +348,7 @@ export function make1000YearSequestrationTemplate(): IsometricGhgEntryTemplate {
           {
             type: "monitored",
             input_key: "s_fraction",
-            quantity_kind: "dimensionless",
+            quantity_kind: "dimensionless_ratio",
             datapoint_id: null,
           },
         ],
