@@ -10,11 +10,18 @@
 import type { DocumentRow } from "@/data-access/certification";
 import { SafeError } from "@/lib/errors";
 import type { CreateDocumentSourceRequest } from "@/lib/isometric";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 import {
   assertUploadHostAllowed,
   fetchSignedUploadWithTimeout,
 } from "@/lib/isometric/utils/signed-upload";
 import { getStorageProvider } from "@/lib/storage";
+import { StorageError } from "@/lib/storage/types";
+
+const SOURCE_READ_ERROR =
+  "The supporting document could not be read. Upload the file again and retry the submission.";
+const SOURCE_READ_TIMEOUT_ERROR =
+  "The file transfer timed out. Check your connection and try again.";
 
 export function buildSourceRequestBody(args: {
   externalProjectId: string;
@@ -62,16 +69,31 @@ export async function downloadDocumentBlob(
   const provider = getStorageProvider();
   try {
     const object = await provider.getObject({ key: document.storageKey });
+    // The Isometric upload URL is signed for the MIME type declared when the
+    // Source was created, not whichever type the storage GET happens to emit.
+    const contentType = document.mimeType ?? object.contentType;
     return {
       blob: new Blob([new Uint8Array(object.bytes)], {
-        type: object.contentType,
+        type: contentType,
       }),
-      contentType: object.contentType,
+      contentType,
     };
-  } catch {
-    throw new SafeError(
-      "The supporting document could not be read. Upload the file again and retry the submission.",
+  } catch (error) {
+    logger.error(
+      {
+        documentId: document.id,
+        errorCode: error instanceof StorageError ? error.code : undefined,
+        errorMessage: sanitizeErrorMessage(error),
+      },
+      "Failed to read supporting document from storage",
     );
+    if (
+      error instanceof StorageError &&
+      error.code === "get_object_timeout"
+    ) {
+      throw new SafeError(SOURCE_READ_TIMEOUT_ERROR);
+    }
+    throw new SafeError(SOURCE_READ_ERROR);
   }
 }
 

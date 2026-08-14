@@ -3,6 +3,7 @@
 // Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
 
 import { getStorageProvider } from "@/lib/storage";
+import { StorageError } from "@/lib/storage/types";
 import { SafeError } from "@/lib/errors";
 import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { parseReadingsCsv } from "@/lib/production-readings/readings-csv";
@@ -51,7 +52,10 @@ export async function importProductionRunReadingsFromDocumentFn(
       );
       assertCsvDocument(context.fileName, context.mimeType);
 
-      const csvText = await readManagedDocumentText(context.storageKey);
+      const csvText = await readManagedDocumentText({
+        documentId,
+        storageKey: context.storageKey,
+      });
       const parsed = parseReadingsForImport({
         csvText,
         runWindowStart: context.runWindowStart,
@@ -140,12 +144,23 @@ function parseReadingsForImport(args: Parameters<typeof parseReadingsCsv>[0]) {
   }
 }
 
-async function readManagedDocumentText(storageKey: string): Promise<string> {
+async function readManagedDocumentText(args: {
+  documentId: string;
+  storageKey: string;
+}): Promise<string> {
   const provider = getStorageProvider();
   try {
-    const object = await provider.getObject({ key: storageKey });
+    const object = await provider.getObject({ key: args.storageKey });
     return object.bytes.toString("utf8");
-  } catch {
+  } catch (error) {
+    logger.error(
+      {
+        documentId: args.documentId,
+        errorCode: error instanceof StorageError ? error.code : undefined,
+        errorMessage: sanitizeErrorMessage(error),
+      },
+      "Failed to read production-run readings from storage",
+    );
     throw new SafeError(
       "The uploaded readings file could not be read. Upload it again and retry the import.",
     );
