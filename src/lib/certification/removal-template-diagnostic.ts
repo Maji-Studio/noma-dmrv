@@ -515,7 +515,7 @@ function buildSequestrationInputs(args: {
     ) {
       status = "externally-unconfirmed-contract";
       statusDetail =
-        "Code implements the observed dry-basis inorganic-carbon contract, but Isometric confirmation for the project is still pending.";
+        "Code implements the observed registry contract, but Isometric confirmation for the project is still pending.";
     }
 
     const measurementPath =
