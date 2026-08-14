@@ -7,7 +7,7 @@
  * multiple batches in one bin and shows physically remaining stock.
  */
 
-import { and, desc, eq, gt, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
@@ -75,8 +75,14 @@ function formatStockSubtitle(
 
 // Total delivered wet mass per product batch. A delivery's product is its own
 // override when set, otherwise the linked order's product. Only 'delivered' rows
-// have physically left the bin.
-function buildDeliveredMassAggregate(ctx: OrgContext) {
+// have physically left the bin. `excludeOrderId` nets out one order's own
+// deliveries so an edit form's "remaining" means "available to other demand"
+// — without it the order being edited reads its own fulfilment as competing
+// consumption (DR-002 / OR-26-001).
+function buildDeliveredMassAggregate(
+  ctx: OrgContext,
+  opts: { excludeOrderId?: string } = {},
+) {
   return db
   .select({
     biocharProductId:
@@ -108,6 +114,9 @@ function buildDeliveredMassAggregate(ctx: OrgContext) {
     and(
       eq(deliveries.status, "delivered"),
       eq(deliveries.organizationId, ctx.organizationId),
+      ...(opts.excludeOrderId
+        ? [ne(deliveries.orderId, opts.excludeOrderId)]
+        : []),
     ),
   )
   .groupBy(sql`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`)
@@ -202,10 +211,13 @@ export function toBiocharProductEntityOption(r: {
 export async function getBiocharProducts(ctx: OrgContext, params: {
   search?: string;
   facilityId?: string;
+  excludeOrderId?: string;
   limit: number;
 }): Promise<EntityOption[]> {
   requireOrgScope(ctx);
-  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx);
+  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx, {
+    excludeOrderId: params.excludeOrderId,
+  });
   const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
   const selection = buildSelection(deliveredMassAggregate, sourceAllocationAggregate);
   const { search, facilityId, limit } = params;
@@ -284,10 +296,13 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
 
 export async function getBiocharProductEntityById(
   ctx: OrgContext,
-  id: string
+  id: string,
+  opts: { excludeOrderId?: string } = {},
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
-  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx);
+  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx, {
+    excludeOrderId: opts.excludeOrderId,
+  });
   const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
   const selection = buildSelection(deliveredMassAggregate, sourceAllocationAggregate);
   const [result] = await db
