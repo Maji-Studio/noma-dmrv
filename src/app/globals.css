@@ -8,6 +8,13 @@
   transform: translateX(100%);
 }
 
+/* Base UI marks the fully-closed popup with the `hidden` attribute, but the
+   popup's own `display: flex` class outranks the UA's [hidden] rule, which
+   left an invisible drawer's controls in the tab order and a11y tree. */
+.slide-over-panel-popup[hidden] {
+  display: none;
+}
+
 .slide-over-panel-popup[data-ending-style] {
   transform: translateX(100%);
 }
@@ -167,6 +174,11 @@
   --row-divider: var(--hair-3);
   --row-hover-bg: var(--sea);
   --row-stripe-bg: rgba(15, 2, 26, 0.02);
+  /* Opaque twins of the translucent washes above, for sticky table cells:
+     a pinned cell scrolls over its neighbours, so an alpha background would
+     let the covered content bleed through. */
+  --panel-head-bg-solid: color-mix(in srgb, var(--clr-purple) 4.5%, var(--paper));
+  --row-hover-bg-solid: color-mix(in srgb, var(--clr-purple) 4.5%, var(--paper));
 
   /* ===== OVERLAY LAYERS =====
      Centered dialogs can open from inside a side sheet. Their backdrop must
@@ -179,6 +191,9 @@
   --z-layer-toast: 80;
   /* Active menus/tooltips must remain operable when a toast overlaps them. */
   --z-layer-popover: 90;
+  /* Skip link tops the whole scale: it only exists while focused and must
+     never hide behind any overlay. */
+  --z-layer-skip-link: 100;
 
   /* ===== GRAYSCALE PALETTE ===== */
   --color-gray-50: #fafafaff;
@@ -231,10 +246,12 @@
   --color-border-secondary: var(--clr-dark-purple-20);
   --color-border-tertiary: var(--clr-dark-purple-10);
 
-  /* Text — plum alphas (same rule) */
+  /* Text — plum alphas (same rule). Tertiary must stay ≥60% ink: 50% composites
+     to ~3.8:1 on the warm field and fails the WCAG AA 4.5:1 floor for body-size
+     text; 60% measures ~5.3–5.4:1 on both cream and white. */
   --color-text-primary: var(--ink);
   --color-text-secondary: var(--clr-dark-purple-70);
-  --color-text-tertiary: var(--clr-dark-purple-50);
+  --color-text-tertiary: var(--clr-dark-purple-60);
   --color-text-white-primary: var(--color-white-100);
   --color-text-white-secondary: var(--color-white-75);
 

@@ -857,6 +857,25 @@ bound); these are the decisions it deliberately did not make.
   payload validation before any datapoint POST so a refused submission leaves
   zero registry residue (S each).
 
+### Where the certification lock falls, and what "Request amendment" does (`certification/amendment-flow`)
+
+- Server-side enforcement exists and is tested
+  (`assertCanMutateCertifiedLineage`,
+  `tests/certification-lineage-guards.test.ts`); the UI carries an interim
+  lock affordance (`isRemovalStatusLocked` drives the credit-batch menu and
+  sheet lock plus the dropped-claimed-run warning).
+- Interim state: the UI says "amend the Removal with the registry" without
+  offering a flow. The UI predicate (derived status kinds) is deliberately
+  looser than the server predicate (`BLOCKING_SUBMISSION_STATUSES`, where a
+  stale draft submission still blocks), so an edge-case operator can reach a
+  server rejection the UI did not preempt.
+- **Resolve via:** DEC carbon team + Isometric decide where the lock falls
+  per lifecycle state and what an amendment request does (registry API or
+  operational process). Then align the two predicates and replace the locked
+  Edit affordance with the amendment entry point (M). Per project memory,
+  verify any Isometric requirement verbatim before building a gate.
+  Follow-up issue: #687.
+
 ## Promotion #682 review follow-ups (opened 2026-08-14)
 
 Findings from the multi-agent review of the staging-to-main promotion PR #682

@@ -838,6 +838,7 @@ export function BiocharProductForm({
       {children}
 
       <FormActions
+        control={form.control}
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

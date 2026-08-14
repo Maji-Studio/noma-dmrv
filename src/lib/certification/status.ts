@@ -103,6 +103,43 @@ const IN_PROGRESS: DerivedStatus = {
   isTerminal: false,
 };
 
+/**
+ * Kinds in which the record definition behind a Removal is locked (interim
+ * certification lock, design review DR-003): the removal has left noma (or a
+ * submission is in flight), so editing or deleting the records that back it
+ * would silently contradict what the registry holds. `rejected` and
+ * `verification-failed` stay editable — the operator must amend data to
+ * resubmit. This predicate drives the UI affordances only; the server-side
+ * enforcement is `assertCanMutateCertifiedLineage` /
+ * `assertRemovalAllowsCreditBatchMutation` (data-access), which block on
+ * `BLOCKING_SUBMISSION_STATUSES` and are deliberately stricter (a stale
+ * draft submission still blocks there). The full amendment flow is a DEC +
+ * Isometric decision (docs/open-questions.md).
+ */
+// Exhaustive by construction: adding a DerivedStatusKind without deciding its
+// lock stance is a typecheck error, so a new kind can never silently default
+// to editable (the unsafe direction for a certification gate).
+const REMOVAL_LOCK_BY_KIND: Record<DerivedStatusKind, boolean> = {
+  "in-progress": true,
+  interrupted: true,
+  "not-submitted": false,
+  submitted: true,
+  draft: false,
+  "in-registry": true,
+  "in-verification": true,
+  verified: true,
+  issued: true,
+  rejected: false,
+  "verification-failed": false,
+  superseded: true,
+};
+
+export function isRemovalStatusLocked(
+  status: Pick<DerivedStatus, "kind"> | null | undefined,
+): boolean {
+  return status != null && REMOVAL_LOCK_BY_KIND[status.kind];
+}
+
 export interface RemovalStatusInput {
   /** Latest ledger status, or `null` when no submission row exists yet. */
   local: LocalSubmissionStatus | null;

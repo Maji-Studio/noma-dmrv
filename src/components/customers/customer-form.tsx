@@ -84,6 +84,7 @@ export function CustomerForm({
   const [locationError, setLocationError] = useState<string | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     formState: { errors },
@@ -214,6 +215,7 @@ export function CustomerForm({
       </FormSection>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}

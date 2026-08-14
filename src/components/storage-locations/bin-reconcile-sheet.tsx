@@ -201,6 +201,7 @@ function LossForm({
       </FormField>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={recordLoss.isPending}
         errorMessage={serverError ?? undefined}

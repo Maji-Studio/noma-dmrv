@@ -973,6 +973,7 @@ export function SampleForm({
       </FormSpine>
 
       <FormActions
+        control={control}
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

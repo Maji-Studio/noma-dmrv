@@ -115,6 +115,7 @@ export function CustomerLocationForm({
       />
 
       <FormActions
+        control={form.control}
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

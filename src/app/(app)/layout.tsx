@@ -57,9 +57,20 @@ export default async function AppLayout({
           real scroll container and in-page sticky rails work. Below `md` the
           window keeps scrolling as before. */}
       <div className="min-h-screen flex flex-col md:h-screen md:flex-row md:overflow-hidden">
+        {/* 25 sidebar controls precede main in DOM order; the skip link is the
+            first focusable element so keyboard users are not forced through
+            them on every page load. */}
+        <a
+          href="#main-content"
+          className="body-small sr-only focus:not-sr-only focus:fixed focus:top-8 focus:left-8 focus:z-[var(--z-layer-skip-link)] focus:bg-[var(--paper)] focus:px-16 focus:py-12 focus:border focus:border-[var(--color-border-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+        >
+          Skip to main content
+        </a>
         <AppSidebar />
         <MobileNav />
-        <main className="flex-1 min-w-0 overflow-auto">{children}</main>
+        <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 overflow-auto focus:outline-none">
+          {children}
+        </main>
       </div>
     </FacilityProvider>
   );

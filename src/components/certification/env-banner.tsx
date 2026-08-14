@@ -66,13 +66,16 @@ export function EnvBanner({
         isInline ? "px-12 py-8" : "px-16 py-12",
       ].join(" ")}
     >
+      {/* --st-wait, not --color-signal-orange: the banner is the only cue that
+          writes are a rehearsal, and signal-orange measures ~2.1:1 on the
+          orange-10 tint; --st-wait clears the 4.5:1 floor there. */}
       <TestTubeIcon
         size={isInline ? 16 : 20}
         weight="fill"
-        className="shrink-0 text-[var(--color-signal-orange)]"
+        className="shrink-0 text-[var(--st-wait)]"
       />
       <div className="flex flex-col gap-2 min-w-0">
-        <span className="title-chapter-title text-[var(--color-signal-orange)]">
+        <span className="title-chapter-title text-[var(--st-wait)]">
           Sandbox · Isometric registry
         </span>
         {!isInline && (

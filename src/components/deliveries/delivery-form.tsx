@@ -541,6 +541,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       </FormSpine>
 
       <FormActions
+        control={control}
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

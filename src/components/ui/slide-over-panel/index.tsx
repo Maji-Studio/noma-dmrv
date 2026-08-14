@@ -160,6 +160,9 @@ function Content({
       />
       <Dialog.Popup
         data-overlay-layer="sheet"
+        // Base UI traps focus but does not stamp aria-modal; without it a
+        // screen reader may keep browsing the inert page behind the sheet.
+        aria-modal="true"
         className={cn(slideOverContentVariants({ size }), className)}
       >
         {children}
@@ -275,7 +278,8 @@ Description.displayName = "SlideOverPanel.Description";
  * SlideOverPanel.Body — scrollable form area
  * -----------------------------------------------------------------------------------------------*/
 
-interface SlideOverPanelBodyProps {
+interface SlideOverPanelBodyProps
+  extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
   /** Remove bottom padding so sticky/flush footers inside have no gap */
@@ -289,27 +293,28 @@ interface SlideOverPanelBodyProps {
   fillHeight?: boolean;
 }
 
-function Body({
-  children,
-  className,
-  noPaddingBottom,
-  fillHeight,
-}: SlideOverPanelBodyProps) {
-  return (
-    <div
-      className={cn(
-        "flex-1 overflow-y-auto",
-        noPaddingBottom ? "p-24 pb-0" : "p-24",
-        // Form-root child fills the body as a flex column so FormActions'
-        // `mt-auto` can pin the CTA row to the bottom on short forms.
-        fillHeight && "flex flex-col [&>*]:flex [&>*]:flex-1 [&>*]:flex-col",
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
-}
+// forwardRef + div-prop passthrough: EntitySideSheet owns the scrollport, so
+// it needs the element to reset scroll and move focus on mode changes.
+const Body = React.forwardRef<HTMLDivElement, SlideOverPanelBodyProps>(
+  ({ children, className, noPaddingBottom, fillHeight, ...divProps }, ref) => {
+    return (
+      <div
+        ref={ref}
+        {...divProps}
+        className={cn(
+          "flex-1 overflow-y-auto",
+          noPaddingBottom ? "p-24 pb-0" : "p-24",
+          // Form-root child fills the body as a flex column so FormActions'
+          // `mt-auto` can pin the CTA row to the bottom on short forms.
+          fillHeight && "flex flex-col [&>*]:flex [&>*]:flex-1 [&>*]:flex-col",
+          className
+        )}
+      >
+        {children}
+      </div>
+    );
+  }
+);
 Body.displayName = "SlideOverPanel.Body";
 
 /* -------------------------------------------------------------------------------------------------

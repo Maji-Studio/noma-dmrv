@@ -33,6 +33,9 @@ Read these first. Each one fails quietly rather than loudly.
   an arbitrary value (`w-[120px]`) when a real off-scale number is intended.
   **44px is on the scale** because it is the minimum touch target; six controls
   had written `size-44` / `min-h-44` / `h-44` and were rendering at icon size.
+  One sanctioned exception: the inline `InfoHint` glyph keeps a 24px hit area
+  (the WCAG 2.5.8 floor) — a 44px box on an in-text hint would break label-row
+  alignment wherever it appears.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
@@ -94,6 +97,9 @@ resolve to nothing. Translate them as follows:
 
 `--color-signal-orange` / `-strong` / `-light` remain supported. Don't convert
 them to `--st-wait` component by component; any migration must be app-wide.
+One sanctioned exception: `env-banner` uses `--st-wait` for its text because
+`--color-signal-orange` measures ~2.1:1 on the banner's orange tint — that is
+a contrast repair, not the start of a migration.
 
 **Hairlines & the panel recipe.** Structure is drawn with borders, never drop
 shadows — elevation is border + paper. Three steps: `--hair` (structural /

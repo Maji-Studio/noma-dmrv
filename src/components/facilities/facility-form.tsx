@@ -281,6 +281,7 @@ export function FacilityForm({
       )}
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}

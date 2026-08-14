@@ -114,6 +114,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
   const [serverError, setServerError] = useState("");
 
   const {
+    control,
     register,
     handleSubmit,
     formState: { errors },
@@ -247,6 +248,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
       </p>
 
       <FormActions
+        control={control}
         isSubmitting={saveMutation.isPending}
         errorMessage={serverError}
         submitLabel="Save defaults"

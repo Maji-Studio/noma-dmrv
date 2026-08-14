@@ -30,6 +30,7 @@ export function OperatorForm({
   const isEditMode = !!operator;
 
   const {
+    control,
     register,
     handleSubmit,
     formState: { errors },
@@ -90,6 +91,7 @@ export function OperatorForm({
       </div>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
