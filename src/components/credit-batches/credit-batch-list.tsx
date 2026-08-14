@@ -710,9 +710,9 @@ export function CreditBatchList({
                   role="note"
                   className="border border-[var(--color-border-secondary)] bg-[var(--color-background-light)] px-16 py-12 body-small text-[var(--color-text-secondary)]"
                 >
-                  {`This credit batch backs a removal (${
+                  {`This credit batch backs a Removal (${
                     sideSheetHealth?.removalStatus?.label ?? "submitted"
-                  }), so its definition is locked. To change it, the removal must be amended with the registry.`}
+                  }), so its definition is locked. To change it, the Removal must be amended with the registry.`}
                 </p>
               )}
               <CreditBatchHealthStrip

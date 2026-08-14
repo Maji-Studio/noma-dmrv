@@ -116,21 +116,28 @@ const IN_PROGRESS: DerivedStatus = {
  * draft submission still blocks there). The full amendment flow is a DEC +
  * Isometric decision (docs/open-questions.md).
  */
-const REMOVAL_LOCKED_KINDS: ReadonlySet<DerivedStatusKind> = new Set([
-  "in-progress",
-  "interrupted",
-  "submitted",
-  "in-registry",
-  "in-verification",
-  "verified",
-  "issued",
-  "superseded",
-]);
+// Exhaustive by construction: adding a DerivedStatusKind without deciding its
+// lock stance is a typecheck error, so a new kind can never silently default
+// to editable (the unsafe direction for a certification gate).
+const REMOVAL_LOCK_BY_KIND: Record<DerivedStatusKind, boolean> = {
+  "in-progress": true,
+  interrupted: true,
+  "not-submitted": false,
+  submitted: true,
+  draft: false,
+  "in-registry": true,
+  "in-verification": true,
+  verified: true,
+  issued: true,
+  rejected: false,
+  "verification-failed": false,
+  superseded: true,
+};
 
 export function isRemovalStatusLocked(
   status: Pick<DerivedStatus, "kind"> | null | undefined,
 ): boolean {
-  return status != null && REMOVAL_LOCKED_KINDS.has(status.kind);
+  return status != null && REMOVAL_LOCK_BY_KIND[status.kind];
 }
 
 export interface RemovalStatusInput {

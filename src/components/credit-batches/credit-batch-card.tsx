@@ -54,7 +54,7 @@ export function CreditBatchCard({
             label={`Actions for credit batch ${creditBatch.code}`}
             actions={[
               {
-                label: "View details",
+                label: "Open details",
                 icon: <EyeIcon size={16} />,
                 onSelect: () => onView(creditBatch),
               },
@@ -84,6 +84,11 @@ export function CreditBatchCard({
               the keyboard and screen-reader route to the same view action
               (the article itself must not be role="button": it contains the
               actions menu, and nested interactive controls are invalid). */}
+          {/* Deliberately a raw <button>, not the Button primitive: Button's
+              contract (label-button type, nowrap, fixed heights, centered
+              flex) cannot render a wrapping h3 title without overriding all
+              of it. The focus ring below mirrors Button's own treatment so
+              the interaction state stays uniform. */}
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
             <button
               type="button"
@@ -91,11 +96,11 @@ export function CreditBatchCard({
                 event.stopPropagation();
                 onView(creditBatch);
               }}
-              className="cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-2"
+              className="cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)]"
             >
               {creditBatch.feedstockTypeName ?? "Feedstock not set"}
               <span className="sr-only">
-                {`, view credit batch ${creditBatch.code}`}
+                {`, open credit batch ${creditBatch.code}`}
               </span>
             </button>
           </h3>
