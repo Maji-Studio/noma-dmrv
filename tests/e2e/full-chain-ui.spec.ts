@@ -451,7 +451,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await reactorSearch.fill(`Chain Reactor ${runId}`);
       await page.waitForTimeout(500);
       await expect(
-        page.getByRole("button", { name: `Chain Reactor ${runId}` }).first()
+        page.locator("table tbody tr").filter({ hasText: `Chain Reactor ${runId}` }).first()
       ).toBeVisible({ timeout: 10000 });
     });
 

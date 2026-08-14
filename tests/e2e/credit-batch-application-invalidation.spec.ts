@@ -129,7 +129,7 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     await page.waitForURL(/\/applications/);
     await page.waitForLoadState("networkidle");
 
-    const applicationRow = page.locator("table tbody tr[role='button']").first();
+    const applicationRow = page.locator("table tbody tr[tabindex='0']").first();
     await applicationRow.click();
     await waitForSideSheet(page);
     await page.getByRole("button", { name: "Edit Application" }).click();
