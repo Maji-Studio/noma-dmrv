@@ -45,6 +45,7 @@ import {
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
 import {
+  deriveBlendEffectiveMoisturePercent,
   deriveSourceBiocharDryMassKg,
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
@@ -56,7 +57,6 @@ import {
 } from "@/config/product-labels";
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import {
-  deriveEffectiveMoisturePercent,
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
@@ -99,6 +99,25 @@ function finalWetProductMassKg(
   return product.massKg == null
     ? null
     : product.massKg + (product.waterAddedKg ?? 0);
+}
+
+function productEffectiveMoisturePercent(
+  product: Pick<
+    BiocharProductWithRelations,
+    | "massKg"
+    | "waterAddedKg"
+    | "moistureContentPercent"
+    | "composition"
+    | "sourceAllocatedDryMassKg"
+  >,
+): number | null {
+  return deriveBlendEffectiveMoisturePercent({
+    blendMassKg: product.massKg,
+    waterAddedKg: product.waterAddedKg,
+    biocharMoisturePercent: product.moistureContentPercent,
+    ingredients: fromCompositionJsonb(product.composition),
+    sourceAllocatedDryMassKg: product.sourceAllocatedDryMassKg,
+  });
 }
 
 // ============================================
@@ -155,20 +174,16 @@ function createColumns(
     {
       id: "moistureContentPercent",
       header: "Moisture",
+      // Composition-aware blend moisture: massKg is the blend total (biochar
+      // plus ingredient solids), so the single-material helper must not see
+      // it — that produced the 26.1% vs 34.3% contradiction (BP-26-001).
       accessorFn: (row) =>
-        deriveEffectiveMoisturePercent(
-          row.massKg,
-          row.moistureContentPercent,
-          row.waterAddedKg,
-        ) ?? row.moistureContentPercent,
+        productEffectiveMoisturePercent(row) ?? row.moistureContentPercent,
       cell: ({ row }) => (
         <span className="font-mono">
           {formatMoisturePercent(
-            deriveEffectiveMoisturePercent(
-              row.original.massKg,
+            productEffectiveMoisturePercent(row.original) ??
               row.original.moistureContentPercent,
-              row.original.waterAddedKg,
-            ) ?? row.original.moistureContentPercent,
           )}
         </span>
       ),

@@ -170,6 +170,52 @@ export function deriveBlendMassKg(
   return (biocharMassGrams + ingredientMassGrams) / GRAMS_PER_KILOGRAM;
 }
 
+/**
+ * The finished product's effective moisture: 1 − totalDry/totalWet across the
+ * whole blend (biochar dry + ingredient dry snapshots over blend mass plus
+ * added water). This is the ONE product-level moisture figure — the
+ * single-material `deriveEffectiveMoisturePercent` in `mass-moisture` must
+ * not be fed a blend mass (its module header says so), which is exactly the
+ * mistake behind DR-002 / BP-26-001 (list said 26.1%, form said 34.3%).
+ * Returns null when the composition cannot account for its dry mass (an
+ * ingredient without a dry snapshot, or no biochar dry mass derivable).
+ */
+export function deriveBlendEffectiveMoisturePercent({
+  blendMassKg,
+  waterAddedKg,
+  biocharMoisturePercent,
+  ingredients,
+  sourceAllocatedDryMassKg,
+}: {
+  blendMassKg: number | null | undefined;
+  waterAddedKg: number | null | undefined;
+  biocharMoisturePercent: number | null | undefined;
+  ingredients: readonly IngredientMassLike[] | null | undefined;
+  /** Allocation-tracked biochar dry mass; wins over the moisture derivation. */
+  sourceAllocatedDryMassKg?: number | null;
+}): number | null {
+  if (
+    typeof blendMassKg !== "number" ||
+    !Number.isFinite(blendMassKg) ||
+    blendMassKg <= 0
+  ) {
+    return null;
+  }
+  const totalWetKg = blendMassKg + (waterAddedKg ?? 0);
+  const biocharDryKg =
+    sourceAllocatedDryMassKg ??
+    deriveSourceBiocharDryMassKg(blendMassKg, biocharMoisturePercent, ingredients);
+  const ingredientDryKg = deriveIngredientDryMassTotalKg(ingredients);
+  if (biocharDryKg == null || ingredientDryKg == null || totalWetKg <= 0) {
+    return null;
+  }
+  const totalDryKg = biocharDryKg + ingredientDryKg;
+  const percent = Math.min(100, Math.max(0, (1 - totalDryKg / totalWetKg) * 100));
+  // Snap float noise (1 − 0.85 → 15.000000000000002) so a pure product's
+  // effective moisture round-trips exactly to its entered percentage.
+  return Math.round(percent * 1e6) / 1e6;
+}
+
 /** Sum of recorded positive ingredient wet masses, gram-exact. */
 export function deriveIngredientMassTotalKg(
   ingredients: readonly IngredientMassLike[] | null | undefined,

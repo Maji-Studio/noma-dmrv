@@ -21,11 +21,12 @@ import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import {
-  deriveEffectiveMoisturePercent,
-  formatWetDryMass,
-} from "@/lib/mass-moisture";
-import { fromCompositionMassJsonb } from "@/lib/biochar-composition";
+  deriveBlendEffectiveMoisturePercent,
+  fromCompositionJsonb,
+  fromCompositionMassJsonb,
+} from "@/lib/biochar-composition";
 import { resolveProductDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
 import { buildSourceAllocationAggregate } from "./source-allocation-aggregate";
@@ -185,11 +186,15 @@ export function toBiocharProductEntityOption(r: {
     code: r.code ?? r.productCode,
     name: r.name ? `${r.name} • ${productLabel}` : productLabel,
     mass: {
-      moisturePercent: deriveEffectiveMoisturePercent(
-        r.massKg,
-        r.moisturePercent,
-        r.waterAddedKg,
-      ),
+      // Composition-aware: massKg is the blend total, which the
+      // single-material moisture helper must never see (BP-26-001).
+      moisturePercent: deriveBlendEffectiveMoisturePercent({
+        blendMassKg: r.massKg,
+        waterAddedKg: r.waterAddedKg,
+        biocharMoisturePercent: r.moisturePercent,
+        ingredients: fromCompositionJsonb(r.composition),
+        sourceAllocatedDryMassKg: r.sourceAllocatedDryMassKg,
+      }),
     },
     remainingMass: {
       wetKg: remainingWetKg,
