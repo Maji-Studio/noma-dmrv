@@ -60,16 +60,19 @@ export async function downloadDocumentBlob(
     );
   }
   const provider = getStorageProvider();
-  const url = await provider.createDownloadUrl({ key: document.storageKey });
-  const response = await fetchSignedUploadWithTimeout(url, {});
-  if (!response.ok) {
+  try {
+    const object = await provider.getObject({ key: document.storageKey });
+    return {
+      blob: new Blob([new Uint8Array(object.bytes)], {
+        type: object.contentType,
+      }),
+      contentType: object.contentType,
+    };
+  } catch {
     throw new SafeError(
       "The supporting document could not be read. Upload the file again and retry the submission.",
     );
   }
-  const contentType = document.mimeType ?? "application/octet-stream";
-  const blob = await response.blob();
-  return { blob, contentType };
 }
 
 export async function putBlobToSignedUrl(

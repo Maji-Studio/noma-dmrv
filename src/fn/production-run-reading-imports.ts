@@ -142,14 +142,14 @@ function parseReadingsForImport(args: Parameters<typeof parseReadingsCsv>[0]) {
 
 async function readManagedDocumentText(storageKey: string): Promise<string> {
   const provider = getStorageProvider();
-  const url = await provider.createDownloadUrl({ key: storageKey });
-  const response = await fetch(url, { redirect: "error" });
-  if (!response.ok) {
+  try {
+    const object = await provider.getObject({ key: storageKey });
+    return object.bytes.toString("utf8");
+  } catch {
     throw new SafeError(
       "The uploaded readings file could not be read. Upload it again and retry the import.",
     );
   }
-  return response.text();
 }
 
 function assertCsvDocument(fileName: string, mimeType: string | null): void {
