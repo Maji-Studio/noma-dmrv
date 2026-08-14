@@ -81,6 +81,41 @@ describe("isometricRegistry.certifyProject — Certify project overview link", (
   });
 });
 
+describe("isometricRegistry.storageSites — project-scoped Certify link", () => {
+  it("matches the verified sandbox storage-sites URL exactly", () => {
+    expect(
+      isometricRegistry.storageSites({
+        environment: "sandbox",
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+      }),
+    ).toBe(
+      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
+    );
+  });
+
+  it("uses the public registry host in production", () => {
+    expect(
+      isometricRegistry.storageSites({
+        environment: "production",
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+      }),
+    ).toBe(
+      "https://registry.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
+    );
+  });
+
+  it("url-encodes the project id", () => {
+    expect(
+      isometricRegistry.storageSites({
+        environment: "sandbox",
+        externalProjectId: "prj a/b",
+      }),
+    ).toBe(
+      "https://registry.sandbox.isometric.com/account/certify/project/prj%20a%2Fb/storage-sites?tab=sites",
+    );
+  });
+});
+
 describe("isometricRegistry.facility — project-nested Certify link", () => {
   it("builds the sandbox Certify facility URL", () => {
     expect(

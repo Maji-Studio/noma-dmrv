@@ -227,6 +227,18 @@ export function SubmissionSummary({
               facilityName
             )}
           </Fact>
+          {externalProjectId && (
+            <Fact label="Storage sites">
+              <RegistryFactLink
+                href={isometricRegistry.storageSites({
+                  environment,
+                  externalProjectId,
+                })}
+                label="Storage sites"
+                ariaLabel="Open storage sites in Isometric in a new tab"
+              />
+            </Fact>
+          )}
           <Fact label="Reporting window">
             {facts.reportingWindowLabel ?? "Not compiled yet"}
           </Fact>

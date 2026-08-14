@@ -160,11 +160,18 @@ export function SubmitStep({
     // this removal (project-scoped, environment-specific — see links.ts). Needs
     // the facility's mapped project id; omit the link if somehow unmapped.
     const projectId = ctx.mapping?.externalProjectId ?? null;
+    const environment = ctx.isProduction ? "production" : "sandbox";
     const viewUrl = projectId
       ? isometricRegistry.removal({
-          environment: ctx.isProduction ? "production" : "sandbox",
+          environment,
           externalProjectId: projectId,
           externalRemovalId: submitMutation.data.externalId,
+        })
+      : null;
+    const storageSitesUrl = projectId
+      ? isometricRegistry.storageSites({
+          environment,
+          externalProjectId: projectId,
         })
       : null;
 
@@ -187,7 +194,18 @@ export function SubmitStep({
           </div>
         </div>
         <SubmissionProgress kind="removal" updates={progressUpdates} />
-        <div className="flex items-center justify-end gap-12">
+        <div className="flex flex-wrap items-center justify-end gap-12">
+          {storageSitesUrl && (
+            <a
+              href={storageSitesUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({ variant: "default" })}
+            >
+              View storage sites
+              <ArrowSquareOutIcon size={16} aria-hidden />
+            </a>
+          )}
           {viewUrl && (
             <a
               href={viewUrl}

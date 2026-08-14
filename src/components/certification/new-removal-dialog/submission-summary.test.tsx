@@ -107,6 +107,10 @@ describe("SubmissionSummary", () => {
     expect(html).toContain(
       "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7",
     );
+    expect(html).toContain(
+      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
+    );
+    expect(html).toContain("Storage sites");
     expect(html).toContain("Jul 1 to Jul 31, 2026");
     expect(html).toContain("CB-26-001");
     expect(html).toContain("1000-year (R₀ reflectance)");
@@ -168,6 +172,7 @@ describe("SubmissionSummary", () => {
 
     expect(html).toContain("Biochar project (Sandbox)");
     expect(html).toContain("Tanzania facility");
+    expect(html).not.toContain("Storage sites");
     expect(html).not.toContain("registry.sandbox.isometric.com");
   });
 
