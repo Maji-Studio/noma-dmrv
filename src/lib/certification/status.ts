@@ -109,9 +109,12 @@ const IN_PROGRESS: DerivedStatus = {
  * submission is in flight), so editing or deleting the records that back it
  * would silently contradict what the registry holds. `rejected` and
  * `verification-failed` stay editable — the operator must amend data to
- * resubmit. The full amendment flow is a DEC + Isometric decision
- * (docs/open-questions.md); until then this predicate is the single seam UI
- * and server guards share.
+ * resubmit. This predicate drives the UI affordances only; the server-side
+ * enforcement is `assertCanMutateCertifiedLineage` /
+ * `assertRemovalAllowsCreditBatchMutation` (data-access), which block on
+ * `BLOCKING_SUBMISSION_STATUSES` and are deliberately stricter (a stale
+ * draft submission still blocks there). The full amendment flow is a DEC +
+ * Isometric decision (docs/open-questions.md).
  */
 const REMOVAL_LOCKED_KINDS: ReadonlySet<DerivedStatusKind> = new Set([
   "in-progress",
