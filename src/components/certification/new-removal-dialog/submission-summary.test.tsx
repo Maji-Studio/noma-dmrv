@@ -111,6 +111,7 @@ describe("SubmissionSummary", () => {
       "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
     );
     expect(html).toContain("Storage sites");
+    expect(html).toContain("View in Isometric");
     expect(html).toContain("Jul 1 to Jul 31, 2026");
     expect(html).toContain("CB-26-001");
     expect(html).toContain("1000-year (R₀ reflectance)");

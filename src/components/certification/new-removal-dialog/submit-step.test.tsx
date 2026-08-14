@@ -208,7 +208,7 @@ describe("SubmitStep", () => {
     });
   });
 
-  it("links to the sandbox removal and storage sites after submission", async () => {
+  async function renderSuccessfulSubmit(ctx: RemovalCertifyContext) {
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
@@ -217,14 +217,7 @@ describe("SubmitStep", () => {
           removalId="removal-1"
           facilityId="facility-1"
           facilityName="Tanzania facility"
-          ctx={
-            {
-              ...CONTEXT,
-              mapping: {
-                externalProjectId: "prj_1K9YJ33RKSBX9FFF",
-              },
-            } as unknown as RemovalCertifyContext
-          }
+          ctx={ctx}
           onDone={vi.fn()}
           submitMutation={
             {
@@ -239,6 +232,17 @@ describe("SubmitStep", () => {
         />,
       );
     });
+
+    return renderer!;
+  }
+
+  it("links to the sandbox removal and storage sites after submission", async () => {
+    const renderer = await renderSuccessfulSubmit({
+      ...CONTEXT,
+      mapping: {
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+      },
+    } as unknown as RemovalCertifyContext);
 
     expect(findLink(renderer!, "View storage sites")?.props.href).toBe(
       "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
@@ -253,37 +257,13 @@ describe("SubmitStep", () => {
   });
 
   it("uses production links after submission", async () => {
-    let renderer: ReactTestRenderer | undefined;
-
-    await act(async () => {
-      renderer = create(
-        <SubmitStep
-          removalId="removal-1"
-          facilityId="facility-1"
-          facilityName="Tanzania facility"
-          ctx={
-            {
-              ...CONTEXT,
-              isProduction: true,
-              mapping: {
-                externalProjectId: "prj_1K9YJ33RKSBX9FFF",
-              },
-            } as unknown as RemovalCertifyContext
-          }
-          onDone={vi.fn()}
-          submitMutation={
-            {
-              mutate: vi.fn(),
-              isPending: false,
-              isSuccess: true,
-              data: { externalId: "rmv_1KT958C1JSBXF5F8", version: 1 },
-              error: null,
-              reset: vi.fn(),
-            } as never
-          }
-        />,
-      );
-    });
+    const renderer = await renderSuccessfulSubmit({
+      ...CONTEXT,
+      isProduction: true,
+      mapping: {
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+      },
+    } as unknown as RemovalCertifyContext);
 
     expect(findLink(renderer!, "View storage sites")?.props.href).toBe(
       "https://registry.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
@@ -298,29 +278,7 @@ describe("SubmitStep", () => {
   });
 
   it("omits registry actions after submission without a project mapping", async () => {
-    let renderer: ReactTestRenderer | undefined;
-
-    await act(async () => {
-      renderer = create(
-        <SubmitStep
-          removalId="removal-1"
-          facilityId="facility-1"
-          facilityName="Tanzania facility"
-          ctx={CONTEXT}
-          onDone={vi.fn()}
-          submitMutation={
-            {
-              mutate: vi.fn(),
-              isPending: false,
-              isSuccess: true,
-              data: { externalId: "rmv_1KT958C1JSBXF5F8", version: 1 },
-              error: null,
-              reset: vi.fn(),
-            } as never
-          }
-        />,
-      );
-    });
+    const renderer = await renderSuccessfulSubmit(CONTEXT);
 
     expect(findLink(renderer!, "View storage sites")).toBeUndefined();
     expect(findLink(renderer!, "View on Isometric")).toBeUndefined();

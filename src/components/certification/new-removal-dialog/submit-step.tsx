@@ -49,6 +49,9 @@ import { allowsRemovalSubmission } from "./resume-state";
 const REJECTED_IN_ISOMETRIC_MSG =
   "This Removal was rejected in Isometric. Resolve the registry record before trying again from noma.";
 
+// Design-system icon tier for icons inside button controls.
+const ACTION_ICON_SIZE = 20;
+
 interface SubmitStepProps {
   removalId: string;
   ctx: RemovalCertifyContext;
@@ -203,7 +206,7 @@ export function SubmitStep({
               className={buttonVariants({ variant: "default" })}
             >
               View storage sites
-              <ArrowSquareOutIcon size={16} aria-hidden />
+              <ArrowSquareOutIcon size={ACTION_ICON_SIZE} aria-hidden />
             </a>
           )}
           {viewUrl && (
@@ -214,7 +217,7 @@ export function SubmitStep({
               className={buttonVariants({ variant: "default" })}
             >
               View on Isometric
-              <ArrowSquareOutIcon size={16} aria-hidden />
+              <ArrowSquareOutIcon size={ACTION_ICON_SIZE} aria-hidden />
             </a>
           )}
           <Button variant="primary" onClick={onDone}>

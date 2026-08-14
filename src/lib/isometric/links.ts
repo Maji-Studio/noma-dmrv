@@ -43,7 +43,9 @@ export const isometricRegistry = {
       args.externalProjectId,
     )}/overview`,
   // Storage sites are managed from a project-scoped Certify page. The sites
-  // tab must be selected explicitly because the route also hosts other views:
+  // tab must be selected explicitly because the route also hosts other tabs
+  // (Biochar applications, Soil samples). Verified against a live sandbox URL
+  // on 2026-08-14: Certify's own nav normalizes /storage-sites to
   //   {host}/account/certify/project/{projectId}/storage-sites?tab=sites
   storageSites: (args: {
     environment: IsometricEnvironment;

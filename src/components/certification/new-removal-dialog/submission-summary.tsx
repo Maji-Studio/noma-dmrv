@@ -234,7 +234,7 @@ export function SubmissionSummary({
                   environment,
                   externalProjectId,
                 })}
-                label="Storage sites"
+                label="View in Isometric"
                 ariaLabel="Open storage sites in Isometric in a new tab"
               />
             </Fact>

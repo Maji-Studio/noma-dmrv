@@ -82,7 +82,7 @@ describe("isometricRegistry.certifyProject — Certify project overview link", (
 });
 
 describe("isometricRegistry.storageSites — project-scoped Certify link", () => {
-  it("matches the verified sandbox storage-sites URL exactly", () => {
+  it("builds the project-scoped sandbox storage-sites URL", () => {
     expect(
       isometricRegistry.storageSites({
         environment: "sandbox",
