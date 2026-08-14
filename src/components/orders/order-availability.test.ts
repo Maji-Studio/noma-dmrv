@@ -14,10 +14,4 @@ describe("orderAvailabilityWarning", () => {
     expect(orderAvailabilityWarning("", 800)).toBeUndefined();
     expect(orderAvailabilityWarning(1_000, null)).toBeUndefined();
   });
-
-  it("suppresses the mismatched full-order comparison in edit mode", () => {
-    expect(
-      orderAvailabilityWarning(1_000, 400, { suppress: true }),
-    ).toBeUndefined();
-  });
 });

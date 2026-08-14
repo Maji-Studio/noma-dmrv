@@ -19,6 +19,8 @@ export interface EntityOption {
     wetKg: number | null;
     /** Omit for wet-only materials; null renders an explicit unknown dry mass. */
     dryKg?: number | null;
+    /** Qualifies figures whose delivered mass excludes the order being edited. */
+    labelVariant?: "excluding-this-order";
   };
 }
 

@@ -48,6 +48,16 @@ const searchEntitiesSchema = z
         message: "The facility filter is invalid. Refresh the page and try again.",
       });
     }
+    if (
+      data.filterBy?.excludeOrderId !== undefined &&
+      !z.uuid().safeParse(data.filterBy.excludeOrderId).success
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["filterBy", "excludeOrderId"],
+        message: "The order filter is invalid. Refresh the page and try again.",
+      });
+    }
   });
 
 /**
@@ -65,16 +75,24 @@ export async function searchEntitiesFn(
   }, { zodErrorPrefix: "Invalid search parameters", fallbackMessage: "Failed to search entities" });
 }
 
+const entityByIdFilterSchema = z
+  .object({
+    excludeOrderId: z.uuid().optional(),
+  })
+  .optional();
+
 /**
  * Get a single entity by ID
  */
 export async function getEntityByIdFn(
   entityType: unknown,
-  id: unknown
+  id: unknown,
+  filterBy?: unknown,
 ): Promise<ActionResult<EntityOption | null>> {
   return withAction(async (ctx) => {
     const validatedType = entityTypeSchema.parse(entityType);
     const validatedId = z.string().uuid().parse(id);
-    return getEntityById(ctx, validatedType, validatedId);
+    const validatedFilterBy = entityByIdFilterSchema.parse(filterBy);
+    return getEntityById(ctx, validatedType, validatedId, validatedFilterBy);
   }, { zodErrorPrefix: "Invalid entity parameters", fallbackMessage: "Failed to fetch entity" });
 }
