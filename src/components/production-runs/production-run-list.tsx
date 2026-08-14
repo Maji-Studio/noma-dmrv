@@ -73,6 +73,7 @@ import {
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 function productionRunDetailHref(run: ProductionRunWithRelations) {
   const params = new URLSearchParams({
@@ -125,7 +126,9 @@ function createColumns(
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => <span>{row.original.facilityName || "Not available"}</span>,
+      cell: ({ row }) => (
+        <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
+      ),
     },
     {
       id: "reactor",
@@ -501,8 +504,8 @@ export function ProductionRunList() {
           title="Biochar Output"
           value={
             <MassPair
-              wetKg={statsData?.totalBiocharKg ?? 0}
-              dryKg={statsData ? statsData.totalBiocharDryKg : 0}
+              wetKg={statsData?.totalBiocharKg ?? null}
+              dryKg={statsData?.totalBiocharDryKg ?? null}
             />
           }
           valueLayout="breakdown"

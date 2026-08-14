@@ -7,7 +7,7 @@
 
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, SQL } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { countRows, sumNumeric } from "@/db/aggregate";
+import { countRows, sumNullableNumeric } from "@/db/aggregate";
 import {
   feedstocks,
   feedstockTypes,
@@ -146,7 +146,7 @@ export interface PaginatedFeedstocks {
 
 export interface FeedstockStats {
   totalFeedstocks: number;
-  totalDryMassKg: number;
+  totalDryMassKg: number | null;
   avgMoisturePercent: number | null;
   completeFeedstocks: number;
   missingDataFeedstocks: number;
@@ -390,7 +390,7 @@ export async function getFeedstockStats(
   const [stats] = await db
     .select({
       totalFeedstocks: count(),
-      totalDryMassKg: sumNumeric(feedstocks.massDryKg),
+      totalDryMassKg: sumNullableNumeric(feedstocks.massDryKg),
       avgMoisturePercent: sql<number | null>`case when sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.massWetKg} end) > 0 then sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.moistureContentPercent} * ${feedstocks.massWetKg} end) / sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.massWetKg} end) else null end`,
       completeFeedstocks: countRows(sql`${feedstocks.status} = 'complete'`),
       missingDataFeedstocks: countRows(

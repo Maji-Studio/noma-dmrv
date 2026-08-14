@@ -38,6 +38,7 @@ import {
   useUpdateFeedstockType,
 } from "@/hooks/use-feedstock-types";
 import type { FeedstockTypeFormData } from "@/schemas/feedstock-types";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { FeedstockTypeForm } from "./feedstock-type-form";
 import { FeedstockTypeSampling } from "./feedstock-type-sampling";
 
@@ -175,7 +176,9 @@ function createColumns(params: {
       accessorFn: (row) => row.isometricFeedstockTypeId ?? "",
       cell: ({ row }) => (
         <MutedValue archived={!!row.original.archivedAt}>
-          {row.original.isometricFeedstockTypeId ? <IsometricLinkedBadge /> : "Not linked"}
+          {row.original.isometricFeedstockTypeId
+            ? <IsometricLinkedBadge />
+            : MISSING_VALUE.notSet}
         </MutedValue>
       ),
     },

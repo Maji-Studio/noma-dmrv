@@ -17,6 +17,7 @@ import type {
   StorageLocationSortKey,
   StorageLocationType,
 } from "@/schemas/storage-locations";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** Bin types in production-flow order — feedstock in, product out. */
 export const STORAGE_LANE_ORDER = [
@@ -185,10 +186,6 @@ export function binCapacityPercent(
  */
 const PURE_BIOCHAR_PRODUCT = "Pure biochar";
 
-/** A feedstock bin without a type, on the other hand, is a real gap: the form
- *  requires one, so only legacy rows can reach this. */
-const UNASSIGNED_FEEDSTOCK = "Unassigned";
-
 /**
  * The tile's headline: what the bin holds, not what it is called.
  *
@@ -203,7 +200,7 @@ export function binMaterialName(bin: StorageLocationWithFacility): string {
     return (
       bin.feedstockTypeName ??
       bin.feedstockInventory.feedstockTypes[0] ??
-      UNASSIGNED_FEEDSTOCK
+      MISSING_VALUE.notSet
     );
   }
   if (bin.type === "product_bin") {

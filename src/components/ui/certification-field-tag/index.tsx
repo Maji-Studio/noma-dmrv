@@ -27,7 +27,19 @@ const STATUS_STYLES: Record<CertFieldStatus, string> = {
     "border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] text-[var(--st-ok)]",
 };
 
-const STATUS_DESCRIPTION: Record<CertFieldStatus, string> = {
+/**
+ * The chip's own explanation, and the **requiredness legend seam** (DR-015).
+ *
+ * A form carries two independent requiredness systems: the red asterisk on
+ * `FormField` (`@/components/forms/form-field`) blocks *saving*, this CERT chip
+ * blocks *certification*. Nothing on screen tells an operator that, and the
+ * legend's wording is an open decision — see `docs/open-questions.md`.
+ *
+ * When that decision lands, build the legend from this map plus the asterisk's
+ * `sr-only` "Required" copy, and mount it once per form/read sheet. Do not
+ * retype either explanation at the legend: one source, two surfaces.
+ */
+export const CERT_FIELD_STATUS_DESCRIPTION: Record<CertFieldStatus, string> = {
   neutral: "Required for certification",
   missing: "Required for certification. Not provided.",
   satisfied: "Required for certification. Provided.",
@@ -58,7 +70,7 @@ export function CertificationFieldTag({
   description,
   status = "neutral",
 }: CertificationFieldTagProps) {
-  const explanation = description ?? STATUS_DESCRIPTION[status];
+  const explanation = description ?? CERT_FIELD_STATUS_DESCRIPTION[status];
   return (
     // The badge recurs ~10×/form, so the same explanation is exposed two ways
     // without adding it to the tab order (that many stops would swamp keyboard

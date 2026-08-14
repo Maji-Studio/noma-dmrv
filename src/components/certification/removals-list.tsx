@@ -34,6 +34,7 @@ import {
 } from "@/hooks/use-certification";
 import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
 import {
@@ -132,7 +133,11 @@ function RemovalCell({ summary }: { summary: RemovalListRow }) {
 function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
   const { memberBatchCodes } = summary;
   if (memberBatchCodes.length === 0) {
-    return <span className="body-small text-[var(--color-text-tertiary)]">None</span>;
+    return (
+      <span className="body-small text-[var(--color-text-tertiary)]">
+        {MISSING_VALUE.none}
+      </span>
+    );
   }
   return (
     <div className="flex flex-col gap-2 min-w-0">

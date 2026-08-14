@@ -100,8 +100,8 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
       {
         label: "Feedstock types",
         value:
-          storageLocation.feedstockInventory.feedstockTypes.join(", ") ||
-          "No feedstock assigned",
+          storageLocation.feedstockInventory.feedstockTypes.join(", ") || null,
+        emptySituation: "none" as const,
       },
     ];
   }
@@ -126,8 +126,8 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
       {
         label: "Downstream formulations",
         value:
-          storageLocation.biocharInventory.downstreamFormulations.join(", ") ||
-          "No linked formulations",
+          storageLocation.biocharInventory.downstreamFormulations.join(", ") || null,
+        emptySituation: "none" as const,
       },
     ];
   }
@@ -168,8 +168,8 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
     {
       label: "Formulations",
       value:
-        storageLocation.productInventory.formulationNames.join(", ") ||
-        "No products assigned",
+        storageLocation.productInventory.formulationNames.join(", ") || null,
+      emptySituation: "none" as const,
     },
   ];
 }

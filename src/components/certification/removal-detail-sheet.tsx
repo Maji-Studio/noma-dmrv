@@ -32,6 +32,7 @@ import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SyncEventLog } from "./sync-event-log";
 import type { RemovalListRow } from "./removal-list-state";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface RemovalDetailSheetProps {
   summary: RemovalListRow;
@@ -192,7 +193,7 @@ export function RemovalDetailSheet({
             <Field label="Reporting window">{window}</Field>
             <Field label={`Credit batches (${summary.memberBatchCodes.length})`}>
               <span className="font-mono">
-                {summary.memberBatchCodes.join(", ") || "None"}
+                {summary.memberBatchCodes.join(", ") || MISSING_VALUE.none}
               </span>
             </Field>
 

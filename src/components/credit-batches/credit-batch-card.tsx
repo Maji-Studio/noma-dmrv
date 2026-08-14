@@ -12,6 +12,7 @@ import { isRemovalStatusLocked } from "@/lib/certification/status";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { CreditBatchLifecycleRail } from "./credit-batch-lifecycle";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface CreditBatchCardProps {
   creditBatch: CreditBatchWithRelations;
@@ -130,7 +131,7 @@ export function CreditBatchCard({
             <span className="title-heading-3 leading-none">
               {creditBatch.appliedWeightTons != null
                 ? `${creditBatch.appliedWeightTons.toFixed(2)} t`
-                : "Not recorded"}
+                : MISSING_VALUE.notRecorded}
             </span>
           </div>
           {co2eStored != null && (

@@ -17,6 +17,16 @@ export function sumNumeric(
 }
 
 /**
+ * SUM(expr), coerced to number while preserving NULL for an empty or all-NULL
+ * set. Use when zero and an unreported aggregate have different meanings.
+ */
+export function sumNullableNumeric(expr: SQLWrapper): SQL<number | null> {
+  return sql<number | null>`SUM(${expr})`.mapWith((value) =>
+    value === null ? null : Number(value),
+  );
+}
+
+/**
  * AVG(expr), coerced to number by construction while preserving NULL for an
  * empty or all-NULL set. Postgres returns numeric aggregates as text; the
  * decoder coerces non-NULL values at the driver boundary (#402).

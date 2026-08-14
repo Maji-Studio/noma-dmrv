@@ -11,7 +11,9 @@
 
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate } from "@/lib/format-utils";
+import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
 
 // Per-run categorical palette for the dry-output composition bar. Accent hues
 // (not semantic good/warn/critical) so adjacent segments stay distinguishable;
@@ -36,52 +38,31 @@ export interface CohortInputTotals {
   electricityKwh: number | null;
 }
 
-/**
- * Sum a set of nullable per-run pickers across the cohort. Returns null (→ "—")
- * when no selected run reported any value, so an all-blank category reads as
- * "not entered" rather than a misleading 0.
- */
-function sumNullable(
-  runs: CreditBatchProductionRunOption[],
-  pickers: Array<(run: CreditBatchProductionRunOption) => number | null>,
-): number | null {
-  let total = 0;
-  let hasValue = false;
-  for (const run of runs) {
-    for (const pick of pickers) {
-      const value = pick(run);
-      if (value != null) {
-        total += value;
-        hasValue = true;
-      }
-    }
-  }
-  return hasValue ? total : null;
-}
-
 /** Pure aggregation over the selected cohort — unit-tested independently. */
 export function computeCohortInputTotals(
   runs: CreditBatchProductionRunOption[],
 ): CohortInputTotals {
   return {
-    dryOutputKg: sumNullable(runs, [(r) => r.biocharDryMassKg]),
-    feedstockDryKg: sumNullable(runs, [(r) => r.feedstockMassDryKg]),
-    dieselLiters: sumNullable(runs, [
-      (r) => r.dieselOperationLiters,
-      (r) => r.dieselGensetLiters,
-      (r) => r.preprocessingFuelLiters,
-    ]),
-    electricityKwh: sumNullable(runs, [(r) => r.electricityKwh]),
+    dryOutputKg: sumNullableBy(runs, (run) => run.biocharDryMassKg),
+    feedstockDryKg: sumNullableBy(runs, (run) => run.feedstockMassDryKg),
+    dieselLiters: sumNullable(
+      runs.flatMap((run) => [
+        run.dieselOperationLiters,
+        run.dieselGensetLiters,
+        run.preprocessingFuelLiters,
+      ]),
+    ),
+    electricityKwh: sumNullableBy(runs, (run) => run.electricityKwh),
   };
 }
 
 function formatTonnesFromKg(kg: number | null): string {
-  if (kg == null) return "Not recorded";
+  if (kg == null) return MISSING_VALUE.notRecorded;
   return kgToTonnes(kg).toFixed(2);
 }
 
 function formatQuantity(value: number | null): string {
-  if (value == null) return "Not recorded";
+  if (value == null) return MISSING_VALUE.notRecorded;
   return Math.round(value).toLocaleString();
 }
 
@@ -94,7 +75,7 @@ function Figure({
   value: string;
   unit: string;
 }) {
-  const isEmpty = value === "Not recorded";
+  const isEmpty = isMissingValueCopy(value);
   return (
     <div className="flex flex-col gap-2">
       <span className="body-caption text-[var(--color-text-tertiary)]">

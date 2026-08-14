@@ -66,6 +66,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useListPagination } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { sumNullableBy } from "@/lib/nullable-sum";
 
 // ============================================
 // Helpers
@@ -253,9 +254,9 @@ export function CreditBatchList({
     hydratedFilteredItems.length > 0 &&
     visibleCo2ePreviews.length === hydratedFilteredItems.length &&
     visibleCo2ePreviews.every((preview) => preview.co2eStoredTonnes != null);
-  const totalCo2e = visibleCo2ePreviews.reduce(
-    (sum, preview) => sum + (preview.co2eStoredTonnes ?? 0),
-    0
+  const totalCo2e = sumNullableBy(
+    visibleCo2ePreviews,
+    (preview) => preview.co2eStoredTonnes,
   );
 
   // Handlers
@@ -539,7 +540,7 @@ export function CreditBatchList({
               ? "Readiness unavailable"
               : `${totalFiltered} ${totalFiltered === 1 ? "batch" : "batches"}`}
         </span>
-        {hasCompleteCo2eSummary && (
+        {hasCompleteCo2eSummary && totalCo2e != null && (
           <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
             <LeafIcon size={16} weight="bold" aria-hidden />
             {`${totalCo2e.toFixed(2)} t CO₂e stored`}

@@ -37,6 +37,8 @@ import {
 import type { ReactorWithRelations } from "@/data-access/reactors";
 import type { Reactor } from "@/db/schema";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { formatTotalThroughputTph } from "./reactor-throughput";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // ============================================
 // Column Definitions
@@ -65,7 +67,7 @@ function createColumns(
       header: "Facility",
       cell: ({ row }) => (
         <div className="flex flex-col">
-          <span>{row.original.facilityName || "Not available"}</span>
+          <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
           {row.original.facilityCode && (
             <span className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
               {row.original.facilityCode}
@@ -214,7 +216,7 @@ export function ReactorList() {
     isLoading,
     setCurrentPage,
   });
-  const totalThroughputTph = reactors.reduce((sum, r) => sum + (r.nominalThroughputTph || 0), 0);
+  const totalThroughputValue = formatTotalThroughputTph(reactors);
   const hasActiveSearch = searchInput.trim().length > 0;
 
   if (!contextFacilityId) {
@@ -274,7 +276,7 @@ export function ReactorList() {
         />
         <StatCard
           title="Throughput on This Page"
-          value={`${totalThroughputTph.toLocaleString()} tph`}
+          value={totalThroughputValue}
           icon={<FlaskIcon size={24} weight="bold" />}
           description="Combined nominal throughput on this page"
           isLoading={isLoading}

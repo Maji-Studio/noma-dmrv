@@ -6,6 +6,7 @@ import { ServerError } from "@/components/forms";
 import { ConfirmActionDialog } from "@/components/certification/confirm-action-dialog";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   useMethodBEligibility,
   useStartNewProductionProcess,
@@ -68,7 +69,7 @@ export function FeedstockTypeSampling({
   const status = eligibility.data;
   const moisturePathway = status.moisturePathway
     ? MOISTURE_PATHWAY_LABELS[status.moisturePathway] ?? status.moisturePathway
-    : "Not recorded";
+    : MISSING_VALUE.notRecorded;
 
   return (
     <div
@@ -100,7 +101,7 @@ export function FeedstockTypeSampling({
             Random sampling plan
           </dt>
           <dd className="body-small text-[var(--color-text-secondary)]">
-            {status.randomSamplingPlanRef ?? "Not recorded"}
+            {status.randomSamplingPlanRef ?? MISSING_VALUE.notRecorded}
           </dd>
         </div>
         <div className="flex flex-col gap-2">

@@ -13,6 +13,7 @@ import type {
   ThousandYearDurabilityLedgerModel,
   ThousandYearLedgerBatch,
 } from "./durability-types";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 const COL = {
   ref: 24,
@@ -111,9 +112,9 @@ function masthead(model: ThousandYearDurabilityLedgerModel): ReactElement {
   const right = v(
     styles.metaCol,
     {},
-    pair("Member batches", model.memberBatchCodes ?? "—"),
-    pair("Facility", model.facilityName ?? "—"),
-    pair("Registry project", model.externalProjectId ?? "—"),
+    pair("Member batches", model.memberBatchCodes ?? MISSING_VALUE.none),
+    pair("Facility", model.facilityName ?? MISSING_VALUE.notAvailable),
+    pair("Registry project", model.externalProjectId ?? MISSING_VALUE.notSet),
     pair(
       "Evidence set",
       `${model.batches.length} batches · ${model.totalReplicates} replicates`,
@@ -213,7 +214,7 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
       ),
       t(
         [styles.mono, { width: COL.day }],
-        replicate.samplingDay ?? "Not recorded",
+        replicate.samplingDay ?? MISSING_VALUE.notRecorded,
       ),
       t(
         [styles.mono, { width: COL.carbon, textAlign: "right" }],
@@ -222,13 +223,13 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
       t(
         [styles.mono, { width: COL.carbon, textAlign: "right" }],
         replicate.inorganicCarbonFraction == null
-          ? "Not recorded"
+          ? MISSING_VALUE.notRecorded
           : fraction(replicate.inorganicCarbonFraction),
       ),
       t(
         [styles.mono, { width: COL.carbon, textAlign: "right" }],
         replicate.calculatedOrganicCarbonFraction == null
-          ? "Not available"
+          ? MISSING_VALUE.notAvailable
           : fraction(replicate.calculatedOrganicCarbonFraction),
       ),
       t(
