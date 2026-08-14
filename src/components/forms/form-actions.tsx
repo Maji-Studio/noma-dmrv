@@ -5,9 +5,11 @@
  * Sticky by default (side-sheet forms); pass `sticky={false}` for nested
  * inline forms (e.g. transport legs, child-entity editors).
  */
+"use client";
 
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { useSideSheetActions } from "@/components/ui/entity-side-sheet/side-sheet-context";
 import { ServerError } from "./server-error";
 
 interface FormActionsProps {
@@ -51,6 +53,14 @@ export function FormActions({
   submitType = "submit",
   onSubmitClick,
 }: FormActionsProps) {
+  // A sticky CTA row inside an EntitySideSheet routes Cancel through the
+  // sheet (edit -> back to read view, create -> guarded close) so every sheet
+  // form behaves the same without per-list wiring. Nested inline forms
+  // (sticky={false}) and forms inside a Modal (context barrier) keep the
+  // caller-supplied handler.
+  const sheetActions = useSideSheetActions();
+  const handleCancel =
+    sticky && sheetActions ? sheetActions.cancel : onCancel;
   return (
     <div
       className={cn(
@@ -75,8 +85,8 @@ export function FormActions({
         >
           {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
         </Button>
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
+        {handleCancel && (
+          <Button type="button" variant="default" onClick={handleCancel} disabled={isSubmitting}>
             {cancelLabel}
           </Button>
         )}

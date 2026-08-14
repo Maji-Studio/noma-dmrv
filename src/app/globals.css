@@ -8,6 +8,13 @@
   transform: translateX(100%);
 }
 
+/* Base UI marks the fully-closed popup with the `hidden` attribute, but the
+   popup's own `display: flex` class outranks the UA's [hidden] rule, which
+   left an invisible drawer's controls in the tab order and a11y tree. */
+.slide-over-panel-popup[hidden] {
+  display: none;
+}
+
 .slide-over-panel-popup[data-ending-style] {
   transform: translateX(100%);
 }
