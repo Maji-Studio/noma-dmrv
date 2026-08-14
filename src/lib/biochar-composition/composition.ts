@@ -8,6 +8,7 @@
 
 import type { IngredientBin } from "./types";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
+import { PERCENT_SCALE } from "@/lib/mass-moisture";
 
 interface FormulationIngredientLike {
   id: string;
@@ -94,6 +95,9 @@ export const ZERO_SOURCE_BIOCHAR_WARNING =
 
 export const GRAMS_PER_KILOGRAM = 1_000;
 
+/** Pins derived blend moisture to six-decimal precision. */
+const MOISTURE_SNAP_FACTOR = 1e6;
+
 export function toPersistedMassGrams(massKg: number): number {
   return Math.round(massKg * GRAMS_PER_KILOGRAM);
 }
@@ -168,6 +172,66 @@ export function deriveBlendMassKg(
     sumRecordedIngredientMassKg(ingredients),
   );
   return (biocharMassGrams + ingredientMassGrams) / GRAMS_PER_KILOGRAM;
+}
+
+/**
+ * The finished product's effective moisture: 1 − totalDry/totalWet across the
+ * whole blend (biochar dry + ingredient dry snapshots over blend mass plus
+ * added water). This is the ONE product-level moisture figure — the
+ * single-material `deriveEffectiveMoisturePercent` in `mass-moisture` must
+ * not be fed a blend mass (its module header says so), which is exactly the
+ * mistake behind DR-002 / BP-26-001 (list said 26.1%, form said 34.3%).
+ * Returns null when the composition cannot account for its dry mass (an
+ * ingredient without a dry snapshot, or no biochar dry mass derivable).
+ */
+export function deriveBlendEffectiveMoisturePercent({
+  blendMassKg,
+  waterAddedKg,
+  biocharMoisturePercent,
+  ingredients,
+  sourceAllocatedDryMassKg,
+}: {
+  blendMassKg: number | null | undefined;
+  waterAddedKg: number | null | undefined;
+  biocharMoisturePercent: number | null | undefined;
+  ingredients: readonly IngredientMassLike[] | null | undefined;
+  /** Allocation-tracked biochar dry mass; wins over the moisture derivation. */
+  sourceAllocatedDryMassKg?: number | null;
+}): number | null {
+  if (
+    typeof blendMassKg !== "number" ||
+    !Number.isFinite(blendMassKg) ||
+    blendMassKg <= 0
+  ) {
+    return null;
+  }
+  if (
+    (waterAddedKg != null &&
+      (!Number.isFinite(waterAddedKg) || waterAddedKg < 0)) ||
+    (sourceAllocatedDryMassKg != null &&
+      (!Number.isFinite(sourceAllocatedDryMassKg) ||
+        sourceAllocatedDryMassKg < 0))
+  ) {
+    return null;
+  }
+  const totalWetKg = blendMassKg + (waterAddedKg ?? 0);
+  const biocharDryKg =
+    sourceAllocatedDryMassKg ??
+    deriveSourceBiocharDryMassKg(blendMassKg, biocharMoisturePercent, ingredients);
+  const ingredientDryKg = deriveIngredientDryMassTotalKg(ingredients);
+  if (biocharDryKg == null || ingredientDryKg == null || totalWetKg <= 0) {
+    return null;
+  }
+  const totalDryKg = biocharDryKg + ingredientDryKg;
+  const percent = Math.min(
+    PERCENT_SCALE,
+    Math.max(0, (1 - totalDryKg / totalWetKg) * PERCENT_SCALE),
+  );
+  // Snap float noise (1 − 0.85 → 15.000000000000002) so a pure product's
+  // effective moisture round-trips exactly to its entered percentage.
+  return (
+    Math.round(percent * MOISTURE_SNAP_FACTOR) / MOISTURE_SNAP_FACTOR
+  );
 }
 
 /** Sum of recorded positive ingredient wet masses, gram-exact. */

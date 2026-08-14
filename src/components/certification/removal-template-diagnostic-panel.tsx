@@ -4,34 +4,89 @@ import { useState } from "react";
 import {
   FlowArrowIcon,
   MagnifyingGlassIcon,
-  TableIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
 import { useRemovalTemplateDiagnostic } from "@/hooks/use-certification";
 import type { RemovalTemplateDiagnosticAvailability } from "@/fn/certification";
 import type { RemovalTemplateDiagnosticStatus } from "@/lib/certification/removal-template-diagnostic";
-import { RemovalTemplateLineageView } from "./removal-template-lineage-view";
 import { RemovalTemplateMappingView } from "./removal-template-mapping-view";
 import { RemovalTemplateTraceView } from "./removal-template-trace-view";
 import {
   REMOVAL_TEMPLATE_STATUS_LABELS,
+  REMOVAL_TEMPLATE_TONE_COLORS,
   RemovalTemplateAggregateStatusBadge,
   RemovalTemplateDiagnosticStatusBadge,
+  summarizeRemovalTemplateMappingOverview,
+  type RemovalTemplateStatusTone,
 } from "./removal-template-diagnostic-status";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
-type DiagnosticView = "mapping" | "lineage" | "trace";
+type DiagnosticView = "mapping" | "trace";
 
 const VIEWS: Array<{
   key: DiagnosticView;
   label: string;
-  icon: typeof TableIcon;
+  icon: typeof FlowArrowIcon;
 }> = [
-  { key: "mapping", label: "Mapping", icon: TableIcon },
-  { key: "lineage", label: "Lineage", icon: FlowArrowIcon },
+  { key: "mapping", label: "Mapping", icon: FlowArrowIcon },
   { key: "trace", label: "Removal trace", icon: MagnifyingGlassIcon },
 ];
+
+const TONE_SUMMARY: Array<{ tone: RemovalTemplateStatusTone; label: string }> =
+  [
+    { tone: "ok", label: "mapped" },
+    { tone: "neutral", label: "registry-owned or optional" },
+    { tone: "attention", label: "attention needed" },
+  ];
+
+function MappingOverview({
+  counts,
+}: {
+  counts: Record<RemovalTemplateDiagnosticStatus, number>;
+}) {
+  const { toneCounts, total } = summarizeRemovalTemplateMappingOverview(counts);
+  if (total === 0) {
+    return null;
+  }
+  return (
+    <div className="sm:col-span-2 lg:col-span-4">
+      <p className="label-micro text-[var(--color-text-tertiary)]">
+        Mapping overview
+      </p>
+      <div
+        aria-hidden
+        className="mt-6 flex h-[6px] w-full overflow-hidden bg-[var(--st-off-bg)]"
+      >
+        {TONE_SUMMARY.map(({ tone }) =>
+          toneCounts[tone] > 0 ? (
+            <span
+              key={tone}
+              style={{
+                width: `${(toneCounts[tone] / total) * 100}%`,
+                backgroundColor: REMOVAL_TEMPLATE_TONE_COLORS[tone],
+              }}
+            />
+          ) : null,
+        )}
+      </div>
+      <p className="mt-6 flex flex-wrap gap-x-16 gap-y-4 body-caption text-[var(--color-text-secondary)]">
+        {TONE_SUMMARY.map(({ tone, label }) => (
+          <span key={tone} className="inline-flex items-center gap-6">
+            <span
+              aria-hidden
+              className="size-[6px]"
+              style={{
+                backgroundColor: REMOVAL_TEMPLATE_TONE_COLORS[tone],
+              }}
+            />
+            {toneCounts[tone]} {label}
+          </span>
+        ))}
+      </p>
+    </div>
+  );
+}
 
 const STATUS_LEGEND: RemovalTemplateDiagnosticStatus[] = [
   "mapped",
@@ -109,7 +164,7 @@ export function RemovalTemplateDiagnosticPanel({
 
   return (
     <div className="flex flex-col gap-20">
-      <section className="grid gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <p className="label-micro text-[var(--color-text-tertiary)]">
             Environment
@@ -176,6 +231,7 @@ export function RemovalTemplateDiagnosticPanel({
             </p>
           )}
         </div>
+        {data.diagnostic && <MappingOverview counts={data.diagnostic.counts} />}
       </section>
 
       {unavailable || !data.diagnostic ? (
@@ -239,9 +295,6 @@ export function RemovalTemplateDiagnosticPanel({
           >
             {view === "mapping" && (
               <RemovalTemplateMappingView model={data.diagnostic} />
-            )}
-            {view === "lineage" && (
-              <RemovalTemplateLineageView model={data.diagnostic} />
             )}
             {view === "trace" && (
               <RemovalTemplateTraceView

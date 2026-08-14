@@ -165,9 +165,11 @@ function sourceLabel(source: string): string {
   return SOURCE_LABELS[source] ?? readableKey(source);
 }
 
+export const IDENTITY_TRANSFORM_LABEL = "Unchanged";
+
 function transformLabel(transformRevision: string | undefined): string {
   if (!transformRevision || transformRevision === "identity-v1") {
-    return "Unchanged";
+    return IDENTITY_TRANSFORM_LABEL;
   }
   if (transformRevision === "percent-to-fraction-v1") return "Divide by 100";
   return `Apply ${transformRevision}`;
@@ -602,7 +604,7 @@ function optionalNotPresent(
 
 /**
  * Normalizes the active Removal template against the exact production mapping
- * seams. Mapping, lineage, and Removal trace views consume this one model.
+ * seams. Mapping and Removal trace views consume this one model.
  */
 export function buildRemovalTemplateDiagnostic(
   args: BuildRemovalTemplateDiagnosticArgs,

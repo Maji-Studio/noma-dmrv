@@ -47,6 +47,7 @@ import {
 } from "../lane-stock-derivation";
 import {
   productDryBiocharKgSql,
+  productWetMassKgSql,
   sourceBiocharMassKgSql,
 } from "../biochar-product-source-mass";
 
@@ -375,7 +376,10 @@ function buildInventoryAggregates(
   .select({
     storageLocationId: biocharProducts.storageLocationId,
     totalProductKg: sumNumeric(
-      sql`COALESCE(${biocharProducts.massKg}, 0) + COALESCE(${biocharProducts.waterAddedKg}, 0)`,
+      productWetMassKgSql(
+        biocharProducts.massKg,
+        biocharProducts.waterAddedKg,
+      ),
     ).as("total_product_kg"),
     totalProductDryKg: sumNumeric(productDryBiocharKgSql(
       biocharProducts.id,

@@ -88,6 +88,24 @@ describe("formatMass", () => {
   });
 });
 
+describe("formatCo2e", () => {
+  it("keeps kilograms whole below a tonne and gives tonnes three decimals", () => {
+    expect(formatCo2e(15.4)).toBe("15 kg CO₂e");
+    expect(formatCo2e(3_704)).toBe("3.704 t CO₂e");
+  });
+
+  it("returns the shared missing marker for null and undefined", () => {
+    expect(formatCo2e(null)).toBe("Not available");
+    expect(formatCo2e(undefined)).toBe("Not available");
+  });
+
+  it("signs from the displayed magnitude so a rounded zero stays unsigned", () => {
+    expect(formatCo2e(1_040, { signed: true })).toBe("+1.04 t CO₂e");
+    expect(formatCo2e(-15.4, { signed: true })).toBe("−15 kg CO₂e");
+    expect(formatCo2e(0.4, { signed: true })).toBe("0 kg CO₂e");
+  });
+});
+
 describe("formatPercent", () => {
   it("preserves requested lab precision", () => {
     expect(formatPercent(1.96, { digits: 2 })).toBe("1.96%");

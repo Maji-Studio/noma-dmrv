@@ -156,6 +156,7 @@ export async function getEntities(
       return getBiocharProducts(ctx, {
         search,
         facilityId: filterBy?.facilityId,
+        excludeOrderId: filterBy?.excludeOrderId,
         limit,
       });
     case "order":
@@ -174,7 +175,10 @@ export async function getEntities(
 export async function getEntityById(
   ctx: OrgContext,
   entityType: EntityType,
-  id: string
+  id: string,
+  // Same idea as getEntities' filterBy; only adapters that derive
+  // per-caller figures (biocharProduct's remaining stock) consume it.
+  filterBy?: { excludeOrderId?: string },
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
   switch (entityType) {
@@ -205,7 +209,9 @@ export async function getEntityById(
     case "formulation":
       return getFormulationEntityById(ctx, id);
     case "biocharProduct":
-      return getBiocharProductEntityById(ctx, id);
+      return getBiocharProductEntityById(ctx, id, {
+        excludeOrderId: filterBy?.excludeOrderId,
+      });
     case "order":
       return getOrderEntityById(ctx, id);
     case "creditBatch":

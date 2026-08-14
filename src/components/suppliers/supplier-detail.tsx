@@ -16,13 +16,31 @@ import {
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
+import type { DetailPanelField } from "@/components/ui/detail-panel";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { SupplierLocationDialog } from "./supplier-location-dialog";
 import { resolveSupplierLocationDisplay } from "@/lib/supplier-location-display";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { buildSupplierFallbackDistanceField } from "./supplier-detail-fields";
 
 interface SupplierDetailProps {
   supplierId: string;
+}
+
+export function SupplierFallbackDistanceSummary({
+  field,
+}: {
+  field: DetailPanelField;
+}) {
+  return (
+    <div>
+      <dt className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+        {field.label}
+        <CertificationFieldTag status={field.certifyStatus} />
+      </dt>
+      <dd className="body-medium mt-16">{field.value}</dd>
+    </div>
+  );
 }
 
 export function SupplierDetail({ supplierId }: SupplierDetailProps) {
@@ -63,6 +81,14 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
       </div>
     );
   }
+
+  const fallbackDistanceField = buildSupplierFallbackDistanceField({
+    defaultLocationDistanceKm:
+      locations.find((location) => location.isDefault)?.distanceFromFacilityKm ??
+      null,
+    legacySupplierDistanceKm: supplier.distanceToFacilityKm,
+    locationsLoaded: true,
+  });
 
   return (
     <div className="container-max page-shell">
@@ -115,17 +141,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                 MISSING_VALUE.notRecorded}
             </dd>
           </div>
-          <div>
-            <dt className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Distance to facility
-              <CertificationFieldTag />
-            </dt>
-            <dd className="body-medium mt-16">
-              {supplier.distanceToFacilityKm != null
-                ? `${supplier.distanceToFacilityKm} km`
-                : MISSING_VALUE.notSet}
-            </dd>
-          </div>
+          <SupplierFallbackDistanceSummary field={fallbackDistanceField} />
         </div>
       </div>
 
