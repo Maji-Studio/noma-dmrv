@@ -2,6 +2,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DeliveryMassPreview } from "./delivery-mass-preview";
 
+const PERSISTED_WET_MASS_KG = 2_500;
+const PERSISTED_DRY_MASS_KG = 1_970;
+
 describe("DeliveryMassPreview", () => {
   it("parses watched moisture strings for the measured moisture preview", () => {
     const html = renderToStaticMarkup(
@@ -31,7 +34,10 @@ describe("DeliveryMassPreview", () => {
         allocationWetBasisKg={null}
         allocationDryBasisKg={null}
         moisturePercent="20"
-        persisted={{ deliveredWetMassKg: 2_500, massDryKg: 1_970 }}
+        persisted={{
+          deliveredWetMassKg: PERSISTED_WET_MASS_KG,
+          massDryKg: PERSISTED_DRY_MASS_KG,
+        }}
       />,
     );
 
@@ -45,7 +51,10 @@ describe("DeliveryMassPreview", () => {
         allocationWetBasisKg={null}
         allocationDryBasisKg={null}
         moisturePercent="20"
-        persisted={{ deliveredWetMassKg: 2_500, massDryKg: 1_970 }}
+        persisted={{
+          deliveredWetMassKg: PERSISTED_WET_MASS_KG,
+          massDryKg: PERSISTED_DRY_MASS_KG,
+        }}
       />,
     );
 

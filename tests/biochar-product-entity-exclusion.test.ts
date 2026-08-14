@@ -9,11 +9,11 @@
  * `excludeOrderId`, remaining means "available to other demand".
  *
  * Runs against a real database because the aggregate is a grouped SQL
- * subquery; skips when DATABASE_URL is unreachable, matching the other
- * DB-backed specs.
+ * subquery. An unavailable database fails setup so the regression cannot
+ * report a false pass without executing its assertions.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { inArray, sql } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   getBiocharProductEntityById,
@@ -28,6 +28,9 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 const PRODUCT_MASS_KG = 4_000;
 const DELIVERED_WET_KG = 4_000;
 const DELIVERED_DRY_KG = 3_000;
+const PRODUCT_MOISTURE_PERCENT = 20;
+const ENTITY_QUERY_LIMIT = 50;
+const RUN_ID_LENGTH = 8;
 
 interface Fixture {
   facilityId: string;
@@ -38,17 +41,15 @@ interface Fixture {
   deliveryId: string;
 }
 
-let dbReachable = true;
 let fixture: Fixture | null = null;
 
+function requireFixture(): Fixture {
+  if (!fixture) throw new Error("Biochar product exclusion fixture was not created");
+  return fixture;
+}
+
 beforeAll(async () => {
-  const runId = crypto.randomUUID().slice(0, 8);
-  try {
-    await db.execute(sql`select 1`);
-  } catch {
-    dbReachable = false;
-    return;
-  }
+  const runId = crypto.randomUUID().slice(0, RUN_ID_LENGTH);
   await ensureTestOrg();
   fixture = await db.transaction(async (tx) => {
     const [facility] = await tx
@@ -76,7 +77,7 @@ beforeAll(async () => {
         code: `BP-EXCL-${runId}`,
         facilityId: facility.id,
         massKg: PRODUCT_MASS_KG,
-        moistureContentPercent: 20,
+        moistureContentPercent: PRODUCT_MOISTURE_PERCENT,
       })
       .returning({ id: biocharProducts.id });
 
@@ -148,28 +149,28 @@ afterAll(async () => {
 
 describe("biochar product entity option excludeOrderId", () => {
   it("counts the order's own delivery as consumed without exclusion", async () => {
-    if (!dbReachable || !fixture) return;
+    const currentFixture = requireFixture();
     const ctx = makeTestOrgContext();
-    const option = await getBiocharProductEntityById(ctx, fixture.productId);
+    const option = await getBiocharProductEntityById(ctx, currentFixture.productId);
     expect(option?.remainingMass?.wetKg).toBe(
       PRODUCT_MASS_KG - DELIVERED_WET_KG,
     );
   });
 
   it("adds the excluded order's fulfilment back into remaining stock", async () => {
-    if (!dbReachable || !fixture) return;
+    const currentFixture = requireFixture();
     const ctx = makeTestOrgContext();
-    const option = await getBiocharProductEntityById(ctx, fixture.productId, {
-      excludeOrderId: fixture.fulfilledOrderId,
+    const option = await getBiocharProductEntityById(ctx, currentFixture.productId, {
+      excludeOrderId: currentFixture.fulfilledOrderId,
     });
     expect(option?.remainingMass?.wetKg).toBe(PRODUCT_MASS_KG);
   });
 
   it("excluding an unrelated order changes nothing", async () => {
-    if (!dbReachable || !fixture) return;
+    const currentFixture = requireFixture();
     const ctx = makeTestOrgContext();
-    const option = await getBiocharProductEntityById(ctx, fixture.productId, {
-      excludeOrderId: fixture.otherOrderId,
+    const option = await getBiocharProductEntityById(ctx, currentFixture.productId, {
+      excludeOrderId: currentFixture.otherOrderId,
     });
     expect(option?.remainingMass?.wetKg).toBe(
       PRODUCT_MASS_KG - DELIVERED_WET_KG,
@@ -177,13 +178,12 @@ describe("biochar product entity option excludeOrderId", () => {
   });
 
   it("applies the same exclusion on the list/search path", async () => {
-    if (!dbReachable || !fixture) return;
-    const { facilityId, fulfilledOrderId, productId } = fixture;
+    const { facilityId, fulfilledOrderId, productId } = requireFixture();
     const ctx = makeTestOrgContext();
     const options = await getBiocharProducts(ctx, {
       facilityId,
       excludeOrderId: fulfilledOrderId,
-      limit: 50,
+      limit: ENTITY_QUERY_LIMIT,
     });
     const option = options.find((o) => o.id === productId);
     expect(option?.remainingMass?.wetKg).toBe(PRODUCT_MASS_KG);

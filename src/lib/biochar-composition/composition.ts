@@ -205,6 +205,15 @@ export function deriveBlendEffectiveMoisturePercent({
   ) {
     return null;
   }
+  if (
+    (waterAddedKg != null &&
+      (!Number.isFinite(waterAddedKg) || waterAddedKg < 0)) ||
+    (sourceAllocatedDryMassKg != null &&
+      (!Number.isFinite(sourceAllocatedDryMassKg) ||
+        sourceAllocatedDryMassKg < 0))
+  ) {
+    return null;
+  }
   const totalWetKg = blendMassKg + (waterAddedKg ?? 0);
   const biocharDryKg =
     sourceAllocatedDryMassKg ??

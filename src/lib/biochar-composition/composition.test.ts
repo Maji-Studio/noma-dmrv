@@ -83,4 +83,41 @@ describe("deriveBlendEffectiveMoisturePercent", () => {
       }),
     ).toBeNull();
   });
+
+  it("returns null for invalid added water or allocated dry mass", () => {
+    const input = {
+      blendMassKg: 1_000,
+      biocharMoisturePercent: 20,
+      ingredients: [],
+    };
+
+    expect(
+      deriveBlendEffectiveMoisturePercent({
+        ...input,
+        waterAddedKg: Number.NaN,
+        sourceAllocatedDryMassKg: null,
+      }),
+    ).toBeNull();
+    expect(
+      deriveBlendEffectiveMoisturePercent({
+        ...input,
+        waterAddedKg: Number.POSITIVE_INFINITY,
+        sourceAllocatedDryMassKg: null,
+      }),
+    ).toBeNull();
+    expect(
+      deriveBlendEffectiveMoisturePercent({
+        ...input,
+        waterAddedKg: 0,
+        sourceAllocatedDryMassKg: -1,
+      }),
+    ).toBeNull();
+    expect(
+      deriveBlendEffectiveMoisturePercent({
+        ...input,
+        waterAddedKg: 0,
+        sourceAllocatedDryMassKg: Number.POSITIVE_INFINITY,
+      }),
+    ).toBeNull();
+  });
 });

@@ -9,10 +9,11 @@
  * showed consistent stock. The rail must equal the sum of the per-bin card
  * figures — one derivation, one arithmetic.
  *
- * Skips when DATABASE_URL is unreachable, matching the other DB-backed specs.
+ * An unavailable database fails setup so the regression cannot report a false
+ * pass without executing its assertions.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { inArray, sql } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { getStorageLocations } from "@/data-access/storage-locations";
 import { facilities } from "@/db/schema/facilities";
@@ -25,6 +26,8 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 const BLEND_MASS_KG = 3_000;
 const WATER_ADDED_KG = 1_000;
 const DELIVERED_WET_KG = 4_000;
+const PRODUCT_MOISTURE_PERCENT = 20;
+const RUN_ID_LENGTH = 8;
 
 interface Fixture {
   facilityId: string;
@@ -35,17 +38,15 @@ interface Fixture {
   deliveryId: string;
 }
 
-let dbReachable = true;
 let fixture: Fixture | null = null;
 
+function requireFixture(): Fixture {
+  if (!fixture) throw new Error("Storage location lane fixture was not created");
+  return fixture;
+}
+
 beforeAll(async () => {
-  const runId = crypto.randomUUID().slice(0, 8);
-  try {
-    await db.execute(sql`select 1`);
-  } catch {
-    dbReachable = false;
-    return;
-  }
+  const runId = crypto.randomUUID().slice(0, RUN_ID_LENGTH);
   await ensureTestOrg();
   fixture = await db.transaction(async (tx) => {
     const [facility] = await tx
@@ -86,7 +87,7 @@ beforeAll(async () => {
         storageLocationId: bin.id,
         massKg: BLEND_MASS_KG,
         waterAddedKg: WATER_ADDED_KG,
-        moistureContentPercent: 20,
+        moistureContentPercent: PRODUCT_MOISTURE_PERCENT,
       })
       .returning({ id: biocharProducts.id });
 
@@ -144,20 +145,20 @@ afterAll(async () => {
 
 describe("storage location lane summary", () => {
   it("counts added water on the intake side, so full delivery reads zero", async () => {
-    if (!dbReachable || !fixture) return;
+    const currentFixture = requireFixture();
     const ctx = makeTestOrgContext();
     const result = await getStorageLocations(ctx, {
-      facilityId: fixture.facilityId,
+      facilityId: currentFixture.facilityId,
     });
     expect(result.laneSummary.product_bin.onHandKg).toBe(0);
   });
 
   it("keeps the lane total equal to the sum of per-bin card figures", async () => {
-    if (!dbReachable || !fixture) return;
-    const { binId } = fixture;
+    const currentFixture = requireFixture();
+    const { binId } = currentFixture;
     const ctx = makeTestOrgContext();
     const result = await getStorageLocations(ctx, {
-      facilityId: fixture.facilityId,
+      facilityId: currentFixture.facilityId,
     });
     const bin = result.items.find((item) => item.id === binId);
     expect(bin).toBeDefined();
