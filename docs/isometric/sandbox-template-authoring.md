@@ -65,9 +65,9 @@ It requires at least three complete paired replicates per member credit batch.
 The registry calculates organic carbon per replicate as total minus inorganic,
 then applies the binomial lower durability estimate and 0.95 cap. noma's local
 calculation is explanatory; the registry result is authoritative. Application
-support is implemented, and the external sandbox template's read-only contract
-was verified on 2026-08-14. A fresh end-to-end sandbox submission remains
-pending.
+support is sandbox-only. Production submission remains fail-closed while the
+registry-confirmation work in
+[`open-questions-isometric.md`](../open-questions-isometric.md) remains open.
 
 `biochar_sequestration_1000_year` is a deprecated historical component with
 total-carbon and uncapped durability semantics. Do not select it for a new

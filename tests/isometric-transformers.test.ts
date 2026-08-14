@@ -239,6 +239,22 @@ describe("1000-year sequestration input sources", () => {
       }),
     ).toThrowError(/no value from the durability measurement/);
   });
+
+  it("fails loudly when the direct product-mass ID is missing", () => {
+    expect(() =>
+      bindSequestrationDatapointsToTemplate({
+        template: template([
+          {
+            id: "rtc_SEQ",
+            blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+            inputs: [{ input_key: "product_mass" }],
+          },
+        ]),
+        datapointIdsByMeasurementProperty: new Map(),
+        datapointIdsByRtcInput: new Map(),
+      }),
+    ).toThrowError(/A durability field has no submitted value/);
+  });
 });
 
 function blueprintInput(
