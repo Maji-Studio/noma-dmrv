@@ -230,8 +230,9 @@ function eligibilityBand(model: DurabilityLedgerModel): ReactElement {
   return v(styles.claim, {}, head, colHead, ...rows, foot);
 }
 
-// One right-aligned numeric replicate cell; "—" tinted faint when the value is
-// missing, plum when the inorganic figure was Eq.2-derived rather than measured.
+// One right-aligned numeric replicate cell; "Not recorded" tinted faint when the
+// value is missing, plum when the inorganic figure was Eq.2-derived rather than
+// measured.
 // `extra` is a single style object (not a nested `Style`) so the style array's
 // elements stay within react-pdf's strict Text-style typing.
 function cell(

@@ -37,6 +37,7 @@ import {
 import type { ReactorWithRelations } from "@/data-access/reactors";
 import type { Reactor } from "@/db/schema";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { formatTotalThroughputTph } from "./reactor-throughput";
 
 // ============================================
 // Column Definitions
@@ -214,7 +215,7 @@ export function ReactorList() {
     isLoading,
     setCurrentPage,
   });
-  const totalThroughputTph = reactors.reduce((sum, r) => sum + (r.nominalThroughputTph || 0), 0);
+  const totalThroughputValue = formatTotalThroughputTph(reactors);
   const hasActiveSearch = searchInput.trim().length > 0;
 
   if (!contextFacilityId) {
@@ -274,7 +275,7 @@ export function ReactorList() {
         />
         <StatCard
           title="Throughput on This Page"
-          value={`${totalThroughputTph.toLocaleString()} tph`}
+          value={totalThroughputValue}
           icon={<FlaskIcon size={24} weight="bold" />}
           description="Combined nominal throughput on this page"
           isLoading={isLoading}

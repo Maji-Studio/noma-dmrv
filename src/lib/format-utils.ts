@@ -1,5 +1,13 @@
 /**
- * Shared formatting utilities for display values
+ * Shared formatting utilities for display values.
+ *
+ * Every formatter here absorbs null itself and returns a shared missing-value
+ * token, so no component ever needs `?? 0` or a hand-written placeholder.
+ * Which token depends on what the formatter's input is, not on its unit:
+ * a value an operator records returns "Not recorded" when null and
+ * "Not available" when it cannot be parsed; a value the app derives returns
+ * "Not available", because there was never an operator to record it. The full
+ * rule lives with the vocabulary in `@/lib/copy-utils`.
  */
 
 import { format, isValid, parseISO } from "date-fns";
@@ -38,7 +46,8 @@ function parseDateValue(value: DateValue): Date | null {
 /**
  * Format a calendar date for user-facing display. Bare `YYYY-MM-DD` values are
  * parsed in local time so they cannot drift to the previous day west of UTC.
- * Returns "—" for null, undefined, or invalid values.
+ * Returns "Not recorded" for null or undefined and "Not available" for a value
+ * it cannot parse.
  */
 export function formatDate(value: DateValue): string {
   if (!value) return MISSING_VALUE.notRecorded;
@@ -56,7 +65,8 @@ const SHORT_MONTH_NAMES = [
  * WITHOUT reparsing it into an instant — the parts are read directly, so a
  * facility-local day never drifts into the viewer's timezone. Use this for
  * server-computed day strings (e.g. `nextCountableSamplingDay`); use `formatDate`
- * for `Date`/timestamp values. Returns "—" for null, undefined, or malformed input.
+ * for `Date`/timestamp values. Returns "Not recorded" for null or undefined and
+ * "Not available" for malformed input.
  */
 export function formatDayString(day: string | null | undefined): string {
   if (!day) return MISSING_VALUE.notRecorded;
@@ -69,7 +79,8 @@ export function formatDayString(day: string | null | undefined): string {
 
 /**
  * Format a date and time for user-facing display using a 24-hour clock.
- * Returns "—" for null, undefined, or invalid values.
+ * Returns "Not recorded" for null or undefined and "Not available" for a value
+ * it cannot parse.
  */
 export function formatDateTime(value: DateValue): string {
   if (!value) return MISSING_VALUE.notRecorded;
@@ -92,7 +103,8 @@ export function formatFacilityDateTimeWithOffset(
 /**
  * Format a user-facing date range. Ranges within one calendar year omit the
  * year from the start; cross-year ranges show both years in full.
- * Returns "—" when either boundary is null, undefined, or invalid.
+ * Returns "Not recorded" when either boundary is null or undefined, and
+ * "Not available" when either cannot be parsed.
  */
 export function formatDateRange(start: DateValue, end: DateValue): string {
   if (!start || !end) return MISSING_VALUE.notRecorded;
@@ -121,8 +133,8 @@ export function formatDateRange(start: DateValue, end: DateValue): string {
  * So reach for `formatMass` for a lone mass, where the tonne switch keeps big
  * numbers readable and sub-kg precision is noise. Reach for `formatMassKg` when
  * a set of related figures must stay comparable, or when the fractional part
- * carries meaning. Both formatters return `"—"` for null, undefined, and
- * `NaN`.
+ * carries meaning. Both formatters return `"Not recorded"` for null, undefined,
+ * and `NaN` — a mass is something an operator records.
  */
 export function formatMass(kg: number | null | undefined): string {
   if (kg == null || Number.isNaN(kg)) return MISSING_VALUE.notRecorded;
@@ -146,7 +158,7 @@ export function formatMassKg(kg: number | null | undefined): string {
 
 /**
  * Format a 0–100 percentage for display — one decimal by default, trailing
- * ".0" trimmed, "—" for null. Lab analytics that need more resolution pass
+ * ".0" trimmed, "Not recorded" for null. Lab analytics that need more resolution pass
  * `digits`; moisture always goes through `formatMoisturePercent`
  * (`@/lib/mass-moisture`), which pins the precision for that one quantity.
  */
@@ -164,7 +176,8 @@ export function formatPercent(
  * decimals, trailing zeros trimmed) once the magnitude reaches 1 t, otherwise
  * whole kg. Unlike `formatMass` (1-decimal tonnes) this keeps small deltas
  * legible, so a 15 kg uncertainty haircut next to a 1.04 t sequestration both
- * read true. Returns "—" for null/undefined. `signed` prepends +/− (zero stays
+ * read true. Returns "Not available" for null/undefined, because CO₂e is derived
+ * rather than recorded. `signed` prepends +/− (zero stays
  * unsigned). The unit suffix is dropped when `unit` is the empty string.
  */
 export function formatCo2e(
@@ -192,7 +205,8 @@ export function formatCo2e(
 
 /**
  * Format a value already expressed in tonnes (NOT kg — use `formatMass` for kg).
- * Returns "—" for null/undefined. Defaults to 2 decimals and a "t" unit; pass
+ * Returns "Not available" for null/undefined: callers pass derived registry and
+ * roll-up figures, not a value an operator typed. Defaults to 2 decimals and a "t" unit; pass
  * `unit: "t CO₂e"` for stored-carbon displays.
  */
 export function formatTonnes(
@@ -215,10 +229,11 @@ export function roundKmDisplay(km: number): string {
 
 /**
  * Format a distance in km for display — one decimal, locale-grouped, "km".
- * Returns "—" for null/undefined.
+ * Returns "Not recorded" for null/undefined: a leg distance is entered by an
+ * operator or resolved from their addresses.
  */
 export function formatDistanceKm(km: number | null | undefined): string {
-  if (km == null) return MISSING_VALUE.notSet;
+  if (km == null) return MISSING_VALUE.notRecorded;
   return `${roundKmDisplay(km)} km`;
 }
 

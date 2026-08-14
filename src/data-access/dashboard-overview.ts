@@ -88,7 +88,7 @@ export interface DashboardKpi {
   label: string;
   /** Display unit, e.g. "t", "tCO₂e". */
   unit: string;
-  /** Null = no data in range (render "—", not 0). */
+  /** Null = no data in range (render "Not available", not 0). */
   value: number | null;
   /** Percent change vs the previous equal-length period; null when not comparable. */
   deltaPercent: number | null;

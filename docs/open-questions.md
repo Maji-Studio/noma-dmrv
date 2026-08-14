@@ -971,3 +971,39 @@ applied weeks after production, so a run completed late in a crediting period
 blocks an otherwise-complete batch until its product is applied. The sub-commit
 says deliberate; needs a product confirmation that this is the intended
 operational tradeoff, and this is not a registry requirement we verified.
+
+## Design review 2026-08-13 follow-ups (opened 2026-08-14)
+
+### The two requiredness systems have no legend, and its wording is undecided (`ui/requiredness-legend`) — DR-015
+
+A form carries two independent requiredness markers and explains neither. The
+red asterisk rendered by `FormField` (`src/components/forms/form-field.tsx`)
+means the field blocks **saving**; the `CertificationFieldTag`
+(`src/components/ui/certification-field-tag/index.tsx`) means the field blocks
+**certification**. An operator sees a red star and an orange "CERT" chip on the
+same row with nothing that distinguishes them.
+
+The fix is one legend, mounted once per form and read sheet, built from
+`CERT_FIELD_STATUS_DESCRIPTION` plus the asterisk's `sr-only` "Required" copy
+(both already single-sourced — the seam is marked in the tag module). What is
+**not** decided is the legend's wording, its placement (sheet header vs footer
+vs an info hint), and whether it appears on every form or only on
+certification-bearing ones. Those are stakeholder calls, so #689 Phase A
+deliberately shipped the seam and no copy. **Resolve via:** a wording decision
+from the product owner, then a `RequirednessLegend` in
+`src/components/forms/`.
+
+### Phase B of the empty-value system is unshipped (`ui/empty-value-phase-b`) — DR-012, DR-013
+
+#689 Phase A defined the vocabulary (`MISSING_VALUE` in
+`src/lib/copy-utils.ts`), the `DetailField` empty contract
+(`emptySituation` / `valuePresent` in `src/components/ui/detail-panel/`), and
+the one placeholder treatment. The mechanical sweep is still open: roughly 110
+hard-coded token literals across screens, the off-vocabulary placeholders
+("Unassigned", "No crop type", "Not linked", "Missing", "No date"), the
+remaining `?? 0` coalescing before display, and the three live em dashes in
+`buildDurability1000Pdf`
+(`src/lib/certification/evidence-ledger/durability-1000-pdf.ts`). Until the
+off-vocabulary literals are migrated, `resolveDetailValue`'s
+`isMissingValueCopy` backstop cannot catch them, so those fields can still show
+a green "satisfied" CERT chip over a missing value.

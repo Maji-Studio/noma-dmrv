@@ -1,7 +1,7 @@
 /**
  * HeroKpiBand — the Flow Hero's 4-stat band: one bordered strip divided into
  * equal cells (mono micro label over a bold value), per the hero design.
- * "—" means no data in range, never a fabricated zero; the delta vs the
+ * "Not available" means no data in range, never a fabricated zero; the delta vs the
  * previous equal period rides along as a quiet mono suffix.
  *
  * Cells avoid <p>/<h*> elements — the global element type rules are unlayered

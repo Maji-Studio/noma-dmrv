@@ -11,6 +11,7 @@
 
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate } from "@/lib/format-utils";
 
 // Per-run categorical palette for the dry-output composition bar. Accent hues
@@ -37,7 +38,8 @@ export interface CohortInputTotals {
 }
 
 /**
- * Sum a set of nullable per-run pickers across the cohort. Returns null (→ "—")
+ * Sum a set of nullable per-run pickers across the cohort. Returns null
+ * (rendered as "Not recorded")
  * when no selected run reported any value, so an all-blank category reads as
  * "not entered" rather than a misleading 0.
  */
@@ -76,12 +78,12 @@ export function computeCohortInputTotals(
 }
 
 function formatTonnesFromKg(kg: number | null): string {
-  if (kg == null) return "Not recorded";
+  if (kg == null) return MISSING_VALUE.notRecorded;
   return kgToTonnes(kg).toFixed(2);
 }
 
 function formatQuantity(value: number | null): string {
-  if (value == null) return "Not recorded";
+  if (value == null) return MISSING_VALUE.notRecorded;
   return Math.round(value).toLocaleString();
 }
 
@@ -94,7 +96,7 @@ function Figure({
   value: string;
   unit: string;
 }) {
-  const isEmpty = value === "Not recorded";
+  const isEmpty = isMissingValueCopy(value);
   return (
     <div className="flex flex-col gap-2">
       <span className="body-caption text-[var(--color-text-tertiary)]">

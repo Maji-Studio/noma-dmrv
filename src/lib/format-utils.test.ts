@@ -1,10 +1,46 @@
 import { describe, expect, it } from "vitest";
+import { MISSING_VALUE } from "./copy-utils";
 import {
+  formatCo2e,
   formatDayString,
+  formatDistanceKm,
   formatFacilityDateTimeWithOffset,
+  formatFileSize,
   formatMass,
+  formatMassKg,
   formatPercent,
+  formatTonnes,
 } from "./format-utils";
+
+describe("missing-value routing", () => {
+  // The rule: a formatter that receives a value an operator records returns
+  // "Not recorded" for null; one that receives a value the app derives returns
+  // "Not available". See the vocabulary in ./copy-utils.
+  it.each([
+    ["formatMass", formatMass],
+    ["formatMassKg", formatMassKg],
+    ["formatPercent", formatPercent],
+    ["formatDistanceKm", formatDistanceKm],
+  ])("%s reports a recorded quantity as not recorded", (_name, format) => {
+    expect(format(null)).toBe(MISSING_VALUE.notRecorded);
+    expect(format(undefined)).toBe(MISSING_VALUE.notRecorded);
+  });
+
+  it.each([
+    ["formatCo2e", formatCo2e],
+    ["formatTonnes", formatTonnes],
+    ["formatFileSize", formatFileSize],
+  ])("%s reports a derived quantity as not available", (_name, format) => {
+    expect(format(null)).toBe(MISSING_VALUE.notAvailable);
+    expect(format(undefined)).toBe(MISSING_VALUE.notAvailable);
+  });
+
+  it("still formats a measured zero rather than a placeholder", () => {
+    expect(formatMass(0)).toBe("0 kg");
+    expect(formatDistanceKm(0)).toBe("0 km");
+    expect(formatPercent(0)).toBe("0%");
+  });
+});
 
 describe("formatFacilityDateTimeWithOffset", () => {
   it("formats facility-local time with its numeric UTC offset", () => {

@@ -584,7 +584,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
                 label: "Distance (km)",
                 ...certificationDetailField("feedstock", "transportDistanceKm"),
                 // Status from the raw column, not the formatted string — the
-                // "—" fallback is truthy and would falsely read as satisfied.
+                // "Not recorded" fallback is truthy and would falsely read as satisfied.
                 certifyStatus: resolveCertFieldStatus(
                   true,
                   sideSheetEntity.transportDistanceKm !== null,

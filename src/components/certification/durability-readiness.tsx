@@ -74,7 +74,8 @@ function ReadinessChip({
 
 /**
  * Format a submitted mean ± sample std-dev for display. `"0.412 ± 0.018"`, or
- * just the mean when there's a single replicate (no std-dev), or `"—"` when the
+ * just the mean when there's a single replicate (no std-dev), or "Not available"
+ * when the
  * batch has no usable replicate for the figure.
  */
 export function formatDurabilityStat(
