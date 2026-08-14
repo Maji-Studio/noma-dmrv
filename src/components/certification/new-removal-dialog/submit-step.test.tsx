@@ -100,6 +100,12 @@ function findButton(renderer: ReactTestRenderer, label: string) {
     .find((button) => button.props.children === label);
 }
 
+function findLink(renderer: ReactTestRenderer, label: string) {
+  return renderer.root
+    .findAllByType("a")
+    .find((link) => link.props.children?.[0] === label);
+}
+
 beforeAll(() => {
   (
     globalThis as typeof globalThis & {
@@ -196,6 +202,86 @@ describe("SubmitStep", () => {
       findButton(renderer!, "Done")?.props.onClick();
     });
     expect(onDone).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  async function renderSuccessfulSubmit(ctx: RemovalCertifyContext) {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <SubmitStep
+          removalId="removal-1"
+          facilityId="facility-1"
+          facilityName="Tanzania facility"
+          ctx={ctx}
+          onDone={vi.fn()}
+          submitMutation={
+            {
+              mutate: vi.fn(),
+              isPending: false,
+              isSuccess: true,
+              data: { externalId: "rmv_1KT958C1JSBXF5F8", version: 1 },
+              error: null,
+              reset: vi.fn(),
+            } as never
+          }
+        />,
+      );
+    });
+
+    return renderer!;
+  }
+
+  it("links to the sandbox removal and storage sites after submission", async () => {
+    const renderer = await renderSuccessfulSubmit({
+      ...CONTEXT,
+      mapping: {
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+      },
+    } as unknown as RemovalCertifyContext);
+
+    expect(findLink(renderer!, "View storage sites")?.props.href).toBe(
+      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
+    );
+    expect(findLink(renderer!, "View on Isometric")?.props.href).toBe(
+      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/ghg-entry/rmv_1KT958C1JSBXF5F8/edit",
+    );
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  it("uses production links after submission", async () => {
+    const renderer = await renderSuccessfulSubmit({
+      ...CONTEXT,
+      isProduction: true,
+      mapping: {
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+      },
+    } as unknown as RemovalCertifyContext);
+
+    expect(findLink(renderer!, "View storage sites")?.props.href).toBe(
+      "https://registry.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
+    );
+    expect(findLink(renderer!, "View on Isometric")?.props.href).toBe(
+      "https://registry.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/ghg-entry/rmv_1KT958C1JSBXF5F8/edit",
+    );
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  it("omits registry actions after submission without a project mapping", async () => {
+    const renderer = await renderSuccessfulSubmit(CONTEXT);
+
+    expect(findLink(renderer!, "View storage sites")).toBeUndefined();
+    expect(findLink(renderer!, "View on Isometric")).toBeUndefined();
 
     await act(async () => {
       renderer?.unmount();
