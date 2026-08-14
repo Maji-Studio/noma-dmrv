@@ -528,11 +528,6 @@ function buildSequestrationInputs(args: {
       binding?.source === "direct-datapoint"
         ? "/datapoints.quantity -> " + GHG_ENTRY_INPUT_PATH
         : "/measurement-samples.values[] -> " + GHG_ENTRY_INPUT_PATH;
-    const sFractionEvidence =
-      binding?.source === "direct-datapoint"
-        ? " Direct datapoint plus measurement evidence."
-        : "";
-
     return {
       label: input?.display_name || readableKey(inputKey),
       inputKey,
@@ -546,7 +541,7 @@ function buildSequestrationInputs(args: {
       transform: sourceContract
         ? transformLabel(sourceContract.transformRevision)
         : MISSING_VALUE.notAvailable,
-      wirePath: measurementPath + sFractionEvidence,
+      wirePath: measurementPath,
       evidenceRoles,
       status,
       statusDetail,

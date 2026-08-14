@@ -205,7 +205,7 @@ const DURABILITY_LEDGER_TARGETS = {
 // Datapoints. This makes the semantic submission hash supersede an already
 // submitted Removal whose target list is unchanged but whose wire attachment
 // behavior was corrected.
-const SOURCE_BINDING_MATERIALIZATION_REVISION = 3;
+const SOURCE_BINDING_MATERIALIZATION_REVISION = 4;
 
 export const SOURCE_BINDING_MAPPING_REVISION = payloadHash({
   rules: SOURCE_BINDING_RULES,

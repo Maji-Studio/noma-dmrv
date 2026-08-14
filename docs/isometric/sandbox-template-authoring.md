@@ -58,15 +58,16 @@ exactly:
 |---|---|---|
 | `total_carbon_contents` | list | Measurement-sample total-carbon replicates |
 | `inorganic_carbon_contents` | list | Directly measured inorganic-carbon replicates paired by Sample |
-| `product_mass` | scalar | Measurement-sample product mass |
-| `s_fraction` | list | Direct Datapoints derived from sample `s_fraction` values |
+| `product_mass` | scalar | Standalone credit-batch product-mass Datapoint |
+| `s_fraction` | list | Measurement-sample reflectance-fraction replicates |
 
 It requires at least three complete paired replicates per member credit batch.
 The registry calculates organic carbon per replicate as total minus inorganic,
 then applies the binomial lower durability estimate and 0.95 cap. noma's local
 calculation is explanatory; the registry result is authoritative. Application
-support is implemented, but the external sandbox template has not yet been
-migrated and re-verified against this replacement contract.
+support is sandbox-only. Production submission remains fail-closed while the
+registry-confirmation work in
+[`open-questions-isometric.md`](../open-questions-isometric.md) remains open.
 
 `biochar_sequestration_1000_year` is a deprecated historical component with
 total-carbon and uncapped durability semantics. Do not select it for a new
