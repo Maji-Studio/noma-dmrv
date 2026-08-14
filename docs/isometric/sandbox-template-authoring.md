@@ -51,16 +51,26 @@ durability tier before any registry write.
 
 ### 1,000-year sandbox facility
 
-Use `biochar_sequestration_1000_year` under `co2-stored` with exactly:
+Use `biochar_sequestration_1000_year_f_durable_max` under `co2-stored` with
+exactly:
 
 | Input | Shape | noma source |
 |---|---|---|
-| `carbon_contents` | list | Measurement-sample total-carbon replicates |
+| `total_carbon_contents` | list | Measurement-sample total-carbon replicates |
+| `inorganic_carbon_contents` | list | Directly measured inorganic-carbon replicates paired by Sample |
 | `product_mass` | scalar | Measurement-sample product mass |
 | `s_fraction` | list | Direct Datapoints derived from sample `s_fraction` values |
 
-This sampled path is sandbox-verified. It requires at least three complete
-replicates per member credit batch.
+It requires at least three complete paired replicates per member credit batch.
+The registry calculates organic carbon per replicate as total minus inorganic,
+then applies the binomial lower durability estimate and 0.95 cap. noma's local
+calculation is explanatory; the registry result is authoritative. Application
+support is implemented, but the external sandbox template has not yet been
+migrated and re-verified against this replacement contract.
+
+`biochar_sequestration_1000_year` is a deprecated historical component with
+total-carbon and uncapped durability semantics. Do not select it for a new
+facility mapping; noma rejects it and directs the operator to the current key.
 
 ### 200-year facility
 

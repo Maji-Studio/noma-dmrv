@@ -272,6 +272,8 @@ export async function createTransportLeg(
         entityId: input.entityId,
       },
       "create",
+      "transportLeg",
+      "linked",
     );
 
     return tx
@@ -322,6 +324,7 @@ export async function updateTransportLeg(
         entityId: existing.entityId,
       },
       "update",
+      "transportLeg",
     );
 
     return tx
@@ -362,6 +365,7 @@ export async function deleteTransportLeg(
         entityId: existing.entityId,
       },
       "delete",
+      "transportLeg",
     );
 
     const rows = await tx

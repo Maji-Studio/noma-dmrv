@@ -68,6 +68,10 @@ export const certifierProductionBatches = pgTable(
     index('certifier_production_batches_organization_id_idx').on(
       table.organizationId
     ),
+    unique('certifier_production_batches_id_organization_id_unique').on(
+      table.id,
+      table.organizationId
+    ),
     foreignKey({
       columns: [table.creditBatchId, table.organizationId],
       foreignColumns: [creditBatches.id, creditBatches.organizationId],

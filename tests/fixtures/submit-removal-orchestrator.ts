@@ -14,6 +14,21 @@ import type {
   Sample,
 } from "@/db/schema";
 import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import {
+  SUBMISSION_ATTEMPT_OUTCOMES,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/certification/submission-metadata";
+
+const INTERRUPTION_METADATA_KEYS = new Set<string>([
+  SUBMISSION_METADATA_KEYS.lastError,
+  SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
+  SUBMISSION_METADATA_KEYS.externalMutation,
+]);
+const RETRY_CLEARED_METADATA_KEYS = new Set<string>([
+  SUBMISSION_METADATA_KEYS.lastError,
+  SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
+]);
 
 // ---------------------------------------------------------------------------
 // Module mocks — declared before importing the system under test so the mocks
@@ -309,12 +324,18 @@ export function make1000YearSequestrationTemplate(): IsometricGhgEntryTemplate {
       ...group,
       components: group.components.map((component) => ({
         ...component,
-        blueprint_key: "biochar_sequestration_1000_year",
+        blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
         display_name: "1000-year sequestration",
         inputs: [
           {
             type: "monitored",
-            input_key: "carbon_contents",
+            input_key: "total_carbon_contents",
+            quantity_kind: "mass_fraction_dry_basis",
+            datapoint_id: null,
+          },
+          {
+            type: "monitored",
+            input_key: "inorganic_carbon_contents",
             quantity_kind: "mass_fraction_dry_basis",
             datapoint_id: null,
           },
@@ -400,8 +421,13 @@ export function makeRun(
     samples: [
       {
         id: "smp-test-1",
+        sampleCode: "SMP-TEST-1",
+        samplingTime: new Date("2026-01-10T08:00:00.000Z"),
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.91,
         hToCOrgRatio: 0.4,
         oToCOrgRatio: 0.15,
         ashContentPercent: 5,
@@ -409,8 +435,13 @@ export function makeRun(
       } as unknown as Sample,
       {
         id: "smp-test-2",
+        sampleCode: "SMP-TEST-2",
+        samplingTime: new Date("2026-01-11T09:00:00.000Z"),
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.92,
         hToCOrgRatio: 0.41,
         oToCOrgRatio: 0.16,
         ashContentPercent: 5,
@@ -418,8 +449,13 @@ export function makeRun(
       } as unknown as Sample,
       {
         id: "smp-test-3",
+        sampleCode: "SMP-TEST-3",
+        samplingTime: new Date("2026-01-12T10:00:00.000Z"),
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.93,
         hToCOrgRatio: 0.39,
         oToCOrgRatio: 0.14,
         ashContentPercent: 5,
@@ -673,6 +709,11 @@ beforeEach(() => {
         if (!row) throw new Error(`Test ledger missing row ${rowId}`);
         row.status = "draft";
         row.lockedAt = new Date();
+        row.metadata = Object.fromEntries(
+          Object.entries(row.metadata ?? {}).filter(
+            ([key]) => !RETRY_CLEARED_METADATA_KEYS.has(key),
+          ),
+        );
         return row;
       },
     }),
@@ -685,6 +726,11 @@ beforeEach(() => {
         row.externalId = args.externalId;
         row.submittedAt = new Date();
         row.lockedAt = null;
+        row.metadata = Object.fromEntries(
+          Object.entries(row.metadata ?? {}).filter(
+            ([key]) => !INTERRUPTION_METADATA_KEYS.has(key),
+          ),
+        );
       }
       if (args.supersedePreviousId) {
         const prev = storedRows.find((r) => r.id === args.supersedePreviousId);
@@ -696,12 +742,37 @@ beforeEach(() => {
     },
   );
   vi.mocked(ledger.markSubmissionRejected).mockImplementation(
-    async (_userId, id) => {
+    async (_userId, id, args) => {
       const row = storedRows.find((r) => r.id === id);
-      if (row) {
+      const ownsLock =
+        !args.expectedLockedAt ||
+        row?.lockedAt?.getTime() === args.expectedLockedAt.getTime();
+      if (row?.status === "draft" && ownsLock) {
         row.status = "rejected";
         row.lockedAt = null;
+        row.metadata = {
+          ...(row.metadata ?? {}),
+          lastError: args.errorMessage,
+        };
       }
+    },
+  );
+  vi.mocked(ledgerClaim.markSubmissionInterrupted).mockImplementation(
+    async (_userId, id, args) => {
+      const row = storedRows.find((r) => r.id === id);
+      const ownsLock =
+        row?.lockedAt?.getTime() === args.expectedLockedAt.getTime();
+      if (row?.status === "draft" && ownsLock) {
+        row.metadata = {
+          ...(row.metadata ?? {}),
+          [SUBMISSION_METADATA_KEYS.lastError]: args.errorMessage,
+          [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]:
+            SUBMISSION_ATTEMPT_OUTCOMES.interrupted,
+          [SUBMISSION_METADATA_KEYS.externalMutation]: args.externalMutation,
+        };
+        return true;
+      }
+      return false;
     },
   );
   vi.mocked(ledger.retireStaleSubmissionDraft).mockImplementation(
@@ -760,11 +831,14 @@ beforeEach(() => {
       // wiring change from passing on a coincidence.
       startDate: "2026-01-01",
       endDate: "2026-01-31",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      endedAt: "2026-01-31T23:59:59.000Z",
       externalProjectId: EXTERNAL_PROJECT_ID,
       externalFacilityId: EXTERNAL_FACILITY_ID,
       isometricFeedstockTypeId: EXTERNAL_FEEDSTOCK_TYPE_ID,
       totalDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
       runsMissingDryMass: 0,
+      runsMissingEndTime: 0,
     },
   ]);
   vi.mocked(
@@ -788,7 +862,7 @@ beforeEach(() => {
   isometricClientFake.post.mockImplementation(
     async (_path: string, body: { supplier_reference_id: string }) => ({
       id: EXTERNAL_PRODUCTION_BATCH_ID,
-      supplier_reference_id: body.supplier_reference_id,
+      ...body,
     }),
   );
 });

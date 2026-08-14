@@ -12,35 +12,38 @@ const CUSTOMER_LOCATION_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const SUPPLIER_LOCATION_ID = "11111111-2222-4333-8444-555555555555";
 
 vi.mock("@/components/forms/entity-select/quick-add-dialog-shell", () => ({
-  QuickAddDialogShell: ({ children }: { children: ReactNode }) => (
-    <div role="dialog">{children}</div>
+  QuickAddDialogShell: ({
+    children,
+    isOpen,
+  }: {
+    children: ReactNode;
+    isOpen: boolean;
+  }) => (isOpen ? <div role="dialog">{children}</div> : null),
+}));
+
+vi.mock("@/components/forms/position-picker", () => ({
+  PositionPicker: ({
+    idPrefix,
+    label,
+  }: {
+    idPrefix: string;
+    label: string;
+  }) => (
+    <label htmlFor={`${idPrefix}-latitude`}>
+      {label}
+      <input id={`${idPrefix}-latitude`} />
+    </label>
   ),
 }));
 
-vi.mock("@/components/forms", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/components/forms")>();
-  return {
-    ...actual,
-    PositionPicker: ({
-      idPrefix,
-      label,
-    }: {
-      idPrefix: string;
-      label: string;
-    }) => (
-      <label htmlFor={`${idPrefix}-latitude`}>
-        {label}
-        <input id={`${idPrefix}-latitude`} />
-      </label>
-    ),
-    DistanceCalcField: ({ id, label }: { id: string; label: string }) => (
-      <label htmlFor={id}>
-        {label}
-        <input id={id} />
-      </label>
-    ),
-  };
-});
+vi.mock("@/components/forms/distance-calc-field", () => ({
+  DistanceCalcField: ({ id, label }: { id: string; label: string }) => (
+    <label htmlFor={id}>
+      {label}
+      <input id={id} />
+    </label>
+  ),
+}));
 
 vi.mock("@/hooks/use-customers", () => ({
   useCreateCustomerLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),

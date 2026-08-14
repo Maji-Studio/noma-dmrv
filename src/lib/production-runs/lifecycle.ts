@@ -39,12 +39,14 @@ export type ProductionRunOutcomeInput = {
   feedstockMoisturePercent: number | null | undefined;
   feedstock:
     | {
-        basis: "form-inputs";
-        storageLocationId: string | null | undefined;
+      basis: "form-inputs";
+        drawCount?: number;
+        /** Legacy compatibility for callers not yet migrated to draw rows. */
+        storageLocationId?: string | null;
       }
     | {
         basis: "consumed-mass";
-        consumedFeedstockKg: number;
+        consumedFeedstockWetKg: number;
       };
 };
 
@@ -143,10 +145,11 @@ export function getProductionRunOutcomeViolations(
         ? !(
             input.feedstockWetMassKg &&
             input.feedstockWetMassKg > 0 &&
-            input.feedstock.storageLocationId &&
+            ((input.feedstock.drawCount ?? 0) > 0 ||
+              Boolean(input.feedstock.storageLocationId)) &&
             input.feedstockMoisturePercent != null
           )
-        : !(input.feedstock.consumedFeedstockKg > 0);
+        : !(input.feedstock.consumedFeedstockWetKg > 0);
 
     if (feedstockIsMissing) {
       violations.push({

@@ -1,7 +1,6 @@
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
-  assertFeedstockDrawWithinStock,
   deriveBiocharAvailableKg,
   isOverdraw,
   overdrawError,
@@ -12,14 +11,13 @@ import {
 } from "./lock-bin-stocks";
 
 interface ProductionRunStockSnapshot {
-  feedstockStorageLocationId: string | null;
+  feedstockStorageLocationIds: readonly string[];
   biocharStorageLocationId: string | null;
 }
 
 interface ProductionRunStockUpdate {
-  feedstockStorageLocationId?: string | null;
-  feedstockWetMassKg?: number | null;
-  feedstockMoisturePercent?: number | null;
+  facilityId?: string;
+  feedstockDraws?: ReadonlyArray<{ storageLocationId: string }>;
   biocharStorageLocationId?: string | null;
   biocharOutputKg?: number | null;
 }
@@ -27,21 +25,6 @@ interface ProductionRunStockUpdate {
 interface BiocharBinStockState {
   storageLocationId: string;
   availableKg: number;
-}
-
-/** Hard-block a new run's feedstock draw against its source bin. */
-export async function assertProductionRunCreateFeedstockDrawWithinStock(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  params: {
-    storageLocationId: string;
-    requestedDryKg: number;
-  },
-): Promise<void> {
-  await assertFeedstockDrawWithinStock(ctx, tx, {
-    storageLocationId: params.storageLocationId,
-    requestedDryKg: params.requestedDryKg,
-  });
 }
 
 /** Discover the complete affected bin set and lock it before the run row. */
@@ -52,9 +35,7 @@ export async function lockProductionRunUpdateStock(
   data: ProductionRunStockUpdate,
 ): Promise<void> {
   const feedstockStockChanged =
-    data.feedstockStorageLocationId !== undefined ||
-    data.feedstockWetMassKg !== undefined ||
-    data.feedstockMoisturePercent !== undefined;
+    data.feedstockDraws !== undefined || data.facilityId !== undefined;
   const biocharStockChanged =
     data.biocharStorageLocationId !== undefined ||
     data.biocharOutputKg !== undefined;
@@ -62,8 +43,9 @@ export async function lockProductionRunUpdateStock(
   await lockBinStocks(ctx, tx, [
     ...(feedstockStockChanged
       ? [
-          snapshot.feedstockStorageLocationId,
-          data.feedstockStorageLocationId ?? snapshot.feedstockStorageLocationId,
+          ...snapshot.feedstockStorageLocationIds,
+          ...(data.feedstockDraws?.map((draw) => draw.storageLocationId) ??
+            snapshot.feedstockStorageLocationIds),
         ]
       : []),
     ...(biocharStockChanged
@@ -82,17 +64,18 @@ export function assertProductionRunStockSnapshot(
   data: ProductionRunStockUpdate,
 ): void {
   const feedstockStockChanged =
-    data.feedstockStorageLocationId !== undefined ||
-    data.feedstockWetMassKg !== undefined ||
-    data.feedstockMoisturePercent !== undefined;
+    data.feedstockDraws !== undefined || data.facilityId !== undefined;
   const biocharStockChanged =
     data.biocharStorageLocationId !== undefined ||
     data.biocharOutputKg !== undefined;
 
   assertStockLockSnapshot(
     (!feedstockStockChanged ||
-      snapshot.feedstockStorageLocationId ===
-        locked.feedstockStorageLocationId) &&
+      snapshot.feedstockStorageLocationIds.length ===
+        locked.feedstockStorageLocationIds.length &&
+      snapshot.feedstockStorageLocationIds.every(
+        (id, index) => id === locked.feedstockStorageLocationIds[index],
+      )) &&
       (!biocharStockChanged ||
         snapshot.biocharStorageLocationId ===
           locked.biocharStorageLocationId),
@@ -172,22 +155,4 @@ export async function assertProductionRunBiocharStockNotOverdrawn(
       throw overdrawError("biochar");
     }
   }
-}
-
-/** Validate a replacement run allocation while its source-bin lock is held. */
-export async function assertProductionRunUpdateFeedstockDrawWithinStock(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  params: {
-    productionRunId: string;
-    storageLocationId: string;
-    requestedDryKg: number;
-  },
-): Promise<void> {
-  await assertFeedstockDrawWithinStock(ctx, tx, {
-    storageLocationId: params.storageLocationId,
-    requestedDryKg: params.requestedDryKg,
-    excludeRunId: params.productionRunId,
-    binLockAlreadyHeld: true,
-  });
 }

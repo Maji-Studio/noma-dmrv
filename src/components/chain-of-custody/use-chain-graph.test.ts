@@ -98,6 +98,37 @@ describe("biochar mass labels", () => {
     });
   });
 
+  it("labels feedstock allocation as wet without pairing it to intake dry mass", () => {
+    const data = lineage();
+    data.feedstocks = [
+      {
+        id: "feedstock-1",
+        code: "FS-1",
+        status: "complete",
+        deliveryDate: new Date("2026-05-16T00:00:00Z"),
+        massDryKg: 1_950,
+        wetMassUsedKg: 3_000,
+        eligibilityStatus: "eligible",
+        supplierName: "Supplier",
+        feedstockTypeName: "Wood chips",
+        feedstockDeliveryCode: "FD-1",
+        href: "/feedstocks",
+      },
+    ];
+
+    const details = buildLineageNodes(data).find(
+      (node) => node.kind === "feedstock",
+    )?.details;
+    expect(details).toContainEqual({
+      label: "Wet allocation",
+      value: "3,000 kg",
+    });
+    expect(details).toContainEqual({
+      label: "Intake dry mass",
+      value: "1,950 kg",
+    });
+  });
+
   it("falls back to the production run code when no biochar bin name exists", () => {
     const data = lineage();
     data.productionRun!.biocharStorageName = null;

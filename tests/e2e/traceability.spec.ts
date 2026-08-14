@@ -69,7 +69,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         id: ids.productionRunFeedstock,
         productionRunId: ids.productionRun,
         feedstockId: seededData.feedstock.id,
-        massUsedKg: 100,
+        wetMassUsedKg: 100,
       });
 
       await tx
@@ -282,14 +282,14 @@ async function seedBatchChain(seededData: SeededChainData) {
           id: crypto.randomUUID(),
           productionRunId: ids.productionRun,
           feedstockId: seededData.feedstock.id,
-          massUsedKg: 900,
+          wetMassUsedKg: 900,
         },
         {
           organizationId: DEC_ORG_ID,
           id: crypto.randomUUID(),
           productionRunId: ids.productionRun,
           feedstockId: ids.ineligibleFeedstock,
-          massUsedKg: 100,
+          wetMassUsedKg: 100,
         },
       ]);
 

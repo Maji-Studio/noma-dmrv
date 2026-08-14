@@ -60,6 +60,8 @@ function bindingSourceLabel(
 
 const REGISTRY_FIELD_LABELS: Record<string, string> = {
   carbon_contents: "Carbon content",
+  total_carbon_contents: "Total carbon content",
+  inorganic_carbon_contents: "Measured inorganic carbon content",
   factor: "Emission factor",
   h_c_molar_ratios: "Hydrogen-to-carbon ratio",
   mass_distance: "Mass and distance",

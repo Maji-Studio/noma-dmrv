@@ -53,6 +53,7 @@ interface SubmitStepProps {
   removalId: string;
   ctx: RemovalCertifyContext;
   facilityId: string;
+  facilityName: string;
   onDone: () => void;
   submitMutation: ReturnType<typeof useSubmitRemoval>;
 }
@@ -61,6 +62,7 @@ export function SubmitStep({
   removalId,
   ctx,
   facilityId,
+  facilityName,
   onDone,
   submitMutation,
 }: SubmitStepProps) {
@@ -267,6 +269,7 @@ export function SubmitStep({
       <SubmissionSummary
         ctx={ctx}
         facilityId={facilityId}
+        facilityName={facilityName}
         compilation={compilationQuery.data ?? null}
         isCompilationLoading={compilationQuery.isLoading}
         compilationError={compilationQuery.error}

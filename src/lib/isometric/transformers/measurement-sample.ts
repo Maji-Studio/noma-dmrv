@@ -34,6 +34,8 @@ import type {
   ValueWithStdDev,
 } from "../utils/durability-aggregation";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
+import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
+import { SafeError } from "@/lib/errors";
 
 type CreateMeasurementSampleRequest =
   components["schemas"]["CreateMeasurementSampleRequest"];
@@ -63,19 +65,54 @@ export const SEQUESTRATION_BLUEPRINT_SAMPLED =
 export const SEQUESTRATION_BLUEPRINT_UNSAMPLED =
   "biochar_sequestration_200_year_unsampled";
 
-/**
- * 1000-year durability blueprint (ADR 0021). Implemented to the LIVE Certify
- * blueprint, NOT module Eq.6 — the two disagree and the blueprint is what runs
- * (research 2026-07-04). Inputs: `carbon_contents` (per-replicate LIST, total
- * carbon dry basis), `product_mass` (SCALAR kg), `s_fraction` (per-replicate
- * LIST = each sample's proportion of R₀ readings ≥ 2%). The registry computes
- * `product_mass × mean(carbon_contents) × durable_fraction × 3.667`, where
- * `durable_fraction = mean(s_fraction) − √(mean·(1−mean)/n)`. No non-reactive
- * carbon input, no 0.95 cap (both present in module Eq.6 — divergence flagged in
- * ADR 0013 / open-questions). See `build1000YearSequestrationSample`.
- */
-export const SEQUESTRATION_BLUEPRINT_1000_YEAR =
+/** Historical three-input component. Read/reconciliation only; never select it for a new template. */
+export const DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR =
   "biochar_sequestration_1000_year";
+
+/** Current sampled 1,000-year component with paired total/inorganic carbon lists. */
+export const CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR =
+  "biochar_sequestration_1000_year_f_durable_max";
+
+/** Method-B 1,000-year component. Noma deliberately does not support this path. */
+export const UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR =
+  "biochar_sequestration_1000_year_unsampled";
+
+export const SEQUESTRATION_1000_YEAR_COMPONENT_CONTRACTS = {
+  deprecated: {
+    blueprintKey: DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+    inputKeys: ["carbon_contents", "product_mass", "s_fraction"],
+  },
+  current: {
+    blueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+    inputKeys: [
+      "total_carbon_contents",
+      "inorganic_carbon_contents",
+      "s_fraction",
+      "product_mass",
+    ],
+  },
+} as const;
+
+export type Sequestration1000YearComponentClassification =
+  | "current"
+  | "deprecated"
+  | "unsupported-unsampled"
+  | null;
+
+export function classifySequestration1000YearComponent(
+  blueprintKey: string,
+): Sequestration1000YearComponentClassification {
+  if (blueprintKey === CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR) {
+    return "current";
+  }
+  if (blueprintKey === DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR) {
+    return "deprecated";
+  }
+  if (blueprintKey === UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR) {
+    return "unsupported-unsampled";
+  }
+  return null;
+}
 
 /**
  * Every sequestration blueprint key we recognise (200-year sampled + Method-B
@@ -89,7 +126,8 @@ export const SEQUESTRATION_BLUEPRINT_1000_YEAR =
 export const SEQUESTRATION_BLUEPRINT_KEYS: ReadonlySet<string> = new Set([
   SEQUESTRATION_BLUEPRINT_SAMPLED,
   SEQUESTRATION_BLUEPRINT_UNSAMPLED,
-  SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
 ]);
 
 export function isSequestrationBlueprintKey(blueprintKey: string): boolean {
@@ -119,7 +157,7 @@ export function expectedSequestrationBlueprintKeys(
   tier: "200_year" | "1000_year",
 ): ReadonlySet<string> {
   return tier === "1000_year"
-    ? new Set([SEQUESTRATION_BLUEPRINT_1000_YEAR])
+    ? new Set([CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR])
     : new Set([
         SEQUESTRATION_BLUEPRINT_SAMPLED,
         SEQUESTRATION_BLUEPRINT_UNSAMPLED,
@@ -362,23 +400,27 @@ export function buildBiocharUnsampledBatchSample(args: {
 
 // ── 1000-year sequestration (ADR 0021) — ⚠️ SANDBOX-GATED wire binding ────────
 //
-// Built to the LIVE `biochar_sequestration_1000_year` blueprint, NOT module
-// Eq.6 (they disagree; the blueprint is what runs — research 2026-07-04). The
-// registry computes `product_mass × mean(carbon_contents) × durable_fraction ×
-// 3.667`, where `durable_fraction = mean(s_fraction) − √(mean·(1−mean)/n)`. We
-// submit ONLY the per-replicate inputs and the product mass — NEVER a
-// pre-reduced mean/−SE/cap (collapsing to one aggregate → n=1 → massive
-// over-penalty). The registry owns the reduction (mirrors ADR 0013).
+// Built to the current `biochar_sequestration_1000_year_f_durable_max`
+// component. It subtracts paired measured inorganic carbon from total carbon
+// and caps the calculated durable fraction at 0.95. Each request represents one
+// independently analysed Sample; product mass travels as one direct Datapoint.
 //
 // The explicit datapoint↔input binding is implemented in
 // `sequestration-binding.ts` from the verified Certify response/component
 // contract. The sandbox-only feature flag remains the operator kill-switch.
 
-/** Total carbon content, dry basis — the 1000-year `carbon_contents` list input. */
-export const CARBON_CONTENTS_MEASUREMENT_PROPERTY: IsometricMeasurementProperty =
+/** Total carbon content, dry basis — the current `total_carbon_contents` list input. */
+export const TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY: IsometricMeasurementProperty =
   {
     quantity_kind: "mass_fraction_dry_basis",
     qualifier: "total_carbon",
+  };
+
+/** Measured inorganic carbon, dry basis — the current `inorganic_carbon_contents` list input. */
+export const INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY: IsometricMeasurementProperty =
+  {
+    quantity_kind: "mass_fraction_dry_basis",
+    qualifier: "total_inorganic_carbon",
   };
 
 /**
@@ -392,24 +434,24 @@ export const S_FRACTION_MEASUREMENT_PROPERTY: IsometricMeasurementProperty = {
   qualifier: "inertinite_fraction",
 };
 
-/** Blueprint unit for `carbon_contents` (a 0–1 dry-basis mass fraction). */
-export const CARBON_CONTENTS_UNIT = "dimensionless";
+/** Blueprint unit for both current dry-basis carbon-content lists. */
+export const CARBON_CONTENTS_1000_YEAR_UNIT = "dimensionless";
 
 /** Blueprint unit for `s_fraction` (a 0–1 proportion). */
 export const S_FRACTION_UNIT = "dimensionless";
 
-/** One 1000-year replicate: its total-carbon fraction + durable (s) fraction. */
+/** One current-component replicate: three measurements from the same Sample row. */
 export interface Sequestration1000YearReplicate {
   /** Total carbon, dry basis, as a 0–1 mass fraction. */
-  carbonContentFraction: number;
+  totalCarbonContentFraction: number;
+  /** Directly measured inorganic carbon, dry basis, as a 0–1 mass fraction. */
+  inorganicCarbonContentFraction: number;
   /** Proportion (0–1) of this sample's R₀ readings ≥ 2% (s_fraction). */
   sFraction: number;
 }
 
 export interface Build1000YearSequestrationSampleArgs {
-  replicates: Sequestration1000YearReplicate[];
-  /** Attribution-scaled dry biochar product mass applied (kg). */
-  productMassKg: number;
+  replicate: Sequestration1000YearReplicate;
   projectId: string;
   supplierRefId: string;
   measuredAt: string;
@@ -418,49 +460,47 @@ export interface Build1000YearSequestrationSampleArgs {
 
 /**
  * Build the `biochar_production_batch` measurement sample carrying the 1000-year
- * inputs as evidence: the per-replicate `carbon_contents` + `s_fraction` values
- * and the single `product_mass`. Carbon and mass response datapoints bind their
- * GHG inputs. The sample's `dimensionless_ratio` s_fraction values remain
- * data-quality evidence while the orchestrator posts matching `dimensionless`
- * datapoints for that LIST input. The registry computes the conservative
- * −binomial-SE durable fraction from the FULL list, so this submits the raw
- * per-replicate values with no local reduction. Returns null when the batch
- * pooled no replicate. Pure — no I/O. ⚠️ Sandbox-gated (see header).
+ * inputs as evidence: paired total carbon, measured inorganic carbon, and
+ * `s_fraction` values from one local Sample. Carbon response datapoints bind
+ * their GHG inputs. Product mass is deliberately not a property of the physical
+ * Sample. The sample's
+ * `dimensionless_ratio` s_fraction values remain data-quality evidence while
+ * the orchestrator posts matching `dimensionless` datapoints for that LIST
+ * input. Pure — no I/O. ⚠️ Sandbox-gated (see header).
  */
 export function build1000YearSequestrationSample(
   args: Build1000YearSequestrationSampleArgs,
-): CreateMeasurementSampleRequest | null {
-  if (args.replicates.length === 0) return null;
-
-  const values: CreateMeasurementSampleValueRequest[] = [];
-  for (const replicate of args.replicates) {
-    values.push({
-      measurement_property: CARBON_CONTENTS_MEASUREMENT_PROPERTY,
+): CreateMeasurementSampleRequest {
+  const { replicate } = args;
+  assert1000YearReplicate(replicate);
+  const values: CreateMeasurementSampleValueRequest[] = [
+    {
+      measurement_property:
+        TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
       value: {
-        magnitude: replicate.carbonContentFraction,
+        magnitude: replicate.totalCarbonContentFraction,
         standard_deviation: null,
-        unit: CARBON_CONTENTS_UNIT,
+        unit: CARBON_CONTENTS_1000_YEAR_UNIT,
       },
-    });
-    values.push({
+    },
+    {
+      measurement_property:
+        INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
+      value: {
+        magnitude: replicate.inorganicCarbonContentFraction,
+        standard_deviation: null,
+        unit: CARBON_CONTENTS_1000_YEAR_UNIT,
+      },
+    },
+    {
       measurement_property: S_FRACTION_MEASUREMENT_PROPERTY,
       value: {
         magnitude: replicate.sFraction,
         standard_deviation: null,
         unit: S_FRACTION_UNIT,
       },
-    });
-  }
-
-  // Product mass (kg) — a single per-batch scalar, no std-dev.
-  values.push({
-    measurement_property: PRODUCT_MASS_MEASUREMENT_PROPERTY,
-    value: {
-      magnitude: args.productMassKg,
-      standard_deviation: null,
-      unit: PRODUCT_MASS_UNIT,
     },
-  });
+  ];
 
   return {
     feedstock_batch_id: null,
@@ -473,6 +513,34 @@ export function build1000YearSequestrationSample(
     supplier_reference_id: args.supplierRefId,
     values,
   };
+}
+
+const FRACTION_MIN = 0;
+const FRACTION_MAX = 1;
+const CARBON_RECONCILIATION_TOLERANCE_FRACTION =
+  CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS / 100;
+
+function assertFraction(value: number, label: string): void {
+  if (!Number.isFinite(value) || value < FRACTION_MIN || value > FRACTION_MAX) {
+    throw new SafeError(`${label} must be a number from 0 to 1.`);
+  }
+}
+
+function assert1000YearReplicate(
+  replicate: Sequestration1000YearReplicate,
+): void {
+  assertFraction(replicate.totalCarbonContentFraction, "Total carbon");
+  assertFraction(replicate.inorganicCarbonContentFraction, "Inorganic carbon");
+  assertFraction(replicate.sFraction, "R₀ fraction");
+  if (
+    replicate.inorganicCarbonContentFraction -
+      replicate.totalCarbonContentFraction >
+    CARBON_RECONCILIATION_TOLERANCE_FRACTION
+  ) {
+    throw new SafeError(
+      `Inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points.`,
+    );
+  }
 }
 
 export interface BuildBiocharSoilSampleArgs {

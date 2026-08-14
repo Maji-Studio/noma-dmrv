@@ -166,12 +166,11 @@ export function ApplicationForm({
     gpsLatitude: application?.gpsLatitude ?? undefined,
     gpsLongitude: application?.gpsLongitude ?? undefined,
     applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
-    // The visual path is still UI-locked ("Available later"), so a new
-    // application always starts on the GIS reference path. The organization
-    // default evidence method stays inert here until visual is selectable.
+    // The visual path remains UI-locked ("Available later"). Customer location
+    // is the default v1.1 proof path for new applications.
     evidenceMethod:
       (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ??
-      "boundary",
+      "location",
     gisBoundary: application?.gisBoundary ?? null,
     soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
     soilTemperatureC: application?.soilTemperatureC ?? undefined,
@@ -565,12 +564,12 @@ export function ApplicationForm({
       <FormSection
         title="Evidence"
         icon={<CameraIcon size={14} weight="bold" />}
-        hint="Record the application area as a GIS reference and retain a dated logbook record for the quantity applied."
+        hint="Choose one way to identify where the biochar was applied."
         fields={["evidenceMethod", "gisBoundary"]}
       >
         <ApplicationEvidencePanel
           applicationId={application?.id}
-          mode={evidenceMethod ?? "boundary"}
+          mode={evidenceMethod ?? "location"}
           boundary={gisBoundary ?? null}
           disabled={isSubmitting}
           deferredAttachments={deferredAttachments}

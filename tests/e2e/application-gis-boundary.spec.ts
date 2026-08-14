@@ -121,6 +121,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await page.locator("#fieldSizeHa").fill("2");
   await page.locator("#fieldIdentifier").fill(fieldIdentifier);
 
+  await page.getByRole("radio", { name: /GIS reference/ }).click();
   await page.getByRole("button", { name: /Add GIS reference/ }).click();
   await page.locator("#gis-reference-file").setInputFiles({
     name: FIRST_BOUNDARY_FILE,

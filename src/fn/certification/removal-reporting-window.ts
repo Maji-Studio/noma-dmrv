@@ -91,9 +91,10 @@ export function resolveRemovalReportingWindow(args: {
 
 /**
  * Reject dates that Isometric cannot accept before the submission pipeline
- * mirrors evidence Sources or creates Datapoints. Production end is the
- * durability `measured_at`; latest application is the GHG entry's
- * `completed_on`. Equality is valid because neither date is in the future.
+ * mirrors evidence Sources or creates Datapoints. Production end anchors the
+ * reporting window, while latest application is the GHG entry's `completed_on`.
+ * Per-Sample durability `measured_at` values are guarded by the durability
+ * builder. Equality is valid because neither date is in the future.
  */
 export function assertRemovalDatesNotFuture(args: {
   productionEndTime: Date;

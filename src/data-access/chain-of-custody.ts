@@ -53,7 +53,9 @@ export interface ChainApplicationLineage {
   status: string | null;
   applicationDate: Date;
   fieldIdentifier: string | null;
-  evidenceMethod: "visual" | "boundary";
+  evidenceMethod: "location" | "boundary" | "visual";
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
   gisBoundary: GisBoundary | null;
   biocharAppliedTons?: number | null;
   biocharAppliedDryTons: number | null;
@@ -128,7 +130,7 @@ export interface ChainFeedstockLineage {
   status: string | null;
   deliveryDate: Date | null;
   massDryKg: number | null;
-  massUsedKg: number | null;
+  wetMassUsedKg: number | null;
   /** Drives the Sankey's derived ineligible-feedstock exit (issue #285). */
   eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
   supplierName: string | null;
@@ -182,6 +184,8 @@ export function projectChainOfCustodyFromBatchFacts(
       applicationDate: application.applicationDate,
       fieldIdentifier: application.fieldIdentifier,
       evidenceMethod: application.evidenceMethod,
+      gpsLatitude: application.gpsLatitude,
+      gpsLongitude: application.gpsLongitude,
       gisBoundary: application.gisBoundary,
       biocharAppliedTons: application.biocharAppliedTons,
       biocharAppliedDryTons: application.biocharAppliedDryTons,
@@ -250,6 +254,8 @@ export async function getChainOfCustodyData(
       applicationDate: applications.applicationDate,
       fieldIdentifier: applications.fieldIdentifier,
       evidenceMethod: applications.evidenceMethod,
+      gpsLatitude: applications.gpsLatitude,
+      gpsLongitude: applications.gpsLongitude,
       gisBoundary: applications.gisBoundary,
       biocharAppliedTons: applications.biocharAppliedTons,
       biocharAppliedDryTons: applications.biocharAppliedDryTons,
@@ -334,6 +340,8 @@ export async function getChainOfCustodyData(
       applicationDate: applicationRow.applicationDate,
       fieldIdentifier: applicationRow.fieldIdentifier,
       evidenceMethod: applicationRow.evidenceMethod,
+      gpsLatitude: applicationRow.gpsLatitude,
+      gpsLongitude: applicationRow.gpsLongitude,
       gisBoundary: applicationRow.gisBoundary,
       biocharAppliedTons: applicationRow.biocharAppliedTons,
       biocharAppliedDryTons: applicationRow.biocharAppliedDryTons,
@@ -598,7 +606,7 @@ async function getFeedstocksForRuns(
       status: feedstocks.status,
       deliveryDate: feedstocks.deliveryDate,
       massDryKg: feedstocks.massDryKg,
-      massUsedKg: productionRunFeedstocks.massUsedKg,
+      wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
       eligibilityStatus: feedstocks.eligibilityStatus,
       supplierName: suppliers.name,
       feedstockTypeName: feedstockTypes.name,

@@ -28,6 +28,7 @@ import {
 import {
   loadCertifyContextForCreditBatchForUser,
 } from "@/fn/certification/certify-context-core";
+import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import {
   factsFromMockedLineages,
   satisfiedVisualEvidenceDocuments,
@@ -103,7 +104,9 @@ const USER_ID = "user-1";
 const CREDIT_BATCH_ID = "cb-1";
 const FACILITY_ID = "fac-1";
 const EXTERNAL_PROJECT_ID = "prj_test";
-function mockNormalizedLineageFacts(): void {
+function mockNormalizedLineageFacts(
+  memberRunStatusById: Record<string, ProductionRunStatus> = {},
+): void {
   mockedLoadAccounting.mockImplementation(async (ctx, batchIds) => {
     const entries = await Promise.all(
       batchIds.map(async (batchId) => {
@@ -123,6 +126,7 @@ function mockNormalizedLineageFacts(): void {
           batchId,
           productionRunIds,
           lineages,
+          memberRunStatusById,
         );
         return [
           batchId,
@@ -279,7 +283,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.productionReadinessGap?.kind).toBe("noApplications");
+    expect(result.productionReadinessGap).toMatchObject({
+      kind: "noProductionRuns",
+      detail:
+        "No completed production runs are linked to this credit batch. Complete a matching production run to continue.",
+      fixTarget: "productionRuns",
+    });
     expect(result.durabilityGateBlockers).toEqual([
       "Credit batch CB-1 is marked as sampled but has no Samples. Add at least 3 Samples before submitting.",
       "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
@@ -292,6 +301,54 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       expect.objectContaining({ organizationId: expect.any(String) }),
       [CREDIT_BATCH_ID],
     );
+  });
+
+  it("routes a member production run with no applications to the application chain", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      code: "CB-1",
+      facilityId: FACILITY_ID,
+      productionRunIds: ["pr-without-application"],
+      durabilityOption: "200_year",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetMapping.mockResolvedValue(null);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      makeTestOrgContext(USER_ID),
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.productionReadinessGap).toMatchObject({
+      kind: "noApplications",
+      detail:
+        "Some completed production runs linked to this credit batch have no application. Review the product, delivery, and application chain.",
+      fixTarget: "applications",
+    });
+  });
+
+  // Defensive coverage: membership writes only admit complete runs, so a
+  // non-complete member run should not occur; if one ever does (legacy rows,
+  // a future membership path), routing must still point at Production Runs.
+  it("defensively routes a batch whose only member runs are incomplete to Production Runs", async () => {
+    mockNormalizedLineageFacts({ "pr-draft": "draft" });
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      code: "CB-1",
+      facilityId: FACILITY_ID,
+      productionRunIds: ["pr-draft"],
+      durabilityOption: "200_year",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetMapping.mockResolvedValue(null);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      makeTestOrgContext(USER_ID),
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.productionReadinessGap).toMatchObject({
+      kind: "noProductionRuns",
+      fixTarget: "productionRuns",
+    });
   });
 
   it("reports missing organization credentials and skips remote calls", async () => {
@@ -503,7 +560,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedListTemplates.mockResolvedValue([
       template("rvt_resolved", [
         "key_known",
-        "biochar_sequestration_1000_year",
+        "biochar_sequestration_1000_year_f_durable_max",
       ]),
     ]);
     mockedListBlueprints.mockResolvedValue([blueprint("key_known")]);
@@ -548,10 +605,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     ]);
     expect(result.transportCoverage.feedstock.count).toBe(0);
     expect(result.productionReadinessGap).toMatchObject({
-      kind: "noApplications",
+      kind: "noProductionRuns",
       detail:
-        "No applications fall within this batch period.",
-      fixTarget: "applications",
+        "No completed production runs are linked to this credit batch. Complete a matching production run to continue.",
+      fixTarget: "productionRuns",
     });
     expect(mockedGetLegs).not.toHaveBeenCalled();
     expect(result.linkedGhgStatement).toBeNull();
@@ -913,7 +970,7 @@ describe("requiredTransportCategories", () => {
     );
 
     expect(result.entityReadinessGaps).toEqual([
-      "Sample S-1: TGA non-reactive carbon data · R0 reflectance · R₀ readings at or above 2%",
+      "Sample S-1: Total carbon · Measured inorganic carbon · TGA non-reactive carbon data · R0 reflectance · R₀ readings at or above 2%",
     ]);
   });
 

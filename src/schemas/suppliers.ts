@@ -5,7 +5,15 @@
 
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
-import { latitudeSchema, longitudeSchema, optionalPositiveNumber, requiredLatitudeSchema, requiredLongitudeSchema, toNumberOrUndefined } from "./helpers";
+import {
+  gpsPairSuperRefine,
+  latitudeSchema,
+  longitudeSchema,
+  optionalPositiveNumber,
+  requiredLatitudeSchema,
+  requiredLongitudeSchema,
+  toNumberOrUndefined,
+} from "./helpers";
 
 // ============================================
 // Supplier Form Schema (Client-side validation)
@@ -174,6 +182,17 @@ export const supplierLocationFormSchema = z.object({
   isDefault: z.boolean().optional().default(false),
 });
 
+export const supplierQuickAddSchema = supplierFormSchema
+  .pick({ name: true })
+  .extend(
+    supplierLocationFormSchema.pick({
+      country: true,
+      gpsLatitude: true,
+      gpsLongitude: true,
+    }).shape,
+  )
+  .superRefine(gpsPairSuperRefine);
+
 /**
  * Schema for creating a supplier location (server action)
  */
@@ -223,6 +242,8 @@ export type DeleteSupplierData = z.infer<typeof deleteSupplierSchema>;
 export type SupplierFilterData = z.infer<typeof supplierFilterSchema>;
 export type SupplierSelectData = z.infer<typeof supplierSelectSchema>;
 export type SupplierLocationFormData = z.infer<typeof supplierLocationFormSchema>;
+export type SupplierQuickAddData = z.infer<typeof supplierQuickAddSchema>;
+export type SupplierQuickAddInput = z.input<typeof supplierQuickAddSchema>;
 export type CreateSupplierLocationData = z.infer<typeof createSupplierLocationSchema>;
 export type CreateSupplierWithLocationsData = z.infer<
   typeof createSupplierWithLocationsSchema

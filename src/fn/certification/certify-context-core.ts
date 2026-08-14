@@ -22,6 +22,7 @@ import {
 } from "@/data-access/chain-of-custody";
 import {
   loadCreditBatchRollups,
+  type BatchLineageRunFact,
   type CreditBatchRollup,
   type CreditBatchRollupsByBatch,
 } from "@/data-access/credit-batch-accounting";
@@ -34,10 +35,10 @@ import {
   type RemovalRunSummary,
 } from "@/lib/certification/mass-accounting";
 import {
-  defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "@/lib/certification/production-readiness";
 import { attributeSoilTemperatureBlockers } from "@/lib/certification/member-batch-gates";
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { SafeError } from "@/lib/errors";
 import {
   aggregateTransportMassDistance,
@@ -72,6 +73,7 @@ import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { collectFutureDatedMeasurements } from "./future-dated-measurements";
 import { buildSubmissionWarnings } from "./submission-warnings";
+import { productionReadinessGapForScope } from "@/lib/certification/production-readiness-from-lineage";
 import { loadEvidenceMirrorSummaryForScope, type EvidenceMirrorSummary } from "./evidence-mirror-summary";
 import {
   loadLinkedGhgStatementStatus,
@@ -307,6 +309,13 @@ interface RemovalScope {
   removal: CertifierRemovalRow | null;
   memberBatches: (MemberCreditBatch & {
     productionRunIds: string[];
+    // Member runs with status "complete" — drives the readiness routing between
+    // "complete a run" and "review the application chain" when nothing is
+    // submittable. Membership writes already reject non-complete runs and block
+    // reopening a member run, so this filter is defensive (legacy rows, future
+    // membership paths); it also keeps the routing honest with the gap copy's
+    // "completed" claim.
+    completedProductionRunIds: string[];
     applicationIds: string[];
     durabilityOption: DurabilityOption;
     // §8.6.2 production-bucket claim state (issue #349, ADR 0020): the removal
@@ -314,6 +323,12 @@ interface RemovalScope {
     productionEmissionsClaimedByRemovalId: string | null;
   })[];
   lineages: ChainOfCustodyData[];
+}
+
+function completedRunIds(runs: BatchLineageRunFact[]): string[] {
+  return runs
+    .filter((run) => run.status === COMPLETED_PRODUCTION_RUN_STATUS)
+    .map((run) => run.id);
 }
 
 // Resolves the removal scope for a credit batch. When the batch is already
@@ -358,6 +373,7 @@ function resolveSingleBatchScope(
       {
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
+        completedProductionRunIds: completedRunIds(lineageFacts.runs),
         applicationIds: lineageFacts.applicationIds,
         durabilityOption: batch.durabilityOption,
         productionEmissionsClaimedByRemovalId:
@@ -393,6 +409,7 @@ export async function resolveScopeForRemoval(
       return {
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
+        completedProductionRunIds: completedRunIds(lineageFacts.runs),
         applicationIds: lineageFacts.applicationIds,
         durabilityOption: accountingBatch.durabilityOption,
         productionEmissionsClaimedByRemovalId:
@@ -539,49 +556,6 @@ export async function loadFacilityCertifierFacts(
   };
 }
 
-function productionReadinessGapFromLineages(
-  lineages: ChainOfCustodyData[],
-): ProductionReadinessGap | null {
-  if (lineages.every((lineage) => lineage.productionRun)) {
-    return null;
-  }
-
-  const missingProduct = lineages.find((lineage) => !lineage.biocharProduct);
-  if (missingProduct) {
-    return {
-      kind: "missingBiocharProduct",
-      detail: `Application ${missingProduct.application.code} is not linked to a biochar product through its delivery or order`,
-      fixTarget: "deliveries",
-    };
-  }
-
-  const productMissingRun = lineages.find(
-    (lineage) =>
-      lineage.biocharProduct && !lineage.biocharProduct.linkedProductionRunId,
-  );
-  if (productMissingRun?.biocharProduct) {
-    return {
-      kind: "biocharProductMissingRun",
-      detail: `Biochar product ${productMissingRun.biocharProduct.code} is not linked to a production run`,
-      fixTarget: "biocharProducts",
-    };
-  }
-
-  const missingRun = lineages.find(
-    (lineage) =>
-      lineage.biocharProduct?.linkedProductionRunId && !lineage.productionRun,
-  );
-  if (missingRun?.biocharProduct) {
-    return {
-      kind: "productionRunMissing",
-      detail: `Biochar product ${missingRun.biocharProduct.code} links to a production run that could not be loaded`,
-      fixTarget: "biocharProducts",
-    };
-  }
-
-  return defaultProductionReadinessGap();
-}
-
 // Composes one removal's scope, submission, lineage, transport, and mass facts.
 export async function buildRemovalContext(
   orgCtx: OrgContext,
@@ -623,6 +597,13 @@ export async function buildRemovalContext(
     new Set(scope.memberBatches.flatMap((b) => b.applicationIds)),
   );
   const lineages = scope.lineages;
+  const productionReadinessGap = productionReadinessGapForScope({
+    lineages,
+    completedMemberProductionRunIds: scope.memberBatches.flatMap(
+      (batch) => batch.completedProductionRunIds,
+    ),
+    scope: scope.removalId ? "removal" : "creditBatch",
+  });
   const runIds = Array.from(
     new Set(
       lineages
@@ -683,13 +664,6 @@ export async function buildRemovalContext(
   // template setup does NOT gate the lineage walk; otherwise setup gaps collapse
   // into a misleading "no production data" blocker.
   if (applicationIds.length === 0) {
-    const productionReadinessGap: ProductionReadinessGap = {
-      kind: "noApplications",
-      detail: scope.removalId
-        ? "No applications linked to this Removal"
-        : "No applications fall within this batch period.",
-      fixTarget: "applications",
-    };
     return {
       facilityId: scope.facilityId,
       removalId: scope.removalId,
@@ -725,7 +699,6 @@ export async function buildRemovalContext(
     runIds.length > 0
       ? await getProductionRunsWithSamples(orgCtx, runIds)
       : [];
-  const productionReadinessGap = productionReadinessGapFromLineages(lineages);
 
   // Credit-batch-grained durability data plane (ADR 0016): pool each member
   // batch's lab Samples, scope runs to the removal's applied set, and run the D3
@@ -773,7 +746,11 @@ export async function buildRemovalContext(
     entityReadinessGaps: entityReadiness.gaps,
     entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
-    futureDatedMeasurements: collectFutureDatedMeasurements({ runs, lineages }),
+    futureDatedMeasurements: collectFutureDatedMeasurements({
+      runs,
+      samples: batchesWithSamples.flatMap((batch) => batch.samples),
+      lineages,
+    }),
     submissionWarnings,
     supportingDocuments,
     runSummary,

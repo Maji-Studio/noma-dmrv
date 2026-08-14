@@ -29,8 +29,8 @@ import {
  *      the orphan, POSTs only the remaining datapoints; exactly one of each.
  *   2. Removal POST drop-after-commit → same property at the removal level
  *      (plus the within-attempt variant where the lookup works immediately).
- *   4. reject-before-commit with a 4xx body → row rejected, failed sync
- *      event carries the registry response body.
+ *   4. Removal reject-before-commit after confirmed datapoints → row stays
+ *      locked, failed sync event carries the registry response body.
  *   5. Hash-supersede across versions → registry holds two removals with
  *      distinct versioned supplier refs.
  *
@@ -89,6 +89,10 @@ import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as sources from "@/fn/certification/sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { SafeError } from "@/lib/errors";
+import {
+  SUBMISSION_ATTEMPT_OUTCOMES,
+  SUBMISSION_EXTERNAL_MUTATIONS,
+} from "@/lib/certification/submission-metadata";
 import {
   buildRemovalSupplierRef,
   IsometricApiError,
@@ -364,8 +368,12 @@ function makeRun(
     samples: [
       {
         id: "smp-bd-1",
+        sampleCode: "SMP-BD-1",
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.91,
         hToCOrgRatio: 0.4,
         oToCOrgRatio: 0.15,
         ashContentPercent: 5,
@@ -373,8 +381,12 @@ function makeRun(
       } as unknown as Sample,
       {
         id: "smp-bd-2",
+        sampleCode: "SMP-BD-2",
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.92,
         hToCOrgRatio: 0.41,
         oToCOrgRatio: 0.16,
         ashContentPercent: 5,
@@ -382,8 +394,12 @@ function makeRun(
       } as unknown as Sample,
       {
         id: "smp-bd-3",
+        sampleCode: "SMP-BD-3",
         productionRunId: PRODUCTION_RUN_ID,
+        totalCarbonPercent: 81,
         organicCarbonPercent: 80,
+        inorganicCarbonPercent: 1,
+        sReflectanceFraction: 0.93,
         hToCOrgRatio: 0.39,
         oToCOrgRatio: 0.14,
         ashContentPercent: 5,
@@ -809,8 +825,8 @@ describe("submitRemoval boundary — removal orphan (test 2)", () => {
   });
 });
 
-describe("submitRemoval boundary — rejected create (test 4)", () => {
-  it("rejects the row and records the registry's 4xx body on the failed sync event", async () => {
+describe("submitRemoval boundary — definitive Removal refusal (test 4)", () => {
+  it("preserves the lock after confirmed datapoints and records the 4xx body", async () => {
     const fixture = await createFixture();
     setContext(fixture);
     const registryBody = {
@@ -825,16 +841,20 @@ describe("submitRemoval boundary — rejected create (test 4)", () => {
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: fixture.removalId }),
     ).rejects.toThrowError(SafeError);
 
-    // The registry never created the removal, and the lookup confirmed it.
+    // The registry never created the Removal, but this attempt already created
+    // its datapoints, so the draft remains locked for reconciliation.
     expect(registry.ghgEntries).toHaveLength(0);
+    expect(registry.datapoints).toHaveLength(2);
     expect(registry.requestCount("GET", "/ghg_entries")).toBe(1);
 
     const rows = await listRows(fixture.removalId);
     expect(rows).toHaveLength(1);
-    expect(rows[0].status).toBe("rejected");
+    expect(rows[0].status).toBe("draft");
+    expect(rows[0].lockedAt).not.toBeNull();
     expect(rows[0].externalId).toBeNull();
     expect(rows[0].metadata).toMatchObject({
-      lastError: expect.stringContaining("422"),
+      lastAttemptOutcome: SUBMISSION_ATTEMPT_OUTCOMES.interrupted,
+      externalMutation: SUBMISSION_EXTERNAL_MUTATIONS.confirmed,
     });
 
     const failed = (await listSyncEvents(fixture.removalId)).find(

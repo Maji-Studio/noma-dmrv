@@ -12,6 +12,7 @@ import { creditBatches } from "@/db/schema/credits";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
@@ -21,10 +22,16 @@ import { SafeError } from "@/lib/errors";
 import { pluralize } from "@/lib/copy-utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
+import {
+  hasStorageLocationRegistrationForExternalProject,
+} from "./certifier-storage-locations";
+import { withCertifierProjectMappingLocks } from "./certifier-project-mapping-locks";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 export type CertifierProjectRow = typeof certifierProjects.$inferSelect;
 export type DocumentRow = typeof documents.$inferSelect;
+export { appendSyncEvent, listRecentSyncEvents } from "./certifier-sync-events";
+export type { AppendSyncEventInput } from "./certifier-sync-events";
 
 export interface UpsertCertifierProjectInput {
   facilityId: string;
@@ -292,6 +299,19 @@ export async function upsertCertifierProject(
             "Cannot change certifier project or facility ID: this facility has certifier submissions. Supersede or reject them first.",
           );
         }
+        if (
+          existing.externalProjectId !== values.externalProjectId &&
+          (await hasStorageLocationRegistrationForExternalProject(
+            ctx,
+            tx,
+            existing.provider,
+            existing.externalProjectId,
+          ))
+        ) {
+          throw new SafeError(
+            "Cannot change the certifier project: this Isometric project has registered application sites. Keep the current project mapping to preserve their registry identities.",
+          );
+        }
       }
 
       // org-scope-ok: values includes the active organization id.
@@ -325,7 +345,15 @@ export async function upsertCertifierProject(
       return row;
     });
 
-  return withExternalFacilityConflictGuard(values.externalFacilityId, runUpsert);
+  return withCertifierProjectMappingLocks(
+    ctx,
+    {
+      facilityId: input.facilityId,
+      provider: input.provider,
+      targetExternalProjectId: values.externalProjectId,
+    },
+    () => withExternalFacilityConflictGuard(values.externalFacilityId, runUpsert),
+  );
 }
 
 export interface FacilityEmissionConfigInput {
@@ -380,11 +408,20 @@ export async function deleteCertifierProject(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  await db.transaction(async (tx) => {
+  await withCertifierProjectMappingLocks(
+    ctx,
+    {
+      facilityId,
+      provider,
+    },
+    () => db.transaction(async (tx) => {
     // Lock the mapping row so a concurrent submission insert that depends on
     // this mapping cannot race the unlink check.
-    await tx
-      .select({ id: certifierProjects.id })
+    const [mapping] = await tx
+      .select({
+        externalProjectId: certifierProjects.externalProjectId,
+        provider: certifierProjects.provider,
+      })
       .from(certifierProjects)
       .where(
         and(
@@ -405,6 +442,20 @@ export async function deleteCertifierProject(
       );
     }
 
+    if (
+      mapping &&
+      (await hasStorageLocationRegistrationForExternalProject(
+        ctx,
+        tx,
+        mapping.provider,
+        mapping.externalProjectId,
+      ))
+    ) {
+      throw new SafeError(
+        "Cannot unlink: this Isometric project has registered application sites. Keep the project mapping to preserve their registry identities.",
+      );
+    }
+
     await tx
       .delete(certifierProjects)
       .where(
@@ -414,7 +465,8 @@ export async function deleteCertifierProject(
           eq(certifierProjects.organizationId, ctx.organizationId),
         ),
       );
-  });
+    }),
+  );
 }
 
 // =====================================================================
@@ -643,6 +695,7 @@ export async function markSubmissionSubmitted(
         externalId: args.externalId,
         submittedAt: sql`now()`,
         lockedAt: null,
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastError}::text - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text - ${SUBMISSION_METADATA_KEYS.externalMutation}::text`,
         updatedAt: sql`now()`,
       })
       .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
@@ -760,7 +813,7 @@ export async function retireStaleSubmissionDraft(
 export async function markSubmissionRejected(
   ctx: OrgContext,
   id: string,
-  args: { errorMessage: string },
+  args: { errorMessage: string; expectedLockedAt?: Date },
 ): Promise<void> {
   requireOrgScope(ctx);
   await db
@@ -769,9 +822,18 @@ export async function markSubmissionRejected(
       status: "rejected",
       lockedAt: null,
       updatedAt: sql`now()`,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('lastError', ${args.errorMessage}::text)`,
+      metadata: sql`(coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text - ${SUBMISSION_METADATA_KEYS.externalMutation}::text) || jsonb_build_object(${SUBMISSION_METADATA_KEYS.lastError}::text, ${args.errorMessage}::text)`,
     })
-    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+    .where(
+      and(
+        eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.status, "draft"),
+        args.expectedLockedAt
+          ? eq(certificationSubmissions.lockedAt, args.expectedLockedAt)
+          : undefined,
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    );
 }
 
 // Accumulates per-step recovery IDs into `payload_snapshot.journaled`
@@ -926,56 +988,6 @@ export async function attachReportDocument(
     })
     .returning();
   return row;
-}
-
-export interface AppendSyncEventInput {
-  provider: CertifierProvider;
-  entityType: string;
-  entityId: string;
-  operation: string;
-  status: "succeeded" | "failed";
-  requestPayload?: unknown;
-  responsePayload?: unknown;
-  errorMessage?: string | null;
-  attemptedAt?: Date;
-}
-
-export async function appendSyncEvent(
-  ctx: OrgContext,
-  input: AppendSyncEventInput,
-): Promise<void> {
-  requireOrgScope(ctx);
-  await db.insert(certifierSyncEvents).values({
-    organizationId: ctx.organizationId,
-    provider: input.provider,
-    entityType: input.entityType,
-    entityId: input.entityId,
-    operation: input.operation,
-    status: input.status,
-    requestPayload: (input.requestPayload ?? null) as Record<string, unknown>,
-    responsePayload: (input.responsePayload ?? null) as Record<string, unknown>,
-    errorMessage: input.errorMessage ?? null,
-    attemptedAt: input.attemptedAt,
-  });
-}
-
-export async function listRecentSyncEvents(
-  ctx: OrgContext,
-  args: { entityType: string; entityId: string; limit: number },
-): Promise<CertifierSyncEventRow[]> {
-  requireOrgScope(ctx);
-  return db
-    .select()
-    .from(certifierSyncEvents)
-    .where(
-      and(
-        eq(certifierSyncEvents.entityType, args.entityType),
-        eq(certifierSyncEvents.entityId, args.entityId),
-        eq(certifierSyncEvents.organizationId, ctx.organizationId),
-      ),
-    )
-    .orderBy(desc(certifierSyncEvents.attemptedAt))
-    .limit(args.limit);
 }
 
 function deriveFileName(reportUrl: string): string {

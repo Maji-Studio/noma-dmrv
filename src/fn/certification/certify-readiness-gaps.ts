@@ -123,6 +123,7 @@ export function buildEntityReadinessResult(
       const readiness = deriveEntityCertifyReadiness("sample", {
         ...sample,
         durabilityOption: batch.durabilityOption,
+        sampling: batch.sampling,
       });
       addEntityGaps(
         `Sample ${sample.sampleCode}`,

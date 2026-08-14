@@ -26,8 +26,9 @@ export const binMovements = pgTable(
       .references(() => storageLocations.id),
     lane: binMovementLane('lane').notNull(),
     movementType: binMovementType('movement_type').notNull(),
-    // Signed delta. Dry kg for the feedstock lane, as-is kg otherwise.
-    // Losses are always negative; adjustments may be either sign.
+    // Signed delta in the lane's native stock unit. Feedstock is wet kg;
+    // biochar and product keep their existing as-is kg semantics. Losses are
+    // always negative; adjustments may be either sign.
     massDeltaKg: massKg('mass_delta_kg').notNull(),
     // Required for both types so a verifier always knows what happened.
     reason: text('reason').notNull(),
@@ -35,9 +36,9 @@ export const binMovements = pgTable(
     createdBy: text('created_by').references(() => users.id, {
       onDelete: 'set null',
     }),
-    // Stock-take snapshot — populated only on adjustments recorded from a count.
-    // countedMassKg is in the lane's native unit (dry for feedstock); the wet
-    // count + moisture ratio record how the dry figure was derived.
+    // Stock-take snapshot, populated only on adjustments recorded from a count.
+    // countedMassKg and derivedMassKgAtTime are in the lane's native unit
+    // (wet for feedstock). Moisture remains snapshot metadata only.
     countedMassKg: massKg('counted_mass_kg'),
     derivedMassKgAtTime: massKg('derived_mass_kg_at_time'),
     countedWetMassKg: massKg('counted_wet_mass_kg'),

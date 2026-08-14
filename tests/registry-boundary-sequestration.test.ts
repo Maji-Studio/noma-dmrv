@@ -29,6 +29,7 @@ vi.mock("@/fn/certification/registry-create", async (importOriginal) => {
         if (args.resumed) {
           const lookup = await args.reconcile();
           if (lookup.found === "single") {
+            await args.onConfirmed?.(lookup.externalId);
             return {
               externalId: lookup.externalId,
               source: "reconciliation" as const,
@@ -36,6 +37,7 @@ vi.mock("@/fn/certification/registry-create", async (importOriginal) => {
           }
         }
         const externalId = await args.create();
+        await args.onConfirmed?.(externalId);
         return { externalId, source: "create" as const };
       },
     ),
@@ -43,10 +45,17 @@ vi.mock("@/fn/certification/registry-create", async (importOriginal) => {
 });
 
 import { submitDurabilityMeasurementSamples } from "@/fn/certification/durability-measurement-samples";
+import { appendSubmissionJournal } from "@/data-access/certification";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
-import { build1000YearSequestrationSample } from "@/lib/isometric/transformers/measurement-sample";
+import {
+  build1000YearSequestrationSample,
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+} from "@/lib/isometric/transformers/measurement-sample";
 import {
   assertSequestrationTemplateBindings,
+  assertSequestrationTemplateSelectable,
   bindSequestrationDatapointsToTemplate,
   buildDirectSequestrationDatapoints,
   RegistryMappingError,
@@ -67,7 +76,11 @@ import {
 const TEMPLATE_ID = "rvt_boundary_1000";
 const RTC_ID = "rtc_boundary_1000";
 const PROJECT_ID = "prj_boundary_1000";
-const SAMPLE_REF = "nm-mts-boundary-pb-batch-v1";
+const SAMPLE_REFS = [
+  "nm-mts-boundary-pb-batch-s-1-v1",
+  "nm-mts-boundary-pb-batch-s-2-v1",
+  "nm-mts-boundary-pb-batch-s-3-v1",
+] as const;
 const SOURCE_BINDING_PLAN = [
   {
     documentId: "document-boundary-inventory",
@@ -82,7 +95,7 @@ const SOURCE_BINDING_PLAN = [
       kind: "sequestration",
       groupKey: "co2-stored",
       componentId: RTC_ID,
-      componentBlueprintKey: "biochar_sequestration_1000_year",
+      componentBlueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
       inputKey: "product_mass",
       creditBatchIds: ["batch-boundary"],
     },
@@ -110,12 +123,18 @@ function template(): IsometricGhgEntryTemplate {
         components: [
           {
             id: RTC_ID,
-            blueprint_key: "biochar_sequestration_1000_year",
+            blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
             display_name: "Biochar sequestration, 1000 year durability",
             inputs: [
               {
                 type: "monitored",
-                input_key: "carbon_contents",
+                input_key: "total_carbon_contents",
+                quantity_kind: "mass_fraction_dry_basis",
+                datapoint_id: null,
+              },
+              {
+                type: "monitored",
+                input_key: "inorganic_carbon_contents",
                 quantity_kind: "mass_fraction_dry_basis",
                 datapoint_id: null,
               },
@@ -177,68 +196,118 @@ describe("1000-year sequestration registry boundary", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(RegistryMappingError);
       expect(error).toMatchObject({
-        blueprintKey: "biochar_sequestration_1000_year",
+        blueprintKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
         inputKey: "renamed_carbon_contents",
       });
     }
 
+    const missingInorganic = structuredClone(valid);
+    missingInorganic.groups[0].components[0].inputs =
+      missingInorganic.groups[0].components[0].inputs.filter(
+        (input) => input.input_key !== "inorganic_carbon_contents",
+      );
+    expect(() =>
+      assertSequestrationTemplateBindings(missingInorganic),
+    ).toThrow(/one value for each required durability field/);
+
     const wrongQuantityKind = structuredClone(valid);
-    wrongQuantityKind.groups[0].components[0].inputs[2].quantity_kind =
+    wrongQuantityKind.groups[0].components[0].inputs[3].quantity_kind =
       "dimensionless_ratio";
     expect(() =>
       assertSequestrationTemplateBindings(wrongQuantityKind),
     ).toThrow(/uses the wrong measurement type/);
   });
 
+  it("rejects the deprecated component for a newly selected template with an actionable replacement", () => {
+    const deprecated = template();
+    deprecated.groups[0].components[0].blueprint_key =
+      DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR;
+    deprecated.groups[0].components[0].inputs = [
+      {
+        type: "monitored",
+        display_name: "Carbon contents",
+        input_key: "carbon_contents",
+        quantity_kind: "mass_fraction_dry_basis",
+        datapoint_id: null,
+      },
+      deprecated.groups[0].components[0].inputs[2],
+      deprecated.groups[0].components[0].inputs[3],
+    ];
+
+    expect(() => assertSequestrationTemplateBindings(deprecated)).toThrow(
+      /deprecated.*biochar_sequestration_1000_year_f_durable_max/i,
+    );
+    expect(() => assertSequestrationTemplateSelectable(deprecated)).toThrow(
+      /legacy.*total-carbon.*uncapped.*biochar_sequestration_1000_year_f_durable_max/i,
+    );
+  });
+
+  it("keeps the unsampled 1,000-year component unsupported with an actionable reason", () => {
+    const unsampled = template();
+    unsampled.groups[0].components[0].blueprint_key =
+      UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR;
+
+    expect(() => assertSequestrationTemplateBindings(unsampled)).toThrow(
+      /Unsampled Method B is not supported/i,
+    );
+    expect(() => assertSequestrationTemplateSelectable(unsampled)).toThrow(
+      /Unsampled Method B is not supported/i,
+    );
+  });
+
   it("captures POSTed measurement value IDs and binds them into the GHG entry variants", async () => {
-    const sampleBody = build1000YearSequestrationSample({
-      projectId: PROJECT_ID,
-      supplierRefId: SAMPLE_REF,
-      measuredAt: "2026-07-24T00:00:00.000Z",
-      productMassKg: 1_000,
-      replicates: [
-        { carbonContentFraction: 0.8, sFraction: 0.91 },
-        { carbonContentFraction: 0.82, sFraction: 0.92 },
-        { carbonContentFraction: 0.84, sFraction: 0.93 },
-      ],
-    });
-    expect(sampleBody).not.toBeNull();
-    if (!sampleBody) return;
+    const replicates = [
+      { totalCarbonContentFraction: 0.77, inorganicCarbonContentFraction: 0.01, sFraction: 0.93 },
+      { totalCarbonContentFraction: 0.755, inorganicCarbonContentFraction: 0.011, sFraction: 0.94 },
+      { totalCarbonContentFraction: 0.78, inorganicCarbonContentFraction: 0.012, sFraction: 0.93 },
+    ];
+    const submissions = replicates.map((replicate, index) => ({
+      creditBatchId: "batch-boundary",
+      sampleId: `sample-boundary-${index + 1}`,
+      creditBatchProductMassKg: 1_970,
+      operationKey: `pb:batch-boundary:sample:sample-boundary-${index + 1}`,
+      supplierRefId: SAMPLE_REFS[index],
+      body: build1000YearSequestrationSample({
+        projectId: PROJECT_ID,
+        supplierRefId: SAMPLE_REFS[index],
+        measuredAt: `2026-07-2${index + 2}T00:00:00.000Z`,
+        replicate,
+      }),
+      label: `Sample sample-boundary-${index + 1}`,
+    }));
 
     const client = await getIsometricClientForOrg(
       "org-boundary-sequestration",
     );
     const directDatapoints = buildDirectSequestrationDatapoints({
       template: template(),
-      measurementSampleSubmissions: [
-        {
-          operationKey: "pb:batch-boundary",
-          supplierRefId: SAMPLE_REF,
-          body: sampleBody,
-        },
-      ],
+      measurementSampleSubmissions: submissions,
       projectId: PROJECT_ID,
       removalId: "rem-boundary-sequestration",
       version: 1,
       sourceIds: [],
     });
-    const directIds: string[] = [];
+    const directIdsByInput = new Map<string, string[]>();
     for (const direct of directDatapoints) {
       const created = await createDatapoint(client, direct.body);
-      directIds.push(created.id);
+      directIdsByInput.set(direct.inputKey, [
+        ...(directIdsByInput.get(direct.inputKey) ?? []),
+        created.id,
+      ]);
     }
 
-    expect(registry.requestCount("POST", "/datapoints")).toBe(3);
+    expect(registry.requestCount("POST", "/datapoints")).toBe(4);
     expect(
       registry.datapoints.map((datapoint) => datapoint.quantity),
     ).toEqual([
-      { magnitude: 0.91, unit: "dimensionless" },
-      { magnitude: 0.92, unit: "dimensionless" },
+      { magnitude: 1_970, unit: "kg" },
+      { magnitude: 0.93, unit: "dimensionless" },
+      { magnitude: 0.94, unit: "dimensionless" },
       { magnitude: 0.93, unit: "dimensionless" },
     ]);
     expect(
       registry.datapoints.map((datapoint) => datapoint.display_name),
-    ).toEqual(["s_fraction", "s_fraction", "s_fraction"]);
+    ).toEqual(["product_mass", "s_fraction", "s_fraction", "s_fraction"]);
 
     const submitted = await submitDurabilityMeasurementSamples({
       orgCtx: makeTestOrgContext("user-boundary-sequestration"),
@@ -248,21 +317,21 @@ describe("1000-year sequestration registry boundary", () => {
         payloadSnapshot: { journaled: {} },
       },
       resumed: false,
-      submissions: [
-        {
-          operationKey: "pb:batch-boundary",
-          supplierRefId: SAMPLE_REF,
-          body: sampleBody,
-          label: "production batch CB-BOUNDARY",
-        },
-      ],
+      submissions,
       sourceBindingPlan: SOURCE_BINDING_PLAN as never,
       log,
     });
 
-    expect(registry.requestCount("POST", "/measurement_samples")).toBe(1);
-    expect(registry.measurementSamples).toHaveLength(1);
-    expect(submitted.samples).toHaveLength(1);
+    expect(registry.requestCount("POST", "/measurement_samples")).toBe(3);
+    expect(registry.measurementSamples).toHaveLength(3);
+    expect(submitted.samples).toHaveLength(3);
+    expect(vi.mocked(appendSubmissionJournal)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(appendSubmissionJournal).mock.calls.at(-1)?.[2]).toEqual({
+      measurementSamples: submitted.samples.map((sample, index) => ({
+        supplierReferenceId: SAMPLE_REFS[index],
+        measurementSampleId: sample.measurementSampleId,
+      })),
+    });
 
     const resumed = await submitDurabilityMeasurementSamples({
       orgCtx: makeTestOrgContext("user-boundary-sequestration"),
@@ -271,53 +340,42 @@ describe("1000-year sequestration registry boundary", () => {
         id: "sub-boundary-sequestration",
         payloadSnapshot: {
           journaled: {
-            measurementSamples: [
-              {
-                supplierReferenceId: SAMPLE_REF,
-                measurementSampleId:
-                  submitted.samples[0].measurementSampleId,
-              },
-            ],
+            measurementSamples: submitted.samples.map((sample, index) => ({
+              supplierReferenceId: SAMPLE_REFS[index],
+              measurementSampleId: sample.measurementSampleId,
+            })),
           },
         },
       },
       resumed: true,
-      submissions: [
-        {
-          operationKey: "pb:batch-boundary",
-          supplierRefId: SAMPLE_REF,
-          body: sampleBody,
-          label: "production batch CB-BOUNDARY",
-        },
-      ],
+      submissions,
       sourceBindingPlan: SOURCE_BINDING_PLAN as never,
       log,
     });
-    expect(registry.requestCount("POST", "/measurement_samples")).toBe(1);
-    expect(
-      registry.requestCount(
-        "GET",
-        `/measurement_samples/${submitted.samples[0].measurementSampleId}`,
-      ),
-    ).toBe(0);
-    expect(registry.requestCount("GET", "/measurement_samples")).toBe(1);
-    expect(resumed.samples).toHaveLength(1);
-    expect(resumed.samples[0].measurementSampleId).toBe(
-      submitted.samples[0].measurementSampleId,
+    expect(registry.requestCount("POST", "/measurement_samples")).toBe(3);
+    expect(registry.requestCount("GET", "/measurement_samples")).toBe(3);
+    expect(resumed.samples).toHaveLength(3);
+    expect(resumed.samples.map((sample) => sample.measurementSampleId)).toEqual(
+      submitted.samples.map((sample) => sample.measurementSampleId),
     );
     expect(resumed.datapointIdsByMeasurementProperty).toEqual(
       submitted.datapointIdsByMeasurementProperty,
     );
 
-    const responseValues = registry.measurementSamples[0].values as Array<{
+    const responseValues = registry.measurementSamples.flatMap((sample) => sample.values) as Array<{
       datapoint_id: string;
       measurement_property: { quantity_kind: string; qualifier: string | null };
     }>;
-    const carbonIds = responseValues
+    const totalCarbonIds = responseValues
       .filter(
         (value) =>
-          value.measurement_property.quantity_kind ===
-          "mass_fraction_dry_basis",
+          value.measurement_property.qualifier === "total_carbon",
+      )
+      .map((value) => value.datapoint_id);
+    const inorganicCarbonIds = responseValues
+      .filter(
+        (value) =>
+          value.measurement_property.qualifier === "total_inorganic_carbon",
       )
       .map((value) => value.datapoint_id);
     const measurementSampleSFractionIds = responseValues
@@ -326,17 +384,21 @@ describe("1000-year sequestration registry boundary", () => {
           value.measurement_property.qualifier === "inertinite_fraction",
       )
       .map((value) => value.datapoint_id);
-    const productMassId = responseValues.find(
+    expect(responseValues.some(
       (value) => value.measurement_property.quantity_kind === "mass",
-    )?.datapoint_id;
-    expect(productMassId).toBeDefined();
+    )).toBe(false);
+    const productMassIds = directIdsByInput.get("product_mass") ?? [];
+    const sFractionIds = directIdsByInput.get("s_fraction") ?? [];
+    expect(productMassIds).toHaveLength(1);
+    expect(sFractionIds).toHaveLength(3);
 
     const datapointIdsByRtcInput = bindSequestrationDatapointsToTemplate({
       template: template(),
       datapointIdsByMeasurementProperty:
         submitted.datapointIdsByMeasurementProperty,
       datapointIdsByRtcInput: new Map([
-        [`${RTC_ID}::s_fraction`, directIds],
+        [`${RTC_ID}::product_mass`, productMassIds],
+        [`${RTC_ID}::s_fraction`, sFractionIds],
       ]),
     });
     const body = buildCreateGhgEntryRequest({
@@ -360,22 +422,27 @@ describe("1000-year sequestration registry boundary", () => {
         inputs: [
           {
             __typename: "CreateComponentListInput",
-            datapoint_ids: carbonIds,
-            input_key: "carbon_contents",
+            datapoint_ids: totalCarbonIds,
+            input_key: "total_carbon_contents",
+          },
+          {
+            __typename: "CreateComponentListInput",
+            datapoint_ids: inorganicCarbonIds,
+            input_key: "inorganic_carbon_contents",
           },
           {
             __typename: "CreateComponentScalarInput",
-            datapoint_id: productMassId,
+            datapoint_id: productMassIds[0],
             input_key: "product_mass",
           },
           {
             __typename: "CreateComponentListInput",
-            datapoint_ids: directIds,
+            datapoint_ids: sFractionIds,
             input_key: "s_fraction",
           },
         ],
       },
     ]);
-    expect(directIds).not.toEqual(measurementSampleSFractionIds);
+    expect(sFractionIds).not.toEqual(measurementSampleSFractionIds);
   });
 });

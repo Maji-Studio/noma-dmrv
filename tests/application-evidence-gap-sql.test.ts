@@ -21,8 +21,8 @@
  *      run over the same fixtures — proving the two implementations equivalent,
  *      not merely taxonomy-aligned.
  *
- * The application `evidence_method` column is NOT NULL (default `visual`), so
- * the CASE's non-boundary `else` branch is only ever reached by `visual` rows;
+ * The application `evidence_method` column is NOT NULL (default `location`), so
+ * the CASE's fallback branch is only reached by `visual` rows;
  * the JS twin's `undefined` short-circuit is therefore unreachable here and the
  * two paths agree on every DB-reachable row.
  *
@@ -227,6 +227,8 @@ async function seedApplicationsAndDocuments(
         biocharAppliedTons: 5,
         biocharAppliedDryTons: 4.5,
         evidenceMethod: spec.evidenceMethod,
+        gpsLatitude: spec.gpsLatitude,
+        gpsLongitude: spec.gpsLongitude,
         gisBoundary: spec.gisBoundary,
       })
       .returning({ id: applications.id, code: applications.code });
@@ -290,6 +292,8 @@ function lineageFor(app: SeededApplication): ChainOfCustodyData {
       applicationDate: new Date("2025-06-15"),
       fieldIdentifier: null,
       evidenceMethod: app.spec.evidenceMethod,
+      gpsLatitude: app.spec.gpsLatitude,
+      gpsLongitude: app.spec.gpsLongitude,
       gisBoundary: app.spec.gisBoundary,
       biocharAppliedDryTons: 4.5,
       soilTemperatureC: null,

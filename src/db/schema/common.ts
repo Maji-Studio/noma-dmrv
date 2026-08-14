@@ -82,8 +82,9 @@ export const applicationMethod = pgEnum('application_method', [
 ]);
 
 export const applicationEvidenceMethod = pgEnum('application_evidence_method', [
-  'visual',
+  'location',
   'boundary',
+  'visual',
 ]);
 
 export const documentationType = pgEnum('documentation_type', [
@@ -112,6 +113,21 @@ export const registrySourceVisibility = pgEnum('registry_source_visibility', [
   'private',
   'public',
 ]);
+
+export const certifierStorageLocationDriftStatus = pgEnum(
+  'certifier_storage_location_drift_status',
+  ['in_sync', 'drifted'],
+);
+
+export const certifierBiocharApplicationLifecycleStatus = pgEnum(
+  'certifier_biochar_application_lifecycle_status',
+  ['gated', 'confirmed', 'deleted'],
+);
+
+export const certifierBiocharApplicationCorrectionStatus = pgEnum(
+  'certifier_biochar_application_correction_status',
+  ['none', 'review_required', 'replacement_required'],
+);
 
 export const documentUploadStatus = pgEnum('document_upload_status', [
   'pending',

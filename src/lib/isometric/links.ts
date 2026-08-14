@@ -42,6 +42,17 @@ export const isometricRegistry = {
     `${CERTIFY_HOSTS[args.environment]}/account/certify/project/${encodeURIComponent(
       args.externalProjectId,
     )}/overview`,
+  // A facility lives in the supplier's private Certify workspace, nested under
+  // its project. Verified against a live sandbox URL on 2026-08-04:
+  //   {host}/account/certify/project/{projectId}/facilities/{facilityId}
+  facility: (args: {
+    environment: IsometricEnvironment;
+    externalProjectId: string;
+    externalFacilityId: string;
+  }) =>
+    `${CERTIFY_HOSTS[args.environment]}/account/certify/project/${encodeURIComponent(
+      args.externalProjectId,
+    )}/facilities/${encodeURIComponent(args.externalFacilityId)}`,
   // A submitted removal lives in the supplier's private Certify workspace — it
   // is NOT a public registry page until credit issuance (see
   // docs/isometric — data-visibility). In the Certify UI a removal is a

@@ -35,6 +35,7 @@ import {
   loadRegistrySourceVisibility,
   loadRemovalBreakdown,
   loadRemovalCompilation,
+  loadRemovalTemplateDiagnostic,
   loadRemovalProductionBatches,
   loadRemovalCertifyContext,
   loadRemovalPreflight,
@@ -92,6 +93,16 @@ export function getRemovalCertifyRefetchInterval(
     : false;
 }
 
+type RemovalPreflightPollingData = {
+  lockInFlight: boolean;
+};
+
+export function getRemovalPreflightRefetchInterval(
+  data: RemovalPreflightPollingData | undefined,
+): number | false {
+  return data?.lockInFlight ? LOCKED_REFETCH_INTERVAL_MS : false;
+}
+
 export const certificationKeys = {
   all: ["certification"] as const,
   facilityMapping: (facilityId: string) =>
@@ -145,6 +156,12 @@ export const certificationKeys = {
       "removal-compilation",
       facilityId,
       removalId,
+    ] as const,
+  removalTemplateDiagnostic: (facilityId: string) =>
+    [
+      ...certificationKeys.all,
+      "removal-template-diagnostic",
+      facilityId,
     ] as const,
   removalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "removals", facilityId] as const,
@@ -232,6 +249,10 @@ export function useRemovalPreflightSummaries(
       },
       enabled: Boolean(facilityId && removalId),
       staleTime: DEFAULT_STALE_MS,
+      refetchInterval: (query: {
+        state: { data?: RemovalPreflightPollingData };
+      }) =>
+        getRemovalPreflightRefetchInterval(query.state.data),
     })),
   });
 
@@ -348,8 +369,9 @@ export function useFacilityCertifierMapping(
 
 // Read-only registry-link summary (DB-only, no Isometric API). For viewers who
 // can't manage the link — keeps the management payload (available projects,
-// templates, link hints) off the wire. Mutations invalidate
-// `certificationKeys.all`, which covers this key too.
+// templates, and facility identities) off the wire while exposing only the
+// linked-facility count needed for safe GHG Statement creation. Mutations
+// invalidate `certificationKeys.all`, which covers this key too.
 export function useFacilityCertifierSummary(
   facilityId: string,
   enabled = true,
@@ -583,6 +605,22 @@ export function useRemovalCompilation(
     },
     enabled: enabled && !!facilityId && !!removalId,
     staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+export function useRemovalTemplateDiagnostic(
+  facilityId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.removalTemplateDiagnostic(facilityId),
+    queryFn: async () => {
+      const result = await loadRemovalTemplateDiagnostic(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId,
+    staleTime: PROJECT_TEMPLATES_STALE_MS,
   });
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applicationEvidenceStateSchema,
   applicationFormSchema,
   createApplicationSchema,
   updateApplicationSchema,
@@ -12,6 +13,60 @@ import {
 } from "@/schemas/helpers";
 
 describe("application schemas", () => {
+  const customerLocation = {
+    gpsLatitude: -3.3349,
+    gpsLongitude: 37.3404,
+  };
+
+  it("defaults to customer location when a coordinate pair is supplied", () => {
+    const result = applicationFormSchema.parse({
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 100,
+      ...customerLocation,
+    });
+
+    expect(result.evidenceMethod).toBe("location");
+  });
+
+  it("requires coordinates for customer location evidence", () => {
+    const result = applicationFormSchema.safeParse({
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 100,
+      evidenceMethod: "location",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["gpsLatitude"],
+            message: "Customer location coordinates are required.",
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("allows GIS and visual alternatives without coordinates", () => {
+    const base = {
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 100,
+    };
+
+    expect(
+      applicationFormSchema.safeParse({ ...base, evidenceMethod: "boundary" })
+        .success,
+    ).toBe(true);
+    expect(
+      applicationFormSchema.safeParse({ ...base, evidenceMethod: "visual" })
+        .success,
+    ).toBe(true);
+  });
+
   it("rejects a create payload with only one GPS coordinate", () => {
     const result = createApplicationSchema.safeParse({
       applicationDate: new Date("2026-06-13"),
@@ -43,24 +98,30 @@ describe("application schemas", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects clearing only one GPS coordinate through the update action", () => {
+  it("allows a partial coordinate payload before it is merged with saved state", () => {
     const result = updateApplicationSchema.safeParse({
       applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       gpsLatitude: null,
-      gpsLongitude: 37.3404,
     });
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            path: ["gpsLatitude"],
-            message: "Latitude is required when a longitude is entered.",
-          }),
-        ]),
-      );
-    }
+    expect(result.success).toBe(true);
+  });
+
+  it("validates the merged evidence state for partial updates", () => {
+    expect(
+      applicationEvidenceStateSchema.safeParse({
+        evidenceMethod: "location",
+        gpsLatitude: null,
+        gpsLongitude: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      applicationEvidenceStateSchema.safeParse({
+        evidenceMethod: "boundary",
+        gpsLatitude: null,
+        gpsLongitude: null,
+      }).success,
+    ).toBe(true);
   });
 
   it("strips submitted dry biochar so the server remains authoritative", () => {
@@ -69,6 +130,7 @@ describe("application schemas", () => {
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 100,
       biocharAppliedDryTons: 1,
+      ...customerLocation,
     });
     const updateResult = updateApplicationSchema.parse({
       applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
@@ -80,6 +142,7 @@ describe("application schemas", () => {
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 100,
       biocharAppliedDryTons: 1,
+      ...customerLocation,
     });
 
     expect(createResult).not.toHaveProperty("biocharAppliedDryTons");
@@ -91,6 +154,7 @@ describe("application schemas", () => {
     const base = {
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      ...customerLocation,
     };
 
     expect(applicationFormSchema.safeParse({
@@ -118,6 +182,7 @@ describe("application schemas", () => {
     const base = {
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      ...customerLocation,
     };
 
     expect(createApplicationSchema.safeParse({

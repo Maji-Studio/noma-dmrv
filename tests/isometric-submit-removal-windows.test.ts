@@ -24,6 +24,8 @@ import {
   storedRows,
 } from "./fixtures/submit-removal-orchestrator";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as ledger from "@/data-access/certification";
+import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as productionBatchesDA from "@/data-access/certifier-production-batches";
 import * as certifyContext from "@/fn/certification/certify-context-core";
@@ -72,28 +74,143 @@ describe("submitRemoval — reporting window anchored to application date (issue
     return make1000YearSequestrationTemplate();
   }
 
-  it("uses MAX(applicationDate) across lineages for completed_on while durability measured_at keeps the production end", async () => {
+  function prepareDurabilitySubmission(): void {
+    setDurabilityMeasurementSamplesEnabled(true);
+    const baseContext = makeContext();
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...baseContext,
+      defaultTemplate: makeCombinedTemplate(),
+      durabilityGateBlockers: [],
+      batchesWithSamples: baseContext.batchesWithSamples.map((batch) => ({
+        ...batch,
+        durabilityOption: "1000_year" as const,
+        samples: batch.samples.map((sample, index) => ({
+          ...sample,
+          totalCarbonPercent: 80 + index,
+          inorganicCarbonPercent: 1 + index / 10,
+          sReflectanceFraction: 0.9 + index / 100,
+        })),
+      })),
+    });
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+  }
+
+  it("keeps the draft locked when production-batch binding fails after datapoints were created", async () => {
+    prepareDurabilitySubmission();
+    const originalError = new Error("production batch binding unavailable");
+    vi.mocked(
+      productionBatchesDA.getProductionBatchRegistryInputs,
+    ).mockRejectedValue(originalError);
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toBe(originalError);
+
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0]).toMatchObject({
+      status: "draft",
+      metadata: {
+        lastError: "Removal submission failed unexpectedly. Retry the submission.",
+        lastAttemptOutcome: "interrupted",
+        externalMutation: "confirmed",
+      },
+    });
+    expect(storedRows[0].lockedAt).not.toBeNull();
+    expect(isometric.createDatapoint).toHaveBeenCalled();
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
+    expect(ledgerClaim.markSubmissionInterrupted).toHaveBeenCalledOnce();
+
+    storedRows[0].lockedAt = new Date(0);
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toBe(originalError);
+    expect(storedRows[0]).toMatchObject({
+      status: "draft",
+      metadata: {
+        lastAttemptOutcome: "interrupted",
+        externalMutation: "confirmed",
+      },
+    });
+    expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
+    expect(ledgerClaim.markSubmissionInterrupted).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not create the GHG Entry when MeasurementSample source patching fails", async () => {
+    prepareDurabilitySubmission();
+    vi.mocked(
+      durabilitySamples.submitDurabilityMeasurementSamples,
+    ).mockRejectedValueOnce(new Error("measurement source patch failed"));
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/measurement source patch failed/);
+
+    expect(isometric.createDatapoint).toHaveBeenCalled();
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
+  });
+
+  it("preserves the submission error when no-mutation rejection cleanup fails", async () => {
+    prepareDurabilitySubmission();
+    vi.mocked(isometric.createDatapoint).mockRejectedValueOnce(
+      new isometric.IsometricApiError(
+        "422 Unprocessable",
+        422,
+        { errors: [{ detail: "invalid datapoint" }] },
+        "http",
+      ),
+    );
+    vi.mocked(ledger.markSubmissionRejected).mockRejectedValueOnce(
+      new Error("submission ledger unavailable"),
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow("Provider rejected the request (422): invalid datapoint");
+
+    expect(ledger.markSubmissionRejected).toHaveBeenCalledOnce();
+    expect(storedRows[0]).toMatchObject({ status: "draft" });
+    expect(storedRows[0].lockedAt).not.toBeNull();
+  });
+
+  it("uses MAX(applicationDate) for completed_on while each durability Sample keeps its sampling time", async () => {
     setDurabilityMeasurementSamplesEnabled(true);
     const progress = vi.fn();
     vi.mocked(
       durabilitySamples.submitDurabilityMeasurementSamples,
     ).mockImplementation(async (args) => {
-      args.onProgress?.(1, 1);
+      args.onProgress?.(3, 3);
       expect(progress).toHaveBeenLastCalledWith({
         step: "removal.sending_durability",
         state: "active",
-        completed: 1,
-        total: 1,
+        completed: 3,
+        total: 3,
       });
       return {
-        submitted: 1,
+        submitted: 3,
         samples: [],
         datapointIdsByMeasurementProperty: new Map([
           [
             "mass_fraction_dry_basis|total_carbon",
             ["dtp-carbon-1", "dtp-carbon-2", "dtp-carbon-3"],
           ],
-          ["mass", ["dtp-product-mass"]],
+          [
+            "mass_fraction_dry_basis|total_inorganic_carbon",
+            ["dtp-inorganic-1", "dtp-inorganic-2", "dtp-inorganic-3"],
+          ],
         ]),
       } as never;
     });
@@ -108,6 +225,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
         samples: batch.samples.map((sample, index) => ({
           ...sample,
           totalCarbonPercent: 80 + index,
+          inorganicCarbonPercent: 1 + index / 10,
           sReflectanceFraction: 0.9 + index / 100,
         })),
       })),
@@ -146,19 +264,19 @@ describe("submitRemoval — reporting window anchored to application date (issue
         step: "removal.sending_durability",
         state: "active",
         completed: 0,
-        total: 1,
+        total: 3,
       },
       {
         step: "removal.sending_durability",
         state: "active",
-        completed: 1,
-        total: 1,
+        completed: 3,
+        total: 3,
       },
       {
         step: "removal.sending_durability",
         state: "complete",
-        completed: 1,
-        total: 1,
+        completed: 3,
+        total: 3,
       },
     ]);
 
@@ -173,9 +291,8 @@ describe("submitRemoval — reporting window anchored to application date (issue
       { startedOn: "2026-01-01", completedOn: "2026-04-05" },
     );
 
-    // Caveat 1: the durability measurement samples keep production-end
-    // `measured_at` (a lab/production-time measurement) — the application
-    // anchor moves ONLY the GHG-entry window.
+    // Each remote Sample keeps the local sampling event; the application
+    // anchor moves only the GHG-entry window.
     const submitArgs = vi.mocked(
       durabilitySamples.submitDurabilityMeasurementSamples,
     ).mock.calls[0][0];
@@ -210,7 +327,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
       feedstock_type_ids: [EXTERNAL_FEEDSTOCK_TYPE_ID],
       mass: { magnitude: ORIGINAL_BIOCHAR_MASS_KG, unit: "kg" },
       started_at: "2026-01-01T00:00:00.000Z",
-      ended_at: "2026-01-31T23:59:59.999Z",
+      ended_at: "2026-01-31T23:59:59.000Z",
     });
     expect("standard_deviation" in productionBatchPost[1].mass).toBe(false);
     // Index the ordering off the matched call, not the first POST on the shared
@@ -226,18 +343,33 @@ describe("submitRemoval — reporting window anchored to application date (issue
       productionBatchesDA.upsertProductionBatchRegistration,
     ).toHaveBeenCalledTimes(1);
 
-    expect(submitArgs.submissions.length).toBeGreaterThan(0);
+    expect(submitArgs.submissions).toHaveLength(3);
+    expect(
+      submitArgs.submissions.map((submission) => submission.body.measured_at),
+    ).toEqual([
+      "2026-01-10T08:00:00.000Z",
+      "2026-01-11T09:00:00.000Z",
+      "2026-01-12T10:00:00.000Z",
+    ]);
+    expect(
+      submitArgs.submissions.map((submission) =>
+        submission.body.values
+          .filter(
+            (value) =>
+              value.measurement_property.qualifier === "inertinite_fraction",
+          )
+          .map((value) => value.value.magnitude),
+      ),
+    ).toEqual([[0.9], [0.91], [0.92]]);
     for (const submission of submitArgs.submissions) {
       expect(submission.body.production_batch_id).toBe(
         EXTERNAL_PRODUCTION_BATCH_ID,
       );
-      expect(submission.body.measured_at).toBe("2026-01-31T23:59:59.000Z");
       expect(
-        submission.body.values.filter(
-          (value) =>
-            value.measurement_property.qualifier === "inertinite_fraction",
-        ).map((value) => value.value.magnitude),
-      ).toEqual([0.9, 0.91, 0.92]);
+        submission.body.values.some(
+          (value) => value.measurement_property.quantity_kind === "mass",
+        ),
+      ).toBe(false);
     }
 
     const datapointBodies = vi.mocked(isometric.createDatapoint).mock.calls.map(
@@ -246,6 +378,15 @@ describe("submitRemoval — reporting window anchored to application date (issue
     const sFractionDatapoints = datapointBodies.filter(
       (body) => body.display_name === "s_fraction",
     );
+    const productMassDatapoints = datapointBodies.filter(
+      (body) => body.display_name === "product_mass",
+    );
+    expect(productMassDatapoints).toHaveLength(1);
+    expect(productMassDatapoints[0].quantity).toEqual({
+      magnitude: ORIGINAL_BIOCHAR_MASS_KG,
+      unit: "kg",
+    });
+    expect(productMassDatapoints[0].source_ids).toEqual(["src-test-1"]);
     expect(sFractionDatapoints.map((body) => body.quantity)).toEqual([
       { magnitude: 0.9, unit: "dimensionless" },
       { magnitude: 0.91, unit: "dimensionless" },
@@ -265,8 +406,17 @@ describe("submitRemoval — reporting window anchored to application date (issue
     );
     expect(sFractionInput).toEqual({
       __typename: "CreateComponentListInput",
-      datapoint_ids: ["dp_1", "dp_2", "dp_3"],
+      datapoint_ids: ["dp_2", "dp_3", "dp_4"],
       input_key: "s_fraction",
+    });
+    expect(
+      sequestrationComponent?.inputs.find(
+        (input) => input.input_key === "product_mass",
+      ),
+    ).toEqual({
+      __typename: "CreateComponentScalarInput",
+      datapoint_id: "dp_1",
+      input_key: "product_mass",
     });
   });
 

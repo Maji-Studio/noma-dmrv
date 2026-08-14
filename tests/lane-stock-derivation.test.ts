@@ -7,6 +7,7 @@ import { binMovements } from "@/db/schema/bin-movements";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
 import {
+  productionRunFeedstockDraws,
   productionRunFeedstocks,
   productionRuns,
 } from "@/db/schema/production";
@@ -20,7 +21,7 @@ import {
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000421";
 const FEEDSTOCK_INTAKE_KG = 120;
 const FEEDSTOCK_CONSUMED_KG = 50;
-const FEEDSTOCK_MOVEMENT_KG = -97;
+const FEEDSTOCK_MOVEMENT_KG = -127;
 const BIOCHAR_PRODUCED_KG = 120;
 const BIOCHAR_ALLOCATED_KG = 35;
 const BIOCHAR_MOVEMENT_KG = -3;
@@ -162,18 +163,33 @@ describe("shared lane-stock derivation", () => {
         .returning({ id: productionRuns.id });
       productionRunIds.push(...runs.map((run) => run.id));
 
+      await tx.insert(productionRunFeedstockDraws).values([
+        {
+          organizationId: TEST_ORG_ID,
+          productionRunId: productionRunIds[0],
+          storageLocationId: feedstockStorageLocationId,
+          wetMassKg: 30,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          productionRunId: productionRunIds[1],
+          storageLocationId: feedstockStorageLocationId,
+          wetMassKg: 20,
+        },
+      ]);
+
       await tx.insert(productionRunFeedstocks).values([
         {
           organizationId: TEST_ORG_ID,
           productionRunId: productionRunIds[0],
           feedstockId: feedstockIds[0],
-          massUsedKg: 30,
+          wetMassUsedKg: 30,
         },
         {
           organizationId: TEST_ORG_ID,
           productionRunId: productionRunIds[1],
           feedstockId: feedstockIds[0],
-          massUsedKg: 20,
+          wetMassUsedKg: 20,
         },
       ]);
 
@@ -218,7 +234,7 @@ describe("shared lane-stock derivation", () => {
           storageLocationId: feedstockStorageLocationId,
           lane: "feedstock",
           movementType: "loss",
-          massDeltaKg: -100,
+          massDeltaKg: -130,
           reason: "Derivation regression fixture",
         },
         {
@@ -262,6 +278,9 @@ describe("shared lane-stock derivation", () => {
         .delete(productionRunFeedstocks)
         .where(inArray(productionRunFeedstocks.productionRunId, productionRunIds));
       await tx
+        .delete(productionRunFeedstockDraws)
+        .where(inArray(productionRunFeedstockDraws.productionRunId, productionRunIds));
+      await tx
         .delete(productionRuns)
         .where(inArray(productionRuns.id, productionRunIds));
       await tx.delete(feedstocks).where(inArray(feedstocks.id, feedstockIds));
@@ -283,9 +302,10 @@ describe("shared lane-stock derivation", () => {
 
     expect(feedstock).toMatchObject({
       feedstockIntakeDryKg: FEEDSTOCK_INTAKE_KG,
-      feedstockConsumedDryKg: FEEDSTOCK_CONSUMED_KG,
+      feedstockConsumedWetKg: FEEDSTOCK_CONSUMED_KG,
       feedstockMovementDeltaKg: FEEDSTOCK_MOVEMENT_KG,
-      feedstockStockDryKg: -27,
+      feedstockStockWetKg: -27,
+      feedstockEstimatedDryKg: -21.6,
     });
     expect(biochar).toMatchObject({
       biocharProducedKg: BIOCHAR_PRODUCED_KG,
@@ -306,8 +326,8 @@ describe("shared lane-stock derivation", () => {
       excludeProductId: biocharProductIds[0],
     });
 
-    expect(withoutRun.feedstockConsumedDryKg).toBe(20);
-    expect(withoutRun.feedstockStockDryKg).toBe(3);
+    expect(withoutRun.feedstockConsumedWetKg).toBe(20);
+    expect(withoutRun.feedstockStockWetKg).toBe(3);
     expect(withoutProduct.biocharAllocatedKg).toBe(15);
     expect(withoutProduct.biocharStockKg).toBe(102);
   });
@@ -317,10 +337,11 @@ describe("shared lane-stock derivation", () => {
       storageLocationIds.map((id) => getStorageLocationWithFacility(ctx, id)),
     );
 
-    expect(feedstock.feedstockInventory.currentDryMassKg).toBe(-27);
+    expect(feedstock.feedstockInventory.currentWetMassKg).toBe(-27);
+    expect(feedstock.feedstockInventory.estimatedDryMassKg).toBeCloseTo(-21.6);
     expect(feedstock.feedstockInventory.batchCount).toBe(1);
-    expect(feedstock.feedstockInventory.pendingDryMassKg).toBe(900);
-    expect(feedstock.feedstockInventory.estimatedWetMassKg).toBeCloseTo(-33.75);
+    expect(feedstock.feedstockInventory.pendingWetMassKg).toBe(1000);
+    expect(feedstock.feedstockInventory.estimatedMoisturePercent).toBeNull();
     expect(biochar.biocharInventory.currentMassKg).toBe(82);
     expect(biochar.biocharInventory.allocatedToProductsKg).toBe(35);
     expect(product.productInventory.currentMassKg).toBe(42);
@@ -344,13 +365,13 @@ describe("shared lane-stock derivation", () => {
       const [stock] = await deriveLaneStock(ctx, tx, {
         storageLocationIds: [storageLocationIds[0]],
       });
-      expect(stock.feedstockStockDryKg).toBe(-16);
+      expect(stock.feedstockStockWetKg).toBe(-16);
 
       await tx.delete(binMovements).where(eq(binMovements.id, movement.id));
     });
   });
 
-  it("replays wet-aware ingredient draws after the latest feedstock stock-take", async () => {
+  it("keeps feedstock reconciliation, losses, and ingredient draws on wet kg", async () => {
     const stockTakeAt = new Date(Date.now() + 60_000);
     const ingredientSnapshotAt = new Date(stockTakeAt.getTime() + 60_000);
     const basislessLossAt = new Date(ingredientSnapshotAt.getTime() + 60_000);
@@ -363,7 +384,7 @@ describe("shared lane-stock derivation", () => {
           storageLocationId: storageLocationIds[0],
           lane: "feedstock",
           movementType: "adjustment",
-          massDeltaKg: 0,
+          massDeltaKg: 100,
           countedMassKg: 64,
           countedWetMassKg: 80,
           moistureRatioUsed: 0.2,
@@ -396,7 +417,7 @@ describe("shared lane-stock derivation", () => {
       const [afterIngredientDraw] = await deriveLaneStock(ctx, tx, {
         storageLocationIds: [storageLocationIds[0]],
       });
-      expect(afterIngredientDraw.feedstockStockWetKg).toBe(70);
+      expect(afterIngredientDraw.feedstockStockWetKg).toBe(63);
 
       const [loss] = await tx
         .insert(binMovements)
@@ -406,15 +427,15 @@ describe("shared lane-stock derivation", () => {
           lane: "feedstock",
           movementType: "loss",
           massDeltaKg: -1,
-          reason: "Loss without a wet-mass basis",
+          reason: "Wet feedstock loss",
           createdAt: basislessLossAt,
         })
         .returning({ id: binMovements.id });
 
-      const [afterBasislessLoss] = await deriveLaneStock(ctx, tx, {
+      const [afterWetLoss] = await deriveLaneStock(ctx, tx, {
         storageLocationIds: [storageLocationIds[0]],
       });
-      expect(afterBasislessLoss.feedstockStockWetKg).toBeNull();
+      expect(afterWetLoss.feedstockStockWetKg).toBe(62);
 
       await tx.delete(binMovements).where(inArray(binMovements.id, [stockTake.id, loss.id]));
       await tx.delete(biocharProducts).where(eq(biocharProducts.id, ingredientProduct.id));

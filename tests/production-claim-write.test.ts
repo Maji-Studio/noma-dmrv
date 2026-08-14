@@ -17,7 +17,11 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
  */
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
-import { markSubmissionSubmitted } from "@/data-access/certification";
+import {
+  markSubmissionRejected,
+  markSubmissionSubmitted,
+} from "@/data-access/certification";
+import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
 import { db } from "@/db";
 import {
   certificationSubmissions,
@@ -224,5 +228,175 @@ describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)
       externalId: "ext_pcw_plain",
     });
     expect(await readClaim(batchId)).toBeNull();
+  });
+});
+
+describe("markSubmissionRejected", () => {
+  it("clears stale interruption markers on a definitive rejection", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    await db
+      .update(certificationSubmissions)
+      .set({
+        metadata: {
+          lastError: "Interrupted earlier.",
+          lastAttemptOutcome: "interrupted",
+          externalMutation: "possible",
+          retained: true,
+        },
+      })
+      .where(eq(certificationSubmissions.id, submissionId));
+
+    await markSubmissionRejected(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      { errorMessage: "Definitive refusal." },
+    );
+
+    const [row] = await db
+      .select({ metadata: certificationSubmissions.metadata })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row.metadata).toEqual({
+      lastError: "Definitive refusal.",
+      retained: true,
+    });
+  });
+
+  it("does not downgrade a row that already reached submitted", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    const orgCtx = makeTestOrgContext(TEST_USER_ID);
+
+    await markSubmissionSubmitted(orgCtx, submissionId, {
+      externalId: "ext_pcw_submitted_guard",
+    });
+    await markSubmissionRejected(orgCtx, submissionId, {
+      errorMessage: "Later verification failed.",
+    });
+
+    const [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        externalId: certificationSubmissions.externalId,
+        metadata: certificationSubmissions.metadata,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toMatchObject({
+      status: "submitted",
+      externalId: "ext_pcw_submitted_guard",
+    });
+    expect(
+      (row.metadata as Record<string, unknown> | null)?.lastError,
+    ).toBeUndefined();
+  });
+});
+
+describe("markSubmissionInterrupted", () => {
+  it("records recovery metadata without unlocking or changing draft status", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    const lockedAt = new Date();
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt })
+      .where(eq(certificationSubmissions.id, submissionId));
+
+    const recorded = await markSubmissionInterrupted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      {
+        errorMessage: "Safe submission error",
+        expectedLockedAt: lockedAt,
+        externalMutation: "confirmed",
+      },
+    );
+    expect(recorded).toBe(true);
+
+    const [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        lockedAt: certificationSubmissions.lockedAt,
+        metadata: certificationSubmissions.metadata,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row.status).toBe("draft");
+    expect(row.lockedAt?.getTime()).toBe(lockedAt.getTime());
+    expect(row.metadata).toMatchObject({
+      lastError: "Safe submission error",
+      lastAttemptOutcome: "interrupted",
+      externalMutation: "confirmed",
+    });
+
+    await markSubmissionSubmitted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      { externalId: "ext_interrupted_reconciled" },
+    );
+    const [submitted] = await db
+      .select({ metadata: certificationSubmissions.metadata })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(submitted.metadata).toEqual({});
+  });
+
+  it("does not mark a successor lock or a submitted row as interrupted", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    const staleLock = new Date(Date.now() - 60_000);
+    const successorLock = new Date();
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt: successorLock })
+      .where(eq(certificationSubmissions.id, submissionId));
+
+    const staleRecorded = await markSubmissionInterrupted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      {
+        errorMessage: "Stale attempt error",
+        expectedLockedAt: staleLock,
+        externalMutation: "possible",
+      },
+    );
+    expect(staleRecorded).toBe(false);
+    let [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        lockedAt: certificationSubmissions.lockedAt,
+        metadata: certificationSubmissions.metadata,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toMatchObject({ status: "draft", metadata: null });
+    expect(row.lockedAt?.getTime()).toBe(successorLock.getTime());
+
+    await markSubmissionSubmitted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      { externalId: "ext_successor_submitted" },
+    );
+    const lateRecorded = await markSubmissionInterrupted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      {
+        errorMessage: "Late cleanup error",
+        expectedLockedAt: successorLock,
+        externalMutation: "confirmed",
+      },
+    );
+    expect(lateRecorded).toBe(false);
+    [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        lockedAt: certificationSubmissions.lockedAt,
+        metadata: certificationSubmissions.metadata,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toMatchObject({ status: "submitted", metadata: {} });
+    expect(row.lockedAt).toBeNull();
   });
 });

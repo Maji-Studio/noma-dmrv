@@ -12,6 +12,7 @@ export { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 export { VehicleQuickAddDialog } from "./vehicle-quick-add-dialog";
 export { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
 export { StorageLocationQuickAddDialog } from "./storage-location-quick-add-dialog";
+export { SupplierQuickAddDialog } from "./supplier-quick-add-dialog";
 export type {
   EntityOption,
   EntityType,

@@ -92,10 +92,14 @@ export async function selectEntity(
   page: Page,
   fieldLabel: string,
   optionId: string,
-  searchText?: string
+  searchText?: string,
+  fieldIndex = 0,
 ) {
   const dialog = page.locator('[role="dialog"]');
-  const label = dialog.locator("label").filter({ hasText: fieldLabel }).first();
+  const label = dialog
+    .locator("label")
+    .filter({ hasText: fieldLabel })
+    .nth(fieldIndex);
   const fieldContainer = label.locator(
     "xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]"
   );

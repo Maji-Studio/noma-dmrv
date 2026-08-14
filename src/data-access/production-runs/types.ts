@@ -8,8 +8,18 @@ import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 export interface ProductionRunFeedstockWithDetails {
   id: string;
   feedstockId: string;
-  massUsedKg: number;
+  wetMassUsedKg: number;
   feedstockCode: string | null;
+  feedstockTypeName: string | null;
+}
+
+export interface ProductionRunFeedstockDrawWithDetails {
+  id: string;
+  storageLocationId: string;
+  wetMassKg: number;
+  storageLocationCode: string;
+  storageLocationName: string;
+  feedstockTypeId: string | null;
   feedstockTypeName: string | null;
 }
 
@@ -55,8 +65,10 @@ export interface ProductionRunWithRelations {
   feedstockStorageLocationName: string | null;
   // M:M feedstocks
   feedstocks: ProductionRunFeedstockWithDetails[];
+  // Canonical explicit source-bin withdrawals
+  feedstockDraws: ProductionRunFeedstockDrawWithDetails[];
   // Computed fields
-  totalFeedstockMassKg: number;
+  totalFeedstockWetMassKg: number;
 }
 
 export interface PaginatedProductionRuns {
@@ -71,7 +83,7 @@ export interface ProductionRunStats {
   totalRuns: number;
   totalBiocharKg: number;
   totalBiocharDryKg: number | null;
-  totalFeedstockKg: number;
+  totalFeedstockWetKg: number;
   runningCount: number;
   completedCount: number;
   draftCount: number;

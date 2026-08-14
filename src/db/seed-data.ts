@@ -72,6 +72,12 @@ const demoCodes = {
   customerVegetable: 'CUS-26-003',
 } as const;
 
+const demoProductionRunFeedstockWetMassKg = {
+  run1: 3500,
+  run2: 2500,
+  run3: 3000,
+} as const;
+
 // Demo entity IDs
 const ids = {
   // Facilities
@@ -953,7 +959,7 @@ async function seedDemoData() {
           biocharDryMassKg: 960.4,
           biocharStorageLocationId: ids.storageCharMoshi,
           feedstockStorageLocationId: ids.storageFeedMoshi,
-          feedstockWetMassKg: 3500,
+          feedstockWetMassKg: demoProductionRunFeedstockWetMassKg.run1,
           feedstockMoisturePercent: 16,
           feedstockMassDryKg: 2940,
         },
@@ -979,7 +985,7 @@ async function seedDemoData() {
           biocharDryMassKg: 705.6,
           biocharStorageLocationId: ids.storageCharMoshi,
           feedstockStorageLocationId: ids.storageFeedCoffee,
-          feedstockWetMassKg: 2500,
+          feedstockWetMassKg: demoProductionRunFeedstockWetMassKg.run2,
           feedstockMoisturePercent: 12,
           feedstockMassDryKg: 2200,
         },
@@ -1005,9 +1011,28 @@ async function seedDemoData() {
           biocharDryMassKg: 833,
           biocharStorageLocationId: ids.storageCharMoshi,
           feedstockStorageLocationId: ids.storageFeedMoshi,
-          feedstockWetMassKg: 3000,
+          feedstockWetMassKg: demoProductionRunFeedstockWetMassKg.run3,
           feedstockMoisturePercent: 18,
           feedstockMassDryKg: 2460,
+        },
+      ]));
+
+      console.log('Creating production run feedstock draws...');
+      await tx.insert(schema.productionRunFeedstockDraws).values(withBootstrapOrg<typeof schema.productionRunFeedstockDraws.$inferInsert>([
+        {
+          productionRunId: ids.productionRun1,
+          storageLocationId: ids.storageFeedMoshi,
+          wetMassKg: demoProductionRunFeedstockWetMassKg.run1,
+        },
+        {
+          productionRunId: ids.productionRun2,
+          storageLocationId: ids.storageFeedCoffee,
+          wetMassKg: demoProductionRunFeedstockWetMassKg.run2,
+        },
+        {
+          productionRunId: ids.productionRun3,
+          storageLocationId: ids.storageFeedMoshi,
+          wetMassKg: demoProductionRunFeedstockWetMassKg.run3,
         },
       ]));
 
@@ -1017,19 +1042,19 @@ async function seedDemoData() {
           id: ids.prodFeedLink1,
           productionRunId: ids.productionRun1,
           feedstockId: ids.feedstock1,
-          massUsedKg: 3500,
+          wetMassUsedKg: demoProductionRunFeedstockWetMassKg.run1,
         },
         {
           id: ids.prodFeedLink2,
           productionRunId: ids.productionRun2,
           feedstockId: ids.feedstock2,
-          massUsedKg: 2500,
+          wetMassUsedKg: demoProductionRunFeedstockWetMassKg.run2,
         },
         {
           id: ids.prodFeedLink3,
           productionRunId: ids.productionRun3,
           feedstockId: ids.feedstock3,
-          massUsedKg: 3000,
+          wetMassUsedKg: demoProductionRunFeedstockWetMassKg.run3,
         },
       ]));
 

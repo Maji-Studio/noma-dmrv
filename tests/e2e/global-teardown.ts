@@ -48,6 +48,37 @@ export default async function globalTeardown() {
 
       // ─── Junction tables first (no FKs pointing to them) ───
 
+      // production_run_feedstock_draws
+      await client.query(`
+        DELETE FROM production_run_feedstock_draws
+        WHERE production_run_id IN (
+          SELECT id FROM production_runs
+          WHERE code LIKE 'E2E-%'
+             OR facility_id IN (
+                  SELECT id FROM facilities
+                  WHERE code LIKE 'E2E-%'
+                     OR name LIKE 'UI %'
+                     OR name LIKE 'Chain %'
+                     OR name LIKE 'Duplicate Test %'
+                )
+             OR reactor_id IN (
+                  SELECT id FROM reactors
+                  WHERE code LIKE 'E2E-%'
+                     OR identifier LIKE 'UI %'
+                     OR identifier LIKE 'Chain %'
+                )
+             OR feedstock_storage_location_id IN (
+                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                )
+             OR biochar_storage_location_id IN (
+                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                )
+        )
+        OR storage_location_id IN (
+          SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+        )
+      `);
+
       // credit_batch_production_runs
       await client.query(`
         DELETE FROM credit_batch_production_runs
@@ -155,15 +186,15 @@ export default async function globalTeardown() {
       `);
 
       // ─── Certifier sync events + submissions for E2E credit batches ───
-      // No FK constraint to credit_batches (entity_id / local_entity_id are
-      // plain uuid), but stale rows would accumulate across runs. Sweep
-      // before the credit_batches delete so the local_entity_id values can
-      // still be resolved.
+      // No FK constraint to credit_batches (entity_id is polymorphic text,
+      // local_entity_id a plain uuid), but stale rows would accumulate across
+      // runs. Sweep before the credit_batches delete so the local_entity_id
+      // values can still be resolved.
       await client.query(`
         DELETE FROM certifier_sync_events
         WHERE entity_type = 'creditBatch'
           AND entity_id IN (
-            SELECT id FROM credit_batches
+            SELECT id::text FROM credit_batches
             WHERE code LIKE 'E2E-%'
                OR facility_id IN (
                     SELECT id FROM facilities

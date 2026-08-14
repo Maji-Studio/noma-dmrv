@@ -3,6 +3,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { DocumentRow } from "@/data-access/documents";
+import type { ApplicationEvidenceMethod } from "@/schemas/applications";
+import type { GisBoundary } from "@/schemas/gis-boundary";
+import { TEST_GIS_BOUNDARY } from "../../../tests/helpers/application-evidence-fixtures";
 
 const documentsForEntity = vi.fn();
 
@@ -54,7 +57,12 @@ function boundaryDoc(logbookEvidenceType: string | null): DocumentRow {
   } as unknown as DocumentRow;
 }
 
-function renderPanel(docs: DocumentRow[]): string {
+function renderPanel(
+  docs: DocumentRow[],
+  mode: ApplicationEvidenceMethod = "location",
+  boundary: GisBoundary | null = null,
+  readOnly = false,
+): string {
   documentsForEntity.mockReturnValue({
     data: docs,
     isLoading: false,
@@ -64,14 +72,51 @@ function renderPanel(docs: DocumentRow[]): string {
     <QueryClientProvider client={new QueryClient()}>
       <ApplicationEvidencePanel
         applicationId={APPLICATION_ID}
-        mode="boundary"
-        boundary={null}
+        mode={mode}
+        boundary={boundary}
+        readOnly={readOnly}
       />
     </QueryClientProvider>,
   );
 }
 
 describe("ApplicationEvidencePanel", () => {
+  it("shows customer location first and selects it by default", () => {
+    const html = renderPanel([]);
+
+    expect(html.indexOf("Customer location")).toBeLessThan(
+      html.indexOf("GIS reference"),
+    );
+    expect(html.indexOf("GIS reference")).toBeLessThan(
+      html.indexOf("Visual evidence"),
+    );
+    const selectedCard = html.match(
+      /<button[^>]*role="radio"[^>]*aria-checked="true"[^>]*>[\s\S]*?<\/button>/,
+    )?.[0];
+    expect(selectedCard).toContain("Customer location");
+    expect(html).not.toContain("Add GIS reference");
+  });
+
+  it("only shows the GIS editor for GIS reference evidence", () => {
+    expect(renderPanel([], "boundary")).toContain("Add GIS reference");
+    expect(renderPanel([], "location")).not.toContain("Add GIS reference");
+  });
+
+  it("keeps the saved GIS reference actions in edit mode", () => {
+    const html = renderPanel([], "boundary", TEST_GIS_BOUNDARY);
+
+    expect(html).toContain("Replace");
+    expect(html).toContain("Remove");
+    expect(html).not.toContain("Add GIS reference");
+  });
+
+  it("keeps the missing GIS reference empty state in read mode", () => {
+    const html = renderPanel([], "boundary", null, true);
+
+    expect(html).toContain("No GIS reference");
+    expect(html).not.toContain("Add GIS reference");
+  });
+
   it("keeps visual evidence visible but locked", () => {
     const html = renderPanel([]);
 
@@ -83,7 +128,7 @@ describe("ApplicationEvidencePanel", () => {
   });
 
   it("keeps mass records without showing the obsolete type taxonomy", () => {
-    const html = renderPanel([boundaryDoc("affidavit")]);
+    const html = renderPanel([boundaryDoc("affidavit")], "boundary");
 
     expect(html).toContain("Application mass records");
     expect(html).toContain("logbook.pdf");

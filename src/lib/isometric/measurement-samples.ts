@@ -44,7 +44,17 @@ export function captureMeasurementSampleDatapointIds(
 ): MeasurementSampleDatapointCapture {
   const datapointIdsByMeasurementProperty = new Map<string, string[]>();
   const expectedCountByMeasurementProperty = new Map<string, number>();
+  const expectedMagnitudesByMeasurementProperty = new Map<string, number[]>();
+  const expectedUnitsByMeasurementProperty = new Map<
+    string,
+    Array<string | null>
+  >();
   const returnedCountByMeasurementProperty = new Map<string, number>();
+  const returnedMagnitudesByMeasurementProperty = new Map<string, number[]>();
+  const returnedUnitsByMeasurementProperty = new Map<
+    string,
+    Array<string | null>
+  >();
   const returnedDatapointIds = new Set<string>();
 
   for (const value of request.values) {
@@ -53,6 +63,14 @@ export function captureMeasurementSampleDatapointIds(
       propertyKey,
       (expectedCountByMeasurementProperty.get(propertyKey) ?? 0) + 1,
     );
+    expectedMagnitudesByMeasurementProperty.set(propertyKey, [
+      ...(expectedMagnitudesByMeasurementProperty.get(propertyKey) ?? []),
+      value.value.magnitude,
+    ]);
+    expectedUnitsByMeasurementProperty.set(propertyKey, [
+      ...(expectedUnitsByMeasurementProperty.get(propertyKey) ?? []),
+      value.value.unit,
+    ]);
   }
 
   for (const value of sample.values) {
@@ -81,6 +99,14 @@ export function captureMeasurementSampleDatapointIds(
       propertyKey,
       (returnedCountByMeasurementProperty.get(propertyKey) ?? 0) + 1,
     );
+    returnedMagnitudesByMeasurementProperty.set(propertyKey, [
+      ...(returnedMagnitudesByMeasurementProperty.get(propertyKey) ?? []),
+      value.value.magnitude,
+    ]);
+    returnedUnitsByMeasurementProperty.set(propertyKey, [
+      ...(returnedUnitsByMeasurementProperty.get(propertyKey) ?? []),
+      value.value.unit,
+    ]);
     const existing = datapointIdsByMeasurementProperty.get(propertyKey) ?? [];
     existing.push(value.datapoint_id);
     datapointIdsByMeasurementProperty.set(propertyKey, existing);
@@ -92,6 +118,34 @@ export function captureMeasurementSampleDatapointIds(
     if (returnedCount !== expectedCount) {
       throw new SafeError(
         `Registry measurement ${sample.id} returned ${returnedCount} ${pluralize(returnedCount, "value")} for one durability field, but ${expectedCount} ${expectedCount === 1 ? "is" : "are"} required. Refresh the registry data and try again.`,
+      );
+    }
+    const expectedMagnitudes =
+      expectedMagnitudesByMeasurementProperty.get(propertyKey) ?? [];
+    const returnedMagnitudes =
+      returnedMagnitudesByMeasurementProperty.get(propertyKey) ?? [];
+    const expectedUnits =
+      expectedUnitsByMeasurementProperty.get(propertyKey) ?? [];
+    const returnedUnits =
+      returnedUnitsByMeasurementProperty.get(propertyKey) ?? [];
+    if (
+      returnedMagnitudes.some(
+        (magnitude, index) => magnitude !== expectedMagnitudes[index],
+      )
+    ) {
+      throw new SafeError(
+        `Registry measurement ${sample.id} returned durability values in a different order. Ask support to check the registry response before submitting.`,
+      );
+    }
+    if (
+      returnedUnits.some(
+        (unit, index) =>
+          (unit ?? "").toLocaleLowerCase() !==
+          (expectedUnits[index] ?? "").toLocaleLowerCase(),
+      )
+    ) {
+      throw new SafeError(
+        `Registry measurement ${sample.id} returned a durability value in a different unit. Ask support to check the registry response before submitting.`,
       );
     }
   }
@@ -127,14 +181,16 @@ export interface BuildMeasurementSampleReferenceArgs {
   version: number;
   /** Required for the per-batch role — the credit batch id the sample is for. */
   creditBatchId?: string;
+  /** Required for production-batch Samples — the stable local Sample identity. */
+  sampleId?: string;
 }
 
 /**
  * Stable, noma-controlled measurement-sample supplier reference, versioned per
  * removal so a superseded-then-resubmitted removal claims a fresh resource. The
- * production-batch role keys on the CREDIT BATCH (the protocol production batch,
- * ADR 0016) — one measurement sample per credit batch carrying its pooled
- * mean + std-dev. The `nm-mts-` prefix never collides with the removal
+ * production-batch role keys on both the CREDIT BATCH (the protocol production
+ * batch, ADR 0016) and the independently analysed local Sample. The `nm-mts-`
+ * prefix never collides with the removal
  * (`nm-rmv-`) or sensor (`nm-snr-`) refs. Mirrors `buildRemovalSupplierRef`.
  */
 export function buildMeasurementSampleReference(
@@ -149,8 +205,14 @@ export function buildMeasurementSampleReference(
       "buildMeasurementSampleReference: creditBatchId required for the production-batch role",
     );
   }
+  if (!args.sampleId) {
+    throw new Error(
+      "buildMeasurementSampleReference: sampleId required for the production-batch role",
+    );
+  }
   const batchShort = shortHash(args.creditBatchId, ENTITY_PREFIX_LEN);
-  return `nm-mts-${short}-pb-${batchShort}-v${args.version}`;
+  const sampleShort = shortHash(args.sampleId, ENTITY_PREFIX_LEN);
+  return `nm-mts-${short}-pb-${batchShort}-s-${sampleShort}-v${args.version}`;
 }
 
 function shortHash(input: string, length: number): string {

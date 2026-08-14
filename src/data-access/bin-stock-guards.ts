@@ -7,8 +7,8 @@
  * any withdrawal that would take the bin below zero — no tolerance (operator
  * re-confirmed 2026-07-02). Warning thresholds belong to #193, never here.
  *
- * The derivation mirrors `storage-location-enrichment.ts` lane-by-lane; keep the
- * two in step if either changes.
+ * Feedstock and biochar derivation is shared with storage summaries through
+ * `deriveLaneStock`, so guards and display reads use the same balance.
  */
 
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
@@ -19,65 +19,32 @@ import {
   binMovements,
   deliveries,
   orders,
-  storageLocations,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
 import type { BinMovementLane } from "@/schemas/bin-movements";
 import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
+import { lockBinStock } from "./lock-bin-stocks";
 import {
-  binStockOverdrawMessage,
   formatStockKg,
   isStockOverdraw,
   productStockOverdrawMessage,
-  type StockMaterial,
 } from "@/lib/stock-overdraw";
+import { overdrawError } from "./stock-overdraw-error";
+import { deriveFeedstockWetStockKg } from "./feedstock-wet-stock";
 
 /** Any Drizzle client that can run reads — the live `db` or a transaction. */
 type DbReader = Pick<typeof db, "select">;
 
-const BIN_STOCK_LOCK_SCOPE = "bin-stock";
-
-/** SafeError subtype so server actions can attach field-level metadata. */
-export class StockOverdrawError extends SafeError {
-  constructor(message: string) {
-    super(message);
-    this.name = "StockOverdrawError";
-  }
-}
+export { StockOverdrawError } from "./stock-overdraw-error";
 
 /**
  * Serialize every stock read-modify-write for one physical bin. All withdrawal
  * guards and reconciliation movements use this same key, so a stock-take can
  * never race a run, product allocation, delivery, loss, or another stock-take.
  */
-export async function lockBinStock(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  storageLocationId: string,
-): Promise<void> {
-  requireOrgScope(ctx);
-  const lockKey = `${BIN_STOCK_LOCK_SCOPE}:${ctx.organizationId}:${storageLocationId}`;
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
-  );
-  const [bin] = await tx
-    .select({ archivedAt: storageLocations.archivedAt })
-    .from(storageLocations)
-    .where(
-      and(
-        eq(storageLocations.id, storageLocationId),
-        eq(storageLocations.organizationId, ctx.organizationId),
-      ),
-    );
-  // Some stock flows deliberately use a product ID as a fallback advisory-lock
-  // key when no physical bin exists. Missing rows are validated by the caller's
-  // entity boundary; an actual archived bin must never accept a stock write.
-  if (bin?.archivedAt) {
-    throw new SafeError("Storage bin not found or archived");
-  }
-}
+export { lockBinStock } from "./lock-bin-stocks";
 
 /**
  * Round a kilogram figure for operator-facing copy (whole kg, grouped).
@@ -92,11 +59,7 @@ export function formatKg(kg: number): string {
  * Build the shared over-draw error for a bin lane.
  * The internal product lane is user-facing biochar.
  */
-export function overdrawError(
-  material: StockMaterial,
-): StockOverdrawError {
-  return new StockOverdrawError(binStockOverdrawMessage(material));
-}
+export { overdrawError } from "./stock-overdraw-error";
 
 /** True when `requestedKg` exceeds `availableKg` beyond the FP slack. */
 export function isOverdraw(requestedKg: number, availableKg: number): boolean {
@@ -106,26 +69,6 @@ export function isOverdraw(requestedKg: number, availableKg: number): boolean {
 /** True when a derived balance is materially above or below zero. */
 export function hasNonZeroStock(availableKg: number): boolean {
   return isStockOverdraw(Math.abs(availableKg), 0);
-}
-
-/**
- * Derived on-hand feedstock (dry kg) for a feedstock bin:
- * complete-batch intake − consumption by production runs + reconciliation deltas.
- * `excludeRunId` drops one run's consumption (its allocation is being replaced).
- */
-export async function deriveFeedstockAvailableKg(
-  ctx: OrgContext,
-  tx: DbReader,
-  storageLocationId: string,
-  excludeRunId?: string,
-  excludeProductId?: string,
-): Promise<number> {
-  const [stock] = await deriveLaneStock(ctx, tx, {
-    storageLocationIds: [storageLocationId],
-    excludeRunId,
-    excludeProductId,
-  });
-  return stock?.feedstockStockDryKg ?? 0;
 }
 
 export async function deriveProductAvailableKg(
@@ -203,43 +146,12 @@ export async function deriveBinLaneAvailableKg(
 ): Promise<number> {
   requireOrgScope(ctx);
   if (lane === "feedstock") {
-    return deriveFeedstockAvailableKg(ctx, tx, storageLocationId);
+    return deriveFeedstockWetStockKg(ctx, tx, storageLocationId);
   }
   if (lane === "biochar") {
     return deriveBiocharAvailableKg(ctx, tx, storageLocationId);
   }
   return deriveProductAvailableKg(ctx, tx, storageLocationId);
-}
-
-/**
- * Hard-block a production-run feedstock draw that exceeds the bin's derived
- * on-hand dry stock. Call inside the run's transaction, before allocating.
- */
-export async function assertFeedstockDrawWithinStock(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  params: {
-    storageLocationId: string;
-    requestedDryKg: number;
-    excludeRunId?: string;
-    excludeProductId?: string;
-    binLockAlreadyHeld?: boolean;
-  },
-): Promise<void> {
-  requireOrgScope(ctx);
-  if (!params.binLockAlreadyHeld) {
-    await lockBinStock(ctx, tx, params.storageLocationId);
-  }
-  const available = await deriveFeedstockAvailableKg(
-    ctx,
-    tx,
-    params.storageLocationId,
-    params.excludeRunId,
-    params.excludeProductId,
-  );
-  if (isOverdraw(params.requestedDryKg, available)) {
-    throw overdrawError("feedstock");
-  }
 }
 
 /**

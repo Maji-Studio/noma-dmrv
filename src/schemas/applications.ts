@@ -33,10 +33,53 @@ export const applicationMethods = ["manual", "mechanical"] as const;
 export type ApplicationMethod = (typeof applicationMethods)[number];
 
 /**
- * Application evidence methods (Soil Module §9.5, either visual or boundary).
+ * Alternative proof-of-spreading methods accepted by the pinned Agricultural
+ * Soils v1.1 module.
  */
-export const applicationEvidenceMethods = ["visual", "boundary"] as const;
+export const applicationEvidenceMethods = [
+  "location",
+  "boundary",
+  "visual",
+] as const;
 export type ApplicationEvidenceMethod = (typeof applicationEvidenceMethods)[number];
+
+const CUSTOMER_LOCATION_REQUIRED_MESSAGE =
+  "Customer location coordinates are required.";
+
+function applicationEvidenceSuperRefine(
+  data: {
+    evidenceMethod?: ApplicationEvidenceMethod;
+    gpsLatitude?: number | null;
+    gpsLongitude?: number | null;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  gpsPairSuperRefine(data, ctx);
+  if (
+    data.evidenceMethod === "location" &&
+    data.gpsLatitude == null &&
+    data.gpsLongitude == null
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["gpsLatitude"],
+      message: CUSTOMER_LOCATION_REQUIRED_MESSAGE,
+    });
+  }
+}
+
+/**
+ * Validates the effective evidence state after a partial update has been
+ * merged with the saved application. A partial payload cannot enforce this
+ * invariant by itself because omitted fields retain their stored values.
+ */
+export const applicationEvidenceStateSchema = z
+  .object({
+    evidenceMethod: z.enum(applicationEvidenceMethods),
+    gpsLatitude: latitudeSchema,
+    gpsLongitude: longitudeSchema,
+  })
+  .superRefine(applicationEvidenceSuperRefine);
 
 // ============================================
 // GPS Coordinate Validation
@@ -85,7 +128,7 @@ const applicationFormBaseSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z.enum(applicationMethods).optional().nullable()
   ),
-  evidenceMethod: z.enum(applicationEvidenceMethods).default("boundary"),
+  evidenceMethod: z.enum(applicationEvidenceMethods).default("location"),
   gisBoundary: gisBoundarySchema.nullable().default(null),
 
   // === Section 3: Soil Temperature ===
@@ -104,7 +147,7 @@ const applicationFormBaseSchema = z.object({
 
 export const applicationFormSchema = applicationFormBaseSchema.superRefine(
   (data, ctx) => {
-    gpsPairSuperRefine(data, ctx);
+    applicationEvidenceSuperRefine(data, ctx);
   },
 );
 
@@ -124,12 +167,14 @@ const applicationCreateBaseSchema = applicationFormBaseSchema.extend({
  */
 export const createApplicationSchema = applicationCreateBaseSchema.superRefine(
   (data, ctx) => {
-    gpsPairSuperRefine(data, ctx);
+    applicationEvidenceSuperRefine(data, ctx);
   },
 );
 
 /**
  * Schema for updating an application (server action)
+ * GPS pair and evidence-method invariants are deferred until updateApplication
+ * validates the payload merged with the saved evidence state.
  */
 export const updateApplicationSchema = z.object({
   applicationId: z.string().uuid("Choose a valid application."),
@@ -152,8 +197,6 @@ export const updateApplicationSchema = z.object({
   gisBoundary: gisBoundarySchema.optional().nullable(),
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
-}).superRefine((data, ctx) => {
-  gpsPairSuperRefine(data, ctx);
 });
 
 /**
@@ -168,6 +211,9 @@ export const deleteApplicationSchema = z.object({
 // ============================================
 
 export type ApplicationFormData = z.infer<typeof applicationFormSchema>;
+export type ApplicationEvidenceState = z.infer<
+  typeof applicationEvidenceStateSchema
+>;
 export type CreateApplicationData = z.infer<typeof createApplicationSchema>;
 export type UpdateApplicationData = z.infer<typeof updateApplicationSchema>;
 export type DeleteApplicationData = z.infer<typeof deleteApplicationSchema>;
@@ -203,8 +249,9 @@ export function formatApplicationMethod(method: ApplicationMethod): string {
 
 export function formatApplicationEvidenceMethod(method: ApplicationEvidenceMethod): string {
   const labels: Record<ApplicationEvidenceMethod, string> = {
-    visual: "Visual evidence",
+    location: "Customer location",
     boundary: "GIS reference",
+    visual: "Visual evidence",
   };
   return labels[method];
 }

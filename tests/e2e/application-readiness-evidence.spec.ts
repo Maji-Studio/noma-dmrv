@@ -94,11 +94,11 @@ async function seedFormCompleteApplication(
   // Soil temperature is a certify requirement for 200-year facilities.
   await page.fill('input[name="soilTemperatureC"]', "24");
 
-  // New applications use the selectable GIS path. The test switches the saved
-  // record to the still-supported visual path below, because that path is
-  // locked only in the UI.
+  // New applications default to the delivery customer's location. The test
+  // switches the saved record to the still-supported visual path below,
+  // because that path is locked only in the UI.
   await expect(
-    page.getByRole("radio", { name: /GIS reference/ }),
+    page.getByRole("radio", { name: /Customer location/ }),
   ).toBeChecked();
 
   await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();

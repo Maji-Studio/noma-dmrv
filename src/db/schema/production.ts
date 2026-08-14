@@ -281,7 +281,7 @@ export const samples = pgTable('samples', {
   r0MeasurementCount: integer('r0_measurement_count'),
   reactiveCarbonPercent: real('reactive_carbon_percent'),
   residualCarbonPercent: real('residual_carbon_percent'),
-  // Per-sample `s_fraction` for the live `biochar_sequestration_1000_year`
+  // Per-sample `s_fraction` for the current sampled 1,000-year component
   // blueprint (ADR 0021): the proportion (0–1) of THIS sample's R₀ readings
   // ≥ 2% — the inertinite fraction from the ISO 7404-5:2009 histogram. The
   // registry needs the full per-replicate list to compute the conservative
@@ -302,6 +302,9 @@ export const samples = pgTable('samples', {
     table.organizationId,
     table.sampleCode
   ),
+  index('samples_organization_id_credit_batch_id_sampling_time_idx')
+    .on(table.organizationId, table.creditBatchId, table.samplingTime)
+    .where(sql`${table.creditBatchId} is not null`),
   foreignKey({
     columns: [table.productionRunId, table.organizationId],
     foreignColumns: [productionRuns.id, productionRuns.organizationId],
@@ -349,15 +352,65 @@ export const productionRunFeedstocks = pgTable('production_run_feedstocks', {
   feedstockId: uuid('feedstock_id')
     .notNull()
     .references(() => feedstocks.id),
-  massUsedKg: massKg('mass_used_kg').notNull(),
+  // Wet/as-received mass withdrawn from this intake batch. Feedstock bins use
+  // wet kg as their native stock currency; the run-level dry mass is derived
+  // separately from the run's measured moisture.
+  wetMassUsedKg: massKg('wet_mass_used_kg').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
-  index('production_run_feedstocks_organization_id_idx').on(table.organizationId),
+  index('production_run_feedstocks_organization_id_production_run_id_idx').on(
+    table.organizationId,
+    table.productionRunId
+  ),
   foreignKey({
     columns: [table.productionRunId, table.organizationId],
     foreignColumns: [productionRuns.id, productionRuns.organizationId],
   }),
 ]);
+
+// Explicit wet-mass withdrawals from physical feedstock bins. These rows are
+// the canonical source-bin attribution for a run; productionRunFeedstocks
+// remains the batch-level allocation/provenance ledger.
+export const productionRunFeedstockDraws = pgTable(
+  'production_run_feedstock_draws',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    productionRunId: uuid('production_run_id').notNull(),
+    storageLocationId: uuid('storage_location_id').notNull(),
+    wetMassKg: massKg('wet_mass_kg').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    unique('production_run_feedstock_draws_run_bin_unique').on(
+      table.organizationId,
+      table.productionRunId,
+      table.storageLocationId,
+    ),
+    index('production_run_feedstock_draws_organization_run_idx').on(
+      table.organizationId,
+      table.productionRunId,
+    ),
+    index('production_run_feedstock_draws_organization_bin_idx').on(
+      table.organizationId,
+      table.storageLocationId,
+    ),
+    foreignKey({
+      columns: [table.productionRunId, table.organizationId],
+      foreignColumns: [productionRuns.id, productionRuns.organizationId],
+    }),
+    foreignKey({
+      columns: [table.storageLocationId, table.organizationId],
+      foreignColumns: [storageLocations.id, storageLocations.organizationId],
+    }),
+    check(
+      'production_run_feedstock_draws_wet_mass_positive',
+      sql`${table.wetMassKg} > 0`,
+    ),
+  ],
+);
 
 // ============================================
 // Production Samples - In-process sampling (~every 2h)
@@ -427,6 +480,7 @@ export const productionRunsRelations = relations(
     incidentReports: many(incidentReports),
     readings: many(productionRunReadings),
     productionRunFeedstocks: many(productionRunFeedstocks),
+    feedstockDraws: many(productionRunFeedstockDraws),
   })
 );
 
@@ -474,6 +528,20 @@ export const productionRunFeedstocksRelations = relations(
       references: [feedstocks.id],
     }),
   })
+);
+
+export const productionRunFeedstockDrawsRelations = relations(
+  productionRunFeedstockDraws,
+  ({ one }) => ({
+    productionRun: one(productionRuns, {
+      fields: [productionRunFeedstockDraws.productionRunId],
+      references: [productionRuns.id],
+    }),
+    storageLocation: one(storageLocations, {
+      fields: [productionRunFeedstockDraws.storageLocationId],
+      references: [storageLocations.id],
+    }),
+  }),
 );
 
 export const productionSamplesRelations = relations(

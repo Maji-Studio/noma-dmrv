@@ -85,6 +85,7 @@ describe("bin loss stock guard", () => {
           code: `FS-LOSS-${tag}`,
           status: "complete",
           massDryKg: AVAILABLE_STOCK_KG,
+          massWetKg: AVAILABLE_STOCK_KG,
         })
         .returning({ id: feedstocks.id });
 
@@ -109,7 +110,7 @@ describe("bin loss stock guard", () => {
         field: "lossMassKg",
       });
       if (!rejected.success) {
-        expect(rejected.error).toBe("Not enough feedstock in this bin");
+        expect(rejected.error).toBe("Not enough wet feedstock in this bin");
       }
 
       const rowsAfterRejection = await db

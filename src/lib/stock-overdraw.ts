@@ -43,8 +43,14 @@ export function binStockOverdrawInlineMessage(
   material: StockMaterial,
   availableKg: number,
 ): string {
-  const userFacingMaterial = material === "product" ? "biochar" : material;
-  return `Only ${formatStockLimitKg(availableKg)} of ${userFacingMaterial} is available. Reduce the mass.`;
+  const userFacingMaterial =
+    material === "feedstock"
+      ? "wet feedstock"
+      : material === "product"
+        ? "biochar"
+        : material;
+  const massLabel = material === "feedstock" ? "wet mass" : "mass";
+  return `Only ${formatStockLimitKg(availableKg)} of ${userFacingMaterial} is available. Reduce the ${massLabel}.`;
 }
 
 /** Compact delivery-form feedback; the server keeps the detailed race message. */
@@ -57,7 +63,7 @@ export function deliveryStockOverdrawInlineMessage(
 export function binStockOverdrawMessage(
   material: StockMaterial,
 ): string {
-  const userFacingMaterial = material === "feedstock" ? "feedstock" : "biochar";
+  const userFacingMaterial = material === "feedstock" ? "wet feedstock" : "biochar";
   return `Not enough ${userFacingMaterial} in this bin`;
 }
 
