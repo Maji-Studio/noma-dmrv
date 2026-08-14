@@ -1,6 +1,7 @@
 import type { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { CreditBatchLineageFacts } from "@/data-access/credit-batch-accounting";
 import type { DocumentRow } from "@/data-access/documents";
+import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 
 const DEFAULT_FACT_DATE = new Date("2026-01-20T00:00:00Z");
@@ -21,6 +22,10 @@ export function factsFromMockedLineages(
   batchId: string,
   productionRunIds: string[],
   lineages: Awaited<ReturnType<typeof getChainOfCustodyData>>[],
+  // Status per member run id for runs not covered by a lineage. The real
+  // membership query returns every member run regardless of status; runs
+  // default to "complete" here so lineage-focused tests stay unaffected.
+  memberRunStatusById: Record<string, ProductionRunStatus> = {},
 ): CreditBatchLineageFacts {
   const resolved = lineages.filter(Boolean);
   const runs = resolved.flatMap((lineage) =>
@@ -48,7 +53,7 @@ export function factsFromMockedLineages(
               status: feedstock.status ?? "complete",
               deliveryDate: feedstock.deliveryDate ?? DEFAULT_FACT_DATE,
               massDryKg: feedstock.massDryKg ?? 100,
-              massUsedKg: feedstock.massUsedKg ?? 100,
+              wetMassUsedKg: feedstock.wetMassUsedKg ?? 100,
               eligibilityStatus: feedstock.eligibilityStatus ?? "eligible",
               supplierName: feedstock.supplierName ?? "Supplier",
               feedstockTypeName: feedstock.feedstockTypeName ?? "Wood",
@@ -111,10 +116,27 @@ export function factsFromMockedLineages(
     ).values(),
   );
 
+  const lineageRuns = Array.from(
+    new Map(runs.map((run) => [run.id, run])).values(),
+  );
+  const coveredRunIds = new Set(lineageRuns.map((run) => run.id));
+  const memberOnlyRuns = productionRunIds
+    .filter((runId) => !coveredRunIds.has(runId))
+    .map((runId) => ({
+      id: runId,
+      code: runId.toUpperCase(),
+      status: memberRunStatusById[runId] ?? "complete",
+      date: DEFAULT_FACT_DATE,
+      biocharDryMassKg: 100,
+      feedstockMassDryKg: 200,
+      reactor: null,
+      feedstocks: [],
+    }));
+
   return {
     batchId,
     productionRunIds,
-    runs: Array.from(new Map(runs.map((run) => [run.id, run])).values()),
+    runs: [...lineageRuns, ...memberOnlyRuns],
     applications: normalizedApplications,
     applicationIds: normalizedApplications.map((application) => application.id),
     appliedWeightTons: normalizedApplications.reduce(

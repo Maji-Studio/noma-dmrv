@@ -1,5 +1,51 @@
 # Isometric Docs Change Log
 
+## 2026-08-13 (Production Batch physical run windows)
+
+New Isometric Production Batches now submit the earliest member production-run
+start and latest completed member-run end as `started_at` and `ended_at`. These
+are physical instants, matching the checked-in Certify OpenAPI descriptions and
+the existing Production Batch mapping decision, rather than UTC day-boundary
+timestamps derived from the credit batch's date-only window. This keeps every
+member run inside the immutable remote Production Batch, preserves non-zero
+same-day windows, and renders the operator's physical run times consistently in
+positive- and negative-offset facility timezones.
+
+Reconciliation accepts the former UTC day-start/day-end representation for a
+remote batch carrying the same stable supplier reference and otherwise matching
+identity and records that compatibility claim in the sync audit trail. Stored
+payload hashes from that exact legacy representation migrate once to the
+physical-window hash; changes to mass, facility, feedstock, kind, supplier
+reference, or a later physical window still emit drift. Open member runs fail
+before that batch's registry POST.
+The behavior is covered hermetically; fresh sandbox verification is pending.
+
+## 2026-08-13 (Storage Location traceability staged)
+
+One customer location now represents one reusable agricultural application
+site per Isometric project. Organization Owners/Admins can explicitly synchronize that site from an
+Application detail sheet. The action reconciles by a stable supplier reference
+before creating an Isometric `biochar_field` Storage Location, journals the
+confirmed `slc_...` identity, checks the remote record for drift, and surfaces
+not-synced, synced, drifted, and failed states with an explicit retry. Project
+mapping changes are blocked after a site is registered. Application create and update actions do not
+perform registry writes, and local name or coordinate drift never triggers an
+automatic PATCH.
+
+The journal schema also reserves one Biochar Application identity per
+Application and credit-batch allocation slice. The Biochar Application adapter
+remains hard-gated: noma records net delivered/applied mass but the current
+request requires separate arrival and departure truck observations. No
+Biochar Application request is built or posted until Isometric confirms the
+mass encoding, application-rate unit and basis, multi-batch allocation, and
+correction lifecycle.
+
+This traceability layer does not change the GHG Entry `CO2 stored` component,
+its payload hash, or the existing sequestration calculation. Measurement
+Locations remain out of scope. The migration chain and focused local
+tenant/concurrency tests are verified independently of the live provider; live
+sandbox Storage Location behavior and any registry UI URL remain unverified.
+
 Certification-readiness, transport-evidence, supporting-source, and sampling
 correction notes are archived in
 [`docs/archive/2026-07-28-certification-readiness-and-sampling-corrections.md`](../archive/2026-07-28-certification-readiness-and-sampling-corrections.md).
@@ -11,6 +57,62 @@ certification readiness. This file-presence check is a conservative Noma
 control and does not claim that structured telemetry was submitted to Certify.
 Dated implementation context is archived in
 [`docs/archive/isometric-changes-archive-2026-07-31-operational-feedback.md`](../archive/isometric-changes-archive-2026-07-31-operational-feedback.md).
+
+Certification review corrections for report serialization, Production Batch
+reconciliation, workspace eligibility, and grouped Removal readiness are
+archived in
+[`docs/archive/2026-08-09-certification-review-corrections.md`](../archive/2026-08-09-certification-review-corrections.md).
+
+Removal submission recovery and the observed Production Batch mass-unit
+readback are archived in
+[`docs/archive/2026-08-10-removal-submission-recovery.md`](../archive/2026-08-10-removal-submission-recovery.md).
+
+## 2026-08-13 (measurement Samples preserve local Sample grain)
+
+Sampled 1,000-year submission now creates one Isometric
+`MeasurementSample` for each independently analysed noma Sample. Each request
+uses a deterministic versioned reference containing the stable local Sample
+identity, the Sample's own sampling instant, and only its paired total-carbon,
+inorganic-carbon, and `s_fraction` values. Input row ordering does not change
+the semantic snapshot or supplier references.
+
+Batch product mass no longer appears as a property of an aggregate physical
+Sample. It is materialized once as a standalone direct `REPORTED` kg Datapoint,
+with the existing inventory and durability Sources. The GHG Entry continues to
+receive three ordered IDs for each chemistry/reflectance list and one scalar
+mass ID. Measurement Sample source patching processes every capture even though
+none carries mass.
+
+The snapshot schema and mapping revision reject the former aggregate shape.
+Supplier-reference journaling and collection reconciliation resume after one or
+two successful Sample creates, and a source-patching retry reconciles all three
+without duplicate POSTs. This is code-implemented and hermetically verified;
+fresh sandbox verification is still pending. No production enablement or
+external-record remediation is included.
+
+## Feedstock inventory mass basis
+
+Feedstock-bin stock, withdrawals, losses, and reconciliation now use wet,
+as-received kilograms as their authoritative physical inventory unit.
+`production_run_feedstocks.wet_mass_used_kg` records that wet allocation and
+replaces the former ambiguously named `mass_used_kg` column. Production runs
+continue to derive dry feedstock mass from their recorded wet mass and moisture
+for process calculations and certification inputs. Certification lineage uses
+the wet allocation shares to select contributing intake batches without
+changing the dry-mass values submitted for protocol calculations.
+
+## 2026-08-10 (customer location application evidence)
+
+Application records now support `location` as the first and default evidence
+method for identifying where biochar was applied under Agricultural Soils v1.1.
+The location path uses the application's complete latitude/longitude pair,
+normally derived from the selected delivery customer's saved location. GIS
+boundary evidence remains available as an alternative, while visual evidence
+remains unavailable in the creation UI.
+
+This changes noma's local application evidence enum and defaults; it does not
+add or change an Isometric API operation. Application evidence-health counts
+remain informational and do not block certification submission.
 
 ## Live submission progress
 
@@ -116,6 +218,31 @@ Earlier implementation notes are archived by date:
 - [`2026-06-10 to 2026-06-20`](../archive/isometric-changes-archive-2026-06-10-to-06-20.md)
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
+
+## 2026-08-13 (replacement sampled 1,000-year component implemented locally)
+
+The current sampled component contract is
+`biochar_sequestration_1000_year_f_durable_max`, with paired list inputs
+`total_carbon_contents`, `inorganic_carbon_contents`, and `s_fraction`, plus
+scalar `product_mass`. Every submitted replicate requires directly measured
+inorganic carbon; noma does not derive it from total minus reported organic
+carbon on this path.
+
+The local explanatory preview now mirrors the component: calculate organic
+carbon per replicate as total minus inorganic, average it, calculate raw
+durability as the binomial lower estimate, bound credit-bearing organic carbon
+and durability at zero, cap durability at 0.95, and use the bounded value for
+stored CO2e. Evidence ledgers show the three per-replicate
+values, `s_fraction`, product mass, raw and capped durability, cap status,
+component key, and formula label. Isometric remains authoritative.
+
+The deprecated `biochar_sequestration_1000_year` remains readable and is
+labelled as legacy total-carbon/uncapped semantics. New template selection and
+submission compilation reject it. Production sampled submission remains
+blocked, and unsampled Method B remains unsupported. Protocol v1.1,
+Agricultural Soils module v1.1, and Standard v1.7 pins are unchanged. Isometric
+confirmation and external sandbox-template migration remain outstanding; no
+registry template was changed by this implementation.
 
 ## 2026-07-28 (application boundary evidence binds product mass Sources)
 
@@ -481,3 +608,20 @@ snapshot by design.
   from the Removal Source binding plan until an Application `source_ids` or
   equivalent boundary target exists.
 - The partial-mirroring blocker is retained.
+
+## 2026-08-14 (sync-event key widened; stale-lock script re-keyed)
+
+- `certifier_sync_events.entity_id` widened from `uuid` to `text` (migration
+  0108). The column is polymorphic per `entity_type`: local UUIDs for removals,
+  GHG statements, and documents; `nm-slc-*` supplier references (or an
+  `unmapped:*` fallback) for Storage Locations, whose sync events previously
+  failed to insert and crashed the application sync panel on read.
+- `scripts/isometric-clear-stale-lock.ts` now targets the Removal ledger key
+  (`localEntityType='removal'`); it previously queried `creditBatch` and could
+  never find current rows. It refuses to clear a draft whose
+  `metadata.externalMutation` is `possible`/`confirmed` unless
+  `--force-confirmed` is passed, because rejecting such a draft re-versions
+  the supplier references and can duplicate registry entries.
+- GHG statement creates now persist the interrupted marker (`lastError`,
+  `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have
+  reached the registry, matching the Removal pipeline.

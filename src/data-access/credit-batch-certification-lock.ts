@@ -5,6 +5,7 @@ import {
   certifierRemovals,
 } from "@/db/schema/certification";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
+import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
@@ -125,6 +126,10 @@ export async function assertRemovalAllowsCreditBatchMutation(
   }
 
   throw new SafeError(
-    `Cannot ${mutation} credit batch because it is part of a submitted certification artifact. Create a correction instead of editing locked source data.`,
+    formatCertificationLineageLockMessage({
+      mutation,
+      subjectEntityType: "creditBatch",
+      lineageEntityType: "creditBatch",
+    }),
   );
 }

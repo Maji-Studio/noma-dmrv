@@ -17,6 +17,7 @@ import {
   facilities,
 } from "@/db/schema";
 import type { SampleFilterData } from "@/schemas/samples";
+import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
@@ -68,6 +69,7 @@ export interface SampleWithRelations {
   hToCOrgRatio: number | null;
   oToCOrgRatio: number | null;
   durabilityOption: "200_year" | "1000_year";
+  sampling: CreditBatchSampling | null;
 
   // 1000-year durability
   randomReflectanceR0Percent: number | null;
@@ -284,6 +286,7 @@ export async function getSamples(
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
       creditBatchCode: creditBatches.code,
+      sampling: creditBatches.sampling,
       batchDurabilityOption: batchFacilities.durabilityOption,
       facilityCode: sql<string | null>`coalesce(${batchFacilities.code}, ${runFacilities.code})`,
       facilityName: sql<string | null>`coalesce(${batchFacilities.name}, ${runFacilities.name})`,
@@ -381,6 +384,7 @@ export async function getSampleById(
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
       creditBatchCode: creditBatches.code,
+      sampling: creditBatches.sampling,
       batchDurabilityOption: batchFacilities.durabilityOption,
       facilityCode: sql<string | null>`coalesce(${batchFacilities.code}, ${runFacilities.code})`,
       facilityName: sql<string | null>`coalesce(${batchFacilities.name}, ${runFacilities.name})`,
@@ -591,6 +595,7 @@ export async function createSample(
       tx,
       { entityType: "creditBatch", entityId: data.creditBatchId },
       "create",
+      "sample",
     );
 
     // Verify the batch exists and enforce its declared tier's evidence
@@ -808,6 +813,8 @@ export async function updateSample(
         tx,
         { entityType: "creditBatch", entityId: data.creditBatchId },
         "update",
+        "sample",
+        "selected",
       );
     }
 

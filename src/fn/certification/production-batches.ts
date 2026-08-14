@@ -35,10 +35,12 @@
 import {
   getProductionBatchRegistrations,
   getProductionBatchRegistryInputs,
+  migrateProductionBatchPayloadHash,
   upsertProductionBatchRegistration,
   type ProductionBatchRegistryInput,
 } from "@/data-access/certifier-production-batches";
 import type { OrgContext } from "@/lib/auth/server";
+import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import { SafeError } from "@/lib/errors";
 import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import {
@@ -46,6 +48,7 @@ import {
   buildProductionBatchReference,
   createProductionBatch,
   findProductionBatchBySupplierRef,
+  productionBatchMassUnitsMatch,
   type CreateProductionBatchRequest,
   type IsometricProductionBatch,
 } from "@/lib/isometric/production-batches";
@@ -56,12 +59,19 @@ import {
   creditBatchIdsForMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
-import { performRegistryCreate, supplierRefLookup } from "./registry-create";
+import {
+  performRegistryCreate,
+  supplierRefLookup,
+  type RegistryExternalMutationReporter,
+} from "./registry-create";
 import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
 } from "./shared";
+
+const LEGACY_DAY_START_SUFFIX = "T00:00:00.000Z";
+const LEGACY_DAY_END_SUFFIX = "T23:59:59.999Z";
 
 /** One credit batch's production-batch POST: its supplier ref + request body. */
 export interface ProductionBatchSubmission {
@@ -105,6 +115,11 @@ export function buildProductionBatchSubmission(
       `Credit batch ${input.creditBatchCode} has production runs with no dry biochar mass recorded. Record the produced mass on every run in the batch before submitting.`,
     );
   }
+  if (input.runsMissingEndTime > 0) {
+    throw new SafeError(
+      `Credit batch ${input.creditBatchCode} has production runs that are still open. Close every run in the batch before submitting.`,
+    );
+  }
   const supplierRefId = buildProductionBatchReference({
     creditBatchId: input.creditBatchId,
   });
@@ -114,8 +129,8 @@ export function buildProductionBatchSubmission(
     feedstockTypeIds: input.isometricFeedstockTypeId
       ? [input.isometricFeedstockTypeId]
       : [],
-    startDate: input.startDate,
-    endDate: input.endDate,
+    startedAt: input.startedAt ?? "",
+    endedAt: input.endedAt ?? "",
     totalDryMassKg: input.totalDryMassKg,
     supplierReferenceId: supplierRefId,
   });
@@ -125,8 +140,8 @@ export function buildProductionBatchSubmission(
     supplierRefId,
     body,
     massKg: input.totalDryMassKg,
-    startedOn: input.startDate,
-    endedOn: input.endDate,
+    startedOn: body.started_at.slice(0, 10),
+    endedOn: body.ended_at.slice(0, 10),
     payloadHash: payloadHash(body),
   };
 }
@@ -144,8 +159,11 @@ export function buildProductionBatchSubmissions(
 export interface EnsureProductionBatchesArgs {
   orgCtx: OrgContext;
   removalId: string;
-  /** Claimed ledger row — rejected by `performRegistryCreate` on failure. */
+  /** Claimed ledger row used for registry audit and recovery. */
   submissionRow: { id: string };
+  expectedLockedAt?: Date;
+  deferRejectionToAttempt?: boolean;
+  onExternalMutation?: RegistryExternalMutationReporter;
   creditBatchIds: string[];
   log: Logger;
 }
@@ -191,14 +209,28 @@ export async function ensureProductionBatchesForCreditBatches(
     if (existing) {
       const current = tryBuildProductionBatchSubmission(input, args.log);
       if (current && current.payloadHash !== existing.payloadHash) {
-        await recordProductionBatchDrift({
-          orgCtx: args.orgCtx,
-          removalId: args.removalId,
-          submissionRowId: args.submissionRow.id,
-          submission: current,
-          registeredExternalId: existing.externalProductionBatchId,
-          log: args.log,
-        });
+        if (
+          matchesLegacyDateBoundPayloadHash(
+            input,
+            current,
+            existing.payloadHash,
+          )
+        ) {
+          await migrateProductionBatchPayloadHash(args.orgCtx, {
+            creditBatchId: input.creditBatchId,
+            expectedPayloadHash: existing.payloadHash,
+            nextPayloadHash: current.payloadHash,
+          });
+        } else {
+          await recordProductionBatchDrift({
+            orgCtx: args.orgCtx,
+            removalId: args.removalId,
+            submissionRowId: args.submissionRow.id,
+            submission: current,
+            registeredExternalId: existing.externalProductionBatchId,
+            log: args.log,
+          });
+        }
       }
       registeredByCreditBatchId.set(
         input.creditBatchId,
@@ -208,11 +240,14 @@ export async function ensureProductionBatchesForCreditBatches(
     }
 
     const submission = buildProductionBatchSubmission(input);
+    let reconciledLegacyBatch: IsometricProductionBatch | null = null;
     const { externalId } = await performRegistryCreate({
       orgCtx: args.orgCtx,
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: args.removalId,
       submissionRowId: args.submissionRow.id,
+      expectedLockedAt: args.expectedLockedAt,
+      deferRejectionToAttempt: args.deferRejectionToAttempt,
       operation: `production-batch:create:${submission.creditBatchId}`,
       requestPayload: submission.body,
       supplierRefId: submission.supplierRefId,
@@ -225,7 +260,8 @@ export async function ensureProductionBatchesForCreditBatches(
       resumed: true,
       create: async () => {
         const batch = await createProductionBatch(client, submission.body);
-        assertProductionBatchSupplierReference(batch, submission.supplierRefId);
+        const mismatch = productionBatchMismatchMessage(batch, submission.body);
+        if (mismatch) throw new SafeError(mismatch);
         return batch.id;
       },
       reconcile: async () => {
@@ -234,10 +270,18 @@ export async function ensureProductionBatchesForCreditBatches(
           submission.supplierRefId,
         );
         if (batch) {
-          assertProductionBatchSupplierReference(
+          const mismatch = productionBatchMismatchMessage(
             batch,
-            submission.supplierRefId,
+            submission.body,
+            input,
           );
+          if (mismatch) return { found: "refused", message: mismatch };
+          if (
+            productionBatchWindowKind(batch, submission.body, input) ===
+            "legacy"
+          ) {
+            reconciledLegacyBatch = batch;
+          }
         }
         return supplierRefLookup(
           batch ? { found: true, externalId: batch.id } : { found: false },
@@ -260,8 +304,18 @@ export async function ensureProductionBatchesForCreditBatches(
             `Credit batch ${submission.creditBatchCode} is already registered as a different production batch in Isometric. Check the registry record before submitting again.`,
           );
         }
+        if (reconciledLegacyBatch) {
+          await recordLegacyProductionBatchClaim({
+            orgCtx: args.orgCtx,
+            removalId: args.removalId,
+            submissionRowId: args.submissionRow.id,
+            submission,
+            batch: reconciledLegacyBatch,
+          });
+        }
       },
       failureMessagePrefix: `Registry production batch for credit batch ${submission.creditBatchCode} could not be created`,
+      onExternalMutation: args.onExternalMutation,
       log: args.log,
     });
     registeredByCreditBatchId.set(submission.creditBatchId, externalId);
@@ -280,6 +334,9 @@ export async function bindProductionBatchesToMeasurementSamples(args: {
   orgCtx: OrgContext;
   removalId: string;
   submissionRow: { id: string };
+  expectedLockedAt?: Date;
+  deferRejectionToAttempt?: boolean;
+  onExternalMutation?: RegistryExternalMutationReporter;
   submissions: DurabilityMeasurementSampleSubmission[];
   log: Logger;
 }): Promise<DurabilityMeasurementSampleSubmission[]> {
@@ -287,6 +344,9 @@ export async function bindProductionBatchesToMeasurementSamples(args: {
     orgCtx: args.orgCtx,
     removalId: args.removalId,
     submissionRow: args.submissionRow,
+    expectedLockedAt: args.expectedLockedAt,
+    deferRejectionToAttempt: args.deferRejectionToAttempt,
+    onExternalMutation: args.onExternalMutation,
     creditBatchIds: creditBatchIdsForMeasurementSamples(args.submissions),
     log: args.log,
   });
@@ -317,13 +377,128 @@ function tryBuildProductionBatchSubmission(
   }
 }
 
-function assertProductionBatchSupplierReference(
+/**
+ * Before physical member-run instants were submitted, noma encoded the same
+ * date-only credit-batch window as UTC day-start/day-end timestamps. Treat a
+ * stored hash of that exact legacy body as a representation migration rather
+ * than permanent business-data drift. Any mass, facility, feedstock, kind or
+ * supplier-reference change still produces a different hash and is reported.
+ */
+function matchesLegacyDateBoundPayloadHash(
+  input: ProductionBatchRegistryInput,
+  current: ProductionBatchSubmission,
+  storedHash: string,
+): boolean {
+  const legacyBody: CreateProductionBatchRequest = {
+    ...current.body,
+    started_at: `${input.startDate}${LEGACY_DAY_START_SUFFIX}`,
+    ended_at: `${input.endDate}${LEGACY_DAY_END_SUFFIX}`,
+  };
+  const physicalStartMs = Date.parse(current.body.started_at);
+  const physicalEndMs = Date.parse(current.body.ended_at);
+  const legacyStartMs = Date.parse(legacyBody.started_at);
+  const legacyEndMs = Date.parse(legacyBody.ended_at);
+  const physicalWindowFitsLegacyBounds =
+    physicalStartMs >= legacyStartMs && physicalEndMs <= legacyEndMs;
+  return (
+    physicalWindowFitsLegacyBounds && payloadHash(legacyBody) === storedHash
+  );
+}
+
+type LegacyProductionBatchWindow = Pick<
+  ProductionBatchRegistryInput,
+  "startDate" | "endDate"
+>;
+
+function timestampMatches(actual: string, expected: string): boolean {
+  const actualMs = Date.parse(actual);
+  return (
+    Number.isFinite(actualMs) && actualMs === Date.parse(expected)
+  );
+}
+
+function productionBatchMismatchMessage(
   batch: IsometricProductionBatch,
-  expected: string,
-): void {
-  if (batch.supplier_reference_id === expected) return;
-  throw new SafeError(
-    `Registry production batch ${batch.id} does not match submission ${expected}. Ask support to check the registry record.`,
+  expected: CreateProductionBatchRequest,
+  legacyWindow?: LegacyProductionBatchWindow,
+): string | null {
+  const windowKind = productionBatchWindowKind(
+    batch,
+    expected,
+    legacyWindow,
+  );
+  const sameFeedstocks =
+    [...batch.feedstock_type_ids].sort().join("\u0000") ===
+    [...expected.feedstock_type_ids].sort().join("\u0000");
+  const massDifferenceKg = Math.abs(
+    batch.mass.magnitude - expected.mass.magnitude,
+  );
+  const floatingPointSlackKg =
+    Number.EPSILON *
+    (Math.abs(batch.mass.magnitude) + Math.abs(expected.mass.magnitude));
+  const massMagnitudeMatches =
+    massDifferenceKg <=
+    MASS_COMPARISON_EPSILON_KG + floatingPointSlackKg;
+  if (
+    batch.supplier_reference_id === expected.supplier_reference_id &&
+    batch.facility_id === expected.facility_id &&
+    sameFeedstocks &&
+    batch.kind === expected.kind &&
+    massMagnitudeMatches &&
+    productionBatchMassUnitsMatch(batch.mass.unit, expected.mass.unit) &&
+    windowKind !== "mismatch"
+  ) {
+    return null;
+  }
+  return `Registry production batch ${batch.id} does not match this credit batch's facility, feedstock, kind, mass, or production window. Ask support to check the registry record.`;
+}
+
+function productionBatchWindowKind(
+  batch: IsometricProductionBatch,
+  expected: CreateProductionBatchRequest,
+  legacyWindow?: LegacyProductionBatchWindow,
+): "physical" | "legacy" | "mismatch" {
+  const physicalWindowMatches =
+    timestampMatches(batch.started_at, expected.started_at) &&
+    timestampMatches(batch.ended_at, expected.ended_at);
+  if (physicalWindowMatches) return "physical";
+  const legacyWindowMatches =
+    legacyWindow !== undefined &&
+    timestampMatches(
+      batch.started_at,
+      `${legacyWindow.startDate}${LEGACY_DAY_START_SUFFIX}`,
+    ) &&
+    timestampMatches(
+      batch.ended_at,
+      `${legacyWindow.endDate}${LEGACY_DAY_END_SUFFIX}`,
+    );
+  return legacyWindowMatches ? "legacy" : "mismatch";
+}
+
+async function recordLegacyProductionBatchClaim(args: {
+  orgCtx: OrgContext;
+  removalId: string;
+  submissionRowId: string;
+  submission: ProductionBatchSubmission;
+  batch: IsometricProductionBatch;
+}): Promise<void> {
+  await appendSyncEventBestEffort(
+    args.orgCtx,
+    {
+      provider: ISOMETRIC_PROVIDER,
+      entityType: REMOVAL_ENTITY_TYPE,
+      entityId: args.removalId,
+      operation: `production-batch:legacy-window-claimed:${args.submission.creditBatchId}`,
+      status: "succeeded",
+      requestPayload: args.submission.body,
+      responsePayload: {
+        id: args.batch.id,
+        supplier_reference_id: args.batch.supplier_reference_id,
+        started_at: args.batch.started_at,
+        ended_at: args.batch.ended_at,
+      },
+    },
+    { submissionId: args.submissionRowId },
   );
 }
 

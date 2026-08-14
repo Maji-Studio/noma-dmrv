@@ -49,7 +49,6 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
-import { resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
@@ -132,10 +131,10 @@ function createColumns(
       accessorFn: (row) => row.reactorIdentifier ?? "",
     },
     {
-      accessorKey: "totalFeedstockMassKg",
+      accessorKey: "totalFeedstockWetMassKg",
       header: "Feedstock wet mass",
       cell: ({ row }) => (
-        <span className="font-mono">{formatMassKg(row.original.totalFeedstockMassKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.totalFeedstockWetMassKg)}</span>
       ),
     },
     {
@@ -652,18 +651,18 @@ export function ProductionRunList() {
             title: "Feedstock & processing",
             fields: [
               buildProductionRunFeedstockDetailField(sideSheetEntity.feedstocks),
-              {
-                label: "Source bin",
-                value: sideSheetEntity.feedstockStorageLocationName,
-              },
-              { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Feedstock"), ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: formatMassKg(sideSheetEntity.feedstockWetMassKg) },
+              ...sideSheetEntity.feedstockDraws.map((draw, index) => ({
+                label: `Source bin ${index + 1}`,
+                value: `${draw.storageLocationName}: ${formatMassKg(draw.wetMassKg)}`,
+              })),
+              { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Feedstock"), ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: formatMassKg(sideSheetEntity.totalFeedstockWetMassKg) },
               { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Feedstock"), ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.feedstockMoisturePercent) },
               { label: "Feed rate (kg/hr)", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
               { label: "Residence time (min)", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
             ],
             content: (
               <MoistureSplit
-                wetMassKg={sideSheetEntity.feedstockWetMassKg}
+                wetMassKg={sideSheetEntity.totalFeedstockWetMassKg}
                 moisturePercent={sideSheetEntity.feedstockMoisturePercent}
                 dryMassKg={sideSheetEntity.feedstockMassDryKg}
                 materialLabel="Feedstock"

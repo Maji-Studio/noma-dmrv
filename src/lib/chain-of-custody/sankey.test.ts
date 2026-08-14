@@ -11,7 +11,7 @@ function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
     },
     biocharProduct: { id: "lot-1", massKg: 3_000, moistureContentPercent: null },
     feedstocks: [
-      { id: "fs-1", massUsedKg: 10_000, eligibilityStatus: "eligible" },
+      { id: "fs-1", wetMassUsedKg: 10_000, eligibilityStatus: "eligible" },
     ],
     ...overrides,
   };
@@ -24,8 +24,8 @@ describe("buildBatchSankey", () => {
     const result = buildBatchSankey([
       lineage({
         feedstocks: [
-          { id: "fs-1", massUsedKg: 9_000, eligibilityStatus: "eligible" },
-          { id: "fs-2", massUsedKg: 1_000, eligibilityStatus: "ineligible" },
+          { id: "fs-1", wetMassUsedKg: 9_000, eligibilityStatus: "eligible" },
+          { id: "fs-2", wetMassUsedKg: 1_000, eligibilityStatus: "ineligible" },
         ],
       }),
     ]);
@@ -75,7 +75,7 @@ describe("buildBatchSankey", () => {
       feedstocks: [
         {
           id: "fs-1",
-          massUsedKg: 10_000,
+          wetMassUsedKg: 10_000,
           eligibilityStatus: "eligible" as const,
         },
       ],
@@ -134,7 +134,7 @@ describe("buildBatchSankey", () => {
             feedstocks: [
               {
                 id: "fs-1",
-                massUsedKg: 6_000,
+                wetMassUsedKg: 6_000,
                 eligibilityStatus: "eligible",
               },
             ],
@@ -148,7 +148,7 @@ describe("buildBatchSankey", () => {
             feedstocks: [
               {
                 id: "fs-2",
-                massUsedKg: 4_000,
+                wetMassUsedKg: 4_000,
                 eligibilityStatus: "eligible",
               },
             ],
@@ -172,12 +172,12 @@ describe("buildBatchSankey", () => {
       feedstocks: [
         {
           id: "fs-1",
-          massUsedKg: 8_000,
+          wetMassUsedKg: 8_000,
           eligibilityStatus: "eligible" as const,
         },
         {
           id: "fs-2",
-          massUsedKg: 2_000,
+          wetMassUsedKg: 2_000,
           eligibilityStatus: "ineligible" as const,
         },
       ],
@@ -193,7 +193,7 @@ describe("buildBatchSankey", () => {
     );
   });
 
-  it("falls back to allocation records when a run has no recorded input mass", () => {
+  it("never substitutes wet allocations for missing run dry mass", () => {
     const result = buildBatchSankey([
       lineage({
         productionRun: {
@@ -202,13 +202,34 @@ describe("buildBatchSankey", () => {
           biocharDryMassKg: 2_000,
         },
         feedstocks: [
-          { id: "fs-1", massUsedKg: 4_000, eligibilityStatus: "eligible" },
-          { id: "fs-2", massUsedKg: 3_000, eligibilityStatus: null },
+          { id: "fs-1", wetMassUsedKg: 4_000, eligibilityStatus: "eligible" },
+          { id: "fs-2", wetMassUsedKg: 3_000, eligibilityStatus: null },
         ],
       }),
     ]);
 
-    expect(result.columns[0]).toMatchObject({ massKg: 7_000, count: 2 });
+    expect(result.columns[0]).toMatchObject({ massKg: 0, count: 2 });
+  });
+
+  it("uses run-derived dry mass while retaining a distinct wet allocation", () => {
+    const result = buildBatchSankey([
+      lineage({
+        productionRun: {
+          id: "run-1",
+          feedstockMassDryKg: 2_400,
+          biocharDryMassKg: 800,
+        },
+        feedstocks: [
+          {
+            id: "fs-1",
+            wetMassUsedKg: 3_000,
+            eligibilityStatus: "eligible",
+          },
+        ],
+      }),
+    ]);
+
+    expect(result.columns[0]).toMatchObject({ massKg: 2_400, count: 1 });
   });
 
   it("emits an unallocated-output exit when run output never reaches a lot", () => {
@@ -242,8 +263,8 @@ describe("buildBatchSankey", () => {
           moistureContentPercent: null,
         }, // > run output
         feedstocks: [
-          // Ineligible allocation exceeds the run's recorded input mass.
-          { id: "fs-1", massUsedKg: 2_000, eligibilityStatus: "ineligible" },
+          // Wet eligibility share is applied to the run's dry input mass.
+          { id: "fs-1", wetMassUsedKg: 2_000, eligibilityStatus: "ineligible" },
         ],
       }),
     ]);
@@ -256,7 +277,7 @@ describe("buildBatchSankey", () => {
         ["conversion_loss", "unallocated_output", "in_storage"].includes(e.key),
       ),
     ).toEqual([]);
-    expect(result.warnings).toHaveLength(4);
+    expect(result.warnings).toHaveLength(3);
   });
 
   it("converts a moist lot to a dry basis so it balances against runs (F14)", () => {
@@ -273,7 +294,7 @@ describe("buildBatchSankey", () => {
         },
         biocharProduct: { id: "lot-1", massKg: 500, moistureContentPercent: 5 },
         feedstocks: [
-          { id: "fs-1", massUsedKg: 475, eligibilityStatus: "eligible" },
+          { id: "fs-1", wetMassUsedKg: 475, eligibilityStatus: "eligible" },
         ],
       }),
     ]);

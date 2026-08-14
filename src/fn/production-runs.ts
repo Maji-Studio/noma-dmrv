@@ -294,7 +294,7 @@ export async function createProductionRunFn(
           // to startTime, which produced misleading zero-duration windows (#259).
           endTime: validated.endTime instanceof Date ? validated.endTime : null,
           operatorId: validated.operatorId || null,
-          feedstockWetMassKg: validated.feedstockWetMassKg ?? null,
+          feedstockDraws: validated.feedstockDraws,
           feedstockMoisturePercent: validated.feedstockMoisturePercent ?? null,
           feedingRateKgHr: validated.feedingRateKgHr ?? null,
           residenceTimeMinutes: validated.residenceTimeMinutes ?? null,
@@ -305,7 +305,6 @@ export async function createProductionRunFn(
           biocharOutputKg: validated.biocharOutputKg ?? null,
           biocharMoisturePercent: validated.biocharMoisturePercent ?? null,
           biocharStorageLocationId: validated.biocharStorageLocationId || null,
-          feedstockStorageLocationId: validated.feedstockStorageLocationId || null,
         }),
       CODE_CONFLICT_MESSAGES.productionRun,
     );
@@ -365,7 +364,7 @@ export async function updateProductionRunFn(
               ? new Date(validated.endTime)
               : undefined,
       operatorId: validated.operatorId,
-      feedstockWetMassKg: validated.feedstockWetMassKg,
+      feedstockDraws: validated.feedstockDraws,
       feedstockMoisturePercent: validated.feedstockMoisturePercent,
       feedingRateKgHr: validated.feedingRateKgHr,
       residenceTimeMinutes: validated.residenceTimeMinutes,
@@ -376,7 +375,6 @@ export async function updateProductionRunFn(
       biocharOutputKg: validated.biocharOutputKg,
       biocharMoisturePercent: validated.biocharMoisturePercent,
       biocharStorageLocationId: validated.biocharStorageLocationId,
-      feedstockStorageLocationId: validated.feedstockStorageLocationId,
     });
 
     return { success: true, data: run };

@@ -95,9 +95,11 @@ describe("CreditBatchCard", () => {
     const unavailableBatch = {
       ...creditBatch,
       co2eStoredPreview: {
-        provider: "isometric",
-        co2eStoredTonnes: null,
-        moduleVersion: null,
+      provider: "isometric",
+      co2eStoredTonnes: null,
+      componentKey: null,
+      moduleVersion: null,
+      formulaVersion: null,
         applicationResults: [],
         missingInputs: ["dryMassTonnes"],
         warnings: [],

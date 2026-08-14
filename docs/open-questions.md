@@ -399,6 +399,22 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   forms and note the rule in [`forms.md`](./forms.md). If it is not, leave both
   and delete this entry (S).
 
+### Only the GHG statement report PDF renders deterministic bytes (`certification/ledger-pdf-determinism`, opened 2026-08-06)
+
+- **Observed:** @react-pdf/pdfkit writes each compressed object when its own
+  async deflate ends (so the threadpool permutes object order in the file) and
+  tags every embedded subset font with `Math.random()`. Neither has a seam in
+  @react-pdf/renderer 4.5.1, so `renderGhgStatementReportPdf` post-processes its
+  output through
+  `src/lib/certification/ghg-statement-report/canonical-pdf.ts`.
+- Every other document built on `renderLedgerToBuffer`
+  (`src/lib/certification/evidence-ledger/pdf-theme.ts`) is still byte-unstable.
+  That is harmless today because only the GHG statement report has a stored
+  checksum operators and verifiers compare.
+- **Resolve via:** if a second ledger ever gains a checksum or a stored-artifact
+  verification gate, move the canonicalizer next to `renderLedgerToBuffer` and
+  apply it to every ledger rather than copying it (S).
+
 ## Isometric Certify integration
 
 Registry-specific deferred decisions live in
@@ -841,14 +857,98 @@ bound); these are the decisions it deliberately did not make.
   payload validation before any datapoint POST so a refused submission leaves
   zero registry residue (S each).
 
-### Production-runs list header "Feedstock wet mass" renders the dry allocation (`production-runs/feedstock-mass-column-mislabel`)
+## Promotion #682 review follow-ups (opened 2026-08-14)
 
-- The column reads `totalFeedstockMassKg`
-  (`src/components/production-runs/production-run-list.tsx`), which sums
-  `production_run_feedstocks.massUsedKg` — allocated from `computedDryMass` in
-  `createProductionRun` (`src/data-access/production-runs/mutations.ts`,
-  `allocateFeedstockMass`). A run entered as 500 kg wet @ 30% moisture lists
-  "350 kg" under the wet-mass header; the detail panel shows both figures
-  correctly.
-- **Resolve via:** either relabel the column "Feedstock dry mass" or surface
-  the run's wet figure; pick one and align the list with the detail panel (XS).
+Findings from the multi-agent review of the staging-to-main promotion PR #682
+that were verified real but deliberately not fixed in
+`fix/promotion-682-review-findings` (which fixed the sync-event entity-id type,
+the stale-lock script's entity type, the storage-location lock order, the GHG
+interrupted marker, the interrupted-CAS visibility, PDF number formatting, and
+the shared-project create gate fallback).
+
+### A drifted draft with a confirmed registry write is permanently blocked (`certification/confirmed-drift-dead-end`)
+
+A removal draft that latched `externalMutation: "confirmed"` and later hits a
+payload-hash mismatch is retired by `retireForDrift` in
+`src/fn/certification/removal-submission-freshness.ts` with
+`preserveForReconciliation = true`, which throws before
+`retireStaleSubmissionDraft` can run — and that is the symbol's only caller, so
+`create-new-version` is unreachable for this state. `draft` also blocks
+regrouping. The escape hatch is now `scripts/isometric-clear-stale-lock.ts`
+(fixed to target `localEntityType = 'removal'`), but rejecting a
+confirmed-write draft and re-versioning can double-create registry entries
+because removal supplier refs are version-suffixed (`buildRemovalSupplierRef`).
+**Resolve via:** a deliberate reconcile-or-discard path for
+confirmed-mutation drafts, not the reject-and-reversion the script does.
+
+### First-time Storage Location creates always run the bounded reconcile scan (`certification/storage-location-resumed-scan`)
+
+`createStorageLocationUnderLocks` (`src/fn/certification/storage-locations.ts`)
+passes `resumed: true` unconditionally, so every first create pages through
+`findStorageLocationBySupplierReference`
+(`src/lib/isometric/storage-locations.ts`), which scans at most 50 pages x 20
+records and throws past that. Once a project holds more than 1000 storage
+locations, no new site can be registered. `needs-registry-check`: whether
+`GET /storage_locations` supports server-side filtering by
+`supplier_reference_id`, which would remove the scan entirely.
+
+### Crash-window interruption still loses the confirmed-write marker (`certification/interrupted-marker-crash-window`)
+
+The interrupted markers written by
+`recordClaimedRemovalSubmissionFailureBestEffort`
+(`src/fn/certification/removal-submission-failure.ts`) and the GHG create path
+are in-process best-effort writes inside a `catch`; a SIGTERM/timeout mid-POST
+records nothing. On retry `readRemovalSubmissionExternalMutation` reports
+`"none"`, so payload drift retires the draft without
+`preserveForReconciliation` and the next version re-POSTs datapoints and
+measurement samples under new version-suffixed supplier refs — a duplicate
+GHG entry. **Resolve via:** persisting an attempt-started marker before the
+first registry POST, or reconciling by unversioned keys.
+
+### Order/delivery repoint does not guard the target lineage (`orders/repoint-target-lineage-guard`)
+
+`updateSample` and `updateApplication` call the certification lineage guard on
+the *target* parent when repointing; `updateOrder`
+(`src/data-access/orders.ts`, repointing `biocharProductId`) and
+`updateDelivery` (`src/data-access/deliveries.ts`, repointing `orderId` /
+`biocharProductId`) guard only the entity's current lineage. Repointing an
+order onto a product that belongs to a submitted removal grafts new chain-of-
+custody onto a locked lineage after submission. Pre-existing, not introduced
+by #682.
+
+### Wet-mass allocation attributes draws to depleted intake batches (`feedstock/allocation-original-mass-weights`)
+
+`allocateFeedstockWetMass` (`src/data-access/feedstock-wet-stock.ts`) weights
+by each batch's original `massWetKg`, never remaining mass, so cumulative
+`production_run_feedstocks` attribution to one batch can exceed its intake once
+later batches share the bin. Bin stock stays correct; provenance (credit-batch
+feedstock-type derivation, CoC Sankey) degrades. Carried over verbatim from the
+pre-#676 dry allocator - a known limitation, not a regression.
+
+### Dead legacy feedstock plumbing after multi-bin draws (`production-runs/legacy-feedstock-column`)
+
+`production_runs.feedstock_storage_location_id` is hard-written `null` on
+create and nulled on draw updates (`src/data-access/production-runs/mutations.ts`),
+and `rejectLegacyFeedstockFields` (`src/schemas/production-runs.ts`) rejects
+both legacy fields at the action layer - yet queries still select/join through
+the column and the legacy fallback branches in `createProductionRun` are
+unreachable (one validates a bin it then discards). Same cleanup family:
+`recordStockTakeFn` / `useRecordStockTake` / `recordStockTakeMovement` lost
+their only consumer when #666 deleted `StockTakeForm`, and the `visual`
+null-method facet branch in `src/data-access/applications.ts` is unreachable
+(`evidence_method` is NOT NULL) with a comment that now contradicts the
+`"location"` UI fallback. Pre-production: drop the column and delete the dead
+paths in one follow-up.
+
+### Confirm: unapplied member runs now hard-block removal submission (`certification/unapplied-member-run-blocker`)
+
+PR #660 (titled as gap routing) also made `productionReadinessGapForScope`
+(`src/lib/certification/production-readiness-from-lineage.ts`) return a gap for
+any completed member run with zero applications, and `hasSubmittableRuns` in
+`src/fn/certification/certify-context-core.ts` turns that into a hard blocker
+for the whole Removal. Batch membership is date-window auto-assignment
+(`src/data-access/credit-batch-membership.ts`), and biochar is typically
+applied weeks after production, so a run completed late in a crediting period
+blocks an otherwise-complete batch until its product is applied. The sub-commit
+says deliberate; needs a product confirmation that this is the intended
+operational tradeoff, and this is not a registry requirement we verified.

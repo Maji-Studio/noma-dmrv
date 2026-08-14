@@ -28,6 +28,7 @@ import {
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
 import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
+import { markSubmissionRejected } from "@/data-access/certification";
 import { updateFacility } from "@/data-access/facilities";
 import { SafeError } from "@/lib/errors";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
@@ -195,6 +196,7 @@ async function seedRow(
     payloadHash: string;
     externalId?: string | null;
     lockedAt?: Date | null;
+    metadata?: Record<string, unknown> | null;
   },
 ) {
   const [row] = await db
@@ -208,6 +210,7 @@ async function seedRow(
       externalId: args.externalId ?? null,
       lockedAt: args.lockedAt ?? null,
       payloadSnapshot: { semantic: { seeded: true } },
+      metadata: args.metadata ?? null,
     })
     .returning();
   return row;
@@ -564,6 +567,12 @@ describe("claimSubmissionDraft — resume", () => {
       status: "draft",
       payloadHash: "hash:v-original",
       lockedAt: staleLockedAt,
+      metadata: {
+        lastError: "Previous attempt failed",
+        lastAttemptOutcome: "interrupted",
+        externalMutation: "possible",
+        retained: true,
+      },
     });
 
     let resolveCalled = false;
@@ -599,6 +608,10 @@ describe("claimSubmissionDraft — resume", () => {
     expect(buildSnapshotCalled).toBe(false);
     expect(outcome.row.payloadSnapshot).toMatchObject({
       semantic: { seeded: true },
+    });
+    expect(outcome.row.metadata).toEqual({
+      externalMutation: "possible",
+      retained: true,
     });
   });
 
@@ -680,6 +693,31 @@ describe("claimSubmissionDraft — resume", () => {
 
     const outcome = await claimPromise;
     expect(outcome).toEqual({ kind: "blocked", reason: "in-flight" });
+  });
+
+  it("does not let stale rejection cleanup unlock a successor attempt", async () => {
+    const fixture = await createFixture();
+    const firstLock = new Date(Date.now() - STALE_LOCK_OFFSET_MS);
+    const seeded = await seedRow(fixture.key, {
+      version: 1,
+      status: "draft",
+      payloadHash: "hash:v-original",
+      lockedAt: firstLock,
+    });
+    const successorLock = new Date();
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt: successorLock })
+      .where(eq(certificationSubmissions.id, seeded.id));
+
+    await markSubmissionRejected(makeTestOrgContext(USER_ID), seeded.id, {
+      errorMessage: "stale attempt failed",
+      expectedLockedAt: firstLock,
+    });
+
+    const [row] = await listRows(fixture.key);
+    expect(row.status).toBe("draft");
+    expect(row.lockedAt?.getTime()).toBe(successorLock.getTime());
   });
 });
 

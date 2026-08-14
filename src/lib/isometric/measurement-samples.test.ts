@@ -1,11 +1,41 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildMeasurementSampleReference,
   captureMeasurementSampleDatapointIds,
   findMeasurementSampleBySupplierRef,
   mergeMeasurementSampleDatapointIds,
   type CreateMeasurementSampleRequest,
   type IsometricMeasurementSample,
 } from "./measurement-samples";
+
+describe("buildMeasurementSampleReference", () => {
+  it("is deterministic, versioned, and unique at local-Sample grain", () => {
+    const build = (sampleId: string, version = 2) =>
+      buildMeasurementSampleReference({
+        removalId: "removal-1",
+        role: "production-batch",
+        version,
+        creditBatchId: "credit-batch-1",
+        sampleId,
+      });
+
+    expect(build("sample-1")).toBe(build("sample-1"));
+    expect(build("sample-1")).not.toBe(build("sample-2"));
+    expect(build("sample-1", 3)).not.toBe(build("sample-1", 2));
+    expect(build("sample-1").length).toBeLessThanOrEqual(100);
+  });
+
+  it("requires a stable Sample id for a production-batch reference", () => {
+    expect(() =>
+      buildMeasurementSampleReference({
+        removalId: "removal-1",
+        role: "production-batch",
+        version: 1,
+        creditBatchId: "credit-batch-1",
+      }),
+    ).toThrow(/sampleId required/);
+  });
+});
 
 function measurementSample(
   id: string,
@@ -156,6 +186,88 @@ describe("captureMeasurementSampleDatapointIds", () => {
         requestForSample(response, expectedValues),
       ),
     ).toThrow(/returned 1 value.*2 are required/);
+  });
+
+  it("fails closed when the registry reorders replicate values", () => {
+    const response = measurementSample("mts_reordered", [
+      {
+        datapoint_id: "dtp_c2",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: { magnitude: 0.82, standard_deviation: null, unit: "dimensionless" },
+      },
+      {
+        datapoint_id: "dtp_c1",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: { magnitude: 0.8, standard_deviation: null, unit: "dimensionless" },
+      },
+    ]);
+    const request = requestForSample(response, [...response.values].reverse());
+
+    expect(() => captureMeasurementSampleDatapointIds(response, request)).toThrow(
+      /values in a different order/,
+    );
+  });
+
+  it("accepts equivalent scalar response shapes while preserving magnitude order", () => {
+    const response = measurementSample("mts_normalized", [
+      {
+        datapoint_id: "dtp_c1",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: { unit: "dimensionless", magnitude: 0.8 },
+      },
+      {
+        datapoint_id: "dtp_c2",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: { unit: "dimensionless", magnitude: 0.82 },
+      },
+    ]);
+    const request = requestForSample(response);
+    request.values = request.values.map((value) => ({
+      ...value,
+      value: {
+        magnitude: value.value.magnitude,
+        standard_deviation: null,
+        unit: value.value.unit,
+      },
+    }));
+
+    expect(() =>
+      captureMeasurementSampleDatapointIds(response, request),
+    ).not.toThrow();
+  });
+
+  it("fails closed when the registry echoes a different unit", () => {
+    const response = measurementSample("mts_unit", [
+      {
+        datapoint_id: "dtp_c1",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: { magnitude: 0.8, unit: "%" },
+      },
+    ]);
+    const request = requestForSample(response);
+    request.values[0] = {
+      ...request.values[0],
+      value: { ...request.values[0].value, unit: "dimensionless" },
+    };
+
+    expect(() =>
+      captureMeasurementSampleDatapointIds(response, request),
+    ).toThrow(/value in a different unit/);
   });
 
   it("fails closed on an unexpected response property", () => {

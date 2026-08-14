@@ -77,6 +77,28 @@ describe("deriveCreditBatchLifecycle", () => {
     ]);
   });
 
+  it("surfaces an interrupted removal on the credit-batch lifecycle", () => {
+    const lifecycle = deriveCreditBatchLifecycle(
+      summary({
+        removalId: "removal-1",
+        removalStatus: {
+          kind: "interrupted",
+          value: "failed",
+          label: "Submission interrupted",
+          isActionable: false,
+          isTerminal: false,
+        },
+      }),
+    );
+
+    expect(lifecycle).toMatchObject({
+      badgeStatus: "failed",
+      label: "Submission interrupted",
+      currentStepIndex: 0,
+      stepStates: ["failed", "inactive", "inactive", "inactive"],
+    });
+  });
+
   it("uses the downstream statement as the highest lifecycle signal", () => {
     const lifecycle = deriveCreditBatchLifecycle(
       summary({

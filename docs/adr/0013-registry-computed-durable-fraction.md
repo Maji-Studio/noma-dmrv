@@ -10,6 +10,44 @@
 > submission path exists” describe the pre-2026-07-10 state and are
 > superseded by this metadata and the later amendments.
 
+## Amendment (2026-08-13) — replacement sampled 1,000-year component
+
+The sampled 1,000-year executable contract is now
+`biochar_sequestration_1000_year_f_durable_max`. For each paired replicate it
+consumes total carbon, directly measured inorganic carbon, and `s_fraction`,
+plus batch product mass. The component calculates organic carbon within each
+replicate as `total - inorganic`, then averages those organic-carbon values. It
+calculates raw durability as
+`mean(s) - sqrt(mean(s) * (1 - mean(s)) / n)` and uses
+`min(raw durability, 0.95)` for stored CO2e.
+
+`biochar_sequestration_1000_year` is deprecated. Historical evidence and
+Removal displays retain it as an explicit legacy identity with total-carbon,
+uncapped semantics, but new template configuration and submission compilation
+reject it. Missing inorganic carbon is never inferred from total minus reported
+organic carbon on the replacement path.
+
+This amendment preserves the ADR's governing boundary: noma submits raw
+measurements, and Isometric remains authoritative for the credited durable
+fraction and stored amount. noma's matching calculation and evidence PDF are
+explanatory review aids. Sampled production submission remains blocked;
+unsampled Method B remains unsupported. The Protocol v1.1, Agricultural Soils
+module v1.1, and Standard v1.7 pins are unchanged. Written Isometric
+confirmation and migration of the sandbox template to the replacement component
+remain outstanding external work.
+
+The local submission code currently builds one Isometric `MeasurementSample`
+request for each independently analysed noma Sample. Its versioned supplier
+reference includes the stable local Sample ID, `measured_at` is the local
+sampling instant, and its body contains only that Sample's paired total carbon,
+inorganic carbon, and `s_fraction`. The payload builder supplies three ordered
+Datapoint IDs for each replicate list and submits batch product mass once as a
+standalone direct `REPORTED` Datapoint in kg, with its existing Sources, rather
+than as a property of a physical Sample. Partial retries reconcile each Sample
+reference independently. The remote record grain remains unconfirmed pending
+fresh sandbox validation; this amendment does not authorize production
+submission.
+
 Historical status: accepted (2026-06-18); amended 2026-07-03 (issue #142)
 
 > **Amendment (2026-07-03, issue #142):** the "Scope is 200-year" deferral below is
@@ -101,7 +139,7 @@ against it with a divergence warning.
   carbon — surfaced as `biochar_production_batch` inertinite/semi-inertinite/poorly-carbonized
   fractions) is deferred — its inputs are captured but unrouted.
 
-## Amendment (2026-07-04, ADR 0021) — the live 1000-year blueprint ≠ module Eq.6
+## Historical amendment (2026-07-04, ADR 0021) — the former live 1000-year blueprint ≠ module Eq.6
 
 Authoritative research (Isometric MCP, 2026-07-04) found that the **live Certify blueprint**
 `biochar_sequestration_1000_year` and **module Eq.6** disagree, and **the blueprint is what
@@ -117,3 +155,7 @@ pre-reduced mean. The live 1000-year path (`build1000YearSequestrationSample`, A
 therefore built to the **blueprint**, while `computeFDurable1000` (Eq.6) stays a local
 **preview**. Which of the two governs verification credit is an open Isometric sign-off
 (`open-questions.md` `certification/fdurable-1000-r0-semantics`).
+
+This section records the deprecated component observed in July 2026. The
+2026-08-13 amendment above supersedes it for current template authoring and
+local explanatory calculations.

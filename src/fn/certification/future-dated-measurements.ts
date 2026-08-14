@@ -3,13 +3,13 @@
  * submit-time guard `assertRemovalDatesNotFuture`
  * (`./removal-reporting-window.ts`).
  *
- * The submit pipeline refuses a removal whose durability `measured_at`
- * (the latest production-run end) or GHG entry `completed_on` (the latest
- * biochar application, §8.6.2) is still in the future — Isometric cannot accept
- * either. That guard runs LAST, so without this module the operator only learns
+ * The submit pipeline refuses a removal whose Sample `measured_at`, latest
+ * production-run end, or GHG entry `completed_on` (the latest biochar
+ * application, §8.6.2) is still in the future. Those guards run during
+ * compilation or submission, so without this module the operator only learns
  * the dates are wrong after clicking submit. This computes the same verdict
- * server-side, against the same `>` comparison on raw milliseconds, and ships it
- * on the Certify context as a plain blocker list so the pure (clock-free)
+ * server-side, against the same `>` comparison on raw milliseconds, and ships
+ * it on the Certify context as a plain blocker list so the pure (clock-free)
  * readiness classifier can render it as a red pre-submit check.
  *
  * Deliberately reports EVERY offending run/application rather than only the
@@ -21,6 +21,10 @@ import { formatUtcDate } from "@/lib/date-utils";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 
 type FutureDateRun = Pick<ProductionRunWithSamples, "code" | "endTime">;
+type FutureDateSample = {
+  sampleCode: string;
+  samplingTime?: Date | null;
+};
 type FutureDateLineage = {
   application: { applicationDate: Date; code: string };
 };
@@ -34,10 +38,11 @@ type FutureDateLineage = {
  */
 export function collectFutureDatedMeasurements(args: {
   runs: FutureDateRun[];
+  samples?: FutureDateSample[];
   lineages: FutureDateLineage[];
   now?: Date;
 }): string[] {
-  const { runs, lineages, now = new Date() } = args;
+  const { runs, samples = [], lineages, now = new Date() } = args;
   const nowMs = now.getTime();
   const blockers: string[] = [];
 
@@ -46,6 +51,16 @@ export function collectFutureDatedMeasurements(args: {
       blockers.push(
         `Production run ${run.code} ends on ${formatUtcDate(run.endTime)}. ` +
           "Change the end time or wait until the run ends.",
+      );
+    }
+  }
+
+  for (const sample of samples) {
+    const { samplingTime } = sample;
+    if (samplingTime && samplingTime.getTime() > nowMs) {
+      blockers.push(
+        `Sample ${sample.sampleCode} is dated ${formatUtcDate(samplingTime)}. ` +
+          "Change the sampling time or wait until then.",
       );
     }
   }

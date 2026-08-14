@@ -700,6 +700,12 @@ export async function buildRemovalSubmissionBuild(args: {
           removalId,
           lineages: ctx.lineages,
           memberBatches: ctx.memberBatches,
+          memberSamples: ctx.batchesWithSamples.flatMap((batch) =>
+            batch.samples.map((sample) => ({
+              id: sample.id,
+              code: sample.sampleCode,
+            })),
+          ),
         }));
   const sourceBindingCandidates =
     args.sourceBindingCandidates ??
@@ -733,6 +739,12 @@ export async function buildRemovalSubmissionBuild(args: {
         batch.applicationIds,
       ]),
     ),
+    sampleIdsByCreditBatchId: new Map(
+      ctx.batchesWithSamples.map((batch) => [
+        batch.creditBatchId,
+        batch.samples.map((sample) => sample.id),
+      ]),
+    ),
   });
   // The operator reviews every candidate file before pending Sources receive
   // registry IDs. Build the semantic plan from that complete candidate set,
@@ -751,6 +763,12 @@ export async function buildRemovalSubmissionBuild(args: {
       ctx.memberBatchClaims.map((batch) => [
         batch.creditBatchId,
         batch.applicationIds,
+      ]),
+    ),
+    sampleIdsByCreditBatchId: new Map(
+      ctx.batchesWithSamples.map((batch) => [
+        batch.creditBatchId,
+        batch.samples.map((sample) => sample.id),
       ]),
     ),
   });
@@ -779,7 +797,6 @@ export async function buildRemovalSubmissionBuild(args: {
           attributionByRunId: ctx.attributionByRunId,
           facilityReferenceSoilTemperature:
             ctx.facilityReferenceSoilTemperature ?? null,
-          measuredAt: agg.latestEndTime.toISOString(),
         }
       : null;
   const semanticMeasurementSamples = durabilityMeasurementSampleArgs

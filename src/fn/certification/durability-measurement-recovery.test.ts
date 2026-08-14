@@ -79,8 +79,11 @@ const body: CreateMeasurementSampleRequest = {
   supplier_reference_id: SUPPLIER_REF,
   values: [
     {
-      measurement_property: { quantity_kind: "mass", qualifier: null },
-      value: { magnitude: 1_000, standard_deviation: null, unit: "kg" },
+      measurement_property: {
+        quantity_kind: "mass_fraction_dry_basis",
+        qualifier: "total_carbon",
+      },
+      value: { magnitude: 0.77, standard_deviation: null, unit: "dimensionless" },
     },
   ],
 };
@@ -105,6 +108,17 @@ function registrySample(
 function submission(
   payloadSnapshot: unknown,
   resumed: boolean,
+  submissions = [
+    {
+      creditBatchId: "batch-1",
+      sampleId: "sample-1",
+      creditBatchProductMassKg: 1_000,
+      operationKey: "pb:batch-1",
+      supplierRefId: SUPPLIER_REF,
+      body,
+      label: "production batch CB-1",
+    },
+  ],
 ) {
   return submitDurabilityMeasurementSamples({
     orgCtx: {
@@ -119,14 +133,7 @@ function submission(
       payloadSnapshot,
     },
     resumed,
-    submissions: [
-      {
-        operationKey: "pb:batch-1",
-        supplierRefId: SUPPLIER_REF,
-        body,
-        label: "production batch CB-1",
-      },
-    ],
+    submissions,
     sourceBindingPlan: [
       {
         documentId: "document-1",
@@ -142,13 +149,32 @@ function submission(
           groupKey: "co2-stored",
           componentId: "component-product-mass",
           componentBlueprintKey: "carbon_rich_substance_sequestration",
-          inputKey: "product_mass",
+          inputKey: "total_carbon_contents",
           creditBatchIds: ["batch-1"],
         },
         mappingRevision: "source-binding-v1",
       },
     ],
     log,
+  });
+}
+
+function threeSubmissions() {
+  return [1, 2, 3].map((index) => {
+    const supplierRefId = `nm-mts-removal-pb-batch-s-${index}-v1`;
+    return {
+      creditBatchId: "batch-1",
+      sampleId: `sample-${index}`,
+      creditBatchProductMassKg: 1_000,
+      operationKey: `pb:batch-1:sample:sample-${index}`,
+      supplierRefId,
+      body: {
+        ...body,
+        measured_at: `2026-07-2${index}T00:00:00.000Z`,
+        supplier_reference_id: supplierRefId,
+      },
+      label: `Sample sample-${index}`,
+    };
   });
 }
 
@@ -332,5 +358,102 @@ describe("measurement-sample journal recovery", () => {
         ],
       },
     );
+  });
+
+  it.each([1, 2])(
+    "resumes after %i successful Sample creates without duplicating them",
+    async (createdCount) => {
+      const submissions = threeSubmissions();
+      const created = submissions.slice(0, createdCount).map((item, index) =>
+        registrySample(`mts-created-${index + 1}`, item.supplierRefId),
+      );
+      let postIndex = 0;
+      mocks.client.post.mockImplementation(async () => {
+        if (postIndex === createdCount) {
+          throw new Error("simulated registry interruption");
+        }
+        const sample = created[postIndex];
+        postIndex += 1;
+        return sample;
+      });
+
+      await expect(
+        submission({ journaled: {} }, false, submissions),
+      ).rejects.toThrow(/simulated registry interruption/);
+
+      const lastJournal = mocks.appendSubmissionJournal.mock.calls.at(-1)?.[2] as
+        | { measurementSamples: Array<{ supplierReferenceId: string; measurementSampleId: string }> }
+        | undefined;
+      expect(lastJournal?.measurementSamples).toHaveLength(createdCount);
+
+      mocks.client.post.mockClear();
+      mocks.client.post.mockImplementation(
+        async (_path: string, request: CreateMeasurementSampleRequest) =>
+          registrySample(
+            `mts-created-${request.supplier_reference_id}`,
+            request.supplier_reference_id ?? "missing-supplier-reference",
+          ),
+      );
+      mocks.client.paginate.mockImplementation(async function* () {
+        yield* created;
+      });
+
+      await submission(
+        { journaled: lastJournal },
+        true,
+        submissions,
+      );
+
+      expect(mocks.client.post).toHaveBeenCalledTimes(3 - createdCount);
+      const postedReferences = mocks.client.post.mock.calls.map(
+        (call) => (call[1] as CreateMeasurementSampleRequest).supplier_reference_id,
+      );
+      expect(postedReferences).toEqual(
+        submissions.slice(createdCount).map((item) => item.supplierRefId),
+      );
+    },
+  );
+
+  it("reconciles all Samples after source patching fails without duplicate POSTs", async () => {
+    const submissions = threeSubmissions();
+    mocks.client.post.mockImplementation(
+      async (_path: string, request: CreateMeasurementSampleRequest) =>
+        registrySample(
+          `mts-created-${request.supplier_reference_id}`,
+          request.supplier_reference_id ?? "missing-supplier-reference",
+        ),
+    );
+    mocks.client.patch.mockRejectedValueOnce(
+      new Error("simulated source patch failure"),
+    );
+
+    await expect(
+      submission({ journaled: {} }, false, submissions),
+    ).rejects.toThrow(/simulated source patch failure/);
+    expect(mocks.client.post).toHaveBeenCalledTimes(3);
+
+    const lastJournal = mocks.appendSubmissionJournal.mock.calls.at(-1)?.[2] as {
+      measurementSamples: Array<{
+        supplierReferenceId: string;
+        measurementSampleId: string;
+      }>;
+    };
+    const remoteSamples = lastJournal.measurementSamples.map((entry) =>
+      registrySample(entry.measurementSampleId, entry.supplierReferenceId),
+    );
+    mocks.client.post.mockClear();
+    mocks.client.patch.mockImplementation(
+      async (_path: string, request: { source_ids?: string[] }) => ({
+        source_ids: request.source_ids ?? [],
+      }),
+    );
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield* remoteSamples;
+    });
+
+    await submission({ journaled: lastJournal }, true, submissions);
+
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.client.patch).toHaveBeenCalled();
   });
 });

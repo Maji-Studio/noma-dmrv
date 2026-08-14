@@ -37,11 +37,12 @@ import {
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
-import type {
-  ApplicationEvidenceMethod,
-  ApplicationStatus,
-  CreateApplicationData,
-  UpdateApplicationData,
+import {
+  applicationEvidenceStateSchema,
+  type ApplicationEvidenceMethod,
+  type ApplicationStatus,
+  type CreateApplicationData,
+  type UpdateApplicationData,
 } from "@/schemas/applications";
 import type { GisBoundary } from "@/schemas/gis-boundary";
 import type { DeliveryStatus } from "@/schemas/deliveries";
@@ -61,6 +62,7 @@ import { parseGisBoundary } from "@/schemas/gis-boundary";
 
 const DEFAULT_PAGE_SIZE = 100;
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
+const INVALID_APPLICATION_EVIDENCE_MESSAGE = "Application evidence is invalid.";
 
 export interface ApplicationDeliveryOptionData {
   id: string;
@@ -649,6 +651,7 @@ export async function createApplication(
       tx,
       { entityType: "delivery", entityId: data.deliveryId },
       "create",
+      "application",
     );
 
     // Before the capacity check — upcoming deliveries carry no delivered
@@ -688,7 +691,7 @@ export async function createApplication(
         gpsLatitude: data.gpsLatitude ?? null,
         gpsLongitude: data.gpsLongitude ?? null,
         applicationMethodType: data.applicationMethodType ?? null,
-        evidenceMethod: data.evidenceMethod ?? "visual",
+        evidenceMethod: data.evidenceMethod ?? "location",
         gisBoundary:
           data.gisBoundary === null || data.gisBoundary === undefined
             ? null
@@ -730,6 +733,25 @@ export async function updateApplication(
       "update",
     );
 
+    const evidenceState = applicationEvidenceStateSchema.safeParse({
+      evidenceMethod:
+        data.evidenceMethod ?? existingApplication.evidenceMethod,
+      gpsLatitude:
+        data.gpsLatitude === undefined
+          ? existingApplication.gpsLatitude
+          : data.gpsLatitude,
+      gpsLongitude:
+        data.gpsLongitude === undefined
+          ? existingApplication.gpsLongitude
+          : data.gpsLongitude,
+    });
+    if (!evidenceState.success) {
+      throw new SafeError(
+        evidenceState.error.issues[0]?.message ??
+          INVALID_APPLICATION_EVIDENCE_MESSAGE,
+      );
+    }
+
     const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     };
@@ -746,6 +768,8 @@ export async function updateApplication(
         tx,
         { entityType: "delivery", entityId: data.deliveryId },
         "update",
+        "application",
+        "selected",
       );
     }
 

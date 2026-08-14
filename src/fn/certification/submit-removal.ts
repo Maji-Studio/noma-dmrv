@@ -1,7 +1,6 @@
 import type { OrgContext } from "@/lib/auth/server";
 import {
   markSubmissionSubmitted,
-  retireStaleSubmissionDraft,
   stampProductionEmissionsClaim,
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
@@ -69,8 +68,19 @@ import {
   materializeRemovalSubmissionSnapshot,
   removalTemplateTierCompatibilityBlocker,
 } from "./removal-submission-build";
+import { assertClaimedRemovalPayloadFresh } from "./removal-submission-freshness";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
-import { performRegistryCreate, supplierRefLookup } from "./registry-create";
+import {
+  performRegistryCreate,
+  supplierRefLookup,
+} from "./registry-create";
+import {
+  recordClaimedRemovalSubmissionFailureBestEffort,
+  recordRemovalExternalMutation,
+  readRemovalSubmissionExternalMutation,
+  safeRemovalSubmissionError,
+  type RemovalExternalMutation,
+} from "./removal-submission-failure";
 import {
   mirrorCandidateSourcesForSubmission,
   resolveSourceBindingCandidates,
@@ -115,37 +125,10 @@ export interface RemovalSubmissionResult {
   version: number;
 }
 
-type GhgEntryExternalMutation = "none" | "possible" | "confirmed";
-
 interface RemovalSubmitAttempt {
   id: string;
   attemptedAt: Date;
-  externalMutation: GhgEntryExternalMutation;
-}
-
-function recordExternalMutation(
-  attempt: RemovalSubmitAttempt,
-  next: Exclude<GhgEntryExternalMutation, "none">,
-): void {
-  if (next === "confirmed" || attempt.externalMutation === "none") {
-    attempt.externalMutation = next;
-  }
-}
-
-function safeAttemptError(error: unknown): {
-  errorClass: string | null;
-  errorMessage: string | null;
-} {
-  if (error === null) {
-    return { errorClass: null, errorMessage: null };
-  }
-  if (error instanceof SafeError) {
-    return { errorClass: "SafeError", errorMessage: error.message };
-  }
-  return {
-    errorClass: "UnexpectedError",
-    errorMessage: "Removal submission failed unexpectedly. Retry the submission.",
-  };
+  externalMutation: RemovalExternalMutation;
 }
 
 // The submission unit: one Isometric Removal == one certifierRemovals row.
@@ -178,7 +161,7 @@ export async function submitRemoval(
         : "failed";
     throw error;
   } finally {
-    const safeError = safeAttemptError(attemptError);
+    const safeError = safeRemovalSubmissionError(attemptError);
     // Best-effort: a failed audit insert must not mask the submission's own
     // error or turn a successful return into a throw.
     await appendSyncEventBestEffort(args.orgCtx, {
@@ -269,7 +252,7 @@ async function submitRemovalCore(
   // Phase 4 template↔tier guard (ADR 0021): the removal template's sequestration
   // blueprint must match the facility's durability tier — a 200-year facility
   // submits against a `biochar_sequestration_200_year_*` template, a 1000-year
-  // facility against `biochar_sequestration_1000_year`. Fail closed EARLY with an
+  // facility against the current sampled 1,000-year component. Fail closed EARLY with an
   // actionable message on a mismatch (or an unknown sequestration variant),
   // rather than letting resolveTemplateInputs silently skip the component or the
   // generic staging gate below misdescribe a template↔tier misconfiguration as
@@ -561,81 +544,87 @@ async function submitRemovalCore(
         version: claimed.version,
       };
     case "claimed": {
-      // ADR 0020 resume gate: never complete a draft whose snapshot was
-      // built under an older INPUT_MAPPING revision — retire it and fail
-      // closed instead (see production-claim-gate.ts).
-      if (claimed.resumed) {
-        await assertResumedSnapshotRevisionCurrent(orgCtx, claimed.row);
-      }
-      // §8.6.2 fresh-read re-assert (issue #349, ADR 0020): the blocking
-      // draft row now exists, so membership is frozen — a foreign claim OR a
-      // membership/run-lineage regroup that landed between context load and
-      // this point is caught HERE, before any registry POST, instead of
-      // shipping a stale payload and tripping the claim-stamp backstop after
-      // the POSTs. See production-claim-gate.ts.
-      await assertProductionClaimGateFresh(
-        orgCtx,
-        removalId,
-        ctx.memberBatchClaims,
-      );
-      await assertClaimedRemovalPayloadFresh({
-        orgCtx,
-        removalId,
-        row: claimed.row,
-        allowPeriodInputStub,
-      });
-      if (claimed.reason === "rejected-hash-changed") {
-        log.warn(
-          { submissionId: claimed.row.id },
-          "removal retry will create a new version after rejected row with changed hash",
+      const expectedLockedAt = claimed.row.lockedAt;
+      if (!expectedLockedAt) {
+        throw new SafeError(
+          "The Removal submission lock changed while preparing the registry request. Reload and retry.",
         );
       }
-      onProgress?.({ step: "removal.preparing_evidence", state: "complete" });
-      // The transport snapshot comes off the claimed row: on resume it is
-      // the prior attempt's stored truth; on create it carries the
-      // locked-source-id version of the datapoint bodies (which may differ
-      // from the tentative `datapointBodyByKey` if a concurrent
-      // mirror/unlink shifted the source set during lock acquisition).
-      const transport = readRemovalTransport(claimed.row);
-      const sourceBindingPlan = readRemovalSourceBindingPlan(claimed.row);
-      // On resume, the fixed bindings must come from the SAME snapshot as the
-      // transport — not the live `fixed` recomputed above, which may have
-      // drifted from the version the snapshot was built against.
-      const effectiveFixed = claimed.resumed
-        ? readRemovalFixedInputs(claimed.row)
-        : fixed;
-      // Durability measurement-sample POST bodies are snapshot truth. On create
-      // they carry the claimed versioned supplier refs; on resume they prevent a
-      // stale draft from rebuilding bodies from changed live context.
-      const durabilityMeasurementSubmissions = hasDurabilityComponents
-        ? readRemovalDurabilityMeasurementSamples(claimed.row)
-        : null;
-      return runRemovalSubmission({
-        client,
-        orgCtx,
-        removalId,
-        row: claimed.row,
-        transport,
-        fixed: effectiveFixed,
-        template: defaultTemplate,
-        blueprintsByKey,
-        reportingWindow: {
-          startedOn: reportingWindow.startedOn,
-          completedOn: reportingWindow.completedOn,
-        },
-        externalProjectId,
-        durabilityMeasurementSubmissions,
-        sourceBindingPlan,
-        // The live member set — membership can't drift under a locked draft
-        // (assertRemovalAllowsCreditBatchMutation), so these are the batches
-        // whose production bucket this submission claims.
-        claimBatchIds: memberCreditBatchIds,
-        supersedePreviousId: claimed.supersedePreviousId,
-        resumed: claimed.resumed,
-        attempt,
-        log,
-        onProgress,
-      });
+      if (claimed.resumed) {
+        attempt.externalMutation = readRemovalSubmissionExternalMutation(
+          claimed.row.metadata,
+        );
+      }
+      try {
+        if (claimed.resumed) {
+          await assertResumedSnapshotRevisionCurrent(
+            orgCtx,
+            claimed.row,
+            attempt.externalMutation !== "none",
+          );
+        }
+        await assertProductionClaimGateFresh(
+          orgCtx,
+          removalId,
+          ctx.memberBatchClaims,
+        );
+        await assertClaimedRemovalPayloadFresh({
+          orgCtx,
+          removalId,
+          row: claimed.row,
+          allowPeriodInputStub,
+          preserveForReconciliation: attempt.externalMutation !== "none",
+        });
+        if (claimed.reason === "rejected-hash-changed") {
+          log.warn(
+            { submissionId: claimed.row.id },
+            "removal retry will create a new version after rejected row with changed hash",
+          );
+        }
+        onProgress?.({ step: "removal.preparing_evidence", state: "complete" });
+        const transport = readRemovalTransport(claimed.row);
+        const sourceBindingPlan = readRemovalSourceBindingPlan(claimed.row);
+        const effectiveFixed = claimed.resumed
+          ? readRemovalFixedInputs(claimed.row)
+          : fixed;
+        const durabilityMeasurementSubmissions = hasDurabilityComponents
+          ? readRemovalDurabilityMeasurementSamples(claimed.row)
+          : null;
+        return await runRemovalSubmission({
+          client,
+          orgCtx,
+          removalId,
+          row: claimed.row,
+          transport,
+          fixed: effectiveFixed,
+          template: defaultTemplate,
+          blueprintsByKey,
+          reportingWindow: {
+            startedOn: reportingWindow.startedOn,
+            completedOn: reportingWindow.completedOn,
+          },
+          externalProjectId,
+          durabilityMeasurementSubmissions,
+          sourceBindingPlan,
+          claimBatchIds: memberCreditBatchIds,
+          supersedePreviousId: claimed.supersedePreviousId,
+          resumed: claimed.resumed,
+          expectedLockedAt,
+          attempt,
+          log,
+          onProgress,
+        });
+      } catch (error) {
+        await recordClaimedRemovalSubmissionFailureBestEffort({
+          orgCtx,
+          submissionId: claimed.row.id,
+          expectedLockedAt,
+          externalMutation: attempt.externalMutation,
+          error,
+          log,
+        });
+        throw error;
+      }
     }
   }
 }
@@ -655,73 +644,6 @@ function assertReviewedCompilationHash(
   if (reviewPayloadHash(compiled.semanticPayload) === expectedHash) return;
   throw new SafeError(
     "This Removal's data changed after you reviewed it. Reload the Removal and check the updated summary before submitting.",
-  );
-}
-
-async function assertClaimedRemovalPayloadFresh(args: {
-  orgCtx: OrgContext;
-  removalId: string;
-  row: CertificationSubmissionRow;
-  allowPeriodInputStub: boolean;
-}): Promise<void> {
-  const { orgCtx, removalId, row, allowPeriodInputStub } = args;
-
-  const freshCtx = await loadRemovalSubmissionContext(orgCtx, removalId);
-  if (
-    !freshCtx.mapping ||
-    freshCtx.missingDefaultTemplateId ||
-    !freshCtx.defaultTemplate ||
-    freshCtx.defaultTemplate.credit_type !== "REMOVAL" ||
-    freshCtx.unresolvedBlueprintKeys.length > 0 ||
-    freshCtx.defaultTemplate.groups.length === 0
-  ) {
-    await retireStaleSubmissionDraft(orgCtx, row.id, {
-      reason: "semantic payload rebuild failed after draft claim",
-    });
-    throw new SafeError(
-      "Removal source data or template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
-    );
-  }
-  const freshHasDurabilityComponents = freshCtx.defaultTemplate.groups.some((group) =>
-    group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
-  );
-  if (freshHasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
-    await retireStaleSubmissionDraft(orgCtx, row.id, {
-      reason: "durability measurement-sample gate changed after draft claim",
-    });
-    throw new SafeError(
-      "Removal template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
-    );
-  }
-
-  let freshBuild: Awaited<ReturnType<typeof buildRemovalSubmissionBuild>>;
-  try {
-    freshBuild = await buildRemovalSubmissionBuild({
-      orgCtx,
-      removalId,
-      ctx: freshCtx,
-      defaultTemplate: freshCtx.defaultTemplate,
-      blueprintsByKey: new Map(
-        freshCtx.blueprintsForTemplate.map((bp) => [bp.key, bp]),
-      ),
-      externalProjectId: freshCtx.mapping.externalProjectId,
-      allowPeriodInputStub,
-      hasDurabilityComponents: freshHasDurabilityComponents,
-    });
-  } catch (err) {
-    await retireStaleSubmissionDraft(orgCtx, row.id, {
-      reason: "semantic payload rebuild failed after draft claim",
-    });
-    throw err;
-  }
-  const freshHash = payloadHash(freshBuild.semanticPayload);
-  if (freshHash === row.payloadHash) return;
-
-  await retireStaleSubmissionDraft(orgCtx, row.id, {
-    reason: `semantic payload drift: snapshot ${String(row.payloadHash)} != current ${freshHash}`,
-  });
-  throw new SafeError(
-    "Removal source data changed while preparing this submission. The stale draft was retired; reload and submit again.",
   );
 }
 
@@ -750,6 +672,7 @@ interface RunRemovalSubmissionArgs {
   claimBatchIds: string[];
   supersedePreviousId: string | null;
   resumed: boolean;
+  expectedLockedAt: Date;
   attempt: RemovalSubmitAttempt;
   /** Attempt-scoped logger (carries submissionAttemptId) from submitRemoval. */
   log: Logger;
@@ -772,6 +695,7 @@ async function runRemovalSubmission({
   claimBatchIds,
   supersedePreviousId,
   resumed,
+  expectedLockedAt,
   attempt,
   log,
   onProgress,
@@ -813,6 +737,8 @@ async function runRemovalSubmission({
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: removalId,
       submissionRowId: row.id,
+      expectedLockedAt,
+      deferRejectionToAttempt: true,
       operation: `datapoint:create:${dp.inputKey}`,
       requestPayload: dp.body,
       supplierRefId,
@@ -820,6 +746,8 @@ async function runRemovalSubmission({
       create: () => createDatapoint(client, dp.body).then((d) => d.id),
       reconcile: () => reconcileDatapoint(client, { supplierRefId }).then(supplierRefLookup),
       failureMessagePrefix: `Datapoint POST failed for "${dp.inputKey}"`,
+      onExternalMutation: (state) =>
+        recordRemovalExternalMutation(attempt, state),
       log,
     });
     const rtcInputKey = `${dp.rtcId}::${dp.inputKey}`;
@@ -862,6 +790,10 @@ async function runRemovalSubmission({
       orgCtx,
       removalId,
       submissionRow: row,
+      expectedLockedAt,
+      deferRejectionToAttempt: true,
+      onExternalMutation: (state) =>
+        recordRemovalExternalMutation(attempt, state),
       submissions: durabilityMeasurementSubmissions,
       log,
     });
@@ -873,6 +805,10 @@ async function runRemovalSubmission({
       removalId,
       submissionRow: row,
       resumed,
+      expectedLockedAt,
+      deferRejectionToAttempt: true,
+      onExternalMutation: (state) =>
+        recordRemovalExternalMutation(attempt, state),
       submissions: boundSubmissions,
       sourceBindingPlan,
       log,
@@ -917,6 +853,8 @@ async function runRemovalSubmission({
     entityType: REMOVAL_ENTITY_TYPE,
     entityId: removalId,
     submissionRowId: row.id,
+    expectedLockedAt,
+    deferRejectionToAttempt: true,
     operation: "removal:create",
     requestPayload: removalBody,
     supplierRefId: transport.removalSupplierRef,
@@ -927,7 +865,7 @@ async function runRemovalSubmission({
         supplierRefLookup,
       ),
     failureMessagePrefix: "Removal POST failed",
-    onExternalMutation: (state) => recordExternalMutation(attempt, state),
+    onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
     onConfirmed: (externalId) =>
       markSubmissionSubmitted(orgCtx, row.id, {
         externalId,

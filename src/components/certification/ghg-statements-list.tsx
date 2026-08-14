@@ -18,6 +18,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
 import {
@@ -37,11 +38,108 @@ import {
 import { useToast } from "@/components/ui/toast";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
+import { certificationSettingsHref } from "@/lib/certification/links";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { formatCount } from "@/lib/copy-utils";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
+
+// Which blocking notice (if any) the list shows above the table. Precedence:
+// a failed summary beats everything, an unlinked facility beats the
+// shared-project notice. Null while loading so nothing flashes before the
+// summary settles.
+export type GhgCreateGateNotice =
+  | "mappingFailed"
+  | "unlinked"
+  | "sharedProject"
+  | null;
+
+export interface GhgCreateGate {
+  canSync: boolean;
+  canCreate: boolean;
+  notice: GhgCreateGateNotice;
+}
+
+// Pure derivation of the Sync/Create button gating from the certifier summary
+// query state. Create is additionally blocked when the Isometric project is
+// shared by more than one noma facility: a GHG Statement is project-wide, so
+// the server rejects creation late in the wizard; this gate surfaces that
+// before the operator starts (`assertDedicatedGhgStatementProject` stays the
+// authoritative backstop).
+export function deriveGhgCreateGate(summary: {
+  isLoading: boolean;
+  isError: boolean;
+  hasMapping: boolean;
+  linkedFacilityCount: number | undefined;
+}): GhgCreateGate {
+  // Keep the link state indeterminate while the lookup is in flight so we do
+  // not flash the "not linked" notice or enable Create before it settles.
+  const isLinked = summary.isLoading ? null : summary.hasMapping;
+  // A missing count stays indeterminate (fail closed) rather than defaulting
+  // to dedicated: a stale cached payload without the field must not enable
+  // Create on a shared project.
+  const isDedicatedProject =
+    summary.isLoading || summary.linkedFacilityCount === undefined
+      ? null
+      : summary.linkedFacilityCount <= 1;
+  const mappingFailed = summary.isError && !summary.isLoading;
+  return {
+    // Fail closed on a failed summary even when React Query still holds cached
+    // data from an earlier success: the cached mapping/count may be stale, and
+    // enabling Create against it reintroduces the late server rejection this
+    // gate exists to prevent.
+    canSync: !mappingFailed && isLinked === true,
+    canCreate:
+      !mappingFailed && isLinked === true && isDedicatedProject === true,
+    notice: mappingFailed
+      ? "mappingFailed"
+      : isLinked === false
+        ? "unlinked"
+        : isDedicatedProject === false
+          ? "sharedProject"
+          : null,
+  };
+}
+
+export function CreateGateNotice({
+  notice,
+  facilityId,
+  linkedFacilityCount,
+}: {
+  notice: GhgCreateGateNotice;
+  facilityId: string;
+  linkedFacilityCount: number | undefined;
+}) {
+  if (!notice) return null;
+  return (
+    <div className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8">
+      {notice === "mappingFailed" ? (
+        <p className="body-small text-[var(--color-signal-orange-strong)]">
+          Isometric project link unavailable. Refresh to retry.
+        </p>
+      ) : notice === "unlinked" ? (
+        <p className="body-small text-[var(--color-signal-orange-strong)]">
+          Link this facility to an Isometric project in Settings before creating
+          a statement.
+        </p>
+      ) : (
+        <p className="body-small text-[var(--color-signal-orange-strong)]">
+          This Isometric project is linked to {linkedFacilityCount} noma
+          facilities. A GHG Statement covers every facility on the project. Link
+          each facility to a dedicated Isometric project in{" "}
+          <Link
+            href={certificationSettingsHref(facilityId)}
+            className="text-[var(--color-interaction)] underline underline-offset-2 hover:text-[var(--color-interaction-hover)]"
+          >
+            Settings
+          </Link>{" "}
+          before creating a statement.
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function GhgStatementsList() {
   const { facilityId } = useFacilityContext();
@@ -190,13 +288,12 @@ function ListBody({ facilityId }: { facilityId: string }) {
   );
 
   const isProduction = summaryQuery.data?.isProduction ?? false;
-  // Keep `isLinked` indeterminate (null) while the mapping lookup is in flight
-  // so we don't flash the "not linked" notice or disable Create on first mount
-  // before the query settles. Downstream gates on `=== true` / `=== false`.
-  const isLinked = summaryQuery.isLoading
-    ? null
-    : Boolean(summaryQuery.data?.mapping);
-  const mappingFailed = summaryQuery.isError && !summaryQuery.isLoading;
+  const gate = deriveGhgCreateGate({
+    isLoading: summaryQuery.isLoading,
+    isError: summaryQuery.isError,
+    hasMapping: Boolean(summaryQuery.data?.mapping),
+    linkedFacilityCount: summaryQuery.data?.linkedFacilityCount,
+  });
   const syncFromRegistry = async () => {
     try {
       const result = await syncMutation.mutateAsync(facilityId);
@@ -256,7 +353,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
               variant="default"
               onClick={syncFromRegistry}
               busy={syncMutation.isPending}
-              disabled={isLinked !== true}
+              disabled={!gate.canSync}
             >
               <ArrowsClockwiseIcon size={20} weight="bold" />
               Sync from registry
@@ -264,7 +361,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
             <Button
               variant="primary"
               onClick={() => setCreateOpen(true)}
-              disabled={isLinked !== true}
+              disabled={!gate.canCreate}
             >
               <PlusIcon size={20} weight="bold" />
               New GHG Statement
@@ -272,20 +369,11 @@ function ListBody({ facilityId }: { facilityId: string }) {
           </div>
         </div>
 
-        {(mappingFailed || isLinked === false) && (
-          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">
-            {mappingFailed ? (
-              <p className="body-small text-[var(--clr-red)]">
-                Isometric project link unavailable. Refresh to retry.
-              </p>
-            ) : (
-              <p className="body-small text-[var(--color-text-secondary)]">
-                Link this facility to an Isometric project in Settings before
-                creating a statement.
-              </p>
-            )}
-          </div>
-        )}
+        <CreateGateNotice
+          notice={gate.notice}
+          facilityId={facilityId}
+          linkedFacilityCount={summaryQuery.data?.linkedFacilityCount}
+        />
 
         <DataTable
           columns={columns}
@@ -317,7 +405,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
                     variant="default"
                     onClick={syncFromRegistry}
                     busy={syncMutation.isPending}
-                    disabled={isLinked !== true}
+                    disabled={!gate.canSync}
                   >
                     <ArrowsClockwiseIcon size={20} weight="bold" />
                     Sync from registry
@@ -351,7 +439,12 @@ function ListBody({ facilityId }: { facilityId: string }) {
         />
       )}
 
-      {isLinked === true && (
+      {/* Keep the dialog mounted once open even if the gate flips (e.g. the
+          post-create invalidation refetch errors): unmounting mid-wizard loses
+          the operator's step state and the post-create result panel. New opens
+          still require the gate via the disabled Create button, and the server
+          backstop rejects shared-project creation regardless. */}
+      {(gate.canCreate || createOpen) && (
         <GhgStatementCreateDialog
           facilityId={facilityId}
           isProduction={isProduction}

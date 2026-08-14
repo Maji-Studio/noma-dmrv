@@ -13,6 +13,7 @@ import {
   feedstocks,
   feedstockTypes,
   productionRuns,
+  productionRunFeedstockDraws,
   biocharProducts,
   biocharProductSourceAllocations,
   biocharStorageInventory,
@@ -168,7 +169,7 @@ async function getStorageLocationLaneSummary(
     const stock = laneStockById.get(bin.id);
     summary[bin.type].binCount += 1;
     if (bin.type === "feedstock_bin") {
-      summary[bin.type].onHandKg += stock?.feedstockStockDryKg ?? 0;
+      summary[bin.type].onHandKg += stock?.feedstockStockWetKg ?? 0;
     } else if (bin.type === "biochar_bin") {
       summary[bin.type].onHandKg += stock?.biocharStockKg ?? 0;
     } else {
@@ -889,8 +890,8 @@ export async function deleteStorageLocation(
       .where(and(eq(feedstocks.storageLocationId, storageLocationId), eq(feedstocks.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
-      .from(productionRuns)
-      .where(and(eq(productionRuns.feedstockStorageLocationId, storageLocationId), eq(productionRuns.organizationId, ctx.organizationId))),
+      .from(productionRunFeedstockDraws)
+      .where(and(eq(productionRunFeedstockDraws.storageLocationId, storageLocationId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
       .from(productionRuns)

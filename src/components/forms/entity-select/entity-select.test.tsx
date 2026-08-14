@@ -55,7 +55,6 @@ vi.mock("./feedstock-type-quick-add-dialog", () => ({
 vi.mock("./formulation-quick-add-dialog", () => ({
   FormulationQuickAddDialog: () => null,
 }));
-
 import {
   EntityOptionText,
   EntitySelect,

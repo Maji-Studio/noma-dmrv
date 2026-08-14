@@ -31,14 +31,16 @@ plans may cite them; their current-applicability notes take precedence.
 | [`simple-implementation-guide.md`](./simple-implementation-guide.md) | Plain-language guide to what exists, what is derived, and what is missing |
 | [`condition-registry.md`](./condition-registry.md) | Conditional-field trigger map |
 | [`integration-plan.md`](./integration-plan.md) | Current Certify integration contract |
-| [`2026-08-04-facility-production-data-api.md`](../archive/2026-08-04-facility-production-data-api.md) | **Archived research (2026-08-04).** Facility, Production Batch, sample, and sensor API sync decisions |
-| [`2026-08-04-production-data-follow-up-research.md`](../archive/2026-08-04-production-data-follow-up-research.md) | **Archived research (2026-08-04).** First-party research: mass basis (open), sample→datapoint binding (resolved), reactor route (conflicted), correction lifecycle. **Corrected after an over-hardening audit + adversarial quote verification** — read its "Scope reality check" first |
-| [`2026-08-04-production-data-follow-up-repo-seams.md`](../archive/2026-08-04-production-data-follow-up-repo-seams.md) | **Archived research (2026-08-04).** Companion: how that contract maps onto current code, and where it does not |
-| [`2026-08-04-production-data-follow-up-support-questions.md`](../archive/2026-08-04-production-data-follow-up-support-questions.md) | **Archived research (2026-08-04).** The 32 open questions from that research, grouped and copy-pasteable for Isometric support |
 | [`openapi-index.md`](./openapi-index.md) | Committed Certify type surface and proven call sites |
 | [`sandbox-template-authoring.md`](./sandbox-template-authoring.md) | Current sandbox template contract and validation workflow |
 | [`changes.md`](./changes.md) | Dated implementation and interpretation changes |
 | [`update-playbook.md`](./update-playbook.md) | Version and API refresh procedure |
+
+Archived 2026-08-04 Production Data research is preserved in
+[`facility-production-data-api`](../archive/2026-08-04-facility-production-data-api.md),
+[`follow-up research`](../archive/2026-08-04-production-data-follow-up-research.md),
+[`repo seams`](../archive/2026-08-04-production-data-follow-up-repo-seams.md),
+and [`support questions`](../archive/2026-08-04-production-data-follow-up-support-questions.md).
 
 The 2026-07-24 adversarial source review is preserved at
 [`docs/archive/2026-07-24-isometric-gap-check-v1-1.md`](../archive/2026-07-24-isometric-gap-check-v1-1.md).

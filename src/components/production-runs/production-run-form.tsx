@@ -12,17 +12,18 @@ import {
   buildProductionRunWindow,
   productionRunTimezoneHelperText,
   productionRunTimingDefaults,
-  type ProductionRunResolver,
 } from "./production-run-timing";
 import { useProductionRunTimingZoneSync } from "./use-production-run-timing-zone-sync";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { useForm, useWatch, Controller } from "react-hook-form";
+import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
-import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, MassMoistureFields, FormActions, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, StockReconciliationLink, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { Button } from "@/components/ui/button";
+import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { ProductionReadingsField } from "./production-readings-field";
 import { FormSelect } from "@/components/forms/form-select";
 import {
@@ -39,7 +40,6 @@ import {
 } from "@/schemas/production-runs";
 import { ProcessFlowPreview } from "./production-run-process-flow-preview";
 import {
-  feedstockDryStockOverdrawMessage,
   productionRunMassBalanceFeedback,
 } from "./production-run-mass-balance";
 import {
@@ -50,12 +50,7 @@ import {
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
-import { useStockAvailability } from "@/hooks/use-stock-availability";
-import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
-import {
-  binStockOverdrawMessage,
-  isStockOverdraw,
-} from "@/lib/stock-overdraw";
+import { ProductionRunFeedstockDrawRow } from "./production-run-feedstock-draw-row";
 
 // ============================================
 // Constants for select options
@@ -68,6 +63,8 @@ const isProductionRunCertifyField = (field: string) =>
 // output lands here), mirroring how the biochar-product form scopes its bin.
 const BIOCHAR_BIN_QUICK_ADD_TYPES = ["biochar_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
+const EMPTY_FEEDSTOCK_DRAW = { storageLocationId: "", wetMassKg: undefined };
+const FEEDSTOCK_MASS_MAX_FRACTION_DIGITS = 3;
 
 // ============================================
 // Component
@@ -129,8 +126,21 @@ export function ProductionRunForm({
       resolveFacilityTimezone(facilities, productionRun?.facilityId ?? contextFacilityId),
     ),
     operatorId: productionRun?.operatorId ?? "",
-    feedstockStorageLocationId: productionRun?.feedstockStorageLocationId ?? "",
-    feedstockWetMassKg: productionRun?.feedstockWetMassKg ?? undefined,
+    feedstockDraws:
+      productionRun?.feedstockDraws.length
+        ? productionRun.feedstockDraws.map((draw) => ({
+            storageLocationId: draw.storageLocationId,
+            wetMassKg: draw.wetMassKg,
+          }))
+        : productionRun?.feedstockStorageLocationId &&
+            productionRun.feedstockWetMassKg
+          ? [
+              {
+                storageLocationId: productionRun.feedstockStorageLocationId,
+                wetMassKg: productionRun.feedstockWetMassKg,
+              },
+            ]
+          : [{ ...EMPTY_FEEDSTOCK_DRAW }],
     feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? undefined,
     feedingRateKgHr: productionRun?.feedingRateKgHr ?? undefined,
     residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? undefined,
@@ -142,6 +152,21 @@ export function ProductionRunForm({
     biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? undefined,
     biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
   };
+  type ProductionRunFormValues = typeof defaultValues;
+  const resolver: Resolver<
+    ProductionRunFormValues,
+    unknown,
+    ProductionRunFormData
+  > = (values, context, options) =>
+    (
+      buildProductionRunResolver(
+        resolveFacilityTimezone(facilities, values.facilityId),
+      ) as unknown as Resolver<
+        ProductionRunFormValues,
+        unknown,
+        ProductionRunFormData
+      >
+    )(values, context, options);
   const {
     register,
     handleSubmit,
@@ -152,19 +177,21 @@ export function ProductionRunForm({
     setError,
     clearErrors,
     formState: { errors, dirtyFields },
-  } = useForm({
+  } = useForm<ProductionRunFormValues, unknown, ProductionRunFormData>({
     // The timing cross-field checks must resolve start/end in the same zone the
     // submit path writes them in, so the schema is rebuilt per validation from
     // the facility currently chosen in the form (the facility select can differ
     // from the context facility). RHF refreshes `resolver` on every render.
-    resolver: ((values, context, options) =>
-      buildProductionRunResolver(
-        resolveFacilityTimezone(facilities, values.facilityId),
-      )(values, context, options)) as ProductionRunResolver,
+    resolver,
     // onTouched so the spine markers can turn red on blur, not just on submit.
     mode: "onTouched",
     defaultValues,
   });
+  const {
+    fields: feedstockDrawFields,
+    append: appendFeedstockDraw,
+    remove: removeFeedstockDraw,
+  } = useFieldArray({ control, name: "feedstockDraws" });
 
   // The run this run's window overlaps, if the server rejected the save (#259).
   const [overlapConflict, setOverlapConflict] = useState<RunConflict | null>(null);
@@ -189,7 +216,13 @@ export function ProductionRunForm({
 
   // Watch fields for flow preview
   const watchedReactorId = useWatch({ control, name: "reactorId" });
-  const watchedSourceBinId = useWatch({ control, name: "feedstockStorageLocationId" });
+  const watchedFeedstockDraws = useWatch({ control, name: "feedstockDraws" }) ?? [];
+  const watchedSourceBinId = watchedFeedstockDraws.find(
+    (draw) => !!draw?.storageLocationId,
+  )?.storageLocationId;
+  const selectedFeedstockDrawCount = watchedFeedstockDraws.filter(
+    (draw) => !!draw?.storageLocationId,
+  ).length;
   const watchedDestBinId = useWatch({ control, name: "biocharStorageLocationId" });
   const watchedBiocharKg = useWatch({ control, name: "biocharOutputKg" });
   const watchedBiocharMoisture = useWatch({ control, name: "biocharMoisturePercent" });
@@ -198,12 +231,22 @@ export function ProductionRunForm({
   const { data: selectedReactor } = useEntityById("reactor", watchedReactorId || undefined);
   const { data: selectedSourceBin } = useEntityById("storageLocation", watchedSourceBinId || undefined);
   const { data: selectedDestBin } = useEntityById("storageLocation", watchedDestBinId || undefined);
+  const sourceBinPreviewName = selectedSourceBin?.name
+    ? selectedFeedstockDrawCount > 1
+      ? `${selectedSourceBin.name} + ${selectedFeedstockDrawCount - 1} more`
+      : selectedSourceBin.name
+    : null;
 
   // Inline quick-add for the Biochar Storage select.
   const biocharBinDialog = useQuickAddDialog();
 
-  // Watch wet mass + moisture for dry mass preview
-  const watchWetMass = useWatch({ control, name: "feedstockWetMassKg" });
+  // Every row is wet/as-received mass. The run-level moisture reading applies
+  // once to their summed input.
+  const watchWetMass = watchedFeedstockDraws.reduce(
+    (total, draw) =>
+      total + (typeof draw?.wetMassKg === "number" ? draw.wetMassKg : 0),
+    0,
+  );
   const watchMoisture = useWatch({ control, name: "feedstockMoisturePercent" });
 
   const previewDryMass =
@@ -214,41 +257,6 @@ export function ProductionRunForm({
     watchMoisture <= 100
       ? deriveMassDryKg(watchWetMass, watchMoisture)
       : null;
-
-  const { data: feedstockAvailability } = useStockAvailability(
-    watchedSourceBinId
-      ? {
-          kind: "productionRunFeedstock",
-          storageLocationId: watchedSourceBinId,
-          productionRunId: productionRun?.id,
-        }
-      : null,
-  );
-  const feedstockStockError =
-    previewDryMass !== null &&
-    typeof watchMoisture === "number" &&
-    feedstockAvailability &&
-    feedstockAvailability.availableKg !== null &&
-    isStockOverdraw(previewDryMass, feedstockAvailability.availableKg)
-      ? feedstockDryStockOverdrawMessage(
-          feedstockAvailability.availableKg,
-          watchMoisture,
-        )
-      : undefined;
-  const feedstockFieldFingerprint = [
-    watchedSourceBinId,
-    watchWetMass,
-    watchMoisture,
-  ].join(":");
-  const routedServerError = useInlineStockServerError(
-    errorMessage,
-    feedstockFieldFingerprint,
-    (message) => message === binStockOverdrawMessage("feedstock"),
-  );
-  const feedstockWetMassError =
-    errors.feedstockWetMassKg?.message ??
-    feedstockStockError ??
-    routedServerError.inlineError;
 
   const previewBiocharDryMass =
     typeof watchedBiocharKg === "number" &&
@@ -281,7 +289,7 @@ export function ProductionRunForm({
   useEffect(() => {
     if (prevFacilityRef.current && watchedFacilityId !== prevFacilityRef.current && !productionRun) {
       setValue("reactorId", "");
-      setValue("feedstockStorageLocationId", "");
+      setValue("feedstockDraws", [{ ...EMPTY_FEEDSTOCK_DRAW }]);
       setValue("biocharStorageLocationId", "");
     }
     prevFacilityRef.current = watchedFacilityId;
@@ -512,12 +520,23 @@ export function ProductionRunForm({
         title="Feedstock & processing"
         icon={<PlantIcon size={14} weight="bold" />}
         fields={[
-          "feedstockStorageLocationId",
-          "feedstockWetMassKg",
+          "feedstockDraws",
           "feedstockMoisturePercent",
           "feedingRateKgHr",
           "residenceTimeMinutes",
         ]}
+        actions={
+          <Button
+            type="button"
+            variant="default"
+            size="small"
+            onClick={() => appendFeedstockDraw({ ...EMPTY_FEEDSTOCK_DRAW })}
+            disabled={isSubmitting || !watchedFacilityId}
+          >
+            <PlusIcon size={16} weight="bold" />
+            Add source
+          </Button>
+        }
       >
 
         {!watchedFacilityId && (
@@ -525,54 +544,91 @@ export function ProductionRunForm({
             Select a facility in the sidebar to choose a feedstock source bin.
           </p>
         )}
-        <FormField
-          id="feedstockStorageLocationId"
-          label="Source bin"
-          error={errors.feedstockStorageLocationId?.message}
-        >
+        {feedstockDrawFields.length === 0 && (
+          <p className="body-small text-[var(--color-text-tertiary)] py-8">
+            Add a source bin and the wet mass drawn from it.
+          </p>
+        )}
+        <FormError
+          id="feedstockDraws-error"
+          message={errors.feedstockDraws?.message}
+        />
+
+        {feedstockDrawFields.map((drawField, index) => (
           <Controller
-            name="feedstockStorageLocationId"
+            key={drawField.id}
+            name={`feedstockDraws.${index}.storageLocationId`}
             control={control}
-            render={({ field }) => (
-              <EntitySelect
-                entityType="storageLocation"
-                value={field.value || undefined}
-                onChange={field.onChange}
-                placeholder="Select bin..."
-                disabled={isSubmitting || !watchedFacilityId}
-                error={!!errors.feedstockStorageLocationId}
-                filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "feedstock_bin", feedstockTypeUsage: "pyrolysis" } : undefined}
+            render={({ field: storageLocationField }) => (
+              <Controller
+                name={`feedstockDraws.${index}.wetMassKg`}
+                control={control}
+                render={({ field: wetMassField }) => (
+                  <ProductionRunFeedstockDrawRow
+                    index={index}
+                    facilityId={watchedFacilityId}
+                    productionRunId={productionRun?.id}
+                    storageLocationId={storageLocationField.value}
+                    wetMassKg={
+                      typeof wetMassField.value === "number"
+                        ? wetMassField.value
+                        : null
+                    }
+                    selectedStorageLocationIds={watchedFeedstockDraws
+                      .map((draw) => draw?.storageLocationId)
+                      .filter((id): id is string => !!id)}
+                    storageLocationError={
+                      errors.feedstockDraws?.[index]?.storageLocationId?.message
+                    }
+                    wetMassError={
+                      errors.feedstockDraws?.[index]?.wetMassKg?.message
+                    }
+                    disabled={isSubmitting}
+                    onStorageLocationChange={storageLocationField.onChange}
+                    onWetMassChange={wetMassField.onChange}
+                    onStorageLocationBlur={storageLocationField.onBlur}
+                    onWetMassBlur={wetMassField.onBlur}
+                    storageLocationName={storageLocationField.name}
+                    wetMassName={wetMassField.name}
+                    storageLocationRef={storageLocationField.ref}
+                    wetMassRef={wetMassField.ref}
+                    onRemove={() => removeFeedstockDraw(index)}
+                  />
+                )}
               />
             )}
           />
-        </FormField>
+        ))}
 
-        <MassMoistureFields
-          materialLabel="Feedstock"
-          wetMassKg={watchWetMass}
-          moisturePercent={watchMoisture}
-          wet={{
-            id: "feedstockWetMassKg",
-            error: feedstockWetMassError,
-            disabled: isSubmitting,
-            placeholder: "e.g. 500",
-            certifyRequired: isProductionRunCertifyField("feedstockWetMassKg"),
-            certifyStatus: certStatus("feedstockWetMassKg"),
-            registration: register("feedstockWetMassKg", { setValueAs: nullableNumericValue }),
-          }}
-          moisture={{
-            id: "feedstockMoisturePercent",
-            error: errors.feedstockMoisturePercent?.message,
-            disabled: isSubmitting,
-            placeholder: "e.g. 15",
-            certifyRequired: isProductionRunCertifyField("feedstockMoisturePercent"),
-            certifyStatus: certStatus("feedstockMoisturePercent"),
-            registration: register("feedstockMoisturePercent", { setValueAs: nullableNumericValue }),
-          }}
-          splitFooter={(feedstockStockError || routedServerError.inlineError) && (
-            <StockReconciliationLink facilityId={watchedFacilityId} />
-          )}
-        />
+        {(selectedFeedstockDrawCount > 0 || watchWetMass > 0) && (
+          <div className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
+            <p className="body-caption text-[var(--color-text-secondary)] flex items-center gap-6">
+              Total wet input
+              {isProductionRunCertifyField("feedstockWetMassKg") && (
+                <CertificationFieldTag status={certStatus("feedstockWetMassKg")} />
+              )}
+            </p>
+            <p className="body-small font-medium text-[var(--color-text-primary)] mt-2">
+              {watchWetMass.toLocaleString("en-US", {
+                maximumFractionDigits: FEEDSTOCK_MASS_MAX_FRACTION_DIGITS,
+              })} kg from {selectedFeedstockDrawCount} {selectedFeedstockDrawCount === 1 ? "bin" : "bins"}
+            </p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <MoistureField
+            id="feedstockMoisturePercent"
+            materialLabel="Feedstock"
+            error={errors.feedstockMoisturePercent?.message}
+            disabled={isSubmitting}
+            certifyRequired={isProductionRunCertifyField("feedstockMoisturePercent")}
+            certifyStatus={certStatus("feedstockMoisturePercent")}
+            registration={register("feedstockMoisturePercent", {
+              setValueAs: nullableNumericValue,
+            })}
+          />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
@@ -779,8 +835,8 @@ export function ProductionRunForm({
             Process Flow
           </SectionLabel>
           <ProcessFlowPreview
-            sourceBinName={selectedSourceBin?.name ?? null}
-            feedstockKg={typeof watchWetMass === "number" ? watchWetMass : null}
+            sourceBinName={sourceBinPreviewName}
+            feedstockKg={watchWetMass}
             feedstockDryKg={previewDryMass}
             reactorName={selectedReactor?.name ?? null}
             biocharKg={typeof watchedBiocharKg === "number" ? watchedBiocharKg : null}
@@ -812,7 +868,7 @@ export function ProductionRunForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={routedServerError.footerError}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

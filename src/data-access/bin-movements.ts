@@ -7,9 +7,8 @@
  * per-lane sums feed the storage-location derivation overlay.
  */
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { sumNumeric } from "@/db/aggregate";
 import {
   binMovements,
   storageLocations,
@@ -21,7 +20,6 @@ import { laneForStorageType } from "@/schemas/bin-movements";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { canonicalizeFeedstockStockTake } from "@/lib/calculations/bin-stock-take";
 import { isPgCheckViolation } from "@/db/errors";
 import {
   deriveBinLaneAvailableKg,
@@ -30,14 +28,12 @@ import {
   overdrawError,
 } from "./bin-stock-guards";
 
-export type DbReader = Pick<typeof db, "select">;
-
 const LOSS_NEGATIVITY_CONSTRAINT = "bin_movements_loss_is_negative";
 const LOSS_NEGATIVITY_MESSAGE = "A loss must be recorded as a negative mass delta";
 const STOCK_TAKE_INCREASE_MESSAGE =
   "Counted stock cannot exceed the current derived stock. Stock-takes can only confirm or reduce inventory.";
 const FEEDSTOCK_SNAPSHOT_MESSAGE =
-  "Feedstock stock-takes require wet stock and moisture";
+  "Feedstock stock-takes require wet stock and moisture metadata";
 const NON_FEEDSTOCK_SNAPSHOT_MESSAGE =
   "Wet stock and moisture are only valid for feedstock bins";
 
@@ -48,12 +44,6 @@ const NON_FEEDSTOCK_SNAPSHOT_MESSAGE =
 export interface BinMovementWithActor extends BinMovement {
   /** Display name of the operator who recorded it, or null if unknown/removed. */
   actorName: string | null;
-}
-
-export interface BinMovementLaneSum {
-  storageLocationId: string;
-  lane: BinMovementLane;
-  totalDeltaKg: number;
 }
 
 export interface CreateBinMovementInput {
@@ -87,37 +77,6 @@ export class StockTakeIncreaseError extends SafeError {
 // ============================================
 // Read Operations
 // ============================================
-
-/**
- * Signed sum of movement deltas per (storage location, lane). Used by the
- * shared lane-stock derivation to fold documented adjustments/losses into
- * derived stock. Guarded because it is a data-access read. Transactional
- * callers must pass their transaction as `executor`.
- */
-export async function getBinMovementLaneSums(
-  ctx: OrgContext,
-  storageLocationIds: string[],
-  executor: DbReader = db,
-): Promise<BinMovementLaneSum[]> {
-  requireOrgScope(ctx);
-  if (storageLocationIds.length === 0) return [];
-
-  const rows = await executor
-    .select({
-      storageLocationId: binMovements.storageLocationId,
-      lane: binMovements.lane,
-      totalDeltaKg: sumNumeric(binMovements.massDeltaKg),
-    })
-    .from(binMovements)
-    .where(and(inArray(binMovements.storageLocationId, storageLocationIds), eq(binMovements.organizationId, ctx.organizationId)))
-    .groupBy(binMovements.storageLocationId, binMovements.lane);
-
-  return rows.map((row) => ({
-    storageLocationId: row.storageLocationId,
-    lane: row.lane,
-    totalDeltaKg: row.totalDeltaKg,
-  }));
-}
 
 /**
  * Full movement history for a bin, newest first — the verifier-facing audit log.
@@ -269,13 +228,11 @@ export async function recordStockTakeMovement(
       ) {
         throw new SafeError(FEEDSTOCK_SNAPSHOT_MESSAGE);
       }
-      const canonicalStockTake = canonicalizeFeedstockStockTake(
-        input.countedWetMassKg,
-        input.moistureRatioUsed,
-      );
-      countedWetMassKg = canonicalStockTake.countedWetMassKg;
-      moistureRatioUsed = canonicalStockTake.moistureRatioUsed;
-      countedMassKg = canonicalStockTake.countedMassKg;
+      countedWetMassKg = input.countedWetMassKg;
+      moistureRatioUsed = input.moistureRatioUsed;
+      // Feedstock's native stock currency is wet kg. Moisture remains audit
+      // metadata and never converts the reconciliation delta or hard limit.
+      countedMassKg = input.countedWetMassKg;
     } else if (
       input.countedWetMassKg != null ||
       input.moistureRatioUsed != null

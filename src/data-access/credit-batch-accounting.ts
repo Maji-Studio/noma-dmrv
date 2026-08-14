@@ -36,19 +36,21 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { GisBoundary } from "@/lib/geojson/types";
 import {
   BLUEPRINT_1000_YEAR_REPLICATES_INPUT,
+  CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION,
   SOIL_STORAGE_MODULE_VERSION,
   SOIL_STORAGE_PREVIEW_REVERIFIED,
   computeApplicationCo2eStored,
   computeApplicationCo2eStoredBlueprint1000,
   type Blueprint1000YearReplicate,
 } from "@/lib/calculations/biochar-removal";
-import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { SafeError } from "@/lib/errors";
 import {
   weightedBatchChemistry,
   type WeightedBatchChemistry,
 } from "@/lib/isometric/utils/durability-aggregation";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "@/lib/certification/preview-gaps";
+import { evaluateSampled1000YearReplicates } from "@/lib/certification/durability-1000-replicates";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import {
   DURABILITY_TIER_FALLBACK,
   type DurabilityOption,
@@ -59,6 +61,14 @@ import {
 } from "./biochar-product-application-allocation";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
+import type {
+  CertifierProvider,
+  CreditBatchCo2eStoredPreview,
+} from "./credit-batch-accounting-types";
+export type {
+  ApplicationCo2eStoredPreview,
+  CreditBatchCo2eStoredPreview,
+} from "./credit-batch-accounting-types";
 
 type Executor = DbTransaction | typeof db;
 
@@ -68,7 +78,7 @@ export interface BatchLineageFeedstockFact {
   status: string | null;
   deliveryDate: Date | null;
   massDryKg: number | null;
-  massUsedKg: number | null;
+  wetMassUsedKg: number | null;
   eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
   supplierName: string | null;
   feedstockTypeName: string | null;
@@ -99,7 +109,9 @@ export interface BatchLineageApplicationFact {
   status: string | null;
   applicationDate: Date;
   fieldIdentifier: string | null;
-  evidenceMethod: "visual" | "boundary";
+  evidenceMethod: "location" | "boundary" | "visual";
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
   gisBoundary: GisBoundary | null;
   biocharAppliedTons: number;
   biocharAppliedDryTons: number | null;
@@ -141,31 +153,9 @@ export interface CreditBatchLineageFacts {
   appliedWeightTons: number;
 }
 
-export type CertifierProvider =
-  (typeof certifierProjects.$inferSelect)["provider"];
-
-export interface ApplicationCo2eStoredPreview {
-  applicationId: string;
-  applicationCode: string;
-  co2eStoredTonnes: number | null;
-  fDurable: number | null;
-  organicCarbonPercent: number | null;
-  effectiveSoilTemperatureC: number | null;
-  missingInputs: string[];
-  warnings: string[];
-}
-
-export interface CreditBatchCo2eStoredPreview {
-  provider: CertifierProvider | null;
-  co2eStoredTonnes: number | null;
-  moduleVersion: string | null;
-  applicationResults: ApplicationCo2eStoredPreview[];
-  missingInputs: string[];
-  warnings: string[];
-}
-
-interface CreditBatchChemistry extends WeightedBatchChemistry {
+export interface CreditBatchChemistry extends WeightedBatchChemistry {
   blueprint1000YearReplicates: Blueprint1000YearReplicate[];
+  blueprint1000YearInputsComplete: boolean;
 }
 
 export interface CreditBatchRollup {
@@ -183,10 +173,8 @@ export type CreditBatchAccountingByBatch = Record<
   string,
   CreditBatchAccounting
 >;
-
 const uniqueSorted = (values: string[]) => [...new Set(values)].sort();
 const unique = (values: string[]) => [...new Set(values)];
-
 /** Four set-based queries regardless of batch/application count. */
 async function loadLineageWithExecutor(
   ctx: OrgContext,
@@ -286,6 +274,8 @@ async function loadLineageWithExecutor(
           applicationDate: applications.applicationDate,
           fieldIdentifier: applications.fieldIdentifier,
           evidenceMethod: applications.evidenceMethod,
+          gpsLatitude: applications.gpsLatitude,
+          gpsLongitude: applications.gpsLongitude,
           gisBoundary: applications.gisBoundary,
           biocharAppliedTons: applications.biocharAppliedTons,
           biocharAppliedDryTons: applications.biocharAppliedDryTons,
@@ -405,7 +395,7 @@ async function loadLineageWithExecutor(
           status: feedstocks.status,
           deliveryDate: feedstocks.deliveryDate,
           massDryKg: feedstocks.massDryKg,
-          massUsedKg: productionRunFeedstocks.massUsedKg,
+          wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
           eligibilityStatus: feedstocks.eligibilityStatus,
           supplierName: suppliers.name,
           feedstockTypeName: feedstockTypes.name,
@@ -481,6 +471,8 @@ async function loadLineageWithExecutor(
       id: row.id, code: row.code, status: row.status,
       applicationDate: row.applicationDate, fieldIdentifier: row.fieldIdentifier,
       evidenceMethod: row.evidenceMethod,
+      gpsLatitude: row.gpsLatitude,
+      gpsLongitude: row.gpsLongitude,
       gisBoundary: row.gisBoundary,
       biocharAppliedTons: row.biocharAppliedTons,
       biocharAppliedDryTons: row.biocharAppliedDryTons,
@@ -540,54 +532,7 @@ async function loadLineageWithExecutor(
   }));
 }
 
-/**
- * Extract a 1000-year batch's complete blueprint replicates from its lab
- * Samples. The both-values filter mirrors the registry submission builder.
- */
-export function extract1000YearBlueprintReplicates(
-  batchSamples: Array<{
-    totalCarbonPercent: number | null;
-    sReflectanceFraction: number | null;
-  }>,
-): Blueprint1000YearReplicate[] {
-  return batchSamples.flatMap((sample) =>
-    sample.totalCarbonPercent == null || sample.sReflectanceFraction == null
-      ? []
-      : [
-          {
-            totalCarbonPercent: sample.totalCarbonPercent,
-            sReflectanceFraction: sample.sReflectanceFraction,
-          },
-        ],
-  );
-}
-
-/**
- * Batch-level evidence gaps that remain true even when there is no application
- * mass to calculate. Method-B batches intentionally carry no current-batch
- * sample requirement.
- */
-export function independentPreviewMissingInputs(
-  batch: Pick<CreditBatch, "sampling"> & {
-    durabilityOption: DurabilityOption;
-  },
-  batchSamples: Array<{
-    totalCarbonPercent: number | null;
-    sReflectanceFraction: number | null;
-  }>,
-): string[] {
-  if (
-    batch.sampling === "sampled" &&
-    batch.durabilityOption === "1000_year" &&
-    extract1000YearBlueprintReplicates(batchSamples).length <
-      MINIMUM_REPLICATES_PER_BATCH
-  ) {
-    return [BLUEPRINT_1000_YEAR_REPLICATES_INPUT];
-  }
-  return [];
-}
-
-function buildCo2eStoredPreview(
+export function buildCo2eStoredPreview(
   batch: CreditBatch & { durabilityOption: DurabilityOption },
   provider: CertifierProvider | null,
   facts: CreditBatchLineageFacts,
@@ -597,7 +542,9 @@ function buildCo2eStoredPreview(
     return {
       provider,
       co2eStoredTonnes: null,
+      componentKey: null,
       moduleVersion: null,
+      formulaVersion: null,
       applicationResults: [],
       missingInputs: [
         provider ? "isometricCertifier" : "facilityCertifierProject",
@@ -606,11 +553,16 @@ function buildCo2eStoredPreview(
     };
   }
 
-  if (!SOIL_STORAGE_PREVIEW_REVERIFIED) {
+  if (
+    batch.durabilityOption !== "1000_year" &&
+    !SOIL_STORAGE_PREVIEW_REVERIFIED
+  ) {
     return {
       provider,
       co2eStoredTonnes: null,
+      componentKey: null,
       moduleVersion: null,
+      formulaVersion: null,
       applicationResults: [],
       missingInputs: [STORED_CO2E_PREVIEW_REVERIFICATION_GAP],
       warnings: [],
@@ -618,14 +570,27 @@ function buildCo2eStoredPreview(
   }
 
   if (facts.applicationIds.length === 0) {
-    const independentMissingInputs = independentPreviewMissingInputs(
-      batch,
-      chemistry.blueprint1000YearReplicates,
-    );
+    const independentMissingInputs =
+      batch.sampling === "sampled" &&
+      batch.durabilityOption === "1000_year" &&
+      !chemistry.blueprint1000YearInputsComplete
+        ? [BLUEPRINT_1000_YEAR_REPLICATES_INPUT]
+        : [];
     return {
       provider,
       co2eStoredTonnes: null,
-      moduleVersion: null,
+      componentKey:
+        batch.durabilityOption === "1000_year"
+          ? CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR
+          : null,
+      moduleVersion:
+        batch.durabilityOption === "1000_year"
+          ? null
+          : SOIL_STORAGE_MODULE_VERSION,
+      formulaVersion:
+        batch.durabilityOption === "1000_year"
+          ? CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION
+          : null,
       applicationResults: [],
       missingInputs: ["applicationIds", ...independentMissingInputs],
       warnings: [],
@@ -685,7 +650,9 @@ function buildCo2eStoredPreview(
       batch.durabilityOption === "1000_year"
         ? computeApplicationCo2eStoredBlueprint1000({
             dryMassTonnes: application?.biocharAppliedDryTons ?? null,
-            replicates: chemistry.blueprint1000YearReplicates,
+            replicates: chemistry.blueprint1000YearInputsComplete
+              ? chemistry.blueprint1000YearReplicates
+              : [],
           })
         : computeApplicationCo2eStored({
             durabilityOption: batch.durabilityOption,
@@ -699,7 +666,9 @@ function buildCo2eStoredPreview(
       applicationId,
       applicationCode: application?.code ?? applicationId,
       co2eStoredTonnes: result.co2eStoredTonnes,
+      rawFDurable: result.rawFDurable ?? null,
       fDurable: result.fDurable,
+      durabilityCapped: result.durabilityCapped,
       organicCarbonPercent: result.organicCarbonPercent,
       effectiveSoilTemperatureC: result.effectiveSoilTemperatureC,
       missingInputs: result.missingInputs,
@@ -718,7 +687,18 @@ function buildCo2eStoredPreview(
           0,
         )
       : null,
-    moduleVersion: SOIL_STORAGE_MODULE_VERSION,
+    componentKey:
+      batch.durabilityOption === "1000_year"
+        ? CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR
+        : null,
+    moduleVersion:
+      batch.durabilityOption === "1000_year"
+        ? null
+        : SOIL_STORAGE_MODULE_VERSION,
+    formulaVersion:
+      batch.durabilityOption === "1000_year"
+        ? CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION
+        : null,
     applicationResults,
     missingInputs: unique(
       applicationResults.flatMap((result) => result.missingInputs),
@@ -944,10 +924,34 @@ export async function loadCreditBatchAccounting(
           ]);
           const chemistry: CreditBatchChemistry = {
             ...weightedChemistry,
-            blueprint1000YearReplicates:
-              batch.durabilityOption === "1000_year"
-                ? extract1000YearBlueprintReplicates(batchSamples)
-                : [],
+            ...(() => {
+              if (
+                batch.durabilityOption !== "1000_year" ||
+                batch.sampling !== "sampled"
+              ) {
+                return {
+                  blueprint1000YearReplicates: [],
+                  blueprint1000YearInputsComplete: true,
+                };
+              }
+              const evaluation = evaluateSampled1000YearReplicates({
+                creditBatchCode: batch.code,
+                samples: batchSamples,
+              });
+              return {
+                blueprint1000YearReplicates: evaluation.replicates.map(
+                  (replicate) => ({
+                    totalCarbonPercent:
+                      replicate.totalCarbonContentFraction * 100,
+                    inorganicCarbonPercent:
+                      replicate.inorganicCarbonContentFraction * 100,
+                    sReflectanceFraction: replicate.sFraction,
+                  }),
+                ),
+                blueprint1000YearInputsComplete:
+                  evaluation.blockers.length === 0,
+              };
+            })(),
           };
           const provider = providersByFacility.get(batch.facilityId) ?? null;
           return [

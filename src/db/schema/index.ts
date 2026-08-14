@@ -19,6 +19,8 @@ export * from "./bin-movements";
 export * from "./documentation";
 export * from "./certification";
 export * from "./certifier-production-batches";
+export * from "./certifier-storage-locations";
+export * from "./certifier-biochar-applications";
 export * from "./settings";
 export * from "./compliance";
 export * from "./geo";

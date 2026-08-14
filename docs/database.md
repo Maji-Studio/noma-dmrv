@@ -113,7 +113,12 @@ credentials — handle as secrets, data-access in
 Source visibility), `certifier_projects`, `certifier_sensors`,
 `certifier_ghg_statements`, `certifier_ghg_statement_reports`,
 `certifier_removals`, `certification_submissions`,
-`certifier_document_uploads`, `certifier_sync_events`. Purpose per table:
+`certifier_document_uploads`, `certifier_sync_events`,
+`certifier_production_batches`, `certifier_storage_locations`, and
+`certifier_biochar_applications`. The last three live in separate schema
+modules named after their tables. They are Isometric-specific registry journals
+and use provider payload types; `certification.ts` remains the provider-neutral
+submission and configuration boundary. Purpose per table:
 [`schema-overview.md`](./schema-overview.md); submission-unit rationale:
 [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR
 0008](./adr/0008-submission-ledger-internal-seam.md).

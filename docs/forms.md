@@ -259,14 +259,17 @@ Application evidence additionally passes `applicationEvidenceRole` / `applicatio
 
 Placement: in a "Documentation" section, the upload field goes **before** the notes textarea.
 
-### Application GIS boundary evidence
+### Application location evidence
 
-Application evidence has two domain paths, `visual` and `boundary`, but the
-current creation UI is GIS-first: it starts on `boundary`, and the visual option
-is shown as unavailable. It therefore does not currently consume the
-organization's `defaultEvidenceMethod`, even though the settings model contains
-that default. Missing evidence remains a certification-readiness gap, not an
-application-create validation failure.
+Application evidence has three alternative paths: `location`, `boundary`, and
+`visual`. The form defaults to `location`, using the GPS pair derived from the
+selected delivery's customer location when available; operators can enter or
+correct that pair in Field details. Both coordinates are required when this
+method is selected. `boundary` reveals the GIS reference editor. `visual`
+remains visible but unavailable. Evidence-health gaps are informational and do
+not block certification submission.
+
+### Application GIS boundary evidence
 
 GIS boundary text never goes straight into `applications.gis_boundary`.
 `normalizeGisBoundaryFn` accepts uploaded or pasted GeoJSON, authenticates and
@@ -278,10 +281,10 @@ FeatureCollection. Application data access calls `parseGisBoundary()` again
 before persistence so all derived statistics are recomputed from the stored
 geometry rather than trusted from the client.
 
-The normalized JSON envelope is the application's boundary reference; related
-`gis_boundary` and classified logbook uploads remain `documents` evidence. Do
-not store raw uploaded GeoJSON in the JSONB column or infer a complete boundary
-evidence path from the presence of one file alone.
+The normalized JSON envelope is the application's boundary reference. Related
+`gis_boundary` and application-mass-record uploads remain `documents` evidence.
+Do not store raw uploaded GeoJSON in the JSONB column or infer a complete
+boundary evidence path from the presence of one file alone.
 
 ## Entity select
 

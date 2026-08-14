@@ -25,18 +25,31 @@ retired questions do not belong in this file.
   `(group, blueprint, input)` triple appears — today only the pyrolysis
   generator/startup diesel split collides. Structural umbrella: **#291**.
 
-### Eq.6 R₀-term semantics — 1000-year F_durable normalization (`certification/fdurable-1000-r0-semantics`, opened 2026-07-03)
+### Replacement 1,000-year component confirmation and template migration (`certification/fdurable-1000-r0-semantics`, opened 2026-07-03; updated 2026-08-13)
 
 - The pinned Biochar Storage in Agricultural Soils v1.1 module's Eq.6 and the
-  live `biochar_sequestration_1000_year` blueprint do not express the same
-  calculation. The blueprint consumes total-carbon replicates, product mass,
-  and the fraction of R0 readings meeting the threshold; it omits the module's
-  non-reactive-carbon term and 0.95 cap.
-- The sandbox submission follows the live blueprint because that is the
-  executable wire contract. The module-based local calculation remains a
-  preview and must not be represented as the registry result.
-- **Still open — needs-registry-check:** which calculation governs verification
-  credit, and whether `carbon_contents` should be total or organic carbon.
+  deprecated `biochar_sequestration_1000_year` component do not express the same
+  calculation. That historical component used total carbon and uncapped
+  durability.
+- The observed replacement is
+  `biochar_sequestration_1000_year_f_durable_max`. It consumes paired total and
+  directly measured inorganic-carbon lists, `s_fraction`, and product mass;
+  calculates organic carbon per replicate; applies the binomial lower estimate;
+  and caps durability at 0.95. noma implements this contract locally while
+  retaining registry authority.
+- **Still open — needs-registry-check:** confirm the replacement formally
+  governs this Protocol v1.1 project, confirm the expected inorganic-carbon
+  measurement property/unit and acceptable direct methods, confirm pairing by
+  Sample/index, and resolve the component-versus-module governance discrepancy.
+- **Still open — needs-registry-check:** confirm the current component accepts
+  standalone direct `product_mass`, confirm `measured_at` should be the physical
+  sampling instant, and verify that three local Samples appear as three remote
+  Production batch Sample rows with one scalar mass binding. The code implements
+  this preferred contract but has not yet written fresh sandbox data.
+- **Still open — external action:** migrate the sandbox template without
+  deleting historical templates, then verify one complete submission and
+  supersession. No external system was mutated by the code implementation.
+- Protocol/module/Standard pins remain unchanged.
   Authoritative pinned module:
   <https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1?tag=1.1.0>.
   Record the answer in [`docs/isometric/changes.md`](./isometric/changes.md).
@@ -261,11 +274,22 @@ independently shippable when its upstream primitives and operator demand exist.
 - **Slice B — `POST /biochar_applications`** (`isometric/phase-5-slice-b`).
   Per-spread-event JSON submission (`application_date`,
   `truck_mass_on_arrival/departure`, `average_application_rate`) that verifiers
-  use to inspect individual delivery records. Deferred because it requires two
-  upstream primitives noma does not post — `POST /production_batches` and
-  `POST /projects/{id}/storage_locations` — which doubles the scope vs. Slice A.
-  Per-application `supplier_reference_id` IS supported by the create request, so
-  the standard reconciliation pattern applies (no ADR 0006-style departure).
+  use to inspect individual delivery records. The upstream Production Batch and
+  Storage Location create/reconcile paths are now implemented, including stable
+  supplier references and local identity journals. POST remains disabled
+  because noma has net delivered/applied mass, while the request requires two
+  separate observed truck masses and offers no net-mass alternative. Isometric
+  must confirm the exact mass encoding or another route, the average-rate unit
+  and wet/dry basis, multi-batch allocation, correction behavior, and
+  `ghg_entry_id` lifecycle. No implementation may encode net mass as arrival
+  and zero as departure. The gated journal keeps one local identity per
+  Application and credit-batch allocation slice until that contract is fixed.
+
+- **Deleted Storage Location recovery** (`isometric/storage-location-recovery`).
+  If an already-journaled remote Storage Location returns 404, noma marks its
+  immutable registration drifted and does not recreate it automatically. A
+  future operator recovery flow must explicitly decide whether to forget and
+  replace that identity; sandbox sync currently requires manual registry review.
 
 - **Slice C — `MonitoringSubmission`** (`isometric/phase-5-slice-c`).
   `POST /projects/{project_id}/monitoring_requirements/{id}/submissions` —

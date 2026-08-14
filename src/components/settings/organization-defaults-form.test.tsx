@@ -12,7 +12,7 @@ const queryState = vi.hoisted(() => ({
       defaultCountry: "Kenya",
       defaultTimezone: "Africa/Nairobi",
       defaultTripType: "return" as const,
-      defaultEvidenceMethod: "visual" as const,
+      defaultEvidenceMethod: "location" as const,
       defaultPackaging: "bagged" as const,
     },
     viewerCanManage: true,
@@ -42,5 +42,19 @@ describe("OrganizationDefaultsForm", () => {
     expect(html).toContain("<form");
     expect(html).toContain("Save defaults");
     expect(html).not.toContain("Couldn&#x27;t load the operating defaults");
+  });
+
+  it("uses the canonical application evidence labels", () => {
+    const html = renderToStaticMarkup(
+      <ToastProvider>
+        <OrganizationDefaultsForm />
+      </ToastProvider>,
+    );
+
+    expect(html).toContain("Customer location");
+    expect(html).toContain("GIS reference");
+    expect(html).toContain("Visual evidence");
+    expect(html).not.toContain("GIS boundary");
+    expect(html).not.toMatch(/>Visual</);
   });
 });

@@ -76,6 +76,15 @@ itself; an input bin has no kind of its own. Distinct from output bins,
 which hold biochar lots and products.
 _Avoid_: ingredient bin as a bin *kind*.
 
+**Feedstock wet stock**:
+The wet/as-received kilograms used for feedstock logistics, bin stock,
+withdrawals, losses, and reconciliations. A production run derives its dry
+feedstock mass from that run's wet withdrawal and measured moisture for process
+and certification calculations; that derived dry mass is not bin stock and
+never limits a withdrawal.
+_Avoid_: feedstock dry stock, dry allocation, converting a physical count to
+dry mass before updating bin stock.
+
 **Ingredient bin**:
 Descriptive shorthand for a **feedstock bin** currently holding a
 blend-usage feedstock type, drawn on when a biochar product is mixed
@@ -265,6 +274,15 @@ more locations; a customer location is a GPS-pinned application site
 carrying per-site defaults. Distinct from **Supplier**.
 _Avoid_: client (collides with client components / API clients), buyer.
 
+**Application site**:
+The reusable agricultural destination represented by one **Customer** location.
+Repeated applications at that location share the same site identity within one
+certifier project. The same destination may need a distinct registry identity
+when facilities submit it under different certifier projects. An application's
+field identifier and coordinates describe that application event, not another
+site.
+_Avoid_: treating an application event or facility inventory bin as the site.
+
 ### Submission & registry
 
 **Credit batch**:
@@ -359,15 +377,17 @@ result idempotently, or block.
 _Avoid_: lock (the claim is a decision; the lock is one of its inputs).
 
 **Measurement-sample submission**:
-The Isometric API object noma POSTs to carry a credit batch's durability
-chemistry — **one per credit batch**, bearing the batch's **mean +
-standard deviation** (its ≥3 **Samples** reduced to a summary; the raw
-replicate values are evidenced by the attached COA and the durability
-evidence ledger). The registry aggregates the per-batch list server-side.
-Deliberately distinct from a noma **Sample**: ≥3 Samples in, **one**
-measurement-sample submission out. _Avoid_: calling it a "sample"
-unqualified (collides with the lab Sample); submitting raw replicates in
-place of the mean + std-dev.
+The Isometric API object noma's sandbox-only submission path currently builds
+to carry durability chemistry: **one per noma Sample**, with that Sample's
+stable identity, sampling instant, and paired raw chemistry values. A sampled
+credit batch therefore builds ≥3 measurement-sample submissions; their ordered
+Datapoint IDs feed the registry component's replicate lists. Batch product mass
+is transported separately as one direct Datapoint, never repeated as a property
+of each physical Sample. This remote record grain remains externally
+unconfirmed pending fresh sandbox validation, and production submission stays
+blocked. _Avoid_: calling it a "sample" unqualified (collides with the lab
+Sample); aggregating the ≥3 Samples into one mean + standard-deviation request;
+presenting the pending remote grain as registry-confirmed.
 
 **Noma evidence role**:
 The per-source classification that maps an evidence document or generated
@@ -430,16 +450,14 @@ expected process physics, not an error or a leak.
 _Avoid_: shrinkage, waste.
 
 **Evidence method**:
-The per-application declaration of which of the certifier's two
-acceptable proofs of biochar spreading the record satisfies — *visual*
-(geotagged, timestamped photos/videos of stockpile, spreading,
-incorporation) or *boundary* (a GIS field-boundary reference plus
-logbook records). Exactly one method is declared per application;
-what counts as missing evidence follows from the declared method.
-The domain, schema, readiness logic, and document model support both paths.
-The current creation UI is deliberately GIS-first: it defaults to *boundary*
-and shows *visual* as unavailable, while missing boundary/logbook evidence is
-an advisory readiness gap rather than a blocker on creating the application.
+The per-application declaration of how the application site is evidenced under
+Agricultural Soils v1.1: *location* (the application GPS coordinates, normally
+derived from the delivery's customer), *boundary* (a GIS field-boundary
+reference), or *visual* (geotagged and dated photos/video). Exactly one method
+is declared per application. The creation UI defaults to *location*, lists GIS
+as the second alternative, and shows *visual* as unavailable. A complete GPS
+pair is required when location is selected. Evidence-health counts remain
+informational and do not gate certification submission.
 _Avoid_: proof type, documentation mode.
 
 **Geotag flag**:

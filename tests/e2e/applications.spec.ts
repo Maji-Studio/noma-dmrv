@@ -44,7 +44,7 @@ async function createProductionRunForCreditBatch(
     seededData.feedstockStorageLocation.id,
     seededData.feedstockStorageLocation.name,
   );
-  await page.fill('input[name="feedstockWetMassKg"]', "50");
+  await page.fill('input[name="feedstockDraws.0.wetMassKg"]', "50");
   await page.fill('input[name="feedstockMoisturePercent"]', "15");
   await selectEntity(
     page,
@@ -171,7 +171,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="cropType"]', "maize");
 
     await expect(
-      page.getByRole("radio", { name: /GIS reference/ }),
+      page.getByRole("radio", { name: /Customer location/ }),
     ).toBeChecked();
     await expect(
       page.getByRole("radio", { name: /Visual evidence/ }),

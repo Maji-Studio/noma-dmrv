@@ -34,7 +34,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import {
   applicationEvidenceMethods,
-  type ApplicationEvidenceMethod,
+  formatApplicationEvidenceMethod,
 } from "@/schemas/applications";
 import { currencyCodes } from "@/schemas/credit-batches";
 import { timezones, type Timezone } from "@/schemas/facilities";
@@ -57,14 +57,9 @@ const TIMEZONE_OPTIONS = timezones.map((zone) => ({
   label: formatTimezoneLabel(zone),
 }));
 
-const EVIDENCE_METHOD_LABELS: Record<ApplicationEvidenceMethod, string> = {
-  visual: "Visual",
-  boundary: "GIS boundary",
-};
-
 const EVIDENCE_METHOD_OPTIONS = applicationEvidenceMethods.map((method) => ({
   value: method,
-  label: EVIDENCE_METHOD_LABELS[method],
+  label: formatApplicationEvidenceMethod(method),
 }));
 
 const PACKAGING_LABELS: Record<PackagingType, string> = {

@@ -12,20 +12,28 @@ import { Modal, type ModalWidth } from "@/components/ui";
 interface QuickAddDialogShellProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Reset dialog-owned state when a closed dialog opens. */
+  onOpen?: () => void;
   title: string;
   /** Width token forwarded to Modal. Defaults to "md" (matches the previous max-w-lg ≈ 512px envelope). */
   width?: ModalWidth;
   /** Test ID for the dialog element */
   testId?: string;
+  /** Forwarded modal dismissal controls; existing callers retain Modal defaults. */
+  dismissOnClickOutside?: boolean;
+  dismissible?: boolean;
   children: React.ReactNode;
 }
 
 export function QuickAddDialogShell({
   isOpen,
   onClose,
+  onOpen,
   title,
   width = "md",
   testId,
+  dismissOnClickOutside,
+  dismissible,
   children,
 }: QuickAddDialogShellProps) {
   const titleId = useId();
@@ -34,8 +42,11 @@ export function QuickAddDialogShell({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      onOpen={onOpen}
       ariaLabelledBy={titleId}
       width={width}
+      dismissOnClickOutside={dismissOnClickOutside}
+      dismissible={dismissible}
       // Inset header has its own padding + bottom border that must reach the
       // dialog edges, so we opt out of Modal's default content padding and
       // own all spacing here.

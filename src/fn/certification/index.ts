@@ -52,6 +52,11 @@ export {
   loadRemovalCompilation,
   type RemovalCompilationView,
 } from "./removal-compilation";
+export {
+  loadRemovalTemplateDiagnostic,
+  type RemovalTemplateDiagnosticAvailability,
+  type RemovalTemplateDiagnosticData,
+} from "./removal-template-diagnostic";
 // On-demand read-only registry observation for the removal detail sheet.
 export {
   loadRemovalBreakdown,
@@ -97,6 +102,12 @@ export {
   loadRegistryGhgStatements,
   reconcileGhgStatementsFromRegistry,
 } from "./ghg-statement-sync";
+export {
+  loadApplicationStorageLocationSync,
+  syncApplicationStorageLocation,
+  type ApplicationStorageLocationSyncState,
+  type ApplicationStorageLocationSyncView,
+} from "./storage-location-actions";
 // Phase 3.5 — mirror noma documents to Isometric Sources + attach
 // source_ids to Datapoint payloads. Server-side proxy, no client blob
 // handling.

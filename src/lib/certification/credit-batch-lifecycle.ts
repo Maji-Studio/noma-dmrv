@@ -1,5 +1,6 @@
 import type { StatusValue } from "@/components/ui/status-badge";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
+import { REMOVAL_SUBMISSION_INTERRUPTED_LABEL } from "./status";
 
 export const CREDIT_BATCH_READY_LABEL = "Batch data ready";
 
@@ -132,6 +133,13 @@ function removalLifecycle(
         label: "Submitting Removal",
         currentStepIndex: 0,
         stepStates: buildStepStates(0),
+      };
+    case "interrupted":
+      return {
+        badgeStatus: "failed",
+        label: REMOVAL_SUBMISSION_INTERRUPTED_LABEL,
+        currentStepIndex: 0,
+        stepStates: buildStepStates(0, "failed"),
       };
     case "submitted":
       return {

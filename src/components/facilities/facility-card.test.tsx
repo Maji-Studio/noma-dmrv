@@ -28,7 +28,7 @@ const facility = {
   archivedAt: null,
   reactorCount: 2,
   storageLocationCount: 3,
-  inventorySummary: { feedstockDryKg: 100 },
+  inventorySummary: { feedstockWetKg: 100 },
 } as FacilityWithRelations;
 
 describe("FacilityCard", () => {

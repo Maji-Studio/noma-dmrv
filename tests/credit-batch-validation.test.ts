@@ -303,18 +303,18 @@ beforeAll(async () => {
   // primary feedstock; the facility-B run to its own primary feedstock; and the
   // A6 run to BOTH types so it resolves to two feedstocks.
   await db.insert(productionRunFeedstocks).values([
-    { organizationId: TEST_ORG_ID, productionRunId: runInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
-    { organizationId: TEST_ORG_ID, productionRunId: secondRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
-    { organizationId: TEST_ORG_ID, productionRunId: thirdRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
-    { organizationId: TEST_ORG_ID, productionRunId: assignedGuardRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
-    { organizationId: TEST_ORG_ID, productionRunId: outOfWindowRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
-    { organizationId: TEST_ORG_ID, productionRunId: runInFacilityB.id, feedstockId: feedstockBPrimary.id, massUsedKg: 400 },
-    { organizationId: TEST_ORG_ID, productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 250 },
-    { organizationId: TEST_ORG_ID, productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, massUsedKg: 150 },
+    { organizationId: TEST_ORG_ID, productionRunId: runInFacilityA.id, feedstockId: feedstockAPrimary.id, wetMassUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: secondRunInFacilityA.id, feedstockId: feedstockAPrimary.id, wetMassUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: thirdRunInFacilityA.id, feedstockId: feedstockAPrimary.id, wetMassUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: assignedGuardRunInFacilityA.id, feedstockId: feedstockAPrimary.id, wetMassUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: outOfWindowRunInFacilityA.id, feedstockId: feedstockAPrimary.id, wetMassUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: runInFacilityB.id, feedstockId: feedstockBPrimary.id, wetMassUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockAPrimary.id, wetMassUsedKg: 250 },
+    { organizationId: TEST_ORG_ID, productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, wetMassUsedKg: 150 },
     // A8 uses ONLY the secondary type — a single, valid feedstock that differs
     // from the primary type the batch will declare (equality-guard fixture).
-    { organizationId: TEST_ORG_ID, productionRunId: mismatchedFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, massUsedKg: 400 },
-    { organizationId: TEST_ORG_ID, productionRunId: concurrencyRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: mismatchedFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, wetMassUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: concurrencyRunInFacilityA.id, feedstockId: feedstockAPrimary.id, wetMassUsedKg: 400 },
   ]);
 
   // Create biochar products (needs formulation)

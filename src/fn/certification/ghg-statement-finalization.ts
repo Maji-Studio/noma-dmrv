@@ -15,7 +15,7 @@ import {
   expectedButExcludedWarnings,
   type ExpectedRemoval,
 } from "@/lib/isometric/utils/ghg-entry-membership";
-import { SUBMISSION_METADATA_KEYS } from "@/lib/isometric/utils/submission-metadata";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import type {
   CreateGhgStatementResult,
   GhgStatementCreateOutcome,
