@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { RemovalTemplateDiagnosticModel } from "@/lib/certification/removal-template-diagnostic";
-import { RemovalTemplateLineageView } from "./removal-template-lineage-view";
 import { RemovalTemplateMappingView } from "./removal-template-mapping-view";
 
 const model: RemovalTemplateDiagnosticModel = {
@@ -79,22 +78,23 @@ const model: RemovalTemplateDiagnosticModel = {
 };
 
 describe("Removal template diagnostic views", () => {
-  it("renders the matrix fields and keeps raw identifiers in disclosures", () => {
+  it("renders each input as a source-to-input wire row with full detail", () => {
     const html = renderToStaticMarkup(
       <RemovalTemplateMappingView model={model} />,
     );
 
     for (const expected of [
-      "Template input",
-      "Expected",
       "noma dMRV source",
+      "Isometric input",
       "Submission wire path",
       "Evidence role",
       "Inorganic carbon contents",
       "inorganic_carbon_contents",
       "Sample inorganicCarbonPercent[]",
       "Divide by 100",
+      "Durability evidence ledger",
       "Externally unconfirmed",
+      "Isometric confirmation is pending.",
       "Raw group identifiers",
       "Raw component identifiers",
     ]) {
@@ -105,15 +105,30 @@ describe("Removal template diagnostic views", () => {
     );
   });
 
-  it("renders the same row as a three-stage lineage", () => {
+  it("keeps identity transforms silent on the wire", () => {
+    const identityModel: RemovalTemplateDiagnosticModel = {
+      ...model,
+      groups: [
+        {
+          ...model.groups[0],
+          components: [
+            {
+              ...model.groups[0].components[0],
+              inputs: [
+                {
+                  ...model.groups[0].components[0].inputs[0],
+                  transform: "Unchanged",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
     const html = renderToStaticMarkup(
-      <RemovalTemplateLineageView model={model} />,
+      <RemovalTemplateMappingView model={identityModel} />,
     );
 
-    expect(html).toContain("noma dMRV source");
-    expect(html).toContain("Transform and wire preparation");
-    expect(html).toContain("Isometric destination");
-    expect(html).toContain("Sample inorganicCarbonPercent[]");
-    expect(html).toContain("inorganic_carbon_contents");
+    expect(html).not.toContain("Unchanged");
   });
 });
