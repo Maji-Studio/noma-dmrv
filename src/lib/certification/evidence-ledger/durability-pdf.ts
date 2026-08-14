@@ -20,7 +20,7 @@
  */
 import { createElement as h, type ReactElement } from "react";
 import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
-import { formatCount, pluralize } from "@/lib/copy-utils";
+import { formatCount, MISSING_VALUE, pluralize } from "@/lib/copy-utils";
 import { C, MONO, SANS, Text_, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
 import type {
   DurabilityLedgerModel,
@@ -43,7 +43,7 @@ const nfi = (n: number): string =>
 
 // "mean ± s.d." for a column, at the given precision; mean alone when s.d. null.
 function stat(value: LedgerStat | null, fmt: (n: number) => string): string {
-  if (value == null) return "Not available";
+  if (value == null) return MISSING_VALUE.notAvailable;
   return value.stdDev == null
     ? fmt(value.mean)
     : `${fmt(value.mean)} ± ${fmt(value.stdDev)}`;
@@ -164,9 +164,9 @@ function masthead(model: DurabilityLedgerModel): ReactElement {
   const pair = (label: string, val: string) =>
     v(styles.metaPair, {}, t(styles.metaLabel, label), t(styles.metaVal, val));
   const right = v(styles.metaCol, {},
-    pair("Member batches", model.memberBatchCodes ?? "None"),
-    pair("Facility", model.facilityName ?? "Not available"),
-    pair("Registry project", model.externalProjectId ?? "Not set"),
+    pair("Member batches", model.memberBatchCodes ?? MISSING_VALUE.none),
+    pair("Facility", model.facilityName ?? MISSING_VALUE.notAvailable),
+    pair("Registry project", model.externalProjectId ?? MISSING_VALUE.notSet),
     pair(
       "Batches reconciled",
       `${model.batches.length} · ${formatCount(model.totalReplicates, "replicate")}`,
@@ -185,7 +185,10 @@ function ratioCell(
 ): ReactElement {
   const color = within === true ? C.green : within === false ? C.burnt : C.amber;
   return v({ width }, {},
-    t([styles.ratioVal, { color }], mean == null ? "Not available" : nf3(mean)),
+    t(
+      [styles.ratioVal, { color }],
+      mean == null ? MISSING_VALUE.notAvailable : nf3(mean),
+    ),
     t(styles.ratioRule, `< ${ceiling}`),
   );
 }
@@ -244,7 +247,7 @@ function cell(
   return h(Text_, {
     style: [styles.qty, { width, paddingLeft: GAP }, value == null && styles.qtyMissing, extra],
   },
-    value == null ? "Not recorded" : fmt(value));
+    value == null ? MISSING_VALUE.notRecorded : fmt(value));
 }
 
 function replicateRow(
@@ -257,7 +260,11 @@ function replicateRow(
       t(styles.repCode, rep.sampleCode),
       rep.labName ? t(styles.repLab, rep.labName) : null,
     ),
-    h(Text, { style: [styles.day, { width: COL.day, paddingLeft: GAP }] }, rep.samplingDay ?? "Not recorded"),
+    h(
+      Text,
+      { style: [styles.day, { width: COL.day, paddingLeft: GAP }] },
+      rep.samplingDay ?? MISSING_VALUE.notRecorded,
+    ),
     cell(COL.hc, rep.hToCorg, nf3),
     cell(COL.oc, rep.oToCorg, nf3),
     cell(COL.totc, rep.totalCarbonPercent, nf1),

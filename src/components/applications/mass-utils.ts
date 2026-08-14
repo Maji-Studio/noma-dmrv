@@ -4,6 +4,7 @@ import { formatWetDryMass } from "@/lib/mass-moisture";
 import { formatRemainingMass } from "@/components/forms/entity-select/remaining-mass";
 import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** The only source a delivery-derived prefill can assert (approved global dataset). */
 export const SOIL_TEMPERATURE_SOURCE_GLOBAL =
@@ -26,9 +27,9 @@ export interface ApplicationDeliveryOption {
   destinationGpsLatitude: number | null;
   destinationGpsLongitude: number | null;
   /** Total kg already applied from this delivery across all applications */
-  alreadyAppliedWetKg: number;
+  alreadyAppliedWetKg: number | null;
   /** Total dry kg already applied from this delivery across all applications */
-  alreadyAppliedDryKg: number;
+  alreadyAppliedDryKg: number | null;
 }
 
 export interface ApplicationPositionDefault {
@@ -167,12 +168,12 @@ export function formatApplicationDeliveryOptionLabel(delivery: ApplicationDelive
 
 export function formatApplicationDeliveryHelperText(delivery: ApplicationDeliveryOption): string {
   const remainingWetKg =
-    delivery.deliveredWetMassKg == null
+    delivery.deliveredWetMassKg == null || delivery.alreadyAppliedWetKg == null
       ? null
       : Math.max(0, delivery.deliveredWetMassKg - delivery.alreadyAppliedWetKg);
   const deliveredDryKg = delivery.massDryKg;
   const remainingDryKg =
-    deliveredDryKg == null
+    deliveredDryKg == null || delivery.alreadyAppliedDryKg == null
       ? null
       : Math.max(0, deliveredDryKg - delivery.alreadyAppliedDryKg);
 
@@ -188,9 +189,6 @@ export function formatApplicationKgFromTons(value: number | null | undefined): s
 
 /** Field size is a surveyed parcel area — two decimals resolve a 100 m² strip. */
 const FIELD_SIZE_HA_FRACTION_DIGITS = 2;
-/** The same token the shared formatters in `@/lib/format-utils` return for null. */
-const FALLBACK_DISPLAY = "Not recorded";
-
 /**
  * Field size in hectares, one precision for every read surface (list column,
  * detail sheet, entity card). The unit rides with the value so a row and a
@@ -198,6 +196,6 @@ const FALLBACK_DISPLAY = "Not recorded";
  * Returns "Not recorded" for null/undefined.
  */
 export function formatFieldSizeHa(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) return FALLBACK_DISPLAY;
+  if (value == null || Number.isNaN(value)) return MISSING_VALUE.notRecorded;
   return `${value.toFixed(FIELD_SIZE_HA_FRACTION_DIGITS)} ha`;
 }

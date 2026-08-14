@@ -11,6 +11,7 @@ import {
   formatApplicationMethod,
 } from "@/schemas/applications";
 import { formatDate } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
 import { formatApplicationKgFromTons, formatFieldSizeHa } from "./mass-utils";
 
@@ -94,7 +95,7 @@ export function ApplicationCard({
       {/* Footer */}
       <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          {application.cropType || "No crop type"}
+          {application.cropType || MISSING_VALUE.notRecorded}
         </span>
 
         {(onEdit || onDelete) && (

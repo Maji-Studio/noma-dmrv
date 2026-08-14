@@ -21,6 +21,7 @@ import { FlowHeroDefs } from "./flow-hero-defs";
 import { FlowHeroMobile } from "./flow-hero-mobile";
 import { FlowHeroScene } from "./flow-hero-scene";
 import { FLOW_HERO_VIEWS, type FlowHeroView } from "./flow-hero-types";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** Placeholder stations while loading — keeps the ghosted art fully drawn. */
 const EMPTY_SEGMENT_TONNES = 0;
@@ -52,7 +53,7 @@ const PLACEHOLDER_STATIONS: DashboardStation[] = (
   key,
   name,
   total: 0,
-  totalLabel: "Not available",
+  totalLabel: MISSING_VALUE.notAvailable,
   attention: 0,
   reasons: [],
   href: "#",

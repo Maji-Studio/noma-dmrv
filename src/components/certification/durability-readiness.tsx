@@ -22,6 +22,7 @@ import {
   type DurabilitySummaryEligibility,
 } from "@/lib/certification/durability-batch-summary";
 import type { ValueWithStdDev } from "@/lib/isometric/utils/durability-aggregation";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 type Tone = "ok" | "wait" | "bad" | "off";
 
@@ -82,7 +83,7 @@ export function formatDurabilityStat(
   stat: ValueWithStdDev | null,
   digits = 3,
 ): string {
-  if (stat == null) return "Not available";
+  if (stat == null) return MISSING_VALUE.notAvailable;
   const mean = stat.mean.toFixed(digits);
   return stat.stdDev == null ? mean : `${mean} ± ${stat.stdDev.toFixed(digits)}`;
 }

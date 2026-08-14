@@ -19,6 +19,7 @@ import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { SupplierLocationDialog } from "./supplier-location-dialog";
 import { resolveSupplierLocationDisplay } from "@/lib/supplier-location-display";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface SupplierDetailProps {
   supplierId: string;
@@ -93,20 +94,25 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Contact email
             </dt>
-            <dd className="body-medium mt-16">{supplier.contactEmail || "Not recorded"}</dd>
+            <dd className="body-medium mt-16">
+              {supplier.contactEmail || MISSING_VALUE.notRecorded}
+            </dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Contact phone
             </dt>
-            <dd className="body-medium mt-16">{supplier.contactPhone || "Not recorded"}</dd>
+            <dd className="body-medium mt-16">
+              {supplier.contactPhone || MISSING_VALUE.notRecorded}
+            </dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Location
             </dt>
             <dd className="body-medium mt-16">
-              {resolveSupplierLocationDisplay(supplier.location, locations) || "Not recorded"}
+              {resolveSupplierLocationDisplay(supplier.location, locations) ||
+                MISSING_VALUE.notRecorded}
             </dd>
           </div>
           <div>
@@ -117,7 +123,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
             <dd className="body-medium mt-16">
               {supplier.distanceToFacilityKm != null
                 ? `${supplier.distanceToFacilityKm} km`
-                : "Not set"}
+                : MISSING_VALUE.notSet}
             </dd>
           </div>
         </div>
@@ -197,29 +203,29 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                     className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-surface-light)]"
                   >
                     <td className="px-16 py-12 body-medium">
-                      {location.name || "Not recorded"}
+                      {location.name || MISSING_VALUE.notRecorded}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.country}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.stateRegion || "Not recorded"}
+                      {location.stateRegion || MISSING_VALUE.notRecorded}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.city || "Not recorded"}
+                      {location.city || MISSING_VALUE.notRecorded}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.address || "Not recorded"}
+                      {location.address || MISSING_VALUE.notRecorded}
                     </td>
                     <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
                       {location.gpsLatitude !== null && location.gpsLongitude !== null
                         ? `${location.gpsLatitude.toFixed(4)}, ${location.gpsLongitude.toFixed(4)}`
-                        : "Not set"}
+                        : MISSING_VALUE.notSet}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.distanceFromFacilityKm != null
                         ? `${location.distanceFromFacilityKm} km`
-                        : "Not set"}
+                        : MISSING_VALUE.notSet}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.isDefault ? "Yes" : "No"}

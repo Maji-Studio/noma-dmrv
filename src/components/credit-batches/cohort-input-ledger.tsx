@@ -13,6 +13,7 @@ import type { CreditBatchProductionRunOption } from "@/data-access/credit-batche
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate } from "@/lib/format-utils";
+import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
 
 // Per-run categorical palette for the dry-output composition bar. Accent hues
 // (not semantic good/warn/critical) so adjacent segments stay distinguishable;
@@ -37,43 +38,21 @@ export interface CohortInputTotals {
   electricityKwh: number | null;
 }
 
-/**
- * Sum a set of nullable per-run pickers across the cohort. Returns null
- * (rendered as "Not recorded")
- * when no selected run reported any value, so an all-blank category reads as
- * "not entered" rather than a misleading 0.
- */
-function sumNullable(
-  runs: CreditBatchProductionRunOption[],
-  pickers: Array<(run: CreditBatchProductionRunOption) => number | null>,
-): number | null {
-  let total = 0;
-  let hasValue = false;
-  for (const run of runs) {
-    for (const pick of pickers) {
-      const value = pick(run);
-      if (value != null) {
-        total += value;
-        hasValue = true;
-      }
-    }
-  }
-  return hasValue ? total : null;
-}
-
 /** Pure aggregation over the selected cohort — unit-tested independently. */
 export function computeCohortInputTotals(
   runs: CreditBatchProductionRunOption[],
 ): CohortInputTotals {
   return {
-    dryOutputKg: sumNullable(runs, [(r) => r.biocharDryMassKg]),
-    feedstockDryKg: sumNullable(runs, [(r) => r.feedstockMassDryKg]),
-    dieselLiters: sumNullable(runs, [
-      (r) => r.dieselOperationLiters,
-      (r) => r.dieselGensetLiters,
-      (r) => r.preprocessingFuelLiters,
-    ]),
-    electricityKwh: sumNullable(runs, [(r) => r.electricityKwh]),
+    dryOutputKg: sumNullableBy(runs, (run) => run.biocharDryMassKg),
+    feedstockDryKg: sumNullableBy(runs, (run) => run.feedstockMassDryKg),
+    dieselLiters: sumNullable(
+      runs.flatMap((run) => [
+        run.dieselOperationLiters,
+        run.dieselGensetLiters,
+        run.preprocessingFuelLiters,
+      ]),
+    ),
+    electricityKwh: sumNullableBy(runs, (run) => run.electricityKwh),
   };
 }
 

@@ -32,6 +32,8 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -98,7 +100,7 @@ function finalWetProductMassKg(
 ): number | null {
   return product.massKg == null
     ? null
-    : product.massKg + (product.waterAddedKg ?? 0);
+    : sumNullable([product.massKg, product.waterAddedKg]);
 }
 
 // ============================================
@@ -128,7 +130,8 @@ function createColumns(
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facility?.name ?? "",
-      cell: ({ row }) => row.original.facility?.name || "Not available",
+      cell: ({ row }) =>
+        row.original.facility?.name || MISSING_VALUE.notAvailable,
     },
     {
       id: "formulation",
@@ -177,7 +180,8 @@ function createColumns(
       id: "storageLocation",
       header: "Storage",
       accessorFn: (row) => row.storageLocation?.name ?? "",
-      cell: ({ row }) => row.original.storageLocation?.name || "Not set",
+      cell: ({ row }) =>
+        row.original.storageLocation?.name || MISSING_VALUE.notSet,
     },
     {
       id: "actions",
@@ -217,26 +221,16 @@ export function BiocharProductPageMassSummary({
   products,
   isLoading = false,
 }: BiocharProductPageMassSummaryProps) {
-  const pageMass = products.reduce(
-    (total, product) => {
-      const wetKg = finalWetProductMassKg(product);
-      const dryKg = sourceBiocharDryMassKg(product);
-      return {
-        wetKg: total.wetKg + (wetKg ?? 0),
-        dryKg: total.dryKg + (dryKg ?? 0),
-        hasMissingDry: total.hasMissingDry || dryKg == null,
-      };
-    },
-    { wetKg: 0, dryKg: 0, hasMissingDry: false },
-  );
+  const wetKg = sumNullableBy(products, finalWetProductMassKg);
+  const dryKg = sumNullableBy(products, sourceBiocharDryMassKg);
 
   return (
     <StatCard
       title="Mass on This Page"
       value={
         <MassPair
-          wetKg={pageMass.wetKg}
-          dryKg={pageMass.hasMissingDry ? null : pageMass.dryKg}
+          wetKg={wetKg}
+          dryKg={dryKg}
           wetLabel={WET_PRODUCT_LABEL}
           dryLabel={DRY_BIOCHAR_LABEL}
         />

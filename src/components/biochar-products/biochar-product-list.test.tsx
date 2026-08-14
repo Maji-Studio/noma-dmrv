@@ -18,7 +18,7 @@ function productMass(
 }
 
 describe("BiocharProductPageMassSummary", () => {
-  it("labels the paginated total and keeps incomplete dry mass explicit", () => {
+  it("labels the paginated total and sums the reported dry mass", () => {
     const html = renderToStaticMarkup(
       <BiocharProductPageMassSummary
         products={[
@@ -31,7 +31,7 @@ describe("BiocharProductPageMassSummary", () => {
     expect(html).toContain("Mass on This Page");
     expect(html).toContain("Combined product mass on the current page");
     expect(html).toContain("150 kg");
-    expect(html).toContain("Not recorded");
+    expect(html).toContain("90 kg");
   });
 
   it("reports source dry biochar instead of drying the whole blend", () => {

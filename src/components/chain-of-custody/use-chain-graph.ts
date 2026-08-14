@@ -4,6 +4,7 @@ import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { formatDate } from "@/lib/format-utils";
+import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
 import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
 import type { ChainNodeData } from "./chain-node";
 import {
@@ -142,7 +143,9 @@ function massLabel(mass: EdgeMass | null): string | null {
 }
 
 function formatShare(fraction: number): string {
-  if (!Number.isFinite(fraction) || fraction <= 0) return "Not available";
+  if (!Number.isFinite(fraction) || fraction <= 0) {
+    return MISSING_VALUE.notAvailable;
+  }
   if (fraction < SUB_ONE_PERCENT) return "<1%";
   if (fraction >= NEAR_FULL_PERCENT) return "100%";
   return `${Math.round(fraction * 100)}%`;
@@ -276,9 +279,7 @@ export function assignEdgeRouteOffsets(
 function formatDateOrNull(value: Date | string | null | undefined): string | null {
   if (!value) return null;
   const formatted = formatDate(value);
-  return formatted === "Not recorded" || formatted === "Not available"
-    ? null
-    : formatted;
+  return isMissingValueCopy(formatted) ? null : formatted;
 }
 
 function addRow(
@@ -302,7 +303,7 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
     if (!reactor || seenNodeIds.has(`reactor:${reactor.id}`)) continue;
     const details: LineageDetailRow[] = [];
     addRow(details, "Unit", reactor.identifier);
-    addRow(details, "Type", reactor.reactorType ?? "Not set");
+    addRow(details, "Type", reactor.reactorType ?? MISSING_VALUE.notSet);
 
     nodes.push({
       id: `reactor:${reactor.id}`,

@@ -1,10 +1,10 @@
 import type { EntityOption } from "./types";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 const KG_SUFFIX = "kg";
-const UNKNOWN_MASS = "Not recorded";
 
 function formatWholeKg(kg: number | null): string {
-  if (kg == null || !Number.isFinite(kg)) return UNKNOWN_MASS;
+  if (kg == null || !Number.isFinite(kg)) return MISSING_VALUE.notRecorded;
   return `${Math.round(kg).toLocaleString("en-US")}${KG_SUFFIX}`;
 }
 

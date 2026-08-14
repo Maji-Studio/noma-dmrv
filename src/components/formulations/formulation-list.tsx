@@ -30,20 +30,21 @@ import { FormulationForm } from "./formulation-form";
 import type { FormulationFormData } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // ============================================
 // Helpers
 // ============================================
 
 function formatRatio(ratio: number | null): string {
-  if (ratio === null || ratio === undefined) return "Not recorded";
+  if (ratio === null || ratio === undefined) return MISSING_VALUE.notRecorded;
   return `${(ratio * 100).toFixed(0)}%`;
 }
 
 function formatIngredientsSummary(
   ingredients: FormulationWithIngredients["ingredients"]
 ): string {
-  if (!ingredients || ingredients.length === 0) return "None";
+  if (!ingredients || ingredients.length === 0) return MISSING_VALUE.none;
   return ingredients
     .map((ing) => {
       const ratio = ing.ratio != null ? ` (${(ing.ratio * 100).toFixed(0)}%)` : "";
@@ -96,7 +97,7 @@ function createColumns(
       header: "Description",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)] max-w-xs truncate block">
-          {row.original.description || "Not recorded"}
+          {row.original.description || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
