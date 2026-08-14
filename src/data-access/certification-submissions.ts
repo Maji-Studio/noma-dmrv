@@ -72,6 +72,13 @@ export interface InsertDraftSubmissionInput extends SubmissionKey {
   metadata?: Record<string, unknown> | null;
 }
 
+/**
+ * Compare-and-set: records the interruption only while the row is still a
+ * draft holding this attempt's exact lock. Returns false when the CAS missed
+ * (e.g. the lock expired and another claimant re-locked the row) — the caller
+ * must surface that loudly, because a confirmed external write would
+ * otherwise be silently forgotten.
+ */
 export async function markSubmissionInterrupted(
   ctx: OrgContext,
   id: string,
@@ -80,9 +87,9 @@ export async function markSubmissionInterrupted(
     expectedLockedAt: Date;
     externalMutation: "possible" | "confirmed";
   },
-): Promise<void> {
+): Promise<boolean> {
   requireOrgScope(ctx);
-  await db
+  const updated = await db
     .update(certificationSubmissions)
     .set({
       updatedAt: sql`now()`,
@@ -99,7 +106,9 @@ export async function markSubmissionInterrupted(
         eq(certificationSubmissions.lockedAt, args.expectedLockedAt),
         eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),
-    );
+    )
+    .returning({ id: certificationSubmissions.id });
+  return updated.length > 0;
 }
 
 // =====================================================================

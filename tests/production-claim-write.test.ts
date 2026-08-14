@@ -303,7 +303,7 @@ describe("markSubmissionInterrupted", () => {
       .set({ lockedAt })
       .where(eq(certificationSubmissions.id, submissionId));
 
-    await markSubmissionInterrupted(
+    const recorded = await markSubmissionInterrupted(
       makeTestOrgContext(TEST_USER_ID),
       submissionId,
       {
@@ -312,6 +312,7 @@ describe("markSubmissionInterrupted", () => {
         externalMutation: "confirmed",
       },
     );
+    expect(recorded).toBe(true);
 
     const [row] = await db
       .select({
@@ -351,7 +352,7 @@ describe("markSubmissionInterrupted", () => {
       .set({ lockedAt: successorLock })
       .where(eq(certificationSubmissions.id, submissionId));
 
-    await markSubmissionInterrupted(
+    const staleRecorded = await markSubmissionInterrupted(
       makeTestOrgContext(TEST_USER_ID),
       submissionId,
       {
@@ -360,6 +361,7 @@ describe("markSubmissionInterrupted", () => {
         externalMutation: "possible",
       },
     );
+    expect(staleRecorded).toBe(false);
     let [row] = await db
       .select({
         status: certificationSubmissions.status,
@@ -376,7 +378,7 @@ describe("markSubmissionInterrupted", () => {
       submissionId,
       { externalId: "ext_successor_submitted" },
     );
-    await markSubmissionInterrupted(
+    const lateRecorded = await markSubmissionInterrupted(
       makeTestOrgContext(TEST_USER_ID),
       submissionId,
       {
@@ -385,6 +387,7 @@ describe("markSubmissionInterrupted", () => {
         externalMutation: "confirmed",
       },
     );
+    expect(lateRecorded).toBe(false);
     [row] = await db
       .select({
         status: certificationSubmissions.status,

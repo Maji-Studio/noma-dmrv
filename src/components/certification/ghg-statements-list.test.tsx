@@ -58,6 +58,19 @@ describe("deriveGhgCreateGate", () => {
     ).toEqual({ canSync: true, canCreate: true, notice: null });
   });
 
+  it("keeps Create off when the loaded summary is missing the facility count", () => {
+    // A stale cached payload predating linkedFacilityCount must not read as
+    // "dedicated": Sync stays available, Create stays closed, no notice.
+    expect(
+      deriveGhgCreateGate({
+        isLoading: false,
+        isError: false,
+        hasMapping: true,
+        linkedFacilityCount: undefined,
+      }),
+    ).toEqual({ canSync: true, canCreate: false, notice: null });
+  });
+
   it("keeps Sync available but disables Create for a shared project", () => {
     expect(
       deriveGhgCreateGate({

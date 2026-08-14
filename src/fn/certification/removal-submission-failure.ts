@@ -82,11 +82,24 @@ export async function recordClaimedRemovalSubmissionFailureBestEffort(args: {
         expectedLockedAt: args.expectedLockedAt,
       });
     } else {
-      await markSubmissionInterrupted(args.orgCtx, args.submissionId, {
-        errorMessage,
-        expectedLockedAt: args.expectedLockedAt,
-        externalMutation: args.externalMutation,
-      });
+      const recorded = await markSubmissionInterrupted(
+        args.orgCtx,
+        args.submissionId,
+        {
+          errorMessage,
+          expectedLockedAt: args.expectedLockedAt,
+          externalMutation: args.externalMutation,
+        },
+      );
+      if (!recorded) {
+        args.log.warn(
+          {
+            submissionId: args.submissionId,
+            externalMutation: args.externalMutation,
+          },
+          "interrupted state lost: submission lock no longer held (row re-claimed or re-locked); external registry write may be unrecorded",
+        );
+      }
     }
   } catch (cleanupError) {
     args.log.warn(

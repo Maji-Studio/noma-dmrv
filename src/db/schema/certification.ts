@@ -526,7 +526,9 @@ export const certifierSyncEvents = pgTable('certifier_sync_events', {
     .references(() => organizations.id),
   provider: certifierProvider('provider').notNull().default('isometric'),
   entityType: text('entity_type').notNull(),
-  entityId: uuid('entity_id').notNull(),
+  // Polymorphic per entityType: UUIDs for local rows (removals, documents),
+  // supplier references (nm-slc-*) for storage locations — hence text.
+  entityId: text('entity_id').notNull(),
   operation: text('operation').notNull(),
   status: syncStatus('status').notNull().default('pending'),
   requestPayload: jsonb('request_payload'),

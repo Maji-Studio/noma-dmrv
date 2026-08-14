@@ -770,7 +770,9 @@ beforeEach(() => {
             SUBMISSION_ATTEMPT_OUTCOMES.interrupted,
           [SUBMISSION_METADATA_KEYS.externalMutation]: args.externalMutation,
         };
+        return true;
       }
+      return false;
     },
   );
   vi.mocked(ledger.retireStaleSubmissionDraft).mockImplementation(
