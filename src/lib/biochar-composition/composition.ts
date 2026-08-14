@@ -8,6 +8,7 @@
 
 import type { IngredientBin } from "./types";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
+import { PERCENT_SCALE } from "@/lib/mass-moisture";
 
 interface FormulationIngredientLike {
   id: string;
@@ -93,6 +94,9 @@ export const ZERO_SOURCE_BIOCHAR_WARNING =
   "This product contains 0 kg of source biochar. It cannot be ordered or traced to a production run or credit batch. Create a new product with more than 0 kg of biochar.";
 
 export const GRAMS_PER_KILOGRAM = 1_000;
+
+/** Pins derived blend moisture to six-decimal precision. */
+const MOISTURE_SNAP_FACTOR = 1e6;
 
 export function toPersistedMassGrams(massKg: number): number {
   return Math.round(massKg * GRAMS_PER_KILOGRAM);
@@ -210,10 +214,15 @@ export function deriveBlendEffectiveMoisturePercent({
     return null;
   }
   const totalDryKg = biocharDryKg + ingredientDryKg;
-  const percent = Math.min(100, Math.max(0, (1 - totalDryKg / totalWetKg) * 100));
+  const percent = Math.min(
+    PERCENT_SCALE,
+    Math.max(0, (1 - totalDryKg / totalWetKg) * PERCENT_SCALE),
+  );
   // Snap float noise (1 − 0.85 → 15.000000000000002) so a pure product's
   // effective moisture round-trips exactly to its entered percentage.
-  return Math.round(percent * 1e6) / 1e6;
+  return (
+    Math.round(percent * MOISTURE_SNAP_FACTOR) / MOISTURE_SNAP_FACTOR
+  );
 }
 
 /** Sum of recorded positive ingredient wet masses, gram-exact. */

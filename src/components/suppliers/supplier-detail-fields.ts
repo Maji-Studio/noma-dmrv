@@ -2,6 +2,7 @@ import type { DetailPanelField } from "@/components/ui/detail-panel";
 import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { positiveOrNull } from "@/lib/calculations/transport-leg";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface SupplierFallbackDistanceInput {
   defaultLocationDistanceKm: number | null;
@@ -54,6 +55,9 @@ export function buildSupplierFallbackDistanceField(
       true,
       effectiveDistanceKm !== null,
     ),
-    value: effectiveDistanceKm !== null ? `${effectiveDistanceKm} km` : null,
+    value:
+      effectiveDistanceKm !== null
+        ? `${effectiveDistanceKm} km`
+        : MISSING_VALUE.notSet,
   };
 }

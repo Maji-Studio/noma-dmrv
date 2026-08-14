@@ -12,7 +12,7 @@ import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
-import { splitWetMass, splitWetMassAfterAddedWater, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
+import { MASS_MOISTURE_LABELS, splitWetMass, splitWetMassAfterAddedWater, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { formatMassKg } from "@/lib/format-utils";
 import {
   StorageLocationQuickAddDialog,
@@ -70,6 +70,10 @@ export function BiocharSourceMassFields({
     <MassMoistureFields
       {...props}
       materialLabel={materialLabel}
+      finalMoistureLabel={qualifyMassLabel(
+        MASS_MOISTURE_LABELS.finalMoisture,
+        "Biochar + water",
+      )}
       wet={{
         ...wet,
         label: qualifyMassLabel(WET_MASS_FIELD_LABEL, materialLabel ?? "Biochar"),

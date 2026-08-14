@@ -134,6 +134,7 @@ export interface LinkedRemoval {
 export interface GhgStatementState {
   statement: CertifierGhgStatementRow;
   statementSubmission: CertificationSubmissionRow | null;
+  statementSubmissionForStatus: CertificationSubmissionRow | null;
   linkedRemovals: LinkedRemoval[];
   remote: GhgStatement | null;
   recentSyncEvents: CertifierSyncEventRow[];
@@ -693,19 +694,18 @@ export async function loadGhgStatementState(
         )
       : null;
 
-    // One registry truth per response: the badge derives from the submission
-    // row's remoteStatus overlay while the technical pane shows the live
-    // fetch, so a stale persisted overlay would self-contradict within the
-    // same sheet. Overlay the live status onto the returned copy — no DB
-    // write; persisting reconciliation stays an explicit operator action.
-    const statementSubmissionForClient =
+    // The badge reflects the live registry fetch, but the submission row stays
+    // byte-for-byte persisted for the technical metadata pane. Persisting
+    // reconciliation remains an explicit operator action.
+    const statementSubmissionForStatus =
       statementSubmission && remote
         ? overlayLiveRemoteStatus(statementSubmission, remote.status)
         : statementSubmission;
 
     return {
       statement,
-      statementSubmission: statementSubmissionForClient,
+      statementSubmission,
+      statementSubmissionForStatus,
       linkedRemovals,
       // The verifier URL can carry the bearer token for the generated report.
       // Keep that plaintext capability on the server even though the rest of

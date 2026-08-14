@@ -54,7 +54,6 @@ describe("GhgStatementTechnicalDetails", () => {
 
   it("keeps raw registry state literal, null included", () => {
     const html = render({ remote: null });
-    expect(html).toContain("Remote status");
-    expect(html).toContain("null");
+    expect(html).toMatch(/Remote status<\/dt><dd[^>]*>null<\/dd>/);
   });
 });

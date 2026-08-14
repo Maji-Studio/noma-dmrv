@@ -24,7 +24,6 @@ import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import {
   deriveBlendEffectiveMoisturePercent,
-  fromCompositionJsonb,
   fromCompositionMassJsonb,
 } from "@/lib/biochar-composition";
 import { resolveProductDryBiocharKg } from "@/lib/biochar-mass-accounting";
@@ -50,6 +49,7 @@ function formatStockSubtitle(
   deliveredDryKg: number,
   unresolvedDeliveredDryCount: number,
   sourceAllocatedDryMassKg?: number | null,
+  labelVariant?: NonNullable<EntityOption["remainingMass"]>["labelVariant"],
 ): string {
   const remainingWetKg =
     (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg;
@@ -64,6 +64,10 @@ function formatStockSubtitle(
     deliveredDryKg,
     unresolvedDeliveredDryCount,
   );
+  const availabilityLabel =
+    labelVariant === "excluding-this-order"
+      ? "available excluding this order"
+      : "available";
   return `${formatWetDryMass({
     wetKg: remainingWetKg,
     dryKg: remainingDryKg,
@@ -71,7 +75,7 @@ function formatStockSubtitle(
     dryLabel: "Dry biochar",
     separator: " | ",
     unitSpacing: "compact",
-  })} available`;
+  })} ${availabilityLabel}`;
 }
 
 // Total delivered wet mass per product batch. A delivery's product is its own
@@ -151,21 +155,24 @@ function buildSelection(
   };
 }
 
-export function toBiocharProductEntityOption(r: {
-  id: string;
-  code: string | null;
-  name: string | null;
-  productCode: string;
-  formulationName: string | null;
-  massKg: number | null;
-  waterAddedKg: number | null;
-  moisturePercent: number | null;
-  composition?: unknown;
-  totalDeliveredKg: number;
-  totalDeliveredDryKg: number;
-  unresolvedDeliveredDryCount: number;
-  sourceAllocatedDryMassKg?: number | null;
-}): EntityOption {
+export function toBiocharProductEntityOption(
+  r: {
+    id: string;
+    code: string | null;
+    name: string | null;
+    productCode: string;
+    formulationName: string | null;
+    massKg: number | null;
+    waterAddedKg: number | null;
+    moisturePercent: number | null;
+    composition?: unknown;
+    totalDeliveredKg: number;
+    totalDeliveredDryKg: number;
+    unresolvedDeliveredDryCount: number;
+    sourceAllocatedDryMassKg?: number | null;
+  },
+  options: { excludeCurrentOrder?: boolean } = {},
+): EntityOption {
   const productLabel = r.formulationName ?? PURE_BIOCHAR_LABEL;
   const remainingWetKg =
     (r.massKg ?? 0) + (r.waterAddedKg ?? 0) - r.totalDeliveredKg;
@@ -192,13 +199,16 @@ export function toBiocharProductEntityOption(r: {
         blendMassKg: r.massKg,
         waterAddedKg: r.waterAddedKg,
         biocharMoisturePercent: r.moisturePercent,
-        ingredients: fromCompositionJsonb(r.composition),
+        ingredients: fromCompositionMassJsonb(r.composition),
         sourceAllocatedDryMassKg: r.sourceAllocatedDryMassKg,
       }),
     },
     remainingMass: {
       wetKg: remainingWetKg,
       dryKg: remainingDryKg,
+      labelVariant: options.excludeCurrentOrder
+        ? "excluding-this-order"
+        : undefined,
     },
     subtitle: formatStockSubtitle(
       r.massKg,
@@ -209,6 +219,7 @@ export function toBiocharProductEntityOption(r: {
       r.totalDeliveredDryKg,
       r.unresolvedDeliveredDryCount,
       r.sourceAllocatedDryMassKg,
+      options.excludeCurrentOrder ? "excluding-this-order" : undefined,
     ),
   };
 }
@@ -296,7 +307,11 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
     .orderBy(desc(biocharProducts.productionDate))
     .limit(limit);
 
-  return results.map(toBiocharProductEntityOption);
+  return results.map((result) =>
+    toBiocharProductEntityOption(result, {
+      excludeCurrentOrder: Boolean(params.excludeOrderId),
+    }),
+  );
 }
 
 export async function getBiocharProductEntityById(
@@ -340,5 +355,7 @@ export async function getBiocharProductEntityById(
 
   if (!result) return null;
 
-  return toBiocharProductEntityOption(result);
+  return toBiocharProductEntityOption(result, {
+    excludeCurrentOrder: Boolean(opts.excludeOrderId),
+  });
 }

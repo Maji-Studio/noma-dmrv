@@ -84,7 +84,7 @@ describe("buildSupplierFallbackDistanceField", () => {
       legacySupplierDistanceKm: Number.NaN,
       locationsLoaded: true,
     })).toMatchObject({
-      value: null,
+      value: "Not set",
       certifyStatus: "missing",
     });
   });
@@ -108,7 +108,7 @@ describe("buildSupplierFallbackDistanceField", () => {
       legacySupplierDistanceKm: null,
       locationsLoaded: true,
     })).toMatchObject({
-      value: null,
+      value: "Not set",
       certifyRequired: true,
       certifyStatus: "missing",
     });

@@ -173,18 +173,14 @@ function createColumns(
     },
     {
       id: "moistureContentPercent",
-      header: "Moisture",
+      header: "Blend moisture",
       // Composition-aware blend moisture: massKg is the blend total (biochar
       // plus ingredient solids), so the single-material helper must not see
       // it — that produced the 26.1% vs 34.3% contradiction (BP-26-001).
-      accessorFn: (row) =>
-        productEffectiveMoisturePercent(row) ?? row.moistureContentPercent,
+      accessorFn: productEffectiveMoisturePercent,
       cell: ({ row }) => (
         <span className="font-mono">
-          {formatMoisturePercent(
-            productEffectiveMoisturePercent(row.original) ??
-              row.original.moistureContentPercent,
-          )}
+          {formatMoisturePercent(productEffectiveMoisturePercent(row.original))}
         </span>
       ),
     },

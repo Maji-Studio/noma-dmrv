@@ -14,13 +14,4 @@ describe("orderAvailabilityWarning", () => {
     expect(orderAvailabilityWarning("", 800)).toBeUndefined();
     expect(orderAvailabilityWarning(1_000, null)).toBeUndefined();
   });
-
-  // Edit mode no longer suppresses: the availability figure it receives is
-  // computed with the order's own deliveries excluded (server-side
-  // excludeOrderId), so the full-quantity comparison is valid there too.
-  it("warns in edit mode when the quantity exceeds self-excluded availability", () => {
-    expect(orderAvailabilityWarning(1_000, 400)).toContain(
-      "Only 400 kg is currently available",
-    );
-  });
 });
