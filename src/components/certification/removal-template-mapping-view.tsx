@@ -1,18 +1,19 @@
 import {
   ArrowDownIcon,
   CaretDownIcon,
+  FlowArrowIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import type {
-  RemovalTemplateDiagnosticInput,
-  RemovalTemplateDiagnosticModel,
+import { EmptyState } from "@/components/ui";
+import {
+  IDENTITY_TRANSFORM_LABEL,
+  type RemovalTemplateDiagnosticInput,
+  type RemovalTemplateDiagnosticModel,
 } from "@/lib/certification/removal-template-diagnostic";
 import {
   REMOVAL_TEMPLATE_STATUS_TONES,
   REMOVAL_TEMPLATE_TONE_COLORS,
   RemovalTemplateDiagnosticStatusBadge,
 } from "./removal-template-diagnostic-status";
-
-const IDENTITY_TRANSFORM = "Unchanged";
 
 function RawIdentifiers({
   summary,
@@ -48,7 +49,7 @@ function SourceNode({ input }: { input: RemovalTemplateDiagnosticInput }) {
           : "border-[var(--clr-dark-purple-20)]"
       }`}
     >
-      <span className="font-mono text-[9px] font-medium uppercase tracking-[0.09em] text-[var(--clr-dark-purple-40)]">
+      <span className="label-micro text-[var(--color-text-tertiary)]">
         noma dMRV source
       </span>
       <span className="body-small break-words text-[var(--color-text-primary)]">
@@ -73,7 +74,7 @@ function Wire({
   const color = REMOVAL_TEMPLATE_TONE_COLORS[tone];
   const broken = tone === "attention";
   const transform =
-    input.transform === IDENTITY_TRANSFORM ? null : input.transform;
+    input.transform === IDENTITY_TRANSFORM_LABEL ? null : input.transform;
   return (
     <>
       {/* Horizontal wire on md+, vertical connector when the nodes stack. */}
@@ -82,7 +83,7 @@ function Wire({
         className="hidden min-w-0 flex-col items-stretch justify-center gap-4 md:flex"
       >
         {transform && (
-          <span className="text-center font-mono text-[9px] font-medium uppercase tracking-[0.07em] break-words text-[var(--color-text-tertiary)]">
+          <span className="label-micro text-center break-words text-[var(--color-text-tertiary)]">
             {transform}
           </span>
         )}
@@ -103,7 +104,7 @@ function Wire({
       <div aria-hidden className="flex items-center gap-8 pl-12 md:hidden">
         <ArrowDownIcon size={12} weight="bold" style={{ color }} />
         {transform && (
-          <span className="font-mono text-[9px] font-medium uppercase tracking-[0.07em] text-[var(--color-text-tertiary)]">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
             {transform}
           </span>
         )}
@@ -128,14 +129,14 @@ function DestinationNode({
       }}
     >
       <span className="flex items-center justify-between gap-8">
-        <span className="font-mono text-[9px] font-medium uppercase tracking-[0.09em] text-[var(--clr-dark-purple-40)]">
+        <span className="label-micro text-[var(--color-text-tertiary)]">
           Isometric input
         </span>
         <CaretDownIcon
           size={12}
           weight="bold"
           aria-hidden
-          className="shrink-0 text-[var(--color-icon-tertiary)] transition-transform group-open:rotate-180"
+          className="shrink-0 text-[var(--color-icon-secondary)] transition-transform group-open:rotate-180"
         />
       </span>
       <span className="body-small break-words text-[var(--color-text-primary)]">
@@ -165,7 +166,7 @@ function WireRow({ input }: { input: RemovalTemplateDiagnosticInput }) {
       </summary>
       <div className="mt-6 grid gap-x-16 gap-y-8 border-[1.5px] border-dashed border-[var(--clr-dark-purple-20)] px-12 py-10 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <span className="font-mono text-[9px] font-medium uppercase tracking-[0.09em] text-[var(--clr-dark-purple-40)]">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
             Expected
           </span>
           <span className="body-caption text-[var(--color-text-secondary)]">
@@ -174,7 +175,15 @@ function WireRow({ input }: { input: RemovalTemplateDiagnosticInput }) {
           </span>
         </div>
         <div className="flex flex-col gap-2">
-          <span className="font-mono text-[9px] font-medium uppercase tracking-[0.09em] text-[var(--clr-dark-purple-40)]">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
+            Transform
+          </span>
+          <span className="body-caption text-[var(--color-text-secondary)]">
+            {input.transform}
+          </span>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
             Evidence role
           </span>
           <span className="body-caption text-[var(--color-text-secondary)]">
@@ -182,7 +191,7 @@ function WireRow({ input }: { input: RemovalTemplateDiagnosticInput }) {
           </span>
         </div>
         <div className="flex flex-col gap-2 sm:col-span-2">
-          <span className="font-mono text-[9px] font-medium uppercase tracking-[0.09em] text-[var(--clr-dark-purple-40)]">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
             Submission wire path
           </span>
           <span className="body-caption font-mono break-all text-[var(--color-text-secondary)]">
@@ -190,7 +199,7 @@ function WireRow({ input }: { input: RemovalTemplateDiagnosticInput }) {
           </span>
         </div>
         <div className="flex flex-col gap-4 sm:col-span-2">
-          <span className="font-mono text-[9px] font-medium uppercase tracking-[0.09em] text-[var(--clr-dark-purple-40)]">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
             Status
           </span>
           <span className="flex flex-wrap items-center gap-8">
@@ -249,9 +258,11 @@ export function RemovalTemplateMappingView({
           </div>
 
           {group.components.length === 0 && (
-            <p className="body-caption text-[var(--color-text-tertiary)]">
-              No components in this group.
-            </p>
+            <EmptyState
+              icon={<FlowArrowIcon size={32} weight="bold" aria-hidden />}
+              title="No components in this group"
+              padding="sm"
+            />
           )}
 
           {group.components.map((component) => (
@@ -282,13 +293,23 @@ export function RemovalTemplateMappingView({
                 </div>
               </div>
 
-              <ol className="flex flex-col gap-10 p-12">
-                {component.inputs.map((input) => (
-                  <li key={input.inputKey}>
-                    <WireRow input={input} />
-                  </li>
-                ))}
-              </ol>
+              {component.inputs.length === 0 ? (
+                <div className="p-12">
+                  <EmptyState
+                    icon={<FlowArrowIcon size={32} weight="bold" aria-hidden />}
+                    title="No inputs in this component"
+                    padding="sm"
+                  />
+                </div>
+              ) : (
+                <ol className="flex flex-col gap-10 p-12">
+                  {component.inputs.map((input) => (
+                    <li key={input.inputKey}>
+                      <WireRow input={input} />
+                    </li>
+                  ))}
+                </ol>
+              )}
             </div>
           ))}
         </section>

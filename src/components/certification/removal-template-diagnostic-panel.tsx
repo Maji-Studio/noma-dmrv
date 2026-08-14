@@ -14,10 +14,10 @@ import { RemovalTemplateMappingView } from "./removal-template-mapping-view";
 import { RemovalTemplateTraceView } from "./removal-template-trace-view";
 import {
   REMOVAL_TEMPLATE_STATUS_LABELS,
-  REMOVAL_TEMPLATE_STATUS_TONES,
   REMOVAL_TEMPLATE_TONE_COLORS,
   RemovalTemplateAggregateStatusBadge,
   RemovalTemplateDiagnosticStatusBadge,
+  summarizeRemovalTemplateMappingOverview,
   type RemovalTemplateStatusTone,
 } from "./removal-template-diagnostic-status";
 
@@ -36,32 +36,22 @@ const TONE_SUMMARY: Array<{ tone: RemovalTemplateStatusTone; label: string }> =
   [
     { tone: "ok", label: "mapped" },
     { tone: "neutral", label: "registry-owned or optional" },
-    { tone: "attention", label: "need attention" },
+    { tone: "attention", label: "attention needed" },
   ];
 
-function InputCoverage({
+function MappingOverview({
   counts,
 }: {
   counts: Record<RemovalTemplateDiagnosticStatus, number>;
 }) {
-  const toneCounts: Record<RemovalTemplateStatusTone, number> = {
-    ok: 0,
-    neutral: 0,
-    attention: 0,
-  };
-  for (const [status, count] of Object.entries(counts)) {
-    toneCounts[
-      REMOVAL_TEMPLATE_STATUS_TONES[status as RemovalTemplateDiagnosticStatus]
-    ] += count;
-  }
-  const total = toneCounts.ok + toneCounts.neutral + toneCounts.attention;
+  const { toneCounts, total } = summarizeRemovalTemplateMappingOverview(counts);
   if (total === 0) {
     return null;
   }
   return (
     <div className="sm:col-span-2 lg:col-span-4">
       <p className="label-micro text-[var(--color-text-tertiary)]">
-        Input coverage
+        Mapping overview
       </p>
       <div
         aria-hidden
@@ -240,7 +230,7 @@ export function RemovalTemplateDiagnosticPanel({
             </p>
           )}
         </div>
-        {data.diagnostic && <InputCoverage counts={data.diagnostic.counts} />}
+        {data.diagnostic && <MappingOverview counts={data.diagnostic.counts} />}
       </section>
 
       {unavailable || !data.diagnostic ? (

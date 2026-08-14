@@ -47,6 +47,27 @@ export const REMOVAL_TEMPLATE_TONE_COLORS: Record<
   attention: "var(--st-wait)",
 };
 
+export function summarizeRemovalTemplateMappingOverview(
+  counts: Record<RemovalTemplateDiagnosticStatus, number>,
+): {
+  toneCounts: Record<RemovalTemplateStatusTone, number>;
+  total: number;
+} {
+  const toneCounts: Record<RemovalTemplateStatusTone, number> = {
+    ok: 0,
+    neutral: 0,
+    attention: 0,
+  };
+  for (const [status, count] of Object.entries(counts)) {
+    const diagnosticStatus = status as RemovalTemplateDiagnosticStatus;
+    toneCounts[REMOVAL_TEMPLATE_STATUS_TONES[diagnosticStatus]] += count;
+  }
+  return {
+    toneCounts,
+    total: toneCounts.ok + toneCounts.neutral + toneCounts.attention,
+  };
+}
+
 const STATUS_CLASSES: Record<RemovalTemplateDiagnosticStatus, string> = {
   mapped: "border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] text-[var(--st-ok)]",
   "registry-owned-fixed":
