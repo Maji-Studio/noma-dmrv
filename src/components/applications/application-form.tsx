@@ -640,6 +640,7 @@ export function ApplicationForm({
       </FormSpine>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={routedServerError.footerError}

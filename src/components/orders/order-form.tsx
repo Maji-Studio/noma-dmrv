@@ -379,6 +379,7 @@ export function OrderForm({
       </FormSpine>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}

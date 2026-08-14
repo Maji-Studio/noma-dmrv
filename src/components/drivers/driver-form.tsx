@@ -30,6 +30,7 @@ export function DriverForm({
   const isEditMode = !!driver;
 
   const {
+    control,
     register,
     handleSubmit,
     formState: { errors },
@@ -89,6 +90,7 @@ export function DriverForm({
       </div>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}

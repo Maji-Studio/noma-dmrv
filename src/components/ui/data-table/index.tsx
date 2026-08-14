@@ -35,6 +35,31 @@ import {
 } from "@/config/list-controls";
 
 /* ------------------------------------------------------------------ */
+/*  Column meta                                                         */
+/* ------------------------------------------------------------------ */
+
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData, TValue> {
+    /** Keep the cell on one line (record codes, dates). */
+    nowrap?: boolean;
+    /**
+     * Pin the column to the right edge of the horizontal scrollport so it
+     * stays visible when the table overflows (actions, status). The pinned
+     * cell carries a leading hairline as the in-region overflow signal.
+     */
+    stickyEnd?: boolean;
+  }
+}
+
+// Solid backgrounds (not the alpha washes) because pinned cells scroll over
+// their neighbours; the hairline marks where the data region is cut off.
+const STICKY_END_CELL_CLASSES =
+  "sticky right-0 z-10 bg-[var(--panel-bg)] [border-left:var(--hair-3)] group-hover/row:bg-[var(--row-hover-bg-solid)]";
+const STICKY_END_HEADER_CLASSES =
+  "sticky right-0 z-10 bg-[var(--panel-head-bg-solid)] [border-left:var(--hair-3)]";
+
+/* ------------------------------------------------------------------ */
 /*  Data Table Context                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -435,7 +460,10 @@ function DataTableRoot<TData, TValue>({
                           // Mono uppercase micro-label — every label is GT Flexa
                           // Mono Medium per the Maji DS (incl. table headers).
                           "label-micro py-10 px-12 text-left text-[var(--color-text-secondary)]",
-                          isSortable && "cursor-pointer select-none hover:bg-[var(--clr-dark-purple-5)]"
+                          isSortable && "cursor-pointer select-none hover:bg-[var(--clr-dark-purple-5)]",
+                          header.column.columnDef.meta?.nowrap && "whitespace-nowrap",
+                          header.column.columnDef.meta?.stickyEnd &&
+                            STICKY_END_HEADER_CLASSES
                         )}
                         style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
                         onClick={isSortable ? header.column.getToggleSortingHandler() : undefined}
@@ -493,6 +521,9 @@ function DataTableRoot<TData, TValue>({
                   <tr
                     key={row.id}
                     className={cn(
+                      // group/row lets pinned cells mirror the row hover wash
+                      // with their solid background twin.
+                      "group/row",
                       tableRowVariants({
                         striped,
                         hoverable: hoverable || !!onRowClick,
@@ -510,9 +541,10 @@ function DataTableRoot<TData, TValue>({
                         : undefined
                     }
                     // A clickable row must be reachable and activatable by
-                    // keyboard, so expose it as a focusable button when
-                    // onRowClick is wired.
-                    role={onRowClick ? "button" : undefined}
+                    // keyboard: focusable with Enter/Space activation, but
+                    // WITHOUT role="button" — that would override the implicit
+                    // role="row" and sever the cell to column-header
+                    // association for screen readers.
                     tabIndex={onRowClick ? 0 : undefined}
                     onKeyDown={
                       onRowClick
@@ -525,7 +557,16 @@ function DataTableRoot<TData, TValue>({
                     data-state={row.getIsSelected() ? "selected" : undefined}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="py-8 px-12 body-small">
+                      <td
+                        key={cell.id}
+                        className={cn(
+                          "py-8 px-12 body-small",
+                          cell.column.columnDef.meta?.nowrap &&
+                            "whitespace-nowrap",
+                          cell.column.columnDef.meta?.stickyEnd &&
+                            STICKY_END_CELL_CLASSES
+                        )}
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}

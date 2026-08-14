@@ -137,7 +137,7 @@ test.describe("Facility + Reactor UI CRUD", () => {
     await reactorSearchBox.fill(reactorIdentifier);
 
     await expect(
-      page.getByRole("button", { name: reactorIdentifier }).first()
+      page.locator("table tbody tr").filter({ hasText: reactorIdentifier }).first()
     ).toBeVisible({ timeout: 10000 });
     await expect(
       page.locator("table tbody tr").filter({ hasText: reactorIdentifier })
@@ -197,7 +197,7 @@ test.describe("Facility + Reactor UI CRUD", () => {
 
     // Verify the new reactor appears in the filtered list.
     await expect(
-      page.getByRole("button", { name: reactorIdentifier }).first()
+      page.locator("table tbody tr").filter({ hasText: reactorIdentifier }).first()
     ).toBeVisible({ timeout: 10000 });
 
     void cleanupTestData;

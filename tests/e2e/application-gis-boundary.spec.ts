@@ -150,10 +150,10 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await waitForSideSheetClose(page);
 
   await page.getByLabel("Search applications").fill(fieldIdentifier);
-  await expect(page.locator("table tbody tr[role='button']")).toHaveCount(1, {
+  await expect(page.locator("table tbody tr[tabindex='0']")).toHaveCount(1, {
     timeout: COLD_COMPILE_TIMEOUT_MS,
   });
-  const applicationRow = page.locator("table tbody tr[role='button']").first();
+  const applicationRow = page.locator("table tbody tr[tabindex='0']").first();
   await applicationRow.click();
   await waitForSideSheet(page);
   // The saved panel prints the file name twice: once as the reference summary's

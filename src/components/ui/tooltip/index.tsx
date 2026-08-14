@@ -105,6 +105,9 @@ function InfoHint({
         aria-label={label}
         className={cn(
           "inline-flex shrink-0 items-center justify-center align-middle",
+          // WCAG 2.5.8 floor: the hit area stays 24px however small the glyph
+          // is, so the hint is reachable on touch.
+          "min-w-24 min-h-24",
           "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]",
           "transition-colors cursor-help",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-1",

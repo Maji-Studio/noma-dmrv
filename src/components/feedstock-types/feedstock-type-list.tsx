@@ -143,6 +143,7 @@ function createColumns(params: {
     },
     {
       accessorKey: "code",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
         <MutedValue archived={!!row.original.archivedAt}>
@@ -194,6 +195,7 @@ function createColumns(params: {
   if (canManage) {
     columns.push({
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex justify-end">
@@ -520,11 +522,14 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         open={!!sideSheet}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheet?.mode ?? "create"}
-        onModeChange={(mode) =>
+        onModeChange={(mode) => {
+          // Mode changes are navigation; a submit error from the previous
+          // visit must not resurface on the next edit entry.
+          setFormError(null);
           setSideSheet((current) =>
             current ? { ...current, mode, entity: current.entity } : null,
-          )
-        }
+          );
+        }}
         title={sideSheet?.mode === "create" ? "Create Feedstock Type" : sideSheetEntity?.code ?? ""}
         subtitle={sideSheet?.mode === "create" ? undefined : sideSheetEntity?.name}
         sections={sideSheet?.mode === "view" ? detailSections : undefined}

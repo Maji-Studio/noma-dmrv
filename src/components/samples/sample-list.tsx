@@ -113,6 +113,7 @@ function createColumns(
   return [
     {
       accessorKey: "sampleCode",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">
@@ -122,6 +123,7 @@ function createColumns(
     },
     {
       accessorKey: "samplingTime",
+      meta: { nowrap: true },
       header: "Sampling time",
       cell: ({ row }) => formatDateTime(row.original.samplingTime),
     },
@@ -168,6 +170,7 @@ function createColumns(
     },
     {
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end">

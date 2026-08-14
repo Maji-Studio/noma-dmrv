@@ -80,6 +80,7 @@ export function SupplierLocationForm({
   };
 
   const {
+    control,
     register,
     handleSubmit,
     watch,
@@ -279,6 +280,7 @@ export function SupplierLocationForm({
       </FormSection>
 
       <FormActions
+        control={control}
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
