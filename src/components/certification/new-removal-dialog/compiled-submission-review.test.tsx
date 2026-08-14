@@ -46,9 +46,9 @@ describe("CompiledSubmissionReview", () => {
             directSequestrationDatapoints: [
               {
                 componentId: "rtc-seq",
-                inputKey: "s_fraction",
-                magnitude: 0.91,
-                unit: "dimensionless",
+                inputKey: "product_mass",
+                magnitude: 910,
+                unit: "kg",
                 type: "REPORTED",
               },
             ],
@@ -84,6 +84,7 @@ describe("CompiledSubmissionReview", () => {
       "42 t.km",
       "Set in template",
       "2026-01-31T23:59:59.000Z",
+      "910 kg",
       "1 registry value source attached",
       "Durability measurements",
       "CB-1",
