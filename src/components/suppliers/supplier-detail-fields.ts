@@ -9,6 +9,22 @@ interface SupplierFallbackDistanceInput {
   locationsLoaded: boolean;
 }
 
+/**
+ * The one derivation of a supplier's effective transport distance: the
+ * default structured location wins; the supplier column remains the legacy
+ * fallback. Every surface showing "distance to facility" (list side sheet,
+ * detail page summary) must resolve through this, never read one column raw.
+ */
+export function resolveSupplierEffectiveDistanceKm({
+  defaultLocationDistanceKm,
+  legacySupplierDistanceKm,
+}: Omit<SupplierFallbackDistanceInput, "locationsLoaded">): number | null {
+  return (
+    positiveOrNull(defaultLocationDistanceKm) ??
+    positiveOrNull(legacySupplierDistanceKm)
+  );
+}
+
 /** The default structured location wins; the supplier column remains the legacy fallback. */
 export function buildSupplierFallbackDistanceField(
   {
@@ -26,9 +42,10 @@ export function buildSupplierFallbackDistanceField(
     };
   }
 
-  const effectiveDistanceKm =
-    positiveOrNull(defaultLocationDistanceKm) ??
-    positiveOrNull(legacySupplierDistanceKm);
+  const effectiveDistanceKm = resolveSupplierEffectiveDistanceKm({
+    defaultLocationDistanceKm,
+    legacySupplierDistanceKm,
+  });
 
   return {
     label: "Distance to facility",

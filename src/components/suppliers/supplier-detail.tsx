@@ -19,6 +19,7 @@ import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { SupplierLocationDialog } from "./supplier-location-dialog";
 import { resolveSupplierLocationDisplay } from "@/lib/supplier-location-display";
+import { resolveSupplierEffectiveDistanceKm } from "./supplier-detail-fields";
 
 interface SupplierDetailProps {
   supplierId: string;
@@ -48,6 +49,16 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
   };
 
   const isLoading = supplierLoading || locationsLoading;
+
+  // Same derivation as the list side sheet (supplier-list.tsx): default
+  // location first, legacy supplier column as fallback. The loading gate
+  // below guarantees locations are resolved before this renders.
+  const effectiveDistanceKm = resolveSupplierEffectiveDistanceKm({
+    defaultLocationDistanceKm:
+      locations.find((location) => location.isDefault)?.distanceFromFacilityKm ??
+      null,
+    legacySupplierDistanceKm: supplier?.distanceToFacilityKm ?? null,
+  });
 
   if (isLoading) {
     return <div className="body-large">Loading supplier details...</div>;
@@ -112,11 +123,13 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
           <div>
             <dt className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Distance to facility
-              <CertificationFieldTag />
+              <CertificationFieldTag
+                status={effectiveDistanceKm != null ? "satisfied" : "missing"}
+              />
             </dt>
             <dd className="body-medium mt-16">
-              {supplier.distanceToFacilityKm != null
-                ? `${supplier.distanceToFacilityKm} km`
+              {effectiveDistanceKm != null
+                ? `${effectiveDistanceKm} km`
                 : "Not set"}
             </dd>
           </div>
