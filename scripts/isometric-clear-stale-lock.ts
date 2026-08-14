@@ -25,6 +25,7 @@ import {
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
 } from "../src/lib/isometric/utils/constants";
+import { SUBMISSION_METADATA_KEYS } from "../src/lib/certification/submission-metadata";
 
 const PROVIDER = ISOMETRIC_PROVIDER;
 const SUBMISSION_TYPE = REMOVAL_SUBMISSION_TYPE;
@@ -83,6 +84,24 @@ async function main(): Promise<void> {
       `\nRow is not draft+locked (status=${latest.status}). Nothing to clear.`,
     );
     process.exit(0);
+  }
+
+  // Rejecting a draft whose attempt already reached the registry re-versions
+  // the supplier references on the next submit, so the pre-POST reconcile
+  // finds nothing and the registry gets duplicate entries. Refuse unless the
+  // operator has verified registry state and explicitly overrides.
+  const externalMutation = (latest.metadata as Record<string, unknown> | null)?.[
+    SUBMISSION_METADATA_KEYS.externalMutation
+  ];
+  const forceConfirmed = process.argv.includes("--force-confirmed");
+  if (
+    (externalMutation === "possible" || externalMutation === "confirmed") &&
+    !forceConfirmed
+  ) {
+    console.log(
+      `\nRefusing to clear: metadata.externalMutation=${externalMutation} - a registry write may already exist for this draft. Clearing re-versions the supplier refs and can duplicate registry entries. Verify the registry state first, then re-run with --force-confirmed to override.`,
+    );
+    process.exit(4);
   }
 
   const ageMs = Date.now() - latest.lockedAt.getTime();
