@@ -113,7 +113,10 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
         value: formatMassKg(storageLocation.biocharInventory.currentMassKg),
       },
       {
-        label: "Allocated to products",
+        // Lifetime running total, never decremented — qualified so it cannot
+        // be read as stock still on hand next to "Available biochar"
+        // (DR-002 / BB-26-001).
+        label: "Allocated to products, all time",
         value: formatMassKg(storageLocation.biocharInventory.allocatedToProductsKg),
       },
       {
@@ -135,7 +138,11 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
       value: formatMassKg(storageLocation.productInventory.currentMassKg),
     },
     {
-      label: "Biochar content",
+      // Lifetime running total of source biochar across every product ever
+      // stored here, never decremented on delivery — qualified so it cannot
+      // be read as stock still on hand next to "Current product mass"
+      // (DR-002 / PB-26-001).
+      label: "Biochar received, all time",
       value: formatMassKg(storageLocation.productInventory.biocharEquivalentKg),
     },
     {

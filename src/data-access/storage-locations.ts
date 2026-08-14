@@ -106,7 +106,15 @@ async function getStorageLocationLaneSummary(
           db
             .select({
               storageLocationId: biocharProducts.storageLocationId,
-              total: sumNumeric(biocharProducts.massKg),
+              // Same intake expression as the per-bin card derivation
+              // (storage-location-enrichment): blend mass PLUS added water.
+              // Delivered wet mass on the out side includes that water, so
+              // omitting it here structurally under-counted every product bin
+              // by its added water and surfaced phantom negative lane totals
+              // (DR-002 / PB-26-001).
+              total: sumNumeric(
+                sql`COALESCE(${biocharProducts.massKg}, 0) + COALESCE(${biocharProducts.waterAddedKg}, 0)`,
+              ),
             })
             .from(biocharProducts)
             .where(
