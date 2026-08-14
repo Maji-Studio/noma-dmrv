@@ -245,7 +245,9 @@ function SectionLabel({ title, accent }: { title: string; accent: string }) {
         className="inline-block size-[5px] shrink-0 opacity-60"
         style={{ backgroundColor: accent }}
       />
-      <span className="title-chapter-title text-[10px] text-[var(--color-white-25)] tracking-[0.12em]">
+      {/* white-50 composites to ~4.7:1 on the near-black gradient — the 10px
+          uppercase label needs the full 4.5:1 floor; white-25 measured ~2:1. */}
+      <span className="title-chapter-title text-[10px] text-[var(--color-white-50)] tracking-[0.12em]">
         {title}
       </span>
     </div>

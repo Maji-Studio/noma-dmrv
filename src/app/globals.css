@@ -231,10 +231,12 @@
   --color-border-secondary: var(--clr-dark-purple-20);
   --color-border-tertiary: var(--clr-dark-purple-10);
 
-  /* Text — plum alphas (same rule) */
+  /* Text — plum alphas (same rule). Tertiary must stay ≥60% ink: 50% composites
+     to ~3.8:1 on the warm field and fails the WCAG AA 4.5:1 floor for body-size
+     text; 60% measures ~5.3–5.4:1 on both cream and white. */
   --color-text-primary: var(--ink);
   --color-text-secondary: var(--clr-dark-purple-70);
-  --color-text-tertiary: var(--clr-dark-purple-50);
+  --color-text-tertiary: var(--clr-dark-purple-60);
   --color-text-white-primary: var(--color-white-100);
   --color-text-white-secondary: var(--color-white-75);
 

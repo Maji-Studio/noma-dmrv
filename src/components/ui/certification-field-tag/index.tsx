@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+import { CheckIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -29,6 +31,15 @@ const STATUS_DESCRIPTION: Record<CertFieldStatus, string> = {
   neutral: "Required for certification",
   missing: "Required for certification. Not provided.",
   satisfied: "Required for certification. Provided.",
+};
+
+// Provided/not-provided must not be signalled by chip hue alone (WCAG 1.4.1);
+// the glyph is the non-colour marker. Assistive tech gets the sr-only string,
+// so the icon stays decorative.
+const STATUS_GLYPHS: Record<CertFieldStatus, ReactNode> = {
+  neutral: null,
+  missing: <WarningIcon size={10} weight="bold" aria-hidden />,
+  satisfied: <CheckIcon size={10} weight="bold" aria-hidden />,
 };
 
 interface CertificationFieldTagProps {
@@ -61,11 +72,12 @@ export function CertificationFieldTag({
           // static position against <html>; inside a wide, horizontally-scrolled
           // table its border-box lands far to the right and inflates the document
           // scroll width, producing page-level horizontal scroll on mobile.
-          "relative body-caption border px-4 py-1",
+          "relative body-caption inline-flex items-center gap-2 border px-4 py-1",
           STATUS_STYLES[status],
           className,
         )}
       >
+        {STATUS_GLYPHS[status]}
         {label}
         <span className="sr-only">{explanation}</span>
       </span>
