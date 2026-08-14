@@ -1,7 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { RemovalTemplateDiagnosticModel } from "@/lib/certification/removal-template-diagnostic";
-import { RemovalTemplateLineageView } from "./removal-template-lineage-view";
+import {
+  IDENTITY_TRANSFORM_LABEL,
+  type RemovalTemplateDiagnosticModel,
+} from "@/lib/certification/removal-template-diagnostic";
+import { summarizeRemovalTemplateMappingOverview } from "./removal-template-diagnostic-status";
 import { RemovalTemplateMappingView } from "./removal-template-mapping-view";
 
 const model: RemovalTemplateDiagnosticModel = {
@@ -79,22 +82,23 @@ const model: RemovalTemplateDiagnosticModel = {
 };
 
 describe("Removal template diagnostic views", () => {
-  it("renders the matrix fields and keeps raw identifiers in disclosures", () => {
+  it("renders each input as a source-to-input wire row with full detail", () => {
     const html = renderToStaticMarkup(
       <RemovalTemplateMappingView model={model} />,
     );
 
     for (const expected of [
-      "Template input",
-      "Expected",
       "noma dMRV source",
+      "Isometric input",
       "Submission wire path",
       "Evidence role",
       "Inorganic carbon contents",
       "inorganic_carbon_contents",
       "Sample inorganicCarbonPercent[]",
       "Divide by 100",
+      "Durability evidence ledger",
       "Externally unconfirmed",
+      "Isometric confirmation is pending.",
       "Raw group identifiers",
       "Raw component identifiers",
     ]) {
@@ -105,15 +109,93 @@ describe("Removal template diagnostic views", () => {
     );
   });
 
-  it("renders the same row as a three-stage lineage", () => {
+  it("keeps identity transforms silent on the wire", () => {
+    const identityModel: RemovalTemplateDiagnosticModel = {
+      ...model,
+      groups: [
+        {
+          ...model.groups[0],
+          components: [
+            {
+              ...model.groups[0].components[0],
+              inputs: [
+                {
+                  ...model.groups[0].components[0].inputs[0],
+                  transform: IDENTITY_TRANSFORM_LABEL,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
     const html = renderToStaticMarkup(
-      <RemovalTemplateLineageView model={model} />,
+      <RemovalTemplateMappingView model={identityModel} />,
     );
 
-    expect(html).toContain("noma dMRV source");
-    expect(html).toContain("Transform and wire preparation");
-    expect(html).toContain("Isometric destination");
-    expect(html).toContain("Sample inorganicCarbonPercent[]");
-    expect(html).toContain("inorganic_carbon_contents");
+    expect(
+      html.match(new RegExp(IDENTITY_TRANSFORM_LABEL, "g")),
+    ).toHaveLength(1);
+  });
+
+  it("uses shared empty states for empty template groups and components", () => {
+    const emptyModel: RemovalTemplateDiagnosticModel = {
+      ...model,
+      groups: [
+        { ...model.groups[0], components: [] },
+        {
+          ...model.groups[0],
+          rawId: "rtg-2",
+          components: [
+            { ...model.groups[0].components[0], inputs: [] },
+          ],
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      <RemovalTemplateMappingView model={emptyModel} />,
+    );
+
+    expect(html).toContain("No components in this group");
+    expect(html).toContain("No inputs in this component");
+  });
+});
+
+describe("summarizeRemovalTemplateMappingOverview", () => {
+  it("maps template and optional-target statuses to tones", () => {
+    expect(
+      summarizeRemovalTemplateMappingOverview({
+        mapped: 1,
+        "registry-owned-fixed": 2,
+        "optional-not-present": 99,
+        "missing-noma-mapping": 3,
+        "unsupported-component": 4,
+        "template-contract-drift": 5,
+        "externally-unconfirmed-contract": 6,
+        "deprecated-incompatible": 7,
+      }),
+    ).toEqual({
+      toneCounts: { ok: 1, neutral: 101, attention: 25 },
+      total: 127,
+    });
+  });
+
+  it("returns an empty mapping summary when all statuses are zero", () => {
+    expect(
+      summarizeRemovalTemplateMappingOverview({
+        mapped: 0,
+        "registry-owned-fixed": 0,
+        "optional-not-present": 0,
+        "missing-noma-mapping": 0,
+        "unsupported-component": 0,
+        "template-contract-drift": 0,
+        "externally-unconfirmed-contract": 0,
+        "deprecated-incompatible": 0,
+      }),
+    ).toEqual({
+      toneCounts: { ok: 0, neutral: 0, attention: 0 },
+      total: 0,
+    });
   });
 });

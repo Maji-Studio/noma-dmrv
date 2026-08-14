@@ -1,15 +1,216 @@
-import type { RemovalTemplateDiagnosticModel } from "@/lib/certification/removal-template-diagnostic";
-import { RemovalTemplateDiagnosticStatusBadge } from "./removal-template-diagnostic-status";
+import {
+  ArrowDownIcon,
+  CaretDownIcon,
+  FlowArrowIcon,
+} from "@phosphor-icons/react/dist/ssr";
+import { EmptyState } from "@/components/ui";
+import {
+  IDENTITY_TRANSFORM_LABEL,
+  type RemovalTemplateDiagnosticInput,
+  type RemovalTemplateDiagnosticModel,
+} from "@/lib/certification/removal-template-diagnostic";
+import {
+  REMOVAL_TEMPLATE_STATUS_TONES,
+  REMOVAL_TEMPLATE_TONE_COLORS,
+  RemovalTemplateDiagnosticStatusBadge,
+} from "./removal-template-diagnostic-status";
 
-function EvidenceRoles({ roles }: { roles: string[] }) {
-  return roles.length > 0 ? (
-    <ul className="flex flex-col gap-2">
-      {roles.map((role) => (
-        <li key={role}>{role}</li>
-      ))}
-    </ul>
-  ) : (
-    <span className="text-[var(--color-text-tertiary)]">No bound Source role</span>
+function RawIdentifiers({
+  summary,
+  entries,
+}: {
+  summary: string;
+  entries: Array<[string, string]>;
+}) {
+  return (
+    <details className="body-caption text-[var(--color-text-tertiary)]">
+      <summary className="cursor-pointer">{summary}</summary>
+      <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-8 gap-y-2 font-mono">
+        {entries.flatMap(([term, value]) => [
+          <dt key={`${term}-dt`}>{term}</dt>,
+          <dd key={`${term}-dd`} className="break-all">
+            {value}
+          </dd>,
+        ])}
+      </dl>
+    </details>
+  );
+}
+
+function SourceNode({ input }: { input: RemovalTemplateDiagnosticInput }) {
+  // Registry-owned inputs carry no noma data: the "source" is the template's
+  // own fixed datapoint, drawn dashed so the eye reads "nothing flows in".
+  const registryOwned = input.status === "registry-owned-fixed";
+  return (
+    <div
+      className={`flex min-w-0 flex-col gap-4 border-[1.5px] bg-[var(--paper)] px-12 py-10 ${
+        registryOwned
+          ? "border-dashed border-[var(--clr-dark-purple-20)]"
+          : "border-[var(--clr-dark-purple-20)]"
+      }`}
+    >
+      <span className="label-micro text-[var(--color-text-tertiary)]">
+        noma dMRV source
+      </span>
+      <span className="body-small break-words text-[var(--color-text-primary)]">
+        {input.nomaSource}
+      </span>
+      {input.evidenceRoles.length > 0 && (
+        <span className="body-caption break-words text-[var(--color-text-tertiary)]">
+          {input.evidenceRoles.join(", ")}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function Wire({
+  input,
+  tone,
+}: {
+  input: RemovalTemplateDiagnosticInput;
+  tone: keyof typeof REMOVAL_TEMPLATE_TONE_COLORS;
+}) {
+  const color = REMOVAL_TEMPLATE_TONE_COLORS[tone];
+  const broken = tone === "attention";
+  const transform =
+    input.transform === IDENTITY_TRANSFORM_LABEL ? null : input.transform;
+  return (
+    <>
+      {/* Horizontal wire on md+, vertical connector when the nodes stack. */}
+      <div
+        aria-hidden
+        className="hidden min-w-0 flex-col items-stretch justify-center gap-4 md:flex"
+      >
+        {transform && (
+          <span className="label-micro text-center break-words text-[var(--color-text-tertiary)]">
+            {transform}
+          </span>
+        )}
+        <span className="flex items-center">
+          <span
+            className="h-0 flex-1 border-t-[1.5px]"
+            style={{
+              borderColor: color,
+              borderTopStyle: broken ? "dashed" : "solid",
+            }}
+          />
+          <span
+            className="size-0 border-y-[4px] border-l-[6px] border-y-transparent"
+            style={{ borderLeftColor: color }}
+          />
+        </span>
+      </div>
+      <div aria-hidden className="flex items-center gap-8 pl-12 md:hidden">
+        <ArrowDownIcon size={12} weight="bold" style={{ color }} />
+        {transform && (
+          <span className="label-micro text-[var(--color-text-tertiary)]">
+            {transform}
+          </span>
+        )}
+      </div>
+    </>
+  );
+}
+
+function DestinationNode({
+  input,
+  tone,
+}: {
+  input: RemovalTemplateDiagnosticInput;
+  tone: keyof typeof REMOVAL_TEMPLATE_TONE_COLORS;
+}) {
+  return (
+    <div
+      className="flex min-w-0 flex-col gap-4 border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-12 py-10"
+      style={{
+        borderLeftWidth: "3px",
+        borderLeftColor: REMOVAL_TEMPLATE_TONE_COLORS[tone],
+      }}
+    >
+      <span className="flex items-center justify-between gap-8">
+        <span className="label-micro text-[var(--color-text-tertiary)]">
+          Isometric input
+        </span>
+        <CaretDownIcon
+          size={12}
+          weight="bold"
+          aria-hidden
+          className="shrink-0 text-[var(--color-icon-secondary)] transition-transform group-open:rotate-180"
+        />
+      </span>
+      <span className="body-small break-words text-[var(--color-text-primary)]">
+        {input.label}
+      </span>
+      <code className="body-caption text-[var(--color-text-tertiary)]">
+        <span className="break-all">{input.inputKey}</span>{" "}
+        <span className="whitespace-nowrap">· {input.expected.unit}</span>
+      </code>
+      {!input.presentInTemplate && (
+        <span className="body-caption text-[var(--st-wait)]">
+          Required locally, absent from template
+        </span>
+      )}
+    </div>
+  );
+}
+
+function WireRow({ input }: { input: RemovalTemplateDiagnosticInput }) {
+  const tone = REMOVAL_TEMPLATE_STATUS_TONES[input.status];
+  return (
+    <details className="group">
+      <summary className="grid cursor-pointer list-none gap-6 [&::-webkit-details-marker]:hidden md:grid-cols-[minmax(0,5fr)_minmax(90px,2fr)_minmax(0,5fr)] md:gap-0">
+        <SourceNode input={input} />
+        <Wire input={input} tone={tone} />
+        <DestinationNode input={input} tone={tone} />
+      </summary>
+      <div className="mt-6 grid gap-x-16 gap-y-8 border-[1.5px] border-dashed border-[var(--clr-dark-purple-20)] px-12 py-10 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
+            Expected
+          </span>
+          <span className="body-caption text-[var(--color-text-secondary)]">
+            {input.expected.dataShape} · {input.expected.quantityKind} ·{" "}
+            {input.expected.unit}
+          </span>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
+            Transform
+          </span>
+          <span className="body-caption text-[var(--color-text-secondary)]">
+            {input.transform}
+          </span>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
+            Evidence role
+          </span>
+          <span className="body-caption text-[var(--color-text-secondary)]">
+            {input.evidenceRoles.join(", ") || "No bound Source role"}
+          </span>
+        </div>
+        <div className="flex flex-col gap-2 sm:col-span-2">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
+            Submission wire path
+          </span>
+          <span className="body-caption font-mono break-all text-[var(--color-text-secondary)]">
+            {input.wirePath}
+          </span>
+        </div>
+        <div className="flex flex-col gap-4 sm:col-span-2">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
+            Status
+          </span>
+          <span className="flex flex-wrap items-center gap-8">
+            <RemovalTemplateDiagnosticStatusBadge status={input.status} />
+            <span className="body-caption text-[var(--color-text-secondary)]">
+              {input.statusDetail}
+            </span>
+          </span>
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -21,9 +222,10 @@ export function RemovalTemplateMappingView({
   return (
     <div className="flex flex-col gap-20">
       <div className="flex flex-col gap-4">
-        <h3 className="title-heading-3">Input mapping matrix</h3>
+        <h3 className="title-heading-3">Input mapping</h3>
         <p className="body-small text-[var(--color-text-secondary)]">
-          Each row is one input in the active Isometric Removal template.
+          Each row wires one noma dMRV source into one input of the active
+          Isometric Removal template. Select a row for its wire detail.
         </p>
       </div>
 
@@ -46,105 +248,68 @@ export function RemovalTemplateMappingView({
                 {group.label}
               </h4>
             </div>
-            <details className="body-caption text-[var(--color-text-tertiary)]">
-              <summary className="cursor-pointer">Raw group identifiers</summary>
-              <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-8 gap-y-2 font-mono">
-                <dt>Key</dt>
-                <dd>{group.key}</dd>
-                <dt>ID</dt>
-                <dd>{group.rawId}</dd>
-              </dl>
-            </details>
+            <RawIdentifiers
+              summary="Raw group identifiers"
+              entries={[
+                ["Key", group.key],
+                ["ID", group.rawId],
+              ]}
+            />
           </div>
+
+          {group.components.length === 0 && (
+            <EmptyState
+              icon={<FlowArrowIcon size={32} weight="bold" aria-hidden />}
+              title="No components in this group"
+              padding="sm"
+            />
+          )}
 
           {group.components.map((component) => (
             <div
               key={component.raw.componentId}
               className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]"
             >
-              <div className="flex flex-wrap items-start justify-between gap-12 border-b border-[var(--color-border-tertiary)] bg-[var(--sea)] px-16 py-12">
-                <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-x-12 gap-y-6 border-b border-[var(--color-border-tertiary)] bg-[var(--sea)] px-12 py-10">
+                <div className="flex min-w-0 flex-col gap-4">
                   <h5 className="body-medium text-[var(--color-text-primary)]">
                     {component.label}
                   </h5>
-                  <details className="body-caption text-[var(--color-text-tertiary)]">
-                    <summary className="cursor-pointer">Raw component identifiers</summary>
-                    <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-8 gap-y-2 font-mono">
-                      <dt>Blueprint</dt>
-                      <dd>{component.blueprintKey}</dd>
-                      <dt>Component ID</dt>
-                      <dd>{component.raw.componentId}</dd>
-                    </dl>
-                  </details>
+                  <RawIdentifiers
+                    summary="Raw component identifiers"
+                    entries={[
+                      ["Blueprint", component.blueprintKey],
+                      ["Component ID", component.raw.componentId],
+                    ]}
+                  />
                 </div>
-                <div className="flex max-w-[420px] flex-col items-end gap-4 text-right">
-                  <RemovalTemplateDiagnosticStatusBadge status={component.status} />
-                  <p className="body-caption text-[var(--color-text-secondary)]">
+                <div className="ml-auto flex min-w-0 flex-col items-end gap-4 text-right">
+                  <RemovalTemplateDiagnosticStatusBadge
+                    status={component.status}
+                  />
+                  <p className="body-caption max-w-[420px] text-[var(--color-text-secondary)]">
                     {component.statusDetail}
                   </p>
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1180px] table-fixed text-left">
-                  <thead className="label-micro text-[var(--color-text-tertiary)]">
-                    <tr className="border-b border-[var(--color-border-tertiary)]">
-                      <th className="w-[180px] px-12 py-10">Template input</th>
-                      <th className="w-[150px] px-12 py-10">Expected</th>
-                      <th className="w-[180px] px-12 py-10">noma dMRV source</th>
-                      <th className="w-[130px] px-12 py-10">Transform</th>
-                      <th className="w-[220px] px-12 py-10">Submission wire path</th>
-                      <th className="w-[150px] px-12 py-10">Evidence role</th>
-                      <th className="w-[170px] px-12 py-10">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="body-caption">
-                    {component.inputs.map((input) => (
-                      <tr
-                        key={input.inputKey}
-                        className="align-top border-b border-[var(--color-border-tertiary)] last:border-b-0"
-                      >
-                        <td className="px-12 py-10">
-                          <p className="body-small text-[var(--color-text-primary)]">
-                            {input.label}
-                          </p>
-                          <code className="body-caption break-all text-[var(--color-text-tertiary)]">
-                            {input.inputKey}
-                          </code>
-                          {!input.presentInTemplate && (
-                            <p className="mt-4 text-[var(--st-wait)]">
-                              Required locally, absent from template
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-12 py-10">
-                          <p>{input.expected.dataShape}</p>
-                          <p>{input.expected.quantityKind}</p>
-                          <p className="font-mono text-[var(--color-text-secondary)]">
-                            {input.expected.unit}
-                          </p>
-                        </td>
-                        <td className="px-12 py-10">{input.nomaSource}</td>
-                        <td className="px-12 py-10">{input.transform}</td>
-                        <td className="px-12 py-10 font-mono break-words text-[var(--color-text-secondary)]">
-                          {input.wirePath}
-                        </td>
-                        <td className="px-12 py-10">
-                          <EvidenceRoles roles={input.evidenceRoles} />
-                        </td>
-                        <td className="px-12 py-10">
-                          <div className="flex flex-col items-start gap-6">
-                            <RemovalTemplateDiagnosticStatusBadge status={input.status} />
-                            <p className="text-[var(--color-text-secondary)]">
-                              {input.statusDetail}
-                            </p>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {component.inputs.length === 0 ? (
+                <div className="p-12">
+                  <EmptyState
+                    icon={<FlowArrowIcon size={32} weight="bold" aria-hidden />}
+                    title="No inputs in this component"
+                    padding="sm"
+                  />
+                </div>
+              ) : (
+                <ol className="flex flex-col gap-10 p-12">
+                  {component.inputs.map((input) => (
+                    <li key={input.inputKey}>
+                      <WireRow input={input} />
+                    </li>
+                  ))}
+                </ol>
+              )}
             </div>
           ))}
         </section>

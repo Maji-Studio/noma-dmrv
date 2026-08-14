@@ -17,6 +17,57 @@ export const REMOVAL_TEMPLATE_STATUS_LABELS: Record<
   "deprecated-incompatible": "Deprecated / incompatible",
 };
 
+/**
+ * Three visual tones summarize the eight statuses wherever a wire, edge, or
+ * bar segment can only carry a color: data flows (ok), the registry supplies
+ * the value itself (neutral), or the mapping needs platform attention.
+ */
+export type RemovalTemplateStatusTone = "ok" | "neutral" | "attention";
+
+export const REMOVAL_TEMPLATE_STATUS_TONES: Record<
+  RemovalTemplateDiagnosticStatus,
+  RemovalTemplateStatusTone
+> = {
+  mapped: "ok",
+  "registry-owned-fixed": "neutral",
+  "optional-not-present": "neutral",
+  "missing-noma-mapping": "attention",
+  "unsupported-component": "attention",
+  "template-contract-drift": "attention",
+  "externally-unconfirmed-contract": "attention",
+  "deprecated-incompatible": "attention",
+};
+
+export const REMOVAL_TEMPLATE_TONE_COLORS: Record<
+  RemovalTemplateStatusTone,
+  string
+> = {
+  ok: "var(--st-ok)",
+  neutral: "var(--st-off)",
+  attention: "var(--st-wait)",
+};
+
+export function summarizeRemovalTemplateMappingOverview(
+  counts: Record<RemovalTemplateDiagnosticStatus, number>,
+): {
+  toneCounts: Record<RemovalTemplateStatusTone, number>;
+  total: number;
+} {
+  const toneCounts: Record<RemovalTemplateStatusTone, number> = {
+    ok: 0,
+    neutral: 0,
+    attention: 0,
+  };
+  for (const [status, count] of Object.entries(counts)) {
+    const diagnosticStatus = status as RemovalTemplateDiagnosticStatus;
+    toneCounts[REMOVAL_TEMPLATE_STATUS_TONES[diagnosticStatus]] += count;
+  }
+  return {
+    toneCounts,
+    total: toneCounts.ok + toneCounts.neutral + toneCounts.attention,
+  };
+}
+
 const STATUS_CLASSES: Record<RemovalTemplateDiagnosticStatus, string> = {
   mapped: "border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] text-[var(--st-ok)]",
   "registry-owned-fixed":
