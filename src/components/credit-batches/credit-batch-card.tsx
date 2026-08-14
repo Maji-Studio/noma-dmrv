@@ -3,6 +3,7 @@
 import { formatDateRange } from "@/lib/format-utils";
 import {
   CertificateIcon,
+  EyeIcon,
   PencilSimpleIcon,
   TrashIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -48,6 +49,11 @@ export function CreditBatchCard({
             label={`Actions for credit batch ${creditBatch.code}`}
             actions={[
               {
+                label: "View details",
+                icon: <EyeIcon size={16} />,
+                onSelect: () => onView(creditBatch),
+              },
+              {
                 label: "Edit",
                 icon: <PencilSimpleIcon size={16} />,
                 onSelect: () => onEdit(creditBatch),
@@ -65,8 +71,24 @@ export function CreditBatchCard({
         {/* Feedstock is the production cohort's identity; facility is already
             fixed by the page context and deliberately not repeated here. */}
         <div className="flex flex-col gap-4">
+          {/* The card's pointer target is the whole article; this button is
+              the keyboard and screen-reader route to the same view action
+              (the article itself must not be role="button": it contains the
+              actions menu, and nested interactive controls are invalid). */}
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
-            {creditBatch.feedstockTypeName ?? "Feedstock not set"}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onView(creditBatch);
+              }}
+              className="cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-2"
+            >
+              {creditBatch.feedstockTypeName ?? "Feedstock not set"}
+              <span className="sr-only">
+                {`, view credit batch ${creditBatch.code}`}
+              </span>
+            </button>
           </h3>
           <p className="body-small text-[var(--color-text-secondary)]">
             {formatDateRange(creditBatch.startDate, creditBatch.endDate)}

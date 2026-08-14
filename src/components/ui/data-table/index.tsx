@@ -510,9 +510,10 @@ function DataTableRoot<TData, TValue>({
                         : undefined
                     }
                     // A clickable row must be reachable and activatable by
-                    // keyboard, so expose it as a focusable button when
-                    // onRowClick is wired.
-                    role={onRowClick ? "button" : undefined}
+                    // keyboard: focusable with Enter/Space activation, but
+                    // WITHOUT role="button" — that would override the implicit
+                    // role="row" and sever the cell to column-header
+                    // association for screen readers.
                     tabIndex={onRowClick ? 0 : undefined}
                     onKeyDown={
                       onRowClick

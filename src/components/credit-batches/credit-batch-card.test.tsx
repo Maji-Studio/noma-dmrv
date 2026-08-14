@@ -60,11 +60,13 @@ describe("CreditBatchCard", () => {
     view.props.onClick();
     menu?.props.actions[0]?.onSelect?.();
     menu?.props.actions[1]?.onSelect?.();
+    menu?.props.actions[2]?.onSelect?.();
 
     expect(onView).toHaveBeenCalledWith(creditBatch);
     expect(onEdit).toHaveBeenCalledWith(creditBatch);
     expect(onDelete).toHaveBeenCalledWith(creditBatch.id);
     expect(menu?.props.actions.map(({ label, destructive }) => [label, destructive])).toEqual([
+      ["View details", undefined],
       ["Edit", undefined],
       ["Delete", true],
     ]);
