@@ -22,7 +22,7 @@ import {
   CaretDownIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
-import { formatCount } from "@/lib/copy-utils";
+import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import type { SchemaArea, SchemaColumnInfo, SchemaRelationship, SchemaTableInfo } from "@/lib/schema/catalog";
 import columnExamples from "@/lib/schema/column-examples.json";
 import columnDescriptions from "@/lib/schema/column-descriptions.json";
@@ -114,14 +114,20 @@ const columnDefs = [
   }),
   columnHelper.accessor("hasDefault", {
     header: "Default",
-    cell: (info) => <span className="text-[var(--color-text-tertiary)]">{info.getValue() ? "Yes" : "None"}</span>,
+    cell: (info) => <span className="text-[var(--color-text-tertiary)]">{info.getValue() ? "Yes" : "No"}</span>,
   }),
   columnHelper.accessor("example", {
     header: "Example",
     enableSorting: false,
     cell: (info) => {
       const val = info.getValue();
-      if (!val) return <span className="text-[var(--color-text-tertiary)]">None</span>;
+      if (!val) {
+        return (
+          <span className="text-[var(--color-text-tertiary)]">
+            {MISSING_VALUE.none}
+          </span>
+        );
+      }
       return (
         <code className="text-[var(--color-text-secondary)] break-all" title={val}>
           {val.length > 40 ? val.slice(0, 37) + "..." : val}
@@ -134,7 +140,13 @@ const columnDefs = [
     enableSorting: false,
     cell: (info) => {
       const val = info.getValue();
-      if (!val) return <span className="text-[var(--color-text-tertiary)]">Not available</span>;
+      if (!val) {
+        return (
+          <span className="text-[var(--color-text-tertiary)]">
+            {MISSING_VALUE.notAvailable}
+          </span>
+        );
+      }
       return (
         <span className="body-small text-[var(--color-text-secondary)]" title={val}>
           {val.length > 60 ? val.slice(0, 57) + "..." : val}

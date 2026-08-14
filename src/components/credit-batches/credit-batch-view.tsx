@@ -21,6 +21,7 @@ import { formatWetDryMass } from "@/lib/mass-moisture";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
 import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {
   return value === "200_year" ? "200 years" : "1,000 years";
@@ -226,11 +227,11 @@ export function creditBatchSheetSections({
               },
               {
                 label: "Preview component",
-                value: preview?.componentKey ?? "Not available",
+                value: preview?.componentKey ?? MISSING_VALUE.notAvailable,
               },
               {
                 label: "Preview formula",
-                value: preview?.formulaVersion ?? "Not available",
+                value: preview?.formulaVersion ?? MISSING_VALUE.notAvailable,
               },
               {
                 label: "Preview authority",

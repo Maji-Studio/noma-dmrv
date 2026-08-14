@@ -22,6 +22,7 @@ import {
   type DurabilitySummaryEligibility,
 } from "@/lib/certification/durability-batch-summary";
 import type { ValueWithStdDev } from "@/lib/isometric/utils/durability-aggregation";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 type Tone = "ok" | "wait" | "bad" | "off";
 
@@ -74,14 +75,15 @@ function ReadinessChip({
 
 /**
  * Format a submitted mean ± sample std-dev for display. `"0.412 ± 0.018"`, or
- * just the mean when there's a single replicate (no std-dev), or `"—"` when the
+ * just the mean when there's a single replicate (no std-dev), or "Not available"
+ * when the
  * batch has no usable replicate for the figure.
  */
 export function formatDurabilityStat(
   stat: ValueWithStdDev | null,
   digits = 3,
 ): string {
-  if (stat == null) return "Not available";
+  if (stat == null) return MISSING_VALUE.notAvailable;
   const mean = stat.mean.toFixed(digits);
   return stat.stdDev == null ? mean : `${mean} ± ${stat.stdDev.toFixed(digits)}`;
 }

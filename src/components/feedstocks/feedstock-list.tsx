@@ -21,6 +21,7 @@ import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate, formatDistanceKm, formatMass, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
@@ -91,7 +92,7 @@ function createColumns(
       header: "Supplier",
       cell: ({ row }) => (
         <div className="flex flex-col">
-          <span>{row.original.supplierName || "Not recorded"}</span>
+          <span>{row.original.supplierName || MISSING_VALUE.notRecorded}</span>
           {row.original.supplierCode && (
             <span className="body-small text-[var(--color-text-tertiary)]">
               {row.original.supplierCode}
@@ -105,7 +106,7 @@ function createColumns(
       header: "Feedstock type",
       cell: ({ row }) => (
         <div className="flex flex-col">
-          <span>{row.original.feedstockTypeName || "Not recorded"}</span>
+          <span>{row.original.feedstockTypeName || MISSING_VALUE.notRecorded}</span>
           {row.original.feedstockTypeCategory && (
             <span className="body-small text-[var(--color-text-tertiary)] capitalize">
               {row.original.feedstockTypeCategory}
@@ -134,7 +135,11 @@ function createColumns(
       accessorKey: "storageLocationName",
       header: "Storage bin",
       cell: ({ row }) => (
-        <span>{row.original.storageLocationCode ?? row.original.storageLocationName ?? "Not set"}</span>
+        <span>
+          {row.original.storageLocationCode ??
+            row.original.storageLocationName ??
+            MISSING_VALUE.notSet}
+        </span>
       ),
     },
     {
@@ -584,7 +589,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
                 label: "Distance (km)",
                 ...certificationDetailField("feedstock", "transportDistanceKm"),
                 // Status from the raw column, not the formatted string — the
-                // "—" fallback is truthy and would falsely read as satisfied.
+                // "Not recorded" fallback is truthy and would falsely read as satisfied.
                 certifyStatus: resolveCertFieldStatus(
                   true,
                   sideSheetEntity.transportDistanceKm !== null,

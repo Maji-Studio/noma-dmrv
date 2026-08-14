@@ -35,6 +35,7 @@ import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
 import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // ============================================
 // Column Definitions
@@ -67,7 +68,7 @@ function createColumns(
       header: "Crop type",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.cropType || "Not recorded"}
+          {row.original.cropType || MISSING_VALUE.notRecorded}
         </span>
       ),
     },

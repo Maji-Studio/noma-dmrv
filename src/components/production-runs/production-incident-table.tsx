@@ -26,6 +26,7 @@ import {
 } from "@/schemas/production-incidents";
 import type { ProductionIncidentWithRelations } from "@/data-access/production-incidents";
 import { formatDateTime } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface ProductionIncidentTableProps {
   productionRunId: string;
@@ -153,10 +154,16 @@ export function ProductionIncidentTable({
                     {formatDateTime(incident.incidentTime)}
                   </td>
                   <td className="py-8 pr-12">
-                    {incident.severity ? formatProductionIncidentSeverity(incident.severity) : "Not recorded"}
+                    {incident.severity
+                      ? formatProductionIncidentSeverity(incident.severity)
+                      : MISSING_VALUE.notRecorded}
                   </td>
-                  <td className="py-8 pr-12">{incident.reactorIdentifier ?? "Not recorded"}</td>
-                  <td className="py-8 pr-12">{incident.operatorName ?? "Not recorded"}</td>
+                  <td className="py-8 pr-12">
+                    {incident.reactorIdentifier ?? MISSING_VALUE.notRecorded}
+                  </td>
+                  <td className="py-8 pr-12">
+                    {incident.operatorName ?? MISSING_VALUE.notRecorded}
+                  </td>
                   <td className="py-8 pr-12 max-w-[360px] whitespace-normal">
                     {incident.description}
                   </td>

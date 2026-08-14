@@ -2,6 +2,7 @@ import type { RemovalCompilationView } from "@/fn/certification";
 import { Button } from "@/components/ui";
 import { formatCount } from "@/lib/copy-utils";
 import type { ReactNode } from "react";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   CompilationBlockers,
   CompilationWarnings,
@@ -141,8 +142,8 @@ export function CompiledSubmissionReview({
 
       <ReviewSection title="Registry plan">
         <p className="body-small text-[var(--color-text-secondary)]">
-          {review.reportingWindow.startedOn || "Not recorded"} to{" "}
-          {review.reportingWindow.completedOn || "Not recorded"}
+          {review.reportingWindow.startedOn || MISSING_VALUE.notRecorded} to{" "}
+          {review.reportingWindow.completedOn || MISSING_VALUE.notRecorded}
         </p>
         <p className="body-small font-mono text-[var(--color-text-primary)]">
           {review.intendedPostTargets.map(registryTargetLabel).join(" · ") ||
@@ -255,7 +256,9 @@ export function CompiledSubmissionReview({
             {review.measurementSamples.map((sample) => (
               <li key={sample.operationKey}>
                 <span className="font-medium">{sample.label}</span> ·{" "}
-                <span className="font-mono">{sample.measuredAt ?? "Not recorded"}</span>
+                <span className="font-mono">
+                  {sample.measuredAt ?? MISSING_VALUE.notRecorded}
+                </span>
                 <span className="ml-6 body-caption text-[var(--color-text-tertiary)]">
                   {formatCount(sample.values.length, "recorded value")}
                 </span>

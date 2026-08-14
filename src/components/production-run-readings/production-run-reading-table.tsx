@@ -21,6 +21,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { formatFacilityDateTimeWithOffset } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 const TABLE_MAX_HEIGHT_CLASS = "max-h-[420px]";
 const COMPACT_TABLE_MAX_HEIGHT_CLASS = "max-h-[240px]";
@@ -30,7 +31,7 @@ const COMPACT_TABLE_MAX_HEIGHT_CLASS = "max-h-[240px]";
 // ============================================
 
 function formatNum(v: number | null, decimals = 1): string {
-  if (v == null) return "Not recorded";
+  if (v == null) return MISSING_VALUE.notRecorded;
   return v.toFixed(decimals);
 }
 

@@ -462,11 +462,9 @@ export interface Build1000YearSequestrationSampleArgs {
  * Build the `biochar_production_batch` measurement sample carrying the 1000-year
  * inputs as evidence: paired total carbon, measured inorganic carbon, and
  * `s_fraction` values from one local Sample. Carbon response datapoints bind
- * their GHG inputs. Product mass is deliberately not a property of the physical
- * Sample. The sample's
- * `dimensionless_ratio` s_fraction values remain data-quality evidence while
- * the orchestrator posts matching `dimensionless` datapoints for that LIST
- * input. Pure — no I/O. ⚠️ Sandbox-gated (see header).
+ * their GHG inputs, including the registry-owned `dimensionless_ratio`
+ * `s_fraction` field. Product mass is deliberately not a property of the
+ * physical Sample. Pure — no I/O. ⚠️ Sandbox-gated (see header).
  */
 export function build1000YearSequestrationSample(
   args: Build1000YearSequestrationSampleArgs,

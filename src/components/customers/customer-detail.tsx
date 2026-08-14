@@ -17,6 +17,7 @@ import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { CustomerLocationDialog } from "./customer-location-dialog";
 import type { EditableCustomerLocation } from "./customer-location-form";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface CustomerDetailProps {
   customerId: string;
@@ -89,19 +90,25 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Crop type
             </dt>
-            <dd className="body-medium mt-16">{customer.cropType || "Not recorded"}</dd>
+            <dd className="body-medium mt-16">
+              {customer.cropType || MISSING_VALUE.notRecorded}
+            </dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Contact email
             </dt>
-            <dd className="body-medium mt-16">{customer.contactEmail || "Not recorded"}</dd>
+            <dd className="body-medium mt-16">
+              {customer.contactEmail || MISSING_VALUE.notRecorded}
+            </dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Contact phone
             </dt>
-            <dd className="body-medium mt-16">{customer.contactPhone || "Not recorded"}</dd>
+            <dd className="body-medium mt-16">
+              {customer.contactPhone || MISSING_VALUE.notRecorded}
+            </dd>
           </div>
           {customer.address && (
             <div className="md:col-span-3">
@@ -194,29 +201,29 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                   >
                     <td className="px-16 py-12 body-medium">{location.name ?? "Unnamed location"}</td>
                     <td className="px-16 py-12 body-medium">
-                      {location.country || "Not recorded"}
+                      {location.country || MISSING_VALUE.notRecorded}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.stateRegion || "Not recorded"}
+                      {location.stateRegion || MISSING_VALUE.notRecorded}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.city || "Not recorded"}
+                      {location.city || MISSING_VALUE.notRecorded}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.address || "Not recorded"}
+                      {location.address || MISSING_VALUE.notRecorded}
                     </td>
                     <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
                       {location.gpsLatitude !== null && location.gpsLongitude !== null
                         ? `${location.gpsLatitude.toFixed(4)}, ${location.gpsLongitude.toFixed(4)}`
-                        : "Not set"}
+                        : MISSING_VALUE.notSet}
                     </td>
                     <td className="px-16 py-12 body-medium">
-                      {location.defaultSoilTemperatureC ?? "Not set"}
+                      {location.defaultSoilTemperatureC ?? MISSING_VALUE.notSet}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.distanceFromFacilityKm != null
                         ? `${location.distanceFromFacilityKm} km`
-                        : "Not set"}
+                        : MISSING_VALUE.notSet}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.isDefault ? "Yes" : "No"}

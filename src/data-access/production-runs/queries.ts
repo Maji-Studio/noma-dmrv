@@ -548,11 +548,13 @@ export async function getProductionRunStats(
 
   return {
     totalRuns: statusCounts.reduce((total, row) => total + Number(row.count), 0),
-    totalBiocharKg: Number(stats.totalBiocharKg) || 0,
+    totalBiocharKg:
+      stats.totalBiocharKg == null ? null : Number(stats.totalBiocharKg),
     totalBiocharDryKg:
-      Number(stats.unresolvedBiocharDryCount) > 0
+      Number(stats.unresolvedBiocharDryCount) > 0 ||
+      stats.totalBiocharDryKg == null
         ? null
-        : Number(stats.totalBiocharDryKg) || 0,
+        : Number(stats.totalBiocharDryKg),
     totalFeedstockWetKg: Number(feedstockStats.totalFeedstockWetKg) || 0,
     runningCount: statusMap["running"] ?? 0,
     completedCount: statusMap["complete"] ?? 0,
@@ -588,13 +590,18 @@ export async function getFacilityEnergyTotals(
 
   return {
     runCount: Number(row.runCount),
-    electricityKwh: Number(row.electricityKwh) || 0,
+    electricityKwh:
+      row.electricityKwh == null ? null : Number(row.electricityKwh),
     // Genset ("summarized") = generator diesel + preprocessing fuel; startup =
     // reactor-startup / plant diesel only. Mirrors the submission split in
     // aggregation.ts (docs/isometric/changes.md).
     gensetLitres:
-      (Number(row.gensetLitres) || 0) + (Number(row.preprocessingLitres) || 0),
-    startupLitres: Number(row.operationLitres) || 0,
+      row.gensetLitres == null && row.preprocessingLitres == null
+        ? null
+        : (Number(row.gensetLitres) || 0) +
+          (Number(row.preprocessingLitres) || 0),
+    startupLitres:
+      row.operationLitres == null ? null : Number(row.operationLitres),
   };
 }
 
