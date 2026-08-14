@@ -865,6 +865,7 @@ export function ProductionRunForm({
       {children}
 
       <FormActions
+        control={control}
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

@@ -17,6 +17,14 @@ import * as React from "react";
 interface SideSheetActions {
   /** Guarded Cancel: edit mode returns to the read view, create mode closes. */
   cancel: () => void;
+  /**
+   * Authoritative dirty report from the form's own state (RHF
+   * `formState.isDirty`). The sheet's native input/change heuristic misses
+   * programmatic `setValue` from custom widgets (entity selects, radio cards,
+   * pickers), so forms report the owner's verdict here and the guard uses
+   * whichever says dirty.
+   */
+  reportDirty: (dirty: boolean) => void;
 }
 
 const SideSheetActionsContext = React.createContext<SideSheetActions | null>(

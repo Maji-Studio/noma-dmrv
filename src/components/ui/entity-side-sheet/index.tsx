@@ -114,10 +114,13 @@ function EntitySideSheet({
   const isViewMode = mode === "view";
 
   const bodyRef = React.useRef<HTMLDivElement>(null);
-  // Dirty heuristic: any native input/change event inside the body while in
-  // edit/create mode. Programmatic setValue from custom widgets is not seen,
-  // so the guard can under-trigger there, but it never blocks a clean close.
+  // Dirty tracking is two sources OR-ed together: a native input/change
+  // heuristic (covers plain fields even in forms that don't report), and the
+  // form's authoritative RHF `formState.isDirty` via `reportDirty` (covers
+  // programmatic setValue from custom widgets the heuristic can't see).
   const dirtyRef = React.useRef(false);
+  const reportedDirtyRef = React.useRef(false);
+  const isDirty = () => dirtyRef.current || reportedDirtyRef.current;
   // A close/back attempt that hit unsaved changes and awaits confirmation.
   const [pendingDiscard, setPendingDiscard] = React.useState<
     "close" | "view" | null
@@ -130,6 +133,7 @@ function EntitySideSheet({
   // the first field so keyboard entry starts at the top of the form.
   React.useEffect(() => {
     dirtyRef.current = false;
+    reportedDirtyRef.current = false;
     setPendingDiscard(null);
     if (!open) return;
     const body = bodyRef.current;
@@ -138,7 +142,7 @@ function EntitySideSheet({
     if (mode === "view") return;
     const frame = requestAnimationFrame(() => {
       const firstField = body.querySelector<HTMLElement>(
-        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [role="combobox"]:not([disabled])'
       );
       firstField?.focus({ preventScroll: true });
       body.scrollTop = 0;
@@ -154,7 +158,7 @@ function EntitySideSheet({
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && !isViewMode) {
       if (onCloseAttempt && !onCloseAttempt()) return;
-      if (dirtyRef.current) {
+      if (isDirty()) {
         setPendingDiscard("close");
         return;
       }
@@ -163,7 +167,7 @@ function EntitySideSheet({
   }
 
   function backToView() {
-    if (dirtyRef.current) {
+    if (isDirty()) {
       setPendingDiscard("view");
       return;
     }
@@ -177,6 +181,18 @@ function EntitySideSheet({
       if (mode === "edit") backToView();
       else handleOpenChange(false);
     },
+    reportDirty: (dirty: boolean) => {
+      reportedDirtyRef.current = dirty;
+    },
+  };
+
+  // React propagates synthetic events from portaled children (nested dialogs)
+  // through the component tree; only events from real DOM descendants of the
+  // body may mark the sheet dirty, or typing in a quick-add dialog would
+  // trigger a spurious discard prompt on a clean sheet.
+  const markDirtyFromBody = (event: React.SyntheticEvent) => {
+    if (!bodyRef.current?.contains(event.target as Node)) return;
+    dirtyRef.current = true;
   };
 
   return (
@@ -214,12 +230,8 @@ function EntitySideSheet({
           className={isViewMode ? "flex flex-col gap-20" : undefined}
           noPaddingBottom={!isViewMode}
           fillHeight={!isViewMode}
-          onInputCapture={
-            isViewMode ? undefined : () => (dirtyRef.current = true)
-          }
-          onChangeCapture={
-            isViewMode ? undefined : () => (dirtyRef.current = true)
-          }
+          onInputCapture={isViewMode ? undefined : markDirtyFromBody}
+          onChangeCapture={isViewMode ? undefined : markDirtyFromBody}
         >
           {isViewMode ? (
             <>

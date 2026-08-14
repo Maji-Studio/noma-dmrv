@@ -36,6 +36,7 @@ export function OrganizationsAdmin() {
   const [enteringId, setEnteringId] = useState<string | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     reset,
@@ -160,6 +161,7 @@ export function OrganizationsAdmin() {
             />
           </FormField>
           <FormActions
+            control={control}
             isSubmitting={createOrg.isPending}
             submitLabel="Create organization"
             submittingLabel="Creating…"

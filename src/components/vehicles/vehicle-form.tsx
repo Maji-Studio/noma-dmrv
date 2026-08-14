@@ -160,6 +160,7 @@ export function VehicleForm({
       </div>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}

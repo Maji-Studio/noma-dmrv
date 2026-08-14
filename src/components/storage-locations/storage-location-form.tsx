@@ -236,6 +236,7 @@ export function StorageLocationForm({
       </FormField>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}

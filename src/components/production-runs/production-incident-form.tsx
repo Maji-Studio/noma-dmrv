@@ -200,6 +200,7 @@ export function ProductionIncidentForm({
       </FormSection>
 
       <FormActions
+        control={control}
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

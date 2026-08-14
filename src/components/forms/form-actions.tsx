@@ -7,13 +7,39 @@
  */
 "use client";
 
+import * as React from "react";
+import {
+  useFormState,
+  type Control,
+  type FieldValues,
+} from "react-hook-form";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { useSideSheetActions } from "@/components/ui/entity-side-sheet/side-sheet-context";
+import {
+  useSideSheetActions,
+  type SideSheetActions,
+} from "@/components/ui/entity-side-sheet/side-sheet-context";
 import { ServerError } from "./server-error";
 
-interface FormActionsProps {
+interface FormActionsProps<
+  TFieldValues extends FieldValues = FieldValues,
+  TContext = unknown,
+  TTransformed = TFieldValues,
+> {
+  /**
+   * Cancel handler. Presence controls whether a Cancel button renders at all;
+   * inside an EntitySideSheet the click is routed through the sheet's guarded
+   * cancel (edit -> back to view, create -> close) instead of this handler.
+   */
   onCancel?: () => void;
+  /**
+   * The owning form's RHF `control`. Inside an EntitySideSheet this feeds the
+   * sheet's unsaved-changes guard with the authoritative `formState.isDirty`,
+   * which sees programmatic `setValue` from custom widgets (entity selects,
+   * radio cards, pickers) that the sheet's native-event heuristic misses.
+   * Pass it from every sheet form.
+   */
+  control?: Control<TFieldValues, TContext, TTransformed>;
   isSubmitting?: boolean;
   /** Submission-level error rendered with the CTA footer. */
   errorMessage?: string;
@@ -39,8 +65,13 @@ interface FormActionsProps {
   onSubmitClick?: () => void;
 }
 
-export function FormActions({
+export function FormActions<
+  TFieldValues extends FieldValues = FieldValues,
+  TContext = unknown,
+  TTransformed = TFieldValues,
+>({
   onCancel,
+  control,
   isSubmitting = false,
   errorMessage,
   submitLabel,
@@ -52,16 +83,25 @@ export function FormActions({
   sticky = true,
   submitType = "submit",
   onSubmitClick,
-}: FormActionsProps) {
+}: FormActionsProps<TFieldValues, TContext, TTransformed>) {
   // A sticky CTA row inside an EntitySideSheet routes Cancel through the
   // sheet (edit -> back to read view, create -> guarded close) so every sheet
-  // form behaves the same without per-list wiring. Nested inline forms
+  // form behaves the same without per-list wiring. The caller's `onCancel`
+  // still owns *presence*: no handler, no Cancel button. Nested inline forms
   // (sticky={false}) and forms inside a Modal (context barrier) keep the
   // caller-supplied handler.
   const sheetActions = useSideSheetActions();
-  const handleCancel =
-    sticky && sheetActions ? sheetActions.cancel : onCancel;
+  const inSheet = sticky && sheetActions !== null;
+  const handleCancel = onCancel
+    ? inSheet
+      ? sheetActions.cancel
+      : onCancel
+    : undefined;
   return (
+    <>
+      {control && inSheet && (
+        <SheetDirtyBridge control={control} reportDirty={sheetActions.reportDirty} />
+      )}
     <div
       className={cn(
         "flex flex-col gap-16 border-t border-[var(--color-border-secondary)]",
@@ -92,5 +132,31 @@ export function FormActions({
         )}
       </div>
     </div>
+    </>
   );
+}
+
+/**
+ * Subscribes to the owning form's dirty state and mirrors it into the sheet's
+ * unsaved-changes guard. Rendered only when both a `control` and a sheet
+ * context exist, so `useFormState` always has a control to subscribe to.
+ */
+function SheetDirtyBridge<
+  TFieldValues extends FieldValues,
+  TContext,
+  TTransformed,
+>({
+  control,
+  reportDirty,
+}: {
+  control: Control<TFieldValues, TContext, TTransformed>;
+  reportDirty: SideSheetActions["reportDirty"];
+}) {
+  const { isDirty } = useFormState({ control });
+  // Sanctioned useEffect: syncing React state into the sheet's imperative
+  // guard ref is an external-system write, not derivable during render.
+  React.useEffect(() => {
+    reportDirty(isDirty);
+  }, [isDirty, reportDirty]);
+  return null;
 }

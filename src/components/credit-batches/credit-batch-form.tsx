@@ -432,6 +432,7 @@ export function CreditBatchForm({
       </FormSection>
 
       <FormActions
+        control={control}
         sticky={stickyActions}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
