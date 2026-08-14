@@ -4,7 +4,12 @@
  * mode, plus the raw registry response and the persisted submission metadata
  * overlay as JSON. Operator-facing surfaces stay curated; this accordion is
  * where an admin checks what the system actually knows when the curated view
- * looks wrong. Values render literally (`null` stays "null") on purpose.
+ * looks wrong. Raw registry/system fields render literally (`null` stays
+ * "null") on purpose — an admin needs to see that the system holds null.
+ * Derived rows (latest report, the pending registry figure) are worded and
+ * formatted like the rest of the app instead: a literal "null" there reads
+ * as broken copy, and a bare kg number reads as a rival CO₂e total
+ * (DR-002 / #685).
  */
 "use client";
 
@@ -14,6 +19,7 @@ import type { CertifierGhgStatementRow } from "@/data-access/certifier-ghg-state
 import type { GhgStatementReportView } from "@/fn/certification/ghg-statement-reports";
 import type { GhgStatement } from "@/lib/isometric";
 import type { GhgSubmitMode } from "@/lib/isometric/utils/ghg-statement-state";
+import { formatCo2e } from "@/lib/format-utils";
 import { DisclosureSummary } from "./disclosure-summary";
 
 interface GhgStatementTechnicalDetailsProps {
@@ -106,16 +112,21 @@ export function GhgStatementTechnicalDetails({
               : "null"
           }
         />
+        {/* Isometric quantizes this statement-level figure to issuable-credit
+            precision; it can legitimately differ from the per-entry net
+            removal sum shown in the headline and gates readiness rather than
+            stating "the" total. Same formatter as the headline so the two
+            never disagree on rounding. */}
         <Row
-          label="Pending CO₂e (kg)"
-          value={literal(remote?.pending_total_co2e_removed_kg ?? null)}
+          label="Pending issuable CO₂e"
+          value={formatCo2e(remote?.pending_total_co2e_removed_kg ?? null)}
         />
         <Row
           label="Latest report"
           value={
             latestReport
               ? `v${latestReport.version} · ${latestReport.lifecycle}`
-              : "null"
+              : "None generated"
           }
         />
         {latestReport && (

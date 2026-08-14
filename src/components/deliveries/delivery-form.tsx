@@ -427,6 +427,14 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             allocationWetBasisKg={allocationWetBasisKg}
             allocationDryBasisKg={allocationDryBasisKg}
             moisturePercent={watchMoisture}
+            persisted={
+              delivery && editingSameOrder
+                ? {
+                    deliveredWetMassKg: delivery.deliveredWetMassKg,
+                    massDryKg: delivery.massDryKg,
+                  }
+                : null
+            }
           />
           {(deliveryStockError || routedServerError.inlineError) && (
             <div className="md:col-span-2">

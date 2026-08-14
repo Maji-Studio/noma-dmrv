@@ -21,6 +21,7 @@ describe("BiocharSourceMassFields", () => {
       <BiocharSourceMassFields
         wetMassKg={100}
         moisturePercent={10}
+        addedWaterKg={10}
         materialLabel="Biochar"
         wet={{
           id: "massKg",
@@ -36,6 +37,7 @@ describe("BiocharSourceMassFields", () => {
 
     expect(text).toContain("Biochar wet mass (kg)");
     expect(text).toContain("Wet biochar drawn from the source bin.");
+    expect(text).toContain("Biochar + water final moisture");
     expect(text).not.toContain("Blend wet mass");
   });
 });

@@ -3,7 +3,25 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { biocharProducts } from "@/db/schema";
-import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
+import {
+  productWetMassKgSql,
+  sourceBiocharMassKgSql,
+} from "./biochar-product-source-mass";
+
+describe("productWetMassKgSql", () => {
+  it("combines persisted blend mass and added water in one shared fragment", () => {
+    const query = new PgDialect().sqlToQuery(
+      productWetMassKgSql(
+        biocharProducts.massKg,
+        biocharProducts.waterAddedKg,
+      ),
+    );
+
+    expect(query.sql).toContain("mass_kg");
+    expect(query.sql).toContain("water_added_kg");
+    expect(query.sql.match(/COALESCE/g)).toHaveLength(2);
+  });
+});
 
 describe("sourceBiocharMassKgSql", () => {
   it("clamps invalid negative allocations with exact numeric SQL", () => {

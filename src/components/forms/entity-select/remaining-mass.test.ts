@@ -25,4 +25,16 @@ describe("formatRemainingMass", () => {
       "Remaining wet mass: 3,000kg | dry mass: Not recorded",
     );
   });
+
+  it("qualifies stock that excludes the order being edited", () => {
+    expect(
+      formatRemainingMass({
+        wetKg: 3_000,
+        dryKg: 2_900,
+        labelVariant: "excluding-this-order",
+      }),
+    ).toBe(
+      "Remaining wet mass excluding this order: 3,000kg | dry mass: 2,900kg",
+    );
+  });
 });

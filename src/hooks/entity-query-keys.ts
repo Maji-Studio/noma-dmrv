@@ -13,8 +13,12 @@ export const entityKeys = {
   details: () => ["entity"] as const,
   detailPrefix: (entityType: EntityType) =>
     [...entityKeys.details(), entityType] as const,
-  detail: (entityType: EntityType, id: string | undefined) =>
-    [...entityKeys.detailPrefix(entityType), id] as const,
+  detail: (
+    entityType: EntityType,
+    id: string | undefined,
+    filterBy?: Record<string, string>,
+  ) =>
+    [...entityKeys.detailPrefix(entityType), id, ...(filterBy ? [filterBy] : [])] as const,
 };
 
 export const ENTITY_LIST_STALE_TIME_MS = 30_000;

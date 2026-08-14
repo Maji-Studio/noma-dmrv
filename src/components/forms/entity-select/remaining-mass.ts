@@ -13,7 +13,11 @@ export function formatRemainingMass(
   remainingMass: NonNullable<EntityOption["remainingMass"]>,
   includeDryMass = true,
 ): string {
-  const wet = `Remaining wet mass: ${formatWholeKg(remainingMass.wetKg)}`;
+  const wetLabel =
+    remainingMass.labelVariant === "excluding-this-order"
+      ? "Remaining wet mass excluding this order"
+      : "Remaining wet mass";
+  const wet = `${wetLabel}: ${formatWholeKg(remainingMass.wetKg)}`;
   if (!includeDryMass || !("dryKg" in remainingMass)) return wet;
   return `${wet} | dry mass: ${formatWholeKg(remainingMass.dryKg ?? null)}`;
 }
