@@ -28,7 +28,12 @@ import {
 
 const PROVIDER = ISOMETRIC_PROVIDER;
 const SUBMISSION_TYPE = REMOVAL_SUBMISSION_TYPE;
-const ENTITY_TYPES = [REMOVAL_ENTITY_TYPE, "creditBatch"] as const;
+// Ledger rows predating the Removal model were keyed by credit batch.
+const LEGACY_CREDIT_BATCH_ENTITY_TYPE = "creditBatch" as const;
+const ENTITY_TYPES = [
+  REMOVAL_ENTITY_TYPE,
+  LEGACY_CREDIT_BATCH_ENTITY_TYPE,
+] as const;
 
 async function main(): Promise<void> {
   const localEntityId = process.argv[2];
@@ -38,7 +43,7 @@ async function main(): Promise<void> {
     !ENTITY_TYPES.includes(entityType as (typeof ENTITY_TYPES)[number])
   ) {
     console.error(
-      "Usage: pnpm tsx scripts/isometric-clear-stale-lock.ts <removalId> [removal|creditBatch]",
+      `Usage: pnpm tsx scripts/isometric-clear-stale-lock.ts <removalId> [${ENTITY_TYPES.join("|")}]`,
     );
     process.exit(1);
   }
