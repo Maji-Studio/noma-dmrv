@@ -603,11 +603,14 @@ export function DeliveryList() {
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
-        onModeChange={(mode) =>
+        onModeChange={(mode) => {
+          // Mode changes are navigation; a submit error from the previous
+          // visit must not resurface on the next edit entry.
+          setFormError(null);
           setSideSheet(
             displaySideSheet ? { ...displaySideSheet, mode } : null,
-          )
-        }
+          );
+        }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit Delivery"

@@ -191,6 +191,9 @@
   --z-layer-toast: 80;
   /* Active menus/tooltips must remain operable when a toast overlaps them. */
   --z-layer-popover: 90;
+  /* Skip link tops the whole scale: it only exists while focused and must
+     never hide behind any overlay. */
+  --z-layer-skip-link: 100;
 
   /* ===== GRAYSCALE PALETTE ===== */
   --color-gray-50: #fafafaff;

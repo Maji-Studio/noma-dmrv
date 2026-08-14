@@ -62,7 +62,7 @@ export default async function AppLayout({
             them on every page load. */}
         <a
           href="#main-content"
-          className="body-small sr-only focus:not-sr-only focus:fixed focus:top-8 focus:left-8 focus:z-[100] focus:bg-[var(--paper)] focus:px-16 focus:py-12 focus:border focus:border-[var(--color-border-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+          className="body-small sr-only focus:not-sr-only focus:fixed focus:top-8 focus:left-8 focus:z-[var(--z-layer-skip-link)] focus:bg-[var(--paper)] focus:px-16 focus:py-12 focus:border focus:border-[var(--color-border-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
         >
           Skip to main content
         </a>

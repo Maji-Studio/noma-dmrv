@@ -374,7 +374,12 @@ export function OrderList() {
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
-        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        onModeChange={(mode) => {
+          // Mode changes are navigation; a submit error from the previous
+          // visit must not resurface on the next edit entry.
+          setFormError(null);
+          setSideSheet((prev) => (prev ? { ...prev, mode } : null));
+        }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit Order"

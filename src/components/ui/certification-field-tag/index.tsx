@@ -35,11 +35,13 @@ const STATUS_DESCRIPTION: Record<CertFieldStatus, string> = {
 
 // Provided/not-provided must not be signalled by chip hue alone (WCAG 1.4.1);
 // the glyph is the non-colour marker. Assistive tech gets the sr-only string,
-// so the icon stays decorative.
+// so the icon stays decorative. 12px is a deliberate step below the 16px
+// small-icon scale: it matches the app's micro-chip glyphs (entity code
+// chips) and keeps the marker legible without dominating the caption type.
 const STATUS_GLYPHS: Record<CertFieldStatus, ReactNode> = {
   neutral: null,
-  missing: <WarningIcon size={10} weight="bold" aria-hidden />,
-  satisfied: <CheckIcon size={10} weight="bold" aria-hidden />,
+  missing: <WarningIcon size={12} weight="bold" aria-hidden />,
+  satisfied: <CheckIcon size={12} weight="bold" aria-hidden />,
 };
 
 interface CertificationFieldTagProps {

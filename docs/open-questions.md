@@ -859,14 +859,12 @@ bound); these are the decisions it deliberately did not make.
 
 ### Where the certification lock falls, and what "Request amendment" does (`certification/amendment-flow`)
 
-- The 2026-08-13 design review (DR-003) flagged that registry-submitted
-  records looked freely editable. Triage 2026-08-14: server-side enforcement
-  already existed and is tested (`assertCanMutateCertifiedLineage`,
-  `tests/certification-lineage-guards.test.ts`); the missing half was UI
-  affordance, shipped on `fix/design-review-record-screens`
-  (`isRemovalStatusLocked` + credit-batch menu/sheet lock + dropped-claimed-run
-  warning).
-- Interim state: the UI says "amend the removal with the registry" without
+- Server-side enforcement exists and is tested
+  (`assertCanMutateCertifiedLineage`,
+  `tests/certification-lineage-guards.test.ts`); the UI carries an interim
+  lock affordance (`isRemovalStatusLocked` drives the credit-batch menu and
+  sheet lock plus the dropped-claimed-run warning).
+- Interim state: the UI says "amend the Removal with the registry" without
   offering a flow. The UI predicate (derived status kinds) is deliberately
   looser than the server predicate (`BLOCKING_SUBMISSION_STATUSES`, where a
   stale draft submission still blocks), so an edge-case operator can reach a
