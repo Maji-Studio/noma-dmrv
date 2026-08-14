@@ -104,13 +104,15 @@ const styles = {
   }),
 };
 
-const formatKg = (value: number | null): string =>
-  value === null
-    ? "Not available"
-    : value.toLocaleString("en-US", {
-        minimumFractionDigits: 3,
-        maximumFractionDigits: 3,
-      });
+// Hand-rolled grouping instead of toLocaleString: locale formatting depends
+// on the runtime's ICU build, and every byte of this document must render
+// identically across environments (contentChecksumSha256 contract).
+const formatKg = (value: number | null): string => {
+  if (value === null) return "Not available";
+  const [whole, fraction] = Math.abs(value).toFixed(3).split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${value < 0 ? "-" : ""}${grouped}.${fraction}`;
+};
 
 const formatPreparedAt = (preparedAt: Date): string =>
   `${preparedAt.toISOString().slice(0, 16).replace("T", " ")} UTC`;

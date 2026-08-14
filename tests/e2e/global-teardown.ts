@@ -186,15 +186,15 @@ export default async function globalTeardown() {
       `);
 
       // ─── Certifier sync events + submissions for E2E credit batches ───
-      // No FK constraint to credit_batches (entity_id / local_entity_id are
-      // plain uuid), but stale rows would accumulate across runs. Sweep
-      // before the credit_batches delete so the local_entity_id values can
-      // still be resolved.
+      // No FK constraint to credit_batches (entity_id is polymorphic text,
+      // local_entity_id a plain uuid), but stale rows would accumulate across
+      // runs. Sweep before the credit_batches delete so the local_entity_id
+      // values can still be resolved.
       await client.query(`
         DELETE FROM certifier_sync_events
         WHERE entity_type = 'creditBatch'
           AND entity_id IN (
-            SELECT id FROM credit_batches
+            SELECT id::text FROM credit_batches
             WHERE code LIKE 'E2E-%'
                OR facility_id IN (
                     SELECT id FROM facilities

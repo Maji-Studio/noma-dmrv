@@ -2,9 +2,11 @@
  * Clear a stale Phase 3 submission lock.
  *
  * Usage:
- *   pnpm tsx scripts/isometric-clear-stale-lock.ts <creditBatchId>
+ *   pnpm tsx scripts/isometric-clear-stale-lock.ts <removalId> [entityType]
  *
- * Loads the latest certification_submissions row for that credit batch.
+ * Loads the latest certification_submissions row for that Removal (ledger
+ * rows are keyed localEntityType='removal', localEntityId=certifierRemovals.id;
+ * pass 'creditBatch' as the second argument only for pre-Removal legacy rows).
  * Refuses to clear unless the lock is older than LOCK_TTL_MS. On success,
  * marks the row as 'rejected' (so the orchestrator's branch-f path applies
  * on the next submit) and stamps an explanatory entry into metadata.
@@ -18,15 +20,26 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 
 import { LOCK_TTL_MS } from "../src/lib/isometric/utils/lock";
+import {
+  ISOMETRIC_PROVIDER,
+  REMOVAL_ENTITY_TYPE,
+  REMOVAL_SUBMISSION_TYPE,
+} from "../src/lib/isometric/utils/constants";
 
-const PROVIDER = "isometric" as const;
-const SUBMISSION_TYPE = "removal" as const;
-const ENTITY_TYPE = "creditBatch" as const;
+const PROVIDER = ISOMETRIC_PROVIDER;
+const SUBMISSION_TYPE = REMOVAL_SUBMISSION_TYPE;
+const ENTITY_TYPES = [REMOVAL_ENTITY_TYPE, "creditBatch"] as const;
 
 async function main(): Promise<void> {
-  const creditBatchId = process.argv[2];
-  if (!creditBatchId) {
-    console.error("Usage: pnpm tsx scripts/isometric-clear-stale-lock.ts <creditBatchId>");
+  const localEntityId = process.argv[2];
+  const entityType = process.argv[3] ?? REMOVAL_ENTITY_TYPE;
+  if (
+    !localEntityId ||
+    !ENTITY_TYPES.includes(entityType as (typeof ENTITY_TYPES)[number])
+  ) {
+    console.error(
+      "Usage: pnpm tsx scripts/isometric-clear-stale-lock.ts <removalId> [removal|creditBatch]",
+    );
     process.exit(1);
   }
 
@@ -43,15 +56,17 @@ async function main(): Promise<void> {
       and(
         eq(certificationSubmissions.provider, PROVIDER),
         eq(certificationSubmissions.submissionType, SUBMISSION_TYPE),
-        eq(certificationSubmissions.localEntityType, ENTITY_TYPE),
-        eq(certificationSubmissions.localEntityId, creditBatchId),
+        eq(certificationSubmissions.localEntityType, entityType),
+        eq(certificationSubmissions.localEntityId, localEntityId),
       ),
     )
     .orderBy(desc(certificationSubmissions.version))
     .limit(1);
 
   if (!latest) {
-    console.log(`No submission rows found for credit batch ${creditBatchId}.`);
+    console.log(
+      `No submission rows found for ${entityType} ${localEntityId}.`,
+    );
     process.exit(0);
   }
 
