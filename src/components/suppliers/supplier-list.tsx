@@ -49,6 +49,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
         <Link
@@ -89,6 +90,7 @@ function createColumns(
     },
     {
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end">

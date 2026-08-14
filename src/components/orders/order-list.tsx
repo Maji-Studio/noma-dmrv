@@ -48,11 +48,13 @@ function createColumns(
   return [
     {
       accessorKey: "code",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>,
     },
     {
       accessorKey: "orderDate",
+      meta: { nowrap: true },
       header: "Date",
       cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{formatDate(row.original.orderDate)}</span>,
     },
@@ -103,6 +105,7 @@ function createColumns(
     },
     {
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end">

@@ -143,6 +143,7 @@ function createColumns(params: {
     },
     {
       accessorKey: "code",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
         <MutedValue archived={!!row.original.archivedAt}>
@@ -194,6 +195,7 @@ function createColumns(params: {
   if (canManage) {
     columns.push({
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex justify-end">
