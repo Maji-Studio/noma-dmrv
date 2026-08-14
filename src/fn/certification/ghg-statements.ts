@@ -37,6 +37,7 @@ import {
 import { withFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { requireOrgFacility } from "@/data-access/utils";
 import { redactReportSecrets } from "@/lib/certification/report-url";
+import { overlayLiveRemoteStatus } from "@/lib/certification/from-submission";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
@@ -692,9 +693,19 @@ export async function loadGhgStatementState(
         )
       : null;
 
+    // One registry truth per response: the badge derives from the submission
+    // row's remoteStatus overlay while the technical pane shows the live
+    // fetch, so a stale persisted overlay would self-contradict within the
+    // same sheet. Overlay the live status onto the returned copy — no DB
+    // write; persisting reconciliation stays an explicit operator action.
+    const statementSubmissionForClient =
+      statementSubmission && remote
+        ? overlayLiveRemoteStatus(statementSubmission, remote.status)
+        : statementSubmission;
+
     return {
       statement,
-      statementSubmission,
+      statementSubmission: statementSubmissionForClient,
       linkedRemovals,
       // The verifier URL can carry the bearer token for the generated report.
       // Keep that plaintext capability on the server even though the rest of
