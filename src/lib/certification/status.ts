@@ -103,6 +103,33 @@ const IN_PROGRESS: DerivedStatus = {
   isTerminal: false,
 };
 
+/**
+ * Kinds in which the record definition behind a Removal is locked (interim
+ * certification lock, design review DR-003): the removal has left noma (or a
+ * submission is in flight), so editing or deleting the records that back it
+ * would silently contradict what the registry holds. `rejected` and
+ * `verification-failed` stay editable — the operator must amend data to
+ * resubmit. The full amendment flow is a DEC + Isometric decision
+ * (docs/open-questions.md); until then this predicate is the single seam UI
+ * and server guards share.
+ */
+const REMOVAL_LOCKED_KINDS: ReadonlySet<DerivedStatusKind> = new Set([
+  "in-progress",
+  "interrupted",
+  "submitted",
+  "in-registry",
+  "in-verification",
+  "verified",
+  "issued",
+  "superseded",
+]);
+
+export function isRemovalStatusLocked(
+  status: Pick<DerivedStatus, "kind"> | null | undefined,
+): boolean {
+  return status != null && REMOVAL_LOCKED_KINDS.has(status.kind);
+}
+
 export interface RemovalStatusInput {
   /** Latest ledger status, or `null` when no submission row exists yet. */
   local: LocalSubmissionStatus | null;

@@ -32,6 +32,7 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { ServerError } from "@/components/forms";
+import { isRemovalStatusLocked } from "@/lib/certification/status";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
 import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
@@ -506,6 +507,13 @@ export function CreditBatchList({
       ? undefined
       : formatDateRange(sideSheetEntity.startDate, sideSheetEntity.endDate);
 
+  // Interim certification lock (DR-003): a batch backing a submitted removal
+  // is frozen — no Edit from the sheet, with the reason stated in view mode.
+  const sideSheetHealth = sideSheetEntity
+    ? batchHealthSummaries[sideSheetEntity.id]
+    : undefined;
+  const sideSheetLocked = isRemovalStatusLocked(sideSheetHealth?.removalStatus);
+
   return (
     <div className="container-max page-shell">
       {/* Header */}
@@ -676,6 +684,7 @@ export function CreditBatchList({
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit Credit Batch"
+        canEdit={!sideSheetLocked}
         size="wide"
         sections={
           sideSheetEntity
@@ -696,6 +705,16 @@ export function CreditBatchList({
         viewModeChildren={
           sideSheetEntity ? (
             <>
+              {sideSheetLocked && (
+                <p
+                  role="note"
+                  className="border border-[var(--color-border-secondary)] bg-[var(--color-background-light)] px-16 py-12 body-small text-[var(--color-text-secondary)]"
+                >
+                  {`This credit batch backs a removal (${
+                    sideSheetHealth?.removalStatus?.label ?? "submitted"
+                  }), so its definition is locked. To change it, the removal must be amended with the registry.`}
+                </p>
+              )}
               <CreditBatchHealthStrip
                 creditBatchId={sideSheetEntity.id}
                 facilityId={sideSheetEntity.facilityId}

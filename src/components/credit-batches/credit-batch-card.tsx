@@ -8,6 +8,7 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { RowActionsMenu } from "@/components/ui";
+import { isRemovalStatusLocked } from "@/lib/certification/status";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { CreditBatchLifecycleRail } from "./credit-batch-lifecycle";
@@ -31,6 +32,10 @@ export function CreditBatchCard({
   onDelete,
 }: CreditBatchCardProps) {
   const co2eStored = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
+  // Interim certification lock (DR-003): once the batch backs a submitted
+  // removal its definition is frozen, so the menu offers no Edit or Delete.
+  // The view sheet explains the lock; the server guard enforces it.
+  const locked = isRemovalStatusLocked(health?.removalStatus);
 
   return (
     <article
@@ -53,17 +58,21 @@ export function CreditBatchCard({
                 icon: <EyeIcon size={16} />,
                 onSelect: () => onView(creditBatch),
               },
-              {
-                label: "Edit",
-                icon: <PencilSimpleIcon size={16} />,
-                onSelect: () => onEdit(creditBatch),
-              },
-              {
-                label: "Delete",
-                destructive: true,
-                icon: <TrashIcon size={16} />,
-                onSelect: () => onDelete(creditBatch.id),
-              },
+              ...(locked
+                ? []
+                : [
+                    {
+                      label: "Edit",
+                      icon: <PencilSimpleIcon size={16} />,
+                      onSelect: () => onEdit(creditBatch),
+                    },
+                    {
+                      label: "Delete",
+                      destructive: true,
+                      icon: <TrashIcon size={16} />,
+                      onSelect: () => onDelete(creditBatch.id),
+                    },
+                  ]),
             ]}
           />
         </div>

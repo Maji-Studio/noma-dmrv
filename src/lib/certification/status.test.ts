@@ -3,6 +3,8 @@ import {
   deriveRemovalStatus,
   deriveRemovalWorkflowStatus,
   deriveStatementStatus,
+  isRemovalStatusLocked,
+  type DerivedStatusKind,
   type LocalSubmissionStatus,
   type RemoteGhgStatus,
 } from "./status";
@@ -362,5 +364,37 @@ describe("deriveStatementStatus", () => {
         deriveStatementStatus({ ...base, remoteStatus }),
       ).not.toThrow();
     }
+  });
+});
+
+describe("isRemovalStatusLocked", () => {
+  it("locks every at-the-registry and in-flight kind", () => {
+    const locked: DerivedStatusKind[] = [
+      "in-progress",
+      "interrupted",
+      "submitted",
+      "in-registry",
+      "in-verification",
+      "verified",
+      "issued",
+      "superseded",
+    ];
+    for (const kind of locked) {
+      expect(isRemovalStatusLocked({ kind })).toBe(true);
+    }
+  });
+
+  it("keeps pre-submission and needs-rework kinds editable", () => {
+    const editable: DerivedStatusKind[] = [
+      "not-submitted",
+      "draft",
+      "rejected",
+      "verification-failed",
+    ];
+    for (const kind of editable) {
+      expect(isRemovalStatusLocked({ kind })).toBe(false);
+    }
+    expect(isRemovalStatusLocked(null)).toBe(false);
+    expect(isRemovalStatusLocked(undefined)).toBe(false);
   });
 });
