@@ -269,7 +269,7 @@ export function CertificationSettings() {
       label: "Template mapping",
       icon: TreeStructureIcon,
       caption:
-        "Read-only mapping, lineage, and Removal compilation traces for this facility's active Isometric Removal template.",
+        "Read-only mapping and Removal compilation traces for this facility's active Isometric Removal template.",
       access: "Platform Admins",
       readOnly: true,
       content: facilityId ? (
