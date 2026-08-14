@@ -107,10 +107,15 @@ const styles = {
 // Hand-rolled grouping instead of toLocaleString: locale formatting depends
 // on the runtime's ICU build, and every byte of this document must render
 // identically across environments (contentChecksumSha256 contract).
+const KG_DECIMAL_PLACES = 3;
+const THOUSANDS_GROUPING = /\B(?=(\d{3})+(?!\d))/g;
+
 const formatKg = (value: number | null): string => {
   if (value === null) return "Not available";
-  const [whole, fraction] = Math.abs(value).toFixed(3).split(".");
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const [whole, fraction] = Math.abs(value)
+    .toFixed(KG_DECIMAL_PLACES)
+    .split(".");
+  const grouped = whole.replace(THOUSANDS_GROUPING, ",");
   return `${value < 0 ? "-" : ""}${grouped}.${fraction}`;
 };
 
