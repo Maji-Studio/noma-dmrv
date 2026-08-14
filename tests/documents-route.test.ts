@@ -39,6 +39,12 @@ class StubProvider implements StorageProvider {
   async createDownloadUrl(): Promise<string> {
     return SIGNED_URL;
   }
+  async getObject() {
+    return {
+      bytes: Buffer.alloc(0),
+      contentType: "application/octet-stream",
+    };
+  }
   async headObject(): Promise<ObjectHead | null> {
     return null;
   }

@@ -194,8 +194,10 @@ status only and cannot be used to change supporting evidence.
 ## Adapter interface
 
 `src/lib/storage/types.ts` defines `StorageProvider` (`name`, `bucket`,
-`createUploadUrl`, `createDownloadUrl`, `headObject`, `deleteObject`,
-`putObject`). A new backend (e.g. R2) means implementing it, wiring it into the
+`createUploadUrl`, `createDownloadUrl`, `getObject`, `headObject`,
+`deleteObject`, `putObject`). `getObject` is the bounded server-side read seam:
+it presigns a fresh URL, refuses redirects and returns the bytes plus response
+content type. A new backend (e.g. R2) means implementing it, wiring it into the
 factory in `src/lib/storage/index.ts`, **and widening the
 `StorageProviderName = "s3" | "do-spaces" | "local-fs"` union** — the name is not
 a free-form string.
