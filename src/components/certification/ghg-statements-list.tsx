@@ -76,9 +76,13 @@ export function deriveGhgCreateGate(summary: {
   // Keep the link state indeterminate while the lookup is in flight so we do
   // not flash the "not linked" notice or enable Create before it settles.
   const isLinked = summary.isLoading ? null : summary.hasMapping;
-  const isDedicatedProject = summary.isLoading
-    ? null
-    : (summary.linkedFacilityCount ?? 0) <= 1;
+  // A missing count stays indeterminate (fail closed) rather than defaulting
+  // to dedicated: a stale cached payload without the field must not enable
+  // Create on a shared project.
+  const isDedicatedProject =
+    summary.isLoading || summary.linkedFacilityCount === undefined
+      ? null
+      : summary.linkedFacilityCount <= 1;
   const mappingFailed = summary.isError && !summary.isLoading;
   return {
     // Fail closed on a failed summary even when React Query still holds cached

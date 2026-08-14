@@ -137,20 +137,23 @@ export async function ensureStorageLocation(
     supplierReferenceId: supplierReference,
   });
   const currentPayloadHash = payloadHash(body);
+  // Lock order matches withCertifierProjectMappingLocks (facility-project
+  // lock before external-project lock) — taking them in the opposite order
+  // here would deadlock against a concurrent project remap/unlink.
   return withDedicatedSessionAdvisoryLock(
     `${STORAGE_LOCATION_LOCK_SCOPE}:${externalProjectId}:${customerLocationId}`,
     () =>
       withDedicatedSessionAdvisoryLock(
-        certifierExternalProjectLockKey({
+        certifierProjectLockKey({
           organizationId: args.orgCtx.organizationId,
-          externalProjectId,
+          facilityId: input.facilityId,
           provider: ISOMETRIC_PROVIDER,
         }),
         () =>
           withDedicatedSessionAdvisoryLock(
-            certifierProjectLockKey({
+            certifierExternalProjectLockKey({
               organizationId: args.orgCtx.organizationId,
-              facilityId: input.facilityId,
+              externalProjectId,
               provider: ISOMETRIC_PROVIDER,
             }),
             () =>

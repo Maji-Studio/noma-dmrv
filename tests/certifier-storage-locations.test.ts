@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { applications } from "@/db/schema/application";
 import { organizations } from "@/db/schema/auth";
-import { certifierProjects } from "@/db/schema/certification";
+import { certifierProjects, certifierSyncEvents } from "@/db/schema/certification";
 import { certifierStorageLocations } from "@/db/schema/certifier-storage-locations";
 import { facilities } from "@/db/schema/facilities";
 import { deliveries, orders } from "@/db/schema/logistics";
@@ -15,7 +15,9 @@ import {
   persistStorageLocationRegistration,
 } from "@/data-access/certifier-storage-locations";
 import {
+  appendSyncEvent,
   deleteCertifierProject,
+  listRecentSyncEvents,
   upsertCertifierProject,
 } from "@/data-access/certification";
 import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
@@ -492,6 +494,45 @@ describe("certifier Storage Location data access", () => {
           .where(eq(certifierProjects.facilityId, sharedFacilityId));
         await db.delete(facilities).where(eq(facilities.id, sharedFacilityId));
       }
+    }
+  });
+});
+
+describe("certifier sync events with supplier-reference keys", () => {
+  it("round-trips a non-UUID entity id through append and list", async () => {
+    // Storage Location sync events are keyed by supplier reference
+    // (nm-slc-<hex>), not a local UUID - the reason entity_id is text.
+    const ctx = makeTestOrgContext();
+    const entityId = `nm-slc-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+    try {
+      await appendSyncEvent(ctx, {
+        provider: "isometric",
+        entityType: "storageLocation",
+        entityId,
+        operation: "storage_location:create",
+        status: "succeeded",
+        responsePayload: { id: "isl_test_1" },
+      });
+
+      const events = await listRecentSyncEvents(ctx, {
+        entityType: "storageLocation",
+        entityId,
+        limit: 5,
+      });
+      expect(events).toHaveLength(1);
+      expect(events[0].entityId).toBe(entityId);
+      expect(events[0].status).toBe("succeeded");
+
+      const foreign = await listRecentSyncEvents(FOREIGN_CONTEXT, {
+        entityType: "storageLocation",
+        entityId,
+        limit: 5,
+      });
+      expect(foreign).toHaveLength(0);
+    } finally {
+      await db
+        .delete(certifierSyncEvents)
+        .where(eq(certifierSyncEvents.entityId, entityId));
     }
   });
 });

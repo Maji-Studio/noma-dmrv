@@ -13,6 +13,7 @@ import {
   claimSubmissionDraft,
   getLatestSubmission,
   getLatestSubmissionWithExecutor,
+  markSubmissionInterrupted,
   type ClaimBlockedReason,
 } from "@/data-access/certification-submissions";
 import {
@@ -65,7 +66,11 @@ import {
 } from "@/schemas/certification";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { ghgStatementLookup, performRegistryCreate } from "./registry-create";
+import {
+  ghgStatementLookup,
+  performRegistryCreate,
+  type RegistryExternalMutation,
+} from "./registry-create";
 import { reconcileGhgStatementRemoteState } from "@/data-access/certifier-ghg-remote-state";
 import {
   assertDedicatedGhgStatementProject,
@@ -452,28 +457,73 @@ async function createGhgStatementRemote(args: {
   } = args;
 
   const requestPayload = { end_on: endOn, project_id: externalProjectId };
-  const { externalId, source } = await performRegistryCreate({
-    orgCtx,
-    entityType: GHG_STATEMENT_ENTITY_TYPE,
-    entityId: statement.id,
-    submissionRowId: row.id,
-    expectedLockedAt: row.lockedAt ?? undefined,
-    operation: "ghg_statement:create",
-    requestPayload,
-    resumed,
-    create: () => createGhgStatement(client, requestPayload).then((r) => r.id),
-    reconcile: () =>
-      reconcileGhgStatement(client, { projectId: externalProjectId, endOn }).then(
-        ghgStatementLookup,
-      ),
-    ambiguousMessage: MULTIPLE_DRAFTS_MESSAGE,
-    failureMessagePrefix: "The GHG Statement could not be created",
-    log: logger.child({
-      op: "ghg-statement:create",
-      ghgStatementId: statement.id,
-      submissionAttemptId,
-    }),
+  const log = logger.child({
+    op: "ghg-statement:create",
+    ghgStatementId: statement.id,
+    submissionAttemptId,
   });
+  // performRegistryCreate marks definitive refusals rejected itself, but a
+  // timeout/5xx that may have reached the registry keeps the draft locked
+  // without touching the row. Record the interruption so the operator sees
+  // the failure instead of a bare in-progress row until the lock TTL expires.
+  let externalMutation: RegistryExternalMutation | null = null;
+  let created: { externalId: string; source: "create" | "reconciliation" };
+  try {
+    created = await performRegistryCreate({
+      orgCtx,
+      entityType: GHG_STATEMENT_ENTITY_TYPE,
+      entityId: statement.id,
+      submissionRowId: row.id,
+      expectedLockedAt: row.lockedAt ?? undefined,
+      operation: "ghg_statement:create",
+      requestPayload,
+      resumed,
+      create: () => createGhgStatement(client, requestPayload).then((r) => r.id),
+      reconcile: () =>
+        reconcileGhgStatement(client, { projectId: externalProjectId, endOn }).then(
+          ghgStatementLookup,
+        ),
+      ambiguousMessage: MULTIPLE_DRAFTS_MESSAGE,
+      failureMessagePrefix: "The GHG Statement could not be created",
+      log,
+      onExternalMutation: (state) => {
+        externalMutation = state;
+      },
+    });
+  } catch (error) {
+    if (externalMutation && row.lockedAt) {
+      const errorMessage =
+        error instanceof SafeError
+          ? error.message
+          : "The GHG Statement create attempt was interrupted.";
+      try {
+        const recorded = await markSubmissionInterrupted(orgCtx, row.id, {
+          errorMessage,
+          expectedLockedAt: row.lockedAt,
+          externalMutation,
+        });
+        if (!recorded) {
+          log.warn(
+            { submissionId: row.id, externalMutation },
+            "interrupted state lost: submission lock no longer held",
+          );
+        }
+      } catch (cleanupError) {
+        log.warn(
+          {
+            submissionId: row.id,
+            cleanupErrorName:
+              cleanupError instanceof Error
+                ? cleanupError.name
+                : typeof cleanupError,
+          },
+          "failed to persist ghg statement interruption",
+        );
+      }
+    }
+    throw error;
+  }
+  const { externalId, source } = created;
 
   return finalizeGhgStatement({
     client,
