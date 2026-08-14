@@ -20,6 +20,7 @@ import {
   summarizeRemovalTemplateMappingOverview,
   type RemovalTemplateStatusTone,
 } from "./removal-template-diagnostic-status";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 type DiagnosticView = "mapping" | "trace";
 
@@ -187,7 +188,7 @@ export function RemovalTemplateDiagnosticPanel({
             Active Removal template
           </p>
           <p className="body-small">
-            {data.diagnostic?.template.displayName ?? "Not available"}
+            {data.diagnostic?.template.displayName ?? MISSING_VALUE.notAvailable}
           </p>
           {data.diagnostic && (
             <p className="body-caption text-[var(--color-text-tertiary)]">
@@ -226,7 +227,7 @@ export function RemovalTemplateDiagnosticPanel({
             </div>
           ) : (
             <p className="body-small text-[var(--color-text-tertiary)]">
-              Not available
+              {MISSING_VALUE.notAvailable}
             </p>
           )}
         </div>

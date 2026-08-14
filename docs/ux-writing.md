@@ -87,6 +87,48 @@ clear action when an action is available.
 Do not repeat the same instruction in the title, description, and button.
 Follow the `EmptyState` patterns in [design-system.md](./design-system.md).
 
+## Missing values
+
+The section above is about a whole surface with nothing in it. This one is
+about a single field with nothing in it, which is a different problem: a blank
+optional note and a missing certification-blocking measurement must not read the
+same.
+
+**Name the situation, not the screen.** There is one token per situation, and a
+blank value takes the token that answers *why it is absent*. The tokens live in
+`MISSING_VALUE` (`src/lib/copy-utils.ts`):
+
+| Token | Use when |
+| --- | --- |
+| `Not recorded` | The operator could have entered this and did not. |
+| `Not available` | The app cannot read or derive the value: a lookup returned nothing, a stored value will not parse, a derived figure's inputs are missing. |
+| `Not set` | A setting, option, or relation nobody has chosen yet. |
+| `None` | The value is a collection and the collection is empty. "None" is an answer, not a gap. |
+| `Not applicable` | The field does not apply to this record at all, so nobody will ever fill it. |
+| `Not yet computed` | The app will produce this value once upstream work finishes. |
+
+Which token a **formatter** returns is decided by what its input is, not by its
+unit. A formatter that receives a value an operator records (a mass, a
+percentage, a date, a distance) returns `Not recorded` when that value is null,
+and `Not available` when it receives a value it cannot parse. A formatter that
+receives a value the app derives (CO₂e, aggregated tonnes, file size) returns
+`Not available`, because there was never an operator to record it.
+
+Three rules follow:
+
+- **Do not invent a seventh phrasing.** "Missing", "Unassigned", "No crop type",
+  "Not linked" and a bare en dash or em dash are all off-vocabulary. Pick the
+  situation instead. A screen that needs to explain *why* adds a second short
+  sentence after the token, and never rewrites the token itself.
+- **Never render a fabricated zero.** Zero is a measurement; absence is not. A
+  readout whose input is missing shows the token, and drops the unit with it, so
+  a card never reads "Not available tph". Counts are the exception: zero rows is
+  a true count. Name the missing input when that helps the operator act
+  ("Enter a wet mass for each selected bin.").
+- **Never hand-write the string in a component.** Route through the shared
+  formatters and the `DetailField` empty contract, per the routing rule in
+  [design-system.md](./design-system.md).
+
 ## Generated and template content
 
 Write generated text so it reads naturally after values are inserted. Use

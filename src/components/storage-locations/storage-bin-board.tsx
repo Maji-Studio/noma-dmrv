@@ -38,6 +38,7 @@ import {
   type StorageBinTypeFilter,
 } from "./bin-display";
 import { StorageBinTile, type BinRowAction } from "./storage-bin-tile";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** Placeholder tiles while the first page loads — roughly one grid row on a
  *  laptop, enough to show the shape without pretending to know the count. */
@@ -125,7 +126,7 @@ function filterFigure(
   summary: LaneSummary | undefined,
   filter: StorageBinTypeFilter,
 ): string {
-  if (!summary) return "Not available";
+  if (!summary) return MISSING_VALUE.notAvailable;
   if (filter === "all") {
     const bins = filterBinCount(summary, "all") ?? 0;
     return `${bins} ${bins === 1 ? "bin" : "bins"}`;

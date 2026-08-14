@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isMissingValueCopy } from "@/lib/copy-utils";
 import { buildPartyLocationDetailFields } from "./party-location-detail-fields";
 
 const options = {
@@ -26,7 +27,7 @@ describe("buildPartyLocationDetailFields", () => {
     ]);
     expect(
       fields.every(
-        (field) => field.value == null || field.value === "Not set",
+        (field) => field.value == null || isMissingValueCopy(field.value),
       ),
     ).toBe(true);
   });

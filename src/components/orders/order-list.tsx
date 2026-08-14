@@ -36,6 +36,7 @@ import {
 } from "@/lib/orders/fulfillment";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // ============================================
 // Column Definitions
@@ -62,13 +63,17 @@ function createColumns(
       id: "customer",
       header: "Customer",
       accessorFn: (row) => row.customerName ?? "",
-      cell: ({ row }) => row.original.customerName || "Not recorded",
+      cell: ({ row }) => row.original.customerName || MISSING_VALUE.notRecorded,
     },
     {
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{row.original.facilityName || "Not available"}</span>,
+      cell: ({ row }) => (
+        <span className="text-[var(--color-text-secondary)]">
+          {row.original.facilityName || MISSING_VALUE.notAvailable}
+        </span>
+      ),
     },
     {
       accessorKey: "quantityKg",
@@ -89,7 +94,9 @@ function createColumns(
                 : "No deliveries scheduled"
             }
           >
-            {deliveryCount > 0 ? `${deliveredCount}/${deliveryCount}` : "None"}
+            {deliveryCount > 0
+              ? `${deliveredCount}/${deliveryCount}`
+              : MISSING_VALUE.none}
           </span>
         );
       },

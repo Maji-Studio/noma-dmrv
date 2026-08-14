@@ -25,9 +25,15 @@ import { StatCard } from "@/components/ui/stat-card";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityEnergyTotals } from "@/hooks/use-production-runs";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import { sumNullable } from "@/lib/nullable-sum";
 
-function fmt(value: number): string {
-  return Math.round(value).toLocaleString();
+function formatEnergyQuantity(
+  value: number | null | undefined,
+  unit: "kWh" | "L",
+): string {
+  if (value == null) return MISSING_VALUE.notAvailable;
+  return `${Math.round(value).toLocaleString()} ${unit}`;
 }
 
 export function EnergySummary() {
@@ -42,13 +48,13 @@ export function EnergySummary() {
       !!facilityId,
     );
 
-  const electricityKwh = totals?.electricityKwh ?? 0;
-  const gensetLitres = totals?.gensetLitres ?? 0;
-  const startupLitres = totals?.startupLitres ?? 0;
+  const electricityKwh = totals?.electricityKwh ?? null;
+  const gensetLitres = totals?.gensetLitres ?? null;
+  const startupLitres = totals?.startupLitres ?? null;
   const runCount = totals?.runCount ?? 0;
 
   const config = certifierSummary?.mapping ?? null;
-  const totalDieselLitres = gensetLitres + startupLitres;
+  const totalDieselLitres = sumNullable([gensetLitres, startupLitres]);
 
   if (!facilityId) {
     return (
@@ -110,21 +116,21 @@ export function EnergySummary() {
         />
         <StatCard
           title="Grid Electricity"
-          value={`${fmt(electricityKwh)} kWh`}
+          value={formatEnergyQuantity(electricityKwh, "kWh")}
           icon={<LightningIcon size={24} weight="bold" />}
           description="All production runs"
           isLoading={isLoading}
         />
         <StatCard
           title="Genset Diesel"
-          value={`${fmt(gensetLitres)} L`}
+          value={formatEnergyQuantity(gensetLitres, "L")}
           icon={<GasPumpIcon size={24} weight="bold" />}
           description="All production runs"
           isLoading={isLoading}
         />
         <StatCard
           title="Startup / Plant Diesel"
-          value={`${fmt(startupLitres)} L`}
+          value={formatEnergyQuantity(startupLitres, "L")}
           icon={<GasPumpIcon size={24} weight="bold" />}
           description="All production runs"
           isLoading={isLoading}
@@ -176,7 +182,7 @@ export function EnergySummary() {
                 <tr className="[border-bottom:var(--row-divider)]">
                   <td className="body-medium py-8 px-12">Grid electricity</td>
                   <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
-                    {fmt(electricityKwh)} kWh
+                    {formatEnergyQuantity(electricityKwh, "kWh")}
                   </td>
                 </tr>
                 <tr className="last:[border-bottom:none]">
@@ -189,7 +195,7 @@ export function EnergySummary() {
                     </span>
                   </td>
                   <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
-                    {fmt(totalDieselLitres)} L
+                    {formatEnergyQuantity(totalDieselLitres, "L")}
                   </td>
                 </tr>
               </tbody>

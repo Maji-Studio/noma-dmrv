@@ -7,6 +7,7 @@
 import { PackageIcon, ScalesIcon, DropIcon, CheckCircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatMass } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFeedstockStats } from "@/hooks/use-feedstocks";
 
@@ -41,9 +42,12 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
         description="All time feedstocks"
       />
 
+      {/* No `?? 0` on either quantity: the shared formatters render the
+          missing-value token themselves, so a facility whose deliveries carry
+          no moisture reading never claims it received zero dry mass. */}
       <StatCard
         title="Total Dry Mass"
-        value={formatMass(stats?.totalDryMassKg ?? 0)}
+        value={formatMass(stats?.totalDryMassKg)}
         icon={<ScalesIcon size={20} />}
         isLoading={isLoading}
         description="Total dry mass received"
@@ -51,7 +55,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
 
       <StatCard
         title="Avg. Moisture"
-        value={stats?.avgMoisturePercent != null ? `${stats.avgMoisturePercent.toFixed(1)}%` : "Not available"}
+        value={formatMoisturePercent(stats?.avgMoisturePercent)}
         icon={<DropIcon size={20} />}
         isLoading={isLoading}
         description="Average moisture content"
