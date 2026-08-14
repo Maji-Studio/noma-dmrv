@@ -608,3 +608,20 @@ snapshot by design.
   from the Removal Source binding plan until an Application `source_ids` or
   equivalent boundary target exists.
 - The partial-mirroring blocker is retained.
+
+## 2026-08-14 (sync-event key widened; stale-lock script re-keyed)
+
+- `certifier_sync_events.entity_id` widened from `uuid` to `text` (migration
+  0108). The column is polymorphic per `entity_type`: local UUIDs for removals,
+  GHG statements, and documents; `nm-slc-*` supplier references (or an
+  `unmapped:*` fallback) for Storage Locations, whose sync events previously
+  failed to insert and crashed the application sync panel on read.
+- `scripts/isometric-clear-stale-lock.ts` now targets the Removal ledger key
+  (`localEntityType='removal'`); it previously queried `creditBatch` and could
+  never find current rows. It refuses to clear a draft whose
+  `metadata.externalMutation` is `possible`/`confirmed` unless
+  `--force-confirmed` is passed, because rejecting such a draft re-versions
+  the supplier references and can duplicate registry entries.
+- GHG statement creates now persist the interrupted marker (`lastError`,
+  `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have
+  reached the registry, matching the Removal pipeline.
