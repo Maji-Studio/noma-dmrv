@@ -23,6 +23,16 @@ export interface CreateDownloadUrlArgs {
   expiresInSeconds?: number;
 }
 
+export interface GetObjectArgs {
+  key: string;
+  expiresInSeconds?: number;
+}
+
+export interface StoredObject {
+  bytes: Buffer;
+  contentType: string;
+}
+
 export type StorageProviderName = "s3" | "do-spaces" | "local-fs";
 
 export interface StorageProvider {
@@ -30,6 +40,12 @@ export interface StorageProvider {
   readonly bucket: string;
   createUploadUrl(args: CreateUploadUrlArgs): Promise<PresignedUpload>;
   createDownloadUrl(args: CreateDownloadUrlArgs): Promise<string>;
+  /**
+   * Server-side read through a freshly presigned URL. Implementations bound
+   * the transfer, reject redirects and non-success responses, and return the
+   * complete object bytes with the response content type.
+   */
+  getObject(args: GetObjectArgs): Promise<StoredObject>;
   headObject(key: string): Promise<ObjectHead | null>;
   deleteObject(key: string): Promise<void>;
   /**

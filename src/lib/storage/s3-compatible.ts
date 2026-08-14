@@ -15,8 +15,11 @@ import type {
   ObjectHead,
   CreateUploadUrlArgs,
   CreateDownloadUrlArgs,
+  GetObjectArgs,
+  StoredObject,
 } from "./types";
 import { isSafeStorageKey } from "./keys";
+import { fetchStoredObject } from "./get-object";
 
 const DEFAULT_UPLOAD_TTL_SECONDS = 60 * 5;
 const DEFAULT_DOWNLOAD_TTL_SECONDS = 60 * 5;
@@ -83,6 +86,11 @@ export class S3CompatibleProvider implements StorageProvider {
       Key: this.physicalKey(args.key),
     });
     return getSignedUrl(this.client, cmd, { expiresIn: ttl });
+  }
+
+  async getObject(args: GetObjectArgs): Promise<StoredObject> {
+    const url = await this.createDownloadUrl(args);
+    return fetchStoredObject(url);
   }
 
   async headObject(key: string): Promise<ObjectHead | null> {

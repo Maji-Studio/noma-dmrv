@@ -41,6 +41,10 @@ class DeleteSafetyStorageProvider implements StorageProvider {
     throw new Error("Not used by document deletion tests");
   }
 
+  async getObject(): Promise<never> {
+    throw new Error("Not used by document deletion tests");
+  }
+
   async headObject(key: string): Promise<ObjectHead | null> {
     return this.objects.has(key)
       ? { size: 1, contentType: "application/pdf", etag: "test" }

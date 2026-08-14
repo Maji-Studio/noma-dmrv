@@ -62,6 +62,12 @@ export function __setStorageProviderForTests(p: StorageProvider | null): void {
   _provider = p;
 }
 
-export type { StorageProvider, PresignedUpload, ObjectHead } from "./types";
+export type {
+  GetObjectArgs,
+  ObjectHead,
+  PresignedUpload,
+  StorageProvider,
+  StoredObject,
+} from "./types";
 export { StorageError } from "./types";
 export { buildStorageKey, extractExtension, isSafeStorageKey } from "./keys";

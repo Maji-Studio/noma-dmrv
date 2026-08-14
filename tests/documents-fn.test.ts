@@ -78,6 +78,14 @@ class FakeProvider implements StorageProvider {
   async createDownloadUrl(args: { key: string }): Promise<string> {
     return `https://fake.test/${encodeURIComponent(args.key)}?download=1`;
   }
+  async getObject(args: { key: string }) {
+    const object = this.store.get(args.key);
+    if (!object) throw new Error("Object not found");
+    return {
+      bytes: Buffer.alloc(object.size),
+      contentType: object.contentType,
+    };
+  }
   async headObject(key: string): Promise<ObjectHead | null> {
     const obj = this.store.get(key);
     if (!obj) return null;

@@ -71,9 +71,9 @@ export async function fetchSignedUploadWithTimeout(
   );
   try {
     // `redirect: "error"` is applied last so it can't be overridden by a
-    // caller's `init` — every signed-URL transfer (PUT bytes AND the storage
-    // GET in downloadDocumentBlob) must refuse a redirect, since a rerouted
-    // hop is the SSRF vector this module exists to close.
+    // caller's `init` — every registry PUT must refuse a redirect, since a
+    // rerouted hop is the SSRF vector this module exists to close. Server-side
+    // storage reads enforce their sibling policy in `storage/get-object.ts`.
     return await fetch(url, {
       ...init,
       signal: controller.signal,

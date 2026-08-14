@@ -9,8 +9,11 @@ import type {
   ObjectHead,
   CreateUploadUrlArgs,
   CreateDownloadUrlArgs,
+  GetObjectArgs,
+  StoredObject,
 } from "./types";
 import { StorageError } from "./types";
+import { fetchStoredObject } from "./get-object";
 
 const DEFAULT_UPLOAD_TTL_SECONDS = 60 * 5;
 const DEFAULT_DOWNLOAD_TTL_SECONDS = 60 * 5;
@@ -135,6 +138,11 @@ export class LocalFsProvider implements StorageProvider {
     });
     const encoded = args.key.split("/").map(encodeURIComponent).join("/");
     return `${this.appUrl}/api/storage-local/${encoded}?token=${token}`;
+  }
+
+  async getObject(args: GetObjectArgs): Promise<StoredObject> {
+    const url = await this.createDownloadUrl(args);
+    return fetchStoredObject(url);
   }
 
   async headObject(key: string): Promise<ObjectHead | null> {
