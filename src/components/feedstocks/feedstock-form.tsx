@@ -50,6 +50,7 @@ import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
 import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
+import { matchesSupplierDefaultForDisplay } from "./feedstock-distance-source";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 const SUPPLIER_DEFAULT_DISTANCE_SOURCE = "supplier_default" as const;
@@ -236,11 +237,17 @@ export function FeedstockForm({
     isEditMode && !supplierAnchorChanged && existingLegDistanceKm != null
       ? (existingLegs?.[0]?.distanceSource ?? null)
       : storedDistanceSource;
-  const matchesSupplierDefault =
-    storedDistanceKm != null &&
-    transportDistanceKm === storedDistanceKm &&
-    draftTransportDistanceSource === storedDistanceSource &&
-    draftTransportDistanceSource !== "document";
+  // A saved leg's provenance is authoritative: in edit mode with an existing
+  // leg, the select shows the persisted source verbatim and never relabels it
+  // "Supplier default" on a numeric coincidence (DR-002 / FS-26-001).
+  const matchesSupplierDefault = matchesSupplierDefaultForDisplay({
+    seededFromSavedLeg:
+      isEditMode && !supplierAnchorChanged && existingLegDistanceKm != null,
+    storedDistanceKm,
+    storedDistanceSource,
+    transportDistanceKm,
+    draftTransportDistanceSource,
+  });
   const selectedDistanceSource =
     distanceSourceChoiceOverride?.supplierId === watchedSupplierId
       ? distanceSourceChoiceOverride.value
@@ -252,6 +259,11 @@ export function FeedstockForm({
       ? [{ value: SUPPLIER_DEFAULT_DISTANCE_SOURCE, label: "Supplier default" }]
       : []),
     { value: "manual", label: DISTANCE_SOURCE_LABELS.manual },
+    // Read-only provenance values stay selectable-in-place so the persisted
+    // source renders instead of a blank select.
+    ...(selectedDistanceSource === "map_estimate"
+      ? [{ value: "map_estimate", label: DISTANCE_SOURCE_LABELS.map_estimate }]
+      : []),
     ...(selectedDistanceSource === "document"
       ? [{ value: "document", label: DISTANCE_SOURCE_LABELS.document }]
       : []),

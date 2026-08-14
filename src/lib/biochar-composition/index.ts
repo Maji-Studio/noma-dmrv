@@ -7,6 +7,7 @@ export {
 
 export {
   reconcileComposition,
+  deriveBlendEffectiveMoisturePercent,
   deriveSourceBiocharDryMassKg,
   deriveSourceBiocharMassKg,
   deriveBlendMassKg,

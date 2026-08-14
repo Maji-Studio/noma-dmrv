@@ -59,4 +59,16 @@ describe("order product-bin selection", () => {
     );
     expect(orderFormSource).toContain("warning={availabilityWarning}");
   });
+
+  it("passes the edited order id to product list and detail availability", () => {
+    expect(orderFormSource).toContain(
+      "const productFilterBy = order ? { excludeOrderId: order.id } : undefined;",
+    );
+    expect(orderFormSource).toContain(
+      'useEntityById(\n    "biocharProduct",\n    watchedBiocharProductId || undefined,\n    productFilterBy,\n  )',
+    );
+    expect(orderFormSource).toMatch(
+      /<FormEntitySelect[\s\S]*?entityType="biocharProduct"[\s\S]*?filterBy=\{[\s\S]*?\.\.\.productFilterBy,[\s\S]*?\}/,
+    );
+  });
 });

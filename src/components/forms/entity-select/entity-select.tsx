@@ -272,12 +272,18 @@ export function EntitySelect({
         )
       : fetchedOptions;
 
-  // Fetch selected entity details
+  // Fetch selected entity details. Derivation-affecting filters (the order
+  // exclusion behind remaining-stock figures) must reach the detail fetch
+  // too, or the caption's "freshest source wins" rule would mix an excluded
+  // list figure with an unexcluded detail figure.
+  const detailFilterBy = filterBy?.excludeOrderId
+    ? { excludeOrderId: filterBy.excludeOrderId }
+    : undefined;
   const {
     data: selectedEntity,
     dataUpdatedAt: detailDataUpdatedAt,
     isPending: isSelectedEntityPending,
-  } = useEntityById(entityType, value);
+  } = useEntityById(entityType, value, detailFilterBy);
 
   const listedOption = options.find((option) => option.id === value);
   const selectedOption =
