@@ -27,9 +27,9 @@ export interface ApplicationDeliveryOption {
   destinationGpsLatitude: number | null;
   destinationGpsLongitude: number | null;
   /** Total kg already applied from this delivery across all applications */
-  alreadyAppliedWetKg: number | null;
+  alreadyAppliedWetKg: number;
   /** Total dry kg already applied from this delivery across all applications */
-  alreadyAppliedDryKg: number | null;
+  alreadyAppliedDryKg: number;
 }
 
 export interface ApplicationPositionDefault {
@@ -168,12 +168,12 @@ export function formatApplicationDeliveryOptionLabel(delivery: ApplicationDelive
 
 export function formatApplicationDeliveryHelperText(delivery: ApplicationDeliveryOption): string {
   const remainingWetKg =
-    delivery.deliveredWetMassKg == null || delivery.alreadyAppliedWetKg == null
+    delivery.deliveredWetMassKg == null
       ? null
       : Math.max(0, delivery.deliveredWetMassKg - delivery.alreadyAppliedWetKg);
   const deliveredDryKg = delivery.massDryKg;
   const remainingDryKg =
-    deliveredDryKg == null || delivery.alreadyAppliedDryKg == null
+    deliveredDryKg == null
       ? null
       : Math.max(0, deliveredDryKg - delivery.alreadyAppliedDryKg);
 

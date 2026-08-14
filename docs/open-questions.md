@@ -992,18 +992,3 @@ certification-bearing ones. Those are stakeholder calls, so #689 Phase A
 deliberately shipped the seam and no copy. **Resolve via:** a wording decision
 from the product owner, then a `RequirednessLegend` in
 `src/components/forms/`.
-
-### Phase B of the empty-value system is unshipped (`ui/empty-value-phase-b`) — DR-012, DR-013
-
-#689 Phase A defined the vocabulary (`MISSING_VALUE` in
-`src/lib/copy-utils.ts`), the `DetailField` empty contract
-(`emptySituation` / `valuePresent` in `src/components/ui/detail-panel/`), and
-the one placeholder treatment. The mechanical sweep is still open: roughly 110
-hard-coded token literals across screens, the off-vocabulary placeholders
-("Unassigned", "No crop type", "Not linked", "Missing", "No date"), the
-remaining `?? 0` coalescing before display, and the three live em dashes in
-`buildDurability1000Pdf`
-(`src/lib/certification/evidence-ledger/durability-1000-pdf.ts`). Until the
-off-vocabulary literals are migrated, `resolveDetailValue`'s
-`isMissingValueCopy` backstop cannot catch them, so those fields can still show
-a green "satisfied" CERT chip over a missing value.

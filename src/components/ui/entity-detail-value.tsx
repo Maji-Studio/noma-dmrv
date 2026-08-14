@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/loading-skeleton";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** Matches the value line of a `DetailField` so the row does not jump on load. */
-const VALUE_SKELETON_CLASS = "inline-block h-[16px] w-96 align-middle";
+const VALUE_SKELETON_CLASS = "inline-block h-16 w-96 align-middle";
 
 interface EntityDetailValueProps {
   entityType: EntityType;

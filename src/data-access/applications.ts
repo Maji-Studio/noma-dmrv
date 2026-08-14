@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
+import { numericAggregate } from "@/db/aggregate";
 import {
   applications,
   soilTemperatureMeasurements,
@@ -79,8 +80,8 @@ export interface ApplicationDeliveryOptionData {
   facilityDefaultSoilTemperatureC: number | null;
   destinationGpsLatitude: number | null;
   destinationGpsLongitude: number | null;
-  alreadyAppliedWetKg: number | null;
-  alreadyAppliedDryKg: number | null;
+  alreadyAppliedWetKg: number;
+  alreadyAppliedDryKg: number;
 }
 
 type CreateApplicationInput = Omit<
@@ -534,11 +535,11 @@ export async function getApplicationDeliveryOptions(
     db
       .select({
         deliveryId: applications.deliveryId,
-        totalAppliedKg: sql<number | null>`sum(${applications.biocharAppliedTons}) * ${KG_PER_TONNE}`.mapWith(
-          (value) => (value === null ? null : Number(value)),
+        totalAppliedKg: numericAggregate(
+          sql<number>`coalesce(sum(${applications.biocharAppliedTons}) * ${KG_PER_TONNE}, 0)`,
         ),
-        totalAppliedDryKg: sql<number | null>`sum(${applications.biocharAppliedDryTons}) * ${KG_PER_TONNE}`.mapWith(
-          (value) => (value === null ? null : Number(value)),
+        totalAppliedDryKg: numericAggregate(
+          sql<number>`coalesce(sum(${applications.biocharAppliedDryTons}) * ${KG_PER_TONNE}, 0)`,
         ),
       })
       .from(applications)
@@ -555,8 +556,8 @@ export async function getApplicationDeliveryOptions(
     const applied = appliedByDeliveryId.get(delivery.id);
     return {
       ...delivery,
-      alreadyAppliedWetKg: applied ? applied.totalAppliedKg : 0,
-      alreadyAppliedDryKg: applied ? applied.totalAppliedDryKg : 0,
+      alreadyAppliedWetKg: applied?.totalAppliedKg ?? 0,
+      alreadyAppliedDryKg: applied?.totalAppliedDryKg ?? 0,
     };
   });
 }

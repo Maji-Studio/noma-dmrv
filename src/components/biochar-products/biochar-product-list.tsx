@@ -233,7 +233,10 @@ export function BiocharProductPageMassSummary({
   isLoading = false,
 }: BiocharProductPageMassSummaryProps) {
   const wetKg = sumNullableBy(products, finalWetProductMassKg);
-  const dryKg = sumNullableBy(products, sourceBiocharDryMassKg);
+  const dryMassesKg = products.map(sourceBiocharDryMassKg);
+  const dryKg = dryMassesKg.some((massKg) => massKg === null)
+    ? null
+    : sumNullable(dryMassesKg);
 
   return (
     <StatCard

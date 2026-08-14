@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { BiocharProductPageMassSummary } from "./biochar-product-list";
 
 function productMass(
@@ -18,7 +19,7 @@ function productMass(
 }
 
 describe("BiocharProductPageMassSummary", () => {
-  it("labels the paginated total and sums the reported dry mass", () => {
+  it("keeps an incomplete paginated dry-mass total explicit", () => {
     const html = renderToStaticMarkup(
       <BiocharProductPageMassSummary
         products={[
@@ -31,7 +32,8 @@ describe("BiocharProductPageMassSummary", () => {
     expect(html).toContain("Mass on This Page");
     expect(html).toContain("Combined product mass on the current page");
     expect(html).toContain("150 kg");
-    expect(html).toContain("90 kg");
+    expect(html).toContain(MISSING_VALUE.notRecorded);
+    expect(html).not.toContain("90 kg");
   });
 
   it("reports source dry biochar instead of drying the whole blend", () => {

@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import type { FeedstockStats as FeedstockStatsData } from "@/data-access/feedstocks";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 vi.mock("@/hooks/use-facility-context", () => ({
@@ -7,7 +8,7 @@ vi.mock("@/hooks/use-facility-context", () => ({
 }));
 
 const stats = vi.hoisted(() => ({
-  value: undefined as Record<string, unknown> | undefined,
+  value: undefined as FeedstockStatsData | undefined,
 }));
 
 vi.mock("@/hooks/use-feedstocks", () => ({

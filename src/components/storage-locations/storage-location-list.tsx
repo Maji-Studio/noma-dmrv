@@ -101,7 +101,7 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
         label: "Feedstock types",
         value:
           storageLocation.feedstockInventory.feedstockTypes.join(", ") || null,
-        emptySituation: "notSet" as const,
+        emptySituation: "none" as const,
       },
     ];
   }
@@ -169,7 +169,7 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
       label: "Formulations",
       value:
         storageLocation.productInventory.formulationNames.join(", ") || null,
-      emptySituation: "notSet" as const,
+      emptySituation: "none" as const,
     },
   ];
 }

@@ -303,38 +303,29 @@ export function ApplicationForm({
 
   // Remaining capacity for the selected delivery
   const deliveryCapacityKg = selectedDelivery?.deliveredWetMassKg ?? null;
-  const alreadyApplied = selectedDelivery?.alreadyAppliedWetKg ?? null;
+  const alreadyApplied = selectedDelivery?.alreadyAppliedWetKg ?? 0;
   const isSameDelivery = isEditMode && application?.deliveryId === selectedDeliveryId;
   const currentApplicationKg = isSameDelivery
-    ? applicationTonsToKg(application?.biocharAppliedTons)
+    ? (applicationTonsToKg(application?.biocharAppliedTons) ?? 0)
     : 0;
   const currentApplicationDryKg = isSameDelivery
-    ? applicationTonsToKg(application?.biocharAppliedDryTons)
+    ? (applicationTonsToKg(application?.biocharAppliedDryTons) ?? 0)
     : 0;
-  const alreadyAppliedDryKg = selectedDelivery?.alreadyAppliedDryKg ?? null;
+  const alreadyAppliedDryKg = selectedDelivery?.alreadyAppliedDryKg ?? 0;
   const availableKg =
-    deliveryCapacityKg !== null &&
-    alreadyApplied !== null &&
-    currentApplicationKg !== null
+    deliveryCapacityKg !== null
       ? deliveryCapacityKg - alreadyApplied + currentApplicationKg
       : null;
-  const allocationsKnown =
-    alreadyApplied !== null &&
-    alreadyAppliedDryKg !== null &&
-    currentApplicationKg !== null &&
-    currentApplicationDryKg !== null;
-  const appliedDryBiocharKg = allocationsKnown
-    ? allocateTrackedDryBiocharKg({
-        totalWetKg: deliveryCapacityKg,
-        totalDryBiocharKg: selectedDelivery?.massDryKg ?? null,
-        requestedWetKg: appliedKgValid,
-        allocatedWetKg: Math.max(0, alreadyApplied - currentApplicationKg),
-        allocatedDryBiocharKg: Math.max(
-          0,
-          alreadyAppliedDryKg - currentApplicationDryKg,
-        ),
-      })
-    : null;
+  const appliedDryBiocharKg = allocateTrackedDryBiocharKg({
+    totalWetKg: deliveryCapacityKg,
+    totalDryBiocharKg: selectedDelivery?.massDryKg ?? null,
+    requestedWetKg: appliedKgValid,
+    allocatedWetKg: Math.max(0, alreadyApplied - currentApplicationKg),
+    allocatedDryBiocharKg: Math.max(
+      0,
+      alreadyAppliedDryKg - currentApplicationDryKg,
+    ),
+  });
   const applicationStockError =
     availableKg !== null &&
     appliedKgValid !== null &&
