@@ -2,6 +2,7 @@ import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { FormField, FormInput } from "@/components/forms";
+import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
 const WEIGHBRIDGE_MISMATCH_TOLERANCE_RATIO = 0.01;
 const DISPLAY_DECIMAL_PLACES = 2;
@@ -75,7 +76,7 @@ export function TruckWeighingSection({
           <FormInput
             id="truckMassOnArrivalKg"
             type="number"
-            step="any"
+            step={MASS_KG_INPUT_STEP}
             min={0}
             placeholder="e.g., 15000"
             disabled={isSubmitting}
@@ -94,7 +95,7 @@ export function TruckWeighingSection({
           <FormInput
             id="truckMassOnDepartureKg"
             type="number"
-            step="any"
+            step={MASS_KG_INPUT_STEP}
             min={0}
             placeholder="e.g., 5000"
             disabled={isSubmitting}
