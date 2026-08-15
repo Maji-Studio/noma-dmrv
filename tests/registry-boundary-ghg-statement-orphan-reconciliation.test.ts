@@ -16,16 +16,6 @@ vi.mock("@/lib/auth/server", async (importOriginal) => {
     requireOrgRole: actual.requireOrgRole,
   };
 });
-vi.mock("@/fn/certification/ghg-statement-finalization", async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import("@/fn/certification/ghg-statement-finalization")
-    >();
-  return {
-    ...actual,
-    finalizeGhgStatement: vi.fn(actual.finalizeGhgStatement),
-  };
-});
 
 import { db } from "@/db";
 import {
@@ -37,25 +27,21 @@ import {
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
 import { createGhgStatementDraft } from "@/fn/certification/ghg-statements";
-import { finalizeGhgStatement } from "@/fn/certification/ghg-statement-finalization";
 import * as authServer from "@/lib/auth/server";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import {
   installFakeRegistry,
   type FakeIsometricRegistry,
 } from "./fixtures/fake-registry";
-import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 
 const REPORTING_PERIOD_END = "2026-03-31";
+const IN_WINDOW_COMPLETED_ON = "2026-03-15";
 const FIXTURE_UUID_SUFFIX_LENGTH = 8;
+const MULTIPLE_DRAFTS_MESSAGE =
+  "Multiple draft GHG Statements exist for this project and period in Isometric.";
 const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
+
 const createdFacilityIds: string[] = [];
-let registry: FakeIsometricRegistry;
-
-beforeAll(() => ensureTestOrg());
-
-beforeEach(() => {
-  registry = installFakeRegistry();
-});
 
 afterAll(async () => {
   if (createdFacilityIds.length === 0) return;
@@ -63,7 +49,7 @@ afterAll(async () => {
     .select({ id: certifierRemovals.id })
     .from(certifierRemovals)
     .where(inArray(certifierRemovals.facilityId, createdFacilityIds));
-  const removalIds = removals.map((row) => row.id);
+  const removalIds = removals.map((removal) => removal.id);
   if (removalIds.length > 0) {
     await db
       .delete(certificationSubmissions)
@@ -76,7 +62,7 @@ afterAll(async () => {
     .select({ id: certifierGhgStatements.id })
     .from(certifierGhgStatements)
     .where(inArray(certifierGhgStatements.facilityId, createdFacilityIds));
-  const statementIds = statements.map((row) => row.id);
+  const statementIds = statements.map((statement) => statement.id);
   if (statementIds.length > 0) {
     await db
       .delete(certificationSubmissions)
@@ -94,14 +80,15 @@ afterAll(async () => {
   await db.delete(facilities).where(inArray(facilities.id, createdFacilityIds));
 });
 
-async function createFixture(): Promise<string> {
+async function createFixture() {
   const runId = crypto.randomUUID().slice(0, FIXTURE_UUID_SUFFIX_LENGTH);
+  const externalProjectId = `prj_ggs_bd_${runId}`;
   const [facility] = await db
     .insert(facilities)
     .values({
       organizationId: TEST_ORG_ID,
-      name: `GGS Finalization Facility ${runId}`,
-      code: `FAC-GF-${runId}`,
+      name: `GGS Boundary Facility ${runId}`,
+      code: `FAC-GB-${runId}`,
     })
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
@@ -109,14 +96,14 @@ async function createFixture(): Promise<string> {
     organizationId: TEST_ORG_ID,
     facilityId: facility.id,
     provider: "isometric",
-    externalProjectId: `prj_ggs_final_${runId}`,
+    externalProjectId,
   });
   const [removal] = await db
     .insert(certifierRemovals)
     .values({
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
-      completedOn: "2026-03-15",
+      completedOn: IN_WINDOW_COMPLETED_ON,
     })
     .returning({ id: certifierRemovals.id });
   await db.insert(certificationSubmissions).values({
@@ -125,18 +112,26 @@ async function createFixture(): Promise<string> {
     submissionType: "removal",
     localEntityType: "removal",
     localEntityId: removal.id,
-    externalId: `rmv_ggs_final_${runId}`,
+    externalId: `rmv_ggs_bd_${runId}`,
     version: 1,
     status: "submitted",
   });
-  const userId = `test-user-ggs-final-${runId}`;
+  vi.mocked(authServer.getUser).mockResolvedValue({
+    id: `test-user-ggs-${runId}`,
+    email: `ggs-${runId}@example.com`,
+    name: "Boundary Tester",
+    emailVerified: true,
+    role: "admin",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as never);
   vi.mocked(authServer.requireOrgContext).mockResolvedValue(
-    makeTestOrgContext(userId),
+    makeTestOrgContext(`test-user-ggs-${runId}`),
   );
-  return facility.id;
+  return { facilityId: facility.id, externalProjectId };
 }
 
-async function latestStatementRow(facilityId: string) {
+async function latestLedgerRow(facilityId: string) {
   const [statement] = await db
     .select({ id: certifierGhgStatements.id })
     .from(certifierGhgStatements)
@@ -149,46 +144,24 @@ async function latestStatementRow(facilityId: string) {
   return row ?? null;
 }
 
-describe("createGhgStatementDraft finalization recovery", () => {
-  it("marks a confirmed remote create interrupted and reconciles it immediately", async () => {
-    const facilityId = await createFixture();
-    vi.mocked(finalizeGhgStatement).mockRejectedValueOnce(
-      new Error("injected local finalization failure"),
-    );
+async function staleifyLock(rowId: string): Promise<void> {
+  await db
+    .update(certificationSubmissions)
+    .set({ lockedAt: new Date(Date.now() - STALE_LOCK_OFFSET_MS) })
+    .where(eq(certificationSubmissions.id, rowId));
+}
 
-    const first = await createGhgStatementDraft({
-      facilityId,
-      reportingPeriodEndOn: REPORTING_PERIOD_END,
-    });
+let registry: FakeIsometricRegistry;
 
-    expect(first.success).toBe(false);
-    expect(registry.ghgStatements).toHaveLength(1);
-    expect(await latestStatementRow(facilityId)).toMatchObject({
-      status: "draft",
-      metadata: {
-        lastAttemptOutcome: "interrupted",
-        externalMutation: "confirmed",
-      },
-    });
+beforeAll(() => ensureTestOrg());
 
-    const second = await createGhgStatementDraft({
-      facilityId,
-      reportingPeriodEndOn: REPORTING_PERIOD_END,
-    });
+beforeEach(() => {
+  registry = installFakeRegistry();
+});
 
-    expect(second).toMatchObject({
-      success: true,
-      data: { outcome: "existing" },
-    });
-    expect(registry.requestCount("POST", "/ghg_statements")).toBe(1);
-    expect(await latestStatementRow(facilityId)).toMatchObject({
-      status: "submitted",
-      externalId: registry.ghgStatements[0].id,
-    });
-  });
-
-  it("marks a reconciled remote create confirmed when local finalization fails", async () => {
-    const facilityId = await createFixture();
+describe("createGhgStatementDraft boundary: orphan reconciliation", () => {
+  it("reconciles a dropped draft after its possible-mutation lock expires", async () => {
+    const fixture = await createFixture();
     registry.failNext("POST /ghg_statements", "drop-after-commit");
     registry.passNext("GET /ghg_statements");
     registry.failNext("GET /ghg_statements", "reject-before-commit", {
@@ -196,42 +169,107 @@ describe("createGhgStatementDraft finalization recovery", () => {
     });
 
     const first = await createGhgStatementDraft({
-      facilityId,
+      facilityId: fixture.facilityId,
       reportingPeriodEndOn: REPORTING_PERIOD_END,
     });
     expect(first.success).toBe(false);
 
-    const interrupted = await latestStatementRow(facilityId);
-    expect(interrupted).not.toBeNull();
-    await db
-      .update(certificationSubmissions)
-      .set({ lockedAt: new Date(Date.now() - STALE_LOCK_OFFSET_MS) })
-      .where(eq(certificationSubmissions.id, interrupted!.id));
+    expect(registry.ghgStatements).toHaveLength(1);
+    const orphanId = registry.ghgStatements[0].id;
 
-    const orphan = registry.ghgStatements.pop();
-    if (!orphan) throw new Error("Expected the dropped registry statement");
-    const deferredPreflight = registry.deferNextResponse(
-      "GET /ghg_statements",
-    );
-    vi.mocked(finalizeGhgStatement).mockRejectedValueOnce(
-      new Error("injected reconciled finalization failure"),
-    );
-    const retry = createGhgStatementDraft({
-      facilityId,
+    let row = await latestLedgerRow(fixture.facilityId);
+    expect(row).not.toBeNull();
+    expect(row!.status).toBe("draft");
+    expect(row!.lockedAt).not.toBeNull();
+    expect(row!.metadata).toMatchObject({
+      lastAttemptOutcome: "interrupted",
+      externalMutation: "possible",
+    });
+    expect(Date.now() - row!.lockedAt!.getTime()).toBeLessThan(LOCK_TTL_MS);
+
+    const immediateRetry = await createGhgStatementDraft({
+      facilityId: fixture.facilityId,
       reportingPeriodEndOn: REPORTING_PERIOD_END,
     });
-    await deferredPreflight.started;
-    registry.ghgStatements.push(orphan);
-    deferredPreflight.release();
+    expect(immediateRetry).toEqual({
+      success: false,
+      error: "GHG Statement creation is already in progress.",
+    });
 
-    await expect(retry).resolves.toMatchObject({ success: false });
-    expect(registry.requestCount("POST", "/ghg_statements")).toBe(1);
-    expect(await latestStatementRow(facilityId)).toMatchObject({
-      status: "draft",
-      metadata: {
-        lastAttemptOutcome: "interrupted",
-        externalMutation: "confirmed",
+    await staleifyLock(row!.id);
+    const retryAfterExpiry = await createGhgStatementDraft({
+      facilityId: fixture.facilityId,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    expect(retryAfterExpiry).toMatchObject({
+      success: true,
+      data: {
+        outcome: "existing",
+        externalId: orphanId,
       },
     });
+
+    expect(registry.ghgStatements).toHaveLength(1);
+    expect(registry.requestCount("POST", "/ghg_statements")).toBe(1);
+
+    row = await latestLedgerRow(fixture.facilityId);
+    expect(row).toMatchObject({
+      status: "submitted",
+      externalId: orphanId,
+      version: 1,
+    });
+
+    const events = await db
+      .select()
+      .from(certifierSyncEvents)
+      .where(eq(certifierSyncEvents.entityId, row!.localEntityId));
+    expect(
+      events.map((event) => `${event.operation}:${event.status}`),
+    ).toContain("ghg_statement:create:reconciled:succeeded");
+  });
+
+  it("rejects with the ambiguity message when the period holds two drafts", async () => {
+    const fixture = await createFixture();
+    registry.failNext("POST /ghg_statements", "drop-after-commit");
+    registry.passNext("GET /ghg_statements");
+    registry.failNext("GET /ghg_statements", "reject-before-commit", {
+      status: 503,
+    });
+
+    const first = await createGhgStatementDraft({
+      facilityId: fixture.facilityId,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    expect(first.success).toBe(false);
+
+    registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: REPORTING_PERIOD_END,
+    });
+
+    let row = await latestLedgerRow(fixture.facilityId);
+    await staleifyLock(row!.id);
+
+    const second = await createGhgStatementDraft({
+      facilityId: fixture.facilityId,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    expect(second).toEqual({ success: false, error: MULTIPLE_DRAFTS_MESSAGE });
+    expect(registry.requestCount("POST", "/ghg_statements")).toBe(1);
+
+    row = await latestLedgerRow(fixture.facilityId);
+    expect(row!.status).toBe("rejected");
+    expect(row!.externalId).toBeNull();
+    expect(row!.metadata).toMatchObject({
+      lastError: MULTIPLE_DRAFTS_MESSAGE,
+    });
+
+    const events = await db
+      .select()
+      .from(certifierSyncEvents)
+      .where(eq(certifierSyncEvents.entityId, row!.localEntityId));
+    expect(
+      events.filter((event) => event.status === "failed"),
+    ).toHaveLength(0);
   });
 });

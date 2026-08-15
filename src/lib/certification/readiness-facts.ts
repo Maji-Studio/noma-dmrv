@@ -12,7 +12,7 @@
 
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
-import { isRemovalSubmissionInterrupted } from "./status";
+import { canReclaimInterruptedSubmission } from "./submission-metadata";
 import type { RemovalReadinessFacts } from "./readiness";
 
 export function toRemovalReadinessFacts(
@@ -20,7 +20,7 @@ export function toRemovalReadinessFacts(
 ): RemovalReadinessFacts {
   const lockInFlight = ctx.latestSubmission
     ? isLockedInFlight(ctx.latestSubmission) &&
-      !isRemovalSubmissionInterrupted(ctx.latestSubmission.metadata)
+      !canReclaimInterruptedSubmission(ctx.latestSubmission.metadata)
     : false;
   return {
     local: ctx.latestSubmission?.status ?? null,

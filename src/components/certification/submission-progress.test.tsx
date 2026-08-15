@@ -1,9 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import {
-  canRetrySubmissionProgress,
-  SubmissionProgress,
-} from "./submission-progress";
+import { SubmissionProgress } from "./submission-progress";
 
 describe("SubmissionProgress", () => {
   it("shows completed, active, counted, and upcoming Removal steps", () => {
@@ -162,66 +159,4 @@ describe("SubmissionProgress", () => {
     expect(html).not.toContain('role="status">Preparing submission</span>');
   });
 
-  it("offers direct retry for server-returned failures at every GHG Statement step", () => {
-    expect(
-      canRetrySubmissionProgress("ghg_statement", [
-        { step: "ghg_statement.checking", state: "active" },
-      ]),
-    ).toBe(true);
-    expect(
-      canRetrySubmissionProgress("ghg_statement", [
-        { step: "ghg_statement.checking", state: "complete" },
-        { step: "ghg_statement.preparing_report", state: "complete" },
-        { step: "ghg_statement.sending", state: "active" },
-      ]),
-    ).toBe(true);
-    expect(canRetrySubmissionProgress("ghg_statement", [])).toBe(true);
-  });
-
-  it("retries GHG Statement confirmation and finalization failures", () => {
-    expect(
-      canRetrySubmissionProgress("ghg_statement", [
-        { step: "ghg_statement.checking", state: "complete" },
-        { step: "ghg_statement.preparing_report", state: "complete" },
-        { step: "ghg_statement.sending", state: "complete" },
-        { step: "ghg_statement.confirming", state: "active" },
-      ]),
-    ).toBe(true);
-    expect(
-      canRetrySubmissionProgress("ghg_statement", [
-        { step: "ghg_statement.checking", state: "complete" },
-        { step: "ghg_statement.preparing_report", state: "complete" },
-        { step: "ghg_statement.sending", state: "complete" },
-        { step: "ghg_statement.confirming", state: "complete" },
-        { step: "ghg_statement.complete", state: "active" },
-      ]),
-    ).toBe(true);
-  });
-
-  it("offers direct retry for server-returned failures at every Removal step", () => {
-    expect(canRetrySubmissionProgress("removal", [])).toBe(true);
-    expect(
-      canRetrySubmissionProgress("removal", [
-        { step: "removal.checking_data", state: "complete" },
-        { step: "removal.preparing_evidence", state: "complete" },
-        {
-          step: "removal.sending_inputs",
-          state: "active",
-          completed: 0,
-          total: 1,
-        },
-      ]),
-    ).toBe(true);
-    expect(
-      canRetrySubmissionProgress("removal", [
-        { step: "removal.checking_data", state: "complete" },
-        { step: "removal.preparing_evidence", state: "complete" },
-        { step: "removal.sending_inputs", state: "complete" },
-        { step: "removal.sending_durability", state: "complete" },
-        { step: "removal.creating", state: "complete" },
-        { step: "removal.verifying_evidence", state: "complete" },
-        { step: "removal.complete", state: "active" },
-      ]),
-    ).toBe(true);
-  });
 });

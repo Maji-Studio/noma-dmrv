@@ -57,6 +57,7 @@ import {
   writeDataUploadParquet,
 } from "@/lib/isometric/parquet/writer";
 import type { ActionResult } from "@/types/actions";
+import { sanitizeErrorMessage } from "@/lib/log";
 import { withAction } from "../with-action";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
@@ -75,6 +76,16 @@ const UPLOAD_ERROR_TRUNCATION_LIMIT = 1000;
 
 type FileUploadResponse = { id: string; upload_url: string };
 type DataUploadSubmission = components["schemas"]["DataUploadSubmission"];
+type DataUploadStatus = DataUploadSubmission["status"];
+
+const DATA_UPLOAD_STATUSES: { [K in DataUploadStatus]: K } = {
+  pending: "pending",
+  completed: "completed",
+  failed: "failed",
+};
+const dataUploadStatusSchema = z.enum(
+  Object.values(DATA_UPLOAD_STATUSES) as [DataUploadStatus, ...DataUploadStatus[]],
+);
 
 export interface SubmitTelemetryArgs {
   removalId: string;
@@ -514,17 +525,13 @@ function readResumeSnapshot(
     row.metadata,
     SUBMISSION_METADATA_KEYS.remoteStatus,
   );
+  const parsedRemoteStatus = dataUploadStatusSchema.safeParse(remoteStatus);
   return {
     dataUploadSubmissionId: j.dataUploadSubmissionId ?? null,
     fileUploadId: j.fileUploadId ?? null,
     uploadUrlExpiresAt:
       expiresAt && Number.isFinite(expiresAt.getTime()) ? expiresAt : null,
-    remoteStatus:
-      remoteStatus === "pending" ||
-      remoteStatus === "completed" ||
-      remoteStatus === "failed"
-        ? remoteStatus
-        : null,
+    remoteStatus: parsedRemoteStatus.success ? parsedRemoteStatus.data : null,
   };
 }
 
@@ -564,22 +571,23 @@ async function recordRemoteDataUploadStatus(
     await markSubmissionSubmitted(orgCtx, rowId, identity);
   }
   const metadataPatch = {
-    remoteStatus: remote.status,
-    lastError: remote.error_message ?? null,
+    [SUBMISSION_METADATA_KEYS.remoteStatus]: remote.status,
+    [SUBMISSION_METADATA_KEYS.lastError]: remote.error_message ?? null,
   };
-  if (remote.status === "completed") {
+  if (remote.status === DATA_UPLOAD_STATUSES.completed) {
     await setSubmissionTerminalStatus(orgCtx, rowId, {
       status: "accepted",
       metadataPatch,
     });
     return;
   }
-  if (remote.status === "failed") {
+  if (remote.status === DATA_UPLOAD_STATUSES.failed) {
     await setSubmissionTerminalStatus(orgCtx, rowId, {
       status: "rejected",
       metadataPatch: {
         ...metadataPatch,
-        lastError: remote.error_message ?? "Isometric processing failed",
+        [SUBMISSION_METADATA_KEYS.lastError]:
+          remote.error_message ?? "Isometric processing failed",
       },
     });
     return;
@@ -594,8 +602,7 @@ async function failTelemetryAttempt(args: {
   operation: string;
   error: unknown;
 }): Promise<never> {
-  const message =
-    args.error instanceof Error ? args.error.message : String(args.error);
+  const message = sanitizeErrorMessage(args.error);
   await appendSyncEventBestEffort(args.orgCtx, {
     provider: ISOMETRIC_PROVIDER,
     entityType: DATA_UPLOAD_ENTITY_TYPE,

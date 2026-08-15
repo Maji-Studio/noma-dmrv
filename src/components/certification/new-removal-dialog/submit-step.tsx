@@ -38,10 +38,7 @@ import {
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
-import {
-  canRetrySubmissionProgress,
-  SubmissionProgress,
-} from "../submission-progress";
+import { SubmissionProgress } from "../submission-progress";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { DebugDrawer } from "./debug-drawer";
@@ -248,9 +245,6 @@ export function SubmitStep({
         : submitMutation.isError
           ? "The Removal was not submitted. Try again."
           : null);
-    const canRetry =
-      !submissionStalled &&
-      canRetrySubmissionProgress("removal", progressUpdates);
     return (
       <div className="flex flex-col gap-16">
         <SubmissionProgress
@@ -266,9 +260,7 @@ export function SubmitStep({
               ? "noma is submitting the Removal to Isometric."
               : submissionStalled
                 ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
-                : canRetry
-                  ? "Completed registry operations are preserved for a safe retry."
-                  : "Review the submission details and resolve the error before submitting again."}
+                : "Completed registry operations are preserved for a safe retry."}
           </span>
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
@@ -276,7 +268,7 @@ export function SubmitStep({
                 <Button variant="primary" onClick={onDone}>
                   Close
                 </Button>
-              ) : canRetry ? (
+              ) : (
                 <>
                   <Button
                     onClick={() => {
@@ -293,16 +285,6 @@ export function SubmitStep({
                     Try again
                   </Button>
                 </>
-              ) : (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setProgressUpdates([]);
-                    submitMutation.reset();
-                  }}
-                >
-                  Review submission
-                </Button>
               )}
             </div>
           )}

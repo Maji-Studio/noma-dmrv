@@ -104,6 +104,21 @@ function pendingCapabilityAppearsApplied(args: {
     : null;
 }
 
+function activeGeneratedReportAppearsApplied(args: {
+  remote: GhgStatement;
+  report: GhgStatementReportRow;
+}): boolean {
+  const token = getVerifierTokenFromReportUrl(
+    args.remote.ghg_statement_report_url,
+    args.report.id,
+  );
+  return Boolean(
+    token &&
+      args.report.verifierTokenHash &&
+      hashVerifierToken(token) === args.report.verifierTokenHash,
+  );
+}
+
 function isUnsubmittedDraftWithoutPendingCapability(args: {
   remote: GhgStatement;
   reportId: string;
@@ -348,13 +363,23 @@ export async function submitGhgStatementToVerifierCore(args: {
         submission.metadata,
       );
       if (submitMode === "blocked-awaiting") {
+        const generatedReportMatches = Boolean(
+          generatedReport &&
+            remoteBefore &&
+            activeGeneratedReportAppearsApplied({
+              remote: remoteBefore,
+              report: generatedReport,
+            }),
+        );
         const externalReportMatches =
           !generatedReport &&
           Boolean(externalReportUrl) &&
           remoteBefore?.ghg_statement_report_url === externalReportUrl;
         if (
           remoteBefore &&
-          (recoveredAppliedReport || externalReportMatches)
+          (recoveredAppliedReport ||
+            generatedReportMatches ||
+            externalReportMatches)
         ) {
           onProgress?.({ step: "ghg_statement.checking", state: "complete" });
           onProgress?.({
@@ -363,16 +388,31 @@ export async function submitGhgStatementToVerifierCore(args: {
           });
           onProgress?.({ step: "ghg_statement.sending", state: "reused" });
           onProgress?.({ step: "ghg_statement.confirming", state: "active" });
+          const summaryOfChanges = parsed.summaryOfChanges?.trim();
           await applyGhgRemoteState(orgCtx, submission, remoteBefore, {
             reportUrl: redactReportUrlSecrets(
               remoteBefore.ghg_statement_report_url,
             ),
-            summaryOfChanges: parsed.summaryOfChanges?.trim() || null,
+            ...(summaryOfChanges ? { summaryOfChanges } : {}),
             ...(generatedReport
               ? { lastReportDocumentId: generatedReport.documentId }
               : {}),
             submittedToVerifierAt:
               remoteBefore.submitted_at ?? new Date().toISOString(),
+          });
+          await appendSyncEvent(orgCtx, {
+            provider: ISOMETRIC_PROVIDER,
+            entityType: GHG_STATEMENT_ENTITY_TYPE,
+            entityId: ghgStatementId,
+            operation: `ghg_statement:${submitMode}:reconciled`,
+            status: "succeeded",
+            responsePayload: {
+              id: initialExternalId,
+              source: "reconciliation",
+              detected_status: remoteBefore.status,
+              submission_attempt_id: submissionAttemptId,
+              external_mutation: "confirmed",
+            },
           });
           return {
             externalId: initialExternalId,

@@ -63,6 +63,7 @@ import { fetchSignedUploadWithTimeout } from "@/lib/isometric/utils/signed-uploa
 import { IsometricApiError } from "@/lib/isometric";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 
 const ORG_CTX: OrgContext = {
   userId: "telemetry-test-user",
@@ -119,8 +120,11 @@ function installMutableLedger(
     claims.resetSubmissionToDraftWithMappingLock,
   ).mockImplementation(async () => {
     if (!current) throw new Error("Test ledger row is missing");
-    current.status = "draft";
-    current.lockedAt = new Date();
+    current = {
+      ...current,
+      status: "draft",
+      lockedAt: new Date(),
+    };
     return current;
   });
   vi.mocked(ledger.appendSubmissionJournal).mockImplementation(
@@ -142,6 +146,14 @@ function installMutableLedger(
   vi.mocked(ledger.markSubmissionRejected).mockImplementation(
     async (_ctx, _rowId, args) => {
       if (!current) throw new Error("Test ledger row is missing");
+      if (
+        current.status !== "draft" ||
+        !current.lockedAt ||
+        !args.expectedLockedAt ||
+        current.lockedAt.getTime() !== args.expectedLockedAt.getTime()
+      ) {
+        return;
+      }
       current.status = "rejected";
       current.lockedAt = null;
       current.metadata = {
@@ -193,6 +205,9 @@ const PENDING_UPLOAD = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  client.get.mockReset();
+  client.post.mockReset();
+  vi.mocked(fetchSignedUploadWithTimeout).mockReset();
   vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({
     facilityId: "30000000-0000-4000-8000-000000000003",
     mapping: {
@@ -403,8 +418,8 @@ describe("submitTelemetry terminal retry behavior", () => {
       {
         status: "rejected",
         metadataPatch: {
-          remoteStatus: "failed",
-          lastError: "invalid parquet shape",
+          [SUBMISSION_METADATA_KEYS.remoteStatus]: "failed",
+          [SUBMISSION_METADATA_KEYS.lastError]: "invalid parquet shape",
         },
       },
     );
@@ -422,7 +437,9 @@ describe("submitTelemetry terminal retry behavior", () => {
     vi.mocked(claims.resetSubmissionToDraftWithMappingLock).mockResolvedValue(
       row,
     );
-    client.get.mockRejectedValue(new Error("status poll failed"));
+    client.get.mockRejectedValue(
+      new Error('status poll failed\nparams: ["operator@example.com"]'),
+    );
 
     await expect(
       submitTelemetry(ORG_CTX, { removalId: REMOVAL_ID }),
@@ -430,7 +447,10 @@ describe("submitTelemetry terminal retry behavior", () => {
     expect(ledger.markSubmissionRejected).toHaveBeenCalledWith(
       ORG_CTX,
       ROW_ID,
-      expect.objectContaining({ errorMessage: "status poll failed" }),
+      expect.objectContaining({
+        errorMessage: "status poll failed\nparams: [REDACTED]",
+        expectedLockedAt: row.lockedAt,
+      }),
     );
   });
 

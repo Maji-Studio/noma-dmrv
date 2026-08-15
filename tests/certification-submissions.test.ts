@@ -639,7 +639,7 @@ describe("claimSubmissionDraft — resume", () => {
       metadata: {
         lastError: "The request ended after registry work began",
         lastAttemptOutcome: "interrupted",
-        externalMutation: "possible",
+        externalMutation: "confirmed",
         retained: true,
       },
     });
@@ -661,7 +661,7 @@ describe("claimSubmissionDraft — resume", () => {
       row: {
         id: seeded.id,
         payloadSnapshot: { semantic: { seeded: true } },
-        metadata: { externalMutation: "possible", retained: true },
+        metadata: { externalMutation: "confirmed", retained: true },
       },
     });
   });
@@ -676,7 +676,7 @@ describe("claimSubmissionDraft — resume", () => {
       lockedAt: new Date(),
       metadata: {
         lastAttemptOutcome: "interrupted",
-        externalMutation: "possible",
+        externalMutation: "confirmed",
       },
     });
 
@@ -701,7 +701,7 @@ describe("claimSubmissionDraft — resume", () => {
     expect(stored).toMatchObject({
       id: seeded.id,
       status: "draft",
-      metadata: { externalMutation: "possible" },
+      metadata: { externalMutation: "confirmed" },
     });
     expect(stored.metadata).not.toHaveProperty("lastAttemptOutcome");
   });

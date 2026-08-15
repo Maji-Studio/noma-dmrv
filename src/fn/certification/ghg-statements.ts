@@ -491,6 +491,7 @@ async function createGhgStatementRemote(args: {
         externalMutation = state;
       },
     });
+    externalMutation = "confirmed";
     // Keep local finalization inside the same failure boundary as the remote
     // create/reconciliation. Once performRegistryCreate returns, the external
     // mutation is confirmed; if the local identity/status write fails, mark

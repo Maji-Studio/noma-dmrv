@@ -28,9 +28,8 @@ import type { StatusValue } from "@/components/ui/status-badge";
 // client bundle as runtime code.
 import type { components } from "@/lib/isometric/generated/certify";
 import {
-  getMetadataValue,
+  isSubmissionAttemptInterrupted,
   SUBMISSION_ATTEMPT_OUTCOMES,
-  SUBMISSION_METADATA_KEYS,
 } from "@/lib/certification/submission-metadata";
 import type { RemovalReadiness } from "./readiness";
 
@@ -170,12 +169,7 @@ export const REMOVAL_SUBMISSION_INTERRUPTED_LABEL =
   "Submission interrupted";
 
 export function isRemovalSubmissionInterrupted(metadata: unknown): boolean {
-  return (
-    getMetadataValue(
-      metadata,
-      SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
-    ) === REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME
-  );
+  return isSubmissionAttemptInterrupted(metadata);
 }
 
 export interface RemovalWorkflowStatus {

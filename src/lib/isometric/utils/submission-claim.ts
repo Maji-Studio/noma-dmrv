@@ -10,9 +10,7 @@
  */
 
 import {
-  getMetadataValue,
-  SUBMISSION_ATTEMPT_OUTCOMES,
-  SUBMISSION_METADATA_KEYS,
+  canReclaimInterruptedSubmission,
 } from "@/lib/certification/submission-metadata";
 
 export type SubmissionClaimStatus =
@@ -126,17 +124,6 @@ export type SubmissionClaim =
  */
 export const UPLOAD_URL_SAFETY_MS = 30_000;
 
-export function isSubmissionClaimInterrupted(
-  row: Pick<SubmissionClaimRow, "metadata"> | null,
-): boolean {
-  return (
-    getMetadataValue(
-      row?.metadata,
-      SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
-    ) === SUBMISSION_ATTEMPT_OUTCOMES.interrupted
-  );
-}
-
 export function decideSubmissionClaim(
   input: SubmissionClaimInput,
 ): SubmissionClaim {
@@ -154,13 +141,15 @@ export function decideSubmissionClaim(
 
   switch (latest.status) {
     case "draft": {
-      const interrupted = isSubmissionClaimInterrupted(latest);
+      const canReclaimInterrupted = canReclaimInterruptedSubmission(
+        latest.metadata,
+      );
       const lockedAtMs = latest.lockedAt?.getTime() ?? 0;
       // A synchronous failure marker proves the active process has ended. It
       // bypasses only the TTL: DataUpload still has to follow the journaled
       // recovery decision below, and the data-access CAS atomically requires
       // and clears the marker before recovery work can start.
-      if (!interrupted && now - lockedAtMs < lockTtlMs) {
+      if (!canReclaimInterrupted && now - lockedAtMs < lockTtlMs) {
         return { kind: "blocked-in-flight" };
       }
       if (dataUploadResume) {
@@ -182,13 +171,6 @@ export function decideSubmissionClaim(
           nextVersion: latest.version + 1,
           supersedePreviousId: null,
           reason: "dataupload-orphan-restart",
-        };
-      }
-      if (interrupted) {
-        return {
-          kind: "resume",
-          resumeRowId: latest.id,
-          resumeVersion: latest.version,
         };
       }
       return {
@@ -224,6 +206,7 @@ export function decideSubmissionClaim(
         // version. Other submission types remain blocked because their remote
         // rejected artifact is the record that must be resolved.
         if (
+          latest.payloadHash === payloadHash &&
           latest.externalId &&
           dataUploadResume.remoteStatus === "failed"
         ) {
@@ -234,7 +217,7 @@ export function decideSubmissionClaim(
             reason: "dataupload-rejected-restart",
           };
         }
-        if (latest.externalId) {
+        if (latest.payloadHash === payloadHash && latest.externalId) {
           return decideDataUploadResume({ latest, dataUploadResume, now });
         }
         // A local failure may have happened after step 3 was journaled but
@@ -243,6 +226,12 @@ export function decideSubmissionClaim(
         if (latest.payloadHash === payloadHash) {
           return decideDataUploadResume({ latest, dataUploadResume, now });
         }
+        return {
+          kind: "create-new-version",
+          nextVersion: latest.version + 1,
+          supersedePreviousId: null,
+          reason: "rejected-hash-changed",
+        };
       }
       if (latest.externalId) {
         return { kind: "blocked-rejected-with-external" };

@@ -29,6 +29,8 @@ import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import {
+  canReclaimInterruptedSubmission,
+  SUBMISSION_EXTERNAL_MUTATIONS,
   SUBMISSION_ATTEMPT_OUTCOMES,
   SUBMISSION_METADATA_KEYS,
 } from "@/lib/certification/submission-metadata";
@@ -38,7 +40,6 @@ import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   decideSubmissionClaim,
-  isSubmissionClaimInterrupted,
   type SubmissionClaimPolicy,
 } from "@/lib/isometric/utils/submission-claim";
 import {
@@ -295,7 +296,7 @@ async function resumeDraft<H>(
       ctx,
       decided.resumeRowId,
       LOCK_TTL_MS,
-      isSubmissionClaimInterrupted(latest),
+      canReclaimInterruptedSubmission(latest?.metadata),
     );
     if (!row) return { kind: "blocked", reason: "in-flight" };
     return {
@@ -624,7 +625,7 @@ async function resetSubmissionToDraftCas(
   ctx: OrgContext,
   id: string,
   lockTtlMs: number,
-  requireInterruptedMarker = false,
+  requireConfirmedInterruptedMarker = false,
 ): Promise<CertificationSubmissionRow | null> {
   const [row] = await tx
     .update(certificationSubmissions)
@@ -640,10 +641,11 @@ async function resetSubmissionToDraftCas(
       and(
         eq(certificationSubmissions.id, id),
         eq(certificationSubmissions.organizationId, ctx.organizationId),
-        requireInterruptedMarker
+        requireConfirmedInterruptedMarker
           ? and(
               eq(certificationSubmissions.status, "draft"),
               sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text = ${SUBMISSION_ATTEMPT_OUTCOMES.interrupted}`,
+              sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.externalMutation}::text = ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}`,
             )
           : or(
               ne(certificationSubmissions.status, "draft"),
@@ -736,7 +738,7 @@ export async function resetSubmissionToDraftWithMappingLock(
       ctx,
       id,
       lockTtlMs,
-      isSubmissionClaimInterrupted(rowToReset),
+      canReclaimInterruptedSubmission(rowToReset.metadata),
     );
     if (!row) throw new SafeError("Submission already in progress");
     return row;

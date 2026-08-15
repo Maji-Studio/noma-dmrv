@@ -912,6 +912,57 @@ describe("submitGhgStatementToVerifier — happy path", () => {
     });
   });
 
+  it("finalizes an already-promoted generated report without replacing its summary", async () => {
+    const remoteDraft = makeRemoteStatement({ status: "DRAFT" });
+    const activeGeneratedReportUrl =
+      `http://localhost:3100/api/ghg-statement-reports/${REPORT_ID}?token=active`;
+    const remoteApplied = makeRemoteStatement({
+      status: "AWAITING_VERIFICATION",
+      ghg_statement_report_url: activeGeneratedReportUrl,
+      submitted_at: "2026-02-01T10:00:00Z",
+    });
+    vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteDraft);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteDraft);
+    await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    storedLedger[0].metadata = { summaryOfChanges: "Existing summary" };
+    vi.mocked(reportDA.getApprovedGhgStatementReport).mockResolvedValue({
+      id: REPORT_ID,
+      ghgStatementId: STATEMENT_ID,
+      documentId: REPORT_DOCUMENT_ID,
+      version: 1,
+      lifecycle: "submitted",
+      sourceFingerprint: "a".repeat(64),
+      verifierTokenHash: hashVerifierToken("active"),
+      pendingVerifierTokenHash: null,
+    } as GhgStatementReportRow);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteApplied);
+
+    const result = await submitGhgStatementToVerifier(STATEMENT_ID, {
+      reportId: REPORT_ID,
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { remoteStatus: "AWAITING_VERIFICATION" },
+    });
+    expect(isometric.submitGhgStatement).not.toHaveBeenCalled();
+    expect(storedLedger[0].metadata).toMatchObject({
+      summaryOfChanges: "Existing summary",
+      remoteStatus: "AWAITING_VERIFICATION",
+      lastReportDocumentId: REPORT_DOCUMENT_ID,
+    });
+    expect(ledger.appendSyncEvent).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      expect.objectContaining({
+        operation: "ghg_statement:blocked-awaiting:reconciled",
+        status: "succeeded",
+      }),
+    );
+  });
+
   it("serializes concurrent generated-report submits before minting a token", async () => {
     const remoteBefore = makeRemoteStatement({ status: "DRAFT" });
     const remoteAfter = makeRemoteStatement({

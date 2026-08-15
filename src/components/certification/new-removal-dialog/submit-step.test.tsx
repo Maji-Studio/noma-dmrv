@@ -86,7 +86,6 @@ vi.mock("../submit-confirm-dialog", () => ({
 }));
 
 vi.mock("../submission-progress", () => ({
-  canRetrySubmissionProgress: () => true,
   SubmissionProgress: () => <div>Submission progress</div>,
 }));
 

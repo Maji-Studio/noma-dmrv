@@ -12,6 +12,7 @@ const NOW = 1_700_000_000_000;
 const LOCK_TTL_MS = 10 * 60 * 1000;
 const HASH = "hash-current";
 const OTHER_HASH = "hash-different";
+const FRESH_UPLOAD_HEADROOM_MS = 60_000;
 
 const SUPERSEDE: SubmissionClaimPolicy = { onSubmittedHashChanged: "supersede" };
 const INVALID: SubmissionClaimPolicy = {
@@ -381,7 +382,10 @@ describe("decideSubmissionClaim", () => {
         status: "draft",
         lockedAt: new Date(NOW),
         version: 2,
-        metadata: { lastAttemptOutcome: "interrupted" },
+        metadata: {
+          lastAttemptOutcome: "interrupted",
+          externalMutation: "confirmed",
+        },
         ...overrides,
       });
     }
@@ -443,7 +447,9 @@ describe("decideSubmissionClaim", () => {
     });
 
     it("re-PUTs the existing fileUpload when the signed URL is comfortably fresh", () => {
-      const fresh = new Date(NOW + UPLOAD_URL_SAFETY_MS + 60_000);
+      const fresh = new Date(
+        NOW + UPLOAD_URL_SAFETY_MS + FRESH_UPLOAD_HEADROOM_MS,
+      );
       expect(
         decideSubmissionClaim({
           latest: staleDraft(),
@@ -511,7 +517,9 @@ describe("decideSubmissionClaim", () => {
       // (payloadHash differs from the draft's). Reusing the orphaned upload
       // would PUT new bytes to a URL presigned for the old length, so the
       // claim must restart instead of resume-re-put.
-      const fresh = new Date(NOW + UPLOAD_URL_SAFETY_MS + 60_000);
+      const fresh = new Date(
+        NOW + UPLOAD_URL_SAFETY_MS + FRESH_UPLOAD_HEADROOM_MS,
+      );
       expect(
         decideSubmissionClaim({
           latest: staleDraft(),
@@ -546,7 +554,9 @@ describe("decideSubmissionClaim", () => {
     });
 
     it("bypasses the TTL for an interrupted draft but still follows its journaled recovery step", () => {
-      const freshUrl = new Date(NOW + UPLOAD_URL_SAFETY_MS + 60_000);
+      const freshUrl = new Date(
+        NOW + UPLOAD_URL_SAFETY_MS + FRESH_UPLOAD_HEADROOM_MS,
+      );
 
       expect(
         decideSubmissionClaim({
@@ -599,6 +609,23 @@ describe("decideSubmissionClaim", () => {
       });
     });
 
+    it("keeps a possible external mutation blocked until the lock TTL expires", () => {
+      expect(
+        decideSubmissionClaim({
+          latest: freshInterruptedDraft({
+            metadata: {
+              lastAttemptOutcome: "interrupted",
+              externalMutation: "possible",
+            },
+          }),
+          payloadHash: HASH,
+          now: NOW,
+          lockTtlMs: LOCK_TTL_MS,
+          policy: SUPERSEDE,
+        }),
+      ).toEqual({ kind: "blocked-in-flight" });
+    });
+
     it("starts a new version when a remote DataUploadSubmission failed", () => {
       expect(
         decideSubmissionClaim({
@@ -624,7 +651,7 @@ describe("decideSubmissionClaim", () => {
       });
     });
 
-    it("polls an external DataUploadSubmission when rejection was local", () => {
+    it("starts a new version instead of polling stale rejected telemetry", () => {
       expect(
         decideSubmissionClaim({
           latest: row({
@@ -641,9 +668,11 @@ describe("decideSubmissionClaim", () => {
             remoteStatus: "pending",
           }),
         }),
-      ).toMatchObject({
-        kind: "resume-poll-existing",
-        dataUploadSubmissionId: "dus_uncertain",
+      ).toEqual({
+        kind: "create-new-version",
+        nextVersion: 5,
+        supersedePreviousId: null,
+        reason: "rejected-hash-changed",
       });
     });
 

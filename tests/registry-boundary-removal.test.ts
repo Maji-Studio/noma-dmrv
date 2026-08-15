@@ -111,6 +111,7 @@ const USER_ID = "test-user-boundary";
 const TEMPLATE_ID = "rvt_boundary_1";
 const RTC_ID = "rtc-seq";
 const ISOMETRIC_FEEDSTOCK_TYPE_ID = "ftt_boundary_1";
+const FIXTURE_UUID_SUFFIX_LENGTH = 8;
 const PRODUCTION_RUN_ID = "pr-boundary-1";
 const ORIGINAL_BIOCHAR_MASS_KG = 1000;
 const CHANGED_BIOCHAR_MASS_KG = 1500;
@@ -192,7 +193,7 @@ interface Fixture {
 }
 
 async function createFixture(): Promise<Fixture> {
-  const runId = crypto.randomUUID().slice(0, 8);
+  const runId = crypto.randomUUID().slice(0, FIXTURE_UUID_SUFFIX_LENGTH);
   const externalProjectId = `prj_boundary_${runId}`;
   const isometricFeedstockTypeId = `${ISOMETRIC_FEEDSTOCK_TYPE_ID}_${runId}`;
   const [facility] = await db
@@ -654,6 +655,18 @@ describe("submitRemoval boundary — datapoint orphan (test 1)", () => {
       externalMutation: SUBMISSION_EXTERNAL_MUTATIONS.possible,
     });
     expect(Date.now() - rows[0].lockedAt!.getTime()).toBeLessThan(LOCK_TTL_MS);
+    setContext(fixture);
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: fixture.removalId,
+      }),
+    ).rejects.toThrowError("already in progress");
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt: new Date(Date.now() - STALE_LOCK_OFFSET_MS) })
+      .where(eq(certificationSubmissions.id, rows[0].id));
     setContext(fixture);
 
     const result = await submitRemoval({

@@ -115,19 +115,6 @@ function failedStep(
   );
 }
 
-export function canRetrySubmissionProgress(
-  kind: ProgressKind,
-  updates: SubmissionProgressUpdate[],
-): boolean {
-  // This helper is called only for a terminal error returned by the server.
-  // The claim/reconciliation layers decide whether the next request resumes,
-  // returns an existing result, or stays blocked. Dialogs separately exclude
-  // stalled streams because their original server request may still be live.
-  void kind;
-  void updates;
-  return true;
-}
-
 function displayState(
   step: SubmissionProgressStep,
   update: SubmissionProgressUpdate | undefined,
