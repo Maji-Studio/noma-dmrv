@@ -1,3 +1,7 @@
+import type {
+  CreditBatchFeedstockTypeFact,
+} from "@/data-access/credit-batch-accounting-types";
+
 export interface FeedstockTypeMappingGap {
   creditBatchId: string;
   creditBatchCode: string;
@@ -8,12 +12,7 @@ export interface FeedstockTypeMappingGap {
 interface BatchFeedstockTypeFact {
   id: string;
   code: string;
-  feedstockType?: {
-    id: string;
-    name: string | null;
-    usage: "pyrolysis" | "blend" | null;
-    isometricFeedstockTypeId: string | null;
-  };
+  feedstockType?: CreditBatchFeedstockTypeFact;
 }
 
 export function collectFeedstockTypeMappingGaps(

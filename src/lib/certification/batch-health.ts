@@ -222,6 +222,13 @@ function productionCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
 function feedstockTypeMappingCheck(
   facts: BatchHealthFacts,
 ): BatchHealthCheckBase {
+  if (!facts.facilitySetupComplete) {
+    return {
+      key: "feedstockTypeMapping",
+      label: FEEDSTOCK_TYPE_MAPPING_LABEL,
+      status: "skipped",
+    };
+  }
   if (facts.feedstockTypeMappingGaps.length === 0) {
     return {
       key: "feedstockTypeMapping",

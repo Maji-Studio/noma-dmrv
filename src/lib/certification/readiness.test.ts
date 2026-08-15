@@ -421,6 +421,7 @@ describe("buildRemovalPreflightChecklist", () => {
     // Template/transport are not yet evaluable without a link.
     expect(checkFor(checks, "template").status).toBe("skipped");
     expect(checkFor(checks, "transport").status).toBe("skipped");
+    expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
     // Production data is independent of the link, so it is still judged.
     expect(checkFor(checks, "production").status).toBe("met");
   });
@@ -436,6 +437,7 @@ describe("buildRemovalPreflightChecklist", () => {
     );
     expect(checkFor(checks, "template").status).toBe("unmet");
     expect(checkFor(checks, "transport").status).toBe("skipped");
+    expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
   });
 
   it("flags missing organization credentials and skips registry-dependent checks", () => {
@@ -583,6 +585,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     expect(reqFor(checks, "mapping").status).toBe("unmet");
     expect(reqFor(checks, "template").status).toBe("skipped");
     expect(reqFor(checks, "transportUniformity").status).toBe("skipped");
+    expect(reqFor(checks, "feedstockTypeMapping").status).toBe("skipped");
   });
 
   it("flags an unresolved template and skips transport uniformity", () => {
@@ -591,6 +594,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     );
     expect(reqFor(checks, "template").status).toBe("unmet");
     expect(reqFor(checks, "transportUniformity").status).toBe("skipped");
+    expect(reqFor(checks, "feedstockTypeMapping").status).toBe("skipped");
   });
 
   it("flags cross-batch transport non-uniformity (present but mixed)", () => {

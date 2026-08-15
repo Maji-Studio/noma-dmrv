@@ -157,12 +157,55 @@ describe("toBatchHealthFacts", () => {
     ).toBe("ready");
   });
 
+  it("does not apply feedstock mapping gaps before a facility is linked", () => {
+    const ctx = {
+      memberBatches: [
+        {
+          id: "batch-1",
+          code: "CB-1",
+          durabilityGateBlockers: [],
+          facilityEmissionsGateBlockers: [],
+        },
+      ],
+      feedstockTypeMappingGaps: [
+        {
+          creditBatchId: "batch-1",
+          creditBatchCode: "CB-1",
+          feedstockTypeId: "type-1",
+          feedstockTypeName: "Macadamia shells",
+        },
+      ],
+      entityReadinessGaps: [],
+      entityReadinessIssues: [],
+      hasSubmittableRuns: true,
+      productionReadinessGap: null,
+      mapping: null,
+      defaultTemplate: null,
+      missingDefaultTemplateId: null,
+      unresolvedBlueprintKeys: [],
+      requiredTransportCategories: [],
+      transportCoverage: {
+        feedstock: { count: 0 },
+        biochar: { count: 0 },
+        sample: { count: 0 },
+      },
+    } as unknown as RemovalCertifyContext;
+
+    const facts = toBatchHealthFacts(ctx, "batch-1");
+
+    expect(facts.feedstockTypeMappingGaps).toEqual([]);
+    expect(deriveBatchHealth(facts).state).toBe("ready");
+  });
+
   it("treats a fresh interrupted Removal lock as immediately reclaimable", () => {
     const ctx = {
       latestSubmission: {
         status: "draft",
         lockedAt: new Date(),
-        metadata: { lastAttemptOutcome: "interrupted" },
+        metadata: {
+          lastAttemptOutcome: "interrupted",
+          externalMutation: "confirmed",
+        },
       },
       feedstockTypeMappingGaps: [],
       hasOrgCredentials: true,

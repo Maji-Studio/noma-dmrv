@@ -79,19 +79,22 @@ export function toBatchHealthFacts(
   ctx: RemovalCertifyContext,
   batchId: string,
 ): BatchHealthFacts {
+  const facilitySetupComplete = isFacilitySetupComplete(ctx);
   return {
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
     facilityEmissionsBlockers:
       ctx.memberBatches.find((batch) => batch.id === batchId)
         ?.facilityEmissionsGateBlockers ?? [],
-    feedstockTypeMappingGaps: (ctx.feedstockTypeMappingGaps ?? []).filter(
-      (gap) => gap.creditBatchId === batchId,
-    ),
+    feedstockTypeMappingGaps: facilitySetupComplete
+      ? (ctx.feedstockTypeMappingGaps ?? []).filter(
+          (gap) => gap.creditBatchId === batchId,
+        )
+      : [],
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,
-    facilitySetupComplete: isFacilitySetupComplete(ctx),
+    facilitySetupComplete,
     requiredTransport: ctx.requiredTransportCategories.map((category) => ({
       category,
       present: ctx.transportCoverage[category].count > 0,

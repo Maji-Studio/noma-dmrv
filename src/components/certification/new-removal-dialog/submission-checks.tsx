@@ -13,6 +13,10 @@ import { Accordion } from "@/components/ui/accordion";
 import { InfoHint } from "@/components/ui/tooltip";
 import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { certificationSettingsHref } from "@/lib/certification/links";
+import {
+  buildFeedstockTypeEditDeepLink,
+  FEEDSTOCK_TYPE_EDIT_LABEL,
+} from "@/lib/entity-deep-link";
 import { actionableSubmissionChecks } from "./submission-facts";
 
 const CHECKS_ITEM = "submission-checks";
@@ -82,15 +86,13 @@ function fixLinksFor(
         { label: "Review Samples", href: `/samples?facility=${facilityId}` },
       ];
     case "feedstockTypeMapping": {
-      const params = new URLSearchParams({ facility: facilityId });
-      if (check.fixTargetId) {
-        params.set("feedstockType", check.fixTargetId);
-        params.set("mode", "edit");
-      }
       return [
         {
-          label: "Edit Feedstock type",
-          href: `/feedstock-types?${params.toString()}`,
+          label: FEEDSTOCK_TYPE_EDIT_LABEL,
+          href: buildFeedstockTypeEditDeepLink(
+            facilityId,
+            check.fixTargetId,
+          ),
         },
       ];
     }

@@ -265,9 +265,11 @@ export function deriveRemovalReadiness(
     reasons.push(productionGapDetail(facts));
   }
 
-  reasons.push(
-    ...facts.feedstockTypeMappingGaps.map(describeFeedstockTypeMappingGap),
-  );
+  if (templateResolvesCleanly(facts)) {
+    reasons.push(
+      ...facts.feedstockTypeMappingGaps.map(describeFeedstockTypeMappingGap),
+    );
+  }
 
   const entityReadinessGaps = facts.entityReadinessGaps ?? [];
   if (entityReadinessGaps.length > 0) {
@@ -384,6 +386,44 @@ function evidencePreflightCheck(facts: RemovalReadinessFacts) {
     status,
     detail,
   };
+}
+
+const FEEDSTOCK_TYPE_MAPPING_LABEL = "Feedstock types linked to Isometric";
+
+interface FeedstockTypeMappingCheckBase {
+  key: "feedstockTypeMapping";
+  label: string;
+  status: PreflightCheckStatus;
+  detail?: string;
+  fixTarget?: "feedstockTypes";
+  fixTargetId?: string;
+}
+
+function feedstockTypeMappingCheck(
+  facts: RemovalReadinessFacts,
+): FeedstockTypeMappingCheckBase {
+  if (!facts.hasMapping || !templateResolvesCleanly(facts)) {
+    return {
+      key: "feedstockTypeMapping",
+      label: FEEDSTOCK_TYPE_MAPPING_LABEL,
+      status: "skipped",
+    };
+  }
+  const gaps = facts.feedstockTypeMappingGaps;
+  return gaps.length === 0
+    ? {
+        key: "feedstockTypeMapping",
+        label: FEEDSTOCK_TYPE_MAPPING_LABEL,
+        status: "met",
+      }
+    : {
+        key: "feedstockTypeMapping",
+        label: FEEDSTOCK_TYPE_MAPPING_LABEL,
+        status: "unmet",
+        detail: gaps.map(describeFeedstockTypeMappingGap).join(" · "),
+        fixTarget: "feedstockTypes",
+        fixTargetId: gaps[0]?.feedstockTypeId,
+      };
 }
 
 /**
@@ -521,23 +561,7 @@ export function buildRemovalPreflightChecklist(
         };
   })();
 
-  const feedstockTypeMapping = ((): PreflightCheckBase => {
-    const gaps = facts.feedstockTypeMappingGaps;
-    return gaps.length === 0
-      ? {
-          key: "feedstockTypeMapping",
-          label: "Feedstock types linked to Isometric",
-          status: "met",
-        }
-      : {
-          key: "feedstockTypeMapping",
-          label: "Feedstock types linked to Isometric",
-          status: "unmet",
-          detail: gaps.map(describeFeedstockTypeMappingGap).join(" · "),
-          fixTarget: "feedstockTypes",
-          fixTargetId: gaps[0]?.feedstockTypeId,
-        };
-  })();
+  const feedstockTypeMapping = feedstockTypeMappingCheck(facts);
 
   const checks: Array<PreflightCheckBase | null> = [
     {
@@ -760,23 +784,7 @@ export function buildRemovalRequirementsChecklist(
         };
   })();
 
-  const feedstockTypeMapping = ((): RemovalRequirementCheckBase => {
-    const gaps = facts.feedstockTypeMappingGaps;
-    return gaps.length === 0
-      ? {
-          key: "feedstockTypeMapping",
-          label: "Feedstock types linked to Isometric",
-          status: "met",
-        }
-      : {
-          key: "feedstockTypeMapping",
-          label: "Feedstock types linked to Isometric",
-          status: "unmet",
-          detail: gaps.map(describeFeedstockTypeMappingGap).join(" · "),
-          fixTarget: "feedstockTypes",
-          fixTargetId: gaps[0]?.feedstockTypeId,
-        };
-  })();
+  const feedstockTypeMapping = feedstockTypeMappingCheck(facts);
 
   const production: RemovalRequirementCheckBase = {
     key: "production",

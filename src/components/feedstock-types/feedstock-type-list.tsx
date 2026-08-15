@@ -40,6 +40,12 @@ import {
 } from "@/hooks/use-feedstock-types";
 import type { FeedstockTypeFormData } from "@/schemas/feedstock-types";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import {
+  ENTITY_DEEP_LINK_EDIT_MODE,
+  ENTITY_DEEP_LINK_MODE_PARAM,
+  FEEDSTOCK_TYPE_EDIT_LABEL,
+  FEEDSTOCK_TYPE_QUERY_PARAM,
+} from "@/lib/entity-deep-link";
 import { FeedstockTypeForm } from "./feedstock-type-form";
 import { FeedstockTypeSampling } from "./feedstock-type-sampling";
 
@@ -228,11 +234,11 @@ function createColumns(params: {
 
 export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   const [focusedFeedstockTypeId, setFocusedFeedstockTypeId] = useQueryState(
-    "feedstockType",
+    FEEDSTOCK_TYPE_QUERY_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [deepLinkMode, setDeepLinkMode] = useQueryState(
-    "mode",
+    ENTITY_DEEP_LINK_MODE_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
@@ -264,7 +270,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     ? {
         entity: deepLinkedFeedstockType,
         mode:
-          deepLinkMode === "edit" && canManage
+          deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE && canManage
             ? ("edit" as const)
             : ("view" as const),
       }
@@ -570,7 +576,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         title={displaySideSheet?.mode === "create" ? "Create Feedstock Type" : sideSheetEntity?.code ?? ""}
         subtitle={displaySideSheet?.mode === "create" ? undefined : sideSheetEntity?.name}
         sections={displaySideSheet?.mode === "view" ? detailSections : undefined}
-        editLabel="Edit Feedstock Type"
+        editLabel={FEEDSTOCK_TYPE_EDIT_LABEL}
         canEdit={canManage}
       >
         <FeedstockTypeForm

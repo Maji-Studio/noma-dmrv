@@ -5,7 +5,9 @@ import type {
 } from "./batch-health";
 import {
   buildEntityDeepLink,
+  buildFeedstockTypeEditDeepLink,
   ENTITY_FOCUS_TARGETS,
+  FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
 import { certificationEmissionEstimatesHref } from "./links";
@@ -148,14 +150,9 @@ export function batchHealthFixLinkFor(
     }
     case "feedstockTypes": {
       const feedstockTypeId = affectedIds[0];
-      const params = new URLSearchParams({ facility: facilityId });
-      if (feedstockTypeId) {
-        params.set("feedstockType", feedstockTypeId);
-        params.set("mode", "edit");
-      }
       return {
-        label: "Edit Feedstock type",
-        href: `/feedstock-types?${params.toString()}`,
+        label: FEEDSTOCK_TYPE_EDIT_LABEL,
+        href: buildFeedstockTypeEditDeepLink(facilityId, feedstockTypeId),
       };
     }
     case "deliveries":

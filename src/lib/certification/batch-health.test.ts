@@ -264,6 +264,7 @@ describe("deriveBatchHealth", () => {
     // Carbon + production are met; transport is skipped, not unmet — so the
     // batch is still selectable. The facility-setup gap is the wizard's concern.
     expect(checkFor(result, "transport").status).toBe("skipped");
+    expect(checkFor(result, "feedstockTypeMapping").status).toBe("skipped");
     expect(result.issueCount).toBe(0);
     expect(result.state).toBe("ready");
   });
@@ -277,6 +278,7 @@ describe("deriveBatchHealth", () => {
       }),
     );
     expect(checkFor(result, "transport").status).toBe("skipped");
+    expect(checkFor(result, "feedstockTypeMapping").status).toBe("skipped");
     expect(checkFor(result, "carbon").status).toBe("unmet");
     expect(result.issueCount).toBe(1);
     expect(result.state).toBe("incomplete");

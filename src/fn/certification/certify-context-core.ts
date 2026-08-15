@@ -573,7 +573,12 @@ export async function buildRemovalContext(
   const memberBatches: MemberCreditBatch[] =
     scope.memberBatches.map(toMemberCreditBatchView);
   const feedstockTypeMappingGaps =
-    collectFeedstockTypeMappingGaps(memberBatches);
+    facilityFacts.mapping &&
+    facilityFacts.defaultTemplate &&
+    !facilityFacts.missingDefaultTemplateId &&
+    facilityFacts.unresolvedBlueprintKeys.length === 0
+      ? collectFeedstockTypeMappingGaps(memberBatches)
+      : [];
   // §8.6.2 claim state per member batch (issue #349) — kept off
   // `MemberCreditBatch` (UI-facing) and carried only on the submission context.
   // Lineage arrays sorted here so the post-claim fresh re-assert compares
