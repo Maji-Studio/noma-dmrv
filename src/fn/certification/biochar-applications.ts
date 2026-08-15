@@ -263,8 +263,7 @@ async function ensureBiocharApplication(args: {
             registrationId: registration!.id,
             expectedPayloadHash: bodyHash,
             externalApplicationId,
-            observedGhgEntryId:
-              remote?.ghg_entry_id ?? args.externalRemovalId,
+            observedGhgEntryId: remote?.ghg_entry_id ?? null,
             observedRemovalId: remote?.removal_id ?? null,
           });
         },
@@ -283,6 +282,11 @@ function assertRemoteMatches(
 ): void {
   const mismatch = biocharApplicationMismatchMessage(remote, body);
   if (mismatch) throw new SafeError(mismatch);
+  if (!remote.ghg_entry_id && !remote.removal_id) {
+    throw new SafeError(
+      `Isometric Biochar Application ${remote.id} is not linked to a GHG Entry yet. Retry after Isometric records the association.`,
+    );
+  }
   if (
     (remote.ghg_entry_id && remote.ghg_entry_id !== externalRemovalId) ||
     (remote.removal_id && remote.removal_id !== externalRemovalId)

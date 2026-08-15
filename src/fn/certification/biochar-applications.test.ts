@@ -287,6 +287,15 @@ describe("ensureRemovalBiocharApplications", () => {
     expect(mocks.client.post).not.toHaveBeenCalled();
   });
 
+  it("does not confirm an unobserved GHG Entry association", async () => {
+    mocks.client.get.mockResolvedValue(
+      page([remote({ ghg_entry_id: null, removal_id: null })]),
+    );
+
+    await expect(ensure()).rejects.toThrow(/not linked to a GHG Entry yet/i);
+    expect(mocks.confirm).not.toHaveBeenCalled();
+  });
+
   it("preserves the confirmed external identity when reconciliation finds another record", async () => {
     mocks.client.get.mockResolvedValue(page([]));
     mocks.client.post.mockResolvedValue(remote());
