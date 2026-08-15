@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { applications } from "@/db/schema/application";
+import { creditBatches } from "@/db/schema/credits";
 import {
   certifierBiocharApplications,
   type CertifierBiocharApplication,
@@ -12,7 +13,7 @@ import { deliveries, orders } from "@/db/schema/logistics";
 import { customerLocations } from "@/db/schema/parties";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CreateBiocharApplicationRequest } from "@/lib/isometric/biochar-applications";
-import { requireOrgScope } from "./utils";
+import { assertSameOrg, requireOrgScope } from "./utils";
 
 type CertifierProvider = CertifierBiocharApplication["provider"];
 const DEFAULT_PROVIDER: CertifierProvider = "isometric";
@@ -151,6 +152,10 @@ export async function claimBiocharApplicationRegistration(
 ): Promise<CertifierBiocharApplication> {
   requireOrgScope(ctx);
   const provider = input.provider ?? DEFAULT_PROVIDER;
+  await Promise.all([
+    assertSameOrg(ctx, applications, input.applicationId),
+    assertSameOrg(ctx, creditBatches, input.creditBatchId),
+  ]);
   const [productionBatch, storageLocation] = await Promise.all([
     db
       .select({ id: certifierProductionBatches.id })
