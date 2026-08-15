@@ -194,6 +194,7 @@ function installMutableLedger(
     async (_ctx, _rowId, args) => {
       if (!current || current.status !== args.expectedStatus) return false;
       current.status = args.status;
+      current.lockedAt = null;
       current.metadata = {
         ...((current.metadata ?? {}) as Record<string, unknown>),
         ...args.metadataPatch,

@@ -39,7 +39,8 @@ const IN_WINDOW_COMPLETED_ON = "2026-03-15";
 const FIXTURE_UUID_SUFFIX_LENGTH = 8;
 const MULTIPLE_DRAFTS_MESSAGE =
   "Multiple draft GHG Statements exist for this project and period in Isometric.";
-const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
+const STALE_LOCK_MARGIN_MS = 60_000;
+const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + STALE_LOCK_MARGIN_MS;
 
 const createdFacilityIds: string[] = [];
 

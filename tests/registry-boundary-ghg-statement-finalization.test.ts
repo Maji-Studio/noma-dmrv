@@ -47,7 +47,8 @@ import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 
 const REPORTING_PERIOD_END = "2026-03-31";
 const FIXTURE_UUID_SUFFIX_LENGTH = 8;
-const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
+const STALE_LOCK_MARGIN_MS = 60_000;
+const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + STALE_LOCK_MARGIN_MS;
 const createdFacilityIds: string[] = [];
 let registry: FakeIsometricRegistry;
 
