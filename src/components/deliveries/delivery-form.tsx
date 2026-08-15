@@ -6,7 +6,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { numericValue } from "@/lib/form-utils";
+import { nullableNumericValue, numericValue } from "@/lib/form-utils";
 import { toDateInputValue } from "@/lib/date-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
@@ -466,10 +466,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           wetMassKg={watchWetMass}
           wetMassLabel="Delivered wet mass"
           arrivalRegister={register("truckMassOnArrivalKg", {
-            setValueAs: numericValue,
+            setValueAs: nullableNumericValue,
           })}
           departureRegister={register("truckMassOnDepartureKg", {
-            setValueAs: numericValue,
+            setValueAs: nullableNumericValue,
           })}
           arrivalError={errors.truckMassOnArrivalKg?.message}
           departureError={errors.truckMassOnDepartureKg?.message}
