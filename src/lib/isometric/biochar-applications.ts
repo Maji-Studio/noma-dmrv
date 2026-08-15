@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { SafeError } from "@/lib/errors";
-import type { IsometricClient } from "./client";
+import type { IsometricClient, IsometricEnvironment } from "./client";
+export type { IsometricEnvironment } from "./client";
 import type { components } from "./generated/certify";
 
 export type IsometricBiocharApplication =
@@ -22,8 +23,6 @@ const DEFAULT_LOOKUP_PAGE_SIZE = MAX_LOOKUP_PAGE_SIZE;
 const DEFAULT_LOOKUP_MAX_PAGES = 20;
 const QUANTITY_COMPARISON_EPSILON = 1e-9;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-export type IsometricEnvironment = "sandbox" | "production";
 
 export interface BuildBiocharApplicationReferenceArgs {
   applicationId: string;
