@@ -33,6 +33,7 @@ export interface BuildCreateGhgEntryArgs {
   reportingWindow: { startedOn: Date; completedOn: Date };
   projectId: string;
   supplierRefId: string;
+  omittedTemplateComponentIds?: readonly string[];
 }
 
 export function buildCreateGhgEntryRequest(
@@ -45,12 +46,14 @@ export function buildCreateGhgEntryRequest(
     reportingWindow,
     projectId,
     supplierRefId,
+    omittedTemplateComponentIds = [],
   } = args;
 
   const rtComponents: GhgEntryTemplateComponentInputs[] = [];
 
   for (const group of template.groups) {
     for (const component of group.components) {
+      if (omittedTemplateComponentIds.includes(component.id)) continue;
       const isSequestration = isSequestrationBlueprintFamily(
         component.blueprint_key,
       );

@@ -611,6 +611,11 @@ export function makeContext(
         claimedByRemovalId: null,
         productionRunIds: [PRODUCTION_RUN_ID],
         applicationIds: [APPLICATION_ID],
+        applicationSlices: [{
+          applicationId: APPLICATION_ID,
+          allocatedWetMassKg: biocharMassKg,
+          allocatedDryMassKg: biocharMassKg,
+        }],
       },
     ],
     transportLegs: { feedstock: [], biochar: [], sample: [] },

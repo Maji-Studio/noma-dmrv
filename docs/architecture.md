@@ -276,6 +276,12 @@ deferred work: [isometric/integration-plan.md](./isometric/integration-plan.md)
 and [open-questions.md](./open-questions.md). Registry facts are authoritative
 only from the Isometric MCP — see [isometric/README.md](./isometric/README.md).
 
+Removal membership is persisted at the application-by-credit-batch slice. Each
+slice freezes allocated wet mass, allocated dry mass, and its owning Removal.
+Later applications can create new unassigned slices from an existing credit
+batch without changing an earlier Removal. Noma submits those frozen accounting
+inputs; Isometric owns the project-emissions calculation and net result.
+
 ## Dashboard
 
 Facility-scoped operations dashboard at `/dashboard`

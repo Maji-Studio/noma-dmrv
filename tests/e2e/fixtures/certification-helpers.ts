@@ -451,7 +451,7 @@ export async function seedGroupedRemovalWithChain(
         facilityId: refs.facilityId,
         feedstockTypeId: feedstockRow.feedstockTypeId,
       });
-      // Group: a Removal ledger row + the credit batch pointing at it.
+      // Group: a Removal ledger row plus one immutable application slice.
       await tx.insert(schema.certifierRemovals).values({
         organizationId: DEC_ORG_ID,
         id: id.removal,
@@ -470,12 +470,19 @@ export async function seedGroupedRemovalWithChain(
         status: "draft",
         // Tier is inherited from the facility (ADR 0021), not a batch column.
         hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
-        removalId: id.removal,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
         organizationId: DEC_ORG_ID,
         creditBatchId: id.creditBatch,
         productionRunId: id.productionRun,
+      });
+      await tx.insert(schema.creditBatchApplications).values({
+        organizationId: DEC_ORG_ID,
+        creditBatchId: id.creditBatch,
+        applicationId: id.application,
+        allocatedWetMassKg: DELIVERED_WET_MASS_KG,
+        allocatedDryMassKg: DELIVERED_DRY_MASS_KG,
+        removalId: id.removal,
       });
     });
   } finally {
@@ -491,6 +498,11 @@ export async function seedGroupedRemovalWithChain(
         await conn.db.transaction(async (tx) => {
           // Reverse FK order; certifier_removals must go before the facility
           // teardown (it FKs the facility and cleanupChainData does not sweep it).
+          await tx
+            .delete(schema.creditBatchApplications)
+            .where(
+              eq(schema.creditBatchApplications.creditBatchId, id.creditBatch),
+            );
           await tx
             .delete(schema.creditBatchProductionRuns)
             .where(
@@ -555,8 +567,8 @@ export async function seedGroupedRemovalWithChain(
  * (deferred-create groups the batch into a fresh `certifier_removals` row and,
  * on a live submit, writes a `certification_submissions` row). The seed's own
  * `cleanup()` only knows the batch + chain, so the spec calls this BEFORE that
- * cleanup: it nulls the batch→removal FK, drops any submission rows, then the
- * removal. A no-op when "Confirm" never ran (the batch is still ungrouped).
+ * cleanup: it releases the batch's application slices, drops any submission
+ * rows, then the Removal. A no-op when "Confirm" never ran.
  */
 export async function teardownWizardRemovalForBatch(
   creditBatchId: string,
@@ -564,16 +576,16 @@ export async function teardownWizardRemovalForBatch(
   const { db, pool } = createDbConnection();
   try {
     const [row] = await db
-      .select({ removalId: schema.creditBatches.removalId })
-      .from(schema.creditBatches)
-      .where(eq(schema.creditBatches.id, creditBatchId));
+      .select({ removalId: schema.creditBatchApplications.removalId })
+      .from(schema.creditBatchApplications)
+      .where(eq(schema.creditBatchApplications.creditBatchId, creditBatchId));
     const removalId = row?.removalId;
     if (!removalId) return;
 
     await db
-      .update(schema.creditBatches)
+      .update(schema.creditBatchApplications)
       .set({ removalId: null })
-      .where(eq(schema.creditBatches.id, creditBatchId));
+      .where(eq(schema.creditBatchApplications.creditBatchId, creditBatchId));
     // A LIVE submit also stamps the batch's front-loaded production-emissions
     // claim (credit_batches.production_emissions_claimed_by_removal_id); the
     // removal row cannot be deleted while any batch still claims through it.

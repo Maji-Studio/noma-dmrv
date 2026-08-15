@@ -47,7 +47,9 @@ function input(
 }
 
 function compile(
-  memberBatches = [
+  memberBatches: Parameters<
+    typeof compileBiocharApplicationIntents
+  >[0]["memberBatches"] = [
     { creditBatchId: CREDIT_BATCH_ID, applicationIds: [APPLICATION_ID] },
   ],
 ) {
@@ -133,16 +135,40 @@ describe("compileBiocharApplicationIntents", () => {
     await expect(compile()).rejects.toThrow(/before unloading.*exceeds/i);
   });
 
-  it("fails closed when an Application spans multiple credit batches", async () => {
+  it("compiles one immutable slice per credit batch for a commingled Application", async () => {
     await expect(
       compile([
-        { creditBatchId: CREDIT_BATCH_ID, applicationIds: [APPLICATION_ID] },
+        {
+          creditBatchId: CREDIT_BATCH_ID,
+          applicationIds: [APPLICATION_ID],
+          applicationSlices: [{
+            applicationId: APPLICATION_ID,
+            allocatedWetMassKg: 7_000,
+            allocatedDryMassKg: 5_600,
+          }],
+        },
         {
           creditBatchId: "44444444-4444-4444-8444-444444444444",
           applicationIds: [APPLICATION_ID],
+          applicationSlices: [{
+            applicationId: APPLICATION_ID,
+            allocatedWetMassKg: 5_000,
+            allocatedDryMassKg: 4_000,
+          }],
         },
       ]),
-    ).rejects.toThrow(/spans 2 credit batches/i);
+    ).resolves.toEqual([
+      expect.objectContaining({
+        applicationId: APPLICATION_ID,
+        creditBatchId: CREDIT_BATCH_ID,
+        appliedTonnes: 7,
+      }),
+      expect.objectContaining({
+        applicationId: APPLICATION_ID,
+        creditBatchId: "44444444-4444-4444-8444-444444444444",
+        appliedTonnes: 5,
+      }),
+    ]);
   });
 
   it("fails closed when one delivery is split across multiple Applications", async () => {

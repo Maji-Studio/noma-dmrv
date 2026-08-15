@@ -1,6 +1,6 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { creditBatches } from "@/db/schema";
+import { creditBatchApplications, creditBatches } from "@/db/schema";
 import { certifierRemovals } from "@/db/schema/certification";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
@@ -19,18 +19,25 @@ export async function listCreditBatchCertificationLinks(
   requireOrgScope(ctx);
   if (batchIds.length === 0) return [];
 
-  return db
+  const rows = await db
     .select({
       id: creditBatches.id,
       facilityId: creditBatches.facilityId,
-      removalId: creditBatches.removalId,
+      removalId: creditBatchApplications.removalId,
       ghgStatementId: certifierRemovals.ghgStatementId,
     })
     .from(creditBatches)
     .leftJoin(
+      creditBatchApplications,
+      and(
+        eq(creditBatchApplications.creditBatchId, creditBatches.id),
+        eq(creditBatchApplications.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
       certifierRemovals,
       and(
-        eq(creditBatches.removalId, certifierRemovals.id),
+        eq(creditBatchApplications.removalId, certifierRemovals.id),
         eq(certifierRemovals.organizationId, ctx.organizationId),
       ),
     )
@@ -39,5 +46,12 @@ export async function listCreditBatchCertificationLinks(
         inArray(creditBatches.id, batchIds),
         eq(creditBatches.organizationId, ctx.organizationId),
       ),
-    );
+    )
+    .orderBy(desc(certifierRemovals.createdAt));
+
+  return batchIds.flatMap((batchId) => {
+    const candidates = rows.filter((row) => row.id === batchId);
+    const unassigned = candidates.find((row) => row.removalId == null);
+    return unassigned ? [unassigned] : candidates.slice(0, 1);
+  });
 }

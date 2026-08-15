@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { TEST_ORG_ID } from "../../../../tests/helpers/test-org";
 
 import type { TransportLeg } from "@/db/schema";
-import { aggregateTransportMassDistance } from "./aggregation";
+import {
+  aggregateProductionRuns,
+  aggregateTransportMassDistance,
+  type ProductionRunWithSamples,
+} from "./aggregation";
 
 function leg(
   id: string,
@@ -175,5 +179,42 @@ describe("aggregateTransportMassDistance", () => {
     expect(result.warning).toContain(
       "00000000-0000-0000-0000-000000000002",
     );
+  });
+});
+
+describe("aggregateProductionRuns production claims", () => {
+  it("keeps stored mass from every run but includes production inputs only once", () => {
+    const run = (
+      id: string,
+      feedstockMassDryKg: number,
+      dieselOperationLiters: number,
+    ) =>
+      ({
+        id,
+        code: id,
+        startTime: new Date("2026-01-01T08:00:00Z"),
+        endTime: new Date("2026-01-01T12:00:00Z"),
+        biocharDryMassKg: 100,
+        feedstockMassDryKg,
+        dieselOperationLiters,
+        dieselGensetLiters: 0,
+        preprocessingFuelLiters: 0,
+        electricityKwh: 10,
+        samples: [],
+      }) as unknown as ProductionRunWithSamples;
+
+    const result = aggregateProductionRuns(
+      [run("run-a", 500, 5), run("run-b", 700, 7)],
+      new Map([
+        ["run-a", 0.5],
+        ["run-b", 0.25],
+      ]),
+      { productionRunIds: new Set(["run-b"]) },
+    );
+
+    expect(result.totalBiocharDryMassKg).toBe(75);
+    expect(result.totalFeedstockDryMassKg).toBe(700);
+    expect(result.totalStartupDieselLitres).toBe(7);
+    expect(result.totalElectricityKwh).toBe(10);
   });
 });

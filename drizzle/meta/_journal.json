@@ -771,6 +771,20 @@
       "when": 1786805607201,
       "tag": "0109_flowery_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1786823903630,
+      "tag": "0110_redundant_stryfe",
+      "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1786824921717,
+      "tag": "0111_sticky_rictor",
+      "breakpoints": true
     }
   ]
 }

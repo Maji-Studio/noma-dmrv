@@ -30,6 +30,7 @@ import {
   certificationSubmissions,
   certifierGhgStatements,
   certifierRemovals,
+  creditBatchApplications,
   creditBatchProductionRuns,
   creditBatches,
   customers,
@@ -138,6 +139,7 @@ async function createLineageFixture(
         biocharOutputKg: 300,
         biocharMoisturePercent: 5,
         biocharDryMassKg: 285,
+        status: blockingVia === "none" ? "draft" : "complete",
       })
       .returning({ id: productionRuns.id });
 
@@ -251,7 +253,6 @@ async function createLineageFixture(
         startDate: "2026-06-01",
         endDate: "2026-06-30",
         certifier: "isometric",
-        removalId: removal.id,
       })
       .returning({ id: creditBatches.id });
 
@@ -259,6 +260,14 @@ async function createLineageFixture(
       organizationId: TEST_ORG_ID,
       creditBatchId: batch.id,
       productionRunId: productionRun.id,
+    });
+    await tx.insert(creditBatchApplications).values({
+      organizationId: TEST_ORG_ID,
+      creditBatchId: batch.id,
+      applicationId: application.id,
+      allocatedWetMassKg: 300,
+      allocatedDryMassKg: 285,
+      removalId: removal.id,
     });
 
     if (blockingVia !== "none") {
@@ -310,6 +319,9 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
     await tx
       .delete(creditBatchProductionRuns)
       .where(eq(creditBatchProductionRuns.creditBatchId, fixture.batchId));
+    await tx
+      .delete(creditBatchApplications)
+      .where(eq(creditBatchApplications.creditBatchId, fixture.batchId));
     await tx.delete(creditBatches).where(eq(creditBatches.id, fixture.batchId));
     await tx
       .delete(applications)
@@ -466,11 +478,11 @@ describe("certification lineage guards", () => {
     });
   });
 
-  it("rejects creating a biochar product against a submitted production-run lineage", async () => {
+  it("allows a downstream biochar product draw from certified bin stock", async () => {
     await withFixture(async (fixture) => {
       const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
-      // An otherwise-valid create: a real product bin in the locked run's
-      // facility. Only the certified-lineage guard should block it.
+      // Certification freezes the submitted records, not the physical stock
+      // that remains in the run's biochar bin.
       const [bin] = await db
         .insert(storageLocations)
         .values({
@@ -483,8 +495,9 @@ describe("certification lineage guards", () => {
         .returning({ id: storageLocations.id });
 
       try {
-        await expect(
-          createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
+        const product = await createBiocharProduct(
+          makeTestOrgContext(TEST_USER_ID),
+          {
             code: `BP-LOCKED-${tag}`,
             facilityId: fixture.facilityId,
             linkedProductionRunId: fixture.productionRunId,
@@ -492,15 +505,10 @@ describe("certification lineage guards", () => {
             massKg: 10,
             moistureContentPercent: 5,
             waterAddedKg: 0,
-          }),
-        ).rejects.toThrow(
-          "Cannot create this biochar product because the selected production run is locked by a certification submission. Select a production run that is not locked.",
+          },
         );
+        expect(product.code).toBe(`BP-LOCKED-${tag}`);
       } finally {
-        // If the certified-lineage guard ever regresses and the create
-        // succeeds, the assertion fails AND leaves an orphan product behind.
-        // Remove any product with this run's unique code before the bin so a
-        // regression can't cascade into later specs.
         await db
           .delete(biocharProducts)
           .where(eq(biocharProducts.code, `BP-LOCKED-${tag}`));

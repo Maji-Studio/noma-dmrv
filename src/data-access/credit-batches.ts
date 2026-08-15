@@ -12,6 +12,7 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import {
+  creditBatchApplications,
   creditBatches,
   creditBatchProductionRuns,
   type CreditBatch,
@@ -45,7 +46,6 @@ import {
   lockCreditBatchForUpdate,
   validateProductionRunIds,
 } from "./credit-batch-membership";
-import { gcRemovalIfOrphaned } from "./certifier-removals";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import {
@@ -66,6 +66,7 @@ import {
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { assertRemovalAllowsCreditBatchMutation } from "./credit-batch-certification-lock";
+import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 
 const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
   "draft",
@@ -228,7 +229,7 @@ export async function getCreditBatchRemovalId(
 ): Promise<string | null> {
   requireOrgScope(ctx);
   const [batch] = await db
-    .select({ removalId: creditBatches.removalId })
+    .select({ id: creditBatches.id })
     .from(creditBatches)
     .where(
       and(
@@ -240,7 +241,17 @@ export async function getCreditBatchRemovalId(
   if (!batch) {
     throw new SafeError("Credit batch not found");
   }
-  return batch.removalId;
+  const slices = await db
+    .select({ removalId: creditBatchApplications.removalId })
+    .from(creditBatchApplications)
+    .where(
+      and(
+        eq(creditBatchApplications.creditBatchId, id),
+        eq(creditBatchApplications.organizationId, ctx.organizationId),
+      ),
+    );
+  if (slices.some((slice) => slice.removalId == null)) return null;
+  return slices.find((slice) => slice.removalId)?.removalId ?? null;
 }
 
 /**
@@ -461,6 +472,10 @@ export async function createCreditBatch(
         .where(and(inArray(samples.productionRunId, runIds), eq(samples.organizationId, ctx.organizationId)));
     }
 
+    await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
+      creditBatchIds: [batch.id],
+    });
+
     return batch;
   });
 
@@ -654,12 +669,7 @@ export async function updateCreditBatch(
       }
     }
 
-    await assertRemovalAllowsCreditBatchMutation(
-      ctx,
-      tx,
-      existingBatch.removalId,
-      "update",
-    );
+    await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "update");
 
     const targetFacilityId = updateFields.facilityId ?? existingBatch.facilityId;
     // Resolve the effective date window after update
@@ -766,6 +776,10 @@ export async function updateCreditBatch(
           .set({ creditBatchId: id, updatedAt: new Date() })
           .where(and(inArray(samples.productionRunId, resolvedProductionRunIds), eq(samples.organizationId, ctx.organizationId)));
       }
+
+      await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
+        creditBatchIds: [id],
+      });
     }
   });
 
@@ -787,7 +801,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
   await db.transaction(async (tx) => {
     // Lock the batch so a concurrent regroup/submit can't move it mid-delete.
     const [batch] = await tx
-      .select({ removalId: creditBatches.removalId })
+      .select({ id: creditBatches.id })
       .from(creditBatches)
       .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)))
       .for("update")
@@ -797,7 +811,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
       throw new SafeError("Credit batch not found");
     }
 
-    await assertRemovalAllowsCreditBatchMutation(ctx, tx, batch.removalId, "delete");
+    await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "delete");
 
     // Clear app-layer sample links, then delete membership links and the batch.
     await tx
@@ -809,10 +823,6 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
       .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
     await tx.delete(creditBatches).where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
 
-    // Drop the removal if this was its last member and it has no history.
-    if (batch?.removalId) {
-      await gcRemovalIfOrphaned(ctx, tx, batch.removalId);
-    }
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "credit_batch", entityId: id },
     ]);

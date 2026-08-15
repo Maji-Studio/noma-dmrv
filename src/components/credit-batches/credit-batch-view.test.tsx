@@ -64,13 +64,13 @@ function makePreview(
   };
 }
 
-function co2eStoredMarkup(
+function carbonLedgerMarkup(
   options: Parameters<typeof creditBatchSheetSections>[0],
 ): string {
-  const field = creditBatchSheetSections(options)
-    .find((section) => section.title === "Batch definition")
-    ?.fields.find((f) => f.label === "CO₂e stored");
-  return renderToStaticMarkup(<>{field?.value}</>);
+  const content = creditBatchSheetSections(options).find(
+    (section) => section.title === "Carbon ledger",
+  )?.content;
+  return renderToStaticMarkup(<>{content}</>);
 }
 
 const baseOptions = {
@@ -85,31 +85,31 @@ const baseOptions = {
 describe("credit batch CO₂e stored", () => {
   it("omits the field until a numeric preview is available", () => {
     expect(
-      co2eStoredMarkup({
+      carbonLedgerMarkup({
         ...baseOptions,
         creditBatch: makeBatch(),
       }),
-    ).toBe("");
+    ).not.toContain("t CO₂e");
 
     expect(
-      co2eStoredMarkup({
+      carbonLedgerMarkup({
         ...baseOptions,
         creditBatch: makeBatch({
           co2eStoredPreview: makePreview(null, ["organicCarbonPercent"]),
         }),
       }),
-    ).toBe("");
+    ).not.toContain("t CO₂e");
   });
 
   it("renders the figure once the preview resolves", () => {
     expect(
-      co2eStoredMarkup({
+      carbonLedgerMarkup({
         ...baseOptions,
         creditBatch: makeBatch({
           co2eStoredPreview: makePreview(12.5, []),
         }),
       }),
-    ).toContain("12.50 t CO₂e");
+    ).toContain("≈ 12.50 t CO₂e");
   });
 
   it("discloses the raw and capped 1000-year durability calculation", () => {

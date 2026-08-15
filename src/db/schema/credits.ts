@@ -14,7 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { creditBatchSampling, creditBatchStatus } from './common';
-import { fraction, percent, ppm } from './numeric-families';
+import { fraction, massKg, percent, ppm } from './numeric-families';
 import { facilities } from './facilities';
 import { feedstockTypes } from './feedstock';
 import { productionProcesses } from './production-processes';
@@ -120,20 +120,13 @@ export const creditBatches = pgTable(
     n2oCompositionPercent: percent('n2o_composition_percent'),
     n2oPpm: ppm('n2o_ppm'),
 
-    // --- Isometric Removal grouping ---
-    // The Isometric Removal this credit batch is submitted within. N credit
-    // batches may share one removalId (default 1:1 per month). Null until the
-    // batch is assigned to — or lazily creates — a removal at submission time.
-    removalId: uuid('removal_id').references(() => certifierRemovals.id),
-
     // --- §8.6.2 production-emissions front-loading (issue #349, ADR 0020) ---
     // The removal (GHG entry) that claimed this batch's PRODUCTION-bucket
     // emissions in full. Null until the batch's removal first submits
     // successfully; written transactionally with the ledger 'submitted' flip.
-    // Idempotent across resubmit/supersede of the SAME removal; a DIFFERENT
-    // removal must suppress the production bucket — in this slice that is a
-    // fail-closed submit block (delivery-only follow-up entries are gated
-    // behind issue #353).
+    // Idempotent across resubmit/supersede of the SAME removal. A DIFFERENT
+    // removal retains stored and delivery inputs while suppressing this
+    // batch's already-claimed production inputs.
     productionEmissionsClaimedByRemovalId: uuid(
       'production_emissions_claimed_by_removal_id'
     ).references(() => certifierRemovals.id),
@@ -176,10 +169,6 @@ export const creditBatches = pgTable(
       sql`${table.certifier} is distinct from 'isometric'
         or ${table.endDate} <= (${table.startDate} + interval '1 month')::date`
     ),
-    // Indexes the Removal grouping FK — drives "find credit batches in
-    // removal X" lookups during submission. Postgres does not auto-index
-    // foreign keys.
-    index('credit_batches_removal_id_idx').on(table.removalId),
     // Indexes the production-emissions claim FK (issue #349, ADR 0020) —
     // same rationale: Postgres does not auto-index foreign keys.
     index('credit_batches_production_claim_removal_id_idx').on(
@@ -217,11 +206,24 @@ export const creditBatchApplications = pgTable(
       .notNull(),
     applicationId: uuid('application_id')
       .notNull(),
+    // Immutable physical allocation for this Application x credit-batch
+    // slice. Wet and dry mass are persisted independently because commingled
+    // source lots can carry different moisture contents.
+    allocatedWetMassKg: massKg('allocated_wet_mass_kg').notNull(),
+    allocatedDryMassKg: massKg('allocated_dry_mass_kg').notNull(),
+    // A Removal owns frozen slices, not whole credit batches. Null means this
+    // applied mass is available for the next Removal.
+    removalId: uuid('removal_id'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.creditBatchId, table.applicationId] }),
     index('credit_batch_applications_organization_id_idx').on(table.organizationId),
+    index('credit_batch_applications_removal_id_idx').on(table.removalId),
+    check(
+      'credit_batch_applications_allocated_mass_non_negative',
+      sql`${table.allocatedWetMassKg} >= 0 and ${table.allocatedDryMassKg} >= 0`
+    ),
     foreignKey({
       columns: [table.creditBatchId, table.organizationId],
       foreignColumns: [creditBatches.id, creditBatches.organizationId],
@@ -229,6 +231,10 @@ export const creditBatchApplications = pgTable(
     foreignKey({
       columns: [table.applicationId, table.organizationId],
       foreignColumns: [applications.id, applications.organizationId],
+    }),
+    foreignKey({
+      columns: [table.removalId, table.organizationId],
+      foreignColumns: [certifierRemovals.id, certifierRemovals.organizationId],
     }),
   ]
 );
@@ -285,10 +291,6 @@ export const creditBatchesRelations = relations(
       fields: [creditBatches.productionProcessId],
       references: [productionProcesses.id],
     }),
-    removal: one(certifierRemovals, {
-      fields: [creditBatches.removalId],
-      references: [certifierRemovals.id],
-    }),
     creditBatchApplications: many(creditBatchApplications),
     creditBatchProductionRuns: many(creditBatchProductionRuns),
   })
@@ -304,6 +306,10 @@ export const creditBatchApplicationsRelations = relations(
     application: one(applications, {
       fields: [creditBatchApplications.applicationId],
       references: [applications.id],
+    }),
+    removal: one(certifierRemovals, {
+      fields: [creditBatchApplications.removalId],
+      references: [certifierRemovals.id],
     }),
   })
 );

@@ -23,13 +23,10 @@ vi.mock("@/data-access/certifier-removals", () => ({
 describe("credit-batch certification scope races", () => {
   it("re-resolves removal scope when grouping commits between reads", async () => {
     const concurrentRemoval = new Error("grouped scope reached");
-    vi.mocked(getCreditBatchRemovalId).mockResolvedValue(null);
-    vi.mocked(loadCreditBatchRollups).mockResolvedValue({
-      "batch-1": {
-        batch: { removalId: "removal-1" },
-        lineageFacts: {},
-      },
-    } as never);
+    vi.mocked(getCreditBatchRemovalId)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce("removal-1");
+    vi.mocked(loadCreditBatchRollups).mockResolvedValue({});
     vi.mocked(getCertifierRemovalById).mockRejectedValue(concurrentRemoval);
 
     await expect(

@@ -22,6 +22,7 @@ import {
 } from "@/lib/isometric/transformers/measurement-sample";
 import {
   buildRemovalSubmissionBuild,
+  buildProductionEmissionClaims,
   compileRemovalSubmission,
   materializeRemovalSubmissionSnapshot,
   normalizeSequestrationTemplateForHash,
@@ -37,6 +38,45 @@ const TEST_ORG_CONTEXT = {
 } as const;
 
 describe("buildRemovalSubmissionBuild", () => {
+  it("shows mixed production and delivery-only batch contributions", () => {
+    expect(
+      buildProductionEmissionClaims(
+        [
+          {
+            creditBatchId: "batch-a",
+            code: "Batch A",
+            claimedByRemovalId: "removal-r-001",
+            productionRunIds: ["run-a"],
+            applicationIds: ["application-a"],
+            applicationSlices: [],
+          },
+          {
+            creditBatchId: "batch-b",
+            code: "Batch B",
+            claimedByRemovalId: null,
+            productionRunIds: ["run-b"],
+            applicationIds: ["application-b"],
+            applicationSlices: [],
+          },
+        ],
+        "removal-r-002",
+      ),
+    ).toEqual([
+      {
+        creditBatchId: "batch-a",
+        creditBatchCode: "Batch A",
+        claimingRemovalId: "removal-r-001",
+        contribution: "delivery-only",
+      },
+      {
+        creditBatchId: "batch-b",
+        creditBatchCode: "Batch B",
+        claimingRemovalId: null,
+        contribution: "production-and-delivery",
+      },
+    ]);
+  });
+
   it("keeps template-tier compatibility as an independent compile blocker", () => {
     const blocker = removalTemplateTierCompatibilityBlocker(
       {
@@ -451,6 +491,7 @@ describe("buildRemovalSubmissionBuild", () => {
         sourceBindingPlan,
         memberCreditBatchIds: ["batch-1"],
         durabilityMeasurementSampleArgs: null,
+        omittedTemplateComponentIds: ["component-production"],
       } as never,
       template: { groups: [] } as never,
       externalProjectId: "project-1",
@@ -461,6 +502,9 @@ describe("buildRemovalSubmissionBuild", () => {
     expect(snapshot.payloadSnapshot.sourceBindingPlan).toEqual(
       sourceBindingPlan,
     );
+    expect(
+      snapshot.payloadSnapshot.transport.omittedTemplateComponentIds,
+    ).toEqual(["component-production"]);
   });
 
   it("does not duplicate measurement-backed s_fraction as direct Datapoints", () => {

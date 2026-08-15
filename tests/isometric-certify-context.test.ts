@@ -136,7 +136,6 @@ function mockNormalizedLineageFacts(
               id: batchId,
               code: batch?.code ?? "CB-1",
               facilityId: batch?.facilityId ?? FACILITY_ID,
-              removalId: batch?.removalId ?? null,
               durabilityOption: batch?.durabilityOption ?? "200_year",
               productionEmissionsClaimedByRemovalId:
                 batch?.productionEmissionsClaimedByRemovalId ?? null,

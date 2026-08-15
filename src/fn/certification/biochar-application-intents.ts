@@ -40,6 +40,11 @@ export async function compileBiocharApplicationIntents(args: {
   memberBatches: Array<{
     creditBatchId: string;
     applicationIds: string[];
+    applicationSlices?: Array<{
+      applicationId: string;
+      allocatedWetMassKg: number;
+      allocatedDryMassKg: number;
+    }>;
   }>;
   environment: "sandbox" | "production";
 }): Promise<BiocharApplicationIntent[]> {
@@ -89,12 +94,19 @@ export async function compileBiocharApplicationIntents(args: {
     );
   }
 
-  return applicationIds.map((applicationId) => {
+  return applicationIds.flatMap((applicationId) => {
     const input = inputByApplicationId.get(applicationId)!;
     const creditBatchIds = [...(batchIdsByApplicationId.get(applicationId) ?? [])].sort();
-    if (creditBatchIds.length !== 1) {
+    const slices = args.memberBatches
+      .flatMap((batch) =>
+        (batch.applicationSlices ?? [])
+          .filter((slice) => slice.applicationId === applicationId)
+          .map((slice) => ({ ...slice, creditBatchId: batch.creditBatchId })),
+      )
+      .sort((a, b) => a.creditBatchId.localeCompare(b.creditBatchId));
+    if (creditBatchIds.length > 1 && slices.length !== creditBatchIds.length) {
       throw new SafeError(
-        `Application ${input.applicationCode} spans ${creditBatchIds.length} credit batches. Assign it to exactly one credit batch before submitting. Truck measurements cannot be allocated across Production Batches.`,
+        `Application ${input.applicationCode} spans ${creditBatchIds.length} credit batches but its immutable batch allocations could not be loaded. Reload the Removal and submit again.`,
       );
     }
     if (input.fieldSizeHa == null) {
@@ -144,49 +156,60 @@ export async function compileBiocharApplicationIntents(args: {
       longitude: input.longitude,
       supplierReferenceId: storageLocationSupplierReference,
     });
-    const creditBatchId = creditBatchIds[0];
-    const supplierReference = buildBiocharApplicationReference({
-      applicationId,
-      creditBatchId,
-      environment: args.environment,
-    });
     const applicationDate = formatUtcDate(input.applicationDate);
+    const effectiveSlices = slices.length > 0
+      ? slices
+      : [{
+          applicationId,
+          creditBatchId: creditBatchIds[0],
+          allocatedWetMassKg: input.appliedTonnes * 1_000,
+          allocatedDryMassKg: 0,
+        }];
 
-    // Run the complete request validator with stable placeholders. This proves
-    // every operator-owned magnitude and identity is ready before any registry
-    // mutation; real dependency IDs replace the placeholders after ensure.
-    buildCreateBiocharApplicationRequest({
-      applicationCode: input.applicationCode,
-      applicationDate,
-      appliedTonnes: input.appliedTonnes,
-      fieldSizeHa,
-      truckMassOnArrivalKg,
-      truckMassOnDepartureKg,
-      externalProjectId,
-      externalProductionBatchId: PREFLIGHT_EXTERNAL_PRODUCTION_BATCH_ID,
-      externalStorageLocationId: PREFLIGHT_EXTERNAL_STORAGE_LOCATION_ID,
-      supplierReferenceId: supplierReference,
-      sourceIds: [],
+    return effectiveSlices.map((slice) => {
+      const appliedTonnes = slice.allocatedWetMassKg / 1_000;
+      const supplierReference = buildBiocharApplicationReference({
+        applicationId,
+        creditBatchId: slice.creditBatchId,
+        environment: args.environment,
+      });
+
+      // A commingled physical application is represented by one registry
+      // application per Production Batch. Applied mass follows the immutable
+      // batch slice; the observed truck facts remain facts of the shared event.
+      buildCreateBiocharApplicationRequest({
+        applicationCode: input.applicationCode,
+        applicationDate,
+        appliedTonnes,
+        fieldSizeHa,
+        truckMassOnArrivalKg,
+        truckMassOnDepartureKg,
+        externalProjectId,
+        externalProductionBatchId: PREFLIGHT_EXTERNAL_PRODUCTION_BATCH_ID,
+        externalStorageLocationId: PREFLIGHT_EXTERNAL_STORAGE_LOCATION_ID,
+        supplierReferenceId: supplierReference,
+        sourceIds: [],
+      });
+
+      return {
+        applicationId,
+        applicationCode: input.applicationCode,
+        creditBatchId: slice.creditBatchId,
+        deliveryId: input.deliveryId,
+        customerLocationId,
+        certifierProjectId,
+        externalProjectId,
+        applicationDate,
+        appliedTonnes,
+        fieldSizeHa,
+        truckMassOnArrivalKg,
+        truckMassOnDepartureKg,
+        supplierReference,
+        storageLocationSupplierReference,
+        storageLocationPayload,
+        sourceIds: [],
+      } satisfies BiocharApplicationIntent;
     });
-
-    return {
-      applicationId,
-      applicationCode: input.applicationCode,
-      creditBatchId,
-      deliveryId: input.deliveryId,
-      customerLocationId,
-      certifierProjectId,
-      externalProjectId,
-      applicationDate,
-      appliedTonnes: input.appliedTonnes,
-      fieldSizeHa,
-      truckMassOnArrivalKg,
-      truckMassOnDepartureKg,
-      supplierReference,
-      storageLocationSupplierReference,
-      storageLocationPayload,
-      sourceIds: [],
-    } satisfies BiocharApplicationIntent;
   });
 }
 

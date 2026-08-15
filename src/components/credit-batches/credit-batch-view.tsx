@@ -8,6 +8,7 @@
  * panels mount below via `viewModeChildren` because they fetch their own data.
  */
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
@@ -22,6 +23,109 @@ import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
 import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { computeCohortInputTotals } from "./cohort-input-ledger";
+
+function formatInput(value: number | null, unit: string): string {
+  return value == null
+    ? MISSING_VALUE.notRecorded
+    : `${Math.round(value).toLocaleString()} ${unit}`;
+}
+
+function CreditBatchCarbonLedger({
+  creditBatch,
+  productionRuns,
+  healthSummary,
+}: {
+  creditBatch: CreditBatchWithRelations;
+  productionRuns: CreditBatchProductionRunOption[];
+  healthSummary?: CreditBatchHealthSummary;
+}) {
+  const totals = computeCohortInputTotals(productionRuns);
+  const estimate = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
+  const removalId =
+    creditBatch.productionEmissionsClaimedByRemovalId ??
+    healthSummary?.removalId ??
+    null;
+  const rows = [
+    {
+      label: "Feedstock, dry mass",
+      value:
+        totals.feedstockDryKg == null
+          ? MISSING_VALUE.notRecorded
+          : formatTonnes(totals.feedstockDryKg / 1_000),
+    },
+    { label: "Diesel", value: formatInput(totals.dieselLiters, "L") },
+    {
+      label: "Grid electricity",
+      value: formatInput(totals.electricityKwh, "kWh"),
+    },
+  ];
+
+  return (
+    <div className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
+      <div className="flex flex-col gap-4 px-16 py-14">
+        <span className="title-heading-3 tabular-nums text-[var(--color-text-primary)]">
+          {estimate == null
+            ? MISSING_VALUE.notAvailable
+            : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
+        </span>
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          Estimated CO₂e stored before project emissions and registry verification.
+        </span>
+      </div>
+      <dl>
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            className="flex items-baseline justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-8"
+          >
+            <dt className="body-small text-[var(--color-text-secondary)]">
+              {row.label}
+            </dt>
+            <dd className="body-small font-mono tabular-nums text-[var(--color-text-primary)]">
+              {row.value}
+            </dd>
+          </div>
+        ))}
+        <div className="flex items-baseline justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-8">
+          <dt className="body-small text-[var(--color-text-secondary)]">
+            Production emissions
+          </dt>
+          <dd className="body-small text-right text-[var(--color-text-primary)]">
+            {removalId ? (
+              <Link
+                href={`/certification/removals?facility=${encodeURIComponent(creditBatch.facilityId)}&removal=${encodeURIComponent(removalId)}`}
+                className="underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
+              >
+                Included in Removal {removalId.slice(0, 8)}…
+              </Link>
+            ) : (
+              "Included with the first Removal"
+            )}
+          </dd>
+        </div>
+      </dl>
+      {productionRuns.length > 0 && (
+        <div className="border-t border-[var(--color-border-primary)] px-16 py-10">
+          <p className="mb-6 body-caption text-[var(--color-text-tertiary)]">
+            Source records
+          </p>
+          <div className="flex flex-wrap gap-x-12 gap-y-4 body-small">
+            {productionRuns.map((run) => (
+              <Link
+                key={run.id}
+                href={`/production-runs?facility=${encodeURIComponent(creditBatch.facilityId)}&run=${encodeURIComponent(run.id)}`}
+                className="underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
+              >
+                {formatDate(run.date)}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {
   return value === "200_year" ? "200 years" : "1,000 years";
@@ -190,6 +294,17 @@ export function creditBatchSheetSections({
       ),
     },
     {
+      title: "Carbon ledger",
+      fields: [],
+      content: (
+        <CreditBatchCarbonLedger
+          creditBatch={creditBatch}
+          productionRuns={productionRuns}
+          healthSummary={healthSummary}
+        />
+      ),
+    },
+    {
       // Mirrors the edit form's "Batch definition" section.
       title: "Batch definition",
       fields: [
@@ -201,15 +316,6 @@ export function creditBatchSheetSections({
           label: "Applied biochar",
           value: formatTonnes(creditBatch.appliedWeightTons),
         },
-        ...(creditBatch.co2eStoredPreview?.co2eStoredTonnes != null
-          ? [{
-              label: "CO₂e stored",
-              value: formatTonnes(
-                creditBatch.co2eStoredPreview.co2eStoredTonnes,
-                { unit: "t CO₂e" },
-              ),
-            }]
-          : []),
         ...(durabilityResult?.rawFDurable != null &&
         durabilityResult.fDurable != null
           ? [

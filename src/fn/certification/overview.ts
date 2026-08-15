@@ -234,6 +234,7 @@ export async function loadCertificationOverview(
       orgCtx,
       readyBatchIds,
       facilityFacts,
+      { unassignedOnly: true },
     );
     const readyToStartBatchCount = readyBatchIds.filter((batchId) => {
       const health = deriveBatchHealth(

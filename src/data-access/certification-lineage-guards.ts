@@ -7,6 +7,7 @@ import {
   biocharProducts,
   certifierRemovals,
   certificationSubmissions,
+  creditBatchApplications,
   creditBatchProductionRuns,
   creditBatches,
   deliveries,
@@ -152,8 +153,16 @@ function lineageQuery(
     )
     .leftJoin(applications, and(eq(applications.deliveryId, deliveries.id), eq(applications.organizationId, ctx.organizationId)))
     .innerJoin(
+      creditBatchApplications,
+      and(
+        eq(creditBatchApplications.creditBatchId, creditBatches.id),
+        eq(creditBatchApplications.applicationId, applications.id),
+        eq(creditBatchApplications.organizationId, ctx.organizationId),
+      ),
+    )
+    .innerJoin(
       certifierRemovals,
-      and(eq(certifierRemovals.id, creditBatches.removalId), eq(certifierRemovals.organizationId, ctx.organizationId)),
+      and(eq(certifierRemovals.id, creditBatchApplications.removalId), eq(certifierRemovals.organizationId, ctx.organizationId)),
     )
     .leftJoin(
       removalSubmission,

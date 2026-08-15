@@ -450,6 +450,7 @@ function declarativeInputMappingRevision(
 }
 
 export const MAPPING_REVISION_INPUT = {
+  productionClaimPolicy: "application-slice-delivery-only-v1",
   inputMapping: declarativeInputMappingRevision(INPUT_MAPPING),
   sequestrationComponentInputBindings:
     SEQUESTRATION_COMPONENT_INPUT_BINDINGS,

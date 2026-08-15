@@ -51,6 +51,7 @@ import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
@@ -701,6 +702,10 @@ export async function createApplication(
       })
       .returning();
 
+    await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
+      applicationIds: [application.id],
+    });
+
     return application;
   });
 }
@@ -831,6 +836,10 @@ export async function updateApplication(
       .set(updateData)
       .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)))
       .returning();
+
+    await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
+      applicationIds: [application.id],
+    });
 
     return application;
   });

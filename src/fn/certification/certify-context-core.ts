@@ -34,9 +34,7 @@ import {
   EMPTY_RUN_SUMMARY,
   type RemovalRunSummary,
 } from "@/lib/certification/mass-accounting";
-import {
-  type ProductionReadinessGap,
-} from "@/lib/certification/production-readiness";
+import type { ProductionReadinessGap } from "@/lib/certification/production-readiness";
 import {
   collectFeedstockTypeMappingGaps,
   type FeedstockTypeMappingGap,
@@ -92,24 +90,18 @@ import {
   toMemberCreditBatchView,
   type MemberCreditBatch,
 } from "./member-credit-batch";
-
+import { collectProductionClaimAwareRequiredTransportCategories, collectProductionClaimAwareTransportEntityIds } from "./production-claim-transport-scope";
+import { summarizeApplicationSlices } from "./application-slice-summary";
+import { buildRemovalLedgerPreview, type RemovalLedgerPreview } from "./removal-ledger-preview";
 export type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
 export type { SelectableBatch, SelectableBatchesData } from "./selectable-batches";
 export type { MemberCreditBatch } from "./member-credit-batch";
-
-// Bound facility fan-out so per-removal DB/registry query chains cannot burst
-// the connection pool. Mirrors `READINESS_CONCURRENCY` in overview.ts.
 const FANOUT_CONCURRENCY = 8;
-
 export interface TransportCoverageBucket {
   count: number;
   entityIds: string[];
   legIds: string[];
   firstLegEntityId: string | null;
-  // Non-null when at least one leg fails the per-leg uniformity /
-  // completeness checks `aggregateTransportMassDistance` enforces. Pooling legs from
-  // several credit batches into one removal raises the chance of a mixed
-  // method/factor — the panel surfaces it before the user clicks submit.
   aggregationWarning: string | null;
 }
 
@@ -118,11 +110,8 @@ export interface TransportCoverage {
   biochar: TransportCoverageBucket;
   sample: TransportCoverageBucket;
 }
-
 export type TransportCategory = keyof TransportCoverage;
 
-// Maps an INPUT_MAPPING.source field name to a transport category. Keep in
-// sync with the three transport rows in transformers/datapoint.ts.
 const TRANSPORT_SOURCE_TO_CATEGORY: Record<string, TransportCategory> = {
   feedstockTransportMassDistanceTonneKm: "feedstock",
   biocharTransportMassDistanceTonneKm: "biochar",
@@ -130,7 +119,6 @@ const TRANSPORT_SOURCE_TO_CATEGORY: Record<string, TransportCategory> = {
 };
 
 type DurabilityOption = "200_year" | "1000_year";
-
 // UI-facing removal context — the lean payload React Query caches.
 export interface RemovalCertifyContext {
   facilityId: string;
@@ -144,12 +132,9 @@ export interface RemovalCertifyContext {
   missingDefaultTemplateId: string | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
-  // Every credit batch that maps into this removal (>= 1).
   memberBatches: MemberCreditBatch[];
-  // Declared pyrolysis feedstock types that lack the registry catalogue id
-  // required by the production-batch submission transformer.
+  emissionsLedger: RemovalLedgerPreview;
   feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
-  // Removal-level transport coverage — one aggregate set across all members.
   transportCoverage: TransportCoverage;
   requiredTransportCategories: TransportCategory[];
   // True once member-batch lineage resolves at least one production run —
@@ -194,7 +179,7 @@ export interface RemovalCertifyContext {
 
 // Extends the UI context with the raw chain data the submit pipeline needs.
 // Kept server-internal so the cached UI payload stays lean.
-export interface RemovalSubmissionContext extends RemovalCertifyContext {
+export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "emissionsLedger"> {
   lineages: ChainOfCustodyData[];
   runs: ProductionRunWithSamples[];
   // The removal's member credit batches with their pooled lab Samples (by
@@ -219,6 +204,11 @@ export interface RemovalSubmissionContext extends RemovalCertifyContext {
     claimedByRemovalId: string | null;
     productionRunIds: string[];
     applicationIds: string[];
+    applicationSlices?: {
+      applicationId: string;
+      allocatedWetMassKg: number;
+      allocatedDryMassKg: number;
+    }[];
   }[];
   // Transport legs pooled across every member batch's lineage, deduped by
   // entity id. Fed to `enrichWithTransportLegs` by the submit pipeline.
@@ -324,6 +314,11 @@ interface RemovalScope {
     // "completed" claim.
     completedProductionRunIds: string[];
     applicationIds: string[];
+    applicationSlices: {
+      applicationId: string;
+      allocatedWetMassKg: number;
+      allocatedDryMassKg: number;
+    }[];
     durabilityOption: DurabilityOption;
     // §8.6.2 production-bucket claim state (issue #349, ADR 0020): the removal
     // that already claimed this batch's production emissions, or null.
@@ -354,13 +349,15 @@ async function resolveScopeForCreditBatch(
   }
 
   const accounting = (
-    await loadCreditBatchRollups(orgCtx, [creditBatchId])
+    await loadCreditBatchRollups(orgCtx, [creditBatchId], {
+      unassignedOnly: !options?.singleBatch,
+    })
   )[creditBatchId];
-  if (!accounting) throw new SafeError("Credit batch not found");
-
-  if (!options?.singleBatch && accounting.batch.removalId) {
-    return resolveScopeForRemoval(orgCtx, accounting.batch.removalId);
+  if (!accounting && !options?.singleBatch) {
+    const racedRemovalId = await getCreditBatchRemovalId(orgCtx, creditBatchId);
+    if (racedRemovalId) return resolveScopeForRemoval(orgCtx, racedRemovalId);
   }
+  if (!accounting) throw new SafeError("Credit batch not found");
 
   return resolveSingleBatchScope(accounting);
 }
@@ -382,6 +379,7 @@ function resolveSingleBatchScope(
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
         applicationIds: lineageFacts.applicationIds,
+        applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
         durabilityOption: batch.durabilityOption,
         productionEmissionsClaimedByRemovalId:
           batch.productionEmissionsClaimedByRemovalId,
@@ -406,7 +404,9 @@ export async function resolveScopeForRemoval(
 
   const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
   const batchIds = batches.map((batch) => batch.id);
-  const accountingByBatch = await loadCreditBatchRollups(orgCtx, batchIds);
+  const accountingByBatch = await loadCreditBatchRollups(orgCtx, batchIds, {
+    removalId,
+  });
   const memberBatches = batches.map((batch) => {
       const accounting = accountingByBatch[batch.id];
       if (!accounting) {
@@ -418,6 +418,7 @@ export async function resolveScopeForRemoval(
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
         applicationIds: lineageFacts.applicationIds,
+        applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
         durabilityOption: accountingBatch.durabilityOption,
         productionEmissionsClaimedByRemovalId:
           accountingBatch.productionEmissionsClaimedByRemovalId,
@@ -589,6 +590,7 @@ export async function buildRemovalContext(
     claimedByRemovalId: b.productionEmissionsClaimedByRemovalId,
     productionRunIds: [...b.productionRunIds].sort(),
     applicationIds: [...b.applicationIds].sort(),
+    applicationSlices: b.applicationSlices,
   }));
 
   // Load removal-owned facts up-front so every short-circuit carries them.
@@ -715,22 +717,26 @@ export async function buildRemovalContext(
       ? await getProductionRunsWithSamples(orgCtx, runIds)
       : [];
 
-  // Credit-batch-grained durability data plane (ADR 0016): pool each member
-  // batch's lab Samples, scope runs to the removal's applied set, and run the D3
-  // gates. Loaded BEFORE the transport walk — samples anchor on the batch
-  // (issue #309), so the sample transport legs and per-sample readiness gaps
-  // hang off these pooled samples, not off the runs. `durabilityGateBlockers`
-  // is the same fail-closed list the submit pipeline blocks on; the §8.3.1
-  // distribution warning is advisory, so it joins the non-blocking submission
-  // warnings.
-  const entityIds = collectTransportEntityIds(lineages, batchesWithSamples);
+  // Batch-pooled Samples drive durability, transport, and readiness (ADR 0016).
+  // The same durability blockers gate the submit pipeline below.
+  const entityIds = collectProductionClaimAwareTransportEntityIds({
+    removalId: scope.removalId,
+    memberBatches: scope.memberBatches,
+    lineages,
+    batchesWithSamples,
+  });
+  const requiredTransportCategories = collectProductionClaimAwareRequiredTransportCategories({
+    removalId: scope.removalId,
+    memberBatches: scope.memberBatches,
+    requiredTransportCategories: facilityFacts.requiredTransportCategories,
+  });
   const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
   const transportCoverage = buildCoverage(transportLegs, entityIds);
   const entityReadiness = await buildCertifyEntityReadiness({
     runs,
     batchesWithSamples,
     transportLegs,
-    requiredTransportCategories: facilityFacts.requiredTransportCategories,
+    requiredTransportCategories,
   });
   // One mass-accounting walk: the per-run attribution the submit pipeline
   // scopes by AND the Review-flow summary, so the two can never diverge.
@@ -754,6 +760,7 @@ export async function buildRemovalContext(
     facilityId: scope.facilityId,
     removalId: scope.removalId,
     ...facilityFacts,
+    requiredTransportCategories,
     memberBatches: memberBatchesWithSubmissionGates,
     feedstockTypeMappingGaps,
     transportCoverage,
@@ -813,6 +820,7 @@ function projectUiContext(
     blueprintsForTemplate: ctx.blueprintsForTemplate,
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
     memberBatches: ctx.memberBatches,
+    emissionsLedger: buildRemovalLedgerPreview(ctx),
     feedstockTypeMappingGaps: ctx.feedstockTypeMappingGaps,
     transportCoverage: ctx.transportCoverage,
     requiredTransportCategories: ctx.requiredTransportCategories,
@@ -882,11 +890,13 @@ export async function buildCreditBatchContexts(
   orgCtx: OrgContext,
   creditBatchIds: string[],
   facilityFacts: FacilityCertifierFacts,
+  options?: { unassignedOnly?: boolean },
 ): Promise<CreditBatchContextSet> {
-  const accountingByBatch = await loadCreditBatchRollups(
-    orgCtx,
-    creditBatchIds,
-  );
+  const accountingByBatch = options?.unassignedOnly
+    ? await loadCreditBatchRollups(orgCtx, creditBatchIds, {
+        unassignedOnly: true,
+      })
+    : await loadCreditBatchRollups(orgCtx, creditBatchIds);
   const contextEntries: Array<
     readonly [string, RemovalCertifyContext]
   > = [];
@@ -935,9 +945,6 @@ export interface RemovalsHubData {
   isProduction: boolean;
 }
 
-// Removals hub payload for a facility: every removal with its member credit
-// batches + latest submission, plus the pool of credit batches not yet
-// grouped into a removal.
 export async function loadRemovalsForFacility(
   facilityId: string,
 ): Promise<ActionResult<RemovalsHubData>> {
@@ -947,8 +954,6 @@ export async function loadRemovalsForFacility(
       listRemovalsForFacility(orgCtx, facilityId),
       listUngroupedCreditBatches(orgCtx, facilityId),
     ]);
-    // Bounded chunks (order-preserving) rather than one unbounded Promise.all
-    // over every removal — see FANOUT_CONCURRENCY.
     const removals: RemovalHubEntry[] = [];
     for (let i = 0; i < removalRows.length; i += FANOUT_CONCURRENCY) {
       const chunk = await Promise.all(
@@ -979,10 +984,6 @@ export async function loadRemovalsForFacility(
   });
 }
 
-// Selection-step payload for the New-Removal wizard: every ungrouped credit
-// batch in the facility paired with the SAME health verdict the credit-batch
-// detail page shows. Facility authorization and certifier facts stay in the
-// core action; the cohesive selectable-batch read flow lives in its split.
 export async function loadSelectableBatchesForFacility(
   facilityId: string,
 ): Promise<ActionResult<SelectableBatchesData>> {

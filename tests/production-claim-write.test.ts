@@ -127,7 +127,6 @@ async function createFixture(): Promise<Fixture> {
         startDate: "2026-06-01",
         endDate: "2026-06-30",
         certifier: "isometric",
-        removalId: removalA.id,
       })
       .returning({ id: creditBatches.id });
     createdBatchIds.push(batch.id);
