@@ -72,4 +72,17 @@ describe("RemovalDetailSheet sync history contract", () => {
       "<SourcesPanel",
     );
   });
+
+  it("reads the facility project mapping for the storage sites field", () => {
+    const source = readFileSync(
+      new URL("./removal-detail-sheet.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain("useFacilityCertifierSummary");
+    expect(source).toMatch(
+      /certifierSummary\?\.mapping\?\.externalProjectId\s*\?\?\s*null/,
+    );
+    expect(source).toContain("<RemovalStorageSitesField");
+  });
 });

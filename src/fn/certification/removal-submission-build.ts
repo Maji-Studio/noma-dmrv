@@ -1,4 +1,5 @@
 import type { OrgContext } from "@/lib/auth/server";
+import { env } from "@/config/env";
 import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { SafeError } from "@/lib/errors";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
@@ -38,6 +39,10 @@ import {
   resolveRemovalReportingWindow,
 } from "./removal-reporting-window";
 import type { ResolvedFixedInput } from "./removal-snapshot-readers";
+import {
+  compileBiocharApplicationIntents,
+  type BiocharApplicationIntent,
+} from "./biochar-application-intents";
 import {
   collectCandidateSourceDocumentsForRemoval,
   resolveSourceBindingCandidates,
@@ -79,6 +84,7 @@ export interface RemovalSubmissionBuild {
   datapointBodyByKey: Map<string, CreateDatapointRequest>;
   durabilityMeasurementSampleArgs: DurabilityMeasurementSampleClaimArgs | null;
   memberCreditBatchIds: string[];
+  biocharApplicationIntents: BiocharApplicationIntent[];
 }
 
 export interface RemovalSubmissionReview {
@@ -215,13 +221,6 @@ export function removalTemplateTierCompatibilityBlocker(
   );
 }
 
-/**
- * Deep compile interface for the Removal workflow. Template walking, semantic
- * mappings, transforms and request planning stay behind this function. The
- * returned snapshot is explicitly a claim-time materialization plan; it is not
- * an immutable versioned POST snapshot until the ledger claim supplies a
- * version.
- */
 export async function compileRemovalSubmission(
   args: Parameters<typeof buildRemovalSubmissionBuild>[0] & {
     /**
@@ -614,6 +613,12 @@ export async function buildRemovalSubmissionBuild(args: {
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
   assertSequestrationTemplateBindings(defaultTemplate);
 
+  const biocharApplicationIntents = await compileBiocharApplicationIntents({
+    orgCtx,
+    memberBatches: ctx.memberBatchClaims,
+    environment: env.ISOMETRIC_ENVIRONMENT,
+  });
+
   const lineageWarnings: string[] = [];
   for (const lineage of ctx.lineages) {
     lineageWarnings.push(
@@ -834,6 +839,7 @@ export async function buildRemovalSubmissionBuild(args: {
     ...(semanticMeasurementSamples.length > 0
       ? { durabilityMeasurementSamples: semanticMeasurementSamples }
       : {}),
+    biocharApplicationIntents,
     inputs: [
       ...monitored.map((m) => ({
         rtcId: m.removalTemplateComponentId,
@@ -870,6 +876,7 @@ export async function buildRemovalSubmissionBuild(args: {
     datapointBodyByKey,
     durabilityMeasurementSampleArgs,
     memberCreditBatchIds,
+    biocharApplicationIntents,
   };
 }
 

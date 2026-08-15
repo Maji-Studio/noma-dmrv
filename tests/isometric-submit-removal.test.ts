@@ -42,6 +42,7 @@ import * as ledger from "@/data-access/certification";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
+import * as biocharApplications from "@/fn/certification/biochar-applications";
 import * as protocolPreflight from "@/fn/certification/protocol-version-preflight";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { compileRemovalSubmission } from "@/fn/certification/removal-submission-build";
@@ -226,6 +227,19 @@ describe("submitRemoval — happy path", () => {
     // One datapoint POST (the only monitored input) + one removal POST.
     expect(createDatapointFake).toHaveBeenCalledTimes(1);
     expect(createGhgEntryFake).toHaveBeenCalledTimes(1);
+    expect(
+      createGhgEntryFake.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(biocharApplications.ensureRemovalBiocharApplications).mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      vi.mocked(ledger.markSubmissionSubmitted).mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(biocharApplications.ensureRemovalBiocharApplications).mock
+        .invocationCallOrder[0],
+    );
     expect(progress).toHaveBeenCalledWith({
       step: "removal.sending_inputs",
       state: "active",

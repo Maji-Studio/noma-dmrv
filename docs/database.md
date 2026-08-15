@@ -123,6 +123,13 @@ submission and configuration boundary. Purpose per table:
 [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR
 0008](./adr/0008-submission-ledger-internal-seam.md).
 
+`certifier_biochar_applications` is an organization-scoped idempotency journal,
+not a second source of application facts. Its exact payload/hash and dependency
+identities are claimed before the non-idempotent sandbox POST, then confirmed
+with the remote ID and observed GHG identity. Delivery arrival/departure truck
+observations use the shared `massKg` numeric family and remain nullable for
+existing development and staging rows.
+
 `certifier_ghg_statement_reports` is the immutable-version record for the PDF
 sent with a GHG Statement verifier submission. Every preparation gets a
 positive version, frozen live input/model, source fingerprint, content

@@ -1,3 +1,5 @@
+import type { IsometricEnvironment } from "./client";
+
 const REGISTRY = "https://registry.isometric.com";
 const DOCS = "https://docs.isometric.com";
 
@@ -9,8 +11,6 @@ const CERTIFY_HOSTS = {
   sandbox: "https://registry.sandbox.isometric.com",
   production: REGISTRY,
 } as const;
-
-export type IsometricEnvironment = keyof typeof CERTIFY_HOSTS;
 
 const REGISTRY_MINOR_VERSION_PATTERN = /\bv?(\d+\.\d+)(?:\.\d+)?\b/i;
 

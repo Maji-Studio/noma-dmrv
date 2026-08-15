@@ -4,6 +4,9 @@ vi.mock("./sources", () => ({
   collectCandidateSourceDocumentsForRemoval: vi.fn(),
   resolveSourceBindingCandidates: vi.fn(),
 }));
+vi.mock("./biochar-application-intents", () => ({
+  compileBiocharApplicationIntents: vi.fn(async () => []),
+}));
 
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import { payloadHash } from "@/lib/isometric";
@@ -25,6 +28,13 @@ import {
   removalTemplateTierCompatibilityBlocker,
 } from "./removal-submission-build";
 import * as sources from "./sources";
+
+const TEST_ORG_CONTEXT = {
+  userId: "removal-submission-build-user",
+  organizationId: "removal-submission-build-org",
+  orgRole: "owner",
+  isPlatformAdmin: false,
+} as const;
 
 describe("buildRemovalSubmissionBuild", () => {
   it("keeps template-tier compatibility as an independent compile blocker", () => {
@@ -72,7 +82,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
   it("returns compile blockers instead of constructing transport for missing readiness", async () => {
     const compiled = await compileRemovalSubmission({
-      orgCtx: {} as never,
+      orgCtx: TEST_ORG_CONTEXT,
       removalId: "rem-test-missing-readiness",
       ctx: {} as RemovalSubmissionContext,
       defaultTemplate: {
@@ -94,7 +104,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
   it("fails closed when a Removal template has no sequestration component", async () => {
     const compiled = await compileRemovalSubmission({
-      orgCtx: {} as never,
+      orgCtx: TEST_ORG_CONTEXT,
       removalId: "rem-test-no-sequestration",
       ctx: {
         entityReadinessGaps: [],
@@ -191,7 +201,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
     await expect(
       buildRemovalSubmissionBuild({
-        orgCtx: {} as never,
+        orgCtx: TEST_ORG_CONTEXT,
         removalId: "rem-test-missing-readiness",
         ctx,
         defaultTemplate: {} as never,
@@ -217,7 +227,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
     await expect(
       buildRemovalSubmissionBuild({
-        orgCtx: {} as never,
+        orgCtx: TEST_ORG_CONTEXT,
         removalId: "rem-test-1",
         ctx,
         defaultTemplate: {} as never,
@@ -384,7 +394,7 @@ describe("buildRemovalSubmissionBuild", () => {
     };
 
     const build = await buildRemovalSubmissionBuild({
-      orgCtx: {} as never,
+      orgCtx: TEST_ORG_CONTEXT,
       removalId: "removal-1",
       ctx,
       defaultTemplate: template,

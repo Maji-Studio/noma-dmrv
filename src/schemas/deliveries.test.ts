@@ -68,4 +68,42 @@ describe("delivery range validation copy", () => {
       result.error.issues.find((issue) => issue.path[0] === field)?.message,
     ).toBe(message);
   });
+
+  it("keeps truck observations optional for operations", () => {
+    expect(deliveryFormSchema.safeParse(baseDelivery).success).toBe(true);
+  });
+
+  it.each([
+    ["truckMassOnArrivalKg", -1, "Observed truck mass must be 0 kg or more"],
+    ["truckMassOnDepartureKg", -1, "Observed truck mass must be 0 kg or more"],
+    ["truckMassOnArrivalKg", Number.NaN, "Enter a valid observed truck mass"],
+  ] as const)("validates %s", (field, value, message) => {
+    const result = deliveryFormSchema.safeParse({
+      ...baseDelivery,
+      [field]: value,
+    });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(
+      result.error.issues.find((issue) => issue.path[0] === field)?.message,
+    ).toBe(message);
+  });
+
+  it("requires the arrival observation to be at least the departure observation", () => {
+    const result = deliveryFormSchema.safeParse({
+      ...baseDelivery,
+      truckMassOnArrivalKg: 1_000,
+      truckMassOnDepartureKg: 1_001,
+    });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ["truckMassOnDepartureKg"],
+          message: expect.stringMatching(/cannot exceed/i),
+        }),
+      ]),
+    );
+  });
 });

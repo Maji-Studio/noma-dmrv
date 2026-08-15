@@ -237,7 +237,7 @@ describe("SubmitStep", () => {
     return renderer!;
   }
 
-  it("links to the sandbox removal and storage sites after submission", async () => {
+  it("links to the sandbox removal without a storage sites CTA", async () => {
     const renderer = await renderSuccessfulSubmit({
       ...CONTEXT,
       mapping: {
@@ -245,9 +245,7 @@ describe("SubmitStep", () => {
       },
     } as unknown as RemovalCertifyContext);
 
-    expect(findLink(renderer!, "View storage sites")?.props.href).toBe(
-      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
-    );
+    expect(findLink(renderer!, "View storage sites")).toBeUndefined();
     expect(findLink(renderer!, "View on Isometric")?.props.href).toBe(
       "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/ghg-entry/rmv_1KT958C1JSBXF5F8/edit",
     );
@@ -266,9 +264,7 @@ describe("SubmitStep", () => {
       },
     } as unknown as RemovalCertifyContext);
 
-    expect(findLink(renderer!, "View storage sites")?.props.href).toBe(
-      "https://registry.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
-    );
+    expect(findLink(renderer!, "View storage sites")).toBeUndefined();
     expect(findLink(renderer!, "View on Isometric")?.props.href).toBe(
       "https://registry.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/ghg-entry/rmv_1KT958C1JSBXF5F8/edit",
     );
