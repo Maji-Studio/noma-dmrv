@@ -287,6 +287,26 @@ describe("ensureRemovalBiocharApplications", () => {
     expect(mocks.client.post).not.toHaveBeenCalled();
   });
 
+  it("preserves the confirmed external identity when reconciliation finds another record", async () => {
+    mocks.client.get.mockResolvedValue(page([]));
+    mocks.client.post.mockResolvedValue(remote());
+    await ensure();
+
+    vi.clearAllMocks();
+    mocks.client.get.mockResolvedValue(
+      page([remote({ id: "bca-replacement" })]),
+    );
+
+    await expect(ensure()).rejects.toThrow(/different Biochar Application identity/i);
+    expect(mocks.markDrift).toHaveBeenCalledWith(
+      orgCtx,
+      "journal-1",
+      "external_identity_drift",
+    );
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    expect(mocks.registration?.externalApplicationId).toBe("bca-test");
+  });
+
   it("rejects journal payload drift before any Biochar Application lookup or POST", async () => {
     mocks.registration = registration({}, { payloadHash: "stale" });
 

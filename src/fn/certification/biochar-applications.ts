@@ -190,7 +190,7 @@ async function ensureBiocharApplication(args: {
         args.orgCtx.organizationId,
       );
       let confirmedRemote: IsometricBiocharApplication | null = null;
-      const result = await performRegistryCreate({
+      await performRegistryCreate({
         orgCtx: args.orgCtx,
         entityType: "application",
         entityId: args.intent.applicationId,
@@ -247,6 +247,19 @@ async function ensureBiocharApplication(args: {
         },
         onConfirmed: async (externalApplicationId) => {
           const remote = confirmedRemote;
+          if (
+            registration!.lifecycleStatus === "confirmed" &&
+            registration!.externalApplicationId !== externalApplicationId
+          ) {
+            await markBiocharApplicationDrift(
+              args.orgCtx,
+              registration!.id,
+              "external_identity_drift",
+            );
+            throw new SafeError(
+              `Application ${args.intent.applicationCode} is linked to a different Biochar Application identity. Resolve the journal drift before retrying.`,
+            );
+          }
           await confirmBiocharApplicationRegistration(args.orgCtx, {
             registrationId: registration!.id,
             expectedPayloadHash: bodyHash,
@@ -260,19 +273,6 @@ async function ensureBiocharApplication(args: {
         onExternalMutation: args.onExternalMutation,
         log: args.log,
       });
-      if (
-        registration.lifecycleStatus === "confirmed" &&
-        registration.externalApplicationId !== result.externalId
-      ) {
-        await markBiocharApplicationDrift(
-          args.orgCtx,
-          registration.id,
-          "external_identity_drift",
-        );
-        throw new SafeError(
-          `Application ${args.intent.applicationCode} is linked to a different Biochar Application identity. Resolve the journal drift before retrying.`,
-        );
-      }
     },
   );
 }
