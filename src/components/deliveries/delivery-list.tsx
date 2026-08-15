@@ -660,7 +660,7 @@ export function DeliveryList() {
                   title: "Truck weighing",
                   fields: [
                     {
-                      label: "Truck mass before unloading",
+                      label: "Truck mass before unloading (kg)",
                       ...certificationDetailField(
                         "delivery",
                         "truckMassOnArrivalKg",
@@ -670,7 +670,7 @@ export function DeliveryList() {
                       ),
                     },
                     {
-                      label: "Truck mass after unloading",
+                      label: "Truck mass after unloading (kg)",
                       ...certificationDetailField(
                         "delivery",
                         "truckMassOnDepartureKg",
