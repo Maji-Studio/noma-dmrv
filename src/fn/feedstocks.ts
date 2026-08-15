@@ -29,6 +29,7 @@ import {
   deleteFeedstockSchema,
   updateFeedstockSchema,
   feedstockFilterSchema,
+  feedstockStatsFilterSchema,
 } from "@/schemas/feedstocks";
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
@@ -106,17 +107,26 @@ export async function getFeedstockByIdFn(
 }
 
 export async function getFeedstockStatsFn(
-  facilityId?: string
+  scope?: Partial<z.infer<typeof feedstockStatsFilterSchema>>
 ): Promise<ActionResult<FeedstockStats>> {
   try {
     const ctx = await requireOrgContext();
 
-    if (facilityId) {
-      await requireOrgFacility(ctx, facilityId);
+    const validatedScope = scope
+      ? feedstockStatsFilterSchema.parse(scope)
+      : undefined;
+    if (validatedScope?.facilityId) {
+      await requireOrgFacility(ctx, validatedScope.facilityId);
     }
-    const data = await getFeedstockStatsData(ctx, facilityId);
+    const data = await getFeedstockStatsData(ctx, validatedScope);
     return { success: true, data };
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: formatZodActionError(error, "Invalid filter parameters"),
+      };
+    }
     return {
       success: false,
       error: feedstockActionError(

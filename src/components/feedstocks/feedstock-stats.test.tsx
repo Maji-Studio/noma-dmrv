@@ -3,8 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 import type { FeedstockStats as FeedstockStatsData } from "@/data-access/feedstocks";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
+vi.mock("nuqs", () => ({
+  parseAsString: { withOptions: () => ({}) },
+  useQueryState: () => [null, vi.fn()],
+}));
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: "facility-1" }),
+}));
+vi.mock("@/hooks/use-entities", () => ({
+  useFeedstockTypes: () => ({ data: [] }),
 }));
 
 const stats = vi.hoisted(() => ({
@@ -47,5 +54,20 @@ describe("FeedstockStats missing quantities", () => {
 
     expect(markup).toContain("2.5 t");
     expect(markup).toContain("12.5%");
+  });
+
+  it("names the moisture stat as weighted and states the unfiltered scope", () => {
+    stats.value = {
+      totalFeedstocks: 1,
+      completeFeedstocks: 1,
+      missingDataFeedstocks: 0,
+      totalDryMassKg: 1000,
+      avgMoisturePercent: 10,
+    };
+
+    const markup = renderToStaticMarkup(<FeedstockStats />);
+
+    expect(markup).toContain("Weighted Avg. Moisture");
+    expect(markup).toContain("Totals cover all feedstock types.");
   });
 });

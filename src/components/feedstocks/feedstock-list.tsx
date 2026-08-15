@@ -38,6 +38,7 @@ import {
   useUpdateFeedstock,
   useDeleteFeedstock,
 } from "@/hooks/use-feedstocks";
+import { useFeedstockTypes } from "@/hooks/use-entities";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useListPagination,
@@ -58,6 +59,7 @@ import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { useFeedstockTypeFilter } from "./feedstock-type-filter";
 
 // ============================================
 // Column Definitions
@@ -250,8 +252,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
+  const { feedstockTypeId, setFeedstockTypeId } = useFeedstockTypeFilter();
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
-    useListPagination(contextFacilityId);
+    useListPagination(`${contextFacilityId ?? ""}:${feedstockTypeId}`);
   const normalizedSearch = searchInput.trim();
   const debouncedSearch = useDebounce(
     normalizedSearch,
@@ -259,10 +262,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   );
 
   // Data
+  const { data: feedstockTypeOptions } = useFeedstockTypes();
   const { data: feedstocksData, isLoading, error: fetchError } = useFeedstocks(
     {
       ...(debouncedSearch ? { search: debouncedSearch } : {}),
       ...(contextFacilityId ? { facilityId: contextFacilityId } : {}),
+      ...(feedstockTypeId ? { feedstockTypeId } : {}),
       page: currentPage,
       pageSize,
     },
@@ -409,7 +414,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     isLoading,
     setCurrentPage,
   });
-  const hasActiveSearch = normalizedSearch.length > 0;
+  const hasActiveFilters =
+    normalizedSearch.length > 0 || feedstockTypeId.length > 0;
   useEffect(() => {
     if (!focusedFeedstockId) return;
     if (focusedFeedstock.error || (focusedFeedstock.isSuccess && !focusedFeedstock.data)) {
@@ -520,10 +526,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           <EmptyState
             padding="md"
             icon={<PackageIcon size={48} />}
-            title={hasActiveSearch ? "No matching feedstocks" : "No feedstocks yet"}
-            description={hasActiveSearch ? "Try clearing your search." : undefined}
+            title={hasActiveFilters ? "No matching feedstocks" : "No feedstocks yet"}
+            description={
+              hasActiveFilters ? "Try clearing your search or filter." : undefined
+            }
             action={
-              !hasActiveSearch ? (
+              !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
                   Create your first feedstock
@@ -539,6 +547,21 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             aria-label="Search feedstocks"
           />
           <DataTable.Controls>
+            <DataTable.FilterSelect
+              value={feedstockTypeId}
+              onChange={(event) => {
+                void setFeedstockTypeId(event.target.value || null);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter feedstocks by feedstock type"
+            >
+              <option value="">All feedstock types</option>
+              {feedstockTypeOptions?.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </DataTable.FilterSelect>
             <DataTable.ColumnVisibility />
           </DataTable.Controls>
         </DataTable.Toolbar>
