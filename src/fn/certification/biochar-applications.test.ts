@@ -180,7 +180,6 @@ function ensure() {
     externalRemovalId: EXTERNAL_REMOVAL_ID,
     submissionRow: { id: "submission-1" } as CertificationSubmissionRow,
     intents: [intent()],
-    resumed: false,
     log,
   });
 }

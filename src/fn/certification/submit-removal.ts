@@ -536,7 +536,6 @@ async function submitRemovalCore(
         externalRemovalId: claimed.externalId,
         submissionRow: ctx.latestSubmission,
         intents: readRemovalBiocharApplicationIntents(ctx.latestSubmission),
-        resumed: true,
         log,
       });
       onProgress?.({
@@ -906,7 +905,6 @@ async function runRemovalSubmission({
     submissionRow: row,
     expectedLockedAt,
     intents: biocharApplicationIntents,
-    resumed,
     onExternalMutation: (state) =>
       recordRemovalExternalMutation(attempt, state),
     log,

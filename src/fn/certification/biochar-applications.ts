@@ -42,7 +42,6 @@ export async function ensureRemovalBiocharApplications(args: {
   submissionRow: CertificationSubmissionRow;
   expectedLockedAt?: Date;
   intents: BiocharApplicationIntent[];
-  resumed: boolean;
   onExternalMutation?: RegistryExternalMutationReporter;
   log: Logger;
 }): Promise<void> {
@@ -140,7 +139,6 @@ async function ensureBiocharApplication(args: {
   externalProductionBatchId: string;
   storageLocationRegistrationId: string;
   externalStorageLocationId: string;
-  resumed: boolean;
   onExternalMutation?: RegistryExternalMutationReporter;
   log: Logger;
 }): Promise<void> {
@@ -206,6 +204,8 @@ async function ensureBiocharApplication(args: {
         operation: `biochar-application:create:${args.intent.applicationId}`,
         requestPayload: body,
         supplierRefId: args.intent.supplierReference,
+        // A missing local row does not prove an earlier POST failed. Always
+        // reconcile by stable reference before this non-idempotent create.
         resumed: true,
         create: async () => {
           const remote = await createBiocharApplication(client, body);
