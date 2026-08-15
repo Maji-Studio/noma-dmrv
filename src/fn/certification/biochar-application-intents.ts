@@ -94,7 +94,7 @@ export async function compileBiocharApplicationIntents(args: {
         `Application ${input.applicationCode} spans ${creditBatchIds.length} credit batches. Assign it to exactly one credit batch before submitting. Truck measurements cannot be allocated across Production Batches.`,
       );
     }
-    if (!Number.isFinite(input.fieldSizeHa) || (input.fieldSizeHa ?? 0) <= 0) {
+    if (input.fieldSizeHa == null) {
       throw new SafeError(
         `Application ${input.applicationCode} needs a field size greater than 0 ha before submitting.`,
       );
