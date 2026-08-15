@@ -197,6 +197,16 @@ export const feedstockFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
+/**
+ * Scope for the feedstock KPI strip. It is the subset of the list filters that
+ * the stat cards honour, so the cards can only ever summarise records the list
+ * is also showing.
+ */
+export const feedstockStatsFilterSchema = feedstockFilterSchema.pick({
+  facilityId: true,
+  feedstockTypeId: true,
+});
+
 // ============================================
 // Type Inference
 // ============================================
@@ -206,3 +216,6 @@ export type CreateFeedstockData = z.infer<typeof createFeedstockSchema>;
 export type UpdateFeedstockData = z.infer<typeof updateFeedstockSchema>;
 export type DeleteFeedstockData = z.infer<typeof deleteFeedstockSchema>;
 export type FeedstockFilterData = z.infer<typeof feedstockFilterSchema>;
+export type FeedstockStatsFilterData = z.infer<
+  typeof feedstockStatsFilterSchema
+>;
