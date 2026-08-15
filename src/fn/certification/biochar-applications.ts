@@ -47,13 +47,12 @@ export async function ensureRemovalBiocharApplications(args: {
   log: Logger;
 }): Promise<void> {
   requireOrgRole(args.orgCtx, "admin");
+  if (args.intents.length === 0) return;
   if (env.ISOMETRIC_ENVIRONMENT === "production") {
     throw new SafeError(
       "Storage Location and Biochar Application synchronization is not enabled for production yet.",
     );
   }
-  if (args.intents.length === 0) return;
-
   const creditBatchIds = [
     ...new Set(args.intents.map((intent) => intent.creditBatchId)),
   ].sort();

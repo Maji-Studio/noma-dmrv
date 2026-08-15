@@ -40,11 +40,7 @@ export async function compileBiocharApplicationIntents(args: {
   }>;
   environment: "sandbox" | "production";
 }): Promise<BiocharApplicationIntent[]> {
-  if (args.environment === "production") {
-    throw new SafeError(
-      "Storage Location and Biochar Application synchronization is not enabled for production yet.",
-    );
-  }
+  if (args.environment === "production") return [];
   const batchIdsByApplicationId = new Map<string, Set<string>>();
   for (const batch of args.memberBatches) {
     for (const applicationId of new Set(batch.applicationIds)) {

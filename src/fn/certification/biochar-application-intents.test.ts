@@ -155,7 +155,7 @@ describe("compileBiocharApplicationIntents", () => {
     await expect(compile()).rejects.toThrow(/after unloading.*exceeds/i);
   });
 
-  it("blocks production instead of silently skipping registry resources", async () => {
+  it("leaves production Removal compilation available without application sync", async () => {
     await expect(
       compileBiocharApplicationIntents({
         orgCtx,
@@ -164,7 +164,7 @@ describe("compileBiocharApplicationIntents", () => {
         ],
         environment: "production",
       }),
-    ).rejects.toThrow(/not enabled for production/i);
+    ).resolves.toEqual([]);
     expect(mocks.getInputs).not.toHaveBeenCalled();
   });
 });
