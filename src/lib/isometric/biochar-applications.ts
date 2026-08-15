@@ -48,7 +48,9 @@ export function buildBiocharApplicationReference(
   const batchHash = shortHash(creditBatchId);
   const reference = `nm-${provider}-${environment}-bca-${applicationHash}-${batchHash}-v${BIOCHAR_APPLICATION_REFERENCE_VERSION}`;
   if (reference.length > BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH) {
-    throw new Error("Biochar Application supplier reference exceeds 100 characters");
+    throw new Error(
+      `Biochar Application supplier reference exceeds ${BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH} characters`,
+    );
   }
   return reference;
 }
@@ -115,7 +117,7 @@ export function buildCreateBiocharApplicationRequest(
   );
   if (supplierReferenceId.length > BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH) {
     throw new SafeError(
-      `Application ${code} has a registry reference longer than 100 characters.`,
+      `Application ${code} has a registry reference longer than ${BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH} characters.`,
     );
   }
 
