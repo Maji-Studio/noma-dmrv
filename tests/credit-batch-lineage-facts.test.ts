@@ -99,6 +99,12 @@ describe("credit batch accounting", () => {
       expect(detail?.productionRunIds.sort()).toEqual(facts.productionRunIds.sort());
       expect(detail?.appliedWeightTons).toBe(facts.appliedWeightTons);
       expect(accounting.appliedWeightTons).toBe(facts.appliedWeightTons);
+      expect(accounting.feedstockType).toEqual({
+        id: feedstockType.id,
+        name: feedstockType.name,
+        usage: "pyrolysis",
+        isometricFeedstockTypeId: null,
+      });
       expect(accounting.co2ePreview.co2eStoredTonnes).toBeNull();
       expect(
         chain.lineages.filter(

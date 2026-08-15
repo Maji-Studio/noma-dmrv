@@ -27,6 +27,10 @@ import {
   redactReportSecrets,
   redactReportUrlSecrets,
 } from "@/lib/certification/report-url";
+import {
+  getMetadataValue,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/certification/submission-metadata";
 import type { SubmissionProgressReporter } from "@/lib/certification/submission-progress";
 import { SafeError } from "@/lib/errors";
 import {
@@ -102,6 +106,21 @@ function pendingCapabilityAppearsApplied(args: {
     args.remote.status !== "DRAFT"
     ? token
     : null;
+}
+
+function activeGeneratedReportAppearsApplied(args: {
+  remote: GhgStatement;
+  report: GhgStatementReportRow;
+}): boolean {
+  const token = getVerifierTokenFromReportUrl(
+    args.remote.ghg_statement_report_url,
+    args.report.id,
+  );
+  return Boolean(
+    token &&
+      args.report.verifierTokenHash &&
+      hashVerifierToken(token) === args.report.verifierTokenHash,
+  );
 }
 
 function isUnsubmittedDraftWithoutPendingCapability(args: {
@@ -313,6 +332,7 @@ export async function submitGhgStatementToVerifierCore(args: {
         client,
         initialExternalId,
       ).catch(() => null);
+      let recoveredAppliedReport = false;
 
       if (generatedReport?.pendingVerifierTokenHash) {
         const recovery = await recoverPendingVerifierCapability({
@@ -323,6 +343,7 @@ export async function submitGhgStatementToVerifierCore(args: {
           remote: remoteBefore,
         });
         remoteBefore = recovery.remote;
+        recoveredAppliedReport = recovery.outcome === "promoted";
         if (recovery.outcome === "pending") {
           throw new SafeError(
             "A previous verifier submission is still being reconciled. Refresh the GHG Statement and try again.",
@@ -346,6 +367,69 @@ export async function submitGhgStatementToVerifierCore(args: {
         submission.metadata,
       );
       if (submitMode === "blocked-awaiting") {
+        const localRemoteStatus = getMetadataValue(
+          submission.metadata,
+          SUBMISSION_METADATA_KEYS.remoteStatus,
+        );
+        const needsLocalReconciliation =
+          remoteBefore !== null && localRemoteStatus !== remoteBefore.status;
+        const generatedReportMatches = Boolean(
+          generatedReport &&
+            remoteBefore &&
+            activeGeneratedReportAppearsApplied({
+              remote: remoteBefore,
+              report: generatedReport,
+            }),
+        );
+        const externalReportMatches =
+          !generatedReport &&
+          Boolean(externalReportUrl) &&
+          remoteBefore?.ghg_statement_report_url === externalReportUrl;
+        if (
+          needsLocalReconciliation &&
+          remoteBefore &&
+          (recoveredAppliedReport ||
+            generatedReportMatches ||
+            externalReportMatches)
+        ) {
+          onProgress?.({ step: "ghg_statement.checking", state: "complete" });
+          onProgress?.({
+            step: "ghg_statement.preparing_report",
+            state: "reused",
+          });
+          onProgress?.({ step: "ghg_statement.sending", state: "reused" });
+          onProgress?.({ step: "ghg_statement.confirming", state: "active" });
+          const summaryOfChanges = parsed.summaryOfChanges?.trim();
+          await applyGhgRemoteState(orgCtx, submission, remoteBefore, {
+            reportUrl: redactReportUrlSecrets(
+              remoteBefore.ghg_statement_report_url,
+            ),
+            ...(summaryOfChanges ? { summaryOfChanges } : {}),
+            ...(generatedReport
+              ? { lastReportDocumentId: generatedReport.documentId }
+              : {}),
+            submittedToVerifierAt:
+              remoteBefore.submitted_at ?? new Date().toISOString(),
+          });
+          await appendSyncEvent(orgCtx, {
+            provider: ISOMETRIC_PROVIDER,
+            entityType: GHG_STATEMENT_ENTITY_TYPE,
+            entityId: ghgStatementId,
+            operation: `ghg_statement:${submitMode}:reconciled`,
+            status: "succeeded",
+            responsePayload: {
+              id: initialExternalId,
+              source: "reconciliation",
+              detected_status: remoteBefore.status,
+              submission_attempt_id: submissionAttemptId,
+              external_mutation: "confirmed",
+            },
+          });
+          return {
+            externalId: initialExternalId,
+            remoteStatus: remoteBefore.status,
+          };
+        }
         throw new SafeError(
           "This GHG Statement is already awaiting verification.",
         );

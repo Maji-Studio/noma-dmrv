@@ -9,6 +9,10 @@
  * effects.
  */
 
+import {
+  canReclaimInterruptedSubmission,
+} from "@/lib/certification/submission-metadata";
+
 export type SubmissionClaimStatus =
   | "draft"
   | "submitted"
@@ -28,6 +32,7 @@ export interface SubmissionClaimRow {
   payloadHash: string | null;
   externalId: string | null;
   lockedAt: Date | null;
+  metadata?: unknown;
 }
 
 export interface SubmissionClaimPolicy {
@@ -60,6 +65,8 @@ export interface DataUploadResumeSnapshot {
   dataUploadSubmissionId: string | null;
   fileUploadId: string | null;
   uploadUrlExpiresAt: Date | null;
+  /** Last observed remote status, stored in ledger metadata. */
+  remoteStatus?: "pending" | "completed" | "failed" | null;
 }
 
 export interface SubmissionClaimInput {
@@ -89,7 +96,8 @@ export type SubmissionClaim =
         | "submitted-hash-changed"
         | "rejected-hash-changed"
         | "after-superseded"
-        | "dataupload-orphan-restart";
+        | "dataupload-orphan-restart"
+        | "dataupload-rejected-restart";
     }
   | { kind: "resume"; resumeRowId: string; resumeVersion: number }
   | {
@@ -133,8 +141,15 @@ export function decideSubmissionClaim(
 
   switch (latest.status) {
     case "draft": {
+      const canReclaimInterrupted = canReclaimInterruptedSubmission(
+        latest.metadata,
+      );
       const lockedAtMs = latest.lockedAt?.getTime() ?? 0;
-      if (now - lockedAtMs < lockTtlMs) {
+      // A synchronous failure marker proves the active process has ended. It
+      // bypasses only the TTL: DataUpload still has to follow the journaled
+      // recovery decision below, and the data-access CAS atomically requires
+      // and clears the marker before recovery work can start.
+      if (!canReclaimInterrupted && now - lockedAtMs < lockTtlMs) {
         return { kind: "blocked-in-flight" };
       }
       if (dataUploadResume) {
@@ -186,6 +201,35 @@ export function decideSubmissionClaim(
     }
 
     case "rejected": {
+      if (dataUploadResume) {
+        // A terminal remote failure needs an explicit operator-triggered new
+        // version. Other submission types remain blocked because their remote
+        // rejected artifact is the record that must be resolved.
+        if (
+          latest.payloadHash === payloadHash &&
+          latest.externalId &&
+          dataUploadResume.remoteStatus === "failed"
+        ) {
+          return {
+            kind: "create-new-version",
+            nextVersion: latest.version + 1,
+            supersedePreviousId: latest.id,
+            reason: "dataupload-rejected-restart",
+          };
+        }
+        // A local failure may have happened after step 3 was journaled but
+        // before externalId was finalized. Reconcile that ID instead of
+        // minting a duplicate DataUploadSubmission.
+        if (latest.payloadHash === payloadHash) {
+          return decideDataUploadResume({ latest, dataUploadResume, now });
+        }
+        return {
+          kind: "create-new-version",
+          nextVersion: latest.version + 1,
+          supersedePreviousId: null,
+          reason: "rejected-hash-changed",
+        };
+      }
       if (latest.externalId) {
         return { kind: "blocked-rejected-with-external" };
       }

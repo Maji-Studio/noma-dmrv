@@ -51,6 +51,34 @@ function attemptSummaryEvents() {
 }
 
 describe("submitRemoval — entity readiness gate", () => {
+  it("blocks an unmapped pyrolysis feedstock before submit side effects", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
+        feedstockTypeMappingGaps: [
+          {
+            creditBatchId: "batch-1",
+            creditBatchCode: "CB-TEST-001",
+            feedstockTypeId: "feedstock-type-1",
+            feedstockTypeName: "Macadamia shells",
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/Macadamia shells.*not linked to an Isometric feedstock type/i);
+
+    expect(
+      evidenceLedgers.ensureEvidenceLedgersFromContext,
+    ).not.toHaveBeenCalled();
+    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+
   it("blocks before submit-phase side effects", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(ORIGINAL_BIOCHAR_MASS_KG, {

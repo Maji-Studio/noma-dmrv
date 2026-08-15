@@ -543,9 +543,16 @@ export function makeContext(
       appliedDryWeightTons: 1,
       durabilityOption: "1000_year",
       sampling: "sampled",
+      feedstockType: {
+        id: "feedstock-type-test",
+        name: "Test pyrolysis feedstock",
+        usage: "pyrolysis",
+        isometricFeedstockTypeId: EXTERNAL_FEEDSTOCK_TYPE_ID,
+      },
       productionRunCount: 1,
       applicationCount: 1,
     }],
+    feedstockTypeMappingGaps: [],
     transportCoverage: {
       feedstock: {
         count: 0,
