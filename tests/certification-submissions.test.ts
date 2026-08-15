@@ -15,6 +15,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   claimSubmissionDraft,
+  resetSubmissionToDraftWithMappingLock,
   type ClaimOutcome,
   type ClaimSubmissionDraftArgs,
   type MappingClaimGuard,
@@ -626,6 +627,83 @@ describe("claimSubmissionDraft — resume", () => {
 
     const outcome = await claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
     expect(outcome).toEqual({ kind: "blocked", reason: "in-flight" });
+  });
+
+  it("atomically reclaims a fresh interrupted draft exactly once", async () => {
+    const fixture = await createFixture();
+    const seeded = await seedRow(fixture.key, {
+      version: 1,
+      status: "draft",
+      payloadHash: "hash:v-original",
+      lockedAt: new Date(),
+      metadata: {
+        lastError: "The request ended after registry work began",
+        lastAttemptOutcome: "interrupted",
+        externalMutation: "confirmed",
+        retained: true,
+      },
+    });
+
+    const [first, second] = await Promise.all([
+      claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture)),
+      claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture)),
+    ]);
+    const outcomes = [first, second];
+
+    expect(outcomes.filter((outcome) => outcome.kind === "claimed")).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.kind === "blocked")).toEqual([
+      { kind: "blocked", reason: "in-flight" },
+    ]);
+    const claimed = outcomes.find((outcome) => outcome.kind === "claimed");
+    expect(claimed).toMatchObject({
+      kind: "claimed",
+      resumed: true,
+      row: {
+        id: seeded.id,
+        payloadSnapshot: { semantic: { seeded: true } },
+        metadata: { externalMutation: "confirmed", retained: true },
+      },
+    });
+  });
+
+  it("atomically resets a fresh interrupted telemetry draft exactly once", async () => {
+    const fixture = await createFixture();
+    const telemetryKey = { ...fixture.key, submissionType: "dataUpload" };
+    const seeded = await seedRow(telemetryKey, {
+      version: 1,
+      status: "draft",
+      payloadHash: "hash:v-original",
+      lockedAt: new Date(),
+      metadata: {
+        lastAttemptOutcome: "interrupted",
+        externalMutation: "confirmed",
+      },
+    });
+
+    const attempts = await Promise.allSettled([
+      resetSubmissionToDraftWithMappingLock(
+        makeTestOrgContext(USER_ID),
+        seeded.id,
+        fixture.guard,
+        LOCK_TTL_MS,
+      ),
+      resetSubmissionToDraftWithMappingLock(
+        makeTestOrgContext(USER_ID),
+        seeded.id,
+        fixture.guard,
+        LOCK_TTL_MS,
+      ),
+    ]);
+
+    expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
+    expect(attempts.filter((attempt) => attempt.status === "rejected")).toHaveLength(1);
+    const [stored] = await listRows(telemetryKey);
+    expect(stored).toMatchObject({
+      id: seeded.id,
+      status: "draft",
+      metadata: { externalMutation: "confirmed" },
+    });
+    expect(stored.metadata).not.toHaveProperty("lastAttemptOutcome");
   });
 
   it("resolves to existing — not a draft revert — when the row flips to submitted while parked in the resume path", async () => {

@@ -12,13 +12,15 @@
 
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
+import { canReclaimInterruptedSubmission } from "./submission-metadata";
 import type { RemovalReadinessFacts } from "./readiness";
 
 export function toRemovalReadinessFacts(
   ctx: RemovalCertifyContext,
 ): RemovalReadinessFacts {
   const lockInFlight = ctx.latestSubmission
-    ? isLockedInFlight(ctx.latestSubmission)
+    ? isLockedInFlight(ctx.latestSubmission) &&
+      !canReclaimInterruptedSubmission(ctx.latestSubmission.metadata)
     : false;
   return {
     local: ctx.latestSubmission?.status ?? null,
@@ -28,6 +30,7 @@ export function toRemovalReadinessFacts(
     hasDefaultTemplate: !!ctx.defaultTemplate,
     missingDefaultTemplateId: ctx.missingDefaultTemplateId,
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
+    feedstockTypeMappingGaps: ctx.feedstockTypeMappingGaps ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],

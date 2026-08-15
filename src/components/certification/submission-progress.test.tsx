@@ -1,9 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import {
-  canRetrySubmissionProgress,
-  SubmissionProgress,
-} from "./submission-progress";
+import { SubmissionProgress } from "./submission-progress";
 
 describe("SubmissionProgress", () => {
   it("shows completed, active, counted, and upcoming Removal steps", () => {
@@ -162,45 +159,4 @@ describe("SubmissionProgress", () => {
     expect(html).not.toContain('role="status">Preparing submission</span>');
   });
 
-  it("offers direct retry only after an external submission step starts", () => {
-    expect(
-      canRetrySubmissionProgress("ghg_statement", [
-        { step: "ghg_statement.checking", state: "active" },
-      ]),
-    ).toBe(false);
-    expect(
-      canRetrySubmissionProgress("ghg_statement", [
-        { step: "ghg_statement.checking", state: "complete" },
-        { step: "ghg_statement.preparing_report", state: "complete" },
-        { step: "ghg_statement.sending", state: "active" },
-      ]),
-    ).toBe(true);
-    expect(canRetrySubmissionProgress("ghg_statement", [])).toBe(false);
-  });
-
-  it("does not retry a deterministic GHG Statement confirmation failure", () => {
-    expect(
-      canRetrySubmissionProgress("ghg_statement", [
-        { step: "ghg_statement.checking", state: "complete" },
-        { step: "ghg_statement.preparing_report", state: "complete" },
-        { step: "ghg_statement.sending", state: "complete" },
-        { step: "ghg_statement.confirming", state: "active" },
-      ]),
-    ).toBe(false);
-  });
-
-  it("never offers a direct Removal retry after draft claim may have started", () => {
-    expect(
-      canRetrySubmissionProgress("removal", [
-        { step: "removal.checking_data", state: "complete" },
-        { step: "removal.preparing_evidence", state: "complete" },
-        {
-          step: "removal.sending_inputs",
-          state: "active",
-          completed: 0,
-          total: 1,
-        },
-      ]),
-    ).toBe(false);
-  });
 });

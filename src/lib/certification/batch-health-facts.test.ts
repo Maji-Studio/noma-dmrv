@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { deriveBatchHealth } from "./batch-health";
 import { carbonGapLabels, toBatchHealthFacts } from "./batch-health-facts";
+import { deriveRemovalReadiness } from "./readiness";
+import { toRemovalReadinessFacts } from "./readiness-facts";
+import { collectFeedstockTypeMappingGaps } from "./feedstock-type-mapping";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
 
 describe("toBatchHealthFacts", () => {
@@ -58,6 +61,176 @@ describe("toBatchHealthFacts", () => {
     expect(
       health.checks.find((check) => check.key === "production")?.status,
     ).toBe("unmet");
+  });
+
+  it("shares a missing pyrolysis registry mapping with batch and Removal gates", () => {
+    const memberBatches = [
+      {
+        id: "batch-1",
+        code: "CB-1",
+        durabilityGateBlockers: [],
+        facilityEmissionsGateBlockers: [],
+        feedstockType: {
+          id: "type-1",
+          name: "Macadamia shells",
+          usage: "pyrolysis" as const,
+          isometricFeedstockTypeId: null,
+        },
+      },
+    ];
+    const ctx = {
+      memberBatches,
+      feedstockTypeMappingGaps:
+        collectFeedstockTypeMappingGaps(memberBatches),
+      latestSubmission: null,
+      hasOrgCredentials: true,
+      hasSubmittableRuns: true,
+      productionReadinessGap: null,
+      entityReadinessGaps: [],
+      entityReadinessIssues: [],
+      durabilityGateBlockers: [],
+      futureDatedMeasurements: [],
+      supportingDocuments: { total: 0, mirrored: 0 },
+      mapping: {},
+      defaultTemplate: {},
+      missingDefaultTemplateId: null,
+      unresolvedBlueprintKeys: [],
+      requiredTransportCategories: [],
+      transportCoverage: {
+        feedstock: { count: 0 },
+        biochar: { count: 0 },
+        sample: { count: 0 },
+      },
+    } as unknown as RemovalCertifyContext;
+
+    const batchHealth = deriveBatchHealth(toBatchHealthFacts(ctx, "batch-1"));
+    const removalReadiness = deriveRemovalReadiness(
+      toRemovalReadinessFacts(ctx),
+    );
+
+    expect(batchHealth.state).toBe("incomplete");
+    expect(removalReadiness).toMatchObject({
+      state: "blocked",
+      reasons: [expect.stringContaining("Credit batch CB-1")],
+    });
+    expect(removalReadiness.reasons[0]).toContain("Macadamia shells");
+    expect(removalReadiness.reasons[0]).toContain("Feedstock types");
+  });
+
+  it("fails closed when a legacy blend feedstock type is unmapped", () => {
+    const memberBatches = [
+      {
+        id: "batch-1",
+        code: "CB-1",
+        durabilityGateBlockers: [],
+        facilityEmissionsGateBlockers: [],
+        feedstockType: {
+          id: "type-1",
+          name: "Compost",
+          usage: "blend" as const,
+          isometricFeedstockTypeId: null,
+        },
+      },
+    ];
+    const ctx = {
+      memberBatches,
+      feedstockTypeMappingGaps:
+        collectFeedstockTypeMappingGaps(memberBatches),
+      entityReadinessGaps: [],
+      entityReadinessIssues: [],
+      hasSubmittableRuns: true,
+      productionReadinessGap: null,
+      mapping: {},
+      defaultTemplate: {},
+      missingDefaultTemplateId: null,
+      unresolvedBlueprintKeys: [],
+      requiredTransportCategories: [],
+      transportCoverage: {
+        feedstock: { count: 0 },
+        biochar: { count: 0 },
+        sample: { count: 0 },
+      },
+    } as unknown as RemovalCertifyContext;
+
+    expect(
+      deriveBatchHealth(toBatchHealthFacts(ctx, "batch-1")).state,
+    ).toBe("incomplete");
+  });
+
+  it("does not apply feedstock mapping gaps before a facility is linked", () => {
+    const ctx = {
+      memberBatches: [
+        {
+          id: "batch-1",
+          code: "CB-1",
+          durabilityGateBlockers: [],
+          facilityEmissionsGateBlockers: [],
+        },
+      ],
+      feedstockTypeMappingGaps: [
+        {
+          creditBatchId: "batch-1",
+          creditBatchCode: "CB-1",
+          feedstockTypeId: "type-1",
+          feedstockTypeName: "Macadamia shells",
+        },
+      ],
+      entityReadinessGaps: [],
+      entityReadinessIssues: [],
+      hasSubmittableRuns: true,
+      productionReadinessGap: null,
+      mapping: null,
+      defaultTemplate: null,
+      missingDefaultTemplateId: null,
+      unresolvedBlueprintKeys: [],
+      requiredTransportCategories: [],
+      transportCoverage: {
+        feedstock: { count: 0 },
+        biochar: { count: 0 },
+        sample: { count: 0 },
+      },
+    } as unknown as RemovalCertifyContext;
+
+    const facts = toBatchHealthFacts(ctx, "batch-1");
+
+    expect(facts.feedstockTypeMappingGaps).toEqual([]);
+    expect(deriveBatchHealth(facts).state).toBe("ready");
+  });
+
+  it("treats a fresh interrupted Removal lock as immediately reclaimable", () => {
+    const ctx = {
+      latestSubmission: {
+        status: "draft",
+        lockedAt: new Date(),
+        metadata: {
+          lastAttemptOutcome: "interrupted",
+          externalMutation: "confirmed",
+        },
+      },
+      feedstockTypeMappingGaps: [],
+      hasOrgCredentials: true,
+      mapping: {},
+      defaultTemplate: {},
+      missingDefaultTemplateId: null,
+      unresolvedBlueprintKeys: [],
+      hasSubmittableRuns: true,
+      productionReadinessGap: null,
+      entityReadinessGaps: [],
+      durabilityGateBlockers: [],
+      futureDatedMeasurements: [],
+      supportingDocuments: { total: 0, mirrored: 0 },
+      requiredTransportCategories: [],
+      transportCoverage: {
+        feedstock: { count: 0 },
+        biochar: { count: 0 },
+        sample: { count: 0 },
+      },
+    } as unknown as RemovalCertifyContext;
+
+    const facts = toRemovalReadinessFacts(ctx);
+
+    expect(facts.lockInFlight).toBe(false);
+    expect(deriveRemovalReadiness(facts).state).toBe("ready");
   });
 });
 

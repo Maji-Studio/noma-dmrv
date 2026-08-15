@@ -64,10 +64,12 @@ import { requireOrgScope } from "./utils";
 import type {
   CertifierProvider,
   CreditBatchCo2eStoredPreview,
+  CreditBatchFeedstockTypeFact,
 } from "./credit-batch-accounting-types";
 export type {
   ApplicationCo2eStoredPreview,
   CreditBatchCo2eStoredPreview,
+  CreditBatchFeedstockTypeFact,
 } from "./credit-batch-accounting-types";
 
 type Executor = DbTransaction | typeof db;
@@ -160,6 +162,7 @@ export interface CreditBatchChemistry extends WeightedBatchChemistry {
 
 export interface CreditBatchRollup {
   batch: CreditBatch & { durabilityOption: DurabilityOption };
+  feedstockType: CreditBatchFeedstockTypeFact;
   lineageFacts: CreditBatchLineageFacts;
   appliedWeightTons: number;
 }
@@ -783,15 +786,16 @@ async function loadCreditBatchRollupsWithExecutor(
     .select({
       creditBatch: creditBatches,
       facilityDurabilityOption: facilities.durabilityOption,
+      feedstockType: {
+        id: creditBatches.feedstockTypeId,
+        name: feedstockTypes.name,
+        usage: feedstockTypes.usage,
+        isometricFeedstockTypeId: feedstockTypes.isometricFeedstockTypeId,
+      },
     })
     .from(creditBatches)
-    .leftJoin(
-      facilities,
-      and(
-        eq(creditBatches.facilityId, facilities.id),
-        eq(facilities.organizationId, ctx.organizationId),
-      ),
-    )
+    .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(feedstockTypes, and(eq(creditBatches.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
     .where(
       and(
         inArray(creditBatches.id, ids),
@@ -803,17 +807,17 @@ async function loadCreditBatchRollupsWithExecutor(
     batchRows.map((row) => [
       row.creditBatch.id,
       {
-        ...row.creditBatch,
-        durabilityOption:
-          row.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
+        batch: {
+          ...row.creditBatch,
+          durabilityOption:
+            row.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
+        },
+        feedstockType: row.feedstockType,
       },
     ]),
   );
-  const batches = ids.flatMap((id) => {
-    const batch = batchById.get(id);
-    return batch ? [batch] : [];
-  });
-  const allowedIds = batches.map((batch) => batch.id);
+  const rollupIdentities = ids.flatMap((id) => batchById.get(id) ?? []);
+  const allowedIds = rollupIdentities.map(({ batch }) => batch.id);
   if (allowedIds.length === 0) return {};
 
   const factsByBatch = await loadLineageWithExecutor(
@@ -822,12 +826,13 @@ async function loadCreditBatchRollupsWithExecutor(
     executor,
   );
   return Object.fromEntries(
-    batches.map((batch) => {
+    rollupIdentities.map(({ batch, feedstockType }) => {
       const lineageFacts = factsByBatch[batch.id];
       return [
         batch.id,
         {
           batch,
+          feedstockType,
           lineageFacts,
           appliedWeightTons: lineageFacts.appliedWeightTons,
         },

@@ -87,6 +87,7 @@ import {
 } from "./sources";
 import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
+import { describeFeedstockTypeMappingGap } from "@/lib/certification/feedstock-type-mapping";
 import type { SubmissionProgressReporter } from "@/lib/certification/submission-progress";
 import {
   appendSyncEventBestEffort,
@@ -212,6 +213,13 @@ async function submitRemovalCore(
   if (!ctx.hasOrgCredentials) {
     throw new SafeError(
       "Configure organization Isometric credentials before submitting.",
+    );
+  }
+  if (ctx.feedstockTypeMappingGaps.length > 0) {
+    throw new SafeError(
+      ctx.feedstockTypeMappingGaps
+        .map(describeFeedstockTypeMappingGap)
+        .join(" "),
     );
   }
   // Fail before the submit-phase client, evidence-ledger generation/mirroring,

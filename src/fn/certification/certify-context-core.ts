@@ -37,6 +37,10 @@ import {
 import {
   type ProductionReadinessGap,
 } from "@/lib/certification/production-readiness";
+import {
+  collectFeedstockTypeMappingGaps,
+  type FeedstockTypeMappingGap,
+} from "@/lib/certification/feedstock-type-mapping";
 import { attributeSoilTemperatureBlockers } from "@/lib/certification/member-batch-gates";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { SafeError } from "@/lib/errors";
@@ -142,6 +146,9 @@ export interface RemovalCertifyContext {
   unresolvedBlueprintKeys: string[];
   // Every credit batch that maps into this removal (>= 1).
   memberBatches: MemberCreditBatch[];
+  // Declared pyrolysis feedstock types that lack the registry catalogue id
+  // required by the production-batch submission transformer.
+  feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
   // Removal-level transport coverage — one aggregate set across all members.
   transportCoverage: TransportCoverage;
   requiredTransportCategories: TransportCategory[];
@@ -565,6 +572,13 @@ export async function buildRemovalContext(
   const isProduction = env.ISOMETRIC_ENVIRONMENT === "production";
   const memberBatches: MemberCreditBatch[] =
     scope.memberBatches.map(toMemberCreditBatchView);
+  const feedstockTypeMappingGaps =
+    facilityFacts.mapping &&
+    facilityFacts.defaultTemplate &&
+    !facilityFacts.missingDefaultTemplateId &&
+    facilityFacts.unresolvedBlueprintKeys.length === 0
+      ? collectFeedstockTypeMappingGaps(memberBatches)
+      : [];
   // §8.6.2 claim state per member batch (issue #349) — kept off
   // `MemberCreditBatch` (UI-facing) and carried only on the submission context.
   // Lineage arrays sorted here so the post-claim fresh re-assert compares
@@ -669,6 +683,7 @@ export async function buildRemovalContext(
       removalId: scope.removalId,
       ...facilityFacts,
       memberBatches: memberBatchesWithSubmissionGates,
+      feedstockTypeMappingGaps,
       transportCoverage: EMPTY_COVERAGE,
       hasSubmittableRuns: false,
       productionReadinessGap,
@@ -740,6 +755,7 @@ export async function buildRemovalContext(
     removalId: scope.removalId,
     ...facilityFacts,
     memberBatches: memberBatchesWithSubmissionGates,
+    feedstockTypeMappingGaps,
     transportCoverage,
     hasSubmittableRuns: runs.length > 0 && !productionReadinessGap,
     productionReadinessGap,
@@ -797,6 +813,7 @@ function projectUiContext(
     blueprintsForTemplate: ctx.blueprintsForTemplate,
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
     memberBatches: ctx.memberBatches,
+    feedstockTypeMappingGaps: ctx.feedstockTypeMappingGaps,
     transportCoverage: ctx.transportCoverage,
     requiredTransportCategories: ctx.requiredTransportCategories,
     hasSubmittableRuns: ctx.hasSubmittableRuns,

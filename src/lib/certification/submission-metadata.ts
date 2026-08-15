@@ -24,3 +24,19 @@ export function getMetadataValue(metadata: unknown, key: string): unknown {
   }
   return null;
 }
+
+export function isSubmissionAttemptInterrupted(metadata: unknown): boolean {
+  return (
+    getMetadataValue(metadata, SUBMISSION_METADATA_KEYS.lastAttemptOutcome) ===
+    SUBMISSION_ATTEMPT_OUTCOMES.interrupted
+  );
+}
+
+/** A finished attempt may bypass the lock TTL only after confirmed remote work. */
+export function canReclaimInterruptedSubmission(metadata: unknown): boolean {
+  return (
+    isSubmissionAttemptInterrupted(metadata) &&
+    getMetadataValue(metadata, SUBMISSION_METADATA_KEYS.externalMutation) ===
+      SUBMISSION_EXTERNAL_MUTATIONS.confirmed
+  );
+}

@@ -1,5 +1,10 @@
 export const ENTITY_DEEP_LINK_MODE_PARAM = "mode";
 export const ENTITY_DEEP_LINK_FOCUS_PARAM = "focus";
+export const ENTITY_DEEP_LINK_EDIT_MODE = "edit";
+export const FEEDSTOCK_TYPE_EDIT_LABEL = "Edit Feedstock Type";
+export const FEEDSTOCK_TYPE_QUERY_PARAM = "feedstockType";
+
+const FEEDSTOCK_TYPES_PATH = "/feedstock-types";
 
 export const ENTITY_FOCUS_TARGETS = {
   transportRoute: "transport-route",
@@ -42,4 +47,17 @@ export function buildEntityDeepLink({
     [ENTITY_DEEP_LINK_FOCUS_PARAM]: focus,
   });
   return `${path}?${params.toString()}`;
+}
+
+/** Opens the affected feedstock type directly in its edit side sheet. */
+export function buildFeedstockTypeEditDeepLink(
+  facilityId: string,
+  feedstockTypeId?: string,
+): string {
+  const params = new URLSearchParams({ facility: facilityId });
+  if (feedstockTypeId) {
+    params.set(FEEDSTOCK_TYPE_QUERY_PARAM, feedstockTypeId);
+    params.set(ENTITY_DEEP_LINK_MODE_PARAM, ENTITY_DEEP_LINK_EDIT_MODE);
+  }
+  return `${FEEDSTOCK_TYPES_PATH}?${params.toString()}`;
 }

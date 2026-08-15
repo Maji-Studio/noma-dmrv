@@ -5,7 +5,9 @@ import type {
 } from "./batch-health";
 import {
   buildEntityDeepLink,
+  buildFeedstockTypeEditDeepLink,
   ENTITY_FOCUS_TARGETS,
+  FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
 import { certificationEmissionEstimatesHref } from "./links";
@@ -43,6 +45,8 @@ export function fallbackBatchHealthFixTarget(
       return "labSamples";
     case "facilityEmissions":
       return "certificationEmissions";
+    case "feedstockTypeMapping":
+      return "feedstockTypes";
     case "production":
       return "productionRuns";
     case "transport":
@@ -142,6 +146,13 @@ export function batchHealthFixLinkFor(
               focus: ENTITY_FOCUS_TARGETS.transportEvidence,
             })
           : `/feedstocks?facility=${facilityId}`,
+      };
+    }
+    case "feedstockTypes": {
+      const feedstockTypeId = affectedIds[0];
+      return {
+        label: FEEDSTOCK_TYPE_EDIT_LABEL,
+        href: buildFeedstockTypeEditDeepLink(facilityId, feedstockTypeId),
       };
     }
     case "deliveries":

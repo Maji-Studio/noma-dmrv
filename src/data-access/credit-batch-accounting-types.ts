@@ -1,7 +1,15 @@
 import { certifierProjects } from "@/db/schema";
+import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 
 export type CertifierProvider =
   (typeof certifierProjects.$inferSelect)["provider"];
+
+export interface CreditBatchFeedstockTypeFact {
+  id: string;
+  name: string | null;
+  usage: FeedstockTypeUsage | null;
+  isometricFeedstockTypeId: string | null;
+}
 
 export interface ApplicationCo2eStoredPreview {
   applicationId: string;

@@ -21,6 +21,10 @@ import {
   type ProductionReadinessGap,
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import {
+  describeFeedstockTypeMappingGap,
+  type FeedstockTypeMappingGap,
+} from "./feedstock-type-mapping";
 
 export type BatchHealthState =
   | "ready" // every applicable batch-level check is met — selectable
@@ -29,6 +33,7 @@ export type BatchHealthState =
 export type BatchHealthCheckKey =
   | "carbon" // carbon & durability lab inputs resolved
   | "facilityEmissions" // facility emission-estimate inputs resolved
+  | "feedstockTypeMapping" // declared pyrolysis feedstock type linked to Isometric
   | "production" // lineage resolves >= 1 production run
   | "transport" // transport legs present for the template's required categories
   | "entityReadiness"; // certifier-required entity fields on the batch's own lineage
@@ -38,6 +43,7 @@ export type BatchHealthFixTarget =
   | "deliveries"
   | "deliveryDistances"
   | "feedstocks"
+  | "feedstockTypes"
   | "productionRuns"
   | "biocharProducts"
   | "labSamples"
@@ -117,6 +123,8 @@ export interface BatchHealthFacts {
    * durability tier, such as a missing reference soil temperature.
    */
   facilityEmissionsBlockers: string[];
+  /** Declared pyrolysis feedstock types missing their Isometric registry id. */
+  feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
   /**
    * Per-entity certifier-readiness gaps from THIS batch's own lineage (its
    * production runs, samples, and transport legs resolve 1:1 for an ungrouped
@@ -154,6 +162,7 @@ export interface BatchHealth {
 
 const CARBON_LABEL = "Carbon & durability inputs complete";
 const FACILITY_EMISSIONS_LABEL = "Facility emission estimates complete";
+const FEEDSTOCK_TYPE_MAPPING_LABEL = "Feedstock type linked to Isometric";
 const PRODUCTION_LABEL = "Production data linked";
 const TRANSPORT_LABEL = "Transport legs present";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
@@ -207,6 +216,39 @@ function productionCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
     status: "unmet",
     detail: gap.detail,
     fixTarget: gap.fixTarget,
+  };
+}
+
+function feedstockTypeMappingCheck(
+  facts: BatchHealthFacts,
+): BatchHealthCheckBase {
+  if (!facts.facilitySetupComplete) {
+    return {
+      key: "feedstockTypeMapping",
+      label: FEEDSTOCK_TYPE_MAPPING_LABEL,
+      status: "skipped",
+    };
+  }
+  if (facts.feedstockTypeMappingGaps.length === 0) {
+    return {
+      key: "feedstockTypeMapping",
+      label: FEEDSTOCK_TYPE_MAPPING_LABEL,
+      status: "met",
+    };
+  }
+  return {
+    key: "feedstockTypeMapping",
+    label: FEEDSTOCK_TYPE_MAPPING_LABEL,
+    status: "unmet",
+    detail: facts.feedstockTypeMappingGaps
+      .map(describeFeedstockTypeMappingGap)
+      .join(MERGED_CHECK_SEPARATOR),
+    fixTarget: "feedstockTypes",
+    affectedRecords: facts.feedstockTypeMappingGaps.map((gap) => ({
+      id: gap.feedstockTypeId,
+      code: gap.feedstockTypeName,
+      missing: ["Isometric feedstock type"],
+    })),
   };
 }
 
@@ -389,6 +431,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
     [
       carbonCheck(facts),
       ...facilityEmissionsChecks(facts),
+      feedstockTypeMappingCheck(facts),
       productionCheck(facts),
       transportCheck(facts),
       ...entityReadinessChecks(facts),

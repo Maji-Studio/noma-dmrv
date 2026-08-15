@@ -192,7 +192,7 @@ describe("deriveRemovalWorkflowStatus", () => {
     });
   });
 
-  it("shows a live interrupted attempt without offering an unsafe retry", () => {
+  it("offers Review & submit immediately for a fresh interrupted attempt", () => {
     const status = deriveRemovalWorkflowStatus({
       local: "draft",
       lockInFlight: true,
@@ -205,9 +205,11 @@ describe("deriveRemovalWorkflowStatus", () => {
       kind: "interrupted",
       value: "failed",
       label: "Submission interrupted",
-      isActionable: false,
+      isActionable: true,
       canRetry: false,
     });
+    expect(status.reasons[0]).toMatch(/Review & submit/);
+    expect(status.reasons[0]).not.toMatch(/Wait/);
   });
 
   it("makes a stale interrupted attempt actionable for reconciliation", () => {

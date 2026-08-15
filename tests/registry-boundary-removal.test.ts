@@ -110,6 +110,8 @@ import {
 const USER_ID = "test-user-boundary";
 const TEMPLATE_ID = "rvt_boundary_1";
 const RTC_ID = "rtc-seq";
+const ISOMETRIC_FEEDSTOCK_TYPE_ID = "ftt_boundary_1";
+const FIXTURE_UUID_SUFFIX_LENGTH = 8;
 const PRODUCTION_RUN_ID = "pr-boundary-1";
 const ORIGINAL_BIOCHAR_MASS_KG = 1000;
 const CHANGED_BIOCHAR_MASS_KG = 1500;
@@ -185,12 +187,15 @@ interface Fixture {
   facilityId: string;
   removalId: string;
   creditBatchId: string;
+  feedstockTypeId: string;
+  isometricFeedstockTypeId: string;
   externalProjectId: string;
 }
 
 async function createFixture(): Promise<Fixture> {
-  const runId = crypto.randomUUID().slice(0, 8);
+  const runId = crypto.randomUUID().slice(0, FIXTURE_UUID_SUFFIX_LENGTH);
   const externalProjectId = `prj_boundary_${runId}`;
+  const isometricFeedstockTypeId = `${ISOMETRIC_FEEDSTOCK_TYPE_ID}_${runId}`;
   const [facility] = await db
     .insert(facilities)
     .values({
@@ -224,6 +229,7 @@ async function createFixture(): Promise<Fixture> {
       name: `Boundary Feedstock ${runId}`,
       category: "forestry",
       usage: "pyrolysis",
+      isometricFeedstockTypeId,
     })
     .returning({ id: feedstockTypes.id });
   createdFeedstockTypeIds.push(feedstockType.id);
@@ -251,6 +257,8 @@ async function createFixture(): Promise<Fixture> {
     facilityId: facility.id,
     removalId: removal.id,
     creditBatchId: batch.id,
+    feedstockTypeId: feedstockType.id,
+    isometricFeedstockTypeId,
     externalProjectId,
   };
 }
@@ -439,9 +447,16 @@ function makeContext(
       appliedDryWeightTons: 1,
       durabilityOption: "1000_year",
       sampling: "sampled",
+      feedstockType: {
+        id: fixture.feedstockTypeId,
+        name: "Boundary pyrolysis feedstock",
+        usage: "pyrolysis",
+        isometricFeedstockTypeId: fixture.isometricFeedstockTypeId,
+      },
       productionRunCount: 1,
       applicationCount: 1,
     }],
+    feedstockTypeMappingGaps: [],
     transportCoverage: {
       feedstock: emptyCoverage,
       biochar: emptyCoverage,
@@ -571,16 +586,6 @@ async function listSyncEvents(removalId: string) {
     .orderBy(certifierSyncEvents.attemptedAt);
 }
 
-// A failed attempt leaves the draft row locked; the next claim treats it as
-// in-flight until the TTL passes. Tests jump the clock by back-dating the
-// lock, like the claim module's own DB suite.
-async function staleifyLock(rowId: string): Promise<void> {
-  await db
-    .update(certificationSubmissions)
-    .set({ lockedAt: new Date(Date.now() - STALE_LOCK_OFFSET_MS) })
-    .where(eq(certificationSubmissions.id, rowId));
-}
-
 function datapointRef(removalId: string, inputKey: string, version: number) {
   return buildRemovalSupplierRef({
     removalId,
@@ -645,7 +650,23 @@ describe("submitRemoval boundary — datapoint orphan (test 1)", () => {
     expect(rows[0].status).toBe("draft");
     expect(rows[0].lockedAt).not.toBeNull();
 
-    await staleifyLock(rows[0].id);
+    expect(rows[0].metadata).toMatchObject({
+      lastAttemptOutcome: SUBMISSION_ATTEMPT_OUTCOMES.interrupted,
+      externalMutation: SUBMISSION_EXTERNAL_MUTATIONS.possible,
+    });
+    expect(Date.now() - rows[0].lockedAt!.getTime()).toBeLessThan(LOCK_TTL_MS);
+    setContext(fixture);
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: fixture.removalId,
+      }),
+    ).rejects.toThrowError("already in progress");
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt: new Date(Date.now() - STALE_LOCK_OFFSET_MS) })
+      .where(eq(certificationSubmissions.id, rows[0].id));
     setContext(fixture);
 
     const result = await submitRemoval({
@@ -716,7 +737,11 @@ describe("submitRemoval boundary — removal orphan (test 2)", () => {
 
     const [draft] = await listRows(fixture.removalId);
     expect(draft.status).toBe("draft");
-    await staleifyLock(draft.id);
+    expect(draft.metadata).toMatchObject({
+      lastAttemptOutcome: SUBMISSION_ATTEMPT_OUTCOMES.interrupted,
+      externalMutation: SUBMISSION_EXTERNAL_MUTATIONS.confirmed,
+    });
+    expect(Date.now() - draft.lockedAt!.getTime()).toBeLessThan(LOCK_TTL_MS);
     setContext(fixture);
 
     const result = await submitRemoval({
@@ -873,6 +898,22 @@ describe("submitRemoval boundary — definitive Removal refusal (test 4)", () =>
     expect(failed!.requestPayload).toMatchObject({
       project_id: fixture.externalProjectId,
     });
+
+    // The terminal 422 proves that no GHG Entry was created. The completed
+    // datapoints still make the attempt "interrupted", so the operator can
+    // retry immediately: those datapoints are reconciled and only the GHG
+    // Entry POST is repeated.
+    setContext(fixture);
+    const retried = await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: fixture.removalId,
+    });
+
+    expect(registry.datapoints).toHaveLength(2);
+    expect(registry.ghgEntries).toHaveLength(1);
+    expect(registry.requestCount("POST", "/datapoints")).toBe(2);
+    expect(registry.requestCount("POST", "/ghg_entries")).toBe(2);
+    expect(retried.externalId).toBe(registry.ghgEntries[0].id);
   });
 });
 

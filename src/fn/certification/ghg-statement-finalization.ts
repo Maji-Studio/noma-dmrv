@@ -38,18 +38,19 @@ export async function finalizeGhgStatement(args: {
   const { client, orgCtx, statement, row, externalId, expected, outcome } =
     args;
 
-  // Persist the registry identity before the follow-up network read. This
-  // transaction must commit independently so a crash during detail fetching
-  // cannot lose the identity and allow a retry to POST a duplicate.
-  await markSubmissionSubmitted(orgCtx, row.id, {
-    externalId,
-    supersedePreviousId: null,
-  });
-
   return withFacilityDurabilityLock(
     orgCtx,
     statement.facilityId,
     async (tx) => {
+      // The identity was journaled on the still-locked draft by onConfirmed.
+      // Commit the submitted transition only with the remaining local
+      // reconciliation so a failure leaves a resumable interrupted draft.
+      await markSubmissionSubmitted(
+        orgCtx,
+        row.id,
+        { externalId, supersedePreviousId: null },
+        tx,
+      );
       const remote = await getGhgStatement(client, externalId).catch(
         () => null,
       );

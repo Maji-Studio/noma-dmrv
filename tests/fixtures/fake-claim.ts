@@ -62,9 +62,12 @@ export function makeClaimSubmissionDraftFake(store: FakeLedgerStore) {
           reason: "resumed",
         };
       case "create-new-version": {
-        if (claim.reason === "dataupload-orphan-restart") {
+        if (
+          claim.reason === "dataupload-orphan-restart" ||
+          claim.reason === "dataupload-rejected-restart"
+        ) {
           throw new Error(
-            "Fake claim: dataupload-orphan-restart is unreachable without dataUploadResume",
+            `Fake claim: ${claim.reason} is unreachable without dataUploadResume`,
           );
         }
         const inputs = args.resolve
@@ -83,9 +86,12 @@ export function makeClaimSubmissionDraftFake(store: FakeLedgerStore) {
             `Fake claim: resolve changed create outcome to ${locked.kind}`,
           );
         }
-        if (locked.reason === "dataupload-orphan-restart") {
+        if (
+          locked.reason === "dataupload-orphan-restart" ||
+          locked.reason === "dataupload-rejected-restart"
+        ) {
           throw new Error(
-            "Fake claim: dataupload-orphan-restart is unreachable without dataUploadResume",
+            `Fake claim: ${locked.reason} is unreachable without dataUploadResume`,
           );
         }
         const snapshot = args.buildSnapshot({

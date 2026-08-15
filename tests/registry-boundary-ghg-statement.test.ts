@@ -1,8 +1,9 @@
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Boundary tests for the GHG Statement create pipeline against the fake
- * registry (reliability-track Phase 3, boundary test 3 — tests 1/2/4/5 live
- * in registry-boundary-removal.test.ts).
+ * registry. The orphan-reconciliation boundary cases live in the focused
+ * `registry-boundary-ghg-statement-orphan-reconciliation.test.ts` sibling;
+ * Removal boundary cases live in `registry-boundary-removal.test.ts`.
  *
  * End-to-end across the recovery seams: the REAL `claimSubmissionDraft`
  * (DB-backed), REAL statement/ledger/sync-event writes, REAL
@@ -73,8 +74,6 @@ const REPORTING_PERIOD_END = "2026-03-31";
 // Inside the reporting window (first statement → unbounded start, so any
 // completion on or before REPORTING_PERIOD_END is in-window).
 const IN_WINDOW_COMPLETED_ON = "2026-03-15";
-const MULTIPLE_DRAFTS_MESSAGE =
-  "Multiple draft GHG Statements exist for this project and period in Isometric.";
 const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
 
 const createdFacilityIds: string[] = [];
@@ -245,122 +244,6 @@ describe("loadGhgStatementsForFacility boundary", () => {
       data: [{ linkedRemovalCount: 1 }],
     });
     expect(registry.requests).toHaveLength(requestCountBeforeLoad);
-  });
-});
-
-describe("createGhgStatementDraft boundary — orphan reconciliation (test 3)", () => {
-  it("resume reconciles the single dropped draft by (project, end_on) and finalizes without re-POSTing", async () => {
-    const fixture = await createFixture();
-    // The create commits server-side; the client sees a network error and
-    // the in-attempt lookup is also down — orphan + locked draft left behind.
-    registry.failNext("POST /ghg_statements", "drop-after-commit");
-    // The create path now checks for an existing exact-period draft before
-    // POSTing. Let that preflight return none, then fail the recovery lookup.
-    registry.passNext("GET /ghg_statements");
-    registry.failNext("GET /ghg_statements", "reject-before-commit", {
-      status: 503,
-    });
-
-    const first = await createGhgStatementDraft({
-      facilityId: fixture.facilityId,
-      reportingPeriodEndOn: REPORTING_PERIOD_END,
-    });
-    expect(first.success).toBe(false);
-
-    expect(registry.ghgStatements).toHaveLength(1);
-    const orphanId = registry.ghgStatements[0].id;
-
-    let row = await latestLedgerRow(fixture.facilityId);
-    expect(row).not.toBeNull();
-    expect(row!.status).toBe("draft");
-    expect(row!.lockedAt).not.toBeNull();
-
-    await staleifyLock(row!.id);
-
-    const second = await createGhgStatementDraft({
-      facilityId: fixture.facilityId,
-      reportingPeriodEndOn: REPORTING_PERIOD_END,
-    });
-    expect(second).toMatchObject({
-      success: true,
-      data: {
-        outcome: "existing",
-        externalId: orphanId,
-      },
-    });
-
-    // Reconciled, never re-POSTed: still exactly one statement server-side.
-    expect(registry.ghgStatements).toHaveLength(1);
-    expect(registry.requestCount("POST", "/ghg_statements")).toBe(1);
-
-    row = await latestLedgerRow(fixture.facilityId);
-    expect(row).toMatchObject({
-      status: "submitted",
-      externalId: orphanId,
-      version: 1,
-    });
-
-    const events = await db
-      .select()
-      .from(certifierSyncEvents)
-      .where(eq(certifierSyncEvents.entityId, row!.localEntityId));
-    expect(
-      events.map((event) => `${event.operation}:${event.status}`),
-    ).toContain("ghg_statement:create:reconciled:succeeded");
-  });
-
-  it("rejects with the ambiguity message when the period holds two drafts", async () => {
-    const fixture = await createFixture();
-    registry.failNext("POST /ghg_statements", "drop-after-commit");
-    registry.passNext("GET /ghg_statements");
-    registry.failNext("GET /ghg_statements", "reject-before-commit", {
-      status: 503,
-    });
-
-    const first = await createGhgStatementDraft({
-      facilityId: fixture.facilityId,
-      reportingPeriodEndOn: REPORTING_PERIOD_END,
-    });
-    expect(first.success).toBe(false);
-
-    // A second DRAFT for the same (project, end_on) appears server-side —
-    // e.g. created out-of-band in the registry UI. The lookup is no longer
-    // unique, so the resume must refuse rather than guess.
-    registry.seedGhgStatement({
-      projectId: fixture.externalProjectId,
-      endOn: REPORTING_PERIOD_END,
-    });
-
-    let row = await latestLedgerRow(fixture.facilityId);
-    await staleifyLock(row!.id);
-
-    const second = await createGhgStatementDraft({
-      facilityId: fixture.facilityId,
-      reportingPeriodEndOn: REPORTING_PERIOD_END,
-    });
-    expect(second).toEqual({ success: false, error: MULTIPLE_DRAFTS_MESSAGE });
-
-    expect(registry.requestCount("POST", "/ghg_statements")).toBe(1);
-
-    row = await latestLedgerRow(fixture.facilityId);
-    expect(row!.status).toBe("rejected");
-    expect(row!.externalId).toBeNull();
-    expect(row!.metadata).toMatchObject({
-      lastError: MULTIPLE_DRAFTS_MESSAGE,
-    });
-
-    // Phase 2 parity: the ambiguous rejection records NO failed sync event —
-    // the rejection itself carries the message. Undecided whether that audit
-    // silence should stay (docs/open-questions.md,
-    // `isometric/ambiguous-lookup-audit-silence`); flip this assertion when
-    // it's resolved.
-    const events = await db
-      .select()
-      .from(certifierSyncEvents)
-      .where(eq(certifierSyncEvents.entityId, row!.localEntityId));
-    expect(
-      events.filter((event) => event.status === "failed"),
-    ).toHaveLength(0);
   });
 });
 
