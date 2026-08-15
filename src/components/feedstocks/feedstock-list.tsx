@@ -556,8 +556,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           <DataTable.Controls>
             <DataTable.FilterSelect
               value={feedstockTypeId}
-              // No explicit page reset: the type is part of the pagination
-              // scope key, so useListPagination already restarts at page 1.
+              // No explicit reset: a scope-key mismatch renders page 1 for the
+              // new type while retaining the previous scope's stored page.
               onChange={(event) => {
                 void setFeedstockTypeId(event.target.value || null);
               }}
