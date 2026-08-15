@@ -43,6 +43,8 @@ export function fallbackBatchHealthFixTarget(
       return "labSamples";
     case "facilityEmissions":
       return "certificationEmissions";
+    case "feedstockTypeMapping":
+      return "feedstockTypes";
     case "production":
       return "productionRuns";
     case "transport":
@@ -142,6 +144,18 @@ export function batchHealthFixLinkFor(
               focus: ENTITY_FOCUS_TARGETS.transportEvidence,
             })
           : `/feedstocks?facility=${facilityId}`,
+      };
+    }
+    case "feedstockTypes": {
+      const feedstockTypeId = affectedIds[0];
+      const params = new URLSearchParams({ facility: facilityId });
+      if (feedstockTypeId) {
+        params.set("feedstockType", feedstockTypeId);
+        params.set("mode", "edit");
+      }
+      return {
+        label: "Edit Feedstock type",
+        href: `/feedstock-types?${params.toString()}`,
       };
     }
     case "deliveries":

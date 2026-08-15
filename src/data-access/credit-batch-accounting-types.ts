@@ -3,6 +3,13 @@ import { certifierProjects } from "@/db/schema";
 export type CertifierProvider =
   (typeof certifierProjects.$inferSelect)["provider"];
 
+export interface CreditBatchFeedstockTypeFact {
+  id: string;
+  name: string | null;
+  usage: "pyrolysis" | "blend" | null;
+  isometricFeedstockTypeId: string | null;
+}
+
 export interface ApplicationCo2eStoredPreview {
   applicationId: string;
   applicationCode: string;

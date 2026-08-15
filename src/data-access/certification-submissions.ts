@@ -38,6 +38,7 @@ import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   decideSubmissionClaim,
+  isSubmissionClaimInterrupted,
   type SubmissionClaimPolicy,
 } from "@/lib/isometric/utils/submission-claim";
 import {
@@ -294,6 +295,7 @@ async function resumeDraft<H>(
       ctx,
       decided.resumeRowId,
       LOCK_TTL_MS,
+      isSubmissionClaimInterrupted(latest),
     );
     if (!row) return { kind: "blocked", reason: "in-flight" };
     return {
@@ -367,9 +369,12 @@ async function createDraft<H>(
       }
 
       const { reason } = locked;
-      if (reason === "dataupload-orphan-restart") {
+      if (
+        reason === "dataupload-orphan-restart" ||
+        reason === "dataupload-rejected-restart"
+      ) {
         // Only reachable with `dataUploadResume`, which is never passed.
-        throw new Error("Unreachable create reason: dataupload-orphan-restart");
+        throw new Error(`Unreachable create reason: ${reason}`);
       }
 
       const snapshot = args.buildSnapshot({
@@ -609,16 +614,17 @@ async function insertDraftSubmissionRow(
   return row;
 }
 
-// Compare-and-swap reset: only a row that is NOT a freshly-locked draft is
-// resumable. If a concurrent caller already claimed it (flipping it to a
-// fresh draft), this UPDATE matches zero rows and returns null — so two
-// callers cannot both resume the same submission and double-POST to the
-// registry.
+// Compare-and-swap reset: stale/non-draft rows are normally resumable. A fresh
+// draft is resumable only when the caller observed the terminal interrupted
+// marker and this UPDATE can atomically require and clear that same marker.
+// A concurrent claimant therefore makes the predicate fail, so two callers
+// cannot both resume the same submission and double-POST to the registry.
 async function resetSubmissionToDraftCas(
   tx: DbTransaction,
   ctx: OrgContext,
   id: string,
   lockTtlMs: number,
+  requireInterruptedMarker = false,
 ): Promise<CertificationSubmissionRow | null> {
   const [row] = await tx
     .update(certificationSubmissions)
@@ -634,14 +640,19 @@ async function resetSubmissionToDraftCas(
       and(
         eq(certificationSubmissions.id, id),
         eq(certificationSubmissions.organizationId, ctx.organizationId),
-        or(
-          ne(certificationSubmissions.status, "draft"),
-          isNull(certificationSubmissions.lockedAt),
-          lt(
-            certificationSubmissions.lockedAt,
-            sql`now() - ${lockTtlMs} * interval '1 millisecond'`,
-          ),
-        ),
+        requireInterruptedMarker
+          ? and(
+              eq(certificationSubmissions.status, "draft"),
+              sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text = ${SUBMISSION_ATTEMPT_OUTCOMES.interrupted}`,
+            )
+          : or(
+              ne(certificationSubmissions.status, "draft"),
+              isNull(certificationSubmissions.lockedAt),
+              lt(
+                certificationSubmissions.lockedAt,
+                sql`now() - ${lockTtlMs} * interval '1 millisecond'`,
+              ),
+            ),
       ),
     )
     .returning();
@@ -713,13 +724,20 @@ export async function resetSubmissionToDraftWithMappingLock(
         provider: certificationSubmissions.provider,
         localEntityType: certificationSubmissions.localEntityType,
         localEntityId: certificationSubmissions.localEntityId,
+        metadata: certificationSubmissions.metadata,
       })
       .from(certificationSubmissions)
       .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)))
       .limit(1);
     if (!rowToReset) throw new SafeError("Submission not found");
     await lockSubmissionArtifact(tx, rowToReset);
-    const row = await resetSubmissionToDraftCas(tx, ctx, id, lockTtlMs);
+    const row = await resetSubmissionToDraftCas(
+      tx,
+      ctx,
+      id,
+      lockTtlMs,
+      isSubmissionClaimInterrupted(rowToReset),
+    );
     if (!row) throw new SafeError("Submission already in progress");
     return row;
   });

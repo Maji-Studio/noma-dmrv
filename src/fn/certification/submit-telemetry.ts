@@ -38,6 +38,10 @@ import {
   decideSubmissionClaim,
   type DataUploadResumeSnapshot,
 } from "@/lib/isometric/utils/submission-claim";
+import {
+  getMetadataValue,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/certification/submission-metadata";
 import { decodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
 import {
   assertUploadHostAllowed,
@@ -283,7 +287,8 @@ export async function submitTelemetry(
         "This Removal changed while the telemetry submission was being prepared. Reload and try again.",
       );
     case "return-existing": {
-      const status = await refreshStatus(client, orgCtx, latest!, claim.externalId);
+      const status = await refreshStatus(client, claim.externalId);
+      await recordRemoteDataUploadStatus(orgCtx, latest!.id, status);
       return {
         removalId: args.removalId,
         dataUploadSubmissionId: claim.externalId,
@@ -293,32 +298,36 @@ export async function submitTelemetry(
       };
     }
     case "resume-poll-existing": {
-      const status = await refreshStatus(
-        client,
+      const row = await resetSubmissionToDraftWithMappingLock(
         orgCtx,
-        latest!,
-        claim.dataUploadSubmissionId,
+        claim.resumeRowId,
+        mappingGuard,
+        LOCK_TTL_MS,
       );
-      if (status.status === "completed") {
-        await markSubmissionSubmitted(orgCtx, claim.resumeRowId, {
+      try {
+        const status = await refreshStatus(
+          client,
+          claim.dataUploadSubmissionId,
+        );
+        await recordRemoteDataUploadStatus(orgCtx, row.id, status, {
           externalId: claim.dataUploadSubmissionId,
         });
-        await setSubmissionTerminalStatus(orgCtx, claim.resumeRowId, {
-          status: "accepted",
-          metadataPatch: { remoteStatus: "completed" },
-        });
-      } else if (status.status === "failed") {
-        await markSubmissionRejected(orgCtx, claim.resumeRowId, {
-          errorMessage: status.error_message ?? "Isometric processing failed",
+        return {
+          removalId: args.removalId,
+          dataUploadSubmissionId: claim.dataUploadSubmissionId,
+          status: status.status,
+          errorMessage: status.error_message ?? null,
+          version: row.version,
+        };
+      } catch (error) {
+        return failTelemetryAttempt({
+          orgCtx,
+          row,
+          removalId: args.removalId,
+          operation: `${DATA_UPLOAD_OPERATION}:resume-poll-existing`,
+          error,
         });
       }
-      return {
-        removalId: args.removalId,
-        dataUploadSubmissionId: claim.dataUploadSubmissionId,
-        status: status.status,
-        errorMessage: status.error_message ?? null,
-        version: claim.resumeVersion,
-      };
     }
     case "resume-re-put": {
       const row = await resetSubmissionToDraftWithMappingLock(
@@ -327,38 +336,48 @@ export async function submitTelemetry(
         mappingGuard,
         LOCK_TTL_MS,
       );
-      const parquetBytes = writeDataUploadParquet(aggregated);
-      await putParquetToSignedUrl({
-        uploadUrl: requireUploadUrl(row),
-        bytes: parquetBytes,
-      });
-      const submissionId = await postDataUploadSubmission(client, {
-        externalFacilityId,
-        fileUploadId: claim.fileUploadId,
-      });
-      await journalStep(orgCtx, row.id, {
-        dataUploadSubmissionId: submissionId.id,
-        parquetBytesSha256: sha256(parquetBytes),
-        parquetBytesLength: parquetBytes.byteLength,
-      });
-      await markSubmissionSubmitted(orgCtx, row.id, {
-        externalId: submissionId.id,
-      });
-      await appendSyncEventBestEffort(orgCtx, {
-        provider: ISOMETRIC_PROVIDER,
-        entityType: DATA_UPLOAD_ENTITY_TYPE,
-        entityId: args.removalId,
-        operation: `${DATA_UPLOAD_OPERATION}:resume-re-put`,
-        status: "succeeded",
-        responsePayload: { id: submissionId.id, status: submissionId.status },
-      });
-      return {
-        removalId: args.removalId,
-        dataUploadSubmissionId: submissionId.id,
-        status: submissionId.status,
-        errorMessage: null,
-        version: row.version,
-      };
+      try {
+        const parquetBytes = writeDataUploadParquet(aggregated);
+        await putParquetToSignedUrl({
+          uploadUrl: requireUploadUrl(row),
+          bytes: parquetBytes,
+        });
+        const submission = await postDataUploadSubmission(client, {
+          externalFacilityId,
+          fileUploadId: claim.fileUploadId,
+        });
+        await journalStep(orgCtx, row.id, {
+          dataUploadSubmissionId: submission.id,
+          parquetBytesSha256: sha256(parquetBytes),
+          parquetBytesLength: parquetBytes.byteLength,
+        });
+        await recordRemoteDataUploadStatus(orgCtx, row.id, submission, {
+          externalId: submission.id,
+        });
+        await appendSyncEventBestEffort(orgCtx, {
+          provider: ISOMETRIC_PROVIDER,
+          entityType: DATA_UPLOAD_ENTITY_TYPE,
+          entityId: args.removalId,
+          operation: `${DATA_UPLOAD_OPERATION}:resume-re-put`,
+          status: "succeeded",
+          responsePayload: { id: submission.id, status: submission.status },
+        });
+        return {
+          removalId: args.removalId,
+          dataUploadSubmissionId: submission.id,
+          status: submission.status,
+          errorMessage: submission.error_message ?? null,
+          version: row.version,
+        };
+      } catch (error) {
+        return failTelemetryAttempt({
+          orgCtx,
+          row,
+          removalId: args.removalId,
+          operation: `${DATA_UPLOAD_OPERATION}:resume-re-put`,
+          error,
+        });
+      }
     }
     case "resume":
     case "create-new-version": {
@@ -424,7 +443,7 @@ export async function submitTelemetry(
         await journalStep(orgCtx, row.id, {
           dataUploadSubmissionId: submission.id,
         });
-        await markSubmissionSubmitted(orgCtx, row.id, {
+        await recordRemoteDataUploadStatus(orgCtx, row.id, submission, {
           externalId: submission.id,
           supersedePreviousId:
             claim.kind === "create-new-version"
@@ -448,29 +467,17 @@ export async function submitTelemetry(
           removalId: args.removalId,
           dataUploadSubmissionId: submission.id,
           status: submission.status,
-          errorMessage: null,
+          errorMessage: submission.error_message ?? null,
           version: row.version,
         };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await appendSyncEventBestEffort(orgCtx, {
-          provider: ISOMETRIC_PROVIDER,
-          entityType: DATA_UPLOAD_ENTITY_TYPE,
-          entityId: args.removalId,
+      } catch (error) {
+        return failTelemetryAttempt({
+          orgCtx,
+          row,
+          removalId: args.removalId,
           operation: DATA_UPLOAD_OPERATION,
-          status: "failed",
-          errorMessage: message,
+          error,
         });
-        await markSubmissionRejected(orgCtx, row.id, { errorMessage: message });
-        if (err instanceof SafeError) throw err;
-        const reason =
-          err instanceof IsometricApiError
-            ? describeIsometricApiError(
-                err,
-                "The registry could not be reached.",
-              )
-            : "The registry request failed.";
-        throw new SafeError(`Telemetry was not submitted. ${reason} Try again.`);
       }
     }
   }
@@ -503,11 +510,21 @@ function readResumeSnapshot(
   const expiresAt = j.uploadUrlExpiresAt
     ? new Date(j.uploadUrlExpiresAt)
     : null;
+  const remoteStatus = getMetadataValue(
+    row.metadata,
+    SUBMISSION_METADATA_KEYS.remoteStatus,
+  );
   return {
     dataUploadSubmissionId: j.dataUploadSubmissionId ?? null,
     fileUploadId: j.fileUploadId ?? null,
     uploadUrlExpiresAt:
       expiresAt && Number.isFinite(expiresAt.getTime()) ? expiresAt : null,
+    remoteStatus:
+      remoteStatus === "pending" ||
+      remoteStatus === "completed" ||
+      remoteStatus === "failed"
+        ? remoteStatus
+        : null,
   };
 }
 
@@ -527,18 +544,79 @@ async function journalStep(
 
 async function refreshStatus(
   client: IsometricClient,
-  orgCtx: OrgContext,
-  row: CertificationSubmissionRow,
   dataUploadSubmissionId: string,
 ): Promise<DataUploadSubmission> {
-  const status = await client.get<DataUploadSubmission>(
+  return client.get<DataUploadSubmission>(
     `/data-upload-submissions/${encodeURIComponent(dataUploadSubmissionId)}`,
   );
-  await updateSubmissionMetadata(orgCtx, row.id, {
-    remoteStatus: status.status,
-    lastError: status.error_message ?? null,
+}
+
+async function recordRemoteDataUploadStatus(
+  orgCtx: OrgContext,
+  rowId: string,
+  remote: DataUploadSubmission,
+  identity?: {
+    externalId: string;
+    supersedePreviousId?: string | null;
+  },
+): Promise<void> {
+  if (identity) {
+    await markSubmissionSubmitted(orgCtx, rowId, identity);
+  }
+  const metadataPatch = {
+    remoteStatus: remote.status,
+    lastError: remote.error_message ?? null,
+  };
+  if (remote.status === "completed") {
+    await setSubmissionTerminalStatus(orgCtx, rowId, {
+      status: "accepted",
+      metadataPatch,
+    });
+    return;
+  }
+  if (remote.status === "failed") {
+    await setSubmissionTerminalStatus(orgCtx, rowId, {
+      status: "rejected",
+      metadataPatch: {
+        ...metadataPatch,
+        lastError: remote.error_message ?? "Isometric processing failed",
+      },
+    });
+    return;
+  }
+  await updateSubmissionMetadata(orgCtx, rowId, metadataPatch);
+}
+
+async function failTelemetryAttempt(args: {
+  orgCtx: OrgContext;
+  row: CertificationSubmissionRow;
+  removalId: string;
+  operation: string;
+  error: unknown;
+}): Promise<never> {
+  const message =
+    args.error instanceof Error ? args.error.message : String(args.error);
+  await appendSyncEventBestEffort(args.orgCtx, {
+    provider: ISOMETRIC_PROVIDER,
+    entityType: DATA_UPLOAD_ENTITY_TYPE,
+    entityId: args.removalId,
+    operation: args.operation,
+    status: "failed",
+    errorMessage: message,
   });
-  return status;
+  await markSubmissionRejected(args.orgCtx, args.row.id, {
+    errorMessage: message,
+    expectedLockedAt: args.row.lockedAt ?? undefined,
+  });
+  if (args.error instanceof SafeError) throw args.error;
+  const reason =
+    args.error instanceof IsometricApiError
+      ? describeIsometricApiError(
+          args.error,
+          "The registry could not be reached.",
+        )
+      : "The registry request failed.";
+  throw new SafeError(`Telemetry was not submitted. ${reason} Try again.`);
 }
 
 async function postDataUploadSubmission(client: IsometricClient, args: {

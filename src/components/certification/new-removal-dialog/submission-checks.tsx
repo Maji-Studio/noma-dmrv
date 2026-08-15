@@ -30,7 +30,10 @@ interface SubmissionChecksProps {
 }
 
 function fixLinksFor(
-  check: Pick<RemovalRequirementCheck, "key" | "fixTarget">,
+  check: Pick<
+    RemovalRequirementCheck,
+    "key" | "fixTarget" | "fixTargetId"
+  >,
   facilityId: string,
 ): { label: string; href: string }[] {
   const productionRuns = {
@@ -78,6 +81,19 @@ function fixLinksFor(
       return [
         { label: "Review Samples", href: `/samples?facility=${facilityId}` },
       ];
+    case "feedstockTypeMapping": {
+      const params = new URLSearchParams({ facility: facilityId });
+      if (check.fixTargetId) {
+        params.set("feedstockType", check.fixTargetId);
+        params.set("mode", "edit");
+      }
+      return [
+        {
+          label: "Edit Feedstock type",
+          href: `/feedstock-types?${params.toString()}`,
+        },
+      ];
+    }
     default:
       return [];
   }

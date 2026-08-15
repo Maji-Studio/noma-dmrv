@@ -84,6 +84,9 @@ export function toBatchHealthFacts(
     facilityEmissionsBlockers:
       ctx.memberBatches.find((batch) => batch.id === batchId)
         ?.facilityEmissionsGateBlockers ?? [],
+    feedstockTypeMappingGaps: (ctx.feedstockTypeMappingGaps ?? []).filter(
+      (gap) => gap.creditBatchId === batchId,
+    ),
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,

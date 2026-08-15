@@ -313,6 +313,7 @@ export async function submitGhgStatementToVerifierCore(args: {
         client,
         initialExternalId,
       ).catch(() => null);
+      let recoveredAppliedReport = false;
 
       if (generatedReport?.pendingVerifierTokenHash) {
         const recovery = await recoverPendingVerifierCapability({
@@ -323,6 +324,7 @@ export async function submitGhgStatementToVerifierCore(args: {
           remote: remoteBefore,
         });
         remoteBefore = recovery.remote;
+        recoveredAppliedReport = recovery.outcome === "promoted";
         if (recovery.outcome === "pending") {
           throw new SafeError(
             "A previous verifier submission is still being reconciled. Refresh the GHG Statement and try again.",
@@ -346,6 +348,37 @@ export async function submitGhgStatementToVerifierCore(args: {
         submission.metadata,
       );
       if (submitMode === "blocked-awaiting") {
+        const externalReportMatches =
+          !generatedReport &&
+          Boolean(externalReportUrl) &&
+          remoteBefore?.ghg_statement_report_url === externalReportUrl;
+        if (
+          remoteBefore &&
+          (recoveredAppliedReport || externalReportMatches)
+        ) {
+          onProgress?.({ step: "ghg_statement.checking", state: "complete" });
+          onProgress?.({
+            step: "ghg_statement.preparing_report",
+            state: "reused",
+          });
+          onProgress?.({ step: "ghg_statement.sending", state: "reused" });
+          onProgress?.({ step: "ghg_statement.confirming", state: "active" });
+          await applyGhgRemoteState(orgCtx, submission, remoteBefore, {
+            reportUrl: redactReportUrlSecrets(
+              remoteBefore.ghg_statement_report_url,
+            ),
+            summaryOfChanges: parsed.summaryOfChanges?.trim() || null,
+            ...(generatedReport
+              ? { lastReportDocumentId: generatedReport.documentId }
+              : {}),
+            submittedToVerifierAt:
+              remoteBefore.submitted_at ?? new Date().toISOString(),
+          });
+          return {
+            externalId: initialExternalId,
+            remoteStatus: remoteBefore.status,
+          };
+        }
         throw new SafeError(
           "This GHG Statement is already awaiting verification.",
         );

@@ -38,7 +38,10 @@ import {
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
-import { SubmissionProgress } from "../submission-progress";
+import {
+  canRetrySubmissionProgress,
+  SubmissionProgress,
+} from "../submission-progress";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { DebugDrawer } from "./debug-drawer";
@@ -74,6 +77,7 @@ export function SubmitStep({
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [lastConfirmProduction, setLastConfirmProduction] = useState(false);
   const [progressUpdates, setProgressUpdates] = useState<
     SubmissionProgressUpdate[]
   >([]);
@@ -103,6 +107,7 @@ export function SubmitStep({
       return;
     }
     setSubmitError(null);
+    setLastConfirmProduction(confirmProduction);
     setProgressUpdates([]);
     submitMutation.mutate(
       {
@@ -228,26 +233,42 @@ export function SubmitStep({
     );
   }
 
-  if (submitMutation.isPending || progressUpdates.length > 0) {
+  if (
+    submitMutation.isPending ||
+    submitMutation.isError ||
+    progressUpdates.length > 0
+  ) {
     const submissionStalled = isSubmissionStreamStalledError(
       submitMutation.error,
     );
+    const terminalError =
+      submitError ??
+      (submitMutation.error instanceof Error
+        ? submitMutation.error.message
+        : submitMutation.isError
+          ? "The Removal was not submitted. Try again."
+          : null);
+    const canRetry =
+      !submissionStalled &&
+      canRetrySubmissionProgress("removal", progressUpdates);
     return (
       <div className="flex flex-col gap-16">
         <SubmissionProgress
           kind="removal"
           updates={progressUpdates}
-          error={submitError}
+          error={terminalError}
           stalled={submissionStalled}
         />
-        {submitError && <ServerError message={submitError} />}
+        {terminalError && <ServerError message={terminalError} />}
         <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {submitMutation.isPending
               ? "noma is submitting the Removal to Isometric."
               : submissionStalled
                 ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
-                : "Return to the submission review before trying again. If noma reports that this submission is in progress, wait for it to finish."}
+                : canRetry
+                  ? "Completed registry operations are preserved for a safe retry."
+                  : "Review the submission details and resolve the error before submitting again."}
           </span>
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
@@ -255,6 +276,23 @@ export function SubmitStep({
                 <Button variant="primary" onClick={onDone}>
                   Close
                 </Button>
+              ) : canRetry ? (
+                <>
+                  <Button
+                    onClick={() => {
+                      setProgressUpdates([]);
+                      submitMutation.reset();
+                    }}
+                  >
+                    Review submission
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => fireSubmit(lastConfirmProduction)}
+                  >
+                    Try again
+                  </Button>
+                </>
               ) : (
                 <Button
                   variant="primary"

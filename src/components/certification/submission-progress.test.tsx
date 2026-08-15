@@ -162,12 +162,12 @@ describe("SubmissionProgress", () => {
     expect(html).not.toContain('role="status">Preparing submission</span>');
   });
 
-  it("offers direct retry only after an external submission step starts", () => {
+  it("offers direct retry for server-returned failures at every GHG Statement step", () => {
     expect(
       canRetrySubmissionProgress("ghg_statement", [
         { step: "ghg_statement.checking", state: "active" },
       ]),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       canRetrySubmissionProgress("ghg_statement", [
         { step: "ghg_statement.checking", state: "complete" },
@@ -175,10 +175,10 @@ describe("SubmissionProgress", () => {
         { step: "ghg_statement.sending", state: "active" },
       ]),
     ).toBe(true);
-    expect(canRetrySubmissionProgress("ghg_statement", [])).toBe(false);
+    expect(canRetrySubmissionProgress("ghg_statement", [])).toBe(true);
   });
 
-  it("does not retry a deterministic GHG Statement confirmation failure", () => {
+  it("retries GHG Statement confirmation and finalization failures", () => {
     expect(
       canRetrySubmissionProgress("ghg_statement", [
         { step: "ghg_statement.checking", state: "complete" },
@@ -186,10 +186,20 @@ describe("SubmissionProgress", () => {
         { step: "ghg_statement.sending", state: "complete" },
         { step: "ghg_statement.confirming", state: "active" },
       ]),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      canRetrySubmissionProgress("ghg_statement", [
+        { step: "ghg_statement.checking", state: "complete" },
+        { step: "ghg_statement.preparing_report", state: "complete" },
+        { step: "ghg_statement.sending", state: "complete" },
+        { step: "ghg_statement.confirming", state: "complete" },
+        { step: "ghg_statement.complete", state: "active" },
+      ]),
+    ).toBe(true);
   });
 
-  it("never offers a direct Removal retry after draft claim may have started", () => {
+  it("offers direct retry for server-returned failures at every Removal step", () => {
+    expect(canRetrySubmissionProgress("removal", [])).toBe(true);
     expect(
       canRetrySubmissionProgress("removal", [
         { step: "removal.checking_data", state: "complete" },
@@ -201,6 +211,17 @@ describe("SubmissionProgress", () => {
           total: 1,
         },
       ]),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      canRetrySubmissionProgress("removal", [
+        { step: "removal.checking_data", state: "complete" },
+        { step: "removal.preparing_evidence", state: "complete" },
+        { step: "removal.sending_inputs", state: "complete" },
+        { step: "removal.sending_durability", state: "complete" },
+        { step: "removal.creating", state: "complete" },
+        { step: "removal.verifying_evidence", state: "complete" },
+        { step: "removal.complete", state: "active" },
+      ]),
+    ).toBe(true);
   });
 });

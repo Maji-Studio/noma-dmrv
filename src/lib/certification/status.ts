@@ -312,15 +312,6 @@ export function deriveRemovalWorkflowStatus({
   }
 
   if (lifecycle.kind === "interrupted") {
-    if (lockInFlight) {
-      return interruptedWorkflowStatus(
-        [
-          "This submission was interrupted. Wait, then select Review & submit when it becomes available.",
-        ],
-        false,
-        false,
-      );
-    }
     if (enrichmentStatus === "loading") {
       return interruptedWorkflowStatus(
         ["Checking whether this submission is ready to reconcile."],

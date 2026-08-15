@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { SubmitStep } from "./submit-step";
 
 const state = vi.hoisted(() => ({
@@ -85,6 +86,7 @@ vi.mock("../submit-confirm-dialog", () => ({
 }));
 
 vi.mock("../submission-progress", () => ({
+  canRetrySubmissionProgress: () => true,
   SubmissionProgress: () => <div>Submission progress</div>,
 }));
 
@@ -282,6 +284,85 @@ describe("SubmitStep", () => {
 
     expect(findLink(renderer!, "View storage sites")).toBeUndefined();
     expect(findLink(renderer!, "View on Isometric")).toBeUndefined();
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  it("offers direct retry when the server fails before progress starts", async () => {
+    const mutate = vi.fn();
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <SubmitStep
+          removalId="removal-1"
+          facilityId="facility-1"
+          facilityName="Tanzania facility"
+          ctx={CONTEXT}
+          onDone={vi.fn()}
+          submitMutation={
+            {
+              mutate,
+              isPending: false,
+              isSuccess: false,
+              isError: true,
+              data: undefined,
+              error: new Error("Server submission failed"),
+              reset: vi.fn(),
+            } as never
+          }
+        />,
+      );
+    });
+
+    expect(findButton(renderer!, "Try again")).toBeDefined();
+    await act(async () => {
+      findButton(renderer!, "Try again")?.props.onClick();
+    });
+    expect(mutate).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  it("keeps a possibly-live stalled request close-only", async () => {
+    const mutate = vi.fn();
+    const onDone = vi.fn();
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <SubmitStep
+          removalId="removal-1"
+          facilityId="facility-1"
+          facilityName="Tanzania facility"
+          ctx={CONTEXT}
+          onDone={onDone}
+          submitMutation={
+            {
+              mutate,
+              isPending: false,
+              isSuccess: false,
+              isError: true,
+              data: undefined,
+              error: new SubmissionStreamStalledError(),
+              reset: vi.fn(),
+            } as never
+          }
+        />,
+      );
+    });
+
+    expect(findButton(renderer!, "Try again")).toBeUndefined();
+    expect(findButton(renderer!, "Close")).toBeDefined();
+    await act(async () => {
+      findButton(renderer!, "Close")?.props.onClick();
+    });
+    expect(onDone).toHaveBeenCalledOnce();
+    expect(mutate).not.toHaveBeenCalled();
 
     await act(async () => {
       renderer?.unmount();

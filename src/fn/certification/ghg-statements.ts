@@ -469,9 +469,8 @@ async function createGhgStatementRemote(args: {
   // without touching the row. Record the interruption so the operator sees
   // the failure instead of a bare in-progress row until the lock TTL expires.
   let externalMutation: RegistryExternalMutation | null = null;
-  let created: { externalId: string; source: "create" | "reconciliation" };
   try {
-    created = await performRegistryCreate({
+    const { externalId, source } = await performRegistryCreate({
       orgCtx,
       entityType: GHG_STATEMENT_ENTITY_TYPE,
       entityId: statement.id,
@@ -491,6 +490,20 @@ async function createGhgStatementRemote(args: {
       onExternalMutation: (state) => {
         externalMutation = state;
       },
+    });
+    // Keep local finalization inside the same failure boundary as the remote
+    // create/reconciliation. Once performRegistryCreate returns, the external
+    // mutation is confirmed; if the local identity/status write fails, mark
+    // the exact claimed draft interrupted so the next click can reconcile it
+    // immediately through the shared fresh-interrupted claim path.
+    return await finalizeGhgStatement({
+      client,
+      orgCtx,
+      statement,
+      row,
+      externalId,
+      expected,
+      outcome: source === "create" ? "created" : "existing",
     });
   } catch (error) {
     if (externalMutation && row.lockedAt) {
@@ -525,17 +538,6 @@ async function createGhgStatementRemote(args: {
     }
     throw error;
   }
-  const { externalId, source } = created;
-
-  return finalizeGhgStatement({
-    client,
-    orgCtx,
-    statement,
-    row,
-    externalId,
-    expected,
-    outcome: source === "create" ? "created" : "existing",
-  });
 }
 
 // =====================================================================

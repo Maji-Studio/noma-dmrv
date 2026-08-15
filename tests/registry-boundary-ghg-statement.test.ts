@@ -275,7 +275,11 @@ describe("createGhgStatementDraft boundary — orphan reconciliation (test 3)", 
     expect(row!.status).toBe("draft");
     expect(row!.lockedAt).not.toBeNull();
 
-    await staleifyLock(row!.id);
+    expect(row!.metadata).toMatchObject({
+      lastAttemptOutcome: "interrupted",
+      externalMutation: "possible",
+    });
+    expect(Date.now() - row!.lockedAt!.getTime()).toBeLessThan(LOCK_TTL_MS);
 
     const second = await createGhgStatementDraft({
       facilityId: fixture.facilityId,

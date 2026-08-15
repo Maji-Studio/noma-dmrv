@@ -32,11 +32,6 @@ const STATE_LABELS: Record<DisplayState, string> = {
   upcoming: "Waiting",
 };
 
-const GHG_RETRYABLE_STEPS = new Set<SubmissionProgressStep>([
-  "ghg_statement.sending",
-  "ghg_statement.complete",
-]);
-
 const STEP_COPY: Record<
   SubmissionProgressStep,
   { title: string; detail: string }
@@ -124,14 +119,13 @@ export function canRetrySubmissionProgress(
   kind: ProgressKind,
   updates: SubmissionProgressUpdate[],
 ): boolean {
-  // Removal claims and locks its draft while evidence preparation is active,
-  // before the first registry-send update. Progress alone therefore cannot
-  // prove that an immediate retry is safe; the operator must return to review
-  // and let refreshed submission state decide when another attempt may start.
-  if (kind === "removal") return false;
-  const steps = stepSequence(kind);
-  const failed = failedStep(steps, latestUpdates(updates));
-  return failed !== null && GHG_RETRYABLE_STEPS.has(failed);
+  // This helper is called only for a terminal error returned by the server.
+  // The claim/reconciliation layers decide whether the next request resumes,
+  // returns an existing result, or stays blocked. Dialogs separately exclude
+  // stalled streams because their original server request may still be live.
+  void kind;
+  void updates;
+  return true;
 }
 
 function displayState(

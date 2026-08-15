@@ -34,6 +34,7 @@ function ready(
     hasDefaultTemplate: true,
     missingDefaultTemplateId: null,
     unresolvedBlueprintKeys: [],
+    feedstockTypeMappingGaps: [],
     hasSubmittableRuns: true,
     requiredTransport: [
       { category: "feedstock", count: 2, hasAggregationWarning: false },
@@ -397,6 +398,7 @@ describe("buildRemovalPreflightChecklist", () => {
       "transport",
       "production",
       "measurementDates",
+      "feedstockTypeMapping",
       "entityReadiness",
       "durability",
     ]);
@@ -563,6 +565,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
       "transportUniformity",
       "production",
       "measurementDates",
+      "feedstockTypeMapping",
       "entityReadiness",
       "durability",
     ]);

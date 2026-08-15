@@ -883,11 +883,11 @@ describe("submitGhgStatementToVerifier — happy path", () => {
     );
   });
 
-  it("promotes a previously staged URL before returning the idempotent awaiting-state refusal", async () => {
+  it("finalizes an already-applied matching external report without resubmitting", async () => {
     const remoteDraft = makeRemoteStatement({ status: "DRAFT" });
     const remoteApplied = makeRemoteStatement({
       status: "AWAITING_VERIFICATION",
-      ghg_statement_report_url: GENERATED_REPORT_URL,
+      ghg_statement_report_url: REPORT_URL,
     });
     vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteDraft);
     vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteDraft);
@@ -895,30 +895,21 @@ describe("submitGhgStatementToVerifier — happy path", () => {
       facilityId: FACILITY_ID,
       reportingPeriodEndOn: REPORTING_PERIOD_END,
     });
-    vi.mocked(reportDA.getApprovedGhgStatementReport).mockResolvedValue({
-      id: REPORT_ID,
-      ghgStatementId: STATEMENT_ID,
-      documentId: REPORT_DOCUMENT_ID,
-      version: 1,
-      lifecycle: "approved",
-      sourceFingerprint: "a".repeat(64),
-      pendingVerifierTokenHash: hashVerifierToken("opaque"),
-    } as GhgStatementReportRow);
     vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteApplied);
 
     const result = await submitGhgStatementToVerifier(STATEMENT_ID, {
-      reportId: REPORT_ID,
+      reportUrl: REPORT_URL,
     });
 
-    expect(result).toEqual({
-      success: false,
-      error: "This GHG Statement is already awaiting verification.",
+    expect(result).toMatchObject({
+      success: true,
+      data: { remoteStatus: "AWAITING_VERIFICATION" },
     });
-    expect(reportDA.promotePendingVerifierReportToken).toHaveBeenCalledWith(
-      makeTestOrgContext("user-test-1"),
-      { reportId: REPORT_ID, token: "opaque" },
-    );
-    expect(reportActions.issueVerifierReportUrl).not.toHaveBeenCalled();
+    expect(isometric.submitGhgStatement).not.toHaveBeenCalled();
+    expect(storedLedger[0].metadata).toMatchObject({
+      remoteStatus: "AWAITING_VERIFICATION",
+      reportUrl: REPORT_URL,
+    });
   });
 
   it("serializes concurrent generated-report submits before minting a token", async () => {
