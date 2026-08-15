@@ -264,7 +264,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   );
 
   // Data
-  const feedstockTypeOptions = useFeedstockTypeFilterOptions();
+  const feedstockTypeOptions = useFeedstockTypeFilterOptions(feedstockTypeId);
   const { data: feedstocksData, isLoading, error: fetchError } = useFeedstocks(
     {
       ...(debouncedSearch ? { search: debouncedSearch } : {}),

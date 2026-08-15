@@ -20,11 +20,21 @@ export const FEEDSTOCK_TYPE_FILTER_PARAM = "feedstockType";
  *
  * The searchable entity-option endpoint caps its result at 50 rows in no
  * particular order, which is fine for a type-ahead and wrong for a dropdown an
- * operator scans, so the filter reads the full org list instead.
+ * operator scans, so the filter reads the full org list instead, which the
+ * query already returns ordered by name.
+ *
+ * An archived type stays in the list while it is the active selection: it can
+ * still be the one in a shared link, and dropping it would blank the select
+ * while the rows and the cards stayed filtered.
  */
-export function useFeedstockTypeFilterOptions() {
+export function useFeedstockTypeFilterOptions(activeFeedstockTypeId?: string) {
   const { data } = useFeedstockTypeList();
-  return data?.filter((feedstockType) => !feedstockType.archivedAt) ?? [];
+  return (
+    data?.filter(
+      (feedstockType) =>
+        !feedstockType.archivedAt || feedstockType.id === activeFeedstockTypeId,
+    ) ?? []
+  );
 }
 
 export function useFeedstockTypeFilter() {

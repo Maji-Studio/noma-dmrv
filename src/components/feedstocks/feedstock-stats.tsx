@@ -37,7 +37,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
 
   // Shares the cached option list with the toolbar's filter select, so naming
   // the active scope costs no extra request.
-  const feedstockTypeOptions = useFeedstockTypeFilterOptions();
+  const feedstockTypeOptions = useFeedstockTypeFilterOptions(feedstockTypeId);
   const activeTypeName = feedstockTypeId
     ? feedstockTypeOptions.find((option) => option.id === feedstockTypeId)?.name
     : undefined;
