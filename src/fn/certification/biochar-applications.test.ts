@@ -237,6 +237,16 @@ describe("ensureRemovalBiocharApplications", () => {
 
     await ensure();
 
+    expect(mocks.ensureStorage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expected: expect.objectContaining({
+          customerLocationId: intent().customerLocationId,
+          supplierReference: intent().storageLocationSupplierReference,
+          payload: intent().storageLocationPayload,
+        }),
+      }),
+    );
+
     expect(mocks.events).toEqual([
       "production-batch",
       "storage-location",

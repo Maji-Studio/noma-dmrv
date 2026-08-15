@@ -83,6 +83,13 @@ export async function ensureRemovalBiocharApplications(args: {
     const storage = await ensureStorageLocation({
       orgCtx: args.orgCtx,
       applicationId: intent.applicationId,
+      expected: {
+        customerLocationId: intent.customerLocationId,
+        certifierProjectId: intent.certifierProjectId,
+        externalProjectId: intent.externalProjectId,
+        supplierReference: intent.storageLocationSupplierReference,
+        payload: intent.storageLocationPayload,
+      },
       log: args.log,
     });
     if (storage.drifted) {
