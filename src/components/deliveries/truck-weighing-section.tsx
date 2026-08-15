@@ -1,4 +1,4 @@
-import { Warning } from "@phosphor-icons/react/dist/ssr";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { FormField, FormInput } from "@/components/forms";
@@ -109,9 +109,9 @@ export function TruckWeighingSection({
           role="alert"
           className="flex items-start gap-12 border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-16"
         >
-          <Warning
+          <WarningIcon
             size={20}
-            weight="fill"
+            weight="bold"
             className="mt-1 shrink-0 text-[var(--color-signal-orange-strong)]"
           />
           <p className="body-small text-[var(--color-text-secondary)]">
