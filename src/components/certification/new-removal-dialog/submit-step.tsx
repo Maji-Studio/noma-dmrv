@@ -173,13 +173,6 @@ export function SubmitStep({
           externalRemovalId: submitMutation.data.externalId,
         })
       : null;
-    const storageSitesUrl = projectId
-      ? isometricRegistry.storageSites({
-          environment,
-          externalProjectId: projectId,
-        })
-      : null;
-
     return (
       <div className="flex flex-col gap-24">
         <div className="flex items-start gap-12 border-l-2 border-[var(--st-ok)] pl-12 py-4">
@@ -200,17 +193,6 @@ export function SubmitStep({
         </div>
         <SubmissionProgress kind="removal" updates={progressUpdates} />
         <div className="flex flex-wrap items-center justify-end gap-12">
-          {storageSitesUrl && (
-            <a
-              href={storageSitesUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({ variant: "default" })}
-            >
-              View storage sites
-              <ArrowSquareOutIcon size={ACTION_ICON_SIZE} aria-hidden />
-            </a>
-          )}
           {viewUrl && (
             <a
               href={viewUrl}

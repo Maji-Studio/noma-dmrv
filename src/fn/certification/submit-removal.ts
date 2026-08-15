@@ -44,9 +44,7 @@ import {
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
 import { bindProductionBatchesToMeasurementSamples } from "./production-batches";
-import {
-  readRemovalDurabilityMeasurementSamples,
-} from "./durability-measurement-sample-snapshot";
+import { readRemovalDurabilityMeasurementSamples } from "./durability-measurement-sample-snapshot";
 import {
   assertNoForeignProductionClaims,
   assertProductionClaimGateFresh,
@@ -54,12 +52,15 @@ import {
 } from "./production-claim-gate";
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
+  readRemovalBiocharApplicationIntents,
   readRemovalFixedInputs,
   readRemovalSourceBindingPlan,
   readRemovalTransport,
   type ResolvedFixedInput,
   type RemovalTransportSnapshot,
 } from "./removal-snapshot-readers";
+import { ensureRemovalBiocharApplications } from "./biochar-applications";
+import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
 import {
   assertEntityReadinessGapsResolved,
@@ -529,6 +530,14 @@ async function submitRemovalCore(
           : "skipped",
       });
       onProgress?.({ step: "removal.creating", state: "reused" });
+      await ensureRemovalBiocharApplications({
+        orgCtx,
+        removalId,
+        externalRemovalId: claimed.externalId,
+        submissionRow: ctx.latestSubmission,
+        intents: readRemovalBiocharApplicationIntents(ctx.latestSubmission),
+        log,
+      });
       onProgress?.({
         step: "removal.verifying_evidence",
         state: "active",
@@ -598,6 +607,8 @@ async function submitRemovalCore(
         const durabilityMeasurementSubmissions = hasDurabilityComponents
           ? readRemovalDurabilityMeasurementSamples(claimed.row)
           : null;
+        const biocharApplicationIntents =
+          readRemovalBiocharApplicationIntents(claimed.row);
         return await runRemovalSubmission({
           client,
           orgCtx,
@@ -613,6 +624,7 @@ async function submitRemovalCore(
           },
           externalProjectId,
           durabilityMeasurementSubmissions,
+          biocharApplicationIntents,
           sourceBindingPlan,
           claimBatchIds: memberCreditBatchIds,
           supersedePreviousId: claimed.supersedePreviousId,
@@ -674,6 +686,7 @@ interface RunRemovalSubmissionArgs {
   durabilityMeasurementSubmissions:
     | DurabilityMeasurementSampleSubmission[]
     | null;
+  biocharApplicationIntents: BiocharApplicationIntent[];
   sourceBindingPlan: ReturnType<typeof readRemovalSourceBindingPlan>;
   // Member credit batches whose §8.6.2 production-bucket claim this submission
   // stamps on success (issue #349, ADR 0020).
@@ -699,6 +712,7 @@ async function runRemovalSubmission({
   reportingWindow,
   externalProjectId,
   durabilityMeasurementSubmissions,
+  biocharApplicationIntents,
   sourceBindingPlan,
   claimBatchIds,
   supersedePreviousId,
@@ -871,19 +885,28 @@ async function runRemovalSubmission({
       reconcileRemoval(client, { supplierRefId: transport.removalSupplierRef }).then(
         supplierRefLookup,
       ),
-    failureMessagePrefix: "Removal POST failed",
-    onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
     onConfirmed: (externalId) =>
       markSubmissionSubmitted(orgCtx, row.id, {
         externalId,
         supersedePreviousId,
-        // §8.6.2 (issue #349, ADR 0020): stamp the production-bucket claim
-        // in the same transaction as the immediate Submitted transition.
         productionEmissionsClaim: {
           removalId,
           creditBatchIds: claimBatchIds,
         },
       }),
+    failureMessagePrefix: "Removal POST failed",
+    onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
+    log,
+  });
+  await ensureRemovalBiocharApplications({
+    orgCtx,
+    removalId,
+    externalRemovalId,
+    submissionRow: row,
+    expectedLockedAt,
+    intents: biocharApplicationIntents,
+    onExternalMutation: (state) =>
+      recordRemovalExternalMutation(attempt, state),
     log,
   });
   onProgress?.({ step: "removal.creating", state: "complete" });
