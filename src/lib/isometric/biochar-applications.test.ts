@@ -87,14 +87,14 @@ describe("Biochar Application request", () => {
   });
 
   it.each([
-    [{ fieldSizeHa: 0 }, "field size"],
-    [{ truckMassOnArrivalKg: Number.NaN }, "before unloading"],
-    [{ truckMassOnDepartureKg: -1 }, "after unloading"],
+    ["field size", { fieldSizeHa: 0 }],
+    ["before unloading", { truckMassOnArrivalKg: Number.NaN }],
+    ["after unloading", { truckMassOnDepartureKg: -1 }],
     [
-      { truckMassOnArrivalKg: 100, truckMassOnDepartureKg: 101 },
       "exceeds",
+      { truckMassOnArrivalKg: 100, truckMassOnDepartureKg: 101 },
     ],
-  ] as const)("fails closed for invalid magnitudes", (overrides, message) => {
+  ] as const)("fails closed for invalid magnitudes: %s", (message, overrides) => {
     expect(() =>
       buildCreateBiocharApplicationRequest({ ...BASE, ...overrides }),
     ).toThrow(message);
