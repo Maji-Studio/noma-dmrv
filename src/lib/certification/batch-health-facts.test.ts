@@ -117,7 +117,7 @@ describe("toBatchHealthFacts", () => {
     expect(removalReadiness.reasons[0]).toContain("Feedstock types");
   });
 
-  it("does not require registry mapping for an internal blend feedstock type", () => {
+  it("fails closed when a legacy blend feedstock type is unmapped", () => {
     const memberBatches = [
       {
         id: "batch-1",
@@ -154,7 +154,7 @@ describe("toBatchHealthFacts", () => {
 
     expect(
       deriveBatchHealth(toBatchHealthFacts(ctx, "batch-1")).state,
-    ).toBe("ready");
+    ).toBe("incomplete");
   });
 
   it("does not apply feedstock mapping gaps before a facility is linked", () => {

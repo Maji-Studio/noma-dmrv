@@ -44,12 +44,12 @@ describe("collectFeedstockTypeMappingGaps", () => {
     ).toEqual([]);
   });
 
-  it("skips blend feedstock types", () => {
+  it("fails closed for an unmapped blend feedstock type", () => {
     expect(
       collectFeedstockTypeMappingGaps([
         batch(feedstockType({ usage: "blend" })),
       ]),
-    ).toEqual([]);
+    ).toHaveLength(1);
   });
 
   it("fails closed when feedstock type usage is null", () => {

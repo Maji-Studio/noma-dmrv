@@ -21,12 +21,10 @@ export function collectFeedstockTypeMappingGaps(
   return batches.flatMap((batch) => {
     const feedstockType = batch.feedstockType;
     if (!feedstockType) return [];
-    // Blend types are internal-only and never submitted. A credit batch should
-    // declare pyrolysis usage; unknown usage fails closed for legacy data.
-    if (
-      feedstockType.usage === "blend" ||
-      feedstockType.isometricFeedstockTypeId
-    ) {
+    // Every batch that reaches certification needs a registry mapping. This
+    // also fails closed for legacy blend/null usage records instead of letting
+    // them reach production-batch construction with an empty type id list.
+    if (feedstockType.isometricFeedstockTypeId) {
       return [];
     }
     return [
