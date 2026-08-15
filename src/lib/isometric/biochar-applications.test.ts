@@ -153,4 +153,21 @@ describe("Biochar Application reconciliation", () => {
       ),
     ).rejects.toThrow("Multiple Isometric Biochar Applications");
   });
+
+  it("rejects a repeated pagination cursor", async () => {
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        nodes: [],
+        page_info: { has_next_page: true, end_cursor: "cursor-1" },
+        total_count: 2,
+      }),
+    } as unknown as IsometricClient;
+
+    await expect(
+      findBiocharApplicationBySupplierReference(
+        client,
+        BASE.supplierReferenceId,
+      ),
+    ).rejects.toThrow(/repeated cursor cursor-1/i);
+  });
 });

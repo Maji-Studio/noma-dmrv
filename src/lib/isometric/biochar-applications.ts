@@ -183,6 +183,7 @@ export async function findBiocharApplicationBySupplierReference(
 
   let after: string | undefined;
   let match: IsometricBiocharApplication | null = null;
+  const usedCursors = new Set<string>();
   for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
     const page = await client.get<BiocharApplicationPage>(
       "/biochar_applications",
@@ -204,6 +205,12 @@ export async function findBiocharApplicationBySupplierReference(
         "Isometric Biochar Application pagination reported another page without a cursor",
       );
     }
+    if (usedCursors.has(after)) {
+      throw new Error(
+        `Isometric Biochar Application pagination repeated cursor ${after}`,
+      );
+    }
+    usedCursors.add(after);
   }
   throw new SafeError(
     `The Isometric Biochar Application lookup exceeded its safety limit after ${(pageSize * maxPages).toLocaleString("en-US")} records. Contact support before retrying.`,
