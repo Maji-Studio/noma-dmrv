@@ -5,6 +5,9 @@ import {
   isCertifyFormField,
 } from "./certify-field-registry";
 
+const DELIVERY_TRUCK_MASS_ON_ARRIVAL_KG = 1_400;
+const DELIVERY_TRUCK_MASS_ON_DEPARTURE_KG = 1_000;
+
 describe("deriveEntityCertifyReadiness", () => {
   it.each(["failed", "cancelled"])(
     "reports only the lifecycle gap for a %s production run",
@@ -341,6 +344,8 @@ describe("deriveEntityCertifyReadiness", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "upcoming",
       deliveredWetMassKg: 400,
+      truckMassOnArrivalKg: DELIVERY_TRUCK_MASS_ON_ARRIVAL_KG,
+      truckMassOnDepartureKg: DELIVERY_TRUCK_MASS_ON_DEPARTURE_KG,
       effectiveDistanceSource: "document",
       transportEvidenceDocumentCount: 1,
     });
@@ -355,6 +360,8 @@ describe("deriveEntityCertifyReadiness", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "delivered",
       deliveredWetMassKg: 400,
+      truckMassOnArrivalKg: DELIVERY_TRUCK_MASS_ON_ARRIVAL_KG,
+      truckMassOnDepartureKg: DELIVERY_TRUCK_MASS_ON_DEPARTURE_KG,
       effectiveDistanceSource: "document",
       transportEvidenceDocumentCount: 1,
     });
@@ -366,6 +373,8 @@ describe("deriveEntityCertifyReadiness", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "delivered",
       deliveredWetMassKg: 400,
+      truckMassOnArrivalKg: DELIVERY_TRUCK_MASS_ON_ARRIVAL_KG,
+      truckMassOnDepartureKg: DELIVERY_TRUCK_MASS_ON_DEPARTURE_KG,
       effectiveDistanceSource: "manual",
       transportEvidenceDocumentCount: 0,
     });
@@ -389,6 +398,8 @@ describe("deriveEntityCertifyReadiness", () => {
       {
         status: "delivered",
         deliveredWetMassKg: 400,
+        truckMassOnArrivalKg: DELIVERY_TRUCK_MASS_ON_ARRIVAL_KG,
+        truckMassOnDepartureKg: DELIVERY_TRUCK_MASS_ON_DEPARTURE_KG,
         effectiveDistanceSource: "manual",
         transportEvidenceDocumentCount: 0,
       },

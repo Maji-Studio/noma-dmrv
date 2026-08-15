@@ -21,7 +21,8 @@ import {
  * lineage/template plumbing has its own tests), generated evidence-ledger
  * materialization (render/storage/mirroring has dedicated tests), and the
  * sources resolver (mirroring stays on its own create/reconcile shape by
- * decision; see the plan's out-of-scope list).
+ * decision; see the plan's out-of-scope list). Biochar Application planning
+ * is also isolated here; its registry choreography has dedicated tests.
  *
  * Coverage (plan Phase 3, boundary tests 1, 2, 4, 5 — test 3 lives in
  * registry-boundary-ghg-statement.test.ts):
@@ -53,6 +54,9 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
   return createFakeClientModule(actual);
 });
 vi.mock("@/fn/certification/certify-context-core");
+vi.mock("@/fn/certification/biochar-application-intents", () => ({
+  compileBiocharApplicationIntents: vi.fn(async () => []),
+}));
 vi.mock("@/fn/certification/ensure-evidence-ledgers", () => ({
   ensureEvidenceLedgersFromContext: vi.fn(async () => undefined),
 }));
@@ -113,6 +117,7 @@ const RTC_ID = "rtc-seq";
 const ISOMETRIC_FEEDSTOCK_TYPE_ID = "ftt_boundary_1";
 const FIXTURE_UUID_SUFFIX_LENGTH = 8;
 const PRODUCTION_RUN_ID = "pr-boundary-1";
+const APPLICATION_ID = "a0000000-0000-4000-8000-000000000001";
 const ORIGINAL_BIOCHAR_MASS_KG = 1000;
 const CHANGED_BIOCHAR_MASS_KG = 1500;
 const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
@@ -125,7 +130,7 @@ function makeBoundarySourceDocument() {
       nomaRoleLabel: "Inventory",
       lineage: {
         entityType: "application",
-        entityId: "app-bd-1",
+        entityId: APPLICATION_ID,
         entityLabel: "Application APP-BD-001",
       },
       intendedTarget: {
@@ -484,7 +489,7 @@ function makeContext(
       {
         facility: { id: fixture.facilityId, code: "F", name: "F" },
         application: {
-          id: "app-bd-1",
+          id: APPLICATION_ID,
           code: "APP-BD-001",
           // §8.6.2 (issue #320): submitRemoval derives the window end from
           // this; keep it at the run end so the boundary tests' window is
@@ -527,7 +532,7 @@ function makeContext(
         code: "CB-BD-001",
         claimedByRemovalId: null,
         productionRunIds: [PRODUCTION_RUN_ID],
-        applicationIds: ["app-bd-1"],
+        applicationIds: [APPLICATION_ID],
       },
     ],
     transportLegs: { feedstock: [], biochar: [], sample: [] },
@@ -558,7 +563,7 @@ function setContext(fixture: Fixture, biocharMassKg?: number): void {
         id: fixture.creditBatchId,
         code: "CB-BD-001",
         productionRunIds: [PRODUCTION_RUN_ID],
-        applicationIds: ["app-bd-1"],
+        applicationIds: [APPLICATION_ID],
         durabilityOption: "200_year",
         productionEmissionsClaimedByRemovalId: null,
       },
