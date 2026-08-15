@@ -113,6 +113,32 @@ export async function markSubmissionInterrupted(
   return updated.length > 0;
 }
 
+/**
+ * Journal a confirmed registry identity while retaining the exact draft lock.
+ * Follow-up reconciliation can then fail safely: an immediate retry resumes
+ * this row by external id instead of POSTing another statement.
+ */
+export async function recordConfirmedSubmissionIdentity(
+  ctx: OrgContext,
+  id: string,
+  args: { externalId: string; expectedLockedAt: Date },
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const updated = await db
+    .update(certificationSubmissions)
+    .set({ externalId: args.externalId, updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.status, "draft"),
+        eq(certificationSubmissions.lockedAt, args.expectedLockedAt),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    )
+    .returning({ id: certificationSubmissions.id });
+  return updated.length > 0;
+}
+
 // =====================================================================
 // claimSubmissionDraft — the single entry point
 // =====================================================================

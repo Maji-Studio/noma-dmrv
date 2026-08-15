@@ -7,20 +7,6 @@
  * their own tests — this one proves the orchestrator wires them together
  * across the create → reconcile-removals → submit-to-verifier path.
  *
- * Coverage:
- *   1. First create  → ledger draft → POST /ghg_statements →
- *                       reconcileRemovalMembership stamps the local removal
- *                       → ledger 'submitted' with externalId.
- *   2. Re-create with same period → `return-existing`, no new POST.
- *   3. Submit-to-verifier on the created statement → POST /submit →
- *                       remote status flips to AWAITING_VERIFICATION,
- *                       report document attached.
- *   4. Empty-statement guard (#245): create fail-closes before any local row
- *                       or remote POST when the window holds no submitted
- *                       removal (none open, or the only one out-of-window).
- *   5. Zero-linked backstop (#245): submit fail-closes when the registry's
- *                       authoritative membership is empty.
- *
  * Out of scope (left to dedicated tests): resubmit-after-failure,
  * stale-lock recovery, double-create dedup details, and the verified
  * terminal-state transition.
@@ -30,18 +16,14 @@ import { makeTestOrgContext } from "./helpers/test-org";
 
 import type {
   CertificationSubmissionRow,
-  CertifierProjectRow,
   DocumentRow,
 } from "@/data-access/certification";
 import type { InsertDraftSubmissionInput } from "@/data-access/certification-submissions";
 import type {
   CertifierGhgStatementRow,
-  OpenRemoval,
   ReconcileResult,
 } from "@/data-access/certifier-ghg-statements";
-import type { CertifierRemovalRow } from "@/data-access/certifier-removals";
 import type { GhgStatementReportRow } from "@/data-access/ghg-statement-reports";
-import type { GhgStatement } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import { hashVerifierToken } from "@/lib/certification/ghg-statement-report/verifier-url";
 
@@ -129,6 +111,21 @@ import {
   submitGhgStatementToVerifier,
 } from "@/fn/certification/ghg-statements";
 import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-statement";
+import {
+  EXTERNAL_STATEMENT_ID,
+  FACILITY_ID,
+  GENERATED_REPORT_URL,
+  makeMapping,
+  makeOpenRemoval,
+  makeRemoteStatement,
+  makeStatementRow,
+  REMOVAL_ID,
+  REPORT_DOCUMENT_ID,
+  REPORT_ID,
+  REPORT_URL,
+  REPORTING_PERIOD_END,
+  STATEMENT_ID,
+} from "./fixtures/isometric-ghg-statement";
 
 // ---------------------------------------------------------------------------
 // Test constants.
@@ -136,22 +133,6 @@ import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-
 
 // Zod 4's .uuid() enforces version + variant bits, so the synthetic ids
 // here are valid v4 UUIDs (version=4, variant=8) rather than all-ones.
-const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
-const STATEMENT_ID = "22222222-2222-4222-8222-222222222222";
-const REMOVAL_ID = "33333333-3333-4333-8333-333333333333";
-const EXTERNAL_PROJECT_ID = "prj_test_1";
-const EXTERNAL_STATEMENT_ID = "ggs_test_1";
-const EXTERNAL_REMOVAL_ID = "rmv_test_1";
-const REPORTING_PERIOD_END = "2026-01-31";
-// Inside the reporting window (no prior statement → unbounded start, so any
-// completion on or before REPORTING_PERIOD_END is in-window).
-const IN_WINDOW_COMPLETED_ON = "2026-01-15";
-const REPORT_URL = "https://example.com/report.pdf";
-const REPORT_ID = "55555555-5555-4555-8555-555555555555";
-const REPORT_DOCUMENT_ID = "66666666-6666-4666-8666-666666666666";
-const GENERATED_REPORT_URL =
-  `http://localhost:3100/api/ghg-statement-reports/${REPORT_ID}?token=opaque`;
-
 // ---------------------------------------------------------------------------
 // In-memory stores. We model just the slice each orchestrator path reads
 // (latest-ledger lookup, statement upsert, removal reconciliation result).
@@ -160,76 +141,6 @@ const GENERATED_REPORT_URL =
 let storedLedger: CertificationSubmissionRow[];
 let nextLedgerRowId: number;
 let storedStatements: CertifierGhgStatementRow[];
-
-function makeStatementRow(): CertifierGhgStatementRow {
-  return {
-    id: STATEMENT_ID,
-    provider: "isometric",
-    facilityId: FACILITY_ID,
-    reportingPeriodEndOn: REPORTING_PERIOD_END,
-    reportingPeriodStartOn: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as CertifierGhgStatementRow;
-}
-
-function makeOpenRemoval(
-  overrides: Partial<CertifierRemovalRow> = {},
-): OpenRemoval {
-  return {
-    removal: {
-      id: REMOVAL_ID,
-      facilityId: FACILITY_ID,
-      provider: "isometric",
-      startedOn: null,
-      completedOn: IN_WINDOW_COMPLETED_ON,
-      ghgStatementId: null,
-      metadata: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      ...overrides,
-    } as CertifierRemovalRow,
-    externalId: EXTERNAL_REMOVAL_ID,
-  };
-}
-
-function makeMapping(): CertifierProjectRow {
-  return {
-    id: "cert-proj-1",
-    facilityId: FACILITY_ID,
-    provider: "isometric",
-    externalProjectId: EXTERNAL_PROJECT_ID,
-    protocolSlug: "biochar",
-    protocolVersion: "1.2",
-    defaultRemovalTemplateId: "rvt_1",
-    webhookSecret: null,
-    metadata: null,
-    gensetEnergyYieldKwhPerLitre: 3.375,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as CertifierProjectRow;
-}
-
-function makeRemoteStatement(
-  overrides: Partial<GhgStatement> = {},
-): GhgStatement {
-  return {
-    id: EXTERNAL_STATEMENT_ID,
-    project_id: EXTERNAL_PROJECT_ID,
-    verifier: null,
-    ghg_entry_ids: [EXTERNAL_REMOVAL_ID],
-    removal_ids: [EXTERNAL_REMOVAL_ID],
-    credit_allocation: null,
-    ghg_statement_report_url: null,
-    status: "DRAFT",
-    reporting_period_start_at: "2026-01-01",
-    reporting_period_end_at: REPORTING_PERIOD_END,
-    submitted_at: null,
-    credits_issued_at: null,
-    pending_total_co2e_removed_kg: null,
-    ...overrides,
-  } as GhgStatement;
-}
 
 function storedLatestForStatement(): CertificationSubmissionRow | null {
   const matching = storedLedger.filter(
@@ -354,6 +265,14 @@ beforeEach(() => {
       }
     },
   );
+  vi.mocked(
+    ledgerClaim.recordConfirmedSubmissionIdentity,
+  ).mockImplementation(async (_userId, id, args) => {
+    const row = storedLedger.find((candidate) => candidate.id === id);
+    if (!row) return false;
+    row.externalId = args.externalId;
+    return true;
+  });
   vi.mocked(ledger.markSubmissionRejected).mockImplementation(
     async (_userId, id, args) => {
       const row = storedLedger.find((candidate) => candidate.id === id);
@@ -910,6 +829,37 @@ describe("submitGhgStatementToVerifier — happy path", () => {
       remoteStatus: "AWAITING_VERIFICATION",
       reportUrl: REPORT_URL,
     });
+  });
+
+  it("rejects a plain duplicate without recording a summary that was never sent", async () => {
+    const remoteDraft = makeRemoteStatement({ status: "DRAFT" });
+    const remoteApplied = makeRemoteStatement({
+      status: "AWAITING_VERIFICATION",
+      ghg_statement_report_url: REPORT_URL,
+    });
+    vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteDraft);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteDraft);
+    await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    storedLedger[0].metadata = {
+      remoteStatus: "AWAITING_VERIFICATION",
+      reportUrl: REPORT_URL,
+    };
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteApplied);
+
+    const result = await submitGhgStatementToVerifier(STATEMENT_ID, {
+      reportUrl: REPORT_URL,
+      summaryOfChanges: "This was not sent to the verifier",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "This GHG Statement is already awaiting verification.",
+    });
+    expect(storedLedger[0].metadata).not.toHaveProperty("summaryOfChanges");
+    expect(isometric.submitGhgStatement).not.toHaveBeenCalled();
   });
 
   it("finalizes an already-promoted generated report without replacing its summary", async () => {

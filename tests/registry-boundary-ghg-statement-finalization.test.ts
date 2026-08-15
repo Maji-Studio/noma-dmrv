@@ -165,6 +165,7 @@ describe("createGhgStatementDraft finalization recovery", () => {
     expect(registry.ghgStatements).toHaveLength(1);
     expect(await latestStatementRow(facilityId)).toMatchObject({
       status: "draft",
+      externalId: registry.ghgStatements[0].id,
       metadata: {
         lastAttemptOutcome: "interrupted",
         externalMutation: "confirmed",
@@ -228,6 +229,7 @@ describe("createGhgStatementDraft finalization recovery", () => {
     expect(registry.requestCount("POST", "/ghg_statements")).toBe(1);
     expect(await latestStatementRow(facilityId)).toMatchObject({
       status: "draft",
+      externalId: orphan.id,
       metadata: {
         lastAttemptOutcome: "interrupted",
         externalMutation: "confirmed",

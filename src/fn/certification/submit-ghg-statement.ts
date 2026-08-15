@@ -27,6 +27,10 @@ import {
   redactReportSecrets,
   redactReportUrlSecrets,
 } from "@/lib/certification/report-url";
+import {
+  getMetadataValue,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/certification/submission-metadata";
 import type { SubmissionProgressReporter } from "@/lib/certification/submission-progress";
 import { SafeError } from "@/lib/errors";
 import {
@@ -363,6 +367,12 @@ export async function submitGhgStatementToVerifierCore(args: {
         submission.metadata,
       );
       if (submitMode === "blocked-awaiting") {
+        const localRemoteStatus = getMetadataValue(
+          submission.metadata,
+          SUBMISSION_METADATA_KEYS.remoteStatus,
+        );
+        const needsLocalReconciliation =
+          remoteBefore !== null && localRemoteStatus !== remoteBefore.status;
         const generatedReportMatches = Boolean(
           generatedReport &&
             remoteBefore &&
@@ -376,6 +386,7 @@ export async function submitGhgStatementToVerifierCore(args: {
           Boolean(externalReportUrl) &&
           remoteBefore?.ghg_statement_report_url === externalReportUrl;
         if (
+          needsLocalReconciliation &&
           remoteBefore &&
           (recoveredAppliedReport ||
             generatedReportMatches ||

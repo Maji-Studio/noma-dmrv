@@ -378,6 +378,14 @@ beforeEach(() => {
       }
     },
   );
+  vi.mocked(
+    ledgerClaim.recordConfirmedSubmissionIdentity,
+  ).mockImplementation(async (_userId, id, args) => {
+    const row = storedLedger.find((candidate) => candidate.id === id);
+    if (!row) return false;
+    row.externalId = args.externalId;
+    return true;
+  });
   vi.mocked(ledger.markSubmissionRejected).mockImplementation(
     async (_userId, id, args) => {
       const row = storedLedger.find((candidate) => candidate.id === id);

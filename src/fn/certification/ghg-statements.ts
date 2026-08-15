@@ -14,6 +14,7 @@ import {
   getLatestSubmission,
   getLatestSubmissionWithExecutor,
   markSubmissionInterrupted,
+  recordConfirmedSubmissionIdentity,
   type ClaimBlockedReason,
 } from "@/data-access/certification-submissions";
 import {
@@ -254,15 +255,19 @@ export async function createGhgStatementDraft(
             ghgStatementCreateRefusalMessage(blocking.statement),
           );
         }
-        // List membership can lag detail, so reconcile the existing statement
-        // from its authoritative representation without minting anything.
-        const reconciled = await reconcileRegistryGhgStatementById(orgCtx, {
-          client,
-          facilityId: parsed.facilityId,
-          externalProjectId: project.externalProjectId,
-          externalId: singleMatch.id,
-        });
-        return { outcome: "existing" as const, ...reconciled };
+        if (existingRemoteSubmission.status !== "draft") {
+          // List membership can lag detail, so reconcile the existing
+          // statement from its authoritative representation without minting
+          // anything. A draft falls through to the claim path: it may be an
+          // interrupted post-identity finalization that must be resumed.
+          const reconciled = await reconcileRegistryGhgStatementById(orgCtx, {
+            client,
+            facilityId: parsed.facilityId,
+            externalProjectId: project.externalProjectId,
+            externalId: singleMatch.id,
+          });
+          return { outcome: "existing" as const, ...reconciled };
+        }
       }
     }
     const knownRemoteMatch = remoteMatches.length > 0;
@@ -489,6 +494,23 @@ async function createGhgStatementRemote(args: {
       log,
       onExternalMutation: (state) => {
         externalMutation = state;
+      },
+      onConfirmed: async (externalId) => {
+        if (!row.lockedAt) {
+          throw new SafeError(
+            "The GHG Statement submission lock was lost before its registry identity could be saved. Try again.",
+          );
+        }
+        const recorded = await recordConfirmedSubmissionIdentity(
+          orgCtx,
+          row.id,
+          { externalId, expectedLockedAt: row.lockedAt },
+        );
+        if (!recorded) {
+          throw new SafeError(
+            "The GHG Statement registry identity could not be saved because the submission changed. Refresh and try again.",
+          );
+        }
       },
     });
     externalMutation = "confirmed";
