@@ -13,6 +13,9 @@ import {
   type CreateStorageLocationRequest,
 } from "@/lib/isometric/storage-locations";
 
+const PREFLIGHT_EXTERNAL_PRODUCTION_BATCH_ID = "preflight-production-batch";
+const PREFLIGHT_EXTERNAL_STORAGE_LOCATION_ID = "preflight-storage-location";
+
 export interface BiocharApplicationIntent {
   applicationId: string;
   applicationCode: string;
@@ -160,8 +163,8 @@ export async function compileBiocharApplicationIntents(args: {
       truckMassOnArrivalKg,
       truckMassOnDepartureKg,
       externalProjectId,
-      externalProductionBatchId: "preflight-production-batch",
-      externalStorageLocationId: "preflight-storage-location",
+      externalProductionBatchId: PREFLIGHT_EXTERNAL_PRODUCTION_BATCH_ID,
+      externalStorageLocationId: PREFLIGHT_EXTERNAL_STORAGE_LOCATION_ID,
       supplierReferenceId: supplierReference,
       sourceIds: [],
     });
