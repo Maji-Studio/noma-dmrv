@@ -535,7 +535,7 @@ async function submitRemovalCore(
         removalId,
         externalRemovalId: claimed.externalId,
         submissionRow: ctx.latestSubmission,
-        intents: initialBuild.biocharApplicationIntents,
+        intents: readRemovalBiocharApplicationIntents(ctx.latestSubmission),
         resumed: true,
         log,
       });
