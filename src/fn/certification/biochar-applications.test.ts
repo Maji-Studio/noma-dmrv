@@ -191,7 +191,10 @@ beforeEach(() => {
   mocks.events.length = 0;
   mocks.getRegistration.mockImplementation(async () => mocks.registration);
   mocks.claim.mockImplementation(async (_ctx, input) => {
-    mocks.registration = registration(input.submittedPayload);
+    mocks.registration = registration(input.submittedPayload, {
+      observedGhgEntryId: input.observedGhgEntryId,
+      observedRemovalId: input.observedRemovalId,
+    });
     return mocks.registration;
   });
   mocks.confirm.mockImplementation(async (_ctx, input) => {
@@ -202,6 +205,8 @@ beforeEach(() => {
       lifecycleStatus: "confirmed",
       correctionStatus: "none",
       gateReason: null,
+      observedGhgEntryId: input.observedGhgEntryId,
+      observedRemovalId: input.observedRemovalId,
     };
     return mocks.registration;
   });
@@ -271,7 +276,11 @@ describe("ensureRemovalBiocharApplications", () => {
     mocks.client.post.mockRejectedValueOnce(new Error("connection reset"));
 
     await expect(ensure()).rejects.toThrow("connection reset");
-    expect(mocks.registration?.lifecycleStatus).toBe("gated");
+    expect(mocks.registration).toMatchObject({
+      lifecycleStatus: "gated",
+      observedGhgEntryId: null,
+      observedRemovalId: null,
+    });
 
     await expect(ensure()).resolves.toBeUndefined();
     expect(mocks.client.post).toHaveBeenCalledTimes(1);
@@ -279,6 +288,19 @@ describe("ensureRemovalBiocharApplications", () => {
     expect(mocks.registration).toMatchObject({
       lifecycleStatus: "confirmed",
       externalApplicationId: "bca-test",
+      observedGhgEntryId: EXTERNAL_REMOVAL_ID,
+    });
+  });
+
+  it("keeps the pre-POST claim unobserved after a registry refusal", async () => {
+    mocks.client.get.mockResolvedValue(page([]));
+    mocks.client.post.mockRejectedValue(new Error("registry refused request"));
+
+    await expect(ensure()).rejects.toThrow("registry refused request");
+    expect(mocks.registration).toMatchObject({
+      lifecycleStatus: "gated",
+      observedGhgEntryId: null,
+      observedRemovalId: null,
     });
   });
 

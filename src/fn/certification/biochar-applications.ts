@@ -168,7 +168,7 @@ async function ensureBiocharApplication(args: {
           supplierReference: args.intent.supplierReference,
           submittedPayload: body,
           payloadHash: bodyHash,
-          observedGhgEntryId: args.externalRemovalId,
+          observedGhgEntryId: null,
           observedRemovalId: null,
         });
       }
