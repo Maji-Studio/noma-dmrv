@@ -32,12 +32,11 @@ not perform registry writes, and local name or coordinate drift never triggers
 an automatic PATCH.
 
 Delivery create/edit now records optional observed truck mass before and after
-unloading in kilograms. As a temporary sandbox fallback, Removal preflight uses
-the delivery's positive wet mass for arrival and `0 kg` for departure when the
-corresponding observations are absent; explicit observations remain
-authoritative. It still requires a positive field size for every included
-Application, refuses multi-batch allocation, and snapshots the resolved values
-before any registry mutation. The Biochar Application
+unloading in kilograms. Sandbox Removal preflight requires both observations
+for every included Application and never substitutes delivered wet mass or zero
+as observed evidence. It also requires a positive field size, refuses
+multi-batch allocation and deliveries split across multiple Applications, and
+snapshots the resolved values before any registry mutation. The Biochar Application
 journal claims the exact payload before POST and reconciles bounded list pages
 by its versioned environment/provider reference after retries. Rate is applied
 tonnes divided by field hectares (`t/ha`); truck mass values use `kg`.
