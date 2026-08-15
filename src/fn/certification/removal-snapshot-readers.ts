@@ -103,10 +103,20 @@ const biocharApplicationIntentSchema = z.object({
   truckMassOnDepartureKg: z.number().finite().nonnegative(),
   supplierReference: z.string().min(1).max(100),
   storageLocationSupplierReference: z.string().min(1),
-  storageLocationPayload: z.object({
-    project_id: z.string().min(1),
-    supplier_reference_id: z.string().min(1),
-  }).passthrough(),
+  storageLocationPayload: z
+    .object({
+      description: z.union([
+        z.string(),
+        z.object({ __typename: z.literal("Undefined") }),
+      ]),
+      latitude: z.number().finite(),
+      longitude: z.number().finite(),
+      name: z.string().min(1),
+      project_id: z.string().min(1),
+      storage_method: z.literal("biochar_field"),
+      supplier_reference_id: z.string().min(1),
+    })
+    .passthrough(),
   sourceIds: z.array(z.string()),
 });
 
