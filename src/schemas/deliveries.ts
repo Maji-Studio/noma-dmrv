@@ -78,6 +78,26 @@ function validateDistanceOverride(
   }
 }
 
+function validateTruckMassUpdatePair(
+  value: {
+    truckMassOnArrivalKg?: number | null;
+    truckMassOnDepartureKg?: number | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  const arrivalChanged = value.truckMassOnArrivalKg !== undefined;
+  const departureChanged = value.truckMassOnDepartureKg !== undefined;
+  if (arrivalChanged === departureChanged) return;
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: [
+      arrivalChanged ? "truckMassOnDepartureKg" : "truckMassOnArrivalKg",
+    ],
+    message: "Update both truck mass observations together",
+  });
+}
+
 // ============================================
 // Delivery Form Schema (Client-side validation)
 // ============================================
@@ -179,6 +199,7 @@ export const updateDeliverySchema = z.object({
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
+  validateTruckMassUpdatePair(value, ctx);
   validateTruckMasses(value, ctx);
 });
 

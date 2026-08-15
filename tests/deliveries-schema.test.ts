@@ -74,4 +74,23 @@ describe("delivery truck observations", () => {
       expect(result.success).toBe(false);
     },
   );
+
+  it.each(["truckMassOnArrivalKg", "truckMassOnDepartureKg"] as const)(
+    "rejects a partial %s update",
+    (field) => {
+      const result = updateDeliverySchema.safeParse({
+        deliveryId: UUID_A,
+        [field]: 3_000,
+      });
+      expect(result.success).toBe(false);
+      if (result.success) return;
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: "Update both truck mass observations together",
+          }),
+        ]),
+      );
+    },
+  );
 });

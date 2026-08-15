@@ -809,6 +809,10 @@ export async function updateDelivery(
       data.deliveredWetMassKg !== undefined
         ? data.deliveredWetMassKg
         : lockedDelivery.deliveredWetMassKg;
+    if (data.truckMassOnArrivalKg !== undefined || data.truckMassOnDepartureKg !== undefined) {
+      if (data.truckMassOnArrivalKg === undefined) data.truckMassOnArrivalKg = lockedDelivery.truckMassOnArrivalKg;
+      if (data.truckMassOnDepartureKg === undefined) data.truckMassOnDepartureKg = lockedDelivery.truckMassOnDepartureKg;
+    }
     const orderChanged = lockedEffectiveOrderId !== lockedDelivery.orderId;
     const wetMassIncreased =
       lockedEffectiveWetMass != null &&
