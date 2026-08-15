@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { CalendarIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { CalendarIcon, PackageIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
@@ -416,6 +416,11 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     isLoading,
     setCurrentPage,
   });
+  const clearFilters = () => {
+    setSearchInput("");
+    void setFeedstockTypeId(null);
+    setCurrentPage(1);
+  };
   const hasActiveFilters =
     normalizedSearch.length > 0 || feedstockTypeId.length > 0;
   useEffect(() => {
@@ -564,6 +569,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
                 </option>
               ))}
             </DataTable.FilterSelect>
+            {hasActiveFilters && (
+              <Button variant="noOutline" size="small" onClick={clearFilters}>
+                <XIcon size={16} weight="bold" />
+                Clear
+              </Button>
+            )}
             <DataTable.ColumnVisibility />
           </DataTable.Controls>
         </DataTable.Toolbar>
