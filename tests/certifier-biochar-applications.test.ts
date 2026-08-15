@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applications,
@@ -233,7 +233,11 @@ afterAll(async () => {
     if (id) await db.delete(table).where(eq((table as never)["id"], id));
   };
   await db.delete(certifierBiocharApplications).where(
-    eq(certifierBiocharApplications.organizationId, TEST_ORG_ID),
+    and(
+      eq(certifierBiocharApplications.organizationId, TEST_ORG_ID),
+      eq(certifierBiocharApplications.applicationId, ids.application),
+      eq(certifierBiocharApplications.creditBatchId, ids.batch),
+    ),
   );
   await cleanup(certifierStorageLocations, ids.storage);
   await cleanup(certifierProductionBatches, ids.production);
