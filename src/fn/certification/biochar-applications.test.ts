@@ -304,6 +304,30 @@ describe("ensureRemovalBiocharApplications", () => {
     });
   });
 
+  it("reuses a confirmed application across a superseding Removal version", async () => {
+    mocks.client.get.mockResolvedValue(page([]));
+    mocks.client.post.mockResolvedValue(remote());
+    await ensure();
+
+    vi.clearAllMocks();
+    mocks.client.get.mockResolvedValue(page([remote()]));
+    await ensureRemovalBiocharApplications({
+      orgCtx,
+      removalId: "removal-1",
+      externalRemovalId: "ghg-superseding-version",
+      submissionRow: { id: "submission-2" } as CertificationSubmissionRow,
+      intents: [intent()],
+      log,
+    });
+
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.registration).toMatchObject({
+      lifecycleStatus: "confirmed",
+      externalApplicationId: "bca-test",
+      observedGhgEntryId: EXTERNAL_REMOVAL_ID,
+    });
+  });
+
   it("rejects remote payload drift without POSTing", async () => {
     mocks.client.get.mockResolvedValue(
       page([remote({ production_batch_id: "ptb-other" })]),

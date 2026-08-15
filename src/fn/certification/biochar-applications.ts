@@ -209,7 +209,7 @@ async function ensureBiocharApplication(args: {
         resumed: true,
         create: async () => {
           const remote = await createBiocharApplication(client, body);
-          assertRemoteMatches(remote, body, args.externalRemovalId);
+          assertRemoteMatchesCurrentRemoval(remote, body, args.externalRemovalId);
           confirmedRemote = remote;
           return remote.id;
         },
@@ -220,7 +220,15 @@ async function ensureBiocharApplication(args: {
           );
           if (remote) {
             try {
-              assertRemoteMatches(remote, body, args.externalRemovalId);
+              if (registration!.lifecycleStatus === "confirmed") {
+                assertRemoteMatchesJournal(remote, body, registration!);
+              } else {
+                assertRemoteMatchesCurrentRemoval(
+                  remote,
+                  body,
+                  args.externalRemovalId,
+                );
+              }
             } catch (error) {
               await markBiocharApplicationDrift(
                 args.orgCtx,
@@ -282,13 +290,20 @@ async function ensureBiocharApplication(args: {
   );
 }
 
-function assertRemoteMatches(
+function assertRemotePayloadMatches(
+  remote: IsometricBiocharApplication,
+  body: Parameters<typeof biocharApplicationMismatchMessage>[1],
+): void {
+  const mismatch = biocharApplicationMismatchMessage(remote, body);
+  if (mismatch) throw new SafeError(mismatch);
+}
+
+function assertRemoteMatchesCurrentRemoval(
   remote: IsometricBiocharApplication,
   body: Parameters<typeof biocharApplicationMismatchMessage>[1],
   externalRemovalId: string,
 ): void {
-  const mismatch = biocharApplicationMismatchMessage(remote, body);
-  if (mismatch) throw new SafeError(mismatch);
+  assertRemotePayloadMatches(remote, body);
   if (!remote.ghg_entry_id && !remote.removal_id) {
     throw new SafeError(
       `Isometric Biochar Application ${remote.id} is not linked to a GHG Entry yet. Retry after Isometric records the association.`,
@@ -300,6 +315,30 @@ function assertRemoteMatches(
   ) {
     throw new SafeError(
       `Isometric Biochar Application ${remote.id} is linked to a different GHG Entry. Resolve the registry identity before retrying.`,
+    );
+  }
+}
+
+function assertRemoteMatchesJournal(
+  remote: IsometricBiocharApplication,
+  body: Parameters<typeof biocharApplicationMismatchMessage>[1],
+  registration: {
+    observedGhgEntryId: string | null;
+    observedRemovalId: string | null;
+  },
+): void {
+  assertRemotePayloadMatches(remote, body);
+  if (!registration.observedGhgEntryId && !registration.observedRemovalId) {
+    throw new SafeError(
+      `Isometric Biochar Application ${remote.id} has no confirmed journal association. Resolve the registry identity before retrying.`,
+    );
+  }
+  if (
+    remote.ghg_entry_id !== registration.observedGhgEntryId ||
+    remote.removal_id !== registration.observedRemovalId
+  ) {
+    throw new SafeError(
+      `Isometric Biochar Application ${remote.id} is linked to a different GHG Entry than its confirmed journal association. Resolve the registry identity before retrying.`,
     );
   }
 }
