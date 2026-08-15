@@ -22,9 +22,9 @@ export function deriveWeighbridgeWetMass(
 }
 
 interface TruckWeighingSectionProps {
-  arrivalMassKg: unknown;
-  departureMassKg: unknown;
-  wetMassKg: unknown;
+  arrivalMassKg: number | null | undefined;
+  departureMassKg: number | null | undefined;
+  wetMassKg: number | null | undefined;
   wetMassLabel: string;
   arrivalRegister: UseFormRegisterReturn;
   departureRegister: UseFormRegisterReturn;
