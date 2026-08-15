@@ -61,7 +61,7 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import {
   useFeedstockTypeFilter,
   useFeedstockTypeFilterOptions,
-} from "./feedstock-type-filter";
+} from "./use-feedstock-type-filter";
 
 // ============================================
 // Column Definitions

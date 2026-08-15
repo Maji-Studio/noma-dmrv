@@ -13,7 +13,7 @@ import { useFeedstockStats } from "@/hooks/use-feedstocks";
 import {
   useFeedstockTypeFilter,
   useFeedstockTypeFilterOptions,
-} from "./feedstock-type-filter";
+} from "./use-feedstock-type-filter";
 
 // ============================================
 // Component
