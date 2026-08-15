@@ -88,9 +88,9 @@ export function buildCreateBiocharApplicationRequest(
     args.truckMassOnDepartureKg,
     `Application ${code} needs a valid observed truck mass after unloading.`,
   );
-  if (args.truckMassOnArrivalKg < args.truckMassOnDepartureKg) {
+  if (args.truckMassOnArrivalKg <= args.truckMassOnDepartureKg) {
     throw new SafeError(
-      `Application ${code} has a truck mass after unloading that exceeds the mass before unloading. Correct the delivery measurements before submitting.`,
+      `Application ${code} needs a truck mass before unloading that exceeds the mass after unloading when applied biochar mass is positive. Correct the delivery measurements before submitting.`,
     );
   }
   if (!ISO_DATE_PATTERN.test(args.applicationDate)) {

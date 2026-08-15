@@ -94,6 +94,14 @@ describe("Biochar Application request", () => {
       "exceeds",
       { truckMassOnArrivalKg: 100, truckMassOnDepartureKg: 101 },
     ],
+    [
+      "exceeds",
+      { truckMassOnArrivalKg: 100, truckMassOnDepartureKg: 100 },
+    ],
+    [
+      "exceeds",
+      { truckMassOnArrivalKg: 0, truckMassOnDepartureKg: 0 },
+    ],
   ] as const)("fails closed for invalid magnitudes: %s", (message, overrides) => {
     expect(() =>
       buildCreateBiocharApplicationRequest({ ...BASE, ...overrides }),

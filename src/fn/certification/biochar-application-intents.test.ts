@@ -130,7 +130,7 @@ describe("compileBiocharApplicationIntents", () => {
     mocks.getInputs.mockResolvedValue([
       input({ deliveredWetMassKg: 12_000, truckMassOnArrivalKg: 0 }),
     ]);
-    await expect(compile()).rejects.toThrow(/after unloading.*exceeds/i);
+    await expect(compile()).rejects.toThrow(/before unloading.*exceeds/i);
   });
 
   it("fails closed when an Application spans multiple credit batches", async () => {
@@ -166,8 +166,22 @@ describe("compileBiocharApplicationIntents", () => {
     mocks.getInputs.mockResolvedValue([
       input({ truckMassOnArrivalKg: 2_000, truckMassOnDepartureKg: 2_001 }),
     ]);
-    await expect(compile()).rejects.toThrow(/after unloading.*exceeds/i);
+    await expect(compile()).rejects.toThrow(/before unloading.*exceeds/i);
   });
+
+  it.each([
+    [2_000, 2_000],
+    [0, 0],
+  ])(
+    "rejects equal truck masses for a positive application (%d/%d)",
+    async (truckMassOnArrivalKg, truckMassOnDepartureKg) => {
+      mocks.getInputs.mockResolvedValue([
+        input({ truckMassOnArrivalKg, truckMassOnDepartureKg }),
+      ]);
+
+      await expect(compile()).rejects.toThrow(/before unloading.*exceeds/i);
+    },
+  );
 
   it("leaves production Removal compilation available without application sync", async () => {
     await expect(
