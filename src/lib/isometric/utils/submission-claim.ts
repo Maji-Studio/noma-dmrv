@@ -217,9 +217,6 @@ export function decideSubmissionClaim(
             reason: "dataupload-rejected-restart",
           };
         }
-        if (latest.payloadHash === payloadHash && latest.externalId) {
-          return decideDataUploadResume({ latest, dataUploadResume, now });
-        }
         // A local failure may have happened after step 3 was journaled but
         // before externalId was finalized. Reconcile that ID instead of
         // minting a duplicate DataUploadSubmission.

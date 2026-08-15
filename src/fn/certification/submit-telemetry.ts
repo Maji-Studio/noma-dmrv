@@ -17,6 +17,7 @@ import {
 import {
   getLatestSubmission,
   insertDraftSubmissionWithMappingLock,
+  recordTerminalStatusIfCurrent,
   resetSubmissionToDraftWithMappingLock,
   type MappingClaimGuard,
 } from "@/data-access/certification-submissions";
@@ -298,8 +299,15 @@ export async function submitTelemetry(
         "This Removal changed while the telemetry submission was being prepared. Reload and try again.",
       );
     case "return-existing": {
+      const expectedStatus = latest!.status;
       const status = await refreshStatus(client, claim.externalId);
-      await recordRemoteDataUploadStatus(orgCtx, latest!.id, status);
+      await recordRemoteDataUploadStatus(
+        orgCtx,
+        latest!.id,
+        status,
+        undefined,
+        expectedStatus,
+      );
       return {
         removalId: args.removalId,
         dataUploadSubmissionId: claim.externalId,
@@ -566,6 +574,7 @@ async function recordRemoteDataUploadStatus(
     externalId: string;
     supersedePreviousId?: string | null;
   },
+  expectedStatus?: CertificationSubmissionRow["status"],
 ): Promise<void> {
   if (identity) {
     await markSubmissionSubmitted(orgCtx, rowId, identity);
@@ -575,21 +584,33 @@ async function recordRemoteDataUploadStatus(
     [SUBMISSION_METADATA_KEYS.lastError]: remote.error_message ?? null,
   };
   if (remote.status === DATA_UPLOAD_STATUSES.completed) {
-    await setSubmissionTerminalStatus(orgCtx, rowId, {
+    const terminalUpdate = {
       status: "accepted",
       metadataPatch,
-    });
+    } as const;
+    await (expectedStatus
+      ? recordTerminalStatusIfCurrent(orgCtx, rowId, {
+          ...terminalUpdate,
+          expectedStatus,
+        })
+      : setSubmissionTerminalStatus(orgCtx, rowId, terminalUpdate));
     return;
   }
   if (remote.status === DATA_UPLOAD_STATUSES.failed) {
-    await setSubmissionTerminalStatus(orgCtx, rowId, {
+    const terminalUpdate = {
       status: "rejected",
       metadataPatch: {
         ...metadataPatch,
         [SUBMISSION_METADATA_KEYS.lastError]:
           remote.error_message ?? "Isometric processing failed",
       },
-    });
+    } as const;
+    await (expectedStatus
+      ? recordTerminalStatusIfCurrent(orgCtx, rowId, {
+          ...terminalUpdate,
+          expectedStatus,
+        })
+      : setSubmissionTerminalStatus(orgCtx, rowId, terminalUpdate));
     return;
   }
   await updateSubmissionMetadata(orgCtx, rowId, metadataPatch);

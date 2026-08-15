@@ -23,6 +23,7 @@ vi.mock("@/data-access/certification", () => ({
 vi.mock("@/data-access/certification-submissions", () => ({
   getLatestSubmission: vi.fn(),
   insertDraftSubmissionWithMappingLock: vi.fn(),
+  recordTerminalStatusIfCurrent: vi.fn(),
   resetSubmissionToDraftWithMappingLock: vi.fn(),
 }));
 vi.mock("@/data-access/certifier-sensors", () => ({
@@ -187,6 +188,17 @@ function installMutableLedger(
         ...((current.metadata ?? {}) as Record<string, unknown>),
         ...(args.metadataPatch ?? {}),
       };
+    },
+  );
+  vi.mocked(claims.recordTerminalStatusIfCurrent).mockImplementation(
+    async (_ctx, _rowId, args) => {
+      if (!current || current.status !== args.expectedStatus) return false;
+      current.status = args.status;
+      current.metadata = {
+        ...((current.metadata ?? {}) as Record<string, unknown>),
+        ...args.metadataPatch,
+      };
+      return true;
     },
   );
   return { current: () => current };
@@ -412,16 +424,44 @@ describe("submitTelemetry terminal retry behavior", () => {
       status: "failed",
       errorMessage: "invalid parquet shape",
     });
-    expect(ledger.setSubmissionTerminalStatus).toHaveBeenCalledWith(
+    expect(claims.recordTerminalStatusIfCurrent).toHaveBeenCalledWith(
       ORG_CTX,
       ROW_ID,
       {
         status: "rejected",
+        expectedStatus: "submitted",
         metadataPatch: {
           [SUBMISSION_METADATA_KEYS.remoteStatus]: "failed",
           [SUBMISSION_METADATA_KEYS.lastError]: "invalid parquet shape",
         },
       },
+    );
+  });
+
+  it("does not overwrite a version superseded while remote status loads", async () => {
+    const state = installMutableLedger(
+      submissionRow({
+        status: "submitted",
+        externalId: "dus_failed",
+        payloadHash: "semantic-hash",
+      }),
+    );
+    client.get.mockImplementation(async () => {
+      state.current()!.status = "superseded";
+      return {
+        id: "dus_failed",
+        status: "failed",
+        error_message: "invalid parquet shape",
+      };
+    });
+
+    await submitTelemetry(ORG_CTX, { removalId: REMOVAL_ID });
+
+    expect(state.current()?.status).toBe("superseded");
+    expect(claims.recordTerminalStatusIfCurrent).toHaveBeenCalledWith(
+      ORG_CTX,
+      ROW_ID,
+      expect.objectContaining({ expectedStatus: "submitted" }),
     );
   });
 

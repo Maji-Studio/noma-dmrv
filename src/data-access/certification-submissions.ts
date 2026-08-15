@@ -139,6 +139,36 @@ export async function recordConfirmedSubmissionIdentity(
   return updated.length > 0;
 }
 
+/** Update a terminal poll result only while this remains the current version. */
+export async function recordTerminalStatusIfCurrent(
+  ctx: OrgContext,
+  id: string,
+  args: {
+    status: "accepted" | "rejected";
+    expectedStatus: CertificationSubmissionRow["status"];
+    metadataPatch: Record<string, unknown>;
+  },
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const updated = await db
+    .update(certificationSubmissions)
+    .set({
+      status: args.status,
+      lockedAt: null,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch)}::jsonb`,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.status, args.expectedStatus),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    )
+    .returning({ id: certificationSubmissions.id });
+  return updated.length > 0;
+}
+
 // =====================================================================
 // claimSubmissionDraft — the single entry point
 // =====================================================================
