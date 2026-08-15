@@ -107,12 +107,12 @@ export function TruckWeighingSection({
       {mismatch && observedWetMassKg !== null && (
         <div
           role="alert"
-          className="flex items-start gap-12 border border-[var(--color-signal-amber)] bg-[var(--color-signal-amber)]/5 p-16"
+          className="flex items-start gap-12 border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-16"
         >
           <Warning
             size={20}
             weight="fill"
-            className="mt-1 shrink-0 text-[var(--color-signal-amber)]"
+            className="mt-1 shrink-0 text-[var(--color-signal-orange-strong)]"
           />
           <p className="body-small text-[var(--color-text-secondary)]">
             {wetMassLabel} is {wetMassKg.toFixed(DISPLAY_DECIMAL_PLACES)} kg,
