@@ -556,9 +556,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           <DataTable.Controls>
             <DataTable.FilterSelect
               value={feedstockTypeId}
+              // No explicit page reset: the type is part of the pagination
+              // scope key, so useListPagination already restarts at page 1.
               onChange={(event) => {
                 void setFeedstockTypeId(event.target.value || null);
-                setCurrentPage(1);
               }}
               aria-label="Filter feedstocks by feedstock type"
             >
