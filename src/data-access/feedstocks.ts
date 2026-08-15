@@ -18,7 +18,10 @@ import {
   productionRunFeedstocks,
   transportLegs,
 } from "@/db/schema";
-import type { FeedstockFilterData } from "@/schemas/feedstocks";
+import type {
+  FeedstockFilterData,
+  FeedstockStatsFilterData,
+} from "@/schemas/feedstocks";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import {
@@ -375,15 +378,22 @@ export async function getFeedstockById(
 
 export async function getFeedstockStats(
   ctx: OrgContext,
-  facilityId?: string
+  scope?: Partial<FeedstockStatsFilterData>
 ): Promise<FeedstockStats> {
   requireOrgScope(ctx);
+
+  const { facilityId, feedstockTypeId } = scope ?? {};
 
   const conditions: SQL[] = [
     eq(feedstocks.organizationId, ctx.organizationId),
     isNull(feedstocks.archivedAt),
   ];
   if (facilityId) conditions.push(eq(feedstocks.facilityId, facilityId));
+  // The same predicate the list applies, so the cards never summarise rows the
+  // operator cannot see below them.
+  if (feedstockTypeId) {
+    conditions.push(eq(feedstocks.feedstockTypeId, feedstockTypeId));
+  }
   const whereClause = and(...conditions);
 
   // org-scope-ok: whereClause includes the active organization predicate.
