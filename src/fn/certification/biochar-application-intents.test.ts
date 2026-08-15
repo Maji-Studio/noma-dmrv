@@ -10,10 +10,7 @@ vi.mock("@/data-access/certifier-biochar-applications", () => ({
   getBiocharApplicationRegistryInputs: mocks.getInputs,
 }));
 
-import {
-  buildBiocharApplicationRequestFromIntent,
-  compileBiocharApplicationIntents,
-} from "./biochar-application-intents";
+import { compileBiocharApplicationIntents } from "./biochar-application-intents";
 
 const APPLICATION_ID = "11111111-1111-4111-8111-111111111111";
 const CREDIT_BATCH_ID = "22222222-2222-4222-8222-222222222222";
@@ -146,6 +143,23 @@ describe("compileBiocharApplicationIntents", () => {
         },
       ]),
     ).rejects.toThrow(/spans 2 credit batches/i);
+  });
+
+  it("fails closed when one delivery is split across multiple Applications", async () => {
+    const secondApplicationId = "44444444-4444-4444-8444-444444444444";
+    mocks.getInputs.mockResolvedValue([
+      input(),
+      input({ applicationId: secondApplicationId, applicationCode: "APP-002" }),
+    ]);
+
+    await expect(
+      compile([
+        {
+          creditBatchId: CREDIT_BATCH_ID,
+          applicationIds: [APPLICATION_ID, secondApplicationId],
+        },
+      ]),
+    ).rejects.toThrow(/split across Applications APP-001, APP-002/i);
   });
 
   it("validates chronology after resolving the truck masses", async () => {

@@ -65,6 +65,26 @@ export async function compileBiocharApplicationIntents(args: {
       "An Application in this Removal could not be loaded. Reload the Removal and submit again.",
     );
   }
+  const applicationsByDeliveryId = new Map<
+    string,
+    { deliveryCode: string; applicationCodes: string[] }
+  >();
+  for (const input of inputs) {
+    const entry = applicationsByDeliveryId.get(input.deliveryId) ?? {
+      deliveryCode: input.deliveryCode,
+      applicationCodes: [],
+    };
+    entry.applicationCodes.push(input.applicationCode);
+    applicationsByDeliveryId.set(input.deliveryId, entry);
+  }
+  const splitDelivery = [...applicationsByDeliveryId.values()].find(
+    ({ applicationCodes }) => applicationCodes.length > 1,
+  );
+  if (splitDelivery) {
+    throw new SafeError(
+      `Delivery ${splitDelivery.deliveryCode} is split across Applications ${splitDelivery.applicationCodes.sort().join(", ")}. Submit one Application per delivery until truck-mass allocation is defined.`,
+    );
+  }
 
   return applicationIds.map((applicationId) => {
     const input = inputByApplicationId.get(applicationId)!;
