@@ -39,8 +39,12 @@ vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");
 vi.mock("@/data-access/certifier-production-batches");
+vi.mock("@/data-access/certifier-biochar-applications");
 vi.mock("@/fn/certification/certify-context-core");
 vi.mock("@/fn/certification/ensure-evidence-ledgers");
+vi.mock("@/fn/certification/biochar-applications", () => ({
+  ensureRemovalBiocharApplications: vi.fn(),
+}));
 // Removal submission fails closed unless every candidate document has a
 // validated mirrored Source ID. Tests that exercise missing/partial mirrors
 // override these healthy defaults.
@@ -133,6 +137,8 @@ import * as ledger from "@/data-access/certification";
 import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as productionBatchesDA from "@/data-access/certifier-production-batches";
+import * as biocharApplicationsDA from "@/data-access/certifier-biochar-applications";
+import * as biocharApplications from "@/fn/certification/biochar-applications";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
@@ -147,6 +153,8 @@ export {
   ledgerClaim,
   removalsDA,
   productionBatchesDA,
+  biocharApplicationsDA,
+  biocharApplications,
   certifyContext,
   durabilitySamples,
   evidenceLedgers,
@@ -699,6 +707,32 @@ beforeEach(() => {
   storedRows = [];
   nextLedgerRowId = 1;
   durabilityFlag.live = false;
+  vi.mocked(
+    biocharApplicationsDA.getBiocharApplicationRegistryInputs,
+  ).mockResolvedValue([
+    {
+      applicationId: APPLICATION_ID,
+      applicationCode: "APP-TEST-001",
+      applicationDate: new Date("2026-04-05T00:00:00Z"),
+      appliedTonnes: 1,
+      fieldSizeHa: 1,
+      deliveryId: "del-1",
+      deliveryCode: "DEL-TEST-001",
+      deliveredWetMassKg: 1_000,
+      truckMassOnArrivalKg: 2_000,
+      truckMassOnDepartureKg: 1_000,
+      facilityId: FACILITY_ID,
+      certifierProjectId: "cert-proj-1",
+      externalProjectId: EXTERNAL_PROJECT_ID,
+      customerLocationId: "00000000-0000-4000-8000-000000000099",
+      customerLocationName: "Test field",
+      latitude: 46.948,
+      longitude: 7.447,
+    },
+  ]);
+  vi.mocked(
+    biocharApplications.ensureRemovalBiocharApplications,
+  ).mockResolvedValue();
 
   // The claim choreography is one mocked function backed by the in-memory
   // ledger + the real pure decision core; lock/CAS/re-resolution behavior

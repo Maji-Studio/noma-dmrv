@@ -397,6 +397,16 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       kind: "entered",
       mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
+    {
+      key: "truckMassOnArrivalKg",
+      label: "Truck mass before unloading",
+      kind: "entered",
+    },
+    {
+      key: "truckMassOnDepartureKg",
+      label: "Truck mass after unloading",
+      kind: "entered",
+    },
   ],
   application: [
     // Carbon inputs for the CO2e-stored calculation

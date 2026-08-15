@@ -99,11 +99,15 @@ export {
   type IsometricStorageLocation,
 } from "./storage-locations";
 export {
-  buildBiocharApplicationRequestIfReady,
+  BIOCHAR_APPLICATION_RATE_UNIT,
+  BIOCHAR_APPLICATION_TRUCK_MASS_UNIT,
+  buildBiocharApplicationReference,
+  buildCreateBiocharApplicationRequest,
+  createBiocharApplication,
+  findBiocharApplicationBySupplierReference,
+  biocharApplicationMismatchMessage,
   type CreateBiocharApplicationRequest,
-  type BiocharApplicationBuildResult,
-  type BiocharApplicationGateReason,
-  type NetMassBiocharApplicationInput,
+  type IsometricBiocharApplication,
 } from "./biochar-applications";
 export {
   decideSubmissionClaim,

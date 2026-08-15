@@ -20,25 +20,29 @@ reference, or a later physical window still emit drift. Open member runs fail
 before that batch's registry POST.
 The behavior is covered hermetically; fresh sandbox verification is pending.
 
-## 2026-08-13 (Storage Location traceability staged)
+## 2026-08-15 (Storage Location and Biochar Application Removal integration)
 
-One customer location now represents one reusable agricultural application
-site per Isometric project. Organization Owners/Admins can explicitly synchronize that site from an
-Application detail sheet. The action reconciles by a stable supplier reference
-before creating an Isometric `biochar_field` Storage Location, journals the
-confirmed `slc_...` identity, checks the remote record for drift, and surfaces
-not-synced, synced, drifted, and failed states with an explicit retry. Project
-mapping changes are blocked after a site is registered. Application create and update actions do not
-perform registry writes, and local name or coordinate drift never triggers an
-automatic PATCH.
+One customer location represents one reusable agricultural application site per
+Isometric project. Organization Owners/Admins can explicitly synchronize that
+site from an Application detail sheet. Sandbox Removal submission also ensures
+all required Production Batches, then Storage Locations, then Biochar
+Applications before completing the submission. Storage Location reconciliation
+and drift handling remain unchanged; application create and update actions do
+not perform registry writes, and local name or coordinate drift never triggers
+an automatic PATCH.
 
-The journal schema also reserves one Biochar Application identity per
-Application and credit-batch allocation slice. The Biochar Application adapter
-remains hard-gated: noma records net delivered/applied mass but the current
-request requires separate arrival and departure truck observations. No
-Biochar Application request is built or posted until Isometric confirms the
-mass encoding, application-rate unit and basis, multi-batch allocation, and
-correction lifecycle.
+Delivery create/edit now records optional observed truck mass before and after
+unloading in kilograms. As a temporary sandbox fallback, Removal preflight uses
+the delivery's positive wet mass for arrival and `0 kg` for departure when the
+corresponding observations are absent; explicit observations remain
+authoritative. It still requires a positive field size for every included
+Application, refuses multi-batch allocation, and snapshots the resolved values
+before any registry mutation. The Biochar Application
+journal claims the exact payload before POST and reconciles bounded list pages
+by its versioned environment/provider reference after retries. Rate is applied
+tonnes divided by field hectares (`t/ha`); truck mass values use `kg`.
+Production remains explicitly blocked for both Storage Location and Biochar
+Application synchronization.
 
 This traceability layer does not change the GHG Entry `CO2 stored` component,
 its payload hash, or the existing sequestration calculation. Measurement

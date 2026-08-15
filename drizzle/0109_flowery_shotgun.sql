@@ -1,0 +1,5 @@
+ALTER TABLE "deliveries" ADD COLUMN "truck_mass_on_arrival_kg" numeric(14, 3);--> statement-breakpoint
+ALTER TABLE "deliveries" ADD COLUMN "truck_mass_on_departure_kg" numeric(14, 3);--> statement-breakpoint
+ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_truck_mass_on_arrival_non_negative" CHECK ("deliveries"."truck_mass_on_arrival_kg" is null or "deliveries"."truck_mass_on_arrival_kg" >= 0);--> statement-breakpoint
+ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_truck_mass_on_departure_non_negative" CHECK ("deliveries"."truck_mass_on_departure_kg" is null or "deliveries"."truck_mass_on_departure_kg" >= 0);--> statement-breakpoint
+ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_truck_mass_arrival_gte_departure" CHECK ("deliveries"."truck_mass_on_arrival_kg" is null or "deliveries"."truck_mass_on_departure_kg" is null or "deliveries"."truck_mass_on_arrival_kg" >= "deliveries"."truck_mass_on_departure_kg");
