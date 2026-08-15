@@ -38,7 +38,6 @@ import {
   useUpdateFeedstock,
   useDeleteFeedstock,
 } from "@/hooks/use-feedstocks";
-import { useFeedstockTypes } from "@/hooks/use-entities";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useListPagination,
@@ -59,7 +58,10 @@ import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
-import { useFeedstockTypeFilter } from "./feedstock-type-filter";
+import {
+  useFeedstockTypeFilter,
+  useFeedstockTypeFilterOptions,
+} from "./feedstock-type-filter";
 
 // ============================================
 // Column Definitions
@@ -262,7 +264,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   );
 
   // Data
-  const { data: feedstockTypeOptions } = useFeedstockTypes();
+  const feedstockTypeOptions = useFeedstockTypeFilterOptions();
   const { data: feedstocksData, isLoading, error: fetchError } = useFeedstocks(
     {
       ...(debouncedSearch ? { search: debouncedSearch } : {}),
@@ -556,7 +558,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
               aria-label="Filter feedstocks by feedstock type"
             >
               <option value="">All feedstock types</option>
-              {feedstockTypeOptions?.map((option) => (
+              {feedstockTypeOptions.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.name}
                 </option>

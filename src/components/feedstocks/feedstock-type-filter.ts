@@ -10,9 +10,22 @@
 "use client";
 
 import { parseAsString, useQueryState } from "nuqs";
+import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 
 /** Query-string key for the active feedstock type. */
 export const FEEDSTOCK_TYPE_FILTER_PARAM = "feedstockType";
+
+/**
+ * Selectable types for the filter, name-ordered and without the archived ones.
+ *
+ * The searchable entity-option endpoint caps its result at 50 rows in no
+ * particular order, which is fine for a type-ahead and wrong for a dropdown an
+ * operator scans, so the filter reads the full org list instead.
+ */
+export function useFeedstockTypeFilterOptions() {
+  const { data } = useFeedstockTypeList();
+  return data?.filter((feedstockType) => !feedstockType.archivedAt) ?? [];
+}
 
 export function useFeedstockTypeFilter() {
   const [param, setFeedstockTypeId] = useQueryState(

@@ -10,8 +10,10 @@ import { formatMass } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFeedstockStats } from "@/hooks/use-feedstocks";
-import { useFeedstockTypes } from "@/hooks/use-entities";
-import { useFeedstockTypeFilter } from "./feedstock-type-filter";
+import {
+  useFeedstockTypeFilter,
+  useFeedstockTypeFilterOptions,
+} from "./feedstock-type-filter";
 
 // ============================================
 // Component
@@ -35,9 +37,9 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
 
   // Shares the cached option list with the toolbar's filter select, so naming
   // the active scope costs no extra request.
-  const { data: feedstockTypeOptions } = useFeedstockTypes();
+  const feedstockTypeOptions = useFeedstockTypeFilterOptions();
   const activeTypeName = feedstockTypeId
-    ? feedstockTypeOptions?.find((option) => option.id === feedstockTypeId)?.name
+    ? feedstockTypeOptions.find((option) => option.id === feedstockTypeId)?.name
     : undefined;
   const scopeCaption = feedstockTypeId
     ? `Totals cover ${activeTypeName ?? "the selected feedstock type"} only.`

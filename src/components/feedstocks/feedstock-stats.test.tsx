@@ -10,8 +10,8 @@ vi.mock("nuqs", () => ({
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: "facility-1" }),
 }));
-vi.mock("@/hooks/use-entities", () => ({
-  useFeedstockTypes: () => ({ data: [] }),
+vi.mock("@/hooks/use-feedstock-types", () => ({
+  useFeedstockTypeList: () => ({ data: [] }),
 }));
 
 const stats = vi.hoisted(() => ({
