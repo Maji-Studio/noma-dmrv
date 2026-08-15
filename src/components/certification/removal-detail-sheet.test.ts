@@ -80,8 +80,8 @@ describe("RemovalDetailSheet sync history contract", () => {
     );
 
     expect(source).toContain("useFacilityCertifierSummary");
-    expect(source).toContain(
-      "certifierSummary?.mapping?.externalProjectId ?? null",
+    expect(source).toMatch(
+      /certifierSummary\?\.mapping\?\.externalProjectId\s*\?\?\s*null/,
     );
     expect(source).toContain("<RemovalStorageSitesField");
   });
