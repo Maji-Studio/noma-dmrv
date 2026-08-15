@@ -234,10 +234,11 @@ describe("submitRemoval — happy path", () => {
         .invocationCallOrder[0],
     );
     expect(
-      vi.mocked(biocharApplications.ensureRemovalBiocharApplications).mock
+      vi.mocked(ledger.markSubmissionSubmitted).mock
         .invocationCallOrder[0],
     ).toBeLessThan(
-      vi.mocked(ledger.markSubmissionSubmitted).mock.invocationCallOrder[0],
+      vi.mocked(biocharApplications.ensureRemovalBiocharApplications).mock
+        .invocationCallOrder[0],
     );
     expect(progress).toHaveBeenCalledWith({
       step: "removal.sending_inputs",

@@ -886,6 +886,15 @@ async function runRemovalSubmission({
       reconcileRemoval(client, { supplierRefId: transport.removalSupplierRef }).then(
         supplierRefLookup,
       ),
+    onConfirmed: (externalId) =>
+      markSubmissionSubmitted(orgCtx, row.id, {
+        externalId,
+        supersedePreviousId,
+        productionEmissionsClaim: {
+          removalId,
+          creditBatchIds: claimBatchIds,
+        },
+      }),
     failureMessagePrefix: "Removal POST failed",
     onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
     log,
@@ -901,14 +910,6 @@ async function runRemovalSubmission({
     onExternalMutation: (state) =>
       recordRemovalExternalMutation(attempt, state),
     log,
-  });
-  await markSubmissionSubmitted(orgCtx, row.id, {
-    externalId: externalRemovalId,
-    supersedePreviousId,
-    productionEmissionsClaim: {
-      removalId,
-      creditBatchIds: claimBatchIds,
-    },
   });
   onProgress?.({ step: "removal.creating", state: "complete" });
 
