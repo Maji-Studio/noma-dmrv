@@ -1,8 +1,7 @@
 import { Warning } from "@phosphor-icons/react/dist/ssr";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
-import { FormField } from "./form-field";
-import { FormInput } from "./form-input";
+import { FormField, FormInput } from "@/components/forms";
 
 const WEIGHBRIDGE_MISMATCH_TOLERANCE_RATIO = 0.01;
 const DISPLAY_DECIMAL_PLACES = 2;

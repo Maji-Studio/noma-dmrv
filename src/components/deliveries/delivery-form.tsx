@@ -13,7 +13,7 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, ScalesIcon, MapPinIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MoistureField, WetMassField, makeCertFieldStatus, ResolvedErrorRevalidator, StockReconciliationLink, TruckWeighingSection } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MoistureField, WetMassField, makeCertFieldStatus, ResolvedErrorRevalidator, StockReconciliationLink } from "@/components/forms";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
@@ -45,6 +45,7 @@ import {
 } from "@/lib/delivery-order-balance";
 import { useEntityById } from "@/hooks/use-entities";
 import { DeliveryMassPreview } from "./delivery-mass-preview";
+import { TruckWeighingSection } from "./truck-weighing-section";
 
 // ============================================
 // Constants for select options
