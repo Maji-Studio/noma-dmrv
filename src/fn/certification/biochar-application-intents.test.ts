@@ -100,7 +100,7 @@ describe("compileBiocharApplicationIntents", () => {
     await expect(compile()).rejects.toThrow(/field size greater than 0 ha/i);
   });
 
-  it("temporarily falls back to delivered wet mass and zero when observations are absent", async () => {
+  it("fails closed when observed truck masses are absent", async () => {
     mocks.getInputs.mockResolvedValue([
       input({
         deliveredWetMassKg: 3_000,
@@ -109,21 +109,7 @@ describe("compileBiocharApplicationIntents", () => {
       }),
     ]);
 
-    const [intent] = await compile();
-    expect(intent).toMatchObject({
-      truckMassOnArrivalKg: 3_000,
-      truckMassOnDepartureKg: 0,
-    });
-    expect(
-      buildBiocharApplicationRequestFromIntent({
-        intent,
-        externalProductionBatchId: "ptb-test",
-        externalStorageLocationId: "slc-test",
-      }),
-    ).toMatchObject({
-      truck_mass_on_arrival: { magnitude: 3_000, unit: "kg" },
-      truck_mass_on_departure: { magnitude: 0, unit: "kg" },
-    });
+    await expect(compile()).rejects.toThrow(/observed truck masses before and after/i);
   });
 
   it("keeps explicit truck observations authoritative", async () => {
@@ -143,25 +129,11 @@ describe("compileBiocharApplicationIntents", () => {
     ]);
   });
 
-  it.each([null, 0, Number.NaN])(
-    "fails closed without an observed or usable delivered arrival mass (%s)",
-    async (deliveredWetMassKg) => {
-      mocks.getInputs.mockResolvedValue([
-        input({
-          deliveredWetMassKg,
-          truckMassOnArrivalKg: null,
-          truckMassOnDepartureKg: null,
-        }),
-      ]);
-      await expect(compile()).rejects.toThrow(/positive delivered wet mass/i);
-    },
-  );
-
-  it("does not replace an explicit invalid arrival observation with the fallback", async () => {
+  it("does not replace an explicit invalid arrival observation", async () => {
     mocks.getInputs.mockResolvedValue([
       input({ deliveredWetMassKg: 12_000, truckMassOnArrivalKg: 0 }),
     ]);
-    await expect(compile()).rejects.toThrow(/observed truck mass before unloading/i);
+    await expect(compile()).rejects.toThrow(/after unloading.*exceeds/i);
   });
 
   it("fails closed when an Application spans multiple credit batches", async () => {

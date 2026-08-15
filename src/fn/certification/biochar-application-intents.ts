@@ -83,23 +83,11 @@ export async function compileBiocharApplicationIntents(args: {
         `Application ${input.applicationCode} needs a field size greater than 0 ha before submitting.`,
       );
     }
-    const deliveredWetMassKg = input.deliveredWetMassKg;
-    const fallbackArrivalKg =
-      deliveredWetMassKg != null &&
-      Number.isFinite(deliveredWetMassKg) &&
-      deliveredWetMassKg > 0
-        ? deliveredWetMassKg
-        : null;
-    const truckMassOnArrivalKg =
-      input.truckMassOnArrivalKg ?? fallbackArrivalKg;
-    const truckMassOnDepartureKg = input.truckMassOnDepartureKg ?? 0;
-    if (
-      truckMassOnArrivalKg == null ||
-      !Number.isFinite(truckMassOnArrivalKg) ||
-      truckMassOnArrivalKg <= 0
-    ) {
+    const truckMassOnArrivalKg = input.truckMassOnArrivalKg;
+    const truckMassOnDepartureKg = input.truckMassOnDepartureKg;
+    if (truckMassOnArrivalKg == null || truckMassOnDepartureKg == null) {
       throw new SafeError(
-        `Application ${input.applicationCode} needs either an observed truck mass before unloading or a positive delivered wet mass on delivery ${input.deliveryCode} before submitting.`,
+        `Application ${input.applicationCode} needs observed truck masses before and after unloading on delivery ${input.deliveryCode} before submitting.`,
       );
     }
     if (!input.customerLocationId) {
