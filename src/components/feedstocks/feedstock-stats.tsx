@@ -55,10 +55,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
     <div className="flex flex-col gap-12">
       {/* Bare <p> would lose the caption type class to the unlayered global
           `p` rule in globals.css, so the scope line is a div. */}
-      <div
-        className="body-caption text-[var(--color-text-tertiary)]"
-        data-testid="feedstock-stats-scope"
-      >
+      <div className="body-caption text-[var(--color-text-tertiary)]">
         {scopeCaption}
       </div>
 
