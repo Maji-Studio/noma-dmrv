@@ -72,6 +72,15 @@ describe("delivery truck observations", () => {
         truckMassOnDepartureKg: 15_000,
       });
       expect(result.success).toBe(false);
+      if (result.success) return;
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["truckMassOnDepartureKg"],
+            message: expect.stringMatching(/cannot exceed/i),
+          }),
+        ]),
+      );
     },
   );
 
