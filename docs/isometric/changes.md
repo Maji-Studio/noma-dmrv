@@ -1,5 +1,19 @@
 # Isometric Docs Change Log
 
+## 2026-08-16 (1000-year Removal grouping and local draft recovery)
+
+- A 1000-year facility can group only one credit batch into each Removal. The
+  wizard enforces this before Continue, and the authoritative transaction
+  rechecks the locked facility tier before creating a Removal or assigning
+  application slices. The 200-year multi-batch flow is unchanged.
+- An authenticated operator can discard a purely local Removal draft after
+  confirmation. Recovery releases only that Removal's application-slice
+  memberships and deletes its local row in one transaction.
+- Recovery refuses any Removal with a submission ledger row, sync history,
+  production claim, reporting dates, or GHG Statement membership. It shares
+  the submission advisory lock so a concurrent claim cannot create orphaned
+  history or race the discard.
+
 ## 2026-08-16 (whole-batch production-claim concurrency hardening)
 
 - A Removal now reserves all unclaimed member credit batches atomically before

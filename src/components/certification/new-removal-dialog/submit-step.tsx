@@ -24,9 +24,11 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { Button, buttonVariants } from "@/components/ui";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
+  useDiscardRemovalDraft,
   useRemovalCompilation,
 } from "@/hooks/use-certification";
 import type { useSubmitRemoval } from "@/hooks/use-certification";
@@ -72,8 +74,10 @@ export function SubmitStep({
 }: SubmitStepProps) {
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
+  const discardMutation = useDiscardRemovalDraft();
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastConfirmProduction, setLastConfirmProduction] = useState(false);
   const [progressUpdates, setProgressUpdates] = useState<
@@ -92,6 +96,42 @@ export function SubmitStep({
   );
   const requirementsMet =
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
+  const canDiscardLocalDraft =
+    ctx.latestSubmission === null && ctx.linkedGhgStatement === null;
+
+  const discardDialog = (
+    <DeleteConfirmDialog
+      isOpen={discardConfirmOpen}
+      title="Discard Removal draft?"
+      message="This releases its credit batches so you can group them into separate Removals. This action cannot be undone."
+      onCancel={() => {
+        setDiscardConfirmOpen(false);
+        discardMutation.reset();
+      }}
+      onConfirm={() => {
+        discardMutation.mutate(
+          { facilityId, removalId },
+          {
+            onSuccess: () => {
+              setDiscardConfirmOpen(false);
+              toast.success(
+                "Removal draft discarded. Credit batches are available again.",
+              );
+              onDone();
+            },
+          },
+        );
+      }}
+      isPending={discardMutation.isPending}
+      errorMessage={
+        discardMutation.error instanceof Error
+          ? discardMutation.error.message
+          : undefined
+      }
+      confirmLabel="Discard draft"
+      pendingLabel="Discarding..."
+    />
+  );
 
   const fireSubmit = (confirmProduction = false) => {
     if (rejectedWithExternal) {
@@ -324,7 +364,14 @@ export function SubmitStep({
           alert is only for what the last submit attempt returned. */}
       {submitError && <ServerError message={submitError} />}
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-12">
+        {canDiscardLocalDraft ? (
+          <Button variant="default" onClick={() => setDiscardConfirmOpen(true)}>
+            Discard draft
+          </Button>
+        ) : (
+          <span />
+        )}
         {requirementsMet ? (
           submitButton
         ) : (
@@ -337,6 +384,7 @@ export function SubmitStep({
       </div>
 
       {confirmDialog}
+      {discardDialog}
     </div>
   );
 }

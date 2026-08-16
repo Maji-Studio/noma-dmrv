@@ -375,6 +375,11 @@ async function createDraft<H>(
     const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
       await lockAndVerifyMapping(ctx, tx, args.guard);
       await lockSubmissionArtifact(tx, args.key);
+      // Recovery may delete a purely local Removal after the optimistic
+      // anchor read above but before this authoritative claim lock. Re-check
+      // under the shared artifact lock so a concurrent discard cannot leave
+      // an orphan submission ledger row.
+      await assertSubmissionAnchorSameOrg(ctx, args.key, tx);
       if (args.mirrorDocumentIds && args.mirrorDocumentIds.length > 0) {
         await acquireMirrorLocksSorted(tx, args.mirrorDocumentIds);
       }

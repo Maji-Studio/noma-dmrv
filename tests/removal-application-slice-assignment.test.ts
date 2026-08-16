@@ -5,6 +5,8 @@ import {
   applications,
   biocharProductSourceAllocations,
   biocharProducts,
+  certificationSubmissions,
+  certifierGhgStatements,
   certifierRemovals,
   creditBatchApplications,
   creditBatchProductionRuns,
@@ -19,7 +21,10 @@ import {
   reactors,
   storageLocations,
 } from "@/db/schema";
-import { createRemovalWithCreditBatches } from "@/data-access/certifier-removals";
+import {
+  createRemovalWithCreditBatches,
+  discardLocalRemovalDraft,
+} from "@/data-access/certifier-removals";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "@/data-access/credit-batch-application-slices";
 import {
   ensureTestOrg,
@@ -30,7 +35,7 @@ import {
 beforeAll(() => ensureTestOrg());
 
 describe("Removal Application-slice assignment", () => {
-  it("rejects a partial batch selection instead of stranding a sibling slice", async () => {
+  it("enforces 1000-year grouping and safely recovers a local draft", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
@@ -181,6 +186,8 @@ describe("Removal Application-slice assignment", () => {
 
     let removalId: string | null = null;
     let laterBatchId: string | null = null;
+    let submissionId: string | null = null;
+    let ghgStatementId: string | null = null;
     try {
       const ctx = makeTestOrgContext();
       await db.transaction((tx) =>
@@ -188,6 +195,26 @@ describe("Removal Application-slice assignment", () => {
           applicationIds: [application.id],
         }),
       );
+
+      await expect(
+        createRemovalWithCreditBatches(
+          ctx,
+          facility.id,
+          batches.map((batch) => batch.id),
+        ),
+      ).rejects.toThrow(/1000-year Removal can contain one credit batch/i);
+      const removalsAfter1000YearRejection = await db
+        .select({ id: certifierRemovals.id })
+        .from(certifierRemovals)
+        .where(eq(certifierRemovals.facilityId, facility.id));
+      expect(removalsAfter1000YearRejection).toEqual([]);
+      const slicesAfter1000YearRejection = await db
+        .select({ removalId: creditBatchApplications.removalId })
+        .from(creditBatchApplications)
+        .where(eq(creditBatchApplications.applicationId, application.id));
+      expect(
+        slicesAfter1000YearRejection.every((slice) => slice.removalId == null),
+      ).toBe(true);
 
       await expect(
         createRemovalWithCreditBatches(ctx, facility.id, [batches[0].id]),
@@ -200,6 +227,11 @@ describe("Removal Application-slice assignment", () => {
       expect(afterRejectedSelection.every((slice) => slice.removalId == null)).toBe(
         true,
       );
+
+      await db
+        .update(facilities)
+        .set({ durabilityOption: "200_year" })
+        .where(eq(facilities.id, facility.id));
 
       removalId = await createRemovalWithCreditBatches(
         ctx,
@@ -243,7 +275,129 @@ describe("Removal Application-slice assignment", () => {
         .from(creditBatchApplications)
         .where(eq(creditBatchApplications.creditBatchId, laterBatch.id));
       expect(laterSlice).toEqual([{ removalId: null }]);
+
+      await expect(
+        discardLocalRemovalDraft(ctx, crypto.randomUUID(), removalId),
+      ).rejects.toThrow(/cannot be discarded/i);
+      await expect(
+        discardLocalRemovalDraft(
+          { ...ctx, organizationId: "org_without_access" },
+          facility.id,
+          removalId,
+        ),
+      ).rejects.toThrow(/cannot be discarded/i);
+
+      const [ghgStatement] = await db
+        .insert(certifierGhgStatements)
+        .values({
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          reportingPeriodEndOn: "2026-06-30",
+        })
+        .returning({ id: certifierGhgStatements.id });
+      ghgStatementId = ghgStatement.id;
+      await db
+        .update(certifierRemovals)
+        .set({ ghgStatementId })
+        .where(eq(certifierRemovals.id, removalId));
+      await expect(
+        discardLocalRemovalDraft(ctx, facility.id, removalId),
+      ).rejects.toThrow(/cannot be discarded/i);
+      await db
+        .update(certifierRemovals)
+        .set({ ghgStatementId: null })
+        .where(eq(certifierRemovals.id, removalId));
+      await db
+        .delete(certifierGhgStatements)
+        .where(eq(certifierGhgStatements.id, ghgStatementId));
+      ghgStatementId = null;
+
+      const [submission] = await db
+        .insert(certificationSubmissions)
+        .values({
+          organizationId: TEST_ORG_ID,
+          provider: "isometric",
+          submissionType: "removal",
+          localEntityType: "removal",
+          localEntityId: removalId,
+          version: 1,
+          status: "draft",
+        })
+        .returning({ id: certificationSubmissions.id });
+      submissionId = submission.id;
+      await db
+        .update(creditBatches)
+        .set({ productionEmissionsClaimReservedBySubmissionId: submission.id })
+        .where(eq(creditBatches.id, batches[0].id));
+
+      await expect(
+        discardLocalRemovalDraft(ctx, facility.id, removalId),
+      ).rejects.toThrow(/cannot be discarded/i);
+      const [preservedReservation] = await db
+        .select({
+          reservationId:
+            creditBatches.productionEmissionsClaimReservedBySubmissionId,
+        })
+        .from(creditBatches)
+        .where(eq(creditBatches.id, batches[0].id));
+      expect(preservedReservation.reservationId).toBe(submission.id);
+      const stillAssigned = await db
+        .select({ removalId: creditBatchApplications.removalId })
+        .from(creditBatchApplications)
+        .where(eq(creditBatchApplications.applicationId, application.id));
+      expect(
+        stillAssigned.filter((slice) => slice.removalId === removalId),
+      ).toHaveLength(2);
+      expect(
+        stillAssigned.filter((slice) => slice.removalId === null),
+      ).toHaveLength(1);
+
+      await db
+        .update(creditBatches)
+        .set({ productionEmissionsClaimReservedBySubmissionId: null })
+        .where(eq(creditBatches.id, batches[0].id));
+      await db
+        .delete(certificationSubmissions)
+        .where(eq(certificationSubmissions.id, submission.id));
+      submissionId = null;
+
+      await expect(
+        discardLocalRemovalDraft(ctx, facility.id, removalId),
+      ).resolves.toEqual({ releasedSliceCount: 2 });
+      const releasedSlices = await db
+        .select({ removalId: creditBatchApplications.removalId })
+        .from(creditBatchApplications)
+        .where(eq(creditBatchApplications.applicationId, application.id));
+      expect(releasedSlices.every((slice) => slice.removalId === null)).toBe(
+        true,
+      );
+      const discardedRemoval = await db
+        .select({ id: certifierRemovals.id })
+        .from(certifierRemovals)
+        .where(eq(certifierRemovals.id, removalId));
+      expect(discardedRemoval).toEqual([]);
+      removalId = null;
     } finally {
+      if (ghgStatementId) {
+        if (removalId) {
+          await db
+            .update(certifierRemovals)
+            .set({ ghgStatementId: null })
+            .where(eq(certifierRemovals.id, removalId));
+        }
+        await db
+          .delete(certifierGhgStatements)
+          .where(eq(certifierGhgStatements.id, ghgStatementId));
+      }
+      if (submissionId) {
+        await db
+          .update(creditBatches)
+          .set({ productionEmissionsClaimReservedBySubmissionId: null })
+          .where(eq(creditBatches.facilityId, facility.id));
+        await db
+          .delete(certificationSubmissions)
+          .where(eq(certificationSubmissions.id, submissionId));
+      }
       await db
         .delete(creditBatchApplications)
         .where(eq(creditBatchApplications.applicationId, application.id));

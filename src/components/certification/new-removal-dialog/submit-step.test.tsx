@@ -8,6 +8,8 @@ import { SubmitStep } from "./submit-step";
 const state = vi.hoisted(() => ({
   refresh: vi.fn(),
   toastSuccess: vi.fn(),
+  discardMutate: vi.fn(),
+  discardReset: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -35,6 +37,21 @@ vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: state.toastSuccess }),
 }));
 
+vi.mock("@/components/ui/delete-confirm-dialog", () => ({
+  DeleteConfirmDialog: ({
+    isOpen,
+    onConfirm,
+  }: {
+    isOpen: boolean;
+    onConfirm: () => void;
+  }) =>
+    isOpen ? (
+      <button type="button" onClick={onConfirm}>
+        Confirm discard
+      </button>
+    ) : null,
+}));
+
 vi.mock("@/components/ui/tooltip", () => ({
   Tooltip: ({ children }: { children: ReactNode }) => children,
 }));
@@ -44,6 +61,12 @@ vi.mock("@/components/forms", () => ({
 }));
 
 vi.mock("@/hooks/use-certification", () => ({
+  useDiscardRemovalDraft: () => ({
+    mutate: state.discardMutate,
+    isPending: false,
+    error: null,
+    reset: state.discardReset,
+  }),
   useRemovalCompilation: () => ({
     data: {
       blockers: [],
@@ -92,6 +115,7 @@ vi.mock("../submission-progress", () => ({
 const CONTEXT = {
   isProduction: false,
   latestSubmission: null,
+  linkedGhgStatement: null,
   mapping: null,
   emissionsLedger: {
     inputs: [],
@@ -126,9 +150,96 @@ beforeAll(() => {
 beforeEach(() => {
   state.refresh.mockReset();
   state.toastSuccess.mockReset();
+  state.discardMutate.mockReset();
+  state.discardReset.mockReset();
 });
 
 describe("SubmitStep", () => {
+  it("discards a local draft only after confirmation", async () => {
+    const onDone = vi.fn();
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <SubmitStep
+          removalId="removal-1"
+          facilityId="facility-1"
+          facilityName="Tanzania facility"
+          ctx={CONTEXT}
+          onDone={onDone}
+          submitMutation={
+            {
+              mutate: vi.fn(),
+              isPending: false,
+              isSuccess: false,
+              data: undefined,
+              error: null,
+              reset: vi.fn(),
+            } as never
+          }
+        />,
+      );
+    });
+
+    await act(async () => {
+      findButton(renderer!, "Discard draft")?.props.onClick();
+    });
+    expect(state.discardMutate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      findButton(renderer!, "Confirm discard")?.props.onClick();
+    });
+    expect(state.discardMutate).toHaveBeenCalledWith(
+      { facilityId: "facility-1", removalId: "removal-1" },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+
+    const options = state.discardMutate.mock.calls[0]?.[1] as {
+      onSuccess: () => void;
+    };
+    await act(async () => options.onSuccess());
+    expect(state.toastSuccess).toHaveBeenCalledWith(
+      "Removal draft discarded. Credit batches are available again.",
+    );
+    expect(onDone).toHaveBeenCalledOnce();
+
+    await act(async () => renderer?.unmount());
+  });
+
+  it("does not offer discard after submission history exists", async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <SubmitStep
+          removalId="removal-1"
+          facilityId="facility-1"
+          facilityName="Tanzania facility"
+          ctx={
+            {
+              ...CONTEXT,
+              latestSubmission: { status: "draft" },
+            } as RemovalCertifyContext
+          }
+          onDone={vi.fn()}
+          submitMutation={
+            {
+              mutate: vi.fn(),
+              isPending: false,
+              isSuccess: false,
+              data: undefined,
+              error: null,
+              reset: vi.fn(),
+            } as never
+          }
+        />,
+      );
+    });
+
+    expect(findButton(renderer!, "Discard draft")).toBeUndefined();
+    await act(async () => renderer?.unmount());
+  });
+
   it("refreshes the route after success without closing the dialog", async () => {
     const mutate = vi.fn();
     const onDone = vi.fn();
