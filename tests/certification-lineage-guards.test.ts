@@ -26,6 +26,7 @@ import { createTransportLeg } from "@/data-access/transport-legs";
 import { db } from "@/db";
 import {
   applications,
+  biocharProductSourceAllocations,
   biocharProducts,
   certificationSubmissions,
   certifierGhgStatements,
@@ -437,6 +438,97 @@ describe("certification lineage guards", () => {
       await expect(
         deleteProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId),
       ).rejects.toThrow(LOCKED_COPY);
+    });
+  });
+
+  it("keeps a production-run lock when delivery reconstruction is incomplete", async () => {
+    await withFixture(async (fixture) => {
+      const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+      const [sourceBin] = await db
+        .insert(storageLocations)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `SL-CLG-INCOMPLETE-${tag}`,
+          name: `CLG Incomplete Source ${tag}`,
+          type: "product_bin",
+          facilityId: fixture.facilityId,
+        })
+        .returning({ id: storageLocations.id });
+      const [unrelatedProduct] = await db
+        .insert(biocharProducts)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `BP-CLG-INCOMPLETE-${tag}`,
+          facilityId: fixture.facilityId,
+          massKg: 1,
+          moistureContentPercent: 0,
+          waterAddedKg: 0,
+        })
+        .returning({ id: biocharProducts.id });
+
+      try {
+        await db.insert(biocharProductSourceAllocations).values({
+          organizationId: TEST_ORG_ID,
+          biocharProductId: fixture.productId,
+          productionRunId: fixture.productionRunId,
+          sourceStorageLocationId: sourceBin.id,
+          allocatedWetMassKg: 300,
+          allocatedDryMassKg: 285,
+        });
+        await db
+          .update(biocharProducts)
+          .set({
+            linkedProductionRunId: null,
+            sourceBiocharStorageLocationId: sourceBin.id,
+          })
+          .where(eq(biocharProducts.id, fixture.productId));
+        await db
+          .update(orders)
+          .set({ biocharProductId: unrelatedProduct.id })
+          .where(eq(orders.id, fixture.orderId));
+        await db
+          .update(deliveries)
+          .set({ biocharProductId: null })
+          .where(eq(deliveries.id, fixture.deliveryId));
+
+        await expect(
+          updateProductionRun(
+            makeTestOrgContext(TEST_USER_ID),
+            fixture.productionRunId,
+            { feedstockMoisturePercent: 11 },
+          ),
+        ).rejects.toThrow(LOCKED_COPY);
+      } finally {
+        await db
+          .update(deliveries)
+          .set({ biocharProductId: fixture.productId })
+          .where(eq(deliveries.id, fixture.deliveryId));
+        await db
+          .update(orders)
+          .set({ biocharProductId: fixture.productId })
+          .where(eq(orders.id, fixture.orderId));
+        await db
+          .delete(biocharProductSourceAllocations)
+          .where(
+            eq(
+              biocharProductSourceAllocations.biocharProductId,
+              fixture.productId,
+            ),
+          );
+        await db
+          .update(biocharProducts)
+          .set({
+            linkedProductionRunId: fixture.productionRunId,
+            sourceBiocharStorageLocationId: null,
+          })
+          .where(eq(biocharProducts.id, fixture.productId));
+        await db
+          .delete(biocharProducts)
+          .where(eq(biocharProducts.id, unrelatedProduct.id));
+        await db
+          .delete(storageLocations)
+          .where(eq(storageLocations.id, sourceBin.id));
+      }
     });
   });
 

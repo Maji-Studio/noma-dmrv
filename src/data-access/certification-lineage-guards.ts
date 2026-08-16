@@ -58,7 +58,10 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
     case "sample":
       return eq(samples.id, target.entityId);
     case "application":
-      return eq(applications.id, target.entityId);
+      return or(
+        eq(applications.id, target.entityId),
+        eq(creditBatchApplications.applicationId, target.entityId),
+      )!;
     case "delivery":
       return eq(deliveries.id, target.entityId);
     case "order":
@@ -83,6 +86,16 @@ function lineageQuery(
       ghgStatementSubmissionId: ghgStatementSubmission.id,
     })
     .from(creditBatches)
+    // Removal ownership is authoritative on the batch slice itself. Join it
+    // directly so an incomplete product/delivery reconstruction cannot release
+    // a production-run or sample lock.
+    .innerJoin(
+      creditBatchApplications,
+      and(
+        eq(creditBatchApplications.creditBatchId, creditBatches.id),
+        eq(creditBatchApplications.organizationId, ctx.organizationId),
+      ),
+    )
     .innerJoin(
       creditBatchProductionRuns,
       and(eq(creditBatchProductionRuns.creditBatchId, creditBatches.id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)),
@@ -152,14 +165,6 @@ function lineageQuery(
       ),
     )
     .leftJoin(applications, and(eq(applications.deliveryId, deliveries.id), eq(applications.organizationId, ctx.organizationId)))
-    .innerJoin(
-      creditBatchApplications,
-      and(
-        eq(creditBatchApplications.creditBatchId, creditBatches.id),
-        eq(creditBatchApplications.applicationId, applications.id),
-        eq(creditBatchApplications.organizationId, ctx.organizationId),
-      ),
-    )
     .innerJoin(
       certifierRemovals,
       and(eq(certifierRemovals.id, creditBatchApplications.removalId), eq(certifierRemovals.organizationId, ctx.organizationId)),
