@@ -184,6 +184,30 @@ describe("compileBiocharApplicationIntents", () => {
     ]);
   });
 
+  it("compiles one partial Application slice for a 1000-year Removal", async () => {
+    await expect(
+      compile([
+        {
+          creditBatchId: CREDIT_BATCH_ID,
+          durabilityOption: "1000_year",
+          applicationIds: [APPLICATION_ID],
+          applicationSlices: [
+            {
+              applicationId: APPLICATION_ID,
+              allocatedWetMassKg: 7_000,
+              allocatedDryMassKg: 5_600,
+            },
+          ],
+        },
+      ]),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        creditBatchId: CREDIT_BATCH_ID,
+        appliedTonnes: 7,
+      }),
+    ]);
+  });
+
   it("rejects a missing immutable slice for a single-batch Application", async () => {
     await expect(
       compile([{ creditBatchId: CREDIT_BATCH_ID, applicationIds: [APPLICATION_ID] }]),

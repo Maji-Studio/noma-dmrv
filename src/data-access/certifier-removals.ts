@@ -5,7 +5,6 @@ import { applications } from "@/db/schema/application";
 import {
   certifierRemovals,
   certificationSubmissions,
-  certifierSyncEvents,
 } from "@/db/schema/certification";
 import {
   creditBatchApplications,
@@ -393,10 +392,10 @@ export async function listUngroupedCreditBatches(
   }));
 }
 
-// Creates a Removal and atomically assigns each selected Application's complete
-// unassigned slice set. An Application with any previously frozen sibling
-// slice is rejected; a later Application can still place newly applied mass
-// from the same physical production batch into a follow-up Removal.
+// Creates a Removal and atomically assigns the selected Application slices.
+// A 200-year Removal owns every sibling slice for each selected Application;
+// a 1000-year Removal owns only its single selected credit-batch slice because
+// each Production Batch must be submitted through a separate Removal.
 export async function createRemovalWithCreditBatches(
   ctx: OrgContext,
   facilityId: string,
@@ -429,6 +428,8 @@ export async function createRemovalWithCreditBatches(
     ) {
       throw new SafeError(THOUSAND_YEAR_REMOVAL_ERROR);
     }
+    const splitsApplicationsByBatch =
+      facility.durabilityOption === "1000_year";
 
     const batches = await tx
       .select({
@@ -509,7 +510,10 @@ export async function createRemovalWithCreditBatches(
         creditBatchApplications.creditBatchId,
       )
       .for("update");
-    if (siblingSlices.some((slice) => slice.removalId != null)) {
+    if (
+      !splitsApplicationsByBatch &&
+      siblingSlices.some((slice) => slice.removalId != null)
+    ) {
       throw new SafeError(
         "A selected Application is already partly assigned to another Removal. Keep all of that Application's credit-batch slices with its existing Removal.",
       );
@@ -525,7 +529,7 @@ export async function createRemovalWithCreditBatches(
           .map((slice) => slice.creditBatchId),
       ),
     ];
-    if (omittedSiblingBatchIds.length > 0) {
+    if (!splitsApplicationsByBatch && omittedSiblingBatchIds.length > 0) {
       throw new SafeError(
         "A selected Application also has unassigned mass in another credit batch. Select every related credit batch so the Application is assigned to one Removal in full.",
       );
@@ -547,7 +551,12 @@ export async function createRemovalWithCreditBatches(
         ),
       )
       .returning({ applicationId: creditBatchApplications.applicationId });
-    if (assigned.length !== unassignedSiblingSlices.length) {
+    const expectedAssignmentCount = splitsApplicationsByBatch
+      ? unassignedSiblingSlices.filter((slice) =>
+          selectedIdSet.has(slice.creditBatchId),
+        ).length
+      : unassignedSiblingSlices.length;
+    if (assigned.length !== expectedAssignmentCount) {
       throw new SafeError(
         "Application allocation changed while creating the Removal. Refresh and retry.",
       );
@@ -610,7 +619,7 @@ export async function discardLocalRemovalDraft(
       },
     ]);
 
-    const [[submissionHistory], [syncHistory], [productionClaim]] =
+    const [[submissionHistory], [productionClaim]] =
       await Promise.all([
         tx
           .select({ id: certificationSubmissions.id })
@@ -623,17 +632,6 @@ export async function discardLocalRemovalDraft(
                 certificationSubmissions.organizationId,
                 ctx.organizationId,
               ),
-            ),
-          )
-          .limit(1),
-        tx
-          .select({ id: certifierSyncEvents.id })
-          .from(certifierSyncEvents)
-          .where(
-            and(
-              eq(certifierSyncEvents.entityType, "removal"),
-              eq(certifierSyncEvents.entityId, removalId),
-              eq(certifierSyncEvents.organizationId, ctx.organizationId),
             ),
           )
           .limit(1),
@@ -679,7 +677,11 @@ export async function discardLocalRemovalDraft(
           .limit(1),
       ]);
 
-    if (submissionHistory || syncHistory || productionClaim) {
+    // Sync events are append-only audit records, not registry state. Local
+    // preflight/refusal events may exist without any external mutation; the
+    // sticky marker above is the authoritative pre-ledger boundary, while the
+    // submission ledger and production claim cover all later write phases.
+    if (submissionHistory || productionClaim) {
       throw new SafeError(DISCARD_REMOVAL_ERROR);
     }
 

@@ -5,17 +5,20 @@
 - A 1000-year facility can group only one credit batch into each Removal. The
   wizard enforces this before Continue, and the authoritative transaction
   rechecks the locked facility tier before creating a Removal or assigning
-  application slices. The 200-year multi-batch flow is unchanged.
+  application slices. When one physical Application spans multiple 1000-year
+  credit batches, each immutable batch slice can join its own Removal. The
+  200-year multi-batch flow still keeps the complete Application together.
 - An authenticated operator can discard a purely local Removal draft after
   confirmation. Recovery releases only that Removal's application-slice
   memberships and deletes its local row in one transaction.
-- Recovery refuses any Removal with a submission ledger row, sync history,
-  production claim, reporting dates, or GHG Statement membership. It shares
-  the submission advisory lock so a concurrent claim cannot create orphaned
-  history or race the discard. Before any submit-time Source mirroring can
-  mutate Isometric, noma persists a sticky possible-mutation marker under the
-  same Removal and artifact locks, so recovery also fails closed throughout
-  the pre-ledger external-write window.
+- Recovery refuses any Removal with a submission ledger row, production claim,
+  reporting dates, GHG Statement membership, or sticky possible-mutation
+  marker. Append-only sync events are retained as audit history but do not act
+  as registry state or block recovery by themselves. Recovery shares the
+  submission advisory lock so a concurrent claim cannot race the discard.
+  Before any submit-time Source mirroring can mutate Isometric, noma persists
+  the sticky marker under the same Removal and artifact locks, so recovery
+  stays fail-closed throughout the pre-ledger external-write window.
 
 ## 2026-08-16 (whole-batch production-claim concurrency hardening)
 
@@ -28,8 +31,9 @@
 - Whole-batch production inputs include completed, unapplied member runs and
   their feedstock transport. Those runs do not dilute the applied biochar
   delivery-transport fraction.
-- An Application may join a Removal only when all of its credit-batch slices
-  are unassigned; an existing sibling owner blocks the assignment.
+- For 200-year facilities, an Application may join a Removal only when all of
+  its credit-batch slices are unassigned; an existing sibling owner blocks the
+  assignment. A 1000-year Removal instead owns its single batch slice.
 
 ## 2026-08-15 (application-slice Removal attribution and carbon ledger)
 

@@ -8,6 +8,7 @@ import {
   certificationSubmissions,
   certifierGhgStatements,
   certifierRemovals,
+  certifierSyncEvents,
   creditBatchApplications,
   creditBatchProductionRuns,
   creditBatches,
@@ -185,9 +186,11 @@ describe("Removal Application-slice assignment", () => {
     );
 
     let removalId: string | null = null;
+    let secondRemovalId: string | null = null;
     let laterBatchId: string | null = null;
     let submissionId: string | null = null;
     let ghgStatementId: string | null = null;
+    let auditRemovalId: string | null = null;
     try {
       const ctx = makeTestOrgContext();
       await db.transaction((tx) =>
@@ -216,17 +219,35 @@ describe("Removal Application-slice assignment", () => {
         slicesAfter1000YearRejection.every((slice) => slice.removalId == null),
       ).toBe(true);
 
-      await expect(
-        createRemovalWithCreditBatches(ctx, facility.id, [batches[0].id]),
-      ).rejects.toThrow(/select every related credit batch/i);
-      const afterRejectedSelection = await db
-        .select({ removalId: creditBatchApplications.removalId })
+      removalId = await createRemovalWithCreditBatches(ctx, facility.id, [
+        batches[0].id,
+      ]);
+      secondRemovalId = await createRemovalWithCreditBatches(ctx, facility.id, [
+        batches[1].id,
+      ]);
+      const separatelyAssigned = await db
+        .select({
+          creditBatchId: creditBatchApplications.creditBatchId,
+          removalId: creditBatchApplications.removalId,
+        })
         .from(creditBatchApplications)
-        .where(eq(creditBatchApplications.applicationId, application.id));
-      expect(afterRejectedSelection).toHaveLength(2);
-      expect(afterRejectedSelection.every((slice) => slice.removalId == null)).toBe(
-        true,
+        .where(eq(creditBatchApplications.applicationId, application.id))
+        .orderBy(creditBatchApplications.creditBatchId);
+      expect(new Map(separatelyAssigned.map((slice) => [slice.creditBatchId, slice.removalId]))).toEqual(
+        new Map([
+          [batches[0].id, removalId],
+          [batches[1].id, secondRemovalId],
+        ]),
       );
+
+      await expect(
+        discardLocalRemovalDraft(ctx, facility.id, removalId),
+      ).resolves.toEqual({ releasedSliceCount: 1 });
+      removalId = null;
+      await expect(
+        discardLocalRemovalDraft(ctx, facility.id, secondRemovalId),
+      ).resolves.toEqual({ releasedSliceCount: 1 });
+      secondRemovalId = null;
 
       await db
         .update(facilities)
@@ -275,6 +296,16 @@ describe("Removal Application-slice assignment", () => {
         .from(creditBatchApplications)
         .where(eq(creditBatchApplications.creditBatchId, laterBatch.id));
       expect(laterSlice).toEqual([{ removalId: null }]);
+
+      await db.insert(certifierSyncEvents).values({
+        organizationId: TEST_ORG_ID,
+        provider: "isometric",
+        entityType: "removal",
+        entityId: removalId,
+        operation: "removal:protocol-version-check",
+        status: "succeeded",
+      });
+      auditRemovalId = removalId;
 
       await expect(
         discardLocalRemovalDraft(ctx, crypto.randomUUID(), removalId),
@@ -376,6 +407,11 @@ describe("Removal Application-slice assignment", () => {
         .from(certifierRemovals)
         .where(eq(certifierRemovals.id, removalId));
       expect(discardedRemoval).toEqual([]);
+      const retainedAudit = await db
+        .select({ id: certifierSyncEvents.id })
+        .from(certifierSyncEvents)
+        .where(eq(certifierSyncEvents.entityId, auditRemovalId));
+      expect(retainedAudit).toHaveLength(1);
       removalId = null;
     } finally {
       if (ghgStatementId) {
@@ -405,6 +441,16 @@ describe("Removal Application-slice assignment", () => {
         await db
           .delete(certifierRemovals)
           .where(eq(certifierRemovals.id, removalId));
+      }
+      if (secondRemovalId) {
+        await db
+          .delete(certifierRemovals)
+          .where(eq(certifierRemovals.id, secondRemovalId));
+      }
+      if (auditRemovalId) {
+        await db
+          .delete(certifierSyncEvents)
+          .where(eq(certifierSyncEvents.entityId, auditRemovalId));
       }
       await db
         .delete(creditBatchProductionRuns)
