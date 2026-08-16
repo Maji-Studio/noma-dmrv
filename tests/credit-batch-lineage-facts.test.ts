@@ -166,7 +166,7 @@ describe("credit batch accounting", () => {
       expect(slicesAfterForeignWrite).toEqual(slicesBeforeForeignWrite);
       await expect(
         createRemovalWithCreditBatches(foreignCtx, facility.id, [batch.id]),
-      ).rejects.toThrow("no longer exist");
+      ).rejects.toThrow("Facility was not found.");
       const firstRemovalId = await createRemovalWithCreditBatches(
         ctx,
         facility.id,

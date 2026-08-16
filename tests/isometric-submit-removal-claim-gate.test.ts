@@ -36,6 +36,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
           {
             creditBatchId: CREDIT_BATCH_ID,
             code: "CB-TEST-001",
+            durabilityOption: "200_year",
             claimedByRemovalId: "rem-other",
             productionRunIds: [PRODUCTION_RUN_ID],
             applicationIds: [APPLICATION_ID],
@@ -108,6 +109,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
       {
         creditBatchId: CREDIT_BATCH_ID,
         code: "Batch A",
+        durabilityOption: "200_year" as const,
         claimedByRemovalId: "removal-r-001",
         productionRunIds: [PRODUCTION_RUN_ID],
         applicationIds: [APPLICATION_ID],
@@ -120,6 +122,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
       {
         creditBatchId: secondBatchId,
         code: "Batch B",
+        durabilityOption: "200_year" as const,
         claimedByRemovalId: null,
         productionRunIds: [PRODUCTION_RUN_ID],
         applicationIds: [APPLICATION_ID],
@@ -192,6 +195,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
           {
             creditBatchId: CREDIT_BATCH_ID,
             code: "CB-TEST-001",
+            durabilityOption: "200_year",
             claimedByRemovalId: REMOVAL_ID,
             productionRunIds: [PRODUCTION_RUN_ID],
             applicationIds: [APPLICATION_ID],
@@ -331,6 +335,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
           memberBatchClaims: [{
             creditBatchId: CREDIT_BATCH_ID,
             code: "CB-TEST-001",
+            durabilityOption: "200_year",
             claimedByRemovalId: null,
             productionRunIds: [PRODUCTION_RUN_ID],
             applicationIds: [APPLICATION_ID],

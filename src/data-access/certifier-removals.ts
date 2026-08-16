@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { applications } from "@/db/schema/application";
@@ -16,6 +16,7 @@ import {
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import type { StoredSourceBindingVerification } from "@/lib/certification/removal-evidence-health";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
@@ -29,6 +30,27 @@ type CreditBatchRow = typeof creditBatches.$inferSelect;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const ISOMETRIC = "isometric" as const;
+const THOUSAND_YEAR_REMOVAL_BATCH_LIMIT = 1;
+const THOUSAND_YEAR_REMOVAL_ERROR =
+  "A 1000-year Removal can contain one credit batch. Create a separate Removal for each credit batch.";
+const DISCARD_REMOVAL_ERROR =
+  "This Removal cannot be discarded because it may have registry history. Refresh the page and review its status.";
+const REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY =
+  "submissionExternalMutationPossible";
+const REMOVAL_EXTERNAL_MUTATION_POSSIBLE_PATCH = JSON.stringify({
+  [REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY]: true,
+});
+
+function removalMayHaveExternalMutation(metadata: unknown): boolean {
+  return (
+    metadata !== null &&
+    typeof metadata === "object" &&
+    !Array.isArray(metadata) &&
+    (metadata as Record<string, unknown>)[
+      REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY
+    ] === true
+  );
+}
 
 // A removal ledger row is keyed (provider, 'removal', 'removal', removalId).
 export async function removalHasBlockingSubmission(
@@ -370,10 +392,10 @@ export async function listUngroupedCreditBatches(
   }));
 }
 
-// Creates a Removal and atomically assigns each selected Application's complete
-// unassigned slice set. An Application with any previously frozen sibling
-// slice is rejected; a later Application can still place newly applied mass
-// from the same physical production batch into a follow-up Removal.
+// Creates a Removal and atomically assigns the selected Application slices.
+// A 200-year Removal owns every sibling slice for each selected Application;
+// a 1000-year Removal owns only its single selected credit-batch slice because
+// each Production Batch must be submitted through a separate Removal.
 export async function createRemovalWithCreditBatches(
   ctx: OrgContext,
   facilityId: string,
@@ -386,6 +408,29 @@ export async function createRemovalWithCreditBatches(
   }
 
   return db.transaction(async (tx) => {
+    const [facility] = await tx
+      .select({ durabilityOption: facilities.durabilityOption })
+      .from(facilities)
+      .where(
+        and(
+          eq(facilities.id, facilityId),
+          eq(facilities.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!facility) {
+      throw new SafeError("Facility not found.");
+    }
+    if (
+      facility.durabilityOption === "1000_year" &&
+      uniqueIds.length > THOUSAND_YEAR_REMOVAL_BATCH_LIMIT
+    ) {
+      throw new SafeError(THOUSAND_YEAR_REMOVAL_ERROR);
+    }
+    const splitsApplicationsByBatch =
+      facility.durabilityOption === "1000_year";
+
     const batches = await tx
       .select({
         id: creditBatches.id,
@@ -465,7 +510,10 @@ export async function createRemovalWithCreditBatches(
         creditBatchApplications.creditBatchId,
       )
       .for("update");
-    if (siblingSlices.some((slice) => slice.removalId != null)) {
+    if (
+      !splitsApplicationsByBatch &&
+      siblingSlices.some((slice) => slice.removalId != null)
+    ) {
       throw new SafeError(
         "A selected Application is already partly assigned to another Removal. Keep all of that Application's credit-batch slices with its existing Removal.",
       );
@@ -481,7 +529,7 @@ export async function createRemovalWithCreditBatches(
           .map((slice) => slice.creditBatchId),
       ),
     ];
-    if (omittedSiblingBatchIds.length > 0) {
+    if (!splitsApplicationsByBatch && omittedSiblingBatchIds.length > 0) {
       throw new SafeError(
         "A selected Application also has unassigned mass in another credit batch. Select every related credit batch so the Application is assigned to one Removal in full.",
       );
@@ -503,13 +551,228 @@ export async function createRemovalWithCreditBatches(
         ),
       )
       .returning({ applicationId: creditBatchApplications.applicationId });
-    if (assigned.length !== unassignedSiblingSlices.length) {
+    const expectedAssignmentCount = splitsApplicationsByBatch
+      ? unassignedSiblingSlices.filter((slice) =>
+          selectedIdSet.has(slice.creditBatchId),
+        ).length
+      : unassignedSiblingSlices.length;
+    if (assigned.length !== expectedAssignmentCount) {
       throw new SafeError(
         "Application allocation changed while creating the Removal. Refresh and retry.",
       );
     }
 
     return removal.id;
+  });
+}
+
+// Releases a purely local Removal draft. Any evidence that the Removal may
+// have crossed the registry boundary makes recovery ineligible. The row lock
+// serializes this decision against submission and GHG Statement membership,
+// while the single transaction prevents partially released slice ownership.
+export async function discardLocalRemovalDraft(
+  ctx: OrgContext,
+  facilityId: string,
+  removalId: string,
+): Promise<{ releasedSliceCount: number }> {
+  requireOrgScope(ctx);
+
+  return db.transaction(async (tx) => {
+    const [removal] = await tx
+      .select({
+        id: certifierRemovals.id,
+        ghgStatementId: certifierRemovals.ghgStatementId,
+        startedOn: certifierRemovals.startedOn,
+        completedOn: certifierRemovals.completedOn,
+        metadata: certifierRemovals.metadata,
+      })
+      .from(certifierRemovals)
+      .where(
+        and(
+          eq(certifierRemovals.id, removalId),
+          eq(certifierRemovals.facilityId, facilityId),
+          eq(certifierRemovals.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (
+      !removal ||
+      removal.ghgStatementId !== null ||
+      removal.startedOn !== null ||
+      removal.completedOn !== null ||
+      removalMayHaveExternalMutation(removal.metadata)
+    ) {
+      throw new SafeError(DISCARD_REMOVAL_ERROR);
+    }
+
+    // Submission claims use this same advisory lock before inserting or
+    // resuming a ledger row. Holding it through the history checks and delete
+    // prevents a concurrent submit from creating a ledger for a draft that
+    // recovery has just removed.
+    await acquireCertificationArtifactLocksSorted(tx, [
+      {
+        provider: ISOMETRIC,
+        localEntityType: "removal",
+        localEntityId: removalId,
+      },
+    ]);
+
+    const [[submissionHistory], [productionClaim]] =
+      await Promise.all([
+        tx
+          .select({ id: certificationSubmissions.id })
+          .from(certificationSubmissions)
+          .where(
+            and(
+              eq(certificationSubmissions.localEntityType, "removal"),
+              eq(certificationSubmissions.localEntityId, removalId),
+              eq(
+                certificationSubmissions.organizationId,
+                ctx.organizationId,
+              ),
+            ),
+          )
+          .limit(1),
+        tx
+          .select({ id: creditBatches.id })
+          .from(creditBatches)
+          .where(
+            and(
+              eq(creditBatches.organizationId, ctx.organizationId),
+              or(
+                eq(
+                  creditBatches.productionEmissionsClaimedByRemovalId,
+                  removalId,
+                ),
+                exists(
+                  tx
+                    .select({ value: sql`1` })
+                    .from(certificationSubmissions)
+                    .where(
+                      and(
+                        eq(
+                          certificationSubmissions.id,
+                          creditBatches.productionEmissionsClaimReservedBySubmissionId,
+                        ),
+                        eq(
+                          certificationSubmissions.localEntityType,
+                          "removal",
+                        ),
+                        eq(
+                          certificationSubmissions.localEntityId,
+                          removalId,
+                        ),
+                        eq(
+                          certificationSubmissions.organizationId,
+                          ctx.organizationId,
+                        ),
+                      ),
+                    ),
+                ),
+              ),
+            ),
+          )
+          .limit(1),
+      ]);
+
+    // Sync events are append-only audit records, not registry state. Local
+    // preflight/refusal events may exist without any external mutation; the
+    // sticky marker above is the authoritative pre-ledger boundary, while the
+    // submission ledger and production claim cover all later write phases.
+    if (submissionHistory || productionClaim) {
+      throw new SafeError(DISCARD_REMOVAL_ERROR);
+    }
+
+    const released = await tx
+      .update(creditBatchApplications)
+      .set({ removalId: null })
+      .where(
+        and(
+          eq(creditBatchApplications.removalId, removalId),
+          eq(creditBatchApplications.organizationId, ctx.organizationId),
+        ),
+      )
+      .returning({ id: creditBatchApplications.id });
+
+    const [deleted] = await tx
+      .delete(certifierRemovals)
+      .where(
+        and(
+          eq(certifierRemovals.id, removalId),
+          eq(certifierRemovals.facilityId, facilityId),
+          eq(certifierRemovals.organizationId, ctx.organizationId),
+        ),
+      )
+      .returning({ id: certifierRemovals.id });
+    if (!deleted) {
+      throw new SafeError(DISCARD_REMOVAL_ERROR);
+    }
+
+    logger.info(
+      { removalId, releasedSliceCount: released.length },
+      "local certifier removal draft discarded",
+    );
+    return { releasedSliceCount: released.length };
+  });
+}
+
+// Persist the point after which submission may create or update registry
+// Sources. This marker is intentionally sticky: once the external-write window
+// opens, a missing ledger row no longer proves that deleting the local Removal
+// is safe. Taking the Removal row lock before the shared artifact lock matches
+// discardLocalRemovalDraft's order, so either discard wins before this marker
+// (and submission stops) or recovery observes the marker and fails closed.
+export async function markRemovalSubmissionExternalMutationPossible(
+  ctx: OrgContext,
+  facilityId: string,
+  removalId: string,
+): Promise<void> {
+  requireOrgScope(ctx);
+
+  await db.transaction(async (tx) => {
+    const [removal] = await tx
+      .select({ id: certifierRemovals.id })
+      .from(certifierRemovals)
+      .where(
+        and(
+          eq(certifierRemovals.id, removalId),
+          eq(certifierRemovals.facilityId, facilityId),
+          eq(certifierRemovals.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!removal) {
+      throw new SafeError("Removal not found.");
+    }
+
+    await acquireCertificationArtifactLocksSorted(tx, [
+      {
+        provider: ISOMETRIC,
+        localEntityType: "removal",
+        localEntityId: removalId,
+      },
+    ]);
+
+    const [updated] = await tx
+      .update(certifierRemovals)
+      .set({
+        metadata: sql`coalesce(${certifierRemovals.metadata}, '{}'::jsonb) || ${REMOVAL_EXTERNAL_MUTATION_POSSIBLE_PATCH}::jsonb`,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(certifierRemovals.id, removalId),
+          eq(certifierRemovals.facilityId, facilityId),
+          eq(certifierRemovals.organizationId, ctx.organizationId),
+        ),
+      )
+      .returning({ id: certifierRemovals.id });
+    if (!updated) {
+      throw new SafeError("Removal not found.");
+    }
   });
 }
 

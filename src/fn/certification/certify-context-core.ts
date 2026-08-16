@@ -194,6 +194,7 @@ export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "e
   memberBatchClaims: {
     creditBatchId: string;
     code: string;
+    durabilityOption: DurabilityOption;
     claimedByRemovalId: string | null;
     productionRunIds: string[];
     applicationIds: string[];
@@ -524,6 +525,7 @@ export async function buildRemovalContext(
   const memberBatchClaims = scope.memberBatches.map((b) => ({
     creditBatchId: b.id,
     code: b.code,
+    durabilityOption: b.durabilityOption,
     claimedByRemovalId: b.productionEmissionsClaimedByRemovalId,
     productionRunIds: [...b.productionRunIds].sort(),
     applicationIds: [...b.applicationIds].sort(),

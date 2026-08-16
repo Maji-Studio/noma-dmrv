@@ -612,6 +612,7 @@ export function makeContext(
       {
         creditBatchId: CREDIT_BATCH_ID,
         code: "CB-TEST-001",
+        durabilityOption: "200_year",
         claimedByRemovalId: null,
         productionRunIds: [PRODUCTION_RUN_ID],
         applicationIds: [APPLICATION_ID],
