@@ -2,39 +2,24 @@
  * §8.6.2 production-emissions claim gate (issue #349, ADR 0020).
  *
  * A credit batch's production-bucket emissions submit exactly once: unclaimed
- * batches and batches claimed by THIS removal (resubmit/supersede) proceed; a
- * batch claimed by a DIFFERENT removal fails closed — the delivery-only
- * follow-up entry is gated behind issue #353.
+ * batches and batches claimed by THIS removal (resubmit/supersede) contribute
+ * production inputs. A batch claimed by a DIFFERENT removal remains valid in
+ * the scope, but its production bucket is suppressed by the compiler.
  *
- * The gate runs TWICE per submit, both times before any registry POST:
- *
- *   1. Pre-flight, against the loaded context (`ctx.memberBatchClaims`) —
- *      cheap, fails before the evidence-ledger HTTP work.
- *   2. Fresh-read re-assert (`assertProductionClaimGateFresh`), immediately
- *      after `claimSubmissionDraft` — the blocking draft row now exists, so
- *      membership is frozen (`assertRemovalAllowsCreditBatchMutation` blocks
- *      regroups on BLOCKING_SUBMISSION_STATUSES, which includes `draft`) and
- *      no NEW foreign claim or membership/lineage drift can appear. One fresh
- *      scope read serves two asserts:
- *        a. no foreign claim was stamped in the window between context load
- *           and draft claim (would otherwise trip the rowcount backstop in
- *           `markSubmissionSubmitted` only AFTER the registry POSTs);
- *        b. the member-batch set and each batch's run/application lineage
- *           still match what the payload was built from — `updateCreditBatch`
- *           can regroup runs (or the batch itself) right up until the draft
- *           row exists, and the POST would otherwise ship the stale snapshot
- *           and then stamp a production claim for changed batch contents.
- *      `submitRemoval` records a pre-registry failure as rejected/unlocked, or
- *      as interrupted when a resumed attempt may already have registry state.
- *      It then compares the full semantic payload hash from a fresh rebuild
- *      against the claimed draft snapshot, catching same-ID source-data edits
- *      that lineage IDs cannot represent.
+ * The fresh-read re-assert (`assertProductionClaimGateFresh`) runs immediately
+ * after `claimSubmissionDraft`. It verifies the frozen slice set, run lineage,
+ * and claim ownership, then lets only the earliest active draft submit an
+ * unclaimed batch's production inputs. New unassigned downstream slices remain
+ * valid and do not change the Removal being submitted. The full semantic
+ * payload is rebuilt afterward to catch same-ID source-data edits that lineage
+ * IDs cannot represent.
  */
 import type { OrgContext } from "@/lib/auth/server";
 import {
   retireStaleSubmissionDraft,
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
+import { listProductionClaimDraftContenders } from "@/data-access/certifier-removals";
 import { SafeError } from "@/lib/errors";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { resolveScopeForRemoval } from "./certify-context-core";
@@ -52,6 +37,7 @@ export interface MemberBatchLineage {
   code: string;
   productionRunIds: string[];
   applicationIds: string[];
+  claimedByRemovalId: string | null;
 }
 
 const INTERRUPTED_REMOVAL_DRIFT_MESSAGE =
@@ -71,37 +57,43 @@ export async function retireClaimedRemovalDraftForDrift(args: {
   });
 }
 
-export function assertNoForeignProductionClaims(
-  claims: readonly MemberBatchClaim[],
-  removalId: string,
-): void {
-  const foreignClaims = claims.filter(
-    (b) => b.claimedByRemovalId != null && b.claimedByRemovalId !== removalId,
-  );
-  if (foreignClaims.length > 0) {
-    throw new SafeError(
-      `Production emissions for ${foreignClaims.map((b) => b.code).join(", ")} ` +
-        "already belong to another Removal. Remove those credit batches from this Removal, then submit again.",
-    );
-  }
-}
-
-// Gate step 2 (see module docblock): one fresh scope read, two asserts.
+// See module docblock: one fresh scope read verifies lineage and claim state.
 export async function assertProductionClaimGateFresh(
   orgCtx: OrgContext,
   removalId: string,
   expected: readonly MemberBatchLineage[],
+  submissionId: string,
 ): Promise<void> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
-  assertNoForeignProductionClaims(
-    scope.memberBatches.map((b) => ({
-      creditBatchId: b.id,
-      code: b.code,
-      claimedByRemovalId: b.productionEmissionsClaimedByRemovalId,
-    })),
-    removalId,
-  );
   assertMemberBatchLineageUnchanged(expected, scope.memberBatches);
+  const unclaimedBatchIds = expected
+    .filter((batch) => batch.claimedByRemovalId == null)
+    .map((batch) => batch.creditBatchId);
+  const contenders =
+    (await listProductionClaimDraftContenders(orgCtx, unclaimedBatchIds)) ?? [];
+  const winnerByBatchId = new Map<
+    string,
+    (typeof contenders)[number]
+  >();
+  for (const contender of contenders) {
+    if (!winnerByBatchId.has(contender.creditBatchId)) {
+      winnerByBatchId.set(contender.creditBatchId, contender);
+    }
+  }
+  const lost = expected.filter((batch) => {
+    if (batch.claimedByRemovalId != null) return false;
+    const winner = winnerByBatchId.get(batch.creditBatchId);
+    return winner != null &&
+      (winner.removalId !== removalId || winner.submissionId !== submissionId);
+  });
+  if (lost.length > 0) {
+    throw new SafeError(
+      `Another Removal started claiming production inputs for credit batch ${lost
+        .map((batch) => batch.code)
+        .sort()
+        .join(", ")}. Wait for that submission to finish, then reload and retry.`,
+    );
+  }
 }
 
 // Pure fingerprint compare: same member-batch set, and per batch the same
@@ -113,6 +105,7 @@ export function assertMemberBatchLineageUnchanged(
     code: string;
     productionRunIds: string[];
     applicationIds: string[];
+    productionEmissionsClaimedByRemovalId: string | null;
   }[],
 ): void {
   const drifted = new Set<string>();
@@ -122,7 +115,8 @@ export function assertMemberBatchLineageUnchanged(
     if (
       !now ||
       !sortedEqual(exp.productionRunIds, now.productionRunIds) ||
-      !sortedEqual(exp.applicationIds, now.applicationIds)
+      !sortedEqual(exp.applicationIds, now.applicationIds) ||
+      exp.claimedByRemovalId !== now.productionEmissionsClaimedByRemovalId
     ) {
       drifted.add(exp.code);
     }
@@ -133,7 +127,7 @@ export function assertMemberBatchLineageUnchanged(
   }
   if (drifted.size > 0) {
     throw new SafeError(
-      `Credit batch membership or run lineage changed while preparing this ` +
+      `Credit batch membership, run lineage, or production claim changed while preparing this ` +
         `submission (${[...drifted].sort().join(", ")}). Reload and retry.`,
     );
   }

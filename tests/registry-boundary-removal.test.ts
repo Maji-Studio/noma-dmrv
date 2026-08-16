@@ -254,7 +254,6 @@ async function createFixture(): Promise<Fixture> {
       startDate: "2026-01-01",
       endDate: "2026-01-31",
       certifier: "isometric",
-      removalId: removal.id,
     })
     .returning({ id: creditBatches.id });
   createdBatchIds.push(batch.id);
@@ -480,6 +479,7 @@ function makeContext(
     runSummary: {
       runCount: 1,
       totalBiocharOutputKg: biocharMassKg,
+      deliveryBiocharOutputKg: biocharMassKg,
       appliedDryKg: biocharMassKg,
     },
     latestSubmission: null,
@@ -533,6 +533,7 @@ function makeContext(
         claimedByRemovalId: null,
         productionRunIds: [PRODUCTION_RUN_ID],
         applicationIds: [APPLICATION_ID],
+        applicationSlices: [],
       },
     ],
     transportLegs: { feedstock: [], biochar: [], sample: [] },

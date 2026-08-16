@@ -60,6 +60,7 @@ export async function createRemovalWithBatchesAction(
       orgCtx,
       uniqueIds,
       facilityFacts,
+      { unassignedOnly: true },
     );
     for (const batchId of uniqueIds) {
       const ctx = contextsByBatch[batchId];

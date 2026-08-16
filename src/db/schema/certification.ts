@@ -399,6 +399,10 @@ export const certifierRemovals = pgTable(
   },
   (table) => [
     index('certifier_removals_organization_id_idx').on(table.organizationId),
+    unique('certifier_removals_id_organization_id_unique').on(
+      table.id,
+      table.organizationId,
+    ),
     foreignKey({
       columns: [table.facilityId, table.organizationId],
       foreignColumns: [facilities.id, facilities.organizationId],

@@ -13,11 +13,11 @@
  *     batch's claiming GHG entry (§8.6.2, issue #349, ADR 0020).
  *
  * Computing both from one walk is deliberate: the Review summary and the submit
- * payload share the same numerator (applied dry kg per run) and denominator
- * (run output), so the two can never drift (ADR 0003 as narrowed by ADR 0020 —
- * a removal's stored quantity counts only the biochar that reached soil).
- * `appliedDryKg / totalBiocharOutputKg` is the overall attribution; per run
- * it's `aggregateProductionRuns`'s scoping factor.
+ * payload share the same applied-mass numerator and application-linked run
+ * output denominator, so the two can never drift (ADR 0003 as narrowed by ADR
+ * 0020 — a removal's stored quantity counts only the biochar that reached
+ * soil). `appliedDryKg / deliveryBiocharOutputKg` is the overall delivery
+ * attribution; per run it's `aggregateProductionRuns`'s scoping factor.
  *
  * Pure and dependency-light: it takes the two arrays the submission context
  * already resolves via narrow structural params, so it stays unit-testable and
@@ -29,8 +29,14 @@ import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 export interface RemovalRunSummary {
   /** Distinct production runs feeding this removal. */
   runCount: number;
-  /** Σ run.biocharDryMassKg across those runs (raw output, the denominator). */
+  /** Σ run.biocharDryMassKg across every production-contributing member run. */
   totalBiocharOutputKg: number;
+  /**
+   * Output only from runs represented by this Removal's Applications. This is
+   * the delivery-transport denominator; unapplied whole-batch production runs
+   * must not dilute the applied biochar transport share.
+   */
+  deliveryBiocharOutputKg: number;
   /**
    * Σ applied biochar dry mass reaching this removal's applications (the
    * numerator), totalled across runs.
@@ -54,22 +60,23 @@ export interface RemovalMassAccounting {
 export const EMPTY_RUN_SUMMARY: RemovalRunSummary = {
   runCount: 0,
   totalBiocharOutputKg: 0,
+  deliveryBiocharOutputKg: 0,
   appliedDryKg: 0,
 };
 
 /**
  * Removal-wide applied-biochar fraction — the DELIVERY-bucket scaling factor
- * (§8.6.2, issue #349, ADR 0020): appliedDryKg / totalBiocharOutputKg, falling
- * back to full attribution (1) when output is zero/absent, mirroring the
- * per-run fallback in `buildMassAccounting`. The ONE shared definition: both
+ * (§8.6.2, issue #349, ADR 0020): appliedDryKg / deliveryBiocharOutputKg,
+ * falling back to full attribution (1) when output is zero/absent, mirroring
+ * the per-run fallback in `buildMassAccounting`. The ONE shared definition: both
  * the submitted biochar-transport scalar (`submitRemoval` →
  * `enrichWithTransportLegs`) and the transport evidence-ledger PDF's explicit
  * "× applied share" line derive from it, so the ledger always reconciles to
  * the submitted datapoint by construction.
  */
 export function appliedBiocharFraction(summary: RemovalRunSummary): number {
-  return summary.totalBiocharOutputKg > 0
-    ? summary.appliedDryKg / summary.totalBiocharOutputKg
+  return summary.deliveryBiocharOutputKg > 0
+    ? summary.appliedDryKg / summary.deliveryBiocharOutputKg
     : 1;
 }
 
@@ -107,11 +114,15 @@ export function buildMassAccounting(
   }
 
   let totalBiocharOutputKg = 0;
+  let deliveryBiocharOutputKg = 0;
   const attributionByRunId = new Map<string, number>();
   for (const run of runs) {
     const output = run.biocharDryMassKg;
     totalBiocharOutputKg += output ?? 0;
     const appliedKg = appliedKgByRun.get(run.id) ?? 0;
+    if (appliedKgByRun.has(run.id)) {
+      deliveryBiocharOutputKg += output ?? 0;
+    }
     attributionByRunId.set(run.id, output && output > 0 ? appliedKg / output : 1);
   }
 
@@ -120,6 +131,7 @@ export function buildMassAccounting(
     runSummary: {
       runCount: runs.length,
       totalBiocharOutputKg,
+      deliveryBiocharOutputKg,
       appliedDryKg,
     },
   };

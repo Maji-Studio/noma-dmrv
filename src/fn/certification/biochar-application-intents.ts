@@ -3,6 +3,10 @@ import type { OrgContext } from "@/lib/auth/server";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import {
+  kgToTonnes,
+  tonnesToKg,
+} from "@/lib/calculations/unit-conversions";
+import {
   buildBiocharApplicationReference,
   buildCreateBiocharApplicationRequest,
   type CreateBiocharApplicationRequest,
@@ -15,6 +19,7 @@ import {
 
 const PREFLIGHT_EXTERNAL_PRODUCTION_BATCH_ID = "preflight-production-batch";
 const PREFLIGHT_EXTERNAL_STORAGE_LOCATION_ID = "preflight-storage-location";
+const SLICE_WET_MASS_TOLERANCE_KG = 0.01;
 
 export interface BiocharApplicationIntent {
   applicationId: string;
@@ -40,6 +45,11 @@ export async function compileBiocharApplicationIntents(args: {
   memberBatches: Array<{
     creditBatchId: string;
     applicationIds: string[];
+    applicationSlices?: Array<{
+      applicationId: string;
+      allocatedWetMassKg: number;
+      allocatedDryMassKg: number;
+    }>;
   }>;
   environment: "sandbox" | "production";
 }): Promise<BiocharApplicationIntent[]> {
@@ -89,12 +99,37 @@ export async function compileBiocharApplicationIntents(args: {
     );
   }
 
-  return applicationIds.map((applicationId) => {
+  return applicationIds.flatMap((applicationId) => {
     const input = inputByApplicationId.get(applicationId)!;
     const creditBatchIds = [...(batchIdsByApplicationId.get(applicationId) ?? [])].sort();
-    if (creditBatchIds.length !== 1) {
+    const slices = args.memberBatches
+      .flatMap((batch) =>
+        (batch.applicationSlices ?? [])
+          .filter((slice) => slice.applicationId === applicationId)
+          .map((slice) => ({ ...slice, creditBatchId: batch.creditBatchId })),
+      )
+      .sort((a, b) => a.creditBatchId.localeCompare(b.creditBatchId));
+    const sliceBatchIds = new Set(slices.map((slice) => slice.creditBatchId));
+    const hasCompleteSlices =
+      slices.length === creditBatchIds.length &&
+      sliceBatchIds.size === creditBatchIds.length &&
+      creditBatchIds.every((creditBatchId) => sliceBatchIds.has(creditBatchId));
+    if (!hasCompleteSlices) {
       throw new SafeError(
-        `Application ${input.applicationCode} spans ${creditBatchIds.length} credit batches. Assign it to exactly one credit batch before submitting. Truck measurements cannot be allocated across Production Batches.`,
+        `Application ${input.applicationCode} does not have one immutable allocation for every member credit batch. Reload the Removal and submit again.`,
+      );
+    }
+    const allocatedWetMassKg = slices.reduce(
+      (total, slice) => total + slice.allocatedWetMassKg,
+      0,
+    );
+    const appliedWetMassKg = tonnesToKg(input.appliedTonnes);
+    if (
+      Math.abs(allocatedWetMassKg - appliedWetMassKg) >
+      SLICE_WET_MASS_TOLERANCE_KG
+    ) {
+      throw new SafeError(
+        `Application ${input.applicationCode}'s immutable allocations total ${allocatedWetMassKg} kg, but its persisted applied mass is ${appliedWetMassKg} kg. Reconcile the Removal and submit again.`,
       );
     }
     if (input.fieldSizeHa == null) {
@@ -144,49 +179,51 @@ export async function compileBiocharApplicationIntents(args: {
       longitude: input.longitude,
       supplierReferenceId: storageLocationSupplierReference,
     });
-    const creditBatchId = creditBatchIds[0];
-    const supplierReference = buildBiocharApplicationReference({
-      applicationId,
-      creditBatchId,
-      environment: args.environment,
-    });
     const applicationDate = formatUtcDate(input.applicationDate);
+    return slices.map((slice) => {
+      const appliedTonnes = kgToTonnes(slice.allocatedWetMassKg);
+      const supplierReference = buildBiocharApplicationReference({
+        applicationId,
+        creditBatchId: slice.creditBatchId,
+        environment: args.environment,
+      });
 
-    // Run the complete request validator with stable placeholders. This proves
-    // every operator-owned magnitude and identity is ready before any registry
-    // mutation; real dependency IDs replace the placeholders after ensure.
-    buildCreateBiocharApplicationRequest({
-      applicationCode: input.applicationCode,
-      applicationDate,
-      appliedTonnes: input.appliedTonnes,
-      fieldSizeHa,
-      truckMassOnArrivalKg,
-      truckMassOnDepartureKg,
-      externalProjectId,
-      externalProductionBatchId: PREFLIGHT_EXTERNAL_PRODUCTION_BATCH_ID,
-      externalStorageLocationId: PREFLIGHT_EXTERNAL_STORAGE_LOCATION_ID,
-      supplierReferenceId: supplierReference,
-      sourceIds: [],
+      // A commingled physical application is represented by one registry
+      // application per Production Batch. Applied mass follows the immutable
+      // batch slice; the observed truck facts remain facts of the shared event.
+      buildCreateBiocharApplicationRequest({
+        applicationCode: input.applicationCode,
+        applicationDate,
+        appliedTonnes,
+        fieldSizeHa,
+        truckMassOnArrivalKg,
+        truckMassOnDepartureKg,
+        externalProjectId,
+        externalProductionBatchId: PREFLIGHT_EXTERNAL_PRODUCTION_BATCH_ID,
+        externalStorageLocationId: PREFLIGHT_EXTERNAL_STORAGE_LOCATION_ID,
+        supplierReferenceId: supplierReference,
+        sourceIds: [],
+      });
+
+      return {
+        applicationId,
+        applicationCode: input.applicationCode,
+        creditBatchId: slice.creditBatchId,
+        deliveryId: input.deliveryId,
+        customerLocationId,
+        certifierProjectId,
+        externalProjectId,
+        applicationDate,
+        appliedTonnes,
+        fieldSizeHa,
+        truckMassOnArrivalKg,
+        truckMassOnDepartureKg,
+        supplierReference,
+        storageLocationSupplierReference,
+        storageLocationPayload,
+        sourceIds: [],
+      } satisfies BiocharApplicationIntent;
     });
-
-    return {
-      applicationId,
-      applicationCode: input.applicationCode,
-      creditBatchId,
-      deliveryId: input.deliveryId,
-      customerLocationId,
-      certifierProjectId,
-      externalProjectId,
-      applicationDate,
-      appliedTonnes: input.appliedTonnes,
-      fieldSizeHa,
-      truckMassOnArrivalKg,
-      truckMassOnDepartureKg,
-      supplierReference,
-      storageLocationSupplierReference,
-      storageLocationPayload,
-      sourceIds: [],
-    } satisfies BiocharApplicationIntent;
   });
 }
 
