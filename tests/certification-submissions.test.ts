@@ -15,6 +15,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   claimSubmissionDraft,
+  insertDraftSubmissionWithMappingLock,
   resetSubmissionToDraftWithMappingLock,
   type ClaimOutcome,
   type ClaimSubmissionDraftArgs,
@@ -31,6 +32,7 @@ import { facilities } from "@/db/schema/facilities";
 import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { markSubmissionRejected } from "@/data-access/certification";
 import { updateFacility } from "@/data-access/facilities";
+import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
 import { SafeError } from "@/lib/errors";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 
@@ -506,6 +508,48 @@ describe("claimSubmissionDraft — concurrency (the GHG drift regression)", () =
       message: expect.stringMatching(/durability tier changed/i),
     });
     expect(await listRows(fixture.key)).toHaveLength(0);
+  });
+
+  it("refuses telemetry continuation when local-draft discard wins the artifact race", async () => {
+    const fixture = await createFixture();
+    const ctx = makeTestOrgContext(USER_ID);
+    let telemetryContinued = false;
+    let claimPromise!: Promise<unknown>;
+
+    await db.transaction(async (tx) => {
+      await acquireFacilityDurabilityLock(ctx, tx, fixture.facilityId);
+      claimPromise = insertDraftSubmissionWithMappingLock(
+        ctx,
+        {
+          ...fixture.key,
+          submissionType: "dataUpload",
+          version: 1,
+          payloadSnapshot: { semantic: {} },
+          payloadHash: "hash:telemetry",
+        },
+        fixture.guard,
+      ).then((row) => {
+        telemetryContinued = true;
+        return row;
+      });
+      claimPromise.catch(() => {});
+
+      // The telemetry claim passes its optimistic anchor read, then parks on
+      // the facility lock. Discard commits before telemetry can take the
+      // shared artifact lock and perform its authoritative anchor re-check.
+      await sleep(PARK_DELAY_MS);
+      await expect(
+        discardLocalRemovalDraft(
+          ctx,
+          fixture.facilityId,
+          fixture.key.localEntityId,
+        ),
+      ).resolves.toEqual({ releasedSliceCount: 0 });
+    });
+
+    await expect(claimPromise).rejects.toThrow(/not found in this organization/i);
+    expect(telemetryContinued).toBe(false);
+    expect(await listRows({ ...fixture.key, submissionType: "dataUpload" })).toEqual([]);
   });
 });
 

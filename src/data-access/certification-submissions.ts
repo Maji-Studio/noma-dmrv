@@ -767,6 +767,10 @@ export async function insertDraftSubmissionWithMappingLock(
   return db.transaction(async (tx) => {
     await lockAndVerifyMapping(ctx, tx, guard);
     await lockSubmissionArtifact(tx, input);
+    // A concurrent local-draft discard can commit after the optimistic anchor
+    // read above. Re-check under the shared artifact lock before telemetry can
+    // create a ledger row and continue to external writes.
+    await assertSubmissionAnchorSameOrg(ctx, input, tx);
     return withUniqueViolationGuard(() => insertDraftSubmissionRow(ctx, tx, input));
   });
 }

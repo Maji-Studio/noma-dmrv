@@ -19,6 +19,9 @@
   Before any submit-time Source mirroring can mutate Isometric, noma persists
   the sticky marker under the same Removal and artifact locks, so recovery
   stays fail-closed throughout the pre-ledger external-write window.
+- The legacy telemetry draft claim rechecks that its Removal still exists in
+  the active organization after taking the shared artifact lock. When discard
+  wins the race, telemetry creates no ledger row and performs no registry work.
 
 ## 2026-08-16 (whole-batch production-claim concurrency hardening)
 
