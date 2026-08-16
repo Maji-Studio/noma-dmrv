@@ -39,7 +39,11 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
             claimedByRemovalId: "rem-other",
             productionRunIds: [PRODUCTION_RUN_ID],
             applicationIds: [APPLICATION_ID],
-            applicationSlices: [],
+            applicationSlices: [{
+              applicationId: APPLICATION_ID,
+              allocatedWetMassKg: ORIGINAL_BIOCHAR_MASS_KG,
+              allocatedDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
+            }],
           },
         ],
       }),
@@ -191,7 +195,11 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
             claimedByRemovalId: REMOVAL_ID,
             productionRunIds: [PRODUCTION_RUN_ID],
             applicationIds: [APPLICATION_ID],
-            applicationSlices: [],
+            applicationSlices: [{
+              applicationId: APPLICATION_ID,
+              allocatedWetMassKg: ORIGINAL_BIOCHAR_MASS_KG,
+              allocatedDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
+            }],
           },
         ],
       }),
@@ -318,7 +326,24 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
       // Payload and snapshot are built from the original context.
       .mockResolvedValueOnce(makeContext(ORIGINAL_BIOCHAR_MASS_KG))
       // The post-draft freshness rebuild sees the same IDs with changed mass.
-      .mockResolvedValue(makeContext(CHANGED_BIOCHAR_MASS_KG));
+      .mockResolvedValue(
+        makeContext(CHANGED_BIOCHAR_MASS_KG, {
+          memberBatchClaims: [{
+            creditBatchId: CREDIT_BATCH_ID,
+            code: "CB-TEST-001",
+            claimedByRemovalId: null,
+            productionRunIds: [PRODUCTION_RUN_ID],
+            applicationIds: [APPLICATION_ID],
+            // The Application itself is unchanged; only upstream production
+            // source data drifts in this freshness regression.
+            applicationSlices: [{
+              applicationId: APPLICATION_ID,
+              allocatedWetMassKg: ORIGINAL_BIOCHAR_MASS_KG,
+              allocatedDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
+            }],
+          }],
+        }),
+      );
     const createDatapointFake = vi.fn(fakeExternalIds("dp"));
     const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
     vi.mocked(isometric.createDatapoint).mockImplementation(

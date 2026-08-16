@@ -50,7 +50,15 @@ function compile(
   memberBatches: Parameters<
     typeof compileBiocharApplicationIntents
   >[0]["memberBatches"] = [
-    { creditBatchId: CREDIT_BATCH_ID, applicationIds: [APPLICATION_ID] },
+    {
+      creditBatchId: CREDIT_BATCH_ID,
+      applicationIds: [APPLICATION_ID],
+      applicationSlices: [{
+        applicationId: APPLICATION_ID,
+        allocatedWetMassKg: 12_000,
+        allocatedDryMassKg: 10_000,
+      }],
+    },
   ],
 ) {
   return compileBiocharApplicationIntents({
@@ -71,6 +79,11 @@ describe("compileBiocharApplicationIntents", () => {
       {
         creditBatchId: CREDIT_BATCH_ID,
         applicationIds: [APPLICATION_ID, APPLICATION_ID],
+        applicationSlices: [{
+          applicationId: APPLICATION_ID,
+          allocatedWetMassKg: 12_000,
+          allocatedDryMassKg: 10_000,
+        }],
       },
     ]);
 
@@ -171,6 +184,29 @@ describe("compileBiocharApplicationIntents", () => {
     ]);
   });
 
+  it("rejects a missing immutable slice for a single-batch Application", async () => {
+    await expect(
+      compile([{ creditBatchId: CREDIT_BATCH_ID, applicationIds: [APPLICATION_ID] }]),
+    ).rejects.toThrow(/one immutable allocation for every member credit batch/i);
+  });
+
+  it.each([
+    [11_999, "under-allocated"],
+    [12_001, "over-allocated"],
+  ])("rejects %s kg as an %s immutable slice total", async (allocatedWetMassKg) => {
+    await expect(
+      compile([{
+        creditBatchId: CREDIT_BATCH_ID,
+        applicationIds: [APPLICATION_ID],
+        applicationSlices: [{
+          applicationId: APPLICATION_ID,
+          allocatedWetMassKg,
+          allocatedDryMassKg: 10_000,
+        }],
+      }]),
+    ).rejects.toThrow(/immutable allocations total.*persisted applied mass/i);
+  });
+
   it("fails closed when one delivery is split across multiple Applications", async () => {
     const secondApplicationId = "44444444-4444-4444-8444-444444444444";
     mocks.getInputs.mockResolvedValue([
@@ -183,6 +219,18 @@ describe("compileBiocharApplicationIntents", () => {
         {
           creditBatchId: CREDIT_BATCH_ID,
           applicationIds: [APPLICATION_ID, secondApplicationId],
+          applicationSlices: [
+            {
+              applicationId: APPLICATION_ID,
+              allocatedWetMassKg: 12_000,
+              allocatedDryMassKg: 10_000,
+            },
+            {
+              applicationId: secondApplicationId,
+              allocatedWetMassKg: 12_000,
+              allocatedDryMassKg: 10_000,
+            },
+          ],
         },
       ]),
     ).rejects.toThrow(/split across Applications APP-001, APP-002/i);

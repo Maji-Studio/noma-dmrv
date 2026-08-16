@@ -21,10 +21,12 @@
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { makeTestOrgContext } from "./helpers/test-org";
 import {
+  APPLICATION_ID,
   CHANGED_BIOCHAR_MASS_KG,
   CREDIT_BATCH_ID,
   EXTERNAL_PROJECT_ID,
   ORIGINAL_BIOCHAR_MASS_KG,
+  PRODUCTION_RUN_ID,
   REMOVAL_ID,
   RTC_PRODUCT_MASS_ID,
   TEMPLATE_ID,
@@ -47,6 +49,25 @@ import * as protocolPreflight from "@/fn/certification/protocol-version-prefligh
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { compileRemovalSubmission } from "@/fn/certification/removal-submission-build";
 import * as isometric from "@/lib/isometric";
+
+function makeChangedProductionContext() {
+  return makeContext(CHANGED_BIOCHAR_MASS_KG, {
+    memberBatchClaims: [{
+      creditBatchId: CREDIT_BATCH_ID,
+      code: "CB-TEST-001",
+      claimedByRemovalId: null,
+      productionRunIds: [PRODUCTION_RUN_ID],
+      applicationIds: [APPLICATION_ID],
+      // These tests change upstream production mass, not the persisted
+      // Application event or its immutable credit-batch slice.
+      applicationSlices: [{
+        applicationId: APPLICATION_ID,
+        allocatedWetMassKg: ORIGINAL_BIOCHAR_MASS_KG,
+        allocatedDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
+      }],
+    }],
+  });
+}
 import * as sourceVerification from "@/lib/isometric/source-binding-verification";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 
@@ -160,7 +181,7 @@ describe("submitRemoval — happy path", () => {
     ).toEqual(vi.mocked(isometric.createDatapoint).mock.calls[0][1]);
 
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
-      makeContext(CHANGED_BIOCHAR_MASS_KG),
+      makeChangedProductionContext(),
     );
     await expect(
       submitRemoval({
@@ -627,7 +648,7 @@ describe("submitRemoval — happy path", () => {
     // Second submit sees a changed run mass → a different payload hash →
     // `create-new-version` with `supersedePreviousId` set.
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
-      makeContext(CHANGED_BIOCHAR_MASS_KG),
+      makeChangedProductionContext(),
     );
 
     const second = await submitRemoval({

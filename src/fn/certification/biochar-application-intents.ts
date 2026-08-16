@@ -19,6 +19,7 @@ import {
 
 const PREFLIGHT_EXTERNAL_PRODUCTION_BATCH_ID = "preflight-production-batch";
 const PREFLIGHT_EXTERNAL_STORAGE_LOCATION_ID = "preflight-storage-location";
+const SLICE_WET_MASS_TOLERANCE_KG = 0.01;
 
 export interface BiocharApplicationIntent {
   applicationId: string;
@@ -108,9 +109,27 @@ export async function compileBiocharApplicationIntents(args: {
           .map((slice) => ({ ...slice, creditBatchId: batch.creditBatchId })),
       )
       .sort((a, b) => a.creditBatchId.localeCompare(b.creditBatchId));
-    if (creditBatchIds.length > 1 && slices.length !== creditBatchIds.length) {
+    const sliceBatchIds = new Set(slices.map((slice) => slice.creditBatchId));
+    const hasCompleteSlices =
+      slices.length === creditBatchIds.length &&
+      sliceBatchIds.size === creditBatchIds.length &&
+      creditBatchIds.every((creditBatchId) => sliceBatchIds.has(creditBatchId));
+    if (!hasCompleteSlices) {
       throw new SafeError(
-        `Application ${input.applicationCode} spans ${creditBatchIds.length} credit batches but its immutable batch allocations could not be loaded. Reload the Removal and submit again.`,
+        `Application ${input.applicationCode} does not have one immutable allocation for every member credit batch. Reload the Removal and submit again.`,
+      );
+    }
+    const allocatedWetMassKg = slices.reduce(
+      (total, slice) => total + slice.allocatedWetMassKg,
+      0,
+    );
+    const appliedWetMassKg = tonnesToKg(input.appliedTonnes);
+    if (
+      Math.abs(allocatedWetMassKg - appliedWetMassKg) >
+      SLICE_WET_MASS_TOLERANCE_KG
+    ) {
+      throw new SafeError(
+        `Application ${input.applicationCode}'s immutable allocations total ${allocatedWetMassKg} kg, but its persisted applied mass is ${appliedWetMassKg} kg. Reconcile the Removal and submit again.`,
       );
     }
     if (input.fieldSizeHa == null) {
@@ -161,16 +180,7 @@ export async function compileBiocharApplicationIntents(args: {
       supplierReferenceId: storageLocationSupplierReference,
     });
     const applicationDate = formatUtcDate(input.applicationDate);
-    const effectiveSlices = slices.length > 0
-      ? slices
-      : [{
-          applicationId,
-          creditBatchId: creditBatchIds[0],
-          allocatedWetMassKg: tonnesToKg(input.appliedTonnes),
-          allocatedDryMassKg: 0,
-        }];
-
-    return effectiveSlices.map((slice) => {
+    return slices.map((slice) => {
       const appliedTonnes = kgToTonnes(slice.allocatedWetMassKg);
       const supplierReference = buildBiocharApplicationReference({
         applicationId,
