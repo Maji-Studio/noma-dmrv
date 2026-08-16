@@ -7,45 +7,12 @@ describe("RemovalEmissionsLedger", () => {
   it("explains the estimate once and links a previous production claim", () => {
     const compilation = {
       estimatedStoredCo2eTonnes: 12.34,
-      estimateMissingInputs: [],
-      review: {
-        bindings: [{
-          componentId: "component-1",
-          componentDisplayName: "Biochar transport",
-          inputKey: "mass_distance",
-          binding: "monitored",
-          wireMagnitude: 42,
-          wireUnit: "t.km",
-        }],
-        memberCreditBatches: [{ id: "batch-1", code: "CB-001" }],
-        productionRuns: [{ id: "run-1", code: "PR-001" }],
-        applications: [{
-          id: "application-1",
-          code: "AP-001",
-          deliveryId: "delivery-1",
-          deliveryCode: "DL-001",
-        }],
-        productionEmissionClaims: [
-          {
-            creditBatchId: "batch-1",
-            creditBatchCode: "CB-001",
-            claimingRemovalId: "removal-previous",
-            contribution: "delivery-only",
-          },
-          {
-            creditBatchId: "batch-2",
-            creditBatchCode: "CB-002",
-            claimingRemovalId: null,
-            contribution: "production-and-delivery",
-          },
-        ],
-      },
-    } as unknown as RemovalCompilationView;
+    } satisfies Pick<RemovalCompilationView, "estimatedStoredCo2eTonnes">;
 
     const html = renderToStaticMarkup(
       <RemovalEmissionsLedger
-        compilation={compilation}
-          ledger={{
+        compilation={compilation as RemovalCompilationView}
+        ledger={{
           inputs: [{
             id: "biochar-transport",
             component: "Biochar transport",
@@ -62,7 +29,20 @@ describe("RemovalEmissionsLedger", () => {
             deliveryCode: "DL-001",
             creditBatchIds: ["batch-1"],
           }],
-          claims: compilation.review.productionEmissionClaims ?? [],
+          claims: [
+            {
+              creditBatchId: "batch-1",
+              creditBatchCode: "CB-001",
+              claimingRemovalId: "removal-previous",
+              contribution: "delivery-only",
+            },
+            {
+              creditBatchId: "batch-2",
+              creditBatchCode: "CB-002",
+              claimingRemovalId: null,
+              contribution: "production-and-delivery",
+            },
+          ],
         }}
         facilityId="facility-1"
         isLoading={false}
