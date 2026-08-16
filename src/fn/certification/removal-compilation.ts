@@ -84,7 +84,7 @@ export async function loadRemovalCompilation(
     const batchPreviews = ctx.memberBatches.map(
       (batch) => previews[batch.id],
     );
-    const estimateComplete = batchPreviews.every(
+    const estimateComplete = batchPreviews.length > 0 && batchPreviews.every(
       (preview) => preview?.co2eStoredTonnes != null,
     );
     const estimateMissingInputs = [
