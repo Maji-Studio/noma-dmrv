@@ -89,6 +89,7 @@ import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
 import type { CertifierProjectRow } from "@/data-access/certification";
+import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as sources from "@/fn/certification/sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
@@ -100,8 +101,6 @@ import {
 import {
   buildRemovalSupplierRef,
   IsometricApiError,
-  type IsometricComponentBlueprint,
-  type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
@@ -110,38 +109,22 @@ import {
   installFakeRegistry,
   type FakeIsometricRegistry,
 } from "./fixtures/fake-registry";
+import {
+  APPLICATION_ID,
+  makeBlueprints,
+  makeBoundarySourceDocument,
+  makeTemplate,
+  RTC_ID,
+  TEMPLATE_ID,
+} from "./fixtures/removal-boundary-fixtures";
 
 const USER_ID = "test-user-boundary";
-const TEMPLATE_ID = "rvt_boundary_1";
-const RTC_ID = "rtc-seq";
 const ISOMETRIC_FEEDSTOCK_TYPE_ID = "ftt_boundary_1";
 const FIXTURE_UUID_SUFFIX_LENGTH = 8;
 const PRODUCTION_RUN_ID = "pr-boundary-1";
-const APPLICATION_ID = "a0000000-0000-4000-8000-000000000001";
 const ORIGINAL_BIOCHAR_MASS_KG = 1000;
 const CHANGED_BIOCHAR_MASS_KG = 1500;
 const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
-
-function makeBoundarySourceDocument() {
-  return {
-    documentId: "doc-boundary-1",
-    binding: {
-      nomaRole: "inventory" as const,
-      nomaRoleLabel: "Inventory",
-      lineage: {
-        entityType: "application",
-        entityId: APPLICATION_ID,
-        entityLabel: "Application APP-BD-001",
-      },
-      intendedTarget: {
-        kind: "sequestration" as const,
-        groupKey: "co2-stored" as const,
-        inputKey: "product_mass" as const,
-      },
-      mappingRevision: "source-binding-boundary-revision",
-    },
-  };
-}
 
 const createdFacilityIds: string[] = [];
 const createdRemovalIds: string[] = [];
@@ -273,71 +256,6 @@ async function createFixture(): Promise<Fixture> {
 // *remaining* datapoint for the resume to POST. Adapted from
 // tests/isometric-submit-removal.test.ts.
 // ---------------------------------------------------------------------------
-
-function makeTemplate(): IsometricGhgEntryTemplate {
-  return {
-    id: TEMPLATE_ID,
-    name: "Boundary removal template",
-    display_name: "Boundary removal template",
-    credit_type: "REMOVAL",
-    groups: [
-      {
-        id: "grp-1",
-        key: "co2-stored",
-        name: "CO2 stored",
-        components: [
-          {
-            id: RTC_ID,
-            blueprint_key: "carbon_rich_substance_sequestration",
-            display_name: "Sequestered biochar",
-            inputs: [
-              {
-                type: "monitored",
-                input_key: "carbon_content",
-                datapoint_id: null,
-                display_name: "Carbon content",
-                quantity_kind: "dimensionless",
-              },
-              {
-                type: "monitored",
-                input_key: "product_mass",
-                datapoint_id: null,
-                display_name: "Product mass",
-                quantity_kind: "mass",
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  } as unknown as IsometricGhgEntryTemplate;
-}
-
-function makeBlueprints(): IsometricComponentBlueprint[] {
-  return [
-    {
-      key: "carbon_rich_substance_sequestration",
-      display_name: "Carbon-rich substance sequestration",
-      description: "",
-      inputs: [
-        {
-          input_key: "carbon_content",
-          quantity_kind: "dimensionless",
-          compatible_unit: "dimensionless",
-          data_shape: "SCALAR",
-          description: "",
-        },
-        {
-          input_key: "product_mass",
-          quantity_kind: "mass",
-          compatible_unit: "kg",
-          data_shape: "SCALAR",
-          description: "",
-        },
-      ],
-    } as unknown as IsometricComponentBlueprint,
-  ];
-}
 
 function makeMapping(fixture: Fixture): CertifierProjectRow {
   return {
@@ -530,6 +448,7 @@ function makeContext(
       {
         creditBatchId: fixture.creditBatchId,
         code: "CB-BD-001",
+        durabilityOption: "200_year",
         claimedByRemovalId: null,
         productionRunIds: [PRODUCTION_RUN_ID],
         applicationIds: [APPLICATION_ID],
@@ -626,6 +545,67 @@ beforeEach(() => {
 
 
 beforeAll(() => ensureTestOrg());
+
+describe("submitRemoval boundary — discard interlock", () => {
+  it("refuses discard once submission enters the pre-ledger external-write window", async () => {
+    const fixture = await createFixture();
+    const orgCtx = makeTestOrgContext(USER_ID);
+    setContext(fixture);
+
+    let signalMirrorEntered: (() => void) | undefined;
+    const mirrorEntered = new Promise<void>((resolve) => {
+      signalMirrorEntered = resolve;
+    });
+    let releaseMirror: (() => void) | undefined;
+    const mirrorRelease = new Promise<void>((resolve) => {
+      releaseMirror = resolve;
+    });
+    vi.mocked(sources.mirrorCandidateSourcesForSubmission).mockImplementationOnce(
+      async () => {
+        signalMirrorEntered?.();
+        await mirrorRelease;
+        throw new SafeError("Injected Source mirror interruption.");
+      },
+    );
+
+    const submissionResult = submitRemoval({
+      orgCtx,
+      removalId: fixture.removalId,
+    }).then(
+      () => ({ kind: "fulfilled" as const }),
+      (error: unknown) => ({ kind: "rejected" as const, error }),
+    );
+
+    await mirrorEntered;
+    await expect(
+      discardLocalRemovalDraft(
+        orgCtx,
+        fixture.facilityId,
+        fixture.removalId,
+      ),
+    ).rejects.toThrow(/cannot be discarded/i);
+
+    const [preservedRemoval] = await db
+      .select({
+        id: certifierRemovals.id,
+        metadata: certifierRemovals.metadata,
+      })
+      .from(certifierRemovals)
+      .where(eq(certifierRemovals.id, fixture.removalId));
+    expect(preservedRemoval).toMatchObject({
+      id: fixture.removalId,
+      metadata: { submissionExternalMutationPossible: true },
+    });
+    expect(await listRows(fixture.removalId)).toEqual([]);
+
+    releaseMirror?.();
+    const result = await submissionResult;
+    expect(result.kind).toBe("rejected");
+    if (result.kind === "rejected") {
+      expect(result.error).toBeInstanceOf(SafeError);
+    }
+  });
+});
 
 describe("submitRemoval boundary — datapoint orphan (test 1)", () => {
   it("resume reconciles the dropped datapoint by supplier ref and POSTs only the remaining ones", async () => {

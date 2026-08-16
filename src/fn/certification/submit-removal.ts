@@ -10,6 +10,7 @@ import {
 } from "@/data-access/certification-submissions";
 import { env } from "@/config/env";
 import {
+  markRemovalSubmissionExternalMutationPossible,
   updateRemovalDates,
 } from "@/data-access/certifier-removals";
 import { reserveProductionEmissionsClaims } from "@/data-access/production-claim-reservations";
@@ -354,6 +355,17 @@ async function submitRemovalCore(
     log,
   });
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
+
+  // Everything below may create or update Isometric Sources before the
+  // submission ledger draft exists. Persist that the registry boundary is
+  // about to open while sharing discard's row/artifact lock protocol. The
+  // marker stays set even when mirroring fails because the remote outcome may
+  // be ambiguous and a missing local mapping cannot prove no Source exists.
+  await markRemovalSubmissionExternalMutationPossible(
+    orgCtx,
+    ctx.facilityId,
+    removalId,
+  );
 
   // Materialize the deterministic transport and durability evidence PDFs
   // before candidate discovery. The generated documents attach to member

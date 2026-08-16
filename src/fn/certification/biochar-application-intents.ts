@@ -44,6 +44,7 @@ export async function compileBiocharApplicationIntents(args: {
   orgCtx: OrgContext;
   memberBatches: Array<{
     creditBatchId: string;
+    durabilityOption?: "200_year" | "1000_year";
     applicationIds: string[];
     applicationSlices?: Array<{
       applicationId: string;
@@ -124,10 +125,20 @@ export async function compileBiocharApplicationIntents(args: {
       0,
     );
     const appliedWetMassKg = tonnesToKg(input.appliedTonnes);
-    if (
-      Math.abs(allocatedWetMassKg - appliedWetMassKg) >
-      SLICE_WET_MASS_TOLERANCE_KG
-    ) {
+    // A 1000-year Removal contains one Production Batch, so a commingled
+    // physical Application is intentionally represented by only that batch's
+    // immutable slice. The 200-year flow still requires the Removal to own the
+    // Application's complete mass across all member batches.
+    const allowsBatchSliceSubmission =
+      creditBatchIds.length === 1 &&
+      args.memberBatches
+        .filter((batch) => creditBatchIds.includes(batch.creditBatchId))
+        .every((batch) => batch.durabilityOption === "1000_year");
+    const allocationMismatch = allowsBatchSliceSubmission
+      ? allocatedWetMassKg - appliedWetMassKg > SLICE_WET_MASS_TOLERANCE_KG
+      : Math.abs(allocatedWetMassKg - appliedWetMassKg) >
+        SLICE_WET_MASS_TOLERANCE_KG;
+    if (allocationMismatch) {
       throw new SafeError(
         `Application ${input.applicationCode}'s immutable allocations total ${allocatedWetMassKg} kg, but its persisted applied mass is ${appliedWetMassKg} kg. Reconcile the Removal and submit again.`,
       );

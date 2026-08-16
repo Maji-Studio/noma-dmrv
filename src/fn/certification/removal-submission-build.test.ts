@@ -45,6 +45,7 @@ describe("buildRemovalSubmissionBuild", () => {
           {
             creditBatchId: "batch-a",
             code: "Batch A",
+            durabilityOption: "200_year",
             claimedByRemovalId: "removal-r-001",
             productionRunIds: ["run-a"],
             applicationIds: ["application-a"],
@@ -53,6 +54,7 @@ describe("buildRemovalSubmissionBuild", () => {
           {
             creditBatchId: "batch-b",
             code: "Batch B",
+            durabilityOption: "200_year",
             claimedByRemovalId: null,
             productionRunIds: ["run-b"],
             applicationIds: ["application-b"],
