@@ -47,15 +47,14 @@ export function collectProductionClaimAwareTransportEntityIds(args: {
   lineages: ChainOfCustodyData[];
   batchesWithSamples: CreditBatchWithSamples[];
 }): ReturnType<typeof collectTransportEntityIds> {
+  const productionBatches = args.memberBatches.filter((batch) =>
+    batchIncludesProductionInputs(batch, args.removalId),
+  );
   const productionBatchIds = new Set(
-    args.memberBatches
-      .filter((batch) => batchIncludesProductionInputs(batch, args.removalId))
-      .map((batch) => batch.id),
+    productionBatches.map((batch) => batch.id),
   );
   const productionRunIds = new Set(
-    args.memberBatches
-      .filter((batch) => productionBatchIds.has(batch.id))
-      .flatMap((batch) => batch.productionRunIds),
+    productionBatches.flatMap((batch) => batch.productionRunIds),
   );
   const all = collectTransportEntityIds(
     args.lineages,
