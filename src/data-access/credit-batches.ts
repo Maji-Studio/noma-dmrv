@@ -67,7 +67,10 @@ import {
 } from "@/lib/production-runs/lifecycle";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
-import { assertRemovalAllowsCreditBatchMutation } from "./credit-batch-certification-lock";
+import {
+  assertCreditBatchSlicesAreUnassigned,
+  assertRemovalAllowsCreditBatchMutation,
+} from "./credit-batch-certification-lock";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 import { deleteCreditBatchApplicationSlices } from "./credit-batch-delete-slices";
 
@@ -684,6 +687,9 @@ export async function updateCreditBatch(
     }
 
     await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "update");
+    if (shouldRefreshMembership) {
+      await assertCreditBatchSlicesAreUnassigned(ctx, tx, id);
+    }
 
     const targetFacilityId = updateFields.facilityId ?? existingBatch.facilityId;
     // Resolve the effective date window after update

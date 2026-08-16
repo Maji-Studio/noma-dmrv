@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
   certificationSubmissions,
@@ -140,5 +140,29 @@ export async function assertRemovalAllowsCreditBatchMutation(
       subjectEntityType: "creditBatch",
       lineageEntityType: "creditBatch",
     }),
+  );
+}
+
+export async function assertCreditBatchSlicesAreUnassigned(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  creditBatchId: string,
+): Promise<void> {
+  const [assignedSlice] = await tx
+    .select({ applicationId: creditBatchApplications.applicationId })
+    .from(creditBatchApplications)
+    .where(
+      and(
+        eq(creditBatchApplications.creditBatchId, creditBatchId),
+        isNotNull(creditBatchApplications.removalId),
+        eq(creditBatchApplications.organizationId, ctx.organizationId),
+      ),
+    )
+    .for("update")
+    .limit(1);
+  if (!assignedSlice) return;
+
+  throw new SafeError(
+    "Cannot change this credit batch's production membership because its applied mass belongs to a Removal.",
   );
 }

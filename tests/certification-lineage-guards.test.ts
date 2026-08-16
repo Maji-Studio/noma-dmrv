@@ -401,6 +401,18 @@ describe("certification lineage guards", () => {
     }, "none");
   });
 
+  it("rejects cohort changes after a slice is assigned to a draft Removal", async () => {
+    await withFixture(async (fixture) => {
+      await expect(
+        updateCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId, {
+          startDate: new Date("2026-06-02T00:00:00Z"),
+        }),
+      ).rejects.toThrow(
+        "Cannot change this credit batch's production membership because its applied mass belongs to a Removal.",
+      );
+    }, "none");
+  });
+
   it("rejects a legacy wet-mass edit when no source bin can be identified", async () => {
     await withFixture(async (fixture) => {
       await expect(
