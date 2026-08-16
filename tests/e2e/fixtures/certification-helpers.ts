@@ -23,7 +23,7 @@ import { config as loadEnv } from "dotenv";
 loadEnv({ path: ".env.local", override: false });
 
 import * as crypto from "crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
@@ -578,14 +578,30 @@ export async function teardownWizardRemovalForBatch(
     const [row] = await db
       .select({ removalId: schema.creditBatchApplications.removalId })
       .from(schema.creditBatchApplications)
-      .where(eq(schema.creditBatchApplications.creditBatchId, creditBatchId));
+      .innerJoin(
+        schema.certifierRemovals,
+        eq(
+          schema.certifierRemovals.id,
+          schema.creditBatchApplications.removalId,
+        ),
+      )
+      .where(eq(schema.creditBatchApplications.creditBatchId, creditBatchId))
+      .orderBy(
+        desc(schema.certifierRemovals.createdAt),
+        desc(schema.certifierRemovals.id),
+      );
     const removalId = row?.removalId;
     if (!removalId) return;
 
     await db
       .update(schema.creditBatchApplications)
       .set({ removalId: null })
-      .where(eq(schema.creditBatchApplications.creditBatchId, creditBatchId));
+      .where(
+        and(
+          eq(schema.creditBatchApplications.creditBatchId, creditBatchId),
+          eq(schema.creditBatchApplications.removalId, removalId),
+        ),
+      );
     // A LIVE submit also stamps the batch's front-loaded production-emissions
     // claim (credit_batches.production_emissions_claimed_by_removal_id); the
     // removal row cannot be deleted while any batch still claims through it.
