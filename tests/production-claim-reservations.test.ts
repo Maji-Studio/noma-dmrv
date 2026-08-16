@@ -34,6 +34,7 @@ const createdFeedstockTypeIds: string[] = [];
 const createdBatchIds: string[] = [];
 const createdRemovalIds: string[] = [];
 const createdSubmissionIds: string[] = [];
+const POST_EXPIRY_OFFSET_MS = 1_000;
 
 interface Fixture {
   batchId: string;
@@ -347,7 +348,9 @@ describe("production-emissions claim reservations", () => {
         removalId: fixture.removalBId,
         submissionId: draftB.id,
         creditBatchIds: [fixture.batchId],
-        now: new Date(draftA.lockedAt.getTime() + LOCK_TTL_MS + 1_000),
+        now: new Date(
+          draftA.lockedAt.getTime() + LOCK_TTL_MS + POST_EXPIRY_OFFSET_MS,
+        ),
       }),
     ).rejects.toThrow(/already sending production inputs/);
     expect(await readReservation(fixture.batchId)).toBe(draftA.id);
