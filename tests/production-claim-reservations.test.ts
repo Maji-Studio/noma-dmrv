@@ -5,6 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
+import { markSubmissionSubmitted } from "@/data-access/certification";
 import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
 import {
   rejectSubmissionAndReleaseProductionClaims,
@@ -182,6 +183,14 @@ async function readReservation(batchId: string): Promise<string | null> {
   return row.owner;
 }
 
+async function readClaim(batchId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ owner: creditBatches.productionEmissionsClaimedByRemovalId })
+    .from(creditBatches)
+    .where(eq(creditBatches.id, batchId));
+  return row.owner;
+}
+
 describe("production-emissions claim reservations", () => {
   it("serializes competing drafts before POST and releases a definitive failure", async () => {
     const fixture = await createFixture();
@@ -273,6 +282,43 @@ describe("production-emissions claim reservations", () => {
       now: new Date(lockedAt.getTime() + LOCK_TTL_MS),
     });
     expect(await readReservation(fixture.batchId)).toBe(draftB.id);
+  });
+
+  it("rejects a resumed stale attempt after its reservation transfers", async () => {
+    const fixture = await createFixture();
+    const lockedAt = new Date("2026-08-16T08:00:00.000Z");
+    const draftA = await insertDraft(fixture.removalAId, 1, lockedAt);
+    const draftB = await insertDraft(fixture.removalBId, 1, lockedAt);
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    await reserveProductionEmissionsClaims(ctx, {
+      removalId: fixture.removalAId,
+      submissionId: draftA.id,
+      creditBatchIds: [fixture.batchId],
+      now: lockedAt,
+    });
+    await reserveProductionEmissionsClaims(ctx, {
+      removalId: fixture.removalBId,
+      submissionId: draftB.id,
+      creditBatchIds: [fixture.batchId],
+      now: new Date(lockedAt.getTime() + LOCK_TTL_MS),
+    });
+
+    await expect(
+      markSubmissionSubmitted(ctx, draftA.id, {
+        externalId: "ext_stale_resumed_attempt",
+        productionEmissionsClaim: {
+          removalId: fixture.removalAId,
+          creditBatchIds: [fixture.batchId],
+        },
+      }),
+    ).rejects.toThrow(/claimed by another Removal/);
+    expect(await readClaim(fixture.batchId)).toBeNull();
+    expect(await readReservation(fixture.batchId)).toBe(draftB.id);
+    const [staleDraft] = await db
+      .select({ status: certificationSubmissions.status })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, draftA.id));
+    expect(staleDraft.status).toBe("draft");
   });
 
   it.each([

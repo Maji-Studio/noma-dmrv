@@ -1,7 +1,6 @@
 import type { OrgContext } from "@/lib/auth/server";
 import {
   markSubmissionSubmitted,
-  stampProductionEmissionsClaim,
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
 import {
@@ -498,17 +497,6 @@ async function submitRemovalCore(
     case "blocked":
       throw new SafeError(REMOVAL_CLAIM_BLOCKED_MESSAGES[claimed.reason]);
     case "existing":
-      // §8.6.2 lazy claim backfill (ADR 0020): a removal submitted before
-      // migration 0068 whose payload hash is unchanged short-circuits here
-      // and never reaches markSubmissionSubmitted's transactional stamp.
-      // Stamp locally (no POST) — the blocking `submitted` row freezes
-      // membership, so the live member set equals the submitted payload's.
-      // The pre-flight gate selected only unclaimed or self-claimed batches;
-      // a raced ownership change trips the stamp's rowcount backstop loudly.
-      await stampProductionEmissionsClaim(orgCtx, {
-        removalId,
-        creditBatchIds: productionClaimBatchIds,
-      });
       if (
         !ctx.latestSubmission ||
         ctx.latestSubmission.externalId !== claimed.externalId ||
