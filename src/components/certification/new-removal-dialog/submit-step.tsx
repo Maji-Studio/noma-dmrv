@@ -97,7 +97,9 @@ export function SubmitStep({
   const requirementsMet =
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
   const canDiscardLocalDraft =
-    ctx.latestSubmission === null && ctx.linkedGhgStatement === null;
+    ctx.latestSubmission === null &&
+    ctx.linkedGhgStatement === null &&
+    !submitMutation.isPending;
 
   const discardDialog = (
     <DeleteConfirmDialog
@@ -122,7 +124,7 @@ export function SubmitStep({
           },
         );
       }}
-      isPending={discardMutation.isPending}
+      isPending={discardMutation.isPending || submitMutation.isPending}
       errorMessage={
         discardMutation.error instanceof Error
           ? discardMutation.error.message
@@ -366,7 +368,11 @@ export function SubmitStep({
 
       <div className="flex items-center justify-between gap-12">
         {canDiscardLocalDraft ? (
-          <Button variant="default" onClick={() => setDiscardConfirmOpen(true)}>
+          <Button
+            variant="default"
+            onClick={() => setDiscardConfirmOpen(true)}
+            disabled={submitMutation.isPending}
+          >
             Discard draft
           </Button>
         ) : (

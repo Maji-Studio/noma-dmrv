@@ -36,6 +36,22 @@ const THOUSAND_YEAR_REMOVAL_ERROR =
   "A 1000-year Removal can contain one credit batch. Create a separate Removal for each credit batch.";
 const DISCARD_REMOVAL_ERROR =
   "This Removal cannot be discarded because it may have registry history. Refresh the page and review its status.";
+const REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY =
+  "submissionExternalMutationPossible";
+const REMOVAL_EXTERNAL_MUTATION_POSSIBLE_PATCH = JSON.stringify({
+  [REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY]: true,
+});
+
+function removalMayHaveExternalMutation(metadata: unknown): boolean {
+  return (
+    metadata !== null &&
+    typeof metadata === "object" &&
+    !Array.isArray(metadata) &&
+    (metadata as Record<string, unknown>)[
+      REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY
+    ] === true
+  );
+}
 
 // A removal ledger row is keyed (provider, 'removal', 'removal', removalId).
 export async function removalHasBlockingSubmission(
@@ -559,6 +575,7 @@ export async function discardLocalRemovalDraft(
         ghgStatementId: certifierRemovals.ghgStatementId,
         startedOn: certifierRemovals.startedOn,
         completedOn: certifierRemovals.completedOn,
+        metadata: certifierRemovals.metadata,
       })
       .from(certifierRemovals)
       .where(
@@ -575,7 +592,8 @@ export async function discardLocalRemovalDraft(
       !removal ||
       removal.ghgStatementId !== null ||
       removal.startedOn !== null ||
-      removal.completedOn !== null
+      removal.completedOn !== null ||
+      removalMayHaveExternalMutation(removal.metadata)
     ) {
       throw new SafeError(DISCARD_REMOVAL_ERROR);
     }
@@ -695,6 +713,64 @@ export async function discardLocalRemovalDraft(
       "local certifier removal draft discarded",
     );
     return { releasedSliceCount: released.length };
+  });
+}
+
+// Persist the point after which submission may create or update registry
+// Sources. This marker is intentionally sticky: once the external-write window
+// opens, a missing ledger row no longer proves that deleting the local Removal
+// is safe. Taking the Removal row lock before the shared artifact lock matches
+// discardLocalRemovalDraft's order, so either discard wins before this marker
+// (and submission stops) or recovery observes the marker and fails closed.
+export async function markRemovalSubmissionExternalMutationPossible(
+  ctx: OrgContext,
+  facilityId: string,
+  removalId: string,
+): Promise<void> {
+  requireOrgScope(ctx);
+
+  await db.transaction(async (tx) => {
+    const [removal] = await tx
+      .select({ id: certifierRemovals.id })
+      .from(certifierRemovals)
+      .where(
+        and(
+          eq(certifierRemovals.id, removalId),
+          eq(certifierRemovals.facilityId, facilityId),
+          eq(certifierRemovals.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!removal) {
+      throw new SafeError("Removal not found.");
+    }
+
+    await acquireCertificationArtifactLocksSorted(tx, [
+      {
+        provider: ISOMETRIC,
+        localEntityType: "removal",
+        localEntityId: removalId,
+      },
+    ]);
+
+    const [updated] = await tx
+      .update(certifierRemovals)
+      .set({
+        metadata: sql`coalesce(${certifierRemovals.metadata}, '{}'::jsonb) || ${REMOVAL_EXTERNAL_MUTATION_POSSIBLE_PATCH}::jsonb`,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(certifierRemovals.id, removalId),
+          eq(certifierRemovals.facilityId, facilityId),
+          eq(certifierRemovals.organizationId, ctx.organizationId),
+        ),
+      )
+      .returning({ id: certifierRemovals.id });
+    if (!updated) {
+      throw new SafeError("Removal not found.");
+    }
   });
 }
 

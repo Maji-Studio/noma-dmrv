@@ -240,6 +240,37 @@ describe("SubmitStep", () => {
     await act(async () => renderer?.unmount());
   });
 
+  it("does not offer discard while submission is pending", async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <SubmitStep
+          removalId="removal-1"
+          facilityId="facility-1"
+          facilityName="Tanzania facility"
+          ctx={CONTEXT}
+          onDone={vi.fn()}
+          submitMutation={
+            {
+              mutate: vi.fn(),
+              isPending: true,
+              isSuccess: false,
+              isError: false,
+              data: undefined,
+              error: null,
+              reset: vi.fn(),
+            } as never
+          }
+        />,
+      );
+    });
+
+    expect(findButton(renderer!, "Discard draft")).toBeUndefined();
+    expect(findButton(renderer!, "Confirm discard")).toBeUndefined();
+    await act(async () => renderer?.unmount());
+  });
+
   it("refreshes the route after success without closing the dialog", async () => {
     const mutate = vi.fn();
     const onDone = vi.fn();

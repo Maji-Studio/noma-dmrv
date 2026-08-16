@@ -12,7 +12,10 @@
 - Recovery refuses any Removal with a submission ledger row, sync history,
   production claim, reporting dates, or GHG Statement membership. It shares
   the submission advisory lock so a concurrent claim cannot create orphaned
-  history or race the discard.
+  history or race the discard. Before any submit-time Source mirroring can
+  mutate Isometric, noma persists a sticky possible-mutation marker under the
+  same Removal and artifact locks, so recovery also fails closed throughout
+  the pre-ledger external-write window.
 
 ## 2026-08-16 (whole-batch production-claim concurrency hardening)
 

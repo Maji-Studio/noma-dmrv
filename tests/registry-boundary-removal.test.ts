@@ -89,6 +89,7 @@ import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
 import type { CertifierProjectRow } from "@/data-access/certification";
+import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as sources from "@/fn/certification/sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
@@ -626,6 +627,67 @@ beforeEach(() => {
 
 
 beforeAll(() => ensureTestOrg());
+
+describe("submitRemoval boundary — discard interlock", () => {
+  it("refuses discard once submission enters the pre-ledger external-write window", async () => {
+    const fixture = await createFixture();
+    const orgCtx = makeTestOrgContext(USER_ID);
+    setContext(fixture);
+
+    let signalMirrorEntered: (() => void) | undefined;
+    const mirrorEntered = new Promise<void>((resolve) => {
+      signalMirrorEntered = resolve;
+    });
+    let releaseMirror: (() => void) | undefined;
+    const mirrorRelease = new Promise<void>((resolve) => {
+      releaseMirror = resolve;
+    });
+    vi.mocked(sources.mirrorCandidateSourcesForSubmission).mockImplementationOnce(
+      async () => {
+        signalMirrorEntered?.();
+        await mirrorRelease;
+        throw new SafeError("Injected Source mirror interruption.");
+      },
+    );
+
+    const submissionResult = submitRemoval({
+      orgCtx,
+      removalId: fixture.removalId,
+    }).then(
+      () => ({ kind: "fulfilled" as const }),
+      (error: unknown) => ({ kind: "rejected" as const, error }),
+    );
+
+    await mirrorEntered;
+    await expect(
+      discardLocalRemovalDraft(
+        orgCtx,
+        fixture.facilityId,
+        fixture.removalId,
+      ),
+    ).rejects.toThrow(/cannot be discarded/i);
+
+    const [preservedRemoval] = await db
+      .select({
+        id: certifierRemovals.id,
+        metadata: certifierRemovals.metadata,
+      })
+      .from(certifierRemovals)
+      .where(eq(certifierRemovals.id, fixture.removalId));
+    expect(preservedRemoval).toMatchObject({
+      id: fixture.removalId,
+      metadata: { submissionExternalMutationPossible: true },
+    });
+    expect(await listRows(fixture.removalId)).toEqual([]);
+
+    releaseMirror?.();
+    const result = await submissionResult;
+    expect(result.kind).toBe("rejected");
+    if (result.kind === "rejected") {
+      expect(result.error).toBeInstanceOf(SafeError);
+    }
+  });
+});
 
 describe("submitRemoval boundary — datapoint orphan (test 1)", () => {
   it("resume reconciles the dropped datapoint by supplier ref and POSTs only the remaining ones", async () => {
