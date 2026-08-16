@@ -34,7 +34,8 @@ beforeAll(() => ensureTestOrg());
 describe("credit batch accounting", () => {
   it("keeps multi-application Roll-up projections aligned behind one deep read", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
-    const ids: string[] = [];
+    const applicationIds: string[] = [];
+    const removalIds: string[] = [];
     const [facility] = await db.insert(facilities).values({ organizationId: TEST_ORG_ID, code: `LF-F-${tag}`, name: `Lineage ${tag}` }).returning();
     const [sourceBin] = await db.insert(storageLocations).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-SL-${tag}`, name: `Source ${tag}`, type: "biochar_bin" }).returning();
     const [reactor] = await db.insert(reactors).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-R-${tag}`, identifier: `Lineage ${tag}`, reactorType: "fixed-bed" }).returning();
@@ -66,7 +67,10 @@ describe("credit batch accounting", () => {
       { organizationId: TEST_ORG_ID, creditBatchId: batch.id, applicationId: appRows[1].id, allocatedWetMassKg: 2_000, allocatedDryMassKg: 1_500 },
       { organizationId: TEST_ORG_ID, creditBatchId: batch.id, applicationId: multiRunApplication.id, allocatedWetMassKg: 4_000, allocatedDryMassKg: 2_000 },
     ]);
-    ids.push(...runs.map((r) => r.id), ...stocks.map((s) => s.id), ...products.map((p) => p.id), ...ordersRows.map((o) => o.id), ...deliveryRows.map((d) => d.id), ...appRows.map((a) => a.id));
+    applicationIds.push(
+      ...appRows.map((application) => application.id),
+      multiRunApplication.id,
+    );
 
     try {
       const accounting = (
@@ -163,6 +167,7 @@ describe("credit batch accounting", () => {
         facility.id,
         [batch.id],
       );
+      removalIds.push(firstRemovalId);
       const firstFrozen = (
         await loadCreditBatchRollups(ctx, [batch.id], {
           removalId: firstRemovalId,
@@ -178,6 +183,7 @@ describe("credit batch accounting", () => {
           biocharAppliedDryTons: 0.125,
         })
         .returning();
+      applicationIds.push(laterApplication.id);
       await db.transaction((tx) =>
         reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
           applicationIds: [laterApplication.id],
@@ -188,6 +194,7 @@ describe("credit batch accounting", () => {
         facility.id,
         [batch.id],
       );
+      removalIds.push(secondRemovalId);
       const firstAfterSecond = (
         await loadCreditBatchRollups(ctx, [batch.id], {
           removalId: firstRemovalId,
@@ -202,13 +209,12 @@ describe("credit batch accounting", () => {
       expect(firstAfterSecond.appliedWeightTons).toBe(firstFrozen.appliedWeightTons);
       expect(secondFrozen.applicationIds).toEqual([laterApplication.id]);
       expect(secondFrozen.appliedWeightTons).toBe(0.25);
-      ids.push(laterApplication.id, firstRemovalId, secondRemovalId);
     } finally {
       await db.delete(creditBatchApplications).where(eq(creditBatchApplications.creditBatchId, batch.id));
-      await db.delete(certifierRemovals).where(inArray(certifierRemovals.id, ids));
+      await db.delete(certifierRemovals).where(inArray(certifierRemovals.id, removalIds));
       await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.creditBatchId, batch.id));
       await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));
-      await db.delete(applications).where(inArray(applications.id, [...ids, multiRunApplication.id]));
+      await db.delete(applications).where(inArray(applications.id, applicationIds));
       await db.delete(deliveries).where(inArray(deliveries.id, [...deliveryRows.map((row) => row.id), multiRunDelivery.id]));
       await db.delete(orders).where(inArray(orders.id, [...ordersRows.map((row) => row.id), multiRunOrder.id]));
       await db.delete(biocharProductSourceAllocations).where(inArray(biocharProductSourceAllocations.id, allocationRows.map((row) => row.id)));
