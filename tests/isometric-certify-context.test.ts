@@ -394,12 +394,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 
-  it("still walks production lineage when the default template is missing", async () => {
+  it("loads unapplied member runs for a whole-batch production claim", async () => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      productionRunIds: ["pr-1"],
+      productionRunIds: ["pr-1", "pr-unapplied"],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
@@ -439,6 +439,15 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         biocharDryMassKg: 1000,
         samples: [],
       } as never,
+      {
+        id: "pr-unapplied",
+        code: "PR-UNAPPLIED",
+        status: "complete",
+        hasReadingsFile: true,
+        startTime: new Date("2026-01-06T00:00:00Z"),
+        biocharDryMassKg: 500,
+        samples: [],
+      } as never,
     ]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
@@ -447,9 +456,15 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
 
     expect(result.defaultTemplate).toBeNull();
-    expect(result.hasSubmittableRuns).toBe(true);
-    expect(result.productionReadinessGap).toBeNull();
-    expect(result.runSummary.runCount).toBe(1);
+    expect(result.runSummary).toMatchObject({
+      runCount: 2,
+      totalBiocharOutputKg: 1_500,
+      appliedDryKg: 1_000,
+    });
+    expect(mockedGetRuns).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      ["pr-1", "pr-unapplied"],
+    );
     expect(mockedGetLineage).toHaveBeenCalledWith(makeTestOrgContext(USER_ID), "app-1");
   });
 

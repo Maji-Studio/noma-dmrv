@@ -217,4 +217,35 @@ describe("aggregateProductionRuns production claims", () => {
     expect(result.totalStartupDieselLitres).toBe(7);
     expect(result.totalElectricityKwh).toBe(10);
   });
+
+  it("counts an unapplied member run in production while its stored mass stays zero", () => {
+    const run = (id: string, biocharDryMassKg: number, feedstockMassDryKg: number) =>
+      ({
+        id,
+        code: id,
+        startTime: new Date("2026-01-01T08:00:00Z"),
+        endTime: new Date("2026-01-01T12:00:00Z"),
+        biocharDryMassKg,
+        feedstockMassDryKg,
+        dieselOperationLiters: 1,
+        dieselGensetLiters: 0,
+        preprocessingFuelLiters: 0,
+        electricityKwh: 2,
+        samples: [],
+      }) as unknown as ProductionRunWithSamples;
+
+    const result = aggregateProductionRuns(
+      [run("run-applied", 100, 500), run("run-unapplied", 200, 700)],
+      new Map([
+        ["run-applied", 0.5],
+        ["run-unapplied", 0],
+      ]),
+      { productionRunIds: new Set(["run-applied", "run-unapplied"]) },
+    );
+
+    expect(result.totalBiocharDryMassKg).toBe(50);
+    expect(result.totalFeedstockDryMassKg).toBe(1_200);
+    expect(result.totalStartupDieselLitres).toBe(2);
+    expect(result.totalElectricityKwh).toBe(4);
+  });
 });

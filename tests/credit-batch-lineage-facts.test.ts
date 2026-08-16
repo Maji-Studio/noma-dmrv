@@ -9,6 +9,7 @@ import {
   creditBatchProductionRuns,
   creditBatches,
   customers,
+  certificationSubmissions,
   certifierRemovals,
   deliveries,
   facilities,
@@ -24,7 +25,10 @@ import {
 import { loadCreditBatchAccounting } from "@/data-access/credit-batch-accounting";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import { getCreditBatchById } from "@/data-access/credit-batches";
-import { createRemovalWithCreditBatches } from "@/data-access/certifier-removals";
+import {
+  createRemovalWithCreditBatches,
+  listProductionClaimDraftContenders,
+} from "@/data-access/certifier-removals";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "@/data-access/credit-batch-application-slices";
 import { getCreditBatchChainData } from "@/data-access/chain-of-custody-batch";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
@@ -56,10 +60,10 @@ describe("credit batch accounting", () => {
       { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, biocharProductId: products[0].id, code: `LF-D1-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 10 },
       { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, code: `LF-D2-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 20 },
     ]).returning();
-    const appRows = await db.insert(applications).values(deliveryRows.map((delivery, n) => ({ organizationId: TEST_ORG_ID, deliveryId: delivery.id, code: `LF-A${n}-${tag}`, biocharAppliedTons: n + 1, biocharAppliedDryTons: n + 0.5 }))).returning();
+    const appRows = await db.insert(applications).values(deliveryRows.map((delivery, n) => ({ organizationId: TEST_ORG_ID, deliveryId: delivery.id, code: `LF-A${n}-${tag}`, applicationDate: new Date(`2026-08-1${n}T00:00:00Z`), biocharAppliedTons: n + 1, biocharAppliedDryTons: n + 0.5 }))).returning();
     const [multiRunOrder] = await db.insert(orders).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, biocharProductId: multiRunProduct.id, code: `LF-OM-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 400, packaging: "loose" }).returning();
     const [multiRunDelivery] = await db.insert(deliveries).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: multiRunOrder.id, biocharProductId: multiRunProduct.id, code: `LF-DM-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 400, massDryKg: 200 }).returning();
-    const [multiRunApplication] = await db.insert(applications).values({ organizationId: TEST_ORG_ID, deliveryId: multiRunDelivery.id, code: `LF-AM-${tag}`, biocharAppliedTons: 4, biocharAppliedDryTons: 2 }).returning();
+    const [multiRunApplication] = await db.insert(applications).values({ organizationId: TEST_ORG_ID, deliveryId: multiRunDelivery.id, code: `LF-AM-${tag}`, applicationDate: new Date("2026-08-12T00:00:00Z"), biocharAppliedTons: 4, biocharAppliedDryTons: 2 }).returning();
     const [batch] = await db.insert(creditBatches).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id, productionProcessId: process.id, code: `LF-CB-${tag}`, startDate: "2026-07-01", endDate: "2026-07-31" }).returning();
     await db.insert(creditBatchProductionRuns).values(runs.map((run) => ({ organizationId: TEST_ORG_ID, creditBatchId: batch.id, productionRunId: run.id })));
     await db.insert(creditBatchApplications).values([
@@ -179,6 +183,7 @@ describe("credit batch accounting", () => {
           organizationId: TEST_ORG_ID,
           deliveryId: deliveryRows[0].id,
           code: `LF-A-LATER-${tag}`,
+          applicationDate: new Date("2026-06-20T00:00:00Z"),
           biocharAppliedTons: 0.25,
           biocharAppliedDryTons: 0.125,
         })
@@ -209,7 +214,47 @@ describe("credit batch accounting", () => {
       expect(firstAfterSecond.appliedWeightTons).toBe(firstFrozen.appliedWeightTons);
       expect(secondFrozen.applicationIds).toEqual([laterApplication.id]);
       expect(secondFrozen.appliedWeightTons).toBe(0.25);
+
+      const draftRows = await db
+        .insert(certificationSubmissions)
+        .values([
+          {
+            organizationId: TEST_ORG_ID,
+            provider: "isometric" as const,
+            submissionType: "removal",
+            localEntityType: "removal",
+            localEntityId: firstRemovalId,
+            version: 1,
+            status: "draft" as const,
+            createdAt: new Date("2026-08-01T00:00:00Z"),
+          },
+          {
+            organizationId: TEST_ORG_ID,
+            provider: "isometric" as const,
+            submissionType: "removal",
+            localEntityType: "removal",
+            localEntityId: secondRemovalId,
+            version: 1,
+            status: "draft" as const,
+            createdAt: new Date("2026-08-02T00:00:00Z"),
+          },
+        ])
+        .returning({ id: certificationSubmissions.id });
+      const contenders = await listProductionClaimDraftContenders(ctx, [batch.id]);
+      expect(contenders.map((contender) => contender.removalId)).toEqual([
+        secondRemovalId,
+        firstRemovalId,
+      ]);
+      await db.delete(certificationSubmissions).where(
+        inArray(
+          certificationSubmissions.id,
+          draftRows.map((row) => row.id),
+        ),
+      );
     } finally {
+      await db.delete(certificationSubmissions).where(
+        inArray(certificationSubmissions.localEntityId, removalIds),
+      );
       await db.delete(creditBatchApplications).where(eq(creditBatchApplications.creditBatchId, batch.id));
       await db.delete(certifierRemovals).where(inArray(certifierRemovals.id, removalIds));
       await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.creditBatchId, batch.id));

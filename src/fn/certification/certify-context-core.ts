@@ -88,6 +88,7 @@ import {
   type MemberCreditBatch,
 } from "./member-credit-batch";
 import { collectProductionClaimAwareRequiredTransportCategories, collectProductionClaimAwareTransportEntityIds } from "./production-claim-transport-scope";
+import { includesProductionInputs } from "./production-claim-policy";
 import { summarizeApplicationSlices } from "./application-slice-summary";
 import { buildRemovalLedgerPreview, type RemovalLedgerPreview } from "./removal-ledger-preview";
 import {
@@ -541,7 +542,7 @@ export async function buildRemovalContext(
     ),
     scope: scope.removalId ? "removal" : "creditBatch",
   });
-  const runIds = Array.from(
+  const appliedRunIds = Array.from(
     new Set(
       lineages
         .map((l) => l.productionRun?.id)
@@ -554,7 +555,7 @@ export async function buildRemovalContext(
   const durabilityBatchData = await loadDurabilityBatchData(
     orgCtx,
     scope.memberBatches.map((b) => b.id),
-    new Set(runIds),
+    new Set(appliedRunIds),
   );
   const {
     batchesWithSamples,
@@ -633,6 +634,22 @@ export async function buildRemovalContext(
     };
   }
 
+  // Stored and delivery quantities remain application-scoped, but the first
+  // Removal to claim a credit batch must carry every member run's production
+  // inputs, including runs whose biochar has not yet been applied. Load that
+  // whole production union; buildMassAccounting assigns unapplied runs a zero
+  // stored-mass factor.
+  const productionClaimRunIds = scope.memberBatches
+    .filter((batch) =>
+      includesProductionInputs(
+        batch.productionEmissionsClaimedByRemovalId,
+        scope.removalId,
+      ),
+    )
+    .flatMap((batch) => batch.productionRunIds);
+  const runIds = Array.from(
+    new Set([...appliedRunIds, ...productionClaimRunIds]),
+  );
   const runs =
     runIds.length > 0
       ? await getProductionRunsWithSamples(orgCtx, runIds)

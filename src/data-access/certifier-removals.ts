@@ -1,5 +1,7 @@
 import { and, asc, desc, eq, exists, inArray, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
+import { applications } from "@/db/schema/application";
 import {
   certifierRemovals,
   certificationSubmissions,
@@ -64,8 +66,16 @@ export async function listProductionClaimDraftContenders(
 ): Promise<ProductionClaimDraftContender[]> {
   requireOrgScope(ctx);
   if (creditBatchIds.length === 0) return [];
+  const removalSlices = alias(
+    creditBatchApplications,
+    "production_claim_removal_slices",
+  );
+  const removalApplications = alias(
+    applications,
+    "production_claim_removal_applications",
+  );
   return db
-    .selectDistinct({
+    .select({
       creditBatchId: creditBatchApplications.creditBatchId,
       removalId: certificationSubmissions.localEntityId,
       submissionId: certificationSubmissions.id,
@@ -85,6 +95,29 @@ export async function listProductionClaimDraftContenders(
         ),
       ),
     )
+    .innerJoin(
+      removalSlices,
+      and(
+        eq(
+          removalSlices.removalId,
+          certificationSubmissions.localEntityId,
+        ),
+        eq(
+          removalSlices.organizationId,
+          certificationSubmissions.organizationId,
+        ),
+      ),
+    )
+    .innerJoin(
+      removalApplications,
+      and(
+        eq(removalApplications.id, removalSlices.applicationId),
+        eq(
+          removalApplications.organizationId,
+          certificationSubmissions.organizationId,
+        ),
+      ),
+    )
     .where(
       and(
         inArray(creditBatchApplications.creditBatchId, creditBatchIds),
@@ -96,8 +129,19 @@ export async function listProductionClaimDraftContenders(
         eq(certificationSubmissions.status, "draft"),
       ),
     )
+    .groupBy(
+      creditBatchApplications.creditBatchId,
+      certificationSubmissions.localEntityId,
+      certificationSubmissions.id,
+      certificationSubmissions.createdAt,
+    )
     .orderBy(
       asc(creditBatchApplications.creditBatchId),
+      // §8.6.2 assigns the production bucket to the earliest reporting
+      // quarter, not whichever operator happened to click Submit first. A
+      // Removal completes on its latest member Application, so derive the
+      // quarter from every frozen slice owned by the contender.
+      asc(sql`date_trunc('quarter', max(${removalApplications.applicationDate}))`),
       asc(certificationSubmissions.createdAt),
       asc(certificationSubmissions.id),
     );
@@ -386,6 +430,50 @@ export async function createRemovalWithCreditBatches(
       );
     }
 
+    const selectedApplicationIds = [
+      ...new Set(slices.map((slice) => slice.applicationId)),
+    ];
+    // Reconcile by Application as well as by the selected batches so legacy
+    // or concurrently-created sibling slices cannot stay invisible. A single
+    // physical Application must be captured completely by one Removal.
+    await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
+      applicationIds: selectedApplicationIds,
+    });
+    const unassignedSiblingSlices = await tx
+      .select({
+        creditBatchId: creditBatchApplications.creditBatchId,
+        applicationId: creditBatchApplications.applicationId,
+      })
+      .from(creditBatchApplications)
+      .where(
+        and(
+          inArray(
+            creditBatchApplications.applicationId,
+            selectedApplicationIds,
+          ),
+          isNull(creditBatchApplications.removalId),
+          eq(creditBatchApplications.organizationId, ctx.organizationId),
+        ),
+      )
+      .orderBy(
+        creditBatchApplications.applicationId,
+        creditBatchApplications.creditBatchId,
+      )
+      .for("update");
+    const selectedIdSet = new Set(uniqueIds);
+    const omittedSiblingBatchIds = [
+      ...new Set(
+        unassignedSiblingSlices
+          .filter((slice) => !selectedIdSet.has(slice.creditBatchId))
+          .map((slice) => slice.creditBatchId),
+      ),
+    ];
+    if (omittedSiblingBatchIds.length > 0) {
+      throw new SafeError(
+        "A selected Application also has unassigned mass in another credit batch. Select every related credit batch so the Application is assigned to one Removal in full.",
+      );
+    }
+
     const [removal] = await tx
       .insert(certifierRemovals)
       .values({ facilityId, organizationId: ctx.organizationId })
@@ -402,7 +490,7 @@ export async function createRemovalWithCreditBatches(
         ),
       )
       .returning({ applicationId: creditBatchApplications.applicationId });
-    if (assigned.length !== slices.length) {
+    if (assigned.length !== unassignedSiblingSlices.length) {
       throw new SafeError(
         "Application allocation changed while creating the Removal. Refresh and retry.",
       );
