@@ -5,6 +5,7 @@ import {
   eq,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   ne,
   or,
@@ -64,6 +65,31 @@ import { parseGisBoundary } from "@/schemas/gis-boundary";
 const DEFAULT_PAGE_SIZE = 100;
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
 const INVALID_APPLICATION_EVIDENCE_MESSAGE = "Application evidence is invalid.";
+
+async function assertApplicationSlicesAreMutable(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  applicationId: string,
+  mutation: "update" | "delete",
+): Promise<void> {
+  const [ownedSlice] = await tx
+    .select({ removalId: creditBatchApplications.removalId })
+    .from(creditBatchApplications)
+    .where(
+      and(
+        eq(creditBatchApplications.applicationId, applicationId),
+        isNotNull(creditBatchApplications.removalId),
+        eq(creditBatchApplications.organizationId, ctx.organizationId),
+      ),
+    )
+    .for("update")
+    .limit(1);
+  if (!ownedSlice) return;
+
+  throw new SafeError(
+    `Cannot ${mutation} this Application because its applied mass belongs to a Removal.`,
+  );
+}
 
 export interface ApplicationDeliveryOptionData {
   id: string;
@@ -803,6 +829,10 @@ export async function updateApplication(
       data.deliveryId !== undefined ||
       data.biocharAppliedTons !== undefined;
 
+    if (shouldRecalculateDryMass) {
+      await assertApplicationSlicesAreMutable(ctx, tx, id, "update");
+    }
+
     if (shouldRecalculateDryMass && deliveryMassState) {
       updateData.biocharAppliedDryTons = resolveApplicationDryMassTons({
         biocharAppliedTons: effectiveAppliedTons,
@@ -867,6 +897,7 @@ export async function deleteApplication(ctx: OrgContext, id: string): Promise<vo
       { entityType: "application", entityId: id },
       "delete",
     );
+    await assertApplicationSlicesAreMutable(ctx, tx, id, "delete");
 
     const linkedCreditBatches = await getLinkedCreditBatches(ctx, tx, id);
     const blockingBatches = linkedCreditBatches.filter((batch) =>

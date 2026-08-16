@@ -49,6 +49,7 @@ import {
   assertProductionClaimGateFresh,
   assertResumedSnapshotRevisionCurrent,
 } from "./production-claim-gate";
+import { includesProductionInputs } from "./production-claim-policy";
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
   readRemovalBiocharApplicationIntents,
@@ -300,10 +301,8 @@ async function submitRemovalCore(
   }
 
   const productionClaimBatchIds = ctx.memberBatchClaims
-    .filter(
-      (batch) =>
-        batch.claimedByRemovalId == null ||
-        batch.claimedByRemovalId === removalId,
+    .filter((batch) =>
+      includesProductionInputs(batch.claimedByRemovalId, removalId),
     )
     .map((batch) => batch.creditBatchId);
 

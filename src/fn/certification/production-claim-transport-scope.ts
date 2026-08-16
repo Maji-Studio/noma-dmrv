@@ -1,6 +1,7 @@
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { collectTransportEntityIds } from "@/lib/isometric";
+import { includesProductionInputs } from "./production-claim-policy";
 
 type TransportCategory = "feedstock" | "biochar" | "sample";
 
@@ -14,9 +15,9 @@ function batchIncludesProductionInputs(
   batch: ProductionClaimScopeBatch,
   removalId: string | null,
 ): boolean {
-  return (
-    batch.productionEmissionsClaimedByRemovalId == null ||
-    batch.productionEmissionsClaimedByRemovalId === removalId
+  return includesProductionInputs(
+    batch.productionEmissionsClaimedByRemovalId,
+    removalId,
   );
 }
 

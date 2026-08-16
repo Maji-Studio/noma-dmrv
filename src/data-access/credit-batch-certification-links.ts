@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatchApplications, creditBatches } from "@/db/schema";
 import { certifierRemovals } from "@/db/schema/certification";
@@ -19,8 +19,8 @@ export async function listCreditBatchCertificationLinks(
   requireOrgScope(ctx);
   if (batchIds.length === 0) return [];
 
-  const rows = await db
-    .select({
+  return db
+    .selectDistinct({
       id: creditBatches.id,
       facilityId: creditBatches.facilityId,
       removalId: creditBatchApplications.removalId,
@@ -47,11 +47,8 @@ export async function listCreditBatchCertificationLinks(
         eq(creditBatches.organizationId, ctx.organizationId),
       ),
     )
-    .orderBy(desc(certifierRemovals.createdAt));
-
-  return batchIds.flatMap((batchId) => {
-    const candidates = rows.filter((row) => row.id === batchId);
-    const unassigned = candidates.find((row) => row.removalId == null);
-    return unassigned ? [unassigned] : candidates.slice(0, 1);
-  });
+    .orderBy(
+      sql`${certifierRemovals.createdAt} desc nulls last`,
+      desc(certifierRemovals.id),
+    );
 }

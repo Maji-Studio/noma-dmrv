@@ -3,6 +3,10 @@ import type { OrgContext } from "@/lib/auth/server";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import {
+  kgToTonnes,
+  tonnesToKg,
+} from "@/lib/calculations/unit-conversions";
+import {
   buildBiocharApplicationReference,
   buildCreateBiocharApplicationRequest,
   type CreateBiocharApplicationRequest,
@@ -162,12 +166,12 @@ export async function compileBiocharApplicationIntents(args: {
       : [{
           applicationId,
           creditBatchId: creditBatchIds[0],
-          allocatedWetMassKg: input.appliedTonnes * 1_000,
+          allocatedWetMassKg: tonnesToKg(input.appliedTonnes),
           allocatedDryMassKg: 0,
         }];
 
     return effectiveSlices.map((slice) => {
-      const appliedTonnes = slice.allocatedWetMassKg / 1_000;
+      const appliedTonnes = kgToTonnes(slice.allocatedWetMassKg);
       const supplierReference = buildBiocharApplicationReference({
         applicationId,
         creditBatchId: slice.creditBatchId,

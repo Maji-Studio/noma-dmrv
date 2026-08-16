@@ -8,6 +8,7 @@ import {
   isNull,
   lte,
   or,
+  sql,
 } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
@@ -25,6 +26,7 @@ import {
 } from "@/db/schema/production";
 import { feedstocks } from "@/db/schema/feedstock";
 import { feedstockTypes } from "@/db/schema/feedstock";
+import { certifierRemovals } from "@/db/schema/certification";
 import {
   DURABILITY_TIER_FALLBACK,
   type CreateCreditBatchData,
@@ -67,6 +69,7 @@ import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { assertRemovalAllowsCreditBatchMutation } from "./credit-batch-certification-lock";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
+import { deleteCreditBatchApplicationSlices } from "./credit-batch-delete-slices";
 
 const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
   "draft",
@@ -219,11 +222,11 @@ export async function getCreditBatches(
 }
 
 /**
- * Resolve only the removal membership needed to choose certification scope.
- * This avoids assembling full accounting for a grouped batch before the
- * removal-wide accounting read.
+ * Resolve the active certification scope for a credit batch. Newly applied,
+ * unassigned mass takes precedence and returns null; otherwise the newest
+ * owning Removal is selected deterministically.
  */
-export async function getCreditBatchRemovalId(
+export async function getCreditBatchActiveScopeRemovalId(
   ctx: OrgContext,
   id: string,
 ): Promise<string | null> {
@@ -244,14 +247,25 @@ export async function getCreditBatchRemovalId(
   const slices = await db
     .select({ removalId: creditBatchApplications.removalId })
     .from(creditBatchApplications)
+    .leftJoin(
+      certifierRemovals,
+      and(
+        eq(certifierRemovals.id, creditBatchApplications.removalId),
+        eq(certifierRemovals.organizationId, ctx.organizationId),
+      ),
+    )
     .where(
       and(
         eq(creditBatchApplications.creditBatchId, id),
         eq(creditBatchApplications.organizationId, ctx.organizationId),
       ),
+    )
+    .orderBy(
+      sql`${certifierRemovals.createdAt} desc nulls last`,
+      desc(certifierRemovals.id),
     );
   if (slices.some((slice) => slice.removalId == null)) return null;
-  return slices.find((slice) => slice.removalId)?.removalId ?? null;
+  return slices[0]?.removalId ?? null;
 }
 
 /**
@@ -821,6 +835,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
     await tx
       .delete(creditBatchProductionRuns)
       .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
+    await deleteCreditBatchApplicationSlices(ctx, tx, id);
     await tx.delete(creditBatches).where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
 
     await retireDocumentsForEntities(ctx, tx, [

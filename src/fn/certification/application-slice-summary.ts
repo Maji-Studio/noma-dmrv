@@ -1,4 +1,5 @@
 import type { BatchLineageApplicationFact } from "@/data-access/credit-batch-accounting";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
 export interface ApplicationSliceSummary {
   applicationId: string;
@@ -16,9 +17,9 @@ export function summarizeApplicationSlices(
       allocatedWetMassKg: 0,
       allocatedDryMassKg: 0,
     };
-    slice.allocatedWetMassKg += application.biocharAppliedTons * 1_000;
+    slice.allocatedWetMassKg += tonnesToKg(application.biocharAppliedTons);
     slice.allocatedDryMassKg +=
-      (application.biocharAppliedDryTons ?? 0) * 1_000;
+      tonnesToKg(application.biocharAppliedDryTons ?? 0);
     slices.set(application.id, slice);
   }
   return [...slices.values()].sort((a, b) =>

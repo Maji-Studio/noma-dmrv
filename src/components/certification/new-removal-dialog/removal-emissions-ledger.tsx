@@ -6,6 +6,11 @@ import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import type { RemovalCompilationView } from "@/fn/certification";
 import type { RemovalLedgerPreview } from "@/fn/certification/removal-ledger-preview";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import {
+  certificationRemovalsHref,
+  productionRunDeepLinkHref,
+  traceabilityApplicationHref,
+} from "@/lib/certification/links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatTonnes } from "@/lib/format-utils";
 
@@ -65,6 +70,9 @@ export function RemovalEmissionsLedger({
     claims.length > 1 &&
     productionAndDeliveryCount > 0 &&
     deliveryOnlyCount > 0;
+  const creditBatchCodeById = new Map(
+    ledger.creditBatches.map((batch) => [batch.id, batch.code]),
+  );
 
   return (
     <section
@@ -118,35 +126,44 @@ export function RemovalEmissionsLedger({
           Inputs included
         </p>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[34rem] text-left body-caption">
-          <thead className="text-[var(--color-text-tertiary)]">
-            <tr className="border-t border-[var(--color-border-tertiary)]">
-              <th className="px-20 py-8 font-normal">Component</th>
-              <th className="px-12 py-8 font-normal">Input</th>
-              <th className="px-20 py-8 text-right font-normal">Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ledger.inputs.map((input) => (
-              <tr
-                key={input.id}
-                className="border-t border-[var(--color-border-tertiary)]"
-              >
-                <td className="px-20 py-8 text-[var(--color-text-secondary)]">
-                  {input.component}
-                </td>
-                <td className="px-12 py-8 text-[var(--color-text-primary)]">
-                  {input.input}
-                </td>
-                <td className="px-20 py-8 text-right font-mono tabular-nums text-[var(--color-text-primary)]">
-                  {inputValue(input)}
-                </td>
+      {ledger.inputsUnavailable || ledger.inputs.length === 0 ? (
+        <div className="border-t border-[var(--color-border-tertiary)] px-20 py-12">
+          <p className="body-small text-[var(--color-text-tertiary)]">
+            {MISSING_VALUE.notAvailable}. Complete the source data checks to
+            calculate these inputs.
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[34rem] text-left body-caption">
+            <thead className="text-[var(--color-text-tertiary)]">
+              <tr className="border-t border-[var(--color-border-tertiary)]">
+                <th className="px-20 py-8 font-normal">Component</th>
+                <th className="px-12 py-8 font-normal">Input</th>
+                <th className="px-20 py-8 text-right font-normal">Value</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {ledger.inputs.map((input) => (
+                <tr
+                  key={input.id}
+                  className="border-t border-[var(--color-border-tertiary)]"
+                >
+                  <td className="px-20 py-8 text-[var(--color-text-secondary)]">
+                    {input.component}
+                  </td>
+                  <td className="px-12 py-8 text-[var(--color-text-primary)]">
+                    {input.input}
+                  </td>
+                  <td className="px-20 py-8 text-right font-mono tabular-nums text-[var(--color-text-primary)]">
+                    {inputValue(input)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {claims.length > 0 && (
         <dl className="border-t border-[var(--color-border-primary)]">
@@ -161,7 +178,10 @@ export function RemovalEmissionsLedger({
               <dd className="body-small text-right text-[var(--color-text-primary)]">
                 {claim.contribution === "delivery-only" && claim.claimingRemovalId ? (
                   <LedgerLink
-                    href={`/certification/removals?facility=${encodeURIComponent(facilityId)}&removal=${encodeURIComponent(claim.claimingRemovalId)}`}
+                    href={certificationRemovalsHref({
+                      facility: facilityId,
+                      removal: claim.claimingRemovalId,
+                    })}
                   >
                     Previously included in Removal {claim.claimingRemovalId.slice(0, 8)}…
                   </LedgerLink>
@@ -191,7 +211,7 @@ export function RemovalEmissionsLedger({
             <li key={run.id} className="flex items-baseline justify-between gap-12">
               <span>Production run</span>
               <LedgerLink
-                href={`/production-runs?facility=${encodeURIComponent(facilityId)}&run=${encodeURIComponent(run.id)}`}
+                href={productionRunDeepLinkHref(run.id, facilityId)}
               >
                 {run.code ?? "Open run"}
               </LedgerLink>
@@ -203,11 +223,24 @@ export function RemovalEmissionsLedger({
               className="flex items-baseline justify-between gap-12"
             >
               <span>{application.deliveryCode} · application</span>
-              <LedgerLink
-                href={`/traceability?batch=${encodeURIComponent(ledger.creditBatches[0]?.id ?? "")}&application=${encodeURIComponent(application.id)}`}
-              >
-                {application.code}
-              </LedgerLink>
+              <span className="flex flex-wrap justify-end gap-x-8 gap-y-4">
+                {application.creditBatchIds.length === 0
+                  ? MISSING_VALUE.notAvailable
+                  : application.creditBatchIds.map((creditBatchId) => (
+                      <LedgerLink
+                        key={creditBatchId}
+                        href={traceabilityApplicationHref(
+                          creditBatchId,
+                          application.id,
+                        )}
+                      >
+                        {application.code}
+                        {application.creditBatchIds.length > 1
+                          ? ` · ${creditBatchCodeById.get(creditBatchId) ?? creditBatchId}`
+                          : ""}
+                      </LedgerLink>
+                    ))}
+              </span>
             </li>
           ))}
         </ul>

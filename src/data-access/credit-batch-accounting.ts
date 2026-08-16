@@ -45,6 +45,7 @@ import {
   type Blueprint1000YearReplicate,
 } from "@/lib/calculations/biochar-removal";
 import { SafeError } from "@/lib/errors";
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import {
   weightedBatchChemistry,
   type WeightedBatchChemistry,
@@ -437,8 +438,8 @@ async function loadLineageWithExecutor(
       gpsLatitude: row.gpsLatitude,
       gpsLongitude: row.gpsLongitude,
       gisBoundary: row.gisBoundary,
-      biocharAppliedTons: row.allocatedWetMassKg / 1_000,
-      biocharAppliedDryTons: row.allocatedDryMassKg / 1_000,
+      biocharAppliedTons: kgToTonnes(row.allocatedWetMassKg),
+      biocharAppliedDryTons: kgToTonnes(row.allocatedDryMassKg),
       sourceAllocation: null,
       soilTemperatureC: row.soilTemperatureC,
       facility: { id: row.facilityId, code: row.facilityCode, name: row.facilityName },

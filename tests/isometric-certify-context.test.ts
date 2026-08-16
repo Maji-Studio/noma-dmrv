@@ -9,7 +9,7 @@ import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import {
   getCreditBatchById,
-  getCreditBatchRemovalId,
+  getCreditBatchActiveScopeRemovalId,
 } from "@/data-access/credit-batches";
 import {
   listDocumentsForEntityIds,
@@ -36,7 +36,7 @@ import {
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
-  getCreditBatchRemovalId: vi.fn(),
+  getCreditBatchActiveScopeRemovalId: vi.fn(),
 }));
 
 vi.mock("@/data-access/certification", () => ({
@@ -87,7 +87,9 @@ vi.mock("@/lib/isometric", async () => {
 });
 
 const mockedGetCreditBatch = vi.mocked(getCreditBatchById);
-const mockedGetCreditBatchRemovalId = vi.mocked(getCreditBatchRemovalId);
+const mockedGetCreditBatchRemovalId = vi.mocked(
+  getCreditBatchActiveScopeRemovalId,
+);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);

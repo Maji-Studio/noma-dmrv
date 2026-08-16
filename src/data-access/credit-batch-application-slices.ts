@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import { db, type DbTransaction } from "@/db";
+import { type DbTransaction } from "@/db";
 import {
   applications,
   biocharProductSourceAllocations,
@@ -10,10 +10,9 @@ import {
   orders,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { SafeError } from "@/lib/errors";
 import { requireOrgScope } from "./utils";
-
-const KG_PER_TONNE = 1_000;
 
 export interface CreditBatchApplicationSlice {
   creditBatchId: string;
@@ -26,6 +25,7 @@ export interface CreditBatchApplicationSlice {
 interface ReconcileSliceScope {
   applicationIds?: string[];
   creditBatchIds?: string[];
+  biocharProductIds?: string[];
 }
 
 /**
@@ -45,7 +45,12 @@ export async function reconcileUnassignedCreditBatchApplicationSlices(
   requireOrgScope(ctx);
   const requestedApplicationIds = [...new Set(scope.applicationIds ?? [])];
   const requestedBatchIds = [...new Set(scope.creditBatchIds ?? [])];
-  if (requestedApplicationIds.length === 0 && requestedBatchIds.length === 0) {
+  const requestedProductIds = [...new Set(scope.biocharProductIds ?? [])];
+  if (
+    requestedApplicationIds.length === 0 &&
+    requestedBatchIds.length === 0 &&
+    requestedProductIds.length === 0
+  ) {
     return;
   }
 
@@ -95,7 +100,12 @@ export async function reconcileUnassignedCreditBatchApplicationSlices(
           ),
         )
     : [];
-  const scopedProductIds = scopedProductRows.map((row) => row.id);
+  const scopedProductIds = [
+    ...new Set([
+      ...requestedProductIds,
+      ...scopedProductRows.map((row) => row.id),
+    ]),
+  ];
 
   const derivedApplicationRows = scopedProductIds.length
     ? await tx
@@ -131,7 +141,18 @@ export async function reconcileUnassignedCreditBatchApplicationSlices(
       ...derivedApplicationRows.map((row) => row.id),
     ]),
   ];
-  if (applicationIds.length === 0) return;
+  if (applicationIds.length === 0) {
+    if (requestedBatchIds.length > 0) {
+      await tx.delete(creditBatchApplications).where(
+        and(
+          inArray(creditBatchApplications.creditBatchId, requestedBatchIds),
+          isNull(creditBatchApplications.removalId),
+          eq(creditBatchApplications.organizationId, ctx.organizationId),
+        ),
+      );
+    }
+    return;
+  }
 
   const applicationRows = await tx
     .select({
@@ -276,12 +297,12 @@ export async function reconcileUnassignedCreditBatchApplicationSlices(
         removalId: null,
       };
       slice.allocatedWetMassKg +=
-        application.appliedWetTons * KG_PER_TONNE *
+        tonnesToKg(application.appliedWetTons) *
         (allocations.length === 0
           ? 1
           : source.allocatedWetMassKg / totalWetWeight);
       slice.allocatedDryMassKg +=
-        application.appliedDryTons * KG_PER_TONNE *
+        tonnesToKg(application.appliedDryTons) *
         (allocations.length === 0
           ? 1
           : source.allocatedDryMassKg / totalDryWeight);
@@ -298,10 +319,9 @@ export async function reconcileUnassignedCreditBatchApplicationSlices(
     .from(creditBatchApplications)
     .where(
       and(
-        inArray(creditBatchApplications.applicationId, applicationIds),
         requestedBatchIds.length > 0
           ? inArray(creditBatchApplications.creditBatchId, requestedBatchIds)
-          : undefined,
+          : inArray(creditBatchApplications.applicationId, applicationIds),
         eq(creditBatchApplications.organizationId, ctx.organizationId),
       ),
     );
@@ -313,10 +333,9 @@ export async function reconcileUnassignedCreditBatchApplicationSlices(
 
   await tx.delete(creditBatchApplications).where(
     and(
-      inArray(creditBatchApplications.applicationId, applicationIds),
       requestedBatchIds.length > 0
         ? inArray(creditBatchApplications.creditBatchId, requestedBatchIds)
-        : undefined,
+        : inArray(creditBatchApplications.applicationId, applicationIds),
       isNull(creditBatchApplications.removalId),
       eq(creditBatchApplications.organizationId, ctx.organizationId),
     ),
@@ -325,29 +344,13 @@ export async function reconcileUnassignedCreditBatchApplicationSlices(
     .filter(([key]) => !assignedKeys.has(key))
     .map(([, row]) => ({ ...row, organizationId: ctx.organizationId }));
   if (inserts.length > 0) {
+    // A concurrent Removal may assign a slice after the read above. Preserve
+    // that assigned row instead of failing this reconciliation on the natural
+    // (creditBatchId, applicationId) key.
     // org-scope-ok: every row above is stamped with the active organization id.
-    await tx.insert(creditBatchApplications).values(inserts);
+    await tx
+      .insert(creditBatchApplications)
+      .values(inserts)
+      .onConflictDoNothing();
   }
-}
-
-export async function listCreditBatchApplicationSlicesForRemoval(
-  ctx: OrgContext,
-  removalId: string,
-): Promise<CreditBatchApplicationSlice[]> {
-  requireOrgScope(ctx);
-  return db
-    .select({
-      creditBatchId: creditBatchApplications.creditBatchId,
-      applicationId: creditBatchApplications.applicationId,
-      allocatedWetMassKg: creditBatchApplications.allocatedWetMassKg,
-      allocatedDryMassKg: creditBatchApplications.allocatedDryMassKg,
-      removalId: creditBatchApplications.removalId,
-    })
-    .from(creditBatchApplications)
-    .where(
-      and(
-        eq(creditBatchApplications.removalId, removalId),
-        eq(creditBatchApplications.organizationId, ctx.organizationId),
-      ),
-    );
 }

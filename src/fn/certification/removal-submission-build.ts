@@ -56,6 +56,10 @@ import {
   resolveTemplateInputs,
   type ResolvedMonitoredInput,
 } from "./removal-template-inputs";
+import {
+  includesProductionInputs,
+  productionClaimContribution,
+} from "./production-claim-policy";
 
 export interface RemovalSubmissionBuild {
   agg: AggregatedProductionData;
@@ -133,11 +137,10 @@ export function buildProductionEmissionClaims(
     creditBatchId: batch.creditBatchId,
     creditBatchCode: batch.code,
     claimingRemovalId: batch.claimedByRemovalId,
-    contribution:
-      batch.claimedByRemovalId == null ||
-      batch.claimedByRemovalId === removalId
-        ? "production-and-delivery"
-        : "delivery-only",
+    contribution: productionClaimContribution(
+      batch.claimedByRemovalId,
+      removalId,
+    ),
   }));
 }
 
@@ -684,20 +687,16 @@ export async function buildRemovalSubmissionBuild(args: {
     ...aggregateProductionRuns(ctx.runs, ctx.attributionByRunId, {
       productionRunIds: new Set(
         ctx.memberBatchClaims
-          .filter(
-            (batch) =>
-              batch.claimedByRemovalId == null ||
-              batch.claimedByRemovalId === removalId,
+          .filter((batch) =>
+            includesProductionInputs(batch.claimedByRemovalId, removalId),
           )
           .flatMap((batch) => batch.productionRunIds),
       ),
     }),
     ...weightedBatchChemistry(ctx.batchesWithSamples, ctx.attributionByRunId),
   };
-  const hasProductionContribution = ctx.memberBatchClaims.some(
-    (batch) =>
-      batch.claimedByRemovalId == null ||
-      batch.claimedByRemovalId === removalId,
+  const hasProductionContribution = ctx.memberBatchClaims.some((batch) =>
+    includesProductionInputs(batch.claimedByRemovalId, removalId),
   );
   if (baseAgg.warnings.length > 0) {
     throw new SafeError(

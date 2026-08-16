@@ -45,7 +45,7 @@ describe("RemovalEmissionsLedger", () => {
     const html = renderToStaticMarkup(
       <RemovalEmissionsLedger
         compilation={compilation}
-        ledger={{
+          ledger={{
           inputs: [{
             id: "biochar-transport",
             component: "Biochar transport",
@@ -53,12 +53,14 @@ describe("RemovalEmissionsLedger", () => {
             magnitude: 42,
             unit: "t·km",
           }],
+          inputsUnavailable: false,
           creditBatches: [{ id: "batch-1", code: "CB-001" }],
           productionRuns: [{ id: "run-1", code: "PR-001" }],
           applications: [{
             id: "application-1",
             code: "AP-001",
             deliveryCode: "DL-001",
+            creditBatchIds: ["batch-1"],
           }],
           claims: compilation.review.productionEmissionClaims ?? [],
         }}
@@ -73,5 +75,27 @@ describe("RemovalEmissionsLedger", () => {
     expect(html).toContain("Mass and distance");
     expect(html).toContain("AP-001");
     expect(html).toContain("Emission allocation");
+  });
+
+  it("explains when numeric inputs are unavailable", () => {
+    const html = renderToStaticMarkup(
+      <RemovalEmissionsLedger
+        compilation={{ estimatedStoredCo2eTonnes: null } as RemovalCompilationView}
+        ledger={{
+          inputs: [],
+          inputsUnavailable: true,
+          creditBatches: [],
+          productionRuns: [],
+          applications: [],
+          claims: [],
+        }}
+        facilityId="facility-1"
+        isLoading={false}
+      />,
+    );
+
+    expect(html).toContain("Not available");
+    expect(html).toContain("Complete the source data checks");
+    expect(html).not.toContain("<table");
   });
 });

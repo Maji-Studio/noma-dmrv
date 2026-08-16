@@ -1,11 +1,17 @@
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { appliedBiocharFraction, type RemovalRunSummary } from "@/lib/certification/mass-accounting";
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import {
   aggregateProductionRuns,
   enrichWithTransportLegs,
   type ProductionRunWithSamples,
   type TransportLegsByCategory,
 } from "@/lib/isometric";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
+import {
+  includesProductionInputs,
+  productionClaimContribution,
+} from "./production-claim-policy";
 
 export interface RemovalLedgerInput {
   id: string;
@@ -24,6 +30,7 @@ export interface RemovalLedgerClaim {
 
 export interface RemovalLedgerPreview {
   inputs: RemovalLedgerInput[];
+  inputsUnavailable: boolean;
   claims: RemovalLedgerClaim[];
   creditBatches: Array<{ id: string; code: string }>;
   productionRuns: Array<{ id: string; code: string | null }>;
@@ -31,6 +38,7 @@ export interface RemovalLedgerPreview {
     id: string;
     code: string;
     deliveryCode: string;
+    creditBatchIds: string[];
   }>;
 }
 
@@ -39,6 +47,8 @@ interface MemberBatchClaim {
   code: string;
   claimedByRemovalId: string | null;
   productionRunIds: string[];
+  applicationIds: string[];
+  applicationSlices?: Array<{ applicationId: string }>;
 }
 
 function input(
@@ -65,111 +75,118 @@ export function buildRemovalLedgerPreview(args: {
     creditBatchId: batch.creditBatchId,
     creditBatchCode: batch.code,
     claimingRemovalId: batch.claimedByRemovalId,
-    contribution:
-      batch.claimedByRemovalId == null ||
-      batch.claimedByRemovalId === args.removalId
-        ? "production-and-delivery"
-        : "delivery-only",
+    contribution: productionClaimContribution(
+      batch.claimedByRemovalId,
+      args.removalId,
+    ),
   }));
   const productionRunIds = new Set(
     args.memberBatchClaims
-      .filter(
-        (batch) =>
-          batch.claimedByRemovalId == null ||
-          batch.claimedByRemovalId === args.removalId,
+      .filter((batch) =>
+        includesProductionInputs(batch.claimedByRemovalId, args.removalId),
       )
       .flatMap((batch) => batch.productionRunIds),
   );
   const inputs: RemovalLedgerInput[] = [];
+  let inputsUnavailable = args.runs.length === 0;
 
   try {
     if (args.runs.length > 0) {
-    const aggregate = enrichWithTransportLegs(
-      aggregateProductionRuns(args.runs, args.attributionByRunId, {
-        productionRunIds,
-      }),
-      args.transportLegs,
-      { appliedBiocharFraction: appliedBiocharFraction(args.runSummary) },
-    );
-    inputs.push(
-      input(
-        "biochar-dry-mass",
-        "Stored carbon",
-        "Biochar, dry mass",
-        aggregate.totalBiocharDryMassKg / 1_000,
-        "t",
-      ),
-    );
-    if (productionRunIds.size > 0) {
+      const aggregate = enrichWithTransportLegs(
+        aggregateProductionRuns(args.runs, args.attributionByRunId, {
+          productionRunIds,
+        }),
+        args.transportLegs,
+        { appliedBiocharFraction: appliedBiocharFraction(args.runSummary) },
+      );
       inputs.push(
         input(
-          "feedstock-dry-mass",
-          "Production",
-          "Feedstock, dry mass",
-          aggregate.totalFeedstockDryMassKg / 1_000,
+          "biochar-dry-mass",
+          "Stored carbon",
+          "Biochar, dry mass",
+          kgToTonnes(aggregate.totalBiocharDryMassKg),
           "t",
         ),
-        input(
-          "diesel",
-          "Production",
-          "Diesel",
-          aggregate.totalDieselLitres,
-          "L",
-        ),
-        input(
-          "grid-electricity",
-          "Production",
-          "Grid electricity",
-          aggregate.totalElectricityKwh,
-          "kWh",
-        ),
       );
+      if (productionRunIds.size > 0) {
+        inputs.push(
+          input(
+            "feedstock-dry-mass",
+            "Production",
+            "Feedstock, dry mass",
+            kgToTonnes(aggregate.totalFeedstockDryMassKg),
+            "t",
+          ),
+          input(
+            "diesel",
+            "Production",
+            "Diesel",
+            aggregate.totalDieselLitres,
+            "L",
+          ),
+          input(
+            "grid-electricity",
+            "Production",
+            "Grid electricity",
+            aggregate.totalElectricityKwh,
+            "kWh",
+          ),
+        );
+      }
+      if (args.requiredTransportCategories.includes("feedstock")) {
+        inputs.push(
+          input(
+            "feedstock-transport",
+            "Feedstock transport",
+            "Mass and distance",
+            aggregate.feedstockTransportMassDistanceTonneKm,
+            "t·km",
+          ),
+        );
+      }
+      if (args.requiredTransportCategories.includes("biochar")) {
+        inputs.push(
+          input(
+            "biochar-transport",
+            "Biochar delivery",
+            "Mass and distance",
+            aggregate.biocharTransportMassDistanceTonneKm,
+            "t·km",
+          ),
+        );
+      }
+      if (
+        args.requiredTransportCategories.includes("sample") &&
+        aggregate.sampleTransportMassDistanceTonneKm > 0
+      ) {
+        inputs.push(
+          input(
+            "sample-transport",
+            "Sample transport",
+            "Mass and distance",
+            aggregate.sampleTransportMassDistanceTonneKm,
+            "t·km",
+          ),
+        );
+      }
     }
-    if (args.requiredTransportCategories.includes("feedstock")) {
-      inputs.push(
-        input(
-          "feedstock-transport",
-          "Feedstock transport",
-          "Mass and distance",
-          aggregate.feedstockTransportMassDistanceTonneKm,
-          "t·km",
-        ),
-      );
-    }
-    if (args.requiredTransportCategories.includes("biochar")) {
-      inputs.push(
-        input(
-          "biochar-transport",
-          "Biochar delivery",
-          "Mass and distance",
-          aggregate.biocharTransportMassDistanceTonneKm,
-          "t·km",
-        ),
-      );
-    }
-    if (
-      args.requiredTransportCategories.includes("sample") &&
-      aggregate.sampleTransportMassDistanceTonneKm > 0
-    ) {
-      inputs.push(
-        input(
-          "sample-transport",
-          "Sample transport",
-          "Mass and distance",
-          aggregate.sampleTransportMassDistanceTonneKm,
-          "t·km",
-        ),
-      );
-    }
-    }
-  } catch {
+  } catch (error) {
     // Transparency must remain available while incomplete source data blocks
     // numeric aggregation; claim and source links below are still useful.
     inputs.length = 0;
+    inputsUnavailable = true;
+    logger.warn(
+      {
+        removalId: args.removalId,
+        errorMessage: sanitizeErrorMessage(error),
+      },
+      "Removal ledger inputs could not be aggregated",
+    );
   }
 
   return {
     inputs,
+    inputsUnavailable,
     claims,
     creditBatches: args.memberBatchClaims.map((batch) => ({
       id: batch.creditBatchId,
@@ -184,6 +201,14 @@ export function buildRemovalLedgerPreview(args: {
             id: lineage.application.id,
             code: lineage.application.code,
             deliveryCode: lineage.delivery.code,
+            creditBatchIds: args.memberBatchClaims
+              .filter((batch) => {
+                const applicationIds = batch.applicationSlices?.map(
+                  (slice) => slice.applicationId,
+                ) ?? batch.applicationIds;
+                return applicationIds.includes(lineage.application.id);
+              })
+              .map((batch) => batch.creditBatchId),
           },
         ]),
       ).values(),

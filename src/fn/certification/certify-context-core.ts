@@ -26,7 +26,7 @@ import {
   type CreditBatchRollup,
   type CreditBatchRollupsByBatch,
 } from "@/data-access/credit-batch-accounting";
-import { getCreditBatchRemovalId } from "@/data-access/credit-batches";
+import { getCreditBatchActiveScopeRemovalId } from "@/data-access/credit-batches";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import {
@@ -43,8 +43,6 @@ import { attributeSoilTemperatureBlockers } from "@/lib/certification/member-bat
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { SafeError } from "@/lib/errors";
 import {
-  aggregateTransportMassDistance,
-  collectTransportEntityIds,
   getIsometricClientForOrg,
   listComponentBlueprints,
   listProjects,
@@ -53,7 +51,6 @@ import {
   type IsometricProject,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import { lookupInputMapping } from "@/lib/isometric/transformers/datapoint";
 import { hasExplicitSequestrationBinding } from "@/lib/isometric/transformers/sequestration-binding";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 import {
@@ -93,30 +90,25 @@ import {
 import { collectProductionClaimAwareRequiredTransportCategories, collectProductionClaimAwareTransportEntityIds } from "./production-claim-transport-scope";
 import { summarizeApplicationSlices } from "./application-slice-summary";
 import { buildRemovalLedgerPreview, type RemovalLedgerPreview } from "./removal-ledger-preview";
+import {
+  buildTransportCoverage,
+  deriveRequiredTransportCategories,
+  EMPTY_TRANSPORT_COVERAGE,
+  type TransportCategory,
+  type TransportCoverage,
+} from "./certify-transport-coverage";
 export type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
 export type { SelectableBatch, SelectableBatchesData } from "./selectable-batches";
 export type { MemberCreditBatch } from "./member-credit-batch";
+
+// Bound facility fan-out so per-removal DB/registry query chains cannot burst
+// the connection pool. Mirrors `READINESS_CONCURRENCY` in overview.ts.
 const FANOUT_CONCURRENCY = 8;
-export interface TransportCoverageBucket {
-  count: number;
-  entityIds: string[];
-  legIds: string[];
-  firstLegEntityId: string | null;
-  aggregationWarning: string | null;
-}
-
-export interface TransportCoverage {
-  feedstock: TransportCoverageBucket;
-  biochar: TransportCoverageBucket;
-  sample: TransportCoverageBucket;
-}
-export type TransportCategory = keyof TransportCoverage;
-
-const TRANSPORT_SOURCE_TO_CATEGORY: Record<string, TransportCategory> = {
-  feedstockTransportMassDistanceTonneKm: "feedstock",
-  biocharTransportMassDistanceTonneKm: "biochar",
-  sampleTransportMassDistanceTonneKm: "sample",
-};
+export type {
+  TransportCategory,
+  TransportCoverage,
+  TransportCoverageBucket,
+} from "./certify-transport-coverage";
 
 type DurabilityOption = "200_year" | "1000_year";
 // UI-facing removal context — the lean payload React Query caches.
@@ -221,83 +213,6 @@ export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "e
   facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature | null;
 }
 
-function deriveRequiredTransportCategories(
-  template: IsometricGhgEntryTemplate,
-): TransportCategory[] {
-  const seen = new Set<TransportCategory>();
-  for (const group of template.groups) {
-    for (const component of group.components) {
-      for (const rtcInput of component.inputs) {
-        if (rtcInput.type !== "monitored") continue;
-        const mapping = lookupInputMapping(
-          group.key,
-          component.blueprint_key,
-          rtcInput.input_key,
-        );
-        if (!mapping) continue;
-        const category = TRANSPORT_SOURCE_TO_CATEGORY[mapping.source];
-        if (category) seen.add(category);
-      }
-    }
-  }
-  return (["feedstock", "biochar", "sample"] as const).filter((c) =>
-    seen.has(c),
-  );
-}
-
-function buildCoverage(
-  legs: TransportLegsByCategory,
-  entityIds: ReturnType<typeof collectTransportEntityIds>,
-): TransportCoverage {
-  const mdWarn = aggregateTransportMassDistance;
-  return {
-    feedstock: {
-      count: legs.feedstock.length,
-      entityIds: entityIds.feedstockIds,
-      legIds: legs.feedstock.map((leg) => leg.id),
-      firstLegEntityId: legs.feedstock[0]?.entityId ?? null,
-      aggregationWarning: mdWarn(legs.feedstock, "Feedstock").warning,
-    },
-    biochar: {
-      count: legs.biochar.length,
-      entityIds: entityIds.biocharProductIds,
-      legIds: legs.biochar.map((leg) => leg.id),
-      firstLegEntityId: legs.biochar[0]?.entityId ?? null,
-      aggregationWarning: mdWarn(legs.biochar, "Biochar").warning,
-    },
-    sample: {
-      count: legs.sample.length,
-      entityIds: entityIds.sampleIds,
-      legIds: legs.sample.map((leg) => leg.id),
-      firstLegEntityId: legs.sample[0]?.entityId ?? null,
-      aggregationWarning: mdWarn(legs.sample, "Sample").warning,
-    },
-  };
-}
-
-const EMPTY_COVERAGE: TransportCoverage = {
-  feedstock: {
-    count: 0,
-    entityIds: [],
-    legIds: [],
-    firstLegEntityId: null,
-    aggregationWarning: null,
-  },
-  biochar: {
-    count: 0,
-    entityIds: [],
-    legIds: [],
-    firstLegEntityId: null,
-    aggregationWarning: null,
-  },
-  sample: {
-    count: 0,
-    entityIds: [],
-    legIds: [],
-    firstLegEntityId: null,
-    aggregationWarning: null,
-  },
-};
 
 // The set of credit batches that compose one removal, with their facility.
 interface RemovalScope {
@@ -342,7 +257,10 @@ async function resolveScopeForCreditBatch(
   options?: { singleBatch?: boolean },
 ): Promise<RemovalScope> {
   if (!options?.singleBatch) {
-    const removalId = await getCreditBatchRemovalId(orgCtx, creditBatchId);
+    const removalId = await getCreditBatchActiveScopeRemovalId(
+      orgCtx,
+      creditBatchId,
+    );
     if (removalId) {
       return resolveScopeForRemoval(orgCtx, removalId);
     }
@@ -353,8 +271,11 @@ async function resolveScopeForCreditBatch(
       unassignedOnly: !options?.singleBatch,
     })
   )[creditBatchId];
-  if (!accounting && !options?.singleBatch) {
-    const racedRemovalId = await getCreditBatchRemovalId(orgCtx, creditBatchId);
+  if (!options?.singleBatch) {
+    const racedRemovalId = await getCreditBatchActiveScopeRemovalId(
+      orgCtx,
+      creditBatchId,
+    );
     if (racedRemovalId) return resolveScopeForRemoval(orgCtx, racedRemovalId);
   }
   if (!accounting) throw new SafeError("Credit batch not found");
@@ -686,7 +607,7 @@ export async function buildRemovalContext(
       ...facilityFacts,
       memberBatches: memberBatchesWithSubmissionGates,
       feedstockTypeMappingGaps,
-      transportCoverage: EMPTY_COVERAGE,
+      transportCoverage: EMPTY_TRANSPORT_COVERAGE,
       hasSubmittableRuns: false,
       productionReadinessGap,
       entityReadinessGaps: [],
@@ -731,7 +652,7 @@ export async function buildRemovalContext(
     requiredTransportCategories: facilityFacts.requiredTransportCategories,
   });
   const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
-  const transportCoverage = buildCoverage(transportLegs, entityIds);
+  const transportCoverage = buildTransportCoverage(transportLegs, entityIds);
   const entityReadiness = await buildCertifyEntityReadiness({
     runs,
     batchesWithSamples,
@@ -945,6 +866,8 @@ export interface RemovalsHubData {
   isProduction: boolean;
 }
 
+// Removals hub payload for a facility: every Removal with its member credit
+// batches and latest submission, plus newly applied mass not yet grouped.
 export async function loadRemovalsForFacility(
   facilityId: string,
 ): Promise<ActionResult<RemovalsHubData>> {
@@ -954,6 +877,7 @@ export async function loadRemovalsForFacility(
       listRemovalsForFacility(orgCtx, facilityId),
       listUngroupedCreditBatches(orgCtx, facilityId),
     ]);
+    // Bounded chunks preserve order without bursting the connection pool.
     const removals: RemovalHubEntry[] = [];
     for (let i = 0; i < removalRows.length; i += FANOUT_CONCURRENCY) {
       const chunk = await Promise.all(
@@ -984,6 +908,8 @@ export async function loadRemovalsForFacility(
   });
 }
 
+// New-Removal selection payload. Each ungrouped batch carries the same health
+// verdict used by credit-batch detail.
 export async function loadSelectableBatchesForFacility(
   facilityId: string,
 ): Promise<ActionResult<SelectableBatchesData>> {

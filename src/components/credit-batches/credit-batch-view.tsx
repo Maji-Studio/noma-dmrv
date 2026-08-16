@@ -23,7 +23,12 @@ import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
 import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { computeCohortInputTotals } from "./cohort-input-ledger";
+import {
+  certificationRemovalsHref,
+  productionRunDeepLinkHref,
+} from "@/lib/certification/links";
 
 function formatInput(value: number | null, unit: string): string {
   return value == null
@@ -52,7 +57,7 @@ function CreditBatchCarbonLedger({
       value:
         totals.feedstockDryKg == null
           ? MISSING_VALUE.notRecorded
-          : formatTonnes(totals.feedstockDryKg / 1_000),
+          : formatTonnes(kgToTonnes(totals.feedstockDryKg)),
     },
     { label: "Diesel", value: formatInput(totals.dieselLiters, "L") },
     {
@@ -63,7 +68,7 @@ function CreditBatchCarbonLedger({
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
-      <div className="flex flex-col gap-4 px-16 py-14">
+      <div className="flex flex-col gap-4 px-16 py-[14px]">
         <span className="title-heading-3 tabular-nums text-[var(--color-text-primary)]">
           {estimate == null
             ? MISSING_VALUE.notAvailable
@@ -94,7 +99,10 @@ function CreditBatchCarbonLedger({
           <dd className="body-small text-right text-[var(--color-text-primary)]">
             {removalId ? (
               <Link
-                href={`/certification/removals?facility=${encodeURIComponent(creditBatch.facilityId)}&removal=${encodeURIComponent(removalId)}`}
+                href={certificationRemovalsHref({
+                  facility: creditBatch.facilityId,
+                  removal: removalId,
+                })}
                 className="underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
               >
                 Included in Removal {removalId.slice(0, 8)}…
@@ -114,7 +122,10 @@ function CreditBatchCarbonLedger({
             {productionRuns.map((run) => (
               <Link
                 key={run.id}
-                href={`/production-runs?facility=${encodeURIComponent(creditBatch.facilityId)}&run=${encodeURIComponent(run.id)}`}
+                href={productionRunDeepLinkHref(
+                  run.id,
+                  creditBatch.facilityId,
+                )}
                 className="underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
               >
                 {formatDate(run.date)}
@@ -140,7 +151,7 @@ function ProductionRunLink({
 }) {
   return (
     <SheetLinkRow
-      href={`/production-runs?facility=${facilityId}&run=${run.id}`}
+      href={productionRunDeepLinkHref(run.id, facilityId)}
       ariaLabel={`Open production run from ${formatDate(run.date)}${
         run.biocharStorageName ? ` in ${run.biocharStorageName}` : ""
       }`}
