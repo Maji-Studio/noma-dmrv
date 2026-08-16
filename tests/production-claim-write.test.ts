@@ -167,6 +167,27 @@ async function readClaim(batchId: string): Promise<string | null> {
   return row.claimedBy;
 }
 
+async function reserveBatch(
+  batchId: string,
+  submissionId: string,
+): Promise<void> {
+  await db
+    .update(creditBatches)
+    .set({ productionEmissionsClaimReservedBySubmissionId: submissionId })
+    .where(eq(creditBatches.id, batchId));
+}
+
+async function readReservation(batchId: string): Promise<string | null> {
+  const [row] = await db
+    .select({
+      reservedBy:
+        creditBatches.productionEmissionsClaimReservedBySubmissionId,
+    })
+    .from(creditBatches)
+    .where(eq(creditBatches.id, batchId));
+  return row.reservedBy;
+}
+
 
 beforeAll(() => ensureTestOrg());
 
@@ -176,6 +197,7 @@ describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)
 
     // 1. Unclaimed → the claiming removal is stamped.
     const subA1 = await insertDraftSubmission(removalAId, 1);
+    await reserveBatch(batchId, subA1);
     await markSubmissionSubmitted(makeTestOrgContext(TEST_USER_ID), subA1, {
       externalId: "ext_pcw_a1",
       productionEmissionsClaim: {
@@ -184,9 +206,11 @@ describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)
       },
     });
     expect(await readClaim(batchId)).toBe(removalAId);
+    expect(await readReservation(batchId)).toBeNull();
 
     // 2. Self re-claim (resubmit/supersede by the SAME removal) → unchanged.
     const subA2 = await insertDraftSubmission(removalAId, 2);
+    await reserveBatch(batchId, subA2);
     await markSubmissionSubmitted(makeTestOrgContext(TEST_USER_ID), subA2, {
       externalId: "ext_pcw_a2",
       supersedePreviousId: subA1,
@@ -196,6 +220,7 @@ describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)
       },
     });
     expect(await readClaim(batchId)).toBe(removalAId);
+    expect(await readReservation(batchId)).toBeNull();
 
     // 3. Foreign claim (a DIFFERENT removal) → the guarded UPDATE's
     // `IS NULL OR = self` predicate excludes the row; the rowcount backstop
@@ -203,6 +228,9 @@ describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)
     // (fail-closed) — a registry POST can no longer be marked submitted while
     // its claim silently no-ops.
     const subB1 = await insertDraftSubmission(removalBId, 1);
+    // The reservation API itself blocks this state. Force the pointer here to
+    // exercise the independent transactional stamp backstop.
+    await reserveBatch(batchId, subB1);
     await expect(
       markSubmissionSubmitted(makeTestOrgContext(TEST_USER_ID), subB1, {
         externalId: "ext_pcw_b1",

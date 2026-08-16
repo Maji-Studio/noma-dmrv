@@ -229,6 +229,7 @@ interface RemovalScope {
     // membership paths); it also keeps the routing honest with the gap copy's
     // "completed" claim.
     completedProductionRunIds: string[];
+    productionFeedstockIds: string[];
     applicationIds: string[];
     applicationSlices: {
       applicationId: string;
@@ -300,6 +301,13 @@ function resolveSingleBatchScope(
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
+        productionFeedstockIds: Array.from(
+          new Set(
+            lineageFacts.runs.flatMap((run) =>
+              run.feedstocks.map((feedstock) => feedstock.id),
+            ),
+          ),
+        ),
         applicationIds: lineageFacts.applicationIds,
         applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
         durabilityOption: batch.durabilityOption,
@@ -339,6 +347,13 @@ export async function resolveScopeForRemoval(
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
+        productionFeedstockIds: Array.from(
+          new Set(
+            lineageFacts.runs.flatMap((run) =>
+              run.feedstocks.map((feedstock) => feedstock.id),
+            ),
+          ),
+        ),
         applicationIds: lineageFacts.applicationIds,
         applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
         durabilityOption: accountingBatch.durabilityOption,

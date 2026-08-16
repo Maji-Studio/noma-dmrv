@@ -227,6 +227,7 @@ describe("credit batch accounting", () => {
             version: 1,
             status: "draft" as const,
             createdAt: new Date("2026-08-01T00:00:00Z"),
+            lockedAt: new Date(),
           },
           {
             organizationId: TEST_ORG_ID,
@@ -237,6 +238,7 @@ describe("credit batch accounting", () => {
             version: 1,
             status: "draft" as const,
             createdAt: new Date("2026-08-02T00:00:00Z"),
+            lockedAt: new Date(),
           },
         ])
         .returning({ id: certificationSubmissions.id });

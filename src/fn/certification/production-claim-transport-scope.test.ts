@@ -14,6 +14,7 @@ function batch(id: string, claimedBy: string | null, productionRunId = `${id}-ru
   return {
     id,
     productionRunIds: [productionRunId],
+    productionFeedstockIds: [`${id}-feedstock`],
     productionEmissionsClaimedByRemovalId: claimedBy,
   };
 }
@@ -103,7 +104,7 @@ describe("production-claim-aware transport requirements", () => {
         ],
       }),
     ).toEqual({
-      feedstockIds: ["feedstock-unclaimed"],
+      feedstockIds: ["feedstock-unclaimed", "batch-unclaimed-feedstock"],
       biocharProductIds: ["product-prior", "product-unclaimed"],
       sampleIds: ["sample-unclaimed"],
     });

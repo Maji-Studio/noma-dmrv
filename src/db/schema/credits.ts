@@ -130,6 +130,12 @@ export const creditBatches = pgTable(
     productionEmissionsClaimedByRemovalId: uuid(
       'production_emissions_claimed_by_removal_id'
     ).references(() => certifierRemovals.id),
+    // Durable pre-POST reservation. The referenced submission row supplies
+    // the lease's locked_at/status/external-mutation state; no FK is declared
+    // because certification_submissions is a polymorphic ledger.
+    productionEmissionsClaimReservedBySubmissionId: uuid(
+      'production_emissions_claim_reserved_by_submission_id'
+    ),
 
     // --- Third-Party Sale Verification (Isometric: SubRequirement G-SZZR-0) ---
     // Required when biochar is sold to third parties before application
@@ -173,6 +179,9 @@ export const creditBatches = pgTable(
     // same rationale: Postgres does not auto-index foreign keys.
     index('credit_batches_production_claim_removal_id_idx').on(
       table.productionEmissionsClaimedByRemovalId
+    ),
+    index('credit_batches_production_claim_reservation_id_idx').on(
+      table.productionEmissionsClaimReservedBySubmissionId
     ),
     foreignKey({
       name: 'credit_batches_process_identity_fk',

@@ -1,5 +1,19 @@
 # Isometric Docs Change Log
 
+## 2026-08-16 (whole-batch production-claim concurrency hardening)
+
+- A Removal now reserves all unclaimed member credit batches atomically before
+  its first registry POST. A mutation-free failure releases the reservation;
+  possible or confirmed remote mutation keeps it fail-closed for reconciliation.
+- The earliest reporting period wins a shared batch's production inputs, using
+  the latest member Application date as the pre-submit completion date and the
+  draft creation time and ID only as tie-breakers.
+- Whole-batch production inputs include completed, unapplied member runs and
+  their feedstock transport. Those runs do not dilute the applied biochar
+  delivery-transport fraction.
+- An Application may join a Removal only when all of its credit-batch slices
+  are unassigned; an existing sibling owner blocks the assignment.
+
 ## 2026-08-15 (application-slice Removal attribution and carbon ledger)
 
 - Biochar remaining in a source bin can be used for a new product after its

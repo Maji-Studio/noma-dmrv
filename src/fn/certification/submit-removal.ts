@@ -13,6 +13,7 @@ import { env } from "@/config/env";
 import {
   updateRemovalDates,
 } from "@/data-access/certifier-removals";
+import { reserveProductionEmissionsClaims } from "@/data-access/production-claim-reservations";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
@@ -591,6 +592,11 @@ async function submitRemovalCore(
           row: claimed.row,
           allowPeriodInputStub,
           preserveForReconciliation: attempt.externalMutation !== "none",
+        });
+        await reserveProductionEmissionsClaims(orgCtx, {
+          removalId,
+          submissionId: claimed.row.id,
+          creditBatchIds: productionClaimBatchIds,
         });
         if (claimed.reason === "rejected-hash-changed") {
           log.warn(

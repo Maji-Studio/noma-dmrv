@@ -720,7 +720,7 @@ export async function markSubmissionSubmitted(
       await stampProductionEmissionsClaimWithExecutor(
         ctx,
         tx,
-        args.productionEmissionsClaim,
+        { ...args.productionEmissionsClaim, reservationSubmissionId: id },
       );
     }
   };
@@ -734,7 +734,11 @@ export async function markSubmissionSubmitted(
 // lazily backfills the claim. Same guarded UPDATE + rowcount backstop.
 export async function stampProductionEmissionsClaim(
   ctx: OrgContext,
-  args: { removalId: string; creditBatchIds: string[] },
+  args: {
+    removalId: string;
+    creditBatchIds: string[];
+    reservationSubmissionId?: string;
+  },
 ): Promise<void> {
   requireOrgScope(ctx);
   if (args.creditBatchIds.length === 0) return;
@@ -751,13 +755,20 @@ export async function stampProductionEmissionsClaim(
 async function stampProductionEmissionsClaimWithExecutor(
   ctx: OrgContext,
   executor: Tx | typeof db,
-  args: { removalId: string; creditBatchIds: string[] },
+  args: {
+    removalId: string;
+    creditBatchIds: string[];
+    reservationSubmissionId?: string;
+  },
 ): Promise<void> {
   const { removalId, creditBatchIds } = args;
   const stamped = await executor
     .update(creditBatches)
     .set({
       productionEmissionsClaimedByRemovalId: removalId,
+      ...(args.reservationSubmissionId
+        ? { productionEmissionsClaimReservedBySubmissionId: null }
+        : {}),
       updatedAt: sql`now()`,
     })
     .where(
@@ -767,6 +778,12 @@ async function stampProductionEmissionsClaimWithExecutor(
           isNull(creditBatches.productionEmissionsClaimedByRemovalId),
           eq(creditBatches.productionEmissionsClaimedByRemovalId, removalId),
         ),
+        args.reservationSubmissionId
+          ? eq(
+              creditBatches.productionEmissionsClaimReservedBySubmissionId,
+              args.reservationSubmissionId,
+            )
+          : undefined,
         eq(creditBatches.organizationId, ctx.organizationId),
       ),
     )

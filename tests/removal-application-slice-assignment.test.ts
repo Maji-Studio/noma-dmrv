@@ -80,7 +80,7 @@ describe("Removal Application-slice assignment", () => {
     const runs = await db
       .insert(productionRuns)
       .values(
-        [1, 2].map((number) => ({
+        [1, 2, 3].map((number) => ({
           organizationId: TEST_ORG_ID,
           facilityId: facility.id,
           reactorId: reactor.id,
@@ -99,7 +99,7 @@ describe("Removal Application-slice assignment", () => {
         facilityId: facility.id,
         code: `RAS-BP-${tag}`,
         sourceBiocharStorageLocationId: sourceBin.id,
-        massKg: 200,
+        massKg: 300,
       })
       .returning();
     await db.insert(biocharProductSourceAllocations).values(
@@ -129,7 +129,7 @@ describe("Removal Application-slice assignment", () => {
         biocharProductId: product.id,
         code: `RAS-O-${tag}`,
         orderDate: new Date("2026-04-03T00:00:00Z"),
-        quantityKg: 200,
+        quantityKg: 300,
         packaging: "loose",
       })
       .returning();
@@ -142,8 +142,8 @@ describe("Removal Application-slice assignment", () => {
         biocharProductId: product.id,
         code: `RAS-D-${tag}`,
         deliveryDate: new Date("2026-04-04T00:00:00Z"),
-        deliveredWetMassKg: 200,
-        massDryKg: 200,
+        deliveredWetMassKg: 300,
+        massDryKg: 300,
       })
       .returning();
     const [application] = await db
@@ -153,8 +153,8 @@ describe("Removal Application-slice assignment", () => {
         deliveryId: delivery.id,
         code: `RAS-A-${tag}`,
         applicationDate: new Date("2026-04-05T00:00:00Z"),
-        biocharAppliedTons: 0.2,
-        biocharAppliedDryTons: 0.1,
+        biocharAppliedTons: 0.3,
+        biocharAppliedDryTons: 0.15,
       })
       .returning();
     const batches = await db
@@ -180,6 +180,7 @@ describe("Removal Application-slice assignment", () => {
     );
 
     let removalId: string | null = null;
+    let laterBatchId: string | null = null;
     try {
       const ctx = makeTestOrgContext();
       await db.transaction((tx) =>
@@ -210,6 +211,38 @@ describe("Removal Application-slice assignment", () => {
         .from(creditBatchApplications)
         .where(eq(creditBatchApplications.applicationId, application.id));
       expect(assigned).toEqual([{ removalId }, { removalId }]);
+
+      const [laterBatch] = await db
+        .insert(creditBatches)
+        .values({
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          feedstockTypeId: feedstockType.id,
+          productionProcessId: process.id,
+          code: `RAS-CB3-${tag}`,
+          startDate: "2026-04-03",
+          endDate: "2026-04-03",
+        })
+        .returning();
+      laterBatchId = laterBatch.id;
+      await db.insert(creditBatchProductionRuns).values({
+        organizationId: TEST_ORG_ID,
+        creditBatchId: laterBatch.id,
+        productionRunId: runs[2].id,
+      });
+      await db.transaction((tx) =>
+        reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
+          applicationIds: [application.id],
+        }),
+      );
+      await expect(
+        createRemovalWithCreditBatches(ctx, facility.id, [laterBatch.id]),
+      ).rejects.toThrow(/already partly assigned to another Removal/i);
+      const laterSlice = await db
+        .select({ removalId: creditBatchApplications.removalId })
+        .from(creditBatchApplications)
+        .where(eq(creditBatchApplications.creditBatchId, laterBatch.id));
+      expect(laterSlice).toEqual([{ removalId: null }]);
     } finally {
       await db
         .delete(creditBatchApplications)
@@ -221,8 +254,18 @@ describe("Removal Application-slice assignment", () => {
       }
       await db
         .delete(creditBatchProductionRuns)
-        .where(inArray(creditBatchProductionRuns.creditBatchId, batches.map((b) => b.id)));
-      await db.delete(creditBatches).where(inArray(creditBatches.id, batches.map((b) => b.id)));
+        .where(
+          inArray(creditBatchProductionRuns.creditBatchId, [
+            ...batches.map((b) => b.id),
+            ...(laterBatchId ? [laterBatchId] : []),
+          ]),
+        );
+      await db.delete(creditBatches).where(
+        inArray(creditBatches.id, [
+          ...batches.map((b) => b.id),
+          ...(laterBatchId ? [laterBatchId] : []),
+        ]),
+      );
       await db.delete(applications).where(eq(applications.id, application.id));
       await db.delete(deliveries).where(eq(deliveries.id, delivery.id));
       await db.delete(orders).where(eq(orders.id, order.id));

@@ -8,6 +8,7 @@ type TransportCategory = "feedstock" | "biochar" | "sample";
 type ProductionClaimScopeBatch = {
   id: string;
   productionRunIds: string[];
+  productionFeedstockIds: string[];
   productionEmissionsClaimedByRemovalId: string | null;
 };
 
@@ -71,7 +72,12 @@ export function collectProductionClaimAwareTransportEntityIds(args: {
     ),
   );
   return {
-    feedstockIds: production.feedstockIds,
+    feedstockIds: Array.from(
+      new Set([
+        ...production.feedstockIds,
+        ...productionBatches.flatMap((batch) => batch.productionFeedstockIds),
+      ]),
+    ),
     biocharProductIds: all.biocharProductIds,
     sampleIds: production.sampleIds,
   };

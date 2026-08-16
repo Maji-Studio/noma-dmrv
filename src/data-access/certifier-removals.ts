@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gte, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { applications } from "@/db/schema/application";
@@ -20,6 +20,7 @@ import type { StoredSourceBindingVerification } from "@/lib/certification/remova
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import type { OrgContext } from "@/lib/auth/server";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { requireOrgScope } from "./utils";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 
@@ -127,6 +128,10 @@ export async function listProductionClaimDraftContenders(
         eq(certificationSubmissions.submissionType, "removal"),
         eq(certificationSubmissions.localEntityType, "removal"),
         eq(certificationSubmissions.status, "draft"),
+        gte(
+          certificationSubmissions.lockedAt,
+          new Date(Date.now() - LOCK_TTL_MS),
+        ),
       ),
     )
     .groupBy(
@@ -365,10 +370,10 @@ export async function listUngroupedCreditBatches(
   }));
 }
 
-// Creates a Removal and atomically assigns only each selected batch's currently
-// unassigned application slices. Previously frozen slices stay with their
-// owning Removal, so the same physical production batch can participate again
-// after new applied mass appears.
+// Creates a Removal and atomically assigns each selected Application's complete
+// unassigned slice set. An Application with any previously frozen sibling
+// slice is rejected; a later Application can still place newly applied mass
+// from the same physical production batch into a follow-up Removal.
 export async function createRemovalWithCreditBatches(
   ctx: OrgContext,
   facilityId: string,
@@ -439,10 +444,11 @@ export async function createRemovalWithCreditBatches(
     await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
       applicationIds: selectedApplicationIds,
     });
-    const unassignedSiblingSlices = await tx
+    const siblingSlices = await tx
       .select({
         creditBatchId: creditBatchApplications.creditBatchId,
         applicationId: creditBatchApplications.applicationId,
+        removalId: creditBatchApplications.removalId,
       })
       .from(creditBatchApplications)
       .where(
@@ -451,7 +457,6 @@ export async function createRemovalWithCreditBatches(
             creditBatchApplications.applicationId,
             selectedApplicationIds,
           ),
-          isNull(creditBatchApplications.removalId),
           eq(creditBatchApplications.organizationId, ctx.organizationId),
         ),
       )
@@ -460,6 +465,14 @@ export async function createRemovalWithCreditBatches(
         creditBatchApplications.creditBatchId,
       )
       .for("update");
+    if (siblingSlices.some((slice) => slice.removalId != null)) {
+      throw new SafeError(
+        "A selected Application is already partly assigned to another Removal. Keep all of that Application's credit-batch slices with its existing Removal.",
+      );
+    }
+    const unassignedSiblingSlices = siblingSlices.filter(
+      (slice) => slice.removalId == null,
+    );
     const selectedIdSet = new Set(uniqueIds);
     const omittedSiblingBatchIds = [
       ...new Set(
