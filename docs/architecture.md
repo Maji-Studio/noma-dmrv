@@ -239,11 +239,13 @@ creation POST directly and reconcile through separate state.
 
 **Source-data immutability:** once a Removal, telemetry upload, or GHG Statement
 has a blocking ledger row (`draft`, `submitted`, `accepted`), its upstream
-operational records are locked at the data-access boundary. The guard re-derives
-membership from current credit-batch lineage before every mutation and blocks
-edits/deletes to production runs, samples, applications, deliveries, orders,
-biochar products, feedstocks, and credit-batch grouping records. Corrections are
-new submission versions or correction-workflow records, never in-place edits.
+operational records are locked at the data-access boundary. The guard validates
+the Removal's captured application-slice set against the reachable source
+records before every mutation; it does not recompute submitted membership from
+mutable current lineage. It blocks edits/deletes to production runs, samples,
+applications, deliveries, orders, biochar products, feedstocks, and credit-batch
+grouping records. Corrections are new submission versions or
+correction-workflow records, never in-place edits.
 
 **Workspace:** `/certification` (ADR
 [0007](./adr/0007-certification-workspace-consolidation.md)) is a first-class
@@ -276,11 +278,12 @@ deferred work: [isometric/integration-plan.md](./isometric/integration-plan.md)
 and [open-questions.md](./open-questions.md). Registry facts are authoritative
 only from the Isometric MCP — see [isometric/README.md](./isometric/README.md).
 
-Removal membership is persisted at the application-by-credit-batch slice. Each
-slice freezes allocated wet mass, allocated dry mass, and its owning Removal.
-Later applications can create new unassigned slices from an existing credit
-batch without changing an earlier Removal. Noma submits those frozen accounting
-inputs; Isometric owns the project-emissions calculation and net result.
+Removal membership is persisted at the application-by-credit-batch slice. An
+assigned slice freezes allocated wet mass, allocated dry mass, and its owning
+Removal. Unassigned slices have no owning Removal and remain available for a
+later one without changing an earlier Removal. Noma submits those frozen
+accounting inputs; Isometric owns the project-emissions calculation and net
+result.
 
 ## Dashboard
 

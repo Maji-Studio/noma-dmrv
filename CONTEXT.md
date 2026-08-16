@@ -297,11 +297,12 @@ means production period, not application period. Batch membership is
 production runs — each completed run matching the batch's organization,
 facility, feedstock, and production window is attached automatically, so the
 batch may be declared before any runs exist. Application-by-credit-batch wet
-and dry mass slices are derived from product provenance. Each slice belongs to
-at most one Removal, so newly applied mass from the same credit batch can join
-a later Removal without changing the earlier one. A credit batch's production
-emissions are claimed by exactly one Removal, recorded on the batch as the
-claiming Removal, so they are never double-counted across entries (ADR 0020).
+and dry mass slices are derived from product provenance. A slice belongs to a
+Removal only after its nullable ownership is assigned, so newly applied mass
+from the same credit batch can remain unassigned for a later Removal without
+changing the earlier one. A credit batch's production emissions are claimed by
+at most one Removal. There is no claimant until the first successful Removal
+submission records one, preventing double-counting across entries (ADR 0020).
 _Avoid_: batch, issuance; "production batch" as a separate entity —
 the credit batch *is* noma's production batch.
 
@@ -575,8 +576,9 @@ _Avoid_: teammate, seat.
   with one org role; a **Platform Admin** needs no Membership to act
   inside an Organization
 - The LCA window contains many monthly **Credit batches**
-- **N application-by-credit-batch slices** group into one **Removal**; one
-  credit batch may contribute later applied slices to later Removals
+- **N assigned application-by-credit-batch slices** group into one **Removal**;
+  unassigned slices remain available for later Removals, so one credit batch
+  may contribute later applied slices to later Removals
 - A **Credit batch** aggregates many **Production runs**
 - A **Removal** is the Isometric submission unit. It aggregates the deduped
   union of **Production runs** reached through its frozen application slices;
