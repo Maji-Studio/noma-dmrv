@@ -19,12 +19,14 @@ export async function listCreditBatchCertificationLinks(
   requireOrgScope(ctx);
   if (batchIds.length === 0) return [];
 
-  return db
+  const rows = await db
     .selectDistinct({
       id: creditBatches.id,
       facilityId: creditBatches.facilityId,
       removalId: creditBatchApplications.removalId,
       ghgStatementId: certifierRemovals.ghgStatementId,
+      removalCreatedAt: certifierRemovals.createdAt,
+      removalSortId: certifierRemovals.id,
     })
     .from(creditBatches)
     .leftJoin(
@@ -51,4 +53,10 @@ export async function listCreditBatchCertificationLinks(
       sql`${certifierRemovals.createdAt} desc nulls last`,
       desc(certifierRemovals.id),
     );
+  return rows.map((row) => ({
+    id: row.id,
+    facilityId: row.facilityId,
+    removalId: row.removalId,
+    ghgStatementId: row.ghgStatementId,
+  }));
 }

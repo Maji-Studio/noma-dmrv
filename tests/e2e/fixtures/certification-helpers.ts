@@ -1066,6 +1066,13 @@ export async function seedUngroupedReadyBatchWithChain(
         creditBatchId: id.creditBatch,
         productionRunId: id.productionRun,
       });
+      await tx.insert(schema.creditBatchApplications).values({
+        organizationId: DEC_ORG_ID,
+        creditBatchId: id.creditBatch,
+        applicationId: id.application,
+        allocatedWetMassKg,
+        allocatedDryMassKg,
+      });
       // A sampled credit batch needs at least three complete H/Corg + O/Corg
       // replicates pooled on the batch itself. The run link is provenance only.
       await tx.insert(schema.samples).values(
@@ -1142,6 +1149,11 @@ export async function seedUngroupedReadyBatchWithChain(
           await tx
             .delete(schema.samples)
             .where(inArray(schema.samples.id, id.samples));
+          await tx
+            .delete(schema.creditBatchApplications)
+            .where(
+              eq(schema.creditBatchApplications.creditBatchId, id.creditBatch),
+            );
           await tx
             .delete(schema.creditBatches)
             .where(eq(schema.creditBatches.id, id.creditBatch));

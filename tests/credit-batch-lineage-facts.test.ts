@@ -25,6 +25,7 @@ import {
 import { loadCreditBatchAccounting } from "@/data-access/credit-batch-accounting";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import { getCreditBatchById } from "@/data-access/credit-batches";
+import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-certification-links";
 import {
   createRemovalWithCreditBatches,
   listProductionClaimDraftContenders,
@@ -247,6 +248,12 @@ describe("credit batch accounting", () => {
         secondRemovalId,
         firstRemovalId,
       ]);
+      const certificationLinks = await listCreditBatchCertificationLinks(ctx, [
+        batch.id,
+      ]);
+      expect(
+        certificationLinks.map((link) => link.removalId).sort(),
+      ).toEqual([firstRemovalId, secondRemovalId].sort());
       await db.delete(certificationSubmissions).where(
         inArray(
           certificationSubmissions.id,
