@@ -1,16 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { collectProductionClaimAwareRequiredTransportCategories } from "./production-claim-transport-scope";
+import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
+import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
+import {
+  collectProductionClaimAwareRequiredTransportCategories,
+  collectProductionClaimAwareTransportEntityIds,
+} from "./production-claim-transport-scope";
 
 const REQUIRED = ["feedstock", "biochar", "sample"] as const;
 const CURRENT_REMOVAL_ID = "00000000-0000-4000-a000-000000000001";
 const PRIOR_REMOVAL_ID = "00000000-0000-4000-a000-000000000002";
 
-function batch(claimedBy: string | null) {
+function batch(id: string, claimedBy: string | null, productionRunId = `${id}-run`) {
   return {
-    id: "00000000-0000-4000-a000-000000000003",
-    productionRunIds: ["00000000-0000-4000-a000-000000000004"],
+    id,
+    productionRunIds: [productionRunId],
     productionEmissionsClaimedByRemovalId: claimedBy,
   };
+}
+
+function lineage(args: {
+  productionRunId: string;
+  biocharProductId: string;
+  feedstockId: string;
+}): ChainOfCustodyData {
+  return {
+    productionRun: { id: args.productionRunId },
+    biocharProduct: { id: args.biocharProductId },
+    feedstocks: [{ id: args.feedstockId }],
+  } as ChainOfCustodyData;
+}
+
+function batchWithSample(
+  creditBatchId: string,
+  sampleId: string,
+): CreditBatchWithSamples {
+  return {
+    creditBatchId,
+    samples: [{ id: sampleId }],
+  } as unknown as CreditBatchWithSamples;
 }
 
 describe("production-claim-aware transport requirements", () => {
@@ -18,7 +45,7 @@ describe("production-claim-aware transport requirements", () => {
     expect(
       collectProductionClaimAwareRequiredTransportCategories({
         removalId: CURRENT_REMOVAL_ID,
-        memberBatches: [batch(PRIOR_REMOVAL_ID)],
+        memberBatches: [batch("batch-prior", PRIOR_REMOVAL_ID)],
         requiredTransportCategories: REQUIRED,
       }),
     ).toEqual(["biochar"]);
@@ -30,7 +57,7 @@ describe("production-claim-aware transport requirements", () => {
       expect(
         collectProductionClaimAwareRequiredTransportCategories({
           removalId: CURRENT_REMOVAL_ID,
-          memberBatches: [batch(claimedBy)],
+          memberBatches: [batch("batch-current", claimedBy)],
           requiredTransportCategories: REQUIRED,
         }),
       ).toEqual(REQUIRED);
@@ -41,9 +68,44 @@ describe("production-claim-aware transport requirements", () => {
     expect(
       collectProductionClaimAwareRequiredTransportCategories({
         removalId: CURRENT_REMOVAL_ID,
-        memberBatches: [batch(PRIOR_REMOVAL_ID), batch(null)],
+        memberBatches: [
+          batch("batch-prior", PRIOR_REMOVAL_ID),
+          batch("batch-unclaimed", null),
+        ],
         requiredTransportCategories: REQUIRED,
       }),
     ).toEqual(REQUIRED);
+  });
+
+  it("keeps production transport IDs from unclaimed batches and biochar IDs from every lineage", () => {
+    expect(
+      collectProductionClaimAwareTransportEntityIds({
+        removalId: CURRENT_REMOVAL_ID,
+        memberBatches: [
+          batch("batch-prior", PRIOR_REMOVAL_ID, "run-prior"),
+          batch("batch-unclaimed", null, "run-unclaimed"),
+        ],
+        lineages: [
+          lineage({
+            productionRunId: "run-prior",
+            biocharProductId: "product-prior",
+            feedstockId: "feedstock-prior",
+          }),
+          lineage({
+            productionRunId: "run-unclaimed",
+            biocharProductId: "product-unclaimed",
+            feedstockId: "feedstock-unclaimed",
+          }),
+        ],
+        batchesWithSamples: [
+          batchWithSample("batch-prior", "sample-prior"),
+          batchWithSample("batch-unclaimed", "sample-unclaimed"),
+        ],
+      }),
+    ).toEqual({
+      feedstockIds: ["feedstock-unclaimed"],
+      biocharProductIds: ["product-prior", "product-unclaimed"],
+      sampleIds: ["sample-unclaimed"],
+    });
   });
 });
