@@ -449,7 +449,10 @@ function declarativeInputMappingRevision(
   return groups;
 }
 
+const PRODUCTION_CLAIM_POLICY = "application-slice-delivery-only-v1";
+
 export const MAPPING_REVISION_INPUT = {
+  productionClaimPolicy: PRODUCTION_CLAIM_POLICY,
   inputMapping: declarativeInputMappingRevision(INPUT_MAPPING),
   sequestrationComponentInputBindings:
     SEQUESTRATION_COMPONENT_INPUT_BINDINGS,

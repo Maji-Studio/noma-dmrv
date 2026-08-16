@@ -88,3 +88,25 @@ export function certificationRemovalsHref(
   const query = params.toString();
   return `/certification/removals${query ? `?${query}` : ""}`;
 }
+
+export function productionRunDeepLinkHref(
+  productionRunId: string,
+  facilityId: string,
+): string {
+  const params = new URLSearchParams({
+    facility: facilityId,
+    run: productionRunId,
+  });
+  return `/production-runs?${params.toString()}`;
+}
+
+export function traceabilityApplicationHref(
+  creditBatchId: string,
+  applicationId: string,
+): string {
+  const params = new URLSearchParams({
+    batch: creditBatchId,
+    application: applicationId,
+  });
+  return `/traceability?${params.toString()}`;
+}

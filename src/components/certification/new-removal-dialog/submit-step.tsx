@@ -45,6 +45,7 @@ import { DebugDrawer } from "./debug-drawer";
 import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
+import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
 
 const REJECTED_IN_ISOMETRIC_MSG =
   "This Removal was rejected in Isometric. Resolve the registry record before trying again from noma.";
@@ -301,6 +302,13 @@ export function SubmitStep({
         rejectionMessage={
           rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null
         }
+      />
+
+      <RemovalEmissionsLedger
+        compilation={compilationQuery.data ?? null}
+        ledger={ctx.emissionsLedger}
+        facilityId={facilityId}
+        isLoading={compilationQuery.isLoading}
       />
 
       <DebugDrawer

@@ -64,13 +64,13 @@ function makePreview(
   };
 }
 
-function co2eStoredMarkup(
+function carbonLedgerMarkup(
   options: Parameters<typeof creditBatchSheetSections>[0],
 ): string {
-  const field = creditBatchSheetSections(options)
-    .find((section) => section.title === "Batch definition")
-    ?.fields.find((f) => f.label === "CO₂e stored");
-  return renderToStaticMarkup(<>{field?.value}</>);
+  const content = creditBatchSheetSections(options).find(
+    (section) => section.title === "Carbon ledger",
+  )?.content;
+  return renderToStaticMarkup(<>{content}</>);
 }
 
 const baseOptions = {
@@ -85,31 +85,55 @@ const baseOptions = {
 describe("credit batch CO₂e stored", () => {
   it("omits the field until a numeric preview is available", () => {
     expect(
-      co2eStoredMarkup({
+      carbonLedgerMarkup({
         ...baseOptions,
         creditBatch: makeBatch(),
       }),
-    ).toBe("");
+    ).not.toContain("t CO₂e");
 
     expect(
-      co2eStoredMarkup({
+      carbonLedgerMarkup({
         ...baseOptions,
         creditBatch: makeBatch({
           co2eStoredPreview: makePreview(null, ["organicCarbonPercent"]),
         }),
       }),
-    ).toBe("");
+    ).not.toContain("t CO₂e");
   });
 
   it("renders the figure once the preview resolves", () => {
     expect(
-      co2eStoredMarkup({
+      carbonLedgerMarkup({
         ...baseOptions,
         creditBatch: makeBatch({
           co2eStoredPreview: makePreview(12.5, []),
         }),
       }),
-    ).toContain("12.50 t CO₂e");
+    ).toContain("≈ 12.50 t CO₂e");
+  });
+
+  it("keeps loading production-run data distinct from missing inputs", () => {
+    const html = carbonLedgerMarkup({
+      ...baseOptions,
+      creditBatch: makeBatch(),
+      isLoadingRuns: true,
+    });
+
+    expect(html).toContain("Loading production inputs…");
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain("Feedstock, dry mass");
+  });
+
+  it("explains when production-run data is unavailable", () => {
+    const html = carbonLedgerMarkup({
+      ...baseOptions,
+      creditBatch: makeBatch(),
+      runsError: new Error("request failed"),
+    });
+
+    expect(html).toContain("Not available");
+    expect(html).toContain("Reload the production runs");
+    expect(html).not.toContain("Feedstock, dry mass");
   });
 
   it("discloses the raw and capped 1000-year durability calculation", () => {

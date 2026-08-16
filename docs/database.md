@@ -154,7 +154,7 @@ The public verifier download lookup is the one deliberate exception:
 `// org-scope-ok:` waiver, then authorizes with the bearer token digest and
 private-document state. It must not be copied into ordinary data access.
 
-`certification_submissions` is the **freeze point** for certification source data. A blocking ledger status (`draft`, `submitted`, `accepted`) on a Removal, telemetry upload, or GHG Statement prevents in-place mutation of upstream production runs, lab samples, deliveries, biochar products, and feedstocks reached through current credit-batch lineage. The guard lives in data-access (`certification-lineage-guards.ts`) so stale UI membership cannot bypass it.
+`certification_submissions` is the **freeze point** for certification source data. A blocking ledger status (`draft`, `submitted`, `accepted`) on a Removal, telemetry upload, or GHG Statement prevents in-place mutation of production runs, lab samples, deliveries, biochar products, and feedstocks captured by that Removal's immutable application-by-credit-batch slices. New downstream physical records may descend from a certified production run without making the captured upstream records editable. The guard lives in data-access (`certification-lineage-guards.ts`) so stale UI membership cannot bypass it.
 
 ## Method-B storage boundary
 

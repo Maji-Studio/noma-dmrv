@@ -27,6 +27,7 @@ export interface DatapointTransport {
 export interface RemovalTransportSnapshot {
   removalSupplierRef: string;
   datapointBodies: DatapointTransport[];
+  omittedTemplateComponentIds: string[];
 }
 
 const datapointTransportSchema = z.object({
@@ -45,6 +46,7 @@ const datapointTransportSchema = z.object({
 const removalTransportSnapshotSchema = z.object({
   removalSupplierRef: z.string().min(1),
   datapointBodies: z.array(datapointTransportSchema),
+  omittedTemplateComponentIds: z.array(z.string().min(1)).default([]),
 });
 
 const removalSourceBindingPlanSchema = z.array(
@@ -133,6 +135,7 @@ export function readRemovalTransport(
   return {
     removalSupplierRef: parsed.data.removalSupplierRef,
     datapointBodies: parsed.data.datapointBodies as DatapointTransport[],
+    omittedTemplateComponentIds: parsed.data.omittedTemplateComponentIds,
   };
 }
 

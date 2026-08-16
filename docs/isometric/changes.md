@@ -1,5 +1,38 @@
 # Isometric Docs Change Log
 
+## 2026-08-16 (whole-batch production-claim concurrency hardening)
+
+- A Removal now reserves all unclaimed member credit batches atomically before
+  its first registry POST. A mutation-free failure releases the reservation;
+  possible or confirmed remote mutation keeps it fail-closed for reconciliation.
+- The earliest reporting period wins a shared batch's production inputs, using
+  the latest member Application date as the pre-submit completion date and the
+  draft creation time and ID only as tie-breakers.
+- Whole-batch production inputs include completed, unapplied member runs and
+  their feedstock transport. Those runs do not dilute the applied biochar
+  delivery-transport fraction.
+- An Application may join a Removal only when all of its credit-batch slices
+  are unassigned; an existing sibling owner blocks the assignment.
+
+## 2026-08-15 (application-slice Removal attribution and carbon ledger)
+
+- Biochar remaining in a source bin can be used for a new product after its
+  production run has supported a submitted Removal. Submitted source records
+  remain immutable; the new downstream draw is a new record.
+- Removal membership now freezes application-by-credit-batch wet and dry mass
+  slices. Newly applied mass from the same credit batch remains available for a
+  later Removal.
+- The first successful Removal claims the full production-emissions bucket.
+  Later Removals retain delivery and stored inputs and omit already-claimed
+  production inputs.
+- A commingled physical Application compiles one registry Biochar Application
+  per immutable credit-batch slice while retaining the shared observed truck
+  facts.
+- Removal review and credit-batch detail now show a compact carbon ledger, one
+  stored-CO₂e estimate, linked source records, and the prior production claim.
+- Noma submits accounting inputs; Isometric remains authoritative for project
+  emissions and the net removal result.
+
 ## 2026-08-13 (Production Batch physical run windows)
 
 New Isometric Production Batches now submit the earliest member production-run
@@ -34,14 +67,15 @@ an automatic PATCH.
 Delivery create/edit now records optional observed truck mass before and after
 unloading in kilograms. Sandbox Removal preflight requires both observations
 for every included Application and never substitutes delivered wet mass or zero
-as observed evidence. It also requires a positive field size, refuses
-multi-batch allocation and deliveries split across multiple Applications, and
+as observed evidence. It also requires a positive field size, compiles
+commingled mass as one immutable application-by-credit-batch slice per registry
+Production Batch, refuses deliveries split across multiple Applications, and
 snapshots the resolved values before any registry mutation. The Biochar Application
 journal claims the exact payload before POST and reconciles bounded list pages
 by its versioned environment/provider reference after retries. Rate is applied
 tonnes divided by field hectares (`t/ha`); truck mass values use `kg`.
-Production remains explicitly blocked for both Storage Location and Biochar
-Application synchronization.
+Production-environment registry synchronization remains explicitly disabled for
+both Storage Location and Biochar Application resources.
 
 This traceability layer does not change the GHG Entry `CO2 stored` component,
 its payload hash, or the existing sequestration calculation. Measurement

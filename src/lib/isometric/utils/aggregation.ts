@@ -210,6 +210,7 @@ export function clampFactor(value: number | null | undefined): number {
 export function aggregateProductionRuns(
   runs: ProductionRunWithSamples[],
   attributionByRunId?: Map<string, number>,
+  options?: { productionRunIds?: ReadonlySet<string> },
 ): AggregatedProductionData {
   if (runs.length === 0) {
     throw new Error("aggregateProductionRuns: no production runs supplied");
@@ -238,19 +239,23 @@ export function aggregateProductionRuns(
     }
     const runEndTime = run.endTime;
     const factor = clampFactor(attributionByRunId?.get(run.id));
+    const includeProduction =
+      options?.productionRunIds == null || options.productionRunIds.has(run.id);
     // STORED bucket: only the applied share is credited (ex-post, unchanged).
     totalBiocharDryMassKg += nz(run.biocharDryMassKg) * factor;
     // PRODUCTION bucket (§8.6.2, ADR 0020): full run totals — front-loaded on
     // the batch's claiming entry, no applied-mass weighting. See SOURCE_BUCKETS.
-    totalFeedstockDryMassKg += nz(run.feedstockMassDryKg);
+    if (includeProduction) {
+      totalFeedstockDryMassKg += nz(run.feedstockMassDryKg);
     // Startup bucket = reactor-startup / on-site plant diesel only.
-    totalStartupDieselLitres += nz(run.dieselOperationLiters);
+      totalStartupDieselLitres += nz(run.dieselOperationLiters);
     // Genset ("summarized") bucket = generator diesel + preprocessing fuel;
     // preprocess rides with genset per the Dark Earth template's two-component
     // pyrolysis diesel split (docs/isometric/changes.md, amends #319).
-    totalGensetDieselLitres +=
-      nz(run.dieselGensetLiters) + nz(run.preprocessingFuelLiters);
-    totalElectricityKwh += nz(run.electricityKwh);
+      totalGensetDieselLitres +=
+        nz(run.dieselGensetLiters) + nz(run.preprocessingFuelLiters);
+      totalElectricityKwh += nz(run.electricityKwh);
+    }
     if (run.startTime < earliestStartTime) earliestStartTime = run.startTime;
     if (latestEndTime == null || runEndTime > latestEndTime) latestEndTime = runEndTime;
 

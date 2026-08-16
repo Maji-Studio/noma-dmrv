@@ -81,6 +81,7 @@ describe("buildSelectableBatchesData", () => {
       orgCtx,
       ["batch-1", "batch-2"],
       facilityFacts,
+      { unassignedOnly: true },
     );
     expect(result).toMatchObject({
       batches: [

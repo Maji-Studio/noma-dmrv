@@ -4,6 +4,7 @@ import {
   eq,
   exists,
   inArray,
+  isNull,
   notExists,
   or,
   sql,
@@ -15,6 +16,7 @@ import {
   biocharProducts,
   certifierProjects,
   creditBatches,
+  creditBatchApplications,
   creditBatchProductionRuns,
   deliveries,
   facilities,
@@ -33,7 +35,6 @@ import {
   type Sample,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import type { GisBoundary } from "@/lib/geojson/types";
 import {
   BLUEPRINT_1000_YEAR_REPLICATES_INPUT,
   CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION,
@@ -44,6 +45,7 @@ import {
   type Blueprint1000YearReplicate,
 } from "@/lib/calculations/biochar-removal";
 import { SafeError } from "@/lib/errors";
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import {
   weightedBatchChemistry,
   type WeightedBatchChemistry,
@@ -66,6 +68,18 @@ import type {
   CreditBatchCo2eStoredPreview,
   CreditBatchFeedstockTypeFact,
 } from "./credit-batch-accounting-types";
+import type {
+  BatchLineageApplicationFact,
+  BatchLineageFeedstockFact,
+  BatchLineageRunFact,
+  CreditBatchLineageFacts,
+} from "./credit-batch-lineage-types";
+export type {
+  BatchLineageApplicationFact,
+  BatchLineageFeedstockFact,
+  BatchLineageRunFact,
+  CreditBatchLineageFacts,
+} from "./credit-batch-lineage-types";
 export type {
   ApplicationCo2eStoredPreview,
   CreditBatchCo2eStoredPreview,
@@ -73,87 +87,6 @@ export type {
 } from "./credit-batch-accounting-types";
 
 type Executor = DbTransaction | typeof db;
-
-export interface BatchLineageFeedstockFact {
-  id: string;
-  code: string;
-  status: string | null;
-  deliveryDate: Date | null;
-  massDryKg: number | null;
-  wetMassUsedKg: number | null;
-  eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
-  supplierName: string | null;
-  feedstockTypeName: string | null;
-  feedstockDeliveryCode: string | null;
-}
-
-export interface BatchLineageRunFact {
-  id: string;
-  code: string;
-  status: string | null;
-  date: Date | string;
-  biocharStorageName?: string | null;
-  biocharOutputKg?: number | null;
-  biocharDryMassKg: number | null;
-  feedstockMassDryKg: number | null;
-  reactor: {
-    id: string;
-    code: string;
-    identifier: string;
-    reactorType: string | null;
-  } | null;
-  feedstocks: BatchLineageFeedstockFact[];
-}
-
-export interface BatchLineageApplicationFact {
-  id: string;
-  code: string;
-  status: string | null;
-  applicationDate: Date;
-  fieldIdentifier: string | null;
-  evidenceMethod: "location" | "boundary" | "visual";
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
-  gisBoundary: GisBoundary | null;
-  biocharAppliedTons: number;
-  biocharAppliedDryTons: number | null;
-  sourceAllocation: ProductSourceAllocationFact | null;
-  soilTemperatureC: number | null;
-  facility: { id: string; code: string; name: string };
-  delivery: {
-    id: string;
-    code: string;
-    status: string | null;
-    deliveryDate: Date;
-    deliveredWetMassKg?: number | null;
-    massDryKg: number | null;
-  };
-  order: {
-    id: string;
-    code: string;
-    orderDate: Date;
-    quantityKg: number | null;
-  } | null;
-  biocharProduct: {
-    id: string;
-    code: string;
-    status: string | null;
-    productionDate: Date;
-    massKg: number | null;
-    moistureContentPercent: number | null;
-    formulationName: string | null;
-    linkedProductionRunId: string;
-  };
-}
-
-export interface CreditBatchLineageFacts {
-  batchId: string;
-  productionRunIds: string[];
-  runs: BatchLineageRunFact[];
-  applications: BatchLineageApplicationFact[];
-  applicationIds: string[];
-  appliedWeightTons: number;
-}
 
 export interface CreditBatchChemistry extends WeightedBatchChemistry {
   blueprint1000YearReplicates: Blueprint1000YearReplicate[];
@@ -183,6 +116,8 @@ async function loadLineageWithExecutor(
   ctx: OrgContext,
   batchIds: string[],
   executor: Executor,
+  removalId?: string,
+  unassignedOnly = false,
 ): Promise<Record<string, CreditBatchLineageFacts>> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
@@ -272,6 +207,7 @@ async function loadLineageWithExecutor(
     ? await executor
         .select({
           id: applications.id,
+          creditBatchId: creditBatchApplications.creditBatchId,
           code: applications.code,
           status: applications.status,
           applicationDate: applications.applicationDate,
@@ -280,8 +216,8 @@ async function loadLineageWithExecutor(
           gpsLatitude: applications.gpsLatitude,
           gpsLongitude: applications.gpsLongitude,
           gisBoundary: applications.gisBoundary,
-          biocharAppliedTons: applications.biocharAppliedTons,
-          biocharAppliedDryTons: applications.biocharAppliedDryTons,
+          allocatedWetMassKg: creditBatchApplications.allocatedWetMassKg,
+          allocatedDryMassKg: creditBatchApplications.allocatedDryMassKg,
           soilTemperatureC: applications.soilTemperatureC,
           facilityId: facilities.id,
           facilityCode: facilities.code,
@@ -306,6 +242,22 @@ async function loadLineageWithExecutor(
           linkedProductionRunId: biocharProducts.linkedProductionRunId,
         })
         .from(applications)
+        .innerJoin(
+          creditBatchApplications,
+          and(
+            eq(creditBatchApplications.applicationId, applications.id),
+            inArray(creditBatchApplications.creditBatchId, ids),
+            removalId
+              ? eq(creditBatchApplications.removalId, removalId)
+              : unassignedOnly
+                ? isNull(creditBatchApplications.removalId)
+                : undefined,
+            eq(
+              creditBatchApplications.organizationId,
+              ctx.organizationId,
+            ),
+          ),
+        )
         .innerJoin(
           deliveries,
           and(
@@ -458,10 +410,19 @@ async function loadLineageWithExecutor(
     allocationsByProductId.set(row.biocharProductId, allocations);
   }
 
-  const applicationsByRun = new Map<string, BatchLineageApplicationFact[]>();
+  const batchIdByRunId = new Map(
+    membershipRows.map((row) => [row.runId, row.batchId]),
+  );
+  const applicationsByBatchRun = new Map<
+    string,
+    BatchLineageApplicationFact[]
+  >();
   for (const row of applicationRows) {
     const sourceAllocations =
-      allocationsByProductId.get(row.productId) ?? [];
+      (allocationsByProductId.get(row.productId) ?? []).filter(
+        (allocation) =>
+          batchIdByRunId.get(allocation.productionRunId) === row.creditBatchId,
+      );
     const effectiveRunId =
       sourceAllocations[0]?.productionRunId ??
       row.linkedProductionRunId;
@@ -477,8 +438,8 @@ async function loadLineageWithExecutor(
       gpsLatitude: row.gpsLatitude,
       gpsLongitude: row.gpsLongitude,
       gisBoundary: row.gisBoundary,
-      biocharAppliedTons: row.biocharAppliedTons,
-      biocharAppliedDryTons: row.biocharAppliedDryTons,
+      biocharAppliedTons: kgToTonnes(row.allocatedWetMassKg),
+      biocharAppliedDryTons: kgToTonnes(row.allocatedDryMassKg),
       sourceAllocation: null,
       soilTemperatureC: row.soilTemperatureC,
       facility: { id: row.facilityId, code: row.facilityCode, name: row.facilityName },
@@ -491,9 +452,10 @@ async function loadLineageWithExecutor(
       sourceAllocations,
     )) {
       const runId = slice.biocharProduct.linkedProductionRunId;
-      const facts = applicationsByRun.get(runId) ?? [];
+      const key = `${row.creditBatchId}:${runId}`;
+      const facts = applicationsByBatchRun.get(key) ?? [];
       facts.push(slice);
-      applicationsByRun.set(runId, facts);
+      applicationsByBatchRun.set(key, facts);
     }
   }
 
@@ -509,7 +471,10 @@ async function loadLineageWithExecutor(
     const applications = Array.from(
       new Map(
         productionRunIds
-          .flatMap((runId) => applicationsByRun.get(runId) ?? [])
+          .flatMap(
+            (runId) =>
+              applicationsByBatchRun.get(`${batchId}:${runId}`) ?? [],
+          )
           .map((app) => [
             `${app.id}:${app.biocharProduct.linkedProductionRunId}`,
             app,
@@ -777,6 +742,8 @@ async function loadCreditBatchRollupsWithExecutor(
   ctx: OrgContext,
   batchIds: string[],
   executor: Executor,
+  removalId?: string,
+  unassignedOnly = false,
 ): Promise<CreditBatchRollupsByBatch> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
@@ -824,6 +791,8 @@ async function loadCreditBatchRollupsWithExecutor(
     ctx,
     allowedIds,
     executor,
+    removalId,
+    unassignedOnly,
   );
   return Object.fromEntries(
     rollupIdentities.map(({ batch, feedstockType }) => {
@@ -849,12 +818,19 @@ async function loadCreditBatchRollupsWithExecutor(
 export async function loadCreditBatchRollups(
   ctx: OrgContext,
   batchIds: string[],
+  options?: { removalId?: string; unassignedOnly?: boolean },
 ): Promise<CreditBatchRollupsByBatch> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
   if (ids.length === 0) return {};
   return db.transaction((tx) =>
-    loadCreditBatchRollupsWithExecutor(ctx, ids, tx),
+    loadCreditBatchRollupsWithExecutor(
+      ctx,
+      ids,
+      tx,
+      options?.removalId,
+      options?.unassignedOnly,
+    ),
     {
       isolationLevel: "repeatable read",
       accessMode: "read only",
@@ -870,6 +846,7 @@ export async function loadCreditBatchRollups(
 export async function loadCreditBatchAccounting(
   ctx: OrgContext,
   batchIds: string[],
+  options?: { removalId?: string; unassignedOnly?: boolean },
 ): Promise<CreditBatchAccountingByBatch> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
@@ -881,6 +858,8 @@ export async function loadCreditBatchAccounting(
         ctx,
         ids,
         tx,
+        options?.removalId,
+        options?.unassignedOnly,
       );
       const rollups = ids.flatMap((id) => {
         const rollup = rollupsByBatch[id];
@@ -985,9 +964,14 @@ export async function loadCreditBatchAccounting(
 export async function getCo2eStoredPreviews(
   ctx: OrgContext,
   batchIds: string[],
+  options?: { removalId?: string; unassignedOnly?: boolean },
 ): Promise<Record<string, CreditBatchCo2eStoredPreview>> {
   requireOrgScope(ctx);
-  const accountingByBatch = await loadCreditBatchAccounting(ctx, batchIds);
+  const accountingByBatch = await loadCreditBatchAccounting(
+    ctx,
+    batchIds,
+    options,
+  );
   return Object.fromEntries(
     Object.entries(accountingByBatch).map(([batchId, accounting]) => [
       batchId,

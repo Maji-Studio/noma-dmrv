@@ -16,7 +16,7 @@ import { canReclaimInterruptedSubmission } from "./submission-metadata";
 import type { RemovalReadinessFacts } from "./readiness";
 
 export function toRemovalReadinessFacts(
-  ctx: RemovalCertifyContext,
+  ctx: Omit<RemovalCertifyContext, "emissionsLedger">,
 ): RemovalReadinessFacts {
   const lockInFlight = ctx.latestSubmission
     ? isLockedInFlight(ctx.latestSubmission) &&

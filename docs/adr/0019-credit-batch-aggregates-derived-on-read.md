@@ -50,3 +50,19 @@ from source data instead:
 - Deleting an application can no longer leave the batch's headline totals
   stale, because there is nothing left to leave stale.
 - Form/update Zod schemas and seed data stop carrying the six fields.
+
+## Amendment: Removal-owned application slices
+
+Removal membership is now frozen at the application-by-credit-batch grain.
+`credit_batch_applications` therefore stores each slice's allocated wet and dry
+mass once the slice is assigned to a Removal. This is a deliberate snapshot,
+not a live credit-batch aggregate: it preserves exactly what an earlier Removal
+submitted while later applied mass can enter a later Removal.
+
+Unassigned slices remain a projection of live application and product
+provenance. Their reconciliation runs when an Application is created or its
+delivery/applied mass changes, when credit-batch run membership changes, and
+immediately before unassigned slices are assigned to a Removal. Product source
+allocations are written before any downstream Application exists and are
+immutable after creation; the legacy linked-production-run update path also
+reconciles any downstream unassigned slices.

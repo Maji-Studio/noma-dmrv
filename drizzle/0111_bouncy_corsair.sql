@@ -1,0 +1,2 @@
+ALTER TABLE "credit_batches" ADD COLUMN "production_emissions_claim_reserved_by_submission_id" uuid;--> statement-breakpoint
+CREATE INDEX "credit_batches_production_claim_reservation_id_idx" ON "credit_batches" USING btree ("production_emissions_claim_reserved_by_submission_id");

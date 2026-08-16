@@ -296,12 +296,13 @@ credit batches, one per feedstock. The `startDate`/`endDate` window
 means production period, not application period. Batch membership is
 production runs — each completed run matching the batch's organization,
 facility, feedstock, and production window is attached automatically, so the
-batch may be declared before any runs exist; member applications are derived
-from lineage. On submission, one or more
-credit batches group into a single Isometric **Removal** (default 1:1
-per cohort). A credit batch's production emissions are claimed by
-exactly one Removal — recorded on the batch as the claiming Removal —
-so they are never double-counted across entries (ADR 0020).
+batch may be declared before any runs exist. Application-by-credit-batch wet
+and dry mass slices are derived from product provenance. A slice belongs to a
+Removal only after its nullable ownership is assigned, so newly applied mass
+from the same credit batch can remain unassigned for a later Removal without
+changing the earlier one. A credit batch's production emissions are claimed by
+at most one Removal. There is no claimant until the first successful Removal
+submission records one, preventing double-counting across entries (ADR 0020).
 _Avoid_: batch, issuance; "production batch" as a separate entity —
 the credit batch *is* noma's production batch.
 
@@ -316,9 +317,10 @@ fixed in different destinations into one issue.
 **Removal**:
 The Isometric **submission unit** — a facility-scoped registry record
 of verified, applied-biochar CO₂e accounting, held locally by a
-`certifierRemovals` row. **N credit batches map into one Removal.** A
-Removal aggregates the deduped union of **production runs** reached
-through its member credit batches' application lineage. Attribution
+`certifierRemovals` row. **N application-by-credit-batch slices map into one
+Removal.** A credit batch may therefore contribute new applied mass to more
+than one Removal over time. A Removal aggregates the deduped union of
+**production runs** reached through its frozen application slices. Attribution
 basis splits by emission-input bucket (ADR 0020): **stored** quantities
 are ex-post applied-scoped (each run weighted by its applied share);
 the **production** bucket submits in full, once, on the claiming
@@ -574,11 +576,13 @@ _Avoid_: teammate, seat.
   with one org role; a **Platform Admin** needs no Membership to act
   inside an Organization
 - The LCA window contains many monthly **Credit batches**
-- **N Credit batches** group into one **Removal** (default 1:1 per month)
+- **N assigned application-by-credit-batch slices** group into one **Removal**;
+  unassigned slices remain available for later Removals, so one credit batch
+  may contribute later applied slices to later Removals
 - A **Credit batch** aggregates many **Production runs**
-- A **Removal** is the Isometric submission unit — it aggregates the
-  deduped union of **Production runs** reached through its member credit
-  batches' application lineage; attribution basis splits by
+- A **Removal** is the Isometric submission unit. It aggregates the deduped
+  union of **Production runs** reached through its frozen application slices;
+  attribution basis splits by
   emission-input bucket (ADR 0020) — production is claimed in full once
   by the claiming Removal, stored and delivery remain applied-biochar
   scoped

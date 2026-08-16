@@ -93,6 +93,14 @@ const CONTEXT = {
   isProduction: false,
   latestSubmission: null,
   mapping: null,
+  emissionsLedger: {
+    inputs: [],
+    inputsUnavailable: true,
+    claims: [],
+    creditBatches: [],
+    productionRuns: [],
+    applications: [],
+  },
 } as unknown as RemovalCertifyContext;
 
 function findButton(renderer: ReactTestRenderer, label: string) {

@@ -43,6 +43,7 @@ type BuildCreditBatchContexts = (
   orgCtx: OrgContext,
   creditBatchIds: string[],
   facilityFacts: FacilityCertifierFacts,
+  options?: { unassignedOnly?: boolean },
 ) => Promise<CreditBatchContextSet>;
 
 // Builds the New-Removal wizard's selection-step payload after the core action
@@ -60,6 +61,7 @@ export async function buildSelectableBatchesData(
     orgCtx,
     ungroupedIds,
     facilityFacts,
+    { unassignedOnly: true },
   );
   const batches: SelectableBatch[] = ungrouped.map((row) => {
     const accounting = accountingByBatch[row.id];

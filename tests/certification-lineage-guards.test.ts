@@ -26,10 +26,12 @@ import { createTransportLeg } from "@/data-access/transport-legs";
 import { db } from "@/db";
 import {
   applications,
+  biocharProductSourceAllocations,
   biocharProducts,
   certificationSubmissions,
   certifierGhgStatements,
   certifierRemovals,
+  creditBatchApplications,
   creditBatchProductionRuns,
   creditBatches,
   customers,
@@ -138,6 +140,7 @@ async function createLineageFixture(
         biocharOutputKg: 300,
         biocharMoisturePercent: 5,
         biocharDryMassKg: 285,
+        status: blockingVia === "none" ? "draft" : "complete",
       })
       .returning({ id: productionRuns.id });
 
@@ -251,7 +254,6 @@ async function createLineageFixture(
         startDate: "2026-06-01",
         endDate: "2026-06-30",
         certifier: "isometric",
-        removalId: removal.id,
       })
       .returning({ id: creditBatches.id });
 
@@ -259,6 +261,14 @@ async function createLineageFixture(
       organizationId: TEST_ORG_ID,
       creditBatchId: batch.id,
       productionRunId: productionRun.id,
+    });
+    await tx.insert(creditBatchApplications).values({
+      organizationId: TEST_ORG_ID,
+      creditBatchId: batch.id,
+      applicationId: application.id,
+      allocatedWetMassKg: 300,
+      allocatedDryMassKg: 285,
+      removalId: removal.id,
     });
 
     if (blockingVia !== "none") {
@@ -310,6 +320,9 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
     await tx
       .delete(creditBatchProductionRuns)
       .where(eq(creditBatchProductionRuns.creditBatchId, fixture.batchId));
+    await tx
+      .delete(creditBatchApplications)
+      .where(eq(creditBatchApplications.creditBatchId, fixture.batchId));
     await tx.delete(creditBatches).where(eq(creditBatches.id, fixture.batchId));
     await tx
       .delete(applications)
@@ -388,6 +401,18 @@ describe("certification lineage guards", () => {
     }, "none");
   });
 
+  it("rejects cohort changes after a slice is assigned to a draft Removal", async () => {
+    await withFixture(async (fixture) => {
+      await expect(
+        updateCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId, {
+          startDate: new Date("2026-06-02T00:00:00Z"),
+        }),
+      ).rejects.toThrow(
+        "Cannot change this credit batch's production membership because its applied mass belongs to a Removal.",
+      );
+    }, "none");
+  });
+
   it("rejects a legacy wet-mass edit when no source bin can be identified", async () => {
     await withFixture(async (fixture) => {
       await expect(
@@ -425,6 +450,97 @@ describe("certification lineage guards", () => {
       await expect(
         deleteProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId),
       ).rejects.toThrow(LOCKED_COPY);
+    });
+  });
+
+  it("keeps a production-run lock when delivery reconstruction is incomplete", async () => {
+    await withFixture(async (fixture) => {
+      const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+      const [sourceBin] = await db
+        .insert(storageLocations)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `SL-CLG-INCOMPLETE-${tag}`,
+          name: `CLG Incomplete Source ${tag}`,
+          type: "product_bin",
+          facilityId: fixture.facilityId,
+        })
+        .returning({ id: storageLocations.id });
+      const [unrelatedProduct] = await db
+        .insert(biocharProducts)
+        .values({
+          organizationId: TEST_ORG_ID,
+          code: `BP-CLG-INCOMPLETE-${tag}`,
+          facilityId: fixture.facilityId,
+          massKg: 1,
+          moistureContentPercent: 0,
+          waterAddedKg: 0,
+        })
+        .returning({ id: biocharProducts.id });
+
+      try {
+        await db.insert(biocharProductSourceAllocations).values({
+          organizationId: TEST_ORG_ID,
+          biocharProductId: fixture.productId,
+          productionRunId: fixture.productionRunId,
+          sourceStorageLocationId: sourceBin.id,
+          allocatedWetMassKg: 300,
+          allocatedDryMassKg: 285,
+        });
+        await db
+          .update(biocharProducts)
+          .set({
+            linkedProductionRunId: null,
+            sourceBiocharStorageLocationId: sourceBin.id,
+          })
+          .where(eq(biocharProducts.id, fixture.productId));
+        await db
+          .update(orders)
+          .set({ biocharProductId: unrelatedProduct.id })
+          .where(eq(orders.id, fixture.orderId));
+        await db
+          .update(deliveries)
+          .set({ biocharProductId: null })
+          .where(eq(deliveries.id, fixture.deliveryId));
+
+        await expect(
+          updateProductionRun(
+            makeTestOrgContext(TEST_USER_ID),
+            fixture.productionRunId,
+            { feedstockMoisturePercent: 11 },
+          ),
+        ).rejects.toThrow(LOCKED_COPY);
+      } finally {
+        await db
+          .update(deliveries)
+          .set({ biocharProductId: fixture.productId })
+          .where(eq(deliveries.id, fixture.deliveryId));
+        await db
+          .update(orders)
+          .set({ biocharProductId: fixture.productId })
+          .where(eq(orders.id, fixture.orderId));
+        await db
+          .delete(biocharProductSourceAllocations)
+          .where(
+            eq(
+              biocharProductSourceAllocations.biocharProductId,
+              fixture.productId,
+            ),
+          );
+        await db
+          .update(biocharProducts)
+          .set({
+            linkedProductionRunId: fixture.productionRunId,
+            sourceBiocharStorageLocationId: null,
+          })
+          .where(eq(biocharProducts.id, fixture.productId));
+        await db
+          .delete(biocharProducts)
+          .where(eq(biocharProducts.id, unrelatedProduct.id));
+        await db
+          .delete(storageLocations)
+          .where(eq(storageLocations.id, sourceBin.id));
+      }
     });
   });
 
@@ -466,11 +582,11 @@ describe("certification lineage guards", () => {
     });
   });
 
-  it("rejects creating a biochar product against a submitted production-run lineage", async () => {
+  it("allows a downstream biochar product draw from certified bin stock", async () => {
     await withFixture(async (fixture) => {
       const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
-      // An otherwise-valid create: a real product bin in the locked run's
-      // facility. Only the certified-lineage guard should block it.
+      // Certification freezes the submitted records, not the physical stock
+      // that remains in the run's biochar bin.
       const [bin] = await db
         .insert(storageLocations)
         .values({
@@ -483,8 +599,9 @@ describe("certification lineage guards", () => {
         .returning({ id: storageLocations.id });
 
       try {
-        await expect(
-          createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
+        const product = await createBiocharProduct(
+          makeTestOrgContext(TEST_USER_ID),
+          {
             code: `BP-LOCKED-${tag}`,
             facilityId: fixture.facilityId,
             linkedProductionRunId: fixture.productionRunId,
@@ -492,15 +609,10 @@ describe("certification lineage guards", () => {
             massKg: 10,
             moistureContentPercent: 5,
             waterAddedKg: 0,
-          }),
-        ).rejects.toThrow(
-          "Cannot create this biochar product because the selected production run is locked by a certification submission. Select a production run that is not locked.",
+          },
         );
+        expect(product.code).toBe(`BP-LOCKED-${tag}`);
       } finally {
-        // If the certified-lineage guard ever regresses and the create
-        // succeeds, the assertion fails AND leaves an orphan product behind.
-        // Remove any product with this run's unique code before the bin so a
-        // regression can't cascade into later specs.
         await db
           .delete(biocharProducts)
           .where(eq(biocharProducts.code, `BP-LOCKED-${tag}`));

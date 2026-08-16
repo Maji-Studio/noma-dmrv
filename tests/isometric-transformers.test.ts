@@ -753,6 +753,31 @@ describe("buildCreateGhgEntryRequest", () => {
     }
   });
 
+  it("omits production components from a delivery-only follow-up Removal", () => {
+    const tmpl = template([
+      { id: "rtc_production", blueprint_key: "mass_blueprint", inputs: [{ input_key: "mass" }] },
+      { id: "rtc_delivery", blueprint_key: "mass_blueprint", inputs: [{ input_key: "mass" }] },
+    ]);
+    const result = buildCreateGhgEntryRequest({
+      template: tmpl,
+      blueprintsByKey: new Map([["mass_blueprint", blueprintMass]]),
+      datapointIdsByRtcInput: new Map([
+        ["rtc_production::mass", ["dtp_production"]],
+        ["rtc_delivery::mass", ["dtp_delivery"]],
+      ]),
+      reportingWindow: baseReportingWindow,
+      projectId: PROJECT_ID,
+      supplierRefId: SUPPLIER_REF,
+      omittedTemplateComponentIds: ["rtc_production"],
+    });
+
+    expect(
+      result.ghg_entry_template_components?.map(
+        (component) => component.ghg_entry_template_component_id,
+      ),
+    ).toEqual(["rtc_delivery"]);
+  });
+
   it("emits CreateComponentListInput when the blueprint declares data_shape=LIST", () => {
     const tmpl = template([
       {

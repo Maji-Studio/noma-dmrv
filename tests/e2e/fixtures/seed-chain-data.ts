@@ -574,6 +574,11 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
             )
           );
         await tx
+          .delete(schema.creditBatchApplications)
+          .where(
+            inArray(schema.creditBatchApplications.creditBatchId, batchIds)
+          );
+        await tx
           .delete(schema.creditBatches)
           .where(eq(schema.creditBatches.facilityId, data.facility.id));
       }

@@ -47,8 +47,18 @@ function input(
 }
 
 function compile(
-  memberBatches = [
-    { creditBatchId: CREDIT_BATCH_ID, applicationIds: [APPLICATION_ID] },
+  memberBatches: Parameters<
+    typeof compileBiocharApplicationIntents
+  >[0]["memberBatches"] = [
+    {
+      creditBatchId: CREDIT_BATCH_ID,
+      applicationIds: [APPLICATION_ID],
+      applicationSlices: [{
+        applicationId: APPLICATION_ID,
+        allocatedWetMassKg: 12_000,
+        allocatedDryMassKg: 10_000,
+      }],
+    },
   ],
 ) {
   return compileBiocharApplicationIntents({
@@ -69,6 +79,11 @@ describe("compileBiocharApplicationIntents", () => {
       {
         creditBatchId: CREDIT_BATCH_ID,
         applicationIds: [APPLICATION_ID, APPLICATION_ID],
+        applicationSlices: [{
+          applicationId: APPLICATION_ID,
+          allocatedWetMassKg: 12_000,
+          allocatedDryMassKg: 10_000,
+        }],
       },
     ]);
 
@@ -133,16 +148,63 @@ describe("compileBiocharApplicationIntents", () => {
     await expect(compile()).rejects.toThrow(/before unloading.*exceeds/i);
   });
 
-  it("fails closed when an Application spans multiple credit batches", async () => {
+  it("compiles one immutable slice per credit batch for a commingled Application", async () => {
     await expect(
       compile([
-        { creditBatchId: CREDIT_BATCH_ID, applicationIds: [APPLICATION_ID] },
+        {
+          creditBatchId: CREDIT_BATCH_ID,
+          applicationIds: [APPLICATION_ID],
+          applicationSlices: [{
+            applicationId: APPLICATION_ID,
+            allocatedWetMassKg: 7_000,
+            allocatedDryMassKg: 5_600,
+          }],
+        },
         {
           creditBatchId: "44444444-4444-4444-8444-444444444444",
           applicationIds: [APPLICATION_ID],
+          applicationSlices: [{
+            applicationId: APPLICATION_ID,
+            allocatedWetMassKg: 5_000,
+            allocatedDryMassKg: 4_000,
+          }],
         },
       ]),
-    ).rejects.toThrow(/spans 2 credit batches/i);
+    ).resolves.toEqual([
+      expect.objectContaining({
+        applicationId: APPLICATION_ID,
+        creditBatchId: CREDIT_BATCH_ID,
+        appliedTonnes: 7,
+      }),
+      expect.objectContaining({
+        applicationId: APPLICATION_ID,
+        creditBatchId: "44444444-4444-4444-8444-444444444444",
+        appliedTonnes: 5,
+      }),
+    ]);
+  });
+
+  it("rejects a missing immutable slice for a single-batch Application", async () => {
+    await expect(
+      compile([{ creditBatchId: CREDIT_BATCH_ID, applicationIds: [APPLICATION_ID] }]),
+    ).rejects.toThrow(/one immutable allocation for every member credit batch/i);
+  });
+
+  it.each([
+    [11_999, "under-allocated"],
+    [12_001, "over-allocated"],
+  ])("rejects %s kg as an %s immutable slice total", async (allocatedWetMassKg) => {
+    await expect(
+      compile([{
+        creditBatchId: CREDIT_BATCH_ID,
+        applicationIds: [APPLICATION_ID],
+        applicationSlices: [{
+          applicationId: APPLICATION_ID,
+          allocatedWetMassKg,
+          allocatedDryMassKg: 10_000,
+        }],
+      }]),
+    ).rejects.toThrow(/immutable allocations total.*persisted applied mass/i);
   });
 
   it("fails closed when one delivery is split across multiple Applications", async () => {
@@ -157,6 +219,18 @@ describe("compileBiocharApplicationIntents", () => {
         {
           creditBatchId: CREDIT_BATCH_ID,
           applicationIds: [APPLICATION_ID, secondApplicationId],
+          applicationSlices: [
+            {
+              applicationId: APPLICATION_ID,
+              allocatedWetMassKg: 12_000,
+              allocatedDryMassKg: 10_000,
+            },
+            {
+              applicationId: secondApplicationId,
+              allocatedWetMassKg: 12_000,
+              allocatedDryMassKg: 10_000,
+            },
+          ],
         },
       ]),
     ).rejects.toThrow(/split across Applications APP-001, APP-002/i);

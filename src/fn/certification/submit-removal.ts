@@ -1,7 +1,6 @@
 import type { OrgContext } from "@/lib/auth/server";
 import {
   markSubmissionSubmitted,
-  stampProductionEmissionsClaim,
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
 import {
@@ -13,6 +12,7 @@ import { env } from "@/config/env";
 import {
   updateRemovalDates,
 } from "@/data-access/certifier-removals";
+import { reserveProductionEmissionsClaims } from "@/data-access/production-claim-reservations";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
@@ -46,10 +46,10 @@ import {
 import { bindProductionBatchesToMeasurementSamples } from "./production-batches";
 import { readRemovalDurabilityMeasurementSamples } from "./durability-measurement-sample-snapshot";
 import {
-  assertNoForeignProductionClaims,
   assertProductionClaimGateFresh,
   assertResumedSnapshotRevisionCurrent,
 } from "./production-claim-gate";
+import { includesProductionInputs } from "./production-claim-policy";
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
   readRemovalBiocharApplicationIntents,
@@ -300,11 +300,11 @@ async function submitRemovalCore(
     );
   }
 
-  // §8.6.2 front-loading pre-flight (issue #349, ADR 0020): fail closed on a
-  // foreign production-bucket claim BEFORE aggregation, the evidence ledgers,
-  // and every registry POST. Re-asserted from a fresh read after the draft
-  // claim below — see production-claim-gate.ts for the TOCTOU rationale.
-  assertNoForeignProductionClaims(ctx.memberBatchClaims, removalId);
+  const productionClaimBatchIds = ctx.memberBatchClaims
+    .filter((batch) =>
+      includesProductionInputs(batch.claimedByRemovalId, removalId),
+    )
+    .map((batch) => batch.creditBatchId);
 
   const blueprintsByKey = new Map(
     ctx.blueprintsForTemplate.map((bp) => [bp.key, bp]),
@@ -418,7 +418,6 @@ async function submitRemovalCore(
     candidateSourceDocuments,
     sourceIds,
     fixed,
-    memberCreditBatchIds,
   } = initialBuild;
 
   // Claim a ledger draft through the submission-ledger module. The module
@@ -498,17 +497,6 @@ async function submitRemovalCore(
     case "blocked":
       throw new SafeError(REMOVAL_CLAIM_BLOCKED_MESSAGES[claimed.reason]);
     case "existing":
-      // §8.6.2 lazy claim backfill (ADR 0020): a removal submitted before
-      // migration 0068 whose payload hash is unchanged short-circuits here
-      // and never reaches markSubmissionSubmitted's transactional stamp.
-      // Stamp locally (no POST) — the blocking `submitted` row freezes
-      // membership, so the live member set equals the submitted payload's.
-      // The pre-flight gate above already asserted no foreign claims; a
-      // raced foreign claim trips the stamp's rowcount backstop loudly.
-      await stampProductionEmissionsClaim(orgCtx, {
-        removalId,
-        creditBatchIds: memberCreditBatchIds,
-      });
       if (
         !ctx.latestSubmission ||
         ctx.latestSubmission.externalId !== claimed.externalId ||
@@ -584,6 +572,7 @@ async function submitRemovalCore(
           orgCtx,
           removalId,
           ctx.memberBatchClaims,
+          claimed.row.id,
         );
         await assertClaimedRemovalPayloadFresh({
           orgCtx,
@@ -591,6 +580,11 @@ async function submitRemovalCore(
           row: claimed.row,
           allowPeriodInputStub,
           preserveForReconciliation: attempt.externalMutation !== "none",
+        });
+        await reserveProductionEmissionsClaims(orgCtx, {
+          removalId,
+          submissionId: claimed.row.id,
+          creditBatchIds: productionClaimBatchIds,
         });
         if (claimed.reason === "rejected-hash-changed") {
           log.warn(
@@ -626,7 +620,7 @@ async function submitRemovalCore(
           durabilityMeasurementSubmissions,
           biocharApplicationIntents,
           sourceBindingPlan,
-          claimBatchIds: memberCreditBatchIds,
+          claimBatchIds: productionClaimBatchIds,
           supersedePreviousId: claimed.supersedePreviousId,
           resumed: claimed.resumed,
           expectedLockedAt,
@@ -868,6 +862,7 @@ async function runRemovalSubmission({
     reportingWindow: effectiveWindow,
     projectId: externalProjectId,
     supplierRefId: transport.removalSupplierRef,
+    omittedTemplateComponentIds: transport.omittedTemplateComponentIds,
   });
   const { externalId: externalRemovalId } = await performRegistryCreate({
     orgCtx,
