@@ -273,13 +273,15 @@ export async function reconcileUnassignedCreditBatchApplicationSlices(
         "A biochar product has invalid source allocation mass. Correct its provenance before creating a Removal.",
       );
     }
+    // Legacy single-run products have no allocation rows. These placeholder
+    // weights are not read because the factor below is fixed to 1.
     const sources = allocations.length > 0
       ? allocations
       : [{
           productId: application.productId,
           productionRunId: application.legacyProductionRunId,
-          allocatedWetMassKg: 1,
-          allocatedDryMassKg: 1,
+          allocatedWetMassKg: 0,
+          allocatedDryMassKg: 0,
         }];
     for (const source of sources) {
       if (!source.productionRunId) continue;
