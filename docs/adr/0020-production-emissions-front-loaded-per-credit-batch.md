@@ -81,12 +81,13 @@ start → latest application).
    Immediately after the submission draft is claimed, a fresh database read
    verifies that membership, run lineage, and claim ownership still match the
    reviewed snapshot. Contenders are ordered by their effective reporting
-   completion date (the latest member Application date), then draft creation
-   and ID. The winner atomically reserves every unclaimed member batch before
-   any registry POST. The exact submission may resume; another draft may take
-   over only when the owner is safely reclaimable under the shared lock TTL and
-   has no possible external mutation. Successful submission converts the
-   reservation to the permanent Removal claim in the ledger transaction.
+   quarter (the quarter containing the latest member Application date), then
+   draft creation and ID. The winner atomically reserves every unclaimed member
+   batch before any registry POST. The exact submission may resume; another
+   draft may take over only when the owner is safely reclaimable under the
+   shared lock TTL and has no possible external mutation. Successful submission
+   converts the reservation to the permanent Removal claim in the ledger
+   transaction.
 4. **Uniform delivery fraction.** Biochar transport scales by one
    removal-wide fraction (`appliedDryKg / deliveryBiocharOutputKg`, the shared
    `appliedBiocharFraction` definition). The denominator includes only member
