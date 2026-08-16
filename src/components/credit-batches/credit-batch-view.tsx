@@ -39,10 +39,14 @@ function formatInput(value: number | null, unit: string): string {
 function CreditBatchCarbonLedger({
   creditBatch,
   productionRuns,
+  isLoadingRuns,
+  runsError,
   healthSummary,
 }: {
   creditBatch: CreditBatchWithRelations;
   productionRuns: CreditBatchProductionRunOption[];
+  isLoadingRuns: boolean;
+  runsError: Error | null;
   healthSummary?: CreditBatchHealthSummary;
 }) {
   const totals = computeCohortInputTotals(productionRuns);
@@ -79,7 +83,21 @@ function CreditBatchCarbonLedger({
         </span>
       </div>
       <dl>
-        {rows.map((row) => (
+        {runsError || isLoadingRuns ? (
+          <div className="flex items-baseline justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-8">
+            <dt className="body-small text-[var(--color-text-secondary)]">
+              Production inputs
+            </dt>
+            <dd
+              className="body-small text-right text-[var(--color-text-tertiary)]"
+              aria-busy={isLoadingRuns || undefined}
+            >
+              {runsError
+                ? `${MISSING_VALUE.notAvailable}. Reload the production runs to calculate these inputs.`
+                : "Loading production inputs…"}
+            </dd>
+          </div>
+        ) : rows.map((row) => (
           <div
             key={row.label}
             className="flex items-baseline justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-8"
@@ -113,7 +131,7 @@ function CreditBatchCarbonLedger({
           </dd>
         </div>
       </dl>
-      {productionRuns.length > 0 && (
+      {!isLoadingRuns && !runsError && productionRuns.length > 0 && (
         <div className="border-t border-[var(--color-border-primary)] px-16 py-10">
           <p className="mb-6 body-caption text-[var(--color-text-tertiary)]">
             Source records
@@ -311,6 +329,8 @@ export function creditBatchSheetSections({
         <CreditBatchCarbonLedger
           creditBatch={creditBatch}
           productionRuns={productionRuns}
+          isLoadingRuns={isLoadingRuns}
+          runsError={runsError}
           healthSummary={healthSummary}
         />
       ),

@@ -112,6 +112,30 @@ describe("credit batch CO₂e stored", () => {
     ).toContain("≈ 12.50 t CO₂e");
   });
 
+  it("keeps loading production-run data distinct from missing inputs", () => {
+    const html = carbonLedgerMarkup({
+      ...baseOptions,
+      creditBatch: makeBatch(),
+      isLoadingRuns: true,
+    });
+
+    expect(html).toContain("Loading production inputs…");
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain("Feedstock, dry mass");
+  });
+
+  it("explains when production-run data is unavailable", () => {
+    const html = carbonLedgerMarkup({
+      ...baseOptions,
+      creditBatch: makeBatch(),
+      runsError: new Error("request failed"),
+    });
+
+    expect(html).toContain("Not available");
+    expect(html).toContain("Reload the production runs");
+    expect(html).not.toContain("Feedstock, dry mass");
+  });
+
   it("discloses the raw and capped 1000-year durability calculation", () => {
     const preview = makePreview(12.5, []);
     preview.componentKey = "biochar_sequestration_1000_year_f_durable_max";

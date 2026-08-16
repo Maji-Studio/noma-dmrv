@@ -89,7 +89,8 @@ function RailItem({
 }) {
   const state = stepState(index, current);
   const labelClass = cn(
-    "body-small whitespace-nowrap transition-colors",
+    "body-small transition-colors",
+    orientation === "horizontal" ? "whitespace-nowrap" : "truncate",
     state === "active"
       ? "text-[var(--color-text-primary)]"
       : "text-[var(--color-text-tertiary)]",
