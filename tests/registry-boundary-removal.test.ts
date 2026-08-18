@@ -21,7 +21,8 @@ import {
  * lineage/template plumbing has its own tests), generated evidence-ledger
  * materialization (render/storage/mirroring has dedicated tests), and the
  * sources resolver (mirroring stays on its own create/reconcile shape by
- * decision; see the plan's out-of-scope list).
+ * decision; see the plan's out-of-scope list). Biochar Application planning
+ * is also isolated here; its registry choreography has dedicated tests.
  *
  * Coverage (plan Phase 3, boundary tests 1, 2, 4, 5 — test 3 lives in
  * registry-boundary-ghg-statement.test.ts):
@@ -53,6 +54,9 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
   return createFakeClientModule(actual);
 });
 vi.mock("@/fn/certification/certify-context-core");
+vi.mock("@/fn/certification/biochar-application-intents", () => ({
+  compileBiocharApplicationIntents: vi.fn(async () => []),
+}));
 vi.mock("@/fn/certification/ensure-evidence-ledgers", () => ({
   ensureEvidenceLedgersFromContext: vi.fn(async () => undefined),
 }));
@@ -85,6 +89,7 @@ import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
 import type { CertifierProjectRow } from "@/data-access/certification";
+import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as sources from "@/fn/certification/sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
@@ -96,8 +101,6 @@ import {
 import {
   buildRemovalSupplierRef,
   IsometricApiError,
-  type IsometricComponentBlueprint,
-  type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
@@ -106,35 +109,22 @@ import {
   installFakeRegistry,
   type FakeIsometricRegistry,
 } from "./fixtures/fake-registry";
+import {
+  APPLICATION_ID,
+  makeBlueprints,
+  makeBoundarySourceDocument,
+  makeTemplate,
+  RTC_ID,
+  TEMPLATE_ID,
+} from "./fixtures/removal-boundary-fixtures";
 
 const USER_ID = "test-user-boundary";
-const TEMPLATE_ID = "rvt_boundary_1";
-const RTC_ID = "rtc-seq";
+const ISOMETRIC_FEEDSTOCK_TYPE_ID = "ftt_boundary_1";
+const FIXTURE_UUID_SUFFIX_LENGTH = 8;
 const PRODUCTION_RUN_ID = "pr-boundary-1";
 const ORIGINAL_BIOCHAR_MASS_KG = 1000;
 const CHANGED_BIOCHAR_MASS_KG = 1500;
 const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
-
-function makeBoundarySourceDocument() {
-  return {
-    documentId: "doc-boundary-1",
-    binding: {
-      nomaRole: "inventory" as const,
-      nomaRoleLabel: "Inventory",
-      lineage: {
-        entityType: "application",
-        entityId: "app-bd-1",
-        entityLabel: "Application APP-BD-001",
-      },
-      intendedTarget: {
-        kind: "sequestration" as const,
-        groupKey: "co2-stored" as const,
-        inputKey: "product_mass" as const,
-      },
-      mappingRevision: "source-binding-boundary-revision",
-    },
-  };
-}
 
 const createdFacilityIds: string[] = [];
 const createdRemovalIds: string[] = [];
@@ -185,12 +175,15 @@ interface Fixture {
   facilityId: string;
   removalId: string;
   creditBatchId: string;
+  feedstockTypeId: string;
+  isometricFeedstockTypeId: string;
   externalProjectId: string;
 }
 
 async function createFixture(): Promise<Fixture> {
-  const runId = crypto.randomUUID().slice(0, 8);
+  const runId = crypto.randomUUID().slice(0, FIXTURE_UUID_SUFFIX_LENGTH);
   const externalProjectId = `prj_boundary_${runId}`;
+  const isometricFeedstockTypeId = `${ISOMETRIC_FEEDSTOCK_TYPE_ID}_${runId}`;
   const [facility] = await db
     .insert(facilities)
     .values({
@@ -224,6 +217,7 @@ async function createFixture(): Promise<Fixture> {
       name: `Boundary Feedstock ${runId}`,
       category: "forestry",
       usage: "pyrolysis",
+      isometricFeedstockTypeId,
     })
     .returning({ id: feedstockTypes.id });
   createdFeedstockTypeIds.push(feedstockType.id);
@@ -243,7 +237,6 @@ async function createFixture(): Promise<Fixture> {
       startDate: "2026-01-01",
       endDate: "2026-01-31",
       certifier: "isometric",
-      removalId: removal.id,
     })
     .returning({ id: creditBatches.id });
   createdBatchIds.push(batch.id);
@@ -251,6 +244,8 @@ async function createFixture(): Promise<Fixture> {
     facilityId: facility.id,
     removalId: removal.id,
     creditBatchId: batch.id,
+    feedstockTypeId: feedstockType.id,
+    isometricFeedstockTypeId,
     externalProjectId,
   };
 }
@@ -261,71 +256,6 @@ async function createFixture(): Promise<Fixture> {
 // *remaining* datapoint for the resume to POST. Adapted from
 // tests/isometric-submit-removal.test.ts.
 // ---------------------------------------------------------------------------
-
-function makeTemplate(): IsometricGhgEntryTemplate {
-  return {
-    id: TEMPLATE_ID,
-    name: "Boundary removal template",
-    display_name: "Boundary removal template",
-    credit_type: "REMOVAL",
-    groups: [
-      {
-        id: "grp-1",
-        key: "co2-stored",
-        name: "CO2 stored",
-        components: [
-          {
-            id: RTC_ID,
-            blueprint_key: "carbon_rich_substance_sequestration",
-            display_name: "Sequestered biochar",
-            inputs: [
-              {
-                type: "monitored",
-                input_key: "carbon_content",
-                datapoint_id: null,
-                display_name: "Carbon content",
-                quantity_kind: "dimensionless",
-              },
-              {
-                type: "monitored",
-                input_key: "product_mass",
-                datapoint_id: null,
-                display_name: "Product mass",
-                quantity_kind: "mass",
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  } as unknown as IsometricGhgEntryTemplate;
-}
-
-function makeBlueprints(): IsometricComponentBlueprint[] {
-  return [
-    {
-      key: "carbon_rich_substance_sequestration",
-      display_name: "Carbon-rich substance sequestration",
-      description: "",
-      inputs: [
-        {
-          input_key: "carbon_content",
-          quantity_kind: "dimensionless",
-          compatible_unit: "dimensionless",
-          data_shape: "SCALAR",
-          description: "",
-        },
-        {
-          input_key: "product_mass",
-          quantity_kind: "mass",
-          compatible_unit: "kg",
-          data_shape: "SCALAR",
-          description: "",
-        },
-      ],
-    } as unknown as IsometricComponentBlueprint,
-  ];
-}
 
 function makeMapping(fixture: Fixture): CertifierProjectRow {
   return {
@@ -439,9 +369,16 @@ function makeContext(
       appliedDryWeightTons: 1,
       durabilityOption: "1000_year",
       sampling: "sampled",
+      feedstockType: {
+        id: fixture.feedstockTypeId,
+        name: "Boundary pyrolysis feedstock",
+        usage: "pyrolysis",
+        isometricFeedstockTypeId: fixture.isometricFeedstockTypeId,
+      },
       productionRunCount: 1,
       applicationCount: 1,
     }],
+    feedstockTypeMappingGaps: [],
     transportCoverage: {
       feedstock: emptyCoverage,
       biochar: emptyCoverage,
@@ -460,6 +397,7 @@ function makeContext(
     runSummary: {
       runCount: 1,
       totalBiocharOutputKg: biocharMassKg,
+      deliveryBiocharOutputKg: biocharMassKg,
       appliedDryKg: biocharMassKg,
     },
     latestSubmission: null,
@@ -469,7 +407,7 @@ function makeContext(
       {
         facility: { id: fixture.facilityId, code: "F", name: "F" },
         application: {
-          id: "app-bd-1",
+          id: APPLICATION_ID,
           code: "APP-BD-001",
           // §8.6.2 (issue #320): submitRemoval derives the window end from
           // this; keep it at the run end so the boundary tests' window is
@@ -510,9 +448,11 @@ function makeContext(
       {
         creditBatchId: fixture.creditBatchId,
         code: "CB-BD-001",
+        durabilityOption: "200_year",
         claimedByRemovalId: null,
         productionRunIds: [PRODUCTION_RUN_ID],
-        applicationIds: ["app-bd-1"],
+        applicationIds: [APPLICATION_ID],
+        applicationSlices: [],
       },
     ],
     transportLegs: { feedstock: [], biochar: [], sample: [] },
@@ -543,7 +483,7 @@ function setContext(fixture: Fixture, biocharMassKg?: number): void {
         id: fixture.creditBatchId,
         code: "CB-BD-001",
         productionRunIds: [PRODUCTION_RUN_ID],
-        applicationIds: ["app-bd-1"],
+        applicationIds: [APPLICATION_ID],
         durabilityOption: "200_year",
         productionEmissionsClaimedByRemovalId: null,
       },
@@ -569,16 +509,6 @@ async function listSyncEvents(removalId: string) {
     .from(certifierSyncEvents)
     .where(eq(certifierSyncEvents.entityId, removalId))
     .orderBy(certifierSyncEvents.attemptedAt);
-}
-
-// A failed attempt leaves the draft row locked; the next claim treats it as
-// in-flight until the TTL passes. Tests jump the clock by back-dating the
-// lock, like the claim module's own DB suite.
-async function staleifyLock(rowId: string): Promise<void> {
-  await db
-    .update(certificationSubmissions)
-    .set({ lockedAt: new Date(Date.now() - STALE_LOCK_OFFSET_MS) })
-    .where(eq(certificationSubmissions.id, rowId));
 }
 
 function datapointRef(removalId: string, inputKey: string, version: number) {
@@ -616,6 +546,67 @@ beforeEach(() => {
 
 beforeAll(() => ensureTestOrg());
 
+describe("submitRemoval boundary — discard interlock", () => {
+  it("refuses discard once submission enters the pre-ledger external-write window", async () => {
+    const fixture = await createFixture();
+    const orgCtx = makeTestOrgContext(USER_ID);
+    setContext(fixture);
+
+    let signalMirrorEntered: (() => void) | undefined;
+    const mirrorEntered = new Promise<void>((resolve) => {
+      signalMirrorEntered = resolve;
+    });
+    let releaseMirror: (() => void) | undefined;
+    const mirrorRelease = new Promise<void>((resolve) => {
+      releaseMirror = resolve;
+    });
+    vi.mocked(sources.mirrorCandidateSourcesForSubmission).mockImplementationOnce(
+      async () => {
+        signalMirrorEntered?.();
+        await mirrorRelease;
+        throw new SafeError("Injected Source mirror interruption.");
+      },
+    );
+
+    const submissionResult = submitRemoval({
+      orgCtx,
+      removalId: fixture.removalId,
+    }).then(
+      () => ({ kind: "fulfilled" as const }),
+      (error: unknown) => ({ kind: "rejected" as const, error }),
+    );
+
+    await mirrorEntered;
+    await expect(
+      discardLocalRemovalDraft(
+        orgCtx,
+        fixture.facilityId,
+        fixture.removalId,
+      ),
+    ).rejects.toThrow(/cannot be discarded/i);
+
+    const [preservedRemoval] = await db
+      .select({
+        id: certifierRemovals.id,
+        metadata: certifierRemovals.metadata,
+      })
+      .from(certifierRemovals)
+      .where(eq(certifierRemovals.id, fixture.removalId));
+    expect(preservedRemoval).toMatchObject({
+      id: fixture.removalId,
+      metadata: { submissionExternalMutationPossible: true },
+    });
+    expect(await listRows(fixture.removalId)).toEqual([]);
+
+    releaseMirror?.();
+    const result = await submissionResult;
+    expect(result.kind).toBe("rejected");
+    if (result.kind === "rejected") {
+      expect(result.error).toBeInstanceOf(SafeError);
+    }
+  });
+});
+
 describe("submitRemoval boundary — datapoint orphan (test 1)", () => {
   it("resume reconciles the dropped datapoint by supplier ref and POSTs only the remaining ones", async () => {
     const fixture = await createFixture();
@@ -645,7 +636,23 @@ describe("submitRemoval boundary — datapoint orphan (test 1)", () => {
     expect(rows[0].status).toBe("draft");
     expect(rows[0].lockedAt).not.toBeNull();
 
-    await staleifyLock(rows[0].id);
+    expect(rows[0].metadata).toMatchObject({
+      lastAttemptOutcome: SUBMISSION_ATTEMPT_OUTCOMES.interrupted,
+      externalMutation: SUBMISSION_EXTERNAL_MUTATIONS.possible,
+    });
+    expect(Date.now() - rows[0].lockedAt!.getTime()).toBeLessThan(LOCK_TTL_MS);
+    setContext(fixture);
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: fixture.removalId,
+      }),
+    ).rejects.toThrowError("already in progress");
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt: new Date(Date.now() - STALE_LOCK_OFFSET_MS) })
+      .where(eq(certificationSubmissions.id, rows[0].id));
     setContext(fixture);
 
     const result = await submitRemoval({
@@ -716,7 +723,11 @@ describe("submitRemoval boundary — removal orphan (test 2)", () => {
 
     const [draft] = await listRows(fixture.removalId);
     expect(draft.status).toBe("draft");
-    await staleifyLock(draft.id);
+    expect(draft.metadata).toMatchObject({
+      lastAttemptOutcome: SUBMISSION_ATTEMPT_OUTCOMES.interrupted,
+      externalMutation: SUBMISSION_EXTERNAL_MUTATIONS.confirmed,
+    });
+    expect(Date.now() - draft.lockedAt!.getTime()).toBeLessThan(LOCK_TTL_MS);
     setContext(fixture);
 
     const result = await submitRemoval({
@@ -873,6 +884,22 @@ describe("submitRemoval boundary — definitive Removal refusal (test 4)", () =>
     expect(failed!.requestPayload).toMatchObject({
       project_id: fixture.externalProjectId,
     });
+
+    // The terminal 422 proves that no GHG Entry was created. The completed
+    // datapoints still make the attempt "interrupted", so the operator can
+    // retry immediately: those datapoints are reconciled and only the GHG
+    // Entry POST is repeated.
+    setContext(fixture);
+    const retried = await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: fixture.removalId,
+    });
+
+    expect(registry.datapoints).toHaveLength(2);
+    expect(registry.ghgEntries).toHaveLength(1);
+    expect(registry.requestCount("POST", "/datapoints")).toBe(2);
+    expect(registry.requestCount("POST", "/ghg_entries")).toBe(2);
+    expect(retried.externalId).toBe(registry.ghgEntries[0].id);
   });
 });
 

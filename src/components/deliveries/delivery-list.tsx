@@ -77,6 +77,7 @@ import {
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // ============================================
 // Helper Functions
@@ -127,14 +128,16 @@ function createColumns(
     {
       accessorKey: "orderCode",
       header: "Order",
-      cell: ({ row }) => <span>{row.original.orderCode || "Not recorded"}</span>,
+      cell: ({ row }) => (
+        <span>{row.original.orderCode || MISSING_VALUE.notRecorded}</span>
+      ),
     },
     {
       accessorKey: "customerName",
       header: "Customer",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.customerName || "Not recorded"}
+          {row.original.customerName || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
@@ -652,6 +655,31 @@ export function DeliveryList() {
                       note="Dry biochar is allocated from the linked product's tracked composition."
                     />
                   ),
+                },
+                {
+                  title: "Truck weighing",
+                  fields: [
+                    {
+                      label: "Truck mass before unloading (kg)",
+                      ...certificationDetailField(
+                        "delivery",
+                        "truckMassOnArrivalKg",
+                      ),
+                      value: formatMassKg(
+                        sideSheetEntity.truckMassOnArrivalKg,
+                      ),
+                    },
+                    {
+                      label: "Truck mass after unloading (kg)",
+                      ...certificationDetailField(
+                        "delivery",
+                        "truckMassOnDepartureKg",
+                      ),
+                      value: formatMassKg(
+                        sideSheetEntity.truckMassOnDepartureKg,
+                      ),
+                    },
+                  ],
                 },
                 {
                   title: "Transport",

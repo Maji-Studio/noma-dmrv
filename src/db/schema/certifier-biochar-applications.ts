@@ -23,8 +23,8 @@ import { certifierStorageLocations } from "./certifier-storage-locations";
 import { creditBatches } from "./credits";
 
 /**
- * Allocation-slice journal for future Isometric Biochar Applications.
- * Rows may exist while gated; no POST path is implemented in this slice.
+ * Idempotency journal for Isometric Biochar Applications.
+ * One row binds an Application to exactly one credit/Production Batch.
  */
 export const certifierBiocharApplications = pgTable(
   "certifier_biochar_applications",

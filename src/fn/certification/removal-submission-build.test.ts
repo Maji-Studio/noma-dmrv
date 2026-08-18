@@ -4,6 +4,9 @@ vi.mock("./sources", () => ({
   collectCandidateSourceDocumentsForRemoval: vi.fn(),
   resolveSourceBindingCandidates: vi.fn(),
 }));
+vi.mock("./biochar-application-intents", () => ({
+  compileBiocharApplicationIntents: vi.fn(async () => []),
+}));
 
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import { payloadHash } from "@/lib/isometric";
@@ -19,6 +22,7 @@ import {
 } from "@/lib/isometric/transformers/measurement-sample";
 import {
   buildRemovalSubmissionBuild,
+  buildProductionEmissionClaims,
   compileRemovalSubmission,
   materializeRemovalSubmissionSnapshot,
   normalizeSequestrationTemplateForHash,
@@ -26,7 +30,55 @@ import {
 } from "./removal-submission-build";
 import * as sources from "./sources";
 
+const TEST_ORG_CONTEXT = {
+  userId: "removal-submission-build-user",
+  organizationId: "removal-submission-build-org",
+  orgRole: "owner",
+  isPlatformAdmin: false,
+} as const;
+
 describe("buildRemovalSubmissionBuild", () => {
+  it("shows mixed production and delivery-only batch contributions", () => {
+    expect(
+      buildProductionEmissionClaims(
+        [
+          {
+            creditBatchId: "batch-a",
+            code: "Batch A",
+            durabilityOption: "200_year",
+            claimedByRemovalId: "removal-r-001",
+            productionRunIds: ["run-a"],
+            applicationIds: ["application-a"],
+            applicationSlices: [],
+          },
+          {
+            creditBatchId: "batch-b",
+            code: "Batch B",
+            durabilityOption: "200_year",
+            claimedByRemovalId: null,
+            productionRunIds: ["run-b"],
+            applicationIds: ["application-b"],
+            applicationSlices: [],
+          },
+        ],
+        "removal-r-002",
+      ),
+    ).toEqual([
+      {
+        creditBatchId: "batch-a",
+        creditBatchCode: "Batch A",
+        claimingRemovalId: "removal-r-001",
+        contribution: "delivery-only",
+      },
+      {
+        creditBatchId: "batch-b",
+        creditBatchCode: "Batch B",
+        claimingRemovalId: null,
+        contribution: "production-and-delivery",
+      },
+    ]);
+  });
+
   it("keeps template-tier compatibility as an independent compile blocker", () => {
     const blocker = removalTemplateTierCompatibilityBlocker(
       {
@@ -72,7 +124,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
   it("returns compile blockers instead of constructing transport for missing readiness", async () => {
     const compiled = await compileRemovalSubmission({
-      orgCtx: {} as never,
+      orgCtx: TEST_ORG_CONTEXT,
       removalId: "rem-test-missing-readiness",
       ctx: {} as RemovalSubmissionContext,
       defaultTemplate: {
@@ -94,7 +146,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
   it("fails closed when a Removal template has no sequestration component", async () => {
     const compiled = await compileRemovalSubmission({
-      orgCtx: {} as never,
+      orgCtx: TEST_ORG_CONTEXT,
       removalId: "rem-test-no-sequestration",
       ctx: {
         entityReadinessGaps: [],
@@ -191,7 +243,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
     await expect(
       buildRemovalSubmissionBuild({
-        orgCtx: {} as never,
+        orgCtx: TEST_ORG_CONTEXT,
         removalId: "rem-test-missing-readiness",
         ctx,
         defaultTemplate: {} as never,
@@ -217,7 +269,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
     await expect(
       buildRemovalSubmissionBuild({
-        orgCtx: {} as never,
+        orgCtx: TEST_ORG_CONTEXT,
         removalId: "rem-test-1",
         ctx,
         defaultTemplate: {} as never,
@@ -365,6 +417,7 @@ describe("buildRemovalSubmissionBuild", () => {
       runSummary: {
         runCount: 1,
         totalBiocharOutputKg: 1_200,
+        deliveryBiocharOutputKg: 1_200,
         appliedDryKg: 600,
       },
       submissionWarnings: [],
@@ -384,7 +437,7 @@ describe("buildRemovalSubmissionBuild", () => {
     };
 
     const build = await buildRemovalSubmissionBuild({
-      orgCtx: {} as never,
+      orgCtx: TEST_ORG_CONTEXT,
       removalId: "removal-1",
       ctx,
       defaultTemplate: template,
@@ -441,6 +494,7 @@ describe("buildRemovalSubmissionBuild", () => {
         sourceBindingPlan,
         memberCreditBatchIds: ["batch-1"],
         durabilityMeasurementSampleArgs: null,
+        omittedTemplateComponentIds: ["component-production"],
       } as never,
       template: { groups: [] } as never,
       externalProjectId: "project-1",
@@ -451,6 +505,9 @@ describe("buildRemovalSubmissionBuild", () => {
     expect(snapshot.payloadSnapshot.sourceBindingPlan).toEqual(
       sourceBindingPlan,
     );
+    expect(
+      snapshot.payloadSnapshot.transport.omittedTemplateComponentIds,
+    ).toEqual(["component-production"]);
   });
 
   it("does not duplicate measurement-backed s_fraction as direct Datapoints", () => {

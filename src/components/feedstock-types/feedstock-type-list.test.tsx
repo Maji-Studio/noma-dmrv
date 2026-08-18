@@ -3,6 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { FeedstockType } from "@/db/schema";
 
+vi.mock("nuqs", () => ({
+  parseAsString: { withOptions: () => ({}) },
+  useQueryState: () => [null, vi.fn()],
+}));
+
 const activeType: FeedstockType = {
   id: "11111111-1111-4111-8111-111111111111",
   organizationId: "org-1",

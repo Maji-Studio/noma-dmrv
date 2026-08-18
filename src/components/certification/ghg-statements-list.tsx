@@ -41,7 +41,7 @@ import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
-import { formatCount } from "@/lib/copy-utils";
+import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
 
@@ -217,7 +217,9 @@ function RegistryRecordCell({ item }: { item: GhgStatementListItem }) {
   const { latestSubmission } = item;
   if (!latestSubmission?.externalId) {
     return (
-      <span className="body-small text-[var(--color-text-tertiary)]">None</span>
+      <span className="body-small text-[var(--color-text-tertiary)]">
+        {MISSING_VALUE.none}
+      </span>
     );
   }
   return (

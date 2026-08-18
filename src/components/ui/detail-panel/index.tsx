@@ -30,7 +30,11 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
+import {
+  isMissingValueCopy,
+  MISSING_VALUE,
+  type MissingValueSituation,
+} from "@/lib/copy-utils";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms/section-label";
@@ -46,7 +50,24 @@ import {
   type SpineMeta,
 } from "@/components/forms/form-spine";
 
-const EMPTY_DETAIL_VALUE = MISSING_VALUE.notRecorded;
+/**
+ * The situation a detail field assumes when nobody says otherwise: a read
+ * sheet mirrors a form, and a blank form field is an operator omission.
+ * Fields that mean something else pass `emptySituation` (see the
+ * missing-value rule in `@/lib/copy-utils`).
+ */
+const DEFAULT_EMPTY_SITUATION: MissingValueSituation = "notRecorded";
+
+/**
+ * The one placeholder treatment. A placeholder keeps the value slot's size and
+ * position so the sheet does not reflow, and drops to tertiary ink at regular
+ * weight so it reads quieter than data without going illegible. The weight step
+ * is deliberate: colour alone must not carry the distinction (WCAG 1.4.1), and
+ * the token's own words stay the primary signal.
+ */
+const EMPTY_DETAIL_VALUE_CLASS = "font-normal text-[var(--color-text-tertiary)]";
+const PRESENT_DETAIL_VALUE_CLASS =
+  "font-medium text-[var(--color-text-primary)]";
 
 /* -------------------------------------------------------------------------------------------------
  * DetailSection - Flat section with mono label, mirrors FormSection so the
@@ -128,6 +149,51 @@ interface DetailFieldProps {
   certifyRequired?: boolean;
   /** Override the value-derived saved status for composite requirements. */
   certifyStatus?: CertFieldStatus;
+  /**
+   * Which missing-value token stands in when `value` is empty. Defaults to
+   * `notRecorded`. Pass the situation rather than passing a placeholder string
+   * as `value` — the field then styles the placeholder and reports the field as
+   * absent to certification in one step.
+   */
+  emptySituation?: MissingValueSituation;
+  /**
+   * Explicit presence signal for the CERT chip, for values the field cannot
+   * read (an element, a composed node, an async lookup). `true`/`false` decide
+   * the chip outright; omit it to derive presence from `value`.
+   */
+  valuePresent?: boolean;
+}
+
+/**
+ * Resolve what a detail field shows and whether it counts as provided.
+ *
+ * Presence is taken from the raw `value` and the caller's explicit
+ * `valuePresent`, never from the string the field ends up rendering. The
+ * `isMissingValueCopy` term is a transitional backstop for screens that still
+ * pass a rendered token as `value`; it catches the shared vocabulary only, so a
+ * screen inventing its own placeholder ("Unassigned", "No crop type") must pass
+ * `emptySituation` or `valuePresent={false}` instead of relying on it.
+ */
+function resolveDetailValue({
+  value,
+  emptySituation = DEFAULT_EMPTY_SITUATION,
+  valuePresent,
+}: Pick<DetailFieldProps, "value" | "emptySituation" | "valuePresent">): {
+  displayValue: React.ReactNode;
+  isEmpty: boolean;
+  present: boolean;
+} {
+  const isBlank = value === null || value === undefined || value === "";
+  const rendersSharedToken = isMissingValueCopy(value);
+  const present =
+    valuePresent ??
+    (!isBlank && !rendersSharedToken && isCertFieldValuePresent(value));
+
+  return {
+    displayValue: isBlank ? MISSING_VALUE[emptySituation] : value,
+    isEmpty: isBlank || rendersSharedToken || valuePresent === false,
+    present,
+  };
 }
 
 function DetailField({
@@ -136,17 +202,16 @@ function DetailField({
   className,
   certifyRequired,
   certifyStatus,
+  emptySituation,
+  valuePresent,
 }: DetailFieldProps) {
-  const displayValue =
-    value === null || value === undefined || value === ""
-      ? EMPTY_DETAIL_VALUE
-      : value;
+  const { displayValue, isEmpty, present } = resolveDetailValue({
+    value,
+    emptySituation,
+    valuePresent,
+  });
   const resolvedCertifyStatus =
-    certifyStatus ??
-    resolveCertFieldStatus(
-      true,
-      !isMissingValueCopy(value) && isCertFieldValuePresent(value),
-    );
+    certifyStatus ?? resolveCertFieldStatus(true, present);
 
   return (
     <div className={cn("flex flex-1 flex-col gap-4 min-w-0", className)}>
@@ -154,7 +219,13 @@ function DetailField({
         {label}
         {certifyRequired && <CertificationFieldTag status={resolvedCertifyStatus} />}
       </span>
-      <span className="body-medium font-medium text-[var(--color-text-primary)] break-words">
+      <span
+        className={cn(
+          "body-medium break-words",
+          isEmpty ? EMPTY_DETAIL_VALUE_CLASS : PRESENT_DETAIL_VALUE_CLASS,
+        )}
+        data-empty={isEmpty || undefined}
+      >
         {displayValue}
       </span>
     </div>
@@ -171,6 +242,10 @@ export interface DetailPanelField {
   value: React.ReactNode;
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
+  /** Which missing-value token stands in when `value` is empty. Defaults to `notRecorded`. */
+  emptySituation?: MissingValueSituation;
+  /** Explicit presence signal for the CERT chip when `value` is not readable. */
+  valuePresent?: boolean;
 }
 
 export interface DetailPanelSection {
@@ -210,6 +285,8 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
                   value={field.value}
                   certifyRequired={field.certifyRequired}
                   certifyStatus={field.certifyStatus}
+                  emptySituation={field.emptySituation}
+                  valuePresent={field.valuePresent}
                 />
               ))}
             </DetailRow>

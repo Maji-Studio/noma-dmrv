@@ -720,44 +720,33 @@ export async function markSubmissionSubmitted(
       await stampProductionEmissionsClaimWithExecutor(
         ctx,
         tx,
-        args.productionEmissionsClaim,
+        { ...args.productionEmissionsClaim, reservationSubmissionId: id },
       );
     }
   };
   await (callerTx ? run(callerTx) : db.transaction(run));
 }
 
-// Standalone claim stamp for the no-POST paths (issue #349, ADR 0020):
-// a removal that short-circuits via `return-existing` was submitted before
-// the claim column existed (migration 0068) with an unchanged payload hash,
-// so it never reaches markSubmissionSubmitted's transactional stamp — this
-// lazily backfills the claim. Same guarded UPDATE + rowcount backstop.
-export async function stampProductionEmissionsClaim(
-  ctx: OrgContext,
-  args: { removalId: string; creditBatchIds: string[] },
-): Promise<void> {
-  requireOrgScope(ctx);
-  if (args.creditBatchIds.length === 0) return;
-  await stampProductionEmissionsClaimWithExecutor(ctx, db, args);
-}
-
 // §8.6.2 claim stamp (issue #349, ADR 0020). Guarded UPDATE (IS NULL OR =
 // self): unclaimed rows and self re-claims (resubmit/supersede) are stamped;
-// a foreign-claimed row is excluded by the predicate. The rowcount backstop
-// turns that exclusion into a loud failure — submit-removal's pre-POST gates
-// make it practically unreachable, but the member batches are not locked
-// between the draft claim and this write, so a mid-flight foreign claim
-// would otherwise leave the ledger submitted with no local error.
+// a foreign claim or transferred reservation is excluded by the predicates.
+// The rowcount backstop turns either exclusion into a loud failure and rolls
+// back the ledger transition with the claim write.
 async function stampProductionEmissionsClaimWithExecutor(
   ctx: OrgContext,
   executor: Tx | typeof db,
-  args: { removalId: string; creditBatchIds: string[] },
+  args: {
+    removalId: string;
+    creditBatchIds: string[];
+    reservationSubmissionId: string;
+  },
 ): Promise<void> {
   const { removalId, creditBatchIds } = args;
   const stamped = await executor
     .update(creditBatches)
     .set({
       productionEmissionsClaimedByRemovalId: removalId,
+      productionEmissionsClaimReservedBySubmissionId: null,
       updatedAt: sql`now()`,
     })
     .where(
@@ -766,6 +755,10 @@ async function stampProductionEmissionsClaimWithExecutor(
         or(
           isNull(creditBatches.productionEmissionsClaimedByRemovalId),
           eq(creditBatches.productionEmissionsClaimedByRemovalId, removalId),
+        ),
+        eq(
+          creditBatches.productionEmissionsClaimReservedBySubmissionId,
+          args.reservationSubmissionId,
         ),
         eq(creditBatches.organizationId, ctx.organizationId),
       ),

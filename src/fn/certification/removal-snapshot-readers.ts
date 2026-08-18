@@ -9,6 +9,7 @@ import type { CertificationSubmissionRow } from "@/data-access/certification";
 import { SafeError } from "@/lib/errors";
 import type { CreateDatapointRequest } from "@/lib/isometric";
 import type { RemovalSourceBindingPlanEntry } from "@/lib/certification/removal-source-bindings";
+import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import { z } from "zod";
 
 export interface ResolvedFixedInput {
@@ -26,6 +27,7 @@ export interface DatapointTransport {
 export interface RemovalTransportSnapshot {
   removalSupplierRef: string;
   datapointBodies: DatapointTransport[];
+  omittedTemplateComponentIds: string[];
 }
 
 const datapointTransportSchema = z.object({
@@ -44,6 +46,7 @@ const datapointTransportSchema = z.object({
 const removalTransportSnapshotSchema = z.object({
   removalSupplierRef: z.string().min(1),
   datapointBodies: z.array(datapointTransportSchema),
+  omittedTemplateComponentIds: z.array(z.string().min(1)).default([]),
 });
 
 const removalSourceBindingPlanSchema = z.array(
@@ -87,6 +90,38 @@ const fixedSnapshotInputSchema = z.object({
   preboundDatapointId: z.string().min(1),
 });
 
+const biocharApplicationIntentSchema = z.object({
+  applicationId: z.string().min(1),
+  applicationCode: z.string().min(1),
+  creditBatchId: z.string().min(1),
+  deliveryId: z.string().min(1),
+  customerLocationId: z.string().min(1),
+  certifierProjectId: z.string().min(1),
+  externalProjectId: z.string().min(1),
+  applicationDate: z.iso.date(),
+  appliedTonnes: z.number().finite().positive(),
+  fieldSizeHa: z.number().finite().positive(),
+  truckMassOnArrivalKg: z.number().finite().nonnegative(),
+  truckMassOnDepartureKg: z.number().finite().nonnegative(),
+  supplierReference: z.string().min(1).max(100),
+  storageLocationSupplierReference: z.string().min(1),
+  storageLocationPayload: z
+    .object({
+      description: z.union([
+        z.string(),
+        z.object({ __typename: z.literal("Undefined") }),
+      ]),
+      latitude: z.number().finite(),
+      longitude: z.number().finite(),
+      name: z.string().min(1),
+      project_id: z.string().min(1),
+      storage_method: z.literal("biochar_field"),
+      supplier_reference_id: z.string().min(1),
+    })
+    .passthrough(),
+  sourceIds: z.array(z.string()),
+});
+
 export function readRemovalTransport(
   row: CertificationSubmissionRow,
 ): RemovalTransportSnapshot {
@@ -100,6 +135,7 @@ export function readRemovalTransport(
   return {
     removalSupplierRef: parsed.data.removalSupplierRef,
     datapointBodies: parsed.data.datapointBodies as DatapointTransport[],
+    omittedTemplateComponentIds: parsed.data.omittedTemplateComponentIds,
   };
 }
 
@@ -158,4 +194,21 @@ export function readRemovalSourceBindingPlan(
     );
   }
   return parsed.data as RemovalSourceBindingPlanEntry[];
+}
+
+export function readRemovalBiocharApplicationIntents(
+  row: CertificationSubmissionRow,
+): BiocharApplicationIntent[] {
+  const snapshot = row.payloadSnapshot as {
+    semantic?: { biocharApplicationIntents?: unknown } | null;
+  } | null;
+  const parsed = z
+    .array(biocharApplicationIntentSchema)
+    .safeParse(snapshot?.semantic?.biocharApplicationIntents);
+  if (!parsed.success) {
+    throw new SafeError(
+      "This saved submission uses an older Biochar Application format and cannot resume. Select Refresh review, then submit again.",
+    );
+  }
+  return parsed.data as BiocharApplicationIntent[];
 }

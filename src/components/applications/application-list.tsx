@@ -19,6 +19,8 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import { sumNullableBy } from "@/lib/nullable-sum";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
@@ -106,7 +108,9 @@ function createColumns(
         const { customerName, locationName } = row.original;
         return (
           <div className="flex flex-col">
-            <span className="text-[var(--color-text-primary)]">{customerName ?? "Not available"}</span>
+            <span className="text-[var(--color-text-primary)]">
+              {customerName ?? MISSING_VALUE.notAvailable}
+            </span>
             {locationName && (
               <span className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">{locationName}</span>
             )}
@@ -146,7 +150,7 @@ function createColumns(
         <span>
           {row.original.applicationMethodType
             ? formatApplicationMethod(row.original.applicationMethodType as ApplicationMethod)
-            : "Not recorded"}
+            : MISSING_VALUE.notRecorded}
         </span>
       ),
     },
@@ -434,7 +438,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     isLoading,
     setCurrentPage,
   });
-  const totalBiochar = items.reduce((sum, a) => sum + (a.biocharAppliedTons ?? 0), 0);
+  const totalBiochar = sumNullableBy(items, (item) => item.biocharAppliedTons);
 
   const hasActiveFilters =
     !!searchQuery ||

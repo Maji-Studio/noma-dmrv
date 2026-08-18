@@ -93,11 +93,13 @@ presence is not evidence of a live 200-year or production path.
 | `GET /projects/{project_id}/storage_locations` | wired, sandbox verification pending | Bounded supplier-reference reconciliation before an explicit sync | `src/lib/isometric/storage-locations.ts` → `findStorageLocationBySupplierReference`; consumer in `src/fn/certification/storage-locations.ts` |
 | `POST /projects/{project_id}/storage_locations` | wired, sandbox verification pending | Explicitly register a customer location as a reusable `biochar_field` site | `src/lib/isometric/storage-locations.ts` → `createStorageLocation`; consumers in `src/fn/certification/storage-locations.ts` and `storage-location-actions.ts` |
 | `GET /projects/{project_id}/storage_locations/{id}` | wired, sandbox verification pending | Explicit drift check against the immutable submitted snapshot | `src/lib/isometric/storage-locations.ts` → `getStorageLocation`; consumer in `src/fn/certification/storage-locations.ts` |
+| `GET /biochar_applications` | wired for sandbox Removal submission | Bounded client-side pagination and exact supplier-reference reconciliation because the API exposes no supplier-reference filter | `src/lib/isometric/biochar-applications.ts` → `findBiocharApplicationBySupplierReference`; consumer in `src/fn/certification/biochar-applications.ts` |
+| `POST /biochar_applications` | wired for sandbox Removal submission | Register one application only after its Production Batch and Storage Location are confirmed | `src/lib/isometric/biochar-applications.ts` → `createBiocharApplication`; consumer in `src/fn/certification/biochar-applications.ts` |
 
-PATCH remains present only in the generated API types and is intentionally
-unwired. Drift is surfaced for operator review instead of being patched
-automatically. Biochar Application POST remains hard-gated and has no
-request-producing or HTTP call path.
+Storage Location PATCH and Biochar Application correction/delete operations
+remain intentionally unwired. Drift is surfaced for operator review. Both
+Storage Location and Biochar Application synchronization remain blocked in
+production until their sandbox behavior is explicitly promoted.
 
 ## Telemetry operations
 
@@ -121,7 +123,6 @@ The following operation families have no current application call site:
 - monitoring requirements and MonitoringSubmissions;
 - storage units;
 - feedstock batches;
-- biochar applications;
 - measurement locations;
 - standalone project/GHG-statement Components and attribution mutations;
 - Datapoint deletion and reverse-lookup endpoints;

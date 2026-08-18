@@ -81,7 +81,7 @@ export interface PaginatedProductionRuns {
 
 export interface ProductionRunStats {
   totalRuns: number;
-  totalBiocharKg: number;
+  totalBiocharKg: number | null;
   totalBiocharDryKg: number | null;
   totalFeedstockWetKg: number;
   runningCount: number;
@@ -91,9 +91,9 @@ export interface ProductionRunStats {
 
 export interface FacilityEnergyTotals {
   runCount: number;
-  electricityKwh: number;
-  gensetLitres: number;
-  startupLitres: number;
+  electricityKwh: number | null;
+  gensetLitres: number | null;
+  startupLitres: number | null;
 }
 
 export interface ProductionRunReadingRecord {

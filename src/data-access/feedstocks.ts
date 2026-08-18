@@ -7,7 +7,7 @@
 
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, SQL } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { countRows, sumNumeric } from "@/db/aggregate";
+import { countRows, sumNullableNumeric } from "@/db/aggregate";
 import {
   feedstocks,
   feedstockTypes,
@@ -18,7 +18,10 @@ import {
   productionRunFeedstocks,
   transportLegs,
 } from "@/db/schema";
-import type { FeedstockFilterData } from "@/schemas/feedstocks";
+import type {
+  FeedstockFilterData,
+  FeedstockStatsFilterData,
+} from "@/schemas/feedstocks";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import {
@@ -146,7 +149,7 @@ export interface PaginatedFeedstocks {
 
 export interface FeedstockStats {
   totalFeedstocks: number;
-  totalDryMassKg: number;
+  totalDryMassKg: number | null;
   avgMoisturePercent: number | null;
   completeFeedstocks: number;
   missingDataFeedstocks: number;
@@ -375,22 +378,29 @@ export async function getFeedstockById(
 
 export async function getFeedstockStats(
   ctx: OrgContext,
-  facilityId?: string
+  scope?: Partial<FeedstockStatsFilterData>
 ): Promise<FeedstockStats> {
   requireOrgScope(ctx);
+
+  const { facilityId, feedstockTypeId } = scope ?? {};
 
   const conditions: SQL[] = [
     eq(feedstocks.organizationId, ctx.organizationId),
     isNull(feedstocks.archivedAt),
   ];
   if (facilityId) conditions.push(eq(feedstocks.facilityId, facilityId));
+  // The same predicate the list applies, so the cards never summarise rows the
+  // operator cannot see below them.
+  if (feedstockTypeId) {
+    conditions.push(eq(feedstocks.feedstockTypeId, feedstockTypeId));
+  }
   const whereClause = and(...conditions);
 
   // org-scope-ok: whereClause includes the active organization predicate.
   const [stats] = await db
     .select({
       totalFeedstocks: count(),
-      totalDryMassKg: sumNumeric(feedstocks.massDryKg),
+      totalDryMassKg: sumNullableNumeric(feedstocks.massDryKg),
       avgMoisturePercent: sql<number | null>`case when sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.massWetKg} end) > 0 then sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.moistureContentPercent} * ${feedstocks.massWetKg} end) / sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.massWetKg} end) else null end`,
       completeFeedstocks: countRows(sql`${feedstocks.status} = 'complete'`),
       missingDataFeedstocks: countRows(

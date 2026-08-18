@@ -451,6 +451,8 @@
     "moisture_content_percent": 3.8,
     "delivered_wet_mass_kg": 520,
     "mass_dry_kg": 500,
+    "truck_mass_on_arrival_kg": 12520,
+    "truck_mass_on_departure_kg": 12000,
     "driver_id": "drv_001",
     "vehicle_id": "veh_001",
     "createdAt": "2025-06-15T07:00:00Z",

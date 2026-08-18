@@ -37,6 +37,7 @@ import {
 } from "@/components/certification/durability-readiness";
 import { sampleCreateHref, sampleDetailHref } from "@/lib/sample-create-intent";
 import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 function Section({
   children,
@@ -122,7 +123,7 @@ function SubmittedStat({
 }
 
 function num(value: number | null, digits: number): string {
-  return value == null ? "Not recorded" : value.toFixed(digits);
+  return value == null ? MISSING_VALUE.notRecorded : value.toFixed(digits);
 }
 
 function ReplicateRow({ r }: { r: DurabilitySummaryReplicate }) {
@@ -142,7 +143,7 @@ function ReplicateRow({ r }: { r: DurabilitySummaryReplicate }) {
         </span>
       </td>
       <td className="px-10 py-8 body-caption text-[var(--color-text-secondary)]">
-        {r.productionRunCode ?? "Not available"}
+        {r.productionRunCode ?? MISSING_VALUE.notAvailable}
         {r.samplingDay ? ` · ${r.samplingDay}` : ""}
       </td>
       <td className="px-10 py-8 text-right tabular-nums body-caption text-[var(--color-text-secondary)]">

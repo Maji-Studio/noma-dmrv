@@ -17,6 +17,7 @@ import { customers } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRuns } from "@/db/schema/production";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
@@ -273,6 +274,24 @@ async function createCreditBatchRecord(
     creditBatchId: creditBatch.id,
     productionRunId: fixture.productionRunId,
   });
+
+  const applicationRows = await db
+    .select({
+      id: applications.id,
+      wetTons: applications.biocharAppliedTons,
+      dryTons: applications.biocharAppliedDryTons,
+    })
+    .from(applications)
+    .where(inArray(applications.id, fixture.applicationIds));
+  await db.insert(creditBatchApplications).values(
+    applicationRows.map((application) => ({
+      organizationId: TEST_ORG_ID,
+      creditBatchId: creditBatch.id,
+      applicationId: application.id,
+      allocatedWetMassKg: tonnesToKg(application.wetTons),
+      allocatedDryMassKg: tonnesToKg(application.dryTons ?? 0),
+    })),
+  );
 
   return creditBatch.id;
 }

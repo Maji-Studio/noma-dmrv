@@ -27,6 +27,7 @@
 export type CertRequirementKey =
   | "carbon"
   | "facilityEmissions"
+  | "feedstockTypeMapping"
   | "production"
   | "measurementDates"
   | "transport"
@@ -65,6 +66,11 @@ export const CERT_REQUIREMENT_META: Record<
     requirementLabel: "Facility reference soil temperature",
     whyDetail:
       "The 200-year durability calculation uses the facility's reference soil temperature to estimate the durable carbon fraction. Configure it in certification emission estimates before certifying affected batches.",
+  },
+  feedstockTypeMapping: {
+    requirementLabel: "Feedstock type registry link",
+    whyDetail:
+      "A credit batch declares the pyrolysis feedstock type submitted with its Isometric production batch. Link the local feedstock type to the matching Isometric catalogue entry before submitting.",
   },
   production: {
     requirementLabel: "Linked production data",

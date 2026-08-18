@@ -238,6 +238,25 @@ describe("batchHealthFixLinkFor", () => {
     );
   });
 
+  it("deep-links a registry mapping gap to the affected feedstock type", () => {
+    const feedstockTypeId = "22222222-2222-4222-8222-222222222222";
+    const link = batchHealthFixLinkFor(
+      check("feedstockTypeMapping", "feedstockTypes", [
+        {
+          id: feedstockTypeId,
+          code: "Macadamia shells",
+          missing: ["Isometric feedstock type"],
+        },
+      ]),
+      facilityId,
+    );
+
+    expect(link).toEqual({
+      label: "Edit Feedstock Type",
+      href: `/feedstock-types?facility=${facilityId}&feedstockType=${feedstockTypeId}&mode=edit`,
+    });
+  });
+
   it("prefers an explicit fixTarget over the fallback", () => {
     // carbon normally falls back to batchDetails, but an explicit override wins.
     const link = batchHealthFixLinkFor(

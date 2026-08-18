@@ -11,6 +11,16 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 > applicability to the configured project version must be confirmed when the
 > operator resolves the project discrepancy with Isometric.
 
+> **Amended 2026-08-15: application-slice follow-up Removals.** A credit
+> batch may now contribute newly applied mass to more than one Removal. The
+> first successful Removal still claims production emissions in full; later
+> Removals omit production components and retain delivery and stored inputs.
+
+> **Amended 2026-08-16: pre-POST reservation.** A Removal submission now
+> reserves every production-contributing credit batch atomically before its
+> first registry mutation. Mutation-free failures release the reservation;
+> possible or confirmed external mutations retain it for reconciliation.
+
 ## Context
 
 ADR 0003 scoped **every** run-derived quantity in a Removal submission by the
@@ -62,30 +72,36 @@ start → latest application).
    boolean) because the predicate is identity — "claimed by ME vs ANOTHER" —
    which enables the guarded UPDATE, answers the audit question directly,
    and stays forward-compatible with issue #353's earliest-entry semantics.
-3. **Foreign claim and stale payloads fail closed before any registry POST.**
-   `submitRemoval` asserts that no member batch is claimed by a *different*
-   removal: once pre-flight against the loaded context, and once from a
-   fresh database read immediately after the submission draft is claimed
-   (the blocking draft row freezes membership, so a foreign claim stamped
-   between context load and draft claim is caught before it could be
-   silently no-opped by the guarded UPDATE after the POSTs). After that draft
-   exists, the pipeline also rebuilds the full semantic payload and compares
-   its hash to the claimed snapshot hash; same-ID source-data edits that change
-   applied mass/date, run inputs, sample chemistry, transport scalars, or
-   source bindings retire the stale draft before any POST. The correct
-   follow-up — a delivery-only entry that suppresses the production bucket — is
-   deferred behind issue #353; until then these conditions are loud errors,
-   never silent suppression.
+3. **Foreign claims produce delivery-only follow-up entries.** Removal
+   membership is frozen at the application-slice grain on
+   `credit_batch_applications`. When a member batch was claimed by a different
+   Removal, compilation excludes its production runs from production-bucket
+   totals and omits production-only template components when the whole Removal
+   is delivery-only. Delivery and stored inputs remain application-scoped.
+   Immediately after the submission draft is claimed, a fresh database read
+   verifies that membership, run lineage, and claim ownership still match the
+   reviewed snapshot. Contenders are ordered by their effective reporting
+   quarter (the quarter containing the latest member Application date), then
+   draft creation and ID. The winner atomically reserves every unclaimed member
+   batch before any registry POST. The exact submission may resume; another
+   draft may take over only when the owner is safely reclaimable under the
+   shared lock TTL and has no possible external mutation. Successful submission
+   converts the reservation to the permanent Removal claim in the ledger
+   transaction.
 4. **Uniform delivery fraction.** Biochar transport scales by one
-   removal-wide fraction (`appliedDryKg / totalBiocharOutputKg`, the shared
-   `appliedBiocharFraction` definition). The legs are already
+   removal-wide fraction (`appliedDryKg / deliveryBiocharOutputKg`, the shared
+   `appliedBiocharFraction` definition). The denominator includes only member
+   runs represented by this Removal's Applications; unapplied runs pulled in
+   for whole-batch production front-loading cannot dilute delivery. The legs are already
    lineage-scoped to the removal's applications; scaling each leg by the
    same fraction is an honest, documented approximation. The transport
    evidence-ledger PDF derives its biochar subtotal from the same fraction
    and renders the "leg sum × applied share" arithmetic explicitly, so the
    Source-mirrored ledger always reconciles to the submitted scalar.
-   Per-delivery scoping needs the application→batch junction and is
-   deferred alongside #353.
+   Exact per-delivery transport allocation remains separate work. The
+   application-by-batch junction now freezes the applied mass used by each
+   Removal, but the current registry input remains one removal-wide transport
+   scalar.
 5. **`bucket` lives on `INPUT_MAPPING`, not the blueprint.** A deliberate
    deviation from "attribute on the blueprint": the remote OpenAPI blueprint
    types have no attribute mechanism, so the classification rides noma's
@@ -105,11 +121,15 @@ applied-scoped, untouched.
 - The semantic payload hash changes for partially-applied removals, so a
   resubmit supersedes the prior version — correct, and inert while nothing
   is live in production.
-- A second removal touching an already-claimed batch cannot submit until
-  #353 lands the delivery-only follow-up entry (batch×quarter grain +
-  suppression arithmetic).
-- Deferred, tracked with #353 unless noted: reporting-quarter grain and
-  suppression arithmetic; adoption of the application→batch junction;
-  a carbon-ledger UI for claim state; per-delivery transport scoping;
-  the blueprint-attribute alternative (#291).
-- Migration `0068` is additive — the claim FK column + its index.
+- A second Removal can submit newly applied mass from an already-claimed batch
+  without repeating that batch's production emissions.
+- Removal membership and wet/dry applied mass are immutable application slices,
+  so later Applications can join later Removals without changing prior ones.
+- The Removal review and credit-batch detail expose the estimate, submitted
+  inputs, source links, and prior production claim.
+- Noma submits the frozen production, delivery, and stored inputs. Isometric
+  remains authoritative for project emissions and the resulting net removal.
+- Deferred: reporting-quarter grain and the blueprint-attribute alternative
+  (#291).
+- Migrations `0068` and `0111` are additive — the permanent claim FK and the
+  pre-POST reservation pointer, each with an index.

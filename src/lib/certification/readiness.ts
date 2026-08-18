@@ -23,6 +23,10 @@ import {
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
 import { pluralize } from "@/lib/copy-utils";
+import {
+  describeFeedstockTypeMappingGap,
+  type FeedstockTypeMappingGap,
+} from "./feedstock-type-mapping";
 
 export type RemovalReadinessState =
   | "submitted" // done from noma's side — nothing to action
@@ -55,6 +59,8 @@ export interface RemovalReadinessFacts {
   missingDefaultTemplateId: string | null;
   /** Template blueprint keys with no matching component blueprint. */
   unresolvedBlueprintKeys: string[];
+  /** Declared pyrolysis feedstock types missing their Isometric registry id. */
+  feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
   /** Production runs resolved from member-batch lineage — false ⇒ nothing to submit. */
   hasSubmittableRuns: boolean;
   /** Specific reason production lineage is not submittable, when known. */
@@ -259,6 +265,12 @@ export function deriveRemovalReadiness(
     reasons.push(productionGapDetail(facts));
   }
 
+  if (templateResolvesCleanly(facts)) {
+    reasons.push(
+      ...facts.feedstockTypeMappingGaps.map(describeFeedstockTypeMappingGap),
+    );
+  }
+
   const entityReadinessGaps = facts.entityReadinessGaps ?? [];
   if (entityReadinessGaps.length > 0) {
     const suffix =
@@ -309,6 +321,10 @@ export type RemovalMeasurementDateFixTarget =
   | "applicationsAndLabSamples"
   | "productionRunsApplicationsAndLabSamples";
 
+export type RemovalFixTarget =
+  | RemovalMeasurementDateFixTarget
+  | "feedstockTypes";
+
 export interface PreflightCheck {
   key:
     | "mapping"
@@ -317,6 +333,7 @@ export interface PreflightCheck {
     | "transport"
     | "production"
     | "measurementDates"
+    | "feedstockTypeMapping"
     | "entityReadiness"
     | "evidence"
     | "durability";
@@ -332,7 +349,9 @@ export interface PreflightCheck {
   /**
    * Typed destinations for repairing every future measurement date category.
    */
-  fixTarget?: RemovalMeasurementDateFixTarget;
+  fixTarget?: RemovalFixTarget;
+  /** Local record to open when the fix target supports an exact edit link. */
+  fixTargetId?: string;
   status: PreflightCheckStatus;
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
@@ -367,6 +386,44 @@ function evidencePreflightCheck(facts: RemovalReadinessFacts) {
     status,
     detail,
   };
+}
+
+const FEEDSTOCK_TYPE_MAPPING_LABEL = "Feedstock types linked to Isometric";
+
+interface FeedstockTypeMappingCheckBase {
+  key: "feedstockTypeMapping";
+  label: string;
+  status: PreflightCheckStatus;
+  detail?: string;
+  fixTarget?: "feedstockTypes";
+  fixTargetId?: string;
+}
+
+function feedstockTypeMappingCheck(
+  facts: RemovalReadinessFacts,
+): FeedstockTypeMappingCheckBase {
+  if (!facts.hasMapping || !templateResolvesCleanly(facts)) {
+    return {
+      key: "feedstockTypeMapping",
+      label: FEEDSTOCK_TYPE_MAPPING_LABEL,
+      status: "skipped",
+    };
+  }
+  const gaps = facts.feedstockTypeMappingGaps;
+  return gaps.length === 0
+    ? {
+        key: "feedstockTypeMapping",
+        label: FEEDSTOCK_TYPE_MAPPING_LABEL,
+        status: "met",
+      }
+    : {
+        key: "feedstockTypeMapping",
+        label: FEEDSTOCK_TYPE_MAPPING_LABEL,
+        status: "unmet",
+        detail: gaps.map(describeFeedstockTypeMappingGap).join(" · "),
+        fixTarget: "feedstockTypes",
+        fixTargetId: gaps[0]?.feedstockTypeId,
+      };
 }
 
 /**
@@ -504,6 +561,8 @@ export function buildRemovalPreflightChecklist(
         };
   })();
 
+  const feedstockTypeMapping = feedstockTypeMappingCheck(facts);
+
   const checks: Array<PreflightCheckBase | null> = [
     {
       key: "mapping",
@@ -548,6 +607,7 @@ export function buildRemovalPreflightChecklist(
         : productionGapDetail(facts),
     },
     measurementDatesCheck(facts),
+    feedstockTypeMapping,
     entityReadiness,
     evidencePreflightCheck(facts),
     durabilityPreflightCheck(facts),
@@ -593,6 +653,7 @@ export type RemovalRequirementKey =
   | "transportUniformity"
   | "production"
   | "measurementDates"
+  | "feedstockTypeMapping"
   | "entityReadiness"
   | "evidence"
   | "durability";
@@ -612,7 +673,9 @@ export interface RemovalRequirementCheck {
    * Typed destination for repairing a future measurement date. Mixed blocker
    * kinds intentionally leave this unset rather than linking to the wrong list.
    */
-  fixTarget?: RemovalMeasurementDateFixTarget;
+  fixTarget?: RemovalFixTarget;
+  /** Local record to open when the fix target supports an exact edit link. */
+  fixTargetId?: string;
   status: PreflightCheckStatus;
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
@@ -721,6 +784,8 @@ export function buildRemovalRequirementsChecklist(
         };
   })();
 
+  const feedstockTypeMapping = feedstockTypeMappingCheck(facts);
+
   const production: RemovalRequirementCheckBase = {
     key: "production",
     label: "Production lineage complete",
@@ -788,6 +853,7 @@ export function buildRemovalRequirementsChecklist(
     uniformity,
     production,
     measurementDatesCheck(facts),
+    feedstockTypeMapping,
     entityReadiness,
     evidencePreflightCheck(facts),
     durability,

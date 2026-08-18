@@ -1,7 +1,6 @@
 import type { OrgContext } from "@/lib/auth/server";
 import {
   markSubmissionSubmitted,
-  stampProductionEmissionsClaim,
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
 import {
@@ -11,8 +10,10 @@ import {
 } from "@/data-access/certification-submissions";
 import { env } from "@/config/env";
 import {
+  markRemovalSubmissionExternalMutationPossible,
   updateRemovalDates,
 } from "@/data-access/certifier-removals";
+import { reserveProductionEmissionsClaims } from "@/data-access/production-claim-reservations";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
@@ -44,22 +45,23 @@ import {
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
 import { bindProductionBatchesToMeasurementSamples } from "./production-batches";
+import { readRemovalDurabilityMeasurementSamples } from "./durability-measurement-sample-snapshot";
 import {
-  readRemovalDurabilityMeasurementSamples,
-} from "./durability-measurement-sample-snapshot";
-import {
-  assertNoForeignProductionClaims,
   assertProductionClaimGateFresh,
   assertResumedSnapshotRevisionCurrent,
 } from "./production-claim-gate";
+import { includesProductionInputs } from "./production-claim-policy";
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
+  readRemovalBiocharApplicationIntents,
   readRemovalFixedInputs,
   readRemovalSourceBindingPlan,
   readRemovalTransport,
   type ResolvedFixedInput,
   type RemovalTransportSnapshot,
 } from "./removal-snapshot-readers";
+import { ensureRemovalBiocharApplications } from "./biochar-applications";
+import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
 import {
   assertEntityReadinessGapsResolved,
@@ -87,6 +89,7 @@ import {
 } from "./sources";
 import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
+import { describeFeedstockTypeMappingGap } from "@/lib/certification/feedstock-type-mapping";
 import type { SubmissionProgressReporter } from "@/lib/certification/submission-progress";
 import {
   appendSyncEventBestEffort,
@@ -214,6 +217,13 @@ async function submitRemovalCore(
       "Configure organization Isometric credentials before submitting.",
     );
   }
+  if (ctx.feedstockTypeMappingGaps.length > 0) {
+    throw new SafeError(
+      ctx.feedstockTypeMappingGaps
+        .map(describeFeedstockTypeMappingGap)
+        .join(" "),
+    );
+  }
   // Fail before the submit-phase client, evidence-ledger generation/mirroring,
   // local ledger claims, or registry writes. Context loading may already make
   // read-only registry calls to resolve the configured project and template.
@@ -291,11 +301,11 @@ async function submitRemovalCore(
     );
   }
 
-  // §8.6.2 front-loading pre-flight (issue #349, ADR 0020): fail closed on a
-  // foreign production-bucket claim BEFORE aggregation, the evidence ledgers,
-  // and every registry POST. Re-asserted from a fresh read after the draft
-  // claim below — see production-claim-gate.ts for the TOCTOU rationale.
-  assertNoForeignProductionClaims(ctx.memberBatchClaims, removalId);
+  const productionClaimBatchIds = ctx.memberBatchClaims
+    .filter((batch) =>
+      includesProductionInputs(batch.claimedByRemovalId, removalId),
+    )
+    .map((batch) => batch.creditBatchId);
 
   const blueprintsByKey = new Map(
     ctx.blueprintsForTemplate.map((bp) => [bp.key, bp]),
@@ -345,6 +355,17 @@ async function submitRemovalCore(
     log,
   });
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
+
+  // Everything below may create or update Isometric Sources before the
+  // submission ledger draft exists. Persist that the registry boundary is
+  // about to open while sharing discard's row/artifact lock protocol. The
+  // marker stays set even when mirroring fails because the remote outcome may
+  // be ambiguous and a missing local mapping cannot prove no Source exists.
+  await markRemovalSubmissionExternalMutationPossible(
+    orgCtx,
+    ctx.facilityId,
+    removalId,
+  );
 
   // Materialize the deterministic transport and durability evidence PDFs
   // before candidate discovery. The generated documents attach to member
@@ -409,7 +430,6 @@ async function submitRemovalCore(
     candidateSourceDocuments,
     sourceIds,
     fixed,
-    memberCreditBatchIds,
   } = initialBuild;
 
   // Claim a ledger draft through the submission-ledger module. The module
@@ -489,17 +509,6 @@ async function submitRemovalCore(
     case "blocked":
       throw new SafeError(REMOVAL_CLAIM_BLOCKED_MESSAGES[claimed.reason]);
     case "existing":
-      // §8.6.2 lazy claim backfill (ADR 0020): a removal submitted before
-      // migration 0068 whose payload hash is unchanged short-circuits here
-      // and never reaches markSubmissionSubmitted's transactional stamp.
-      // Stamp locally (no POST) — the blocking `submitted` row freezes
-      // membership, so the live member set equals the submitted payload's.
-      // The pre-flight gate above already asserted no foreign claims; a
-      // raced foreign claim trips the stamp's rowcount backstop loudly.
-      await stampProductionEmissionsClaim(orgCtx, {
-        removalId,
-        creditBatchIds: memberCreditBatchIds,
-      });
       if (
         !ctx.latestSubmission ||
         ctx.latestSubmission.externalId !== claimed.externalId ||
@@ -521,6 +530,14 @@ async function submitRemovalCore(
           : "skipped",
       });
       onProgress?.({ step: "removal.creating", state: "reused" });
+      await ensureRemovalBiocharApplications({
+        orgCtx,
+        removalId,
+        externalRemovalId: claimed.externalId,
+        submissionRow: ctx.latestSubmission,
+        intents: readRemovalBiocharApplicationIntents(ctx.latestSubmission),
+        log,
+      });
       onProgress?.({
         step: "removal.verifying_evidence",
         state: "active",
@@ -567,6 +584,7 @@ async function submitRemovalCore(
           orgCtx,
           removalId,
           ctx.memberBatchClaims,
+          claimed.row.id,
         );
         await assertClaimedRemovalPayloadFresh({
           orgCtx,
@@ -574,6 +592,11 @@ async function submitRemovalCore(
           row: claimed.row,
           allowPeriodInputStub,
           preserveForReconciliation: attempt.externalMutation !== "none",
+        });
+        await reserveProductionEmissionsClaims(orgCtx, {
+          removalId,
+          submissionId: claimed.row.id,
+          creditBatchIds: productionClaimBatchIds,
         });
         if (claimed.reason === "rejected-hash-changed") {
           log.warn(
@@ -590,6 +613,8 @@ async function submitRemovalCore(
         const durabilityMeasurementSubmissions = hasDurabilityComponents
           ? readRemovalDurabilityMeasurementSamples(claimed.row)
           : null;
+        const biocharApplicationIntents =
+          readRemovalBiocharApplicationIntents(claimed.row);
         return await runRemovalSubmission({
           client,
           orgCtx,
@@ -605,8 +630,9 @@ async function submitRemovalCore(
           },
           externalProjectId,
           durabilityMeasurementSubmissions,
+          biocharApplicationIntents,
           sourceBindingPlan,
-          claimBatchIds: memberCreditBatchIds,
+          claimBatchIds: productionClaimBatchIds,
           supersedePreviousId: claimed.supersedePreviousId,
           resumed: claimed.resumed,
           expectedLockedAt,
@@ -666,6 +692,7 @@ interface RunRemovalSubmissionArgs {
   durabilityMeasurementSubmissions:
     | DurabilityMeasurementSampleSubmission[]
     | null;
+  biocharApplicationIntents: BiocharApplicationIntent[];
   sourceBindingPlan: ReturnType<typeof readRemovalSourceBindingPlan>;
   // Member credit batches whose §8.6.2 production-bucket claim this submission
   // stamps on success (issue #349, ADR 0020).
@@ -691,6 +718,7 @@ async function runRemovalSubmission({
   reportingWindow,
   externalProjectId,
   durabilityMeasurementSubmissions,
+  biocharApplicationIntents,
   sourceBindingPlan,
   claimBatchIds,
   supersedePreviousId,
@@ -846,6 +874,7 @@ async function runRemovalSubmission({
     reportingWindow: effectiveWindow,
     projectId: externalProjectId,
     supplierRefId: transport.removalSupplierRef,
+    omittedTemplateComponentIds: transport.omittedTemplateComponentIds,
   });
   const { externalId: externalRemovalId } = await performRegistryCreate({
     orgCtx,
@@ -863,19 +892,28 @@ async function runRemovalSubmission({
       reconcileRemoval(client, { supplierRefId: transport.removalSupplierRef }).then(
         supplierRefLookup,
       ),
-    failureMessagePrefix: "Removal POST failed",
-    onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
     onConfirmed: (externalId) =>
       markSubmissionSubmitted(orgCtx, row.id, {
         externalId,
         supersedePreviousId,
-        // §8.6.2 (issue #349, ADR 0020): stamp the production-bucket claim
-        // in the same transaction as the immediate Submitted transition.
         productionEmissionsClaim: {
           removalId,
           creditBatchIds: claimBatchIds,
         },
       }),
+    failureMessagePrefix: "Removal POST failed",
+    onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
+    log,
+  });
+  await ensureRemovalBiocharApplications({
+    orgCtx,
+    removalId,
+    externalRemovalId,
+    submissionRow: row,
+    expectedLockedAt,
+    intents: biocharApplicationIntents,
+    onExternalMutation: (state) =>
+      recordRemovalExternalMutation(attempt, state),
     log,
   });
   onProgress?.({ step: "removal.creating", state: "complete" });

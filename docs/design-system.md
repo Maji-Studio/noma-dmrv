@@ -229,6 +229,40 @@ machine-facing API/export/PDF contracts keep their ISO formats.
 
 ---
 
+## Missing values
+
+**Never hand-write a missing-value string in a component.** Every formatter in
+`@/lib/format-utils` and `@/lib/mass-moisture` absorbs null itself and returns
+one of the six shared tokens in `MISSING_VALUE` (`@/lib/copy-utils`), so a
+component's job is to pass the nullable value straight through. The six
+situations and the rule for picking between them are in
+[ux-writing.md](./ux-writing.md).
+
+Three seams carry it:
+
+- **Formatters** — `formatMass(kg)`, not `formatMass(kg ?? 0)`. A `?? 0` before
+  a display turns absence into a measurement; the only quantities that may
+  coalesce are counts. Aggregate with `sumNullable` / `sumNullableBy`
+  (`@/lib/nullable-sum`), which returns null when nothing was reported. When a
+  readout carries its own unit, suppress the unit with the value
+  (`hero-kpi-band.tsx` is the reference) so nothing reads "Not available tph".
+- **`DetailField` / `DetailPanelField`** (`@/components/ui/detail-panel`) — pass
+  the raw nullable `value` plus `emptySituation` when the field means something
+  other than "not recorded". The field renders the token in the one placeholder
+  treatment (tertiary ink at regular weight, same size and slot as data, plus a
+  `data-empty` hook) and reports the field as absent to certification. Passing a
+  placeholder string as `value` instead is what makes a missing CERT field show
+  a green "satisfied" chip; where the value is a node the field cannot read (an
+  element, an async lookup), say so with `valuePresent`.
+- **`EmptyState`** is for a whole surface with nothing in it, never for one
+  field.
+
+`MoistureSplit`'s unresolved state and `MassPair`'s "Not recorded" are the two
+worked examples: an absent input stays visible, because dry mass drives
+certification readiness.
+
+---
+
 ## Component library
 
 **Base UI** ([base-ui.com](https://base-ui.com)) is the headless primitive

@@ -29,6 +29,8 @@ import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import {
+  canReclaimInterruptedSubmission,
+  SUBMISSION_EXTERNAL_MUTATIONS,
   SUBMISSION_ATTEMPT_OUTCOMES,
   SUBMISSION_METADATA_KEYS,
 } from "@/lib/certification/submission-metadata";
@@ -104,6 +106,62 @@ export async function markSubmissionInterrupted(
         eq(certificationSubmissions.id, id),
         eq(certificationSubmissions.status, "draft"),
         eq(certificationSubmissions.lockedAt, args.expectedLockedAt),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    )
+    .returning({ id: certificationSubmissions.id });
+  return updated.length > 0;
+}
+
+/**
+ * Journal a confirmed registry identity while retaining the exact draft lock.
+ * Follow-up reconciliation can then fail safely: an immediate retry resumes
+ * this row by external id instead of POSTing another statement.
+ */
+export async function recordConfirmedSubmissionIdentity(
+  ctx: OrgContext,
+  id: string,
+  args: { externalId: string; expectedLockedAt: Date },
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const updated = await db
+    .update(certificationSubmissions)
+    .set({ externalId: args.externalId, updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.status, "draft"),
+        eq(certificationSubmissions.lockedAt, args.expectedLockedAt),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    )
+    .returning({ id: certificationSubmissions.id });
+  return updated.length > 0;
+}
+
+/** Update a terminal poll result only while this remains the current version. */
+export async function recordTerminalStatusIfCurrent(
+  ctx: OrgContext,
+  id: string,
+  args: {
+    status: "accepted" | "rejected";
+    expectedStatus: CertificationSubmissionRow["status"];
+    metadataPatch: Record<string, unknown>;
+  },
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const updated = await db
+    .update(certificationSubmissions)
+    .set({
+      status: args.status,
+      lockedAt: null,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch)}::jsonb`,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.status, args.expectedStatus),
         eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),
     )
@@ -294,6 +352,7 @@ async function resumeDraft<H>(
       ctx,
       decided.resumeRowId,
       LOCK_TTL_MS,
+      canReclaimInterruptedSubmission(latest?.metadata),
     );
     if (!row) return { kind: "blocked", reason: "in-flight" };
     return {
@@ -316,6 +375,11 @@ async function createDraft<H>(
     const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
       await lockAndVerifyMapping(ctx, tx, args.guard);
       await lockSubmissionArtifact(tx, args.key);
+      // Recovery may delete a purely local Removal after the optimistic
+      // anchor read above but before this authoritative claim lock. Re-check
+      // under the shared artifact lock so a concurrent discard cannot leave
+      // an orphan submission ledger row.
+      await assertSubmissionAnchorSameOrg(ctx, args.key, tx);
       if (args.mirrorDocumentIds && args.mirrorDocumentIds.length > 0) {
         await acquireMirrorLocksSorted(tx, args.mirrorDocumentIds);
       }
@@ -367,9 +431,12 @@ async function createDraft<H>(
       }
 
       const { reason } = locked;
-      if (reason === "dataupload-orphan-restart") {
+      if (
+        reason === "dataupload-orphan-restart" ||
+        reason === "dataupload-rejected-restart"
+      ) {
         // Only reachable with `dataUploadResume`, which is never passed.
-        throw new Error("Unreachable create reason: dataupload-orphan-restart");
+        throw new Error(`Unreachable create reason: ${reason}`);
       }
 
       const snapshot = args.buildSnapshot({
@@ -609,16 +676,17 @@ async function insertDraftSubmissionRow(
   return row;
 }
 
-// Compare-and-swap reset: only a row that is NOT a freshly-locked draft is
-// resumable. If a concurrent caller already claimed it (flipping it to a
-// fresh draft), this UPDATE matches zero rows and returns null — so two
-// callers cannot both resume the same submission and double-POST to the
-// registry.
+// Compare-and-swap reset: stale/non-draft rows are normally resumable. A fresh
+// draft is resumable only when the caller observed the terminal interrupted
+// marker and this UPDATE can atomically require and clear that same marker.
+// A concurrent claimant therefore makes the predicate fail, so two callers
+// cannot both resume the same submission and double-POST to the registry.
 async function resetSubmissionToDraftCas(
   tx: DbTransaction,
   ctx: OrgContext,
   id: string,
   lockTtlMs: number,
+  requireConfirmedInterruptedMarker = false,
 ): Promise<CertificationSubmissionRow | null> {
   const [row] = await tx
     .update(certificationSubmissions)
@@ -634,14 +702,20 @@ async function resetSubmissionToDraftCas(
       and(
         eq(certificationSubmissions.id, id),
         eq(certificationSubmissions.organizationId, ctx.organizationId),
-        or(
-          ne(certificationSubmissions.status, "draft"),
-          isNull(certificationSubmissions.lockedAt),
-          lt(
-            certificationSubmissions.lockedAt,
-            sql`now() - ${lockTtlMs} * interval '1 millisecond'`,
-          ),
-        ),
+        requireConfirmedInterruptedMarker
+          ? and(
+              eq(certificationSubmissions.status, "draft"),
+              sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text = ${SUBMISSION_ATTEMPT_OUTCOMES.interrupted}`,
+              sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.externalMutation}::text = ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}`,
+            )
+          : or(
+              ne(certificationSubmissions.status, "draft"),
+              isNull(certificationSubmissions.lockedAt),
+              lt(
+                certificationSubmissions.lockedAt,
+                sql`now() - ${lockTtlMs} * interval '1 millisecond'`,
+              ),
+            ),
       ),
     )
     .returning();
@@ -693,6 +767,10 @@ export async function insertDraftSubmissionWithMappingLock(
   return db.transaction(async (tx) => {
     await lockAndVerifyMapping(ctx, tx, guard);
     await lockSubmissionArtifact(tx, input);
+    // A concurrent local-draft discard can commit after the optimistic anchor
+    // read above. Re-check under the shared artifact lock before telemetry can
+    // create a ledger row and continue to external writes.
+    await assertSubmissionAnchorSameOrg(ctx, input, tx);
     return withUniqueViolationGuard(() => insertDraftSubmissionRow(ctx, tx, input));
   });
 }
@@ -713,13 +791,20 @@ export async function resetSubmissionToDraftWithMappingLock(
         provider: certificationSubmissions.provider,
         localEntityType: certificationSubmissions.localEntityType,
         localEntityId: certificationSubmissions.localEntityId,
+        metadata: certificationSubmissions.metadata,
       })
       .from(certificationSubmissions)
       .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)))
       .limit(1);
     if (!rowToReset) throw new SafeError("Submission not found");
     await lockSubmissionArtifact(tx, rowToReset);
-    const row = await resetSubmissionToDraftCas(tx, ctx, id, lockTtlMs);
+    const row = await resetSubmissionToDraftCas(
+      tx,
+      ctx,
+      id,
+      lockTtlMs,
+      canReclaimInterruptedSubmission(rowToReset.metadata),
+    );
     if (!row) throw new SafeError("Submission already in progress");
     return row;
   });

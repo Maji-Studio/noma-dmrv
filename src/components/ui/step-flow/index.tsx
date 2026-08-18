@@ -89,7 +89,8 @@ function RailItem({
 }) {
   const state = stepState(index, current);
   const labelClass = cn(
-    "body-small truncate transition-colors",
+    "body-small transition-colors",
+    orientation === "horizontal" ? "whitespace-nowrap" : "truncate",
     state === "active"
       ? "text-[var(--color-text-primary)]"
       : "text-[var(--color-text-tertiary)]",
@@ -163,7 +164,7 @@ export function StepFlow({
             key={step.key}
             className={cn(
               "flex min-w-0 items-center",
-              orientation === "horizontal" && "gap-8",
+              orientation === "horizontal" && "shrink-0 gap-8",
             )}
           >
             <RailItem

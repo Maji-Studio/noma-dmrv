@@ -24,9 +24,11 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { Button, buttonVariants } from "@/components/ui";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
+  useDiscardRemovalDraft,
   useRemovalCompilation,
 } from "@/hooks/use-certification";
 import type { useSubmitRemoval } from "@/hooks/use-certification";
@@ -45,6 +47,7 @@ import { DebugDrawer } from "./debug-drawer";
 import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
+import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
 
 const REJECTED_IN_ISOMETRIC_MSG =
   "This Removal was rejected in Isometric. Resolve the registry record before trying again from noma.";
@@ -71,9 +74,12 @@ export function SubmitStep({
 }: SubmitStepProps) {
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
+  const discardMutation = useDiscardRemovalDraft();
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [lastConfirmProduction, setLastConfirmProduction] = useState(false);
   const [progressUpdates, setProgressUpdates] = useState<
     SubmissionProgressUpdate[]
   >([]);
@@ -90,6 +96,44 @@ export function SubmitStep({
   );
   const requirementsMet =
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
+  const canDiscardLocalDraft =
+    ctx.latestSubmission === null &&
+    ctx.linkedGhgStatement === null &&
+    !submitMutation.isPending;
+
+  const discardDialog = (
+    <DeleteConfirmDialog
+      isOpen={discardConfirmOpen}
+      title="Discard Removal draft?"
+      message="This releases its credit batches so you can group them into separate Removals. This action cannot be undone."
+      onCancel={() => {
+        setDiscardConfirmOpen(false);
+        discardMutation.reset();
+      }}
+      onConfirm={() => {
+        discardMutation.mutate(
+          { facilityId, removalId },
+          {
+            onSuccess: () => {
+              setDiscardConfirmOpen(false);
+              toast.success(
+                "Removal draft discarded. Credit batches are available again.",
+              );
+              onDone();
+            },
+          },
+        );
+      }}
+      isPending={discardMutation.isPending || submitMutation.isPending}
+      errorMessage={
+        discardMutation.error instanceof Error
+          ? discardMutation.error.message
+          : undefined
+      }
+      confirmLabel="Discard draft"
+      pendingLabel="Discarding..."
+    />
+  );
 
   const fireSubmit = (confirmProduction = false) => {
     if (rejectedWithExternal) {
@@ -103,6 +147,7 @@ export function SubmitStep({
       return;
     }
     setSubmitError(null);
+    setLastConfirmProduction(confirmProduction);
     setProgressUpdates([]);
     submitMutation.mutate(
       {
@@ -171,13 +216,6 @@ export function SubmitStep({
           externalRemovalId: submitMutation.data.externalId,
         })
       : null;
-    const storageSitesUrl = projectId
-      ? isometricRegistry.storageSites({
-          environment,
-          externalProjectId: projectId,
-        })
-      : null;
-
     return (
       <div className="flex flex-col gap-24">
         <div className="flex items-start gap-12 border-l-2 border-[var(--st-ok)] pl-12 py-4">
@@ -198,17 +236,6 @@ export function SubmitStep({
         </div>
         <SubmissionProgress kind="removal" updates={progressUpdates} />
         <div className="flex flex-wrap items-center justify-end gap-12">
-          {storageSitesUrl && (
-            <a
-              href={storageSitesUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({ variant: "default" })}
-            >
-              View storage sites
-              <ArrowSquareOutIcon size={ACTION_ICON_SIZE} aria-hidden />
-            </a>
-          )}
           {viewUrl && (
             <a
               href={viewUrl}
@@ -228,26 +255,37 @@ export function SubmitStep({
     );
   }
 
-  if (submitMutation.isPending || progressUpdates.length > 0) {
+  if (
+    submitMutation.isPending ||
+    submitMutation.isError ||
+    progressUpdates.length > 0
+  ) {
     const submissionStalled = isSubmissionStreamStalledError(
       submitMutation.error,
     );
+    const terminalError =
+      submitError ??
+      (submitMutation.error instanceof Error
+        ? submitMutation.error.message
+        : submitMutation.isError
+          ? "The Removal was not submitted. Try again."
+          : null);
     return (
       <div className="flex flex-col gap-16">
         <SubmissionProgress
           kind="removal"
           updates={progressUpdates}
-          error={submitError}
+          error={terminalError}
           stalled={submissionStalled}
         />
-        {submitError && <ServerError message={submitError} />}
+        {terminalError && <ServerError message={terminalError} />}
         <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {submitMutation.isPending
               ? "noma is submitting the Removal to Isometric."
               : submissionStalled
                 ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
-                : "Return to the submission review before trying again. If noma reports that this submission is in progress, wait for it to finish."}
+                : "Completed registry operations are preserved for a safe retry."}
           </span>
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
@@ -256,15 +294,22 @@ export function SubmitStep({
                   Close
                 </Button>
               ) : (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setProgressUpdates([]);
-                    submitMutation.reset();
-                  }}
-                >
-                  Review submission
-                </Button>
+                <>
+                  <Button
+                    onClick={() => {
+                      setProgressUpdates([]);
+                      submitMutation.reset();
+                    }}
+                  >
+                    Review submission
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => fireSubmit(lastConfirmProduction)}
+                  >
+                    Try again
+                  </Button>
+                </>
               )}
             </div>
           )}
@@ -301,6 +346,13 @@ export function SubmitStep({
         }
       />
 
+      <RemovalEmissionsLedger
+        compilation={compilationQuery.data ?? null}
+        ledger={ctx.emissionsLedger}
+        facilityId={facilityId}
+        isLoading={compilationQuery.isLoading}
+      />
+
       <DebugDrawer
         compilation={compilationQuery.data ?? null}
         isCompilationLoading={compilationQuery.isLoading}
@@ -314,7 +366,18 @@ export function SubmitStep({
           alert is only for what the last submit attempt returned. */}
       {submitError && <ServerError message={submitError} />}
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-12">
+        {canDiscardLocalDraft ? (
+          <Button
+            variant="default"
+            onClick={() => setDiscardConfirmOpen(true)}
+            disabled={submitMutation.isPending}
+          >
+            Discard draft
+          </Button>
+        ) : (
+          <span />
+        )}
         {requirementsMet ? (
           submitButton
         ) : (
@@ -327,6 +390,7 @@ export function SubmitStep({
       </div>
 
       {confirmDialog}
+      {discardDialog}
     </div>
   );
 }

@@ -14,7 +14,7 @@
  */
 import { createElement as h, type ReactElement } from "react";
 import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
-import { formatCount } from "@/lib/copy-utils";
+import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import { C, MONO, SANS, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
 import type { LedgerCategory, LedgerModel } from "./types";
 
@@ -117,9 +117,9 @@ function masthead(model: LedgerModel): ReactElement {
   const pair = (label: string, val: string) =>
     v(styles.metaPair, {}, t(styles.metaLabel, label), t(styles.metaVal, val));
   const right = v(styles.metaCol, {},
-    pair("Member batches", model.memberBatchCodes ?? "None"),
-    pair("Facility", model.facilityName ?? "Not available"),
-    pair("Registry project", model.externalProjectId ?? "Not set"),
+    pair("Member batches", model.memberBatchCodes ?? MISSING_VALUE.none),
+    pair("Facility", model.facilityName ?? MISSING_VALUE.notAvailable),
+    pair("Registry project", model.externalProjectId ?? MISSING_VALUE.notSet),
     pair("Legs reconciled", `${model.totalLegs} across 3 categories`),
   );
   return v(styles.masthead, {}, left, right);
@@ -159,11 +159,11 @@ function claimBand(model: LedgerModel): ReactElement {
 }
 
 function routeCell(leg: LedgerCategory["legs"][number]): ReactElement {
-  const origin = leg.originName ?? "Not recorded";
-  const dest = leg.destinationName ?? "Not recorded";
+  const origin = leg.originName ?? MISSING_VALUE.notRecorded;
+  const dest = leg.destinationName ?? MISSING_VALUE.notRecorded;
   const geo =
     leg.originGeo || leg.destinationGeo
-      ? `${leg.originGeo ?? "Not recorded"} › ${leg.destinationGeo ?? "Not recorded"}`
+      ? `${leg.originGeo ?? MISSING_VALUE.notRecorded} › ${leg.destinationGeo ?? MISSING_VALUE.notRecorded}`
       : "coordinates not recorded";
   return v({ flex: 1, paddingRight: 8 }, {},
     h(Text, { style: styles.routeLine },
@@ -183,7 +183,7 @@ function legRow(leg: LedgerCategory["legs"][number], isLast: boolean): ReactElem
       nfi(leg.distanceKm),
       h(Text, { style: styles.qtyUnit }, leg.roundTrip ? " km · rt" : " km")),
     h(Text, { style: [styles.qty, { width: COL.mass, paddingLeft: GAP }] },
-      leg.massMissing ? "Not recorded" : nfi(leg.loadMassKg),
+      leg.massMissing ? MISSING_VALUE.notRecorded : nfi(leg.loadMassKg),
       leg.massMissing ? "" : h(Text, { style: styles.qtyUnit }, " kg")),
     v({ width: COL.mode, paddingLeft: GAP }, {},
       t(styles.modeText, leg.mode),

@@ -2,6 +2,7 @@
 
 import { env } from "@/config/env";
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
+import { getCo2eStoredPreviews } from "@/data-access/credit-batch-accounting";
 import { requireOrgFacility } from "@/data-access/utils";
 import { SafeError } from "@/lib/errors";
 import {
@@ -27,6 +28,8 @@ export interface RemovalCompilationView {
   warnings: string[];
   snapshot: CompiledRemovalSubmission["snapshot"];
   compilationHash: string | null;
+  estimatedStoredCo2eTonnes: number | null;
+  estimateMissingInputs: string[];
 }
 
 export async function loadRemovalCompilation(
@@ -73,6 +76,22 @@ export async function loadRemovalCompilation(
       hasDurabilityComponents,
       allowPendingSources: true,
     });
+    const previews = await getCo2eStoredPreviews(
+      orgCtx,
+      ctx.memberBatches.map((batch) => batch.id),
+      { removalId },
+    );
+    const batchPreviews = ctx.memberBatches.map(
+      (batch) => previews[batch.id],
+    );
+    const estimateComplete = batchPreviews.length > 0 && batchPreviews.every(
+      (preview) => preview?.co2eStoredTonnes != null,
+    );
+    const estimateMissingInputs = [
+      ...new Set(
+        batchPreviews.flatMap((preview) => preview?.missingInputs ?? []),
+      ),
+    ];
     const blockers = [...compiled.blockers];
     if (
       hasDurabilityComponents &&
@@ -90,6 +109,13 @@ export async function loadRemovalCompilation(
         blockers.length === 0 && compiled.snapshot
           ? reviewPayloadHash(compiled.snapshot.semanticPayload)
           : null,
+      estimatedStoredCo2eTonnes: estimateComplete
+        ? batchPreviews.reduce(
+            (total, preview) => total + (preview?.co2eStoredTonnes ?? 0),
+            0,
+          )
+        : null,
+      estimateMissingInputs,
     };
   });
 }

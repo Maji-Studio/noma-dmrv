@@ -6,13 +6,13 @@
 "use client";
 
 import { useId, useState } from "react";
-import { numericValue } from "@/lib/form-utils";
+import { nullableNumericValue, numericValue } from "@/lib/form-utils";
 import { toDateInputValue } from "@/lib/date-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarIcon, ScalesIcon, MapPinIcon } from "@phosphor-icons/react/dist/ssr";
+import { CalendarIcon, ScalesIcon, MapPinIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MoistureField, WetMassField, makeCertFieldStatus, ResolvedErrorRevalidator, StockReconciliationLink } from "@/components/forms";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
@@ -45,6 +45,7 @@ import {
 } from "@/lib/delivery-order-balance";
 import { useEntityById } from "@/hooks/use-entities";
 import { DeliveryMassPreview } from "./delivery-mass-preview";
+import { TruckWeighingSection } from "./truck-weighing-section";
 
 // ============================================
 // Constants for select options
@@ -123,6 +124,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     deliveryDate: toDateInputValue(delivery?.deliveryDate),
     status: defaultStatus,
     deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
+    truckMassOnArrivalKg: delivery?.truckMassOnArrivalKg ?? undefined,
+    truckMassOnDepartureKg: delivery?.truckMassOnDepartureKg ?? undefined,
     moistureContentPercent: delivery?.moistureContentPercent ?? undefined,
     biocharProductId: delivery?.biocharProductId ?? undefined,
     driverId: delivery?.driverId ?? undefined,
@@ -152,6 +155,14 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   const watchWetMass = useWatch({ control, name: "deliveredWetMassKg" });
   const watchMoisture = useWatch({ control, name: "moistureContentPercent" });
+  const watchArrivalMass = useWatch({
+    control,
+    name: "truckMassOnArrivalKg",
+  });
+  const watchDepartureMass = useWatch({
+    control,
+    name: "truckMassOnDepartureKg",
+  });
   const watchOrderId = useWatch({ control, name: "orderId" });
   const watchStatus = useWatch({ control, name: "status" });
   const distanceKmOverride = useWatch({
@@ -442,6 +453,37 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             </div>
           )}
         </div>
+      </FormSection>
+
+      <FormSection
+        title="Truck weighing"
+        icon={<TruckIcon size={14} weight="bold" />}
+        hint="Record the observed truck mass before and after unloading. Their difference is checked against delivered wet mass."
+        fields={["truckMassOnArrivalKg", "truckMassOnDepartureKg"]}
+      >
+        <TruckWeighingSection
+          arrivalMassKg={watchArrivalMass}
+          departureMassKg={watchDepartureMass}
+          wetMassKg={watchWetMass}
+          wetMassLabel="Delivered wet mass"
+          arrivalRegister={register("truckMassOnArrivalKg", {
+            setValueAs: nullableNumericValue,
+          })}
+          departureRegister={register("truckMassOnDepartureKg", {
+            setValueAs: nullableNumericValue,
+          })}
+          arrivalError={errors.truckMassOnArrivalKg?.message}
+          departureError={errors.truckMassOnDepartureKg?.message}
+          arrivalCertifyRequired={isDeliveryCertifyField(
+            "truckMassOnArrivalKg",
+          )}
+          departureCertifyRequired={isDeliveryCertifyField(
+            "truckMassOnDepartureKg",
+          )}
+          arrivalCertifyStatus={certStatus("truckMassOnArrivalKg")}
+          departureCertifyStatus={certStatus("truckMassOnDepartureKg")}
+          isSubmitting={isSubmitting}
+        />
       </FormSection>
 
       {/* Transport Section */}
