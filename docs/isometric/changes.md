@@ -128,16 +128,17 @@ Removal submission recovery and the observed Production Batch mass-unit
 readback are archived in
 [`docs/archive/2026-08-10-removal-submission-recovery.md`](../archive/2026-08-10-removal-submission-recovery.md).
 
-## 2026-08-14 (replacement s_fraction binding aligned to the registry)
+## 2026-08-14 (replacement s_fraction binding matches observed blueprint shape)
 
 The live `biochar_sequestration_1000_year_f_durable_max` blueprint declares
 `s_fraction` as a `dimensionless_ratio` LIST. Removal compilation now binds the
 existing `dimensionless_ratio/inertinite_fraction` Measurement Sample response
 Datapoints directly instead of duplicating them as `dimensionless` Datapoints.
-Product mass remains the only standalone durability Datapoint. This aligns the
-local contract with the read-only sandbox blueprint observation and removes the
-false template-admin blocker; a fresh end-to-end sandbox submission remains
-pending.
+Product mass remains the only standalone durability Datapoint. The local
+contract now matches the read-only sandbox blueprint shape and removes the
+false template-admin blocker. Registry confirmation that this replacement
+governs the Protocol v1.1 project and a fresh end-to-end sandbox submission
+remain pending.
 
 ## 2026-08-13 (measurement Samples preserve local Sample grain)
 
