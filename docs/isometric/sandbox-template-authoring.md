@@ -57,11 +57,14 @@ exactly:
 | Input | Shape | Quantity kind | noma source |
 |---|---|---|---|
 | `total_carbon_contents` | list | `mass_fraction_dry_basis` | Measurement-sample total-carbon replicates |
-| `inorganic_carbon_contents` | list | `mass_fraction_dry_basis` | Directly measured inorganic-carbon replicates paired by Sample |
+| `inorganic_carbon_contents` | list | `mass_fraction_dry_basis` | Directly measured inorganic-carbon replicates; registry pairing key unconfirmed |
 | `product_mass` | scalar | `mass` | Standalone credit-batch product-mass Datapoint |
 | `s_fraction` | list | `dimensionless_ratio` | Measurement-sample reflectance-fraction replicates |
 
-It requires at least three complete paired replicates per member credit batch.
+The local submission gate requires at least three complete paired replicates per
+member credit batch.
+Verify the registry `MeasurementSample` record grain and pairing key before
+migrating the template.
 The registry calculates organic carbon per replicate as total minus inorganic,
 then applies the binomial lower durability estimate and 0.95 cap. noma's local
 calculation is explanatory; the registry result is authoritative. Application
