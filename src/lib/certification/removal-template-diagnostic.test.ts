@@ -227,6 +227,7 @@ describe("buildRemovalTemplateDiagnostic", () => {
     expect(inputs.s_fraction).toMatchObject({
       nomaSource: "Sample sReflectanceFraction[]",
       transform: "Unchanged",
+      status: "externally-unconfirmed-contract",
       resolved: {
         binding: "measurement-sample",
         count: 1,

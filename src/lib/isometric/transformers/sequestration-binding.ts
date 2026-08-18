@@ -149,7 +149,7 @@ export const SEQUESTRATION_COMPONENT_INPUT_BINDINGS = {
           nomaSource: "Sample sReflectanceFraction[]",
           transformRevision: "identity-v1",
           wireUnit: S_FRACTION_UNIT,
-          confirmation: "confirmed",
+          confirmation: "externally-unconfirmed",
         },
       },
     },
