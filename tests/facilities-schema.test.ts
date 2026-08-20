@@ -37,6 +37,44 @@ describe("facility schemas", () => {
     expect(result.success).toBe(true);
   });
 
+  it("rejects a whitespace-only country and trims a padded one", () => {
+    const whitespace = facilityFormSchema.safeParse({
+      ...baseFacilityInput,
+      timezone: "Africa/Nairobi",
+      country: "   ",
+    });
+
+    expect(whitespace.success).toBe(false);
+    if (!whitespace.success) {
+      expect(whitespace.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["country"],
+            message: "Country is required",
+          }),
+        ]),
+      );
+    }
+
+    const padded = facilityFormSchema.safeParse({
+      ...baseFacilityInput,
+      timezone: "Africa/Nairobi",
+      country: "  Tanzania  ",
+    });
+
+    expect(padded.success).toBe(true);
+    if (padded.success) {
+      expect(padded.data.country).toBe("Tanzania");
+    }
+
+    expect(
+      updateFacilitySchema.safeParse({
+        facilityId: "55555555-5555-4555-8555-555555555555",
+        country: "   ",
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects a facility create with only one GPS coordinate", () => {
     const result = createFacilitySchema.safeParse({
       ...baseFacilityInput,

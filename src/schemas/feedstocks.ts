@@ -11,8 +11,8 @@ import {
   emptyToNull,
   massKgSchema,
   optionalPositiveNumber,
-  requiredMassKgSchema,
   requiredNumber,
+  requiredPositiveMassKgSchema,
   storedPercentSchema,
 } from "./helpers";
 
@@ -25,7 +25,15 @@ const MOISTURE_MAX = 100;
 const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
   "Enter a justification when allocated wet mass exceeds the declared delivery mass";
 
-const requiredNonNegativeNumber = requiredMassKgSchema("Must be 0 or greater");
+// A feedstock delivery records a physical intake: a zero-mass delivery or bin
+// allocation is an auditable no-op record, so both bounds are strictly
+// positive. The server update schema below keeps its non-negative bound so
+// legacy records stay patchable.
+const requiredPositiveMass = requiredPositiveMassKgSchema(
+  "Required",
+  "Enter a valid number.",
+  "Must be greater than 0",
+);
 
 const requiredMoisturePercent = requiredNumber().pipe(
   storedPercentSchema()
@@ -54,7 +62,7 @@ export const binAllocationSchema = z.object({
     .string()
     .min(1, "Select a storage bin.")
     .uuid("Choose a valid storage bin."),
-  allocatedWetMassKg: requiredNonNegativeNumber,
+  allocatedWetMassKg: requiredPositiveMass,
 });
 
 export type BinAllocation = z.infer<typeof binAllocationSchema>;
@@ -94,7 +102,7 @@ export const feedstockFormSchema = z.object({
     .string()
     .min(1, "Select a feedstock type.")
     .uuid("Choose a valid feedstock type."),
-  totalWetMassKg: requiredNonNegativeNumber,
+  totalWetMassKg: requiredPositiveMass,
   moisturePercent: requiredMoisturePercent,
 
   // --- Bin Allocations ---

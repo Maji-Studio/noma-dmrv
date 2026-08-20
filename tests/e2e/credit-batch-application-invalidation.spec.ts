@@ -30,6 +30,18 @@ import {
 } from "./fixtures/page-helpers";
 import type { Page } from "@playwright/test";
 
+// Wait for hydration — the sidebar shows the facility name once the
+// FacilityProvider resolves. Filling a form before then loses the values
+// (docs/testing.md).
+async function waitForFacilityHydration(
+  page: Page,
+  seededData: SeededChainData,
+) {
+  await expect(
+    page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+  ).toBeVisible({ timeout: 15000 });
+}
+
 async function createApplicationForLineage(
   page: Page,
   seededData: SeededChainData,
@@ -38,6 +50,7 @@ async function createApplicationForLineage(
   // Order (biochar product is the one wired to the seeded production run).
   await page.goto(`/orders?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData);
   await page.click('button:has-text("New Order")');
   await waitForSideSheet(page);
 
@@ -65,6 +78,7 @@ async function createApplicationForLineage(
   // Delivery, already delivered (applications require a delivered delivery).
   await page.goto(`/deliveries?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData);
   await page.click('button:has-text("New Delivery")');
   await waitForSideSheet(page);
 
@@ -79,6 +93,7 @@ async function createApplicationForLineage(
   // Application against that delivery — 5000 tons applied initially.
   await page.goto(`/applications?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData);
   await page.click('button:has-text("New Application")');
   await waitForSideSheet(page);
 

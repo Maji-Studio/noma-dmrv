@@ -104,7 +104,7 @@ const applicationFormBaseSchema = z.object({
   deliveryId: z.string().min(1, "Select a delivery.").uuid("Choose a valid delivery."),
   biocharAppliedTons: z
     .number({ error: "Biochar product applied (kg) is required" })
-    .min(0, "Must be a positive number")
+    .positive("Must be greater than 0")
     .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE),
   // === Section 2: Field Details ===
   fieldSizeHa: z
@@ -154,7 +154,7 @@ export const applicationFormSchema = applicationFormBaseSchema.superRefine(
 const applicationCreateBaseSchema = applicationFormBaseSchema.extend({
   biocharAppliedTons: z
     .number({ error: "Biochar product applied is required" })
-    .min(0, "Must be a positive number")
+    .positive("Must be greater than 0")
     .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE),
 });
 

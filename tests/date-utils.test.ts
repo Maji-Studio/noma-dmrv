@@ -6,6 +6,8 @@ import {
   formatFacilityDate,
   formatFacilityTime,
   formatLocalDate,
+  formatTimezoneLabel,
+  getUtcOffsetLabel,
   NonexistentLocalTimeError,
   parseLocalDateString,
   resolveFacilityTimezone,
@@ -183,6 +185,28 @@ describe("combineDateAndTime across DST transitions", () => {
     process.env.TZ = "UTC";
     expect(combineDateAndTime("", "", NEW_YORK).getTime()).toBeNaN();
     expect(combineDateAndTime("2026-13-45", "08:00", NEW_YORK).getTime()).toBeNaN();
+  });
+});
+
+// Zero offset must render as one canonical "UTC" everywhere: Node spells it
+// "GMT+0" where Chromium spells it "GMT", and the label is server-rendered, so
+// any variance between the two is an SSR hydration mismatch.
+describe("getUtcOffsetLabel", () => {
+  it("canonicalizes zero offset to bare UTC", () => {
+    expect(getUtcOffsetLabel("UTC")).toBe("UTC");
+    expect(
+      getUtcOffsetLabel("Europe/London", new Date("2026-01-15T12:00:00Z")),
+    ).toBe("UTC");
+  });
+
+  it("keeps non-zero offsets", () => {
+    expect(
+      getUtcOffsetLabel("Africa/Nairobi", new Date("2026-01-15T12:00:00Z")),
+    ).toBe("UTC+3");
+    expect(formatTimezoneLabel("UTC")).toBe("UTC");
+    expect(
+      formatTimezoneLabel("Africa/Dar_es_Salaam", new Date("2026-01-15T12:00:00Z")),
+    ).toBe("Africa/Dar es Salaam (UTC+3)");
   });
 });
 

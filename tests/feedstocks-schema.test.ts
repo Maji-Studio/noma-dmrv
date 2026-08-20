@@ -59,6 +59,33 @@ describe("feedstockFormSchema", () => {
     }
   });
 
+  it("rejects a zero-mass delivery and zero-mass bin allocation", () => {
+    const result = feedstockFormSchema.safeParse({
+      ...validFeedstockInput,
+      totalWetMassKg: 0,
+      allocations: [
+        {
+          ...validFeedstockInput.allocations[0],
+          allocatedWetMassKg: 0,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const issueMessages = new Map(
+        result.error.issues.map((issue) => [
+          issue.path.join("."),
+          issue.message,
+        ]),
+      );
+      expect(issueMessages.get("totalWetMassKg")).toBe("Must be greater than 0");
+      expect(issueMessages.get("allocations.0.allocatedWetMassKg")).toBe(
+        "Must be greater than 0",
+      );
+    }
+  });
+
   it("requires a justification when allocations exceed the declared wet mass", () => {
     const result = feedstockFormSchema.safeParse({
       ...validFeedstockInput,

@@ -55,6 +55,11 @@ async function openRunFormWithSource(
   await page.goto(
     `${PRODUCTION_RUNS_URL}?facility=${seededData.facility.id}`,
   );
+  // Wait for hydration — the sidebar shows the facility name once the
+  // FacilityProvider resolves.
+  await expect(
+    page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+  ).toBeVisible({ timeout: 15000 });
   await expect(
     page.getByRole("button", { name: "New Production Run" }),
   ).toBeVisible();
@@ -96,6 +101,11 @@ async function openCompleteRunForm(
   await page.goto(
     `${PRODUCTION_RUNS_URL}?facility=${seededData.facility.id}`,
   );
+  // Wait for hydration — the sidebar shows the facility name once the
+  // FacilityProvider resolves.
+  await expect(
+    page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+  ).toBeVisible({ timeout: 15000 });
   await expect(
     page.getByRole("button", { name: "New Production Run" }),
   ).toBeVisible();

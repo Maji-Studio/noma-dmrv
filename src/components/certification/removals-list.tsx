@@ -27,6 +27,7 @@ import {
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useRemovalPreflightSummaries,
@@ -78,11 +79,7 @@ export function RemovalsList() {
       />
 
       {!facilityId ? (
-        <EmptyState
-          icon={<SealCheckIcon size={48} />}
-          title="Select a facility"
-          description="Choose a facility from the sidebar to view its Removals."
-        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its Removals." />
       ) : (
         <ListBody facilityId={facilityId} onNewRemoval={() => setDialogOpen(true)} />
       )}

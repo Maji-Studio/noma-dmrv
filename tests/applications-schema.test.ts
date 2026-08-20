@@ -67,6 +67,31 @@ describe("application schemas", () => {
     ).toBe(true);
   });
 
+  it("rejects a zero applied mass on the form and create schemas", () => {
+    const zeroInput = {
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 0,
+      ...customerLocation,
+    };
+
+    for (const schema of [applicationFormSchema, createApplicationSchema]) {
+      const result = schema.safeParse(zeroInput);
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              path: ["biocharAppliedTons"],
+              message: "Must be greater than 0",
+            }),
+          ]),
+        );
+      }
+    }
+  });
+
   it("rejects a create payload with only one GPS coordinate", () => {
     const result = createApplicationSchema.safeParse({
       applicationDate: new Date("2026-06-13"),
