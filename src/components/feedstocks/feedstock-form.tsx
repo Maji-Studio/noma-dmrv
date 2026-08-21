@@ -13,7 +13,6 @@ import { ArrowCounterClockwiseIcon, CalendarIcon, MapPinIcon, NoteIcon, PlantIco
 import { numericValue } from "@/lib/form-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
-import { formatDistanceKm } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
@@ -30,7 +29,7 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { roundTripDistanceFactor, TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
+import { TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { FormSelect } from "@/components/forms/form-select";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
@@ -191,18 +190,6 @@ export function FeedstockForm({
     control,
     name: "transportDistanceSource",
   }) as DistanceSourceValue | null | undefined;
-  const transportTripType = useWatch({
-    control,
-    name: "transportTripType",
-  }) as TripTypeValue | null | undefined;
-  const totalTransportDistanceKm =
-    transportTripType === "return" &&
-    typeof transportDistanceKm === "number" &&
-    Number.isFinite(transportDistanceKm) &&
-    transportDistanceKm >= 0
-      ? transportDistanceKm * roundTripDistanceFactor(transportTripType)
-      : null;
-
   const defaultStorageBinType = "feedstock_bin";
 
   // Transport distance autofills from the existing leg (edit) or the stored
@@ -537,7 +524,7 @@ export function FeedstockForm({
               id="transportTripType"
               label="Trip type"
               error={errors.transportTripType?.message}
-              hint="Return counts the entered distance twice; One-way counts it once."
+              hint="Records the journey type as evidence. The entered distance is submitted once either way."
             >
               <FormSelect
                 id="transportTripType"
@@ -612,15 +599,6 @@ export function FeedstockForm({
                       </button>
                     )}
                   </div>
-                  {totalTransportDistanceKm != null && (
-                    <p
-                      className="body-caption text-[var(--color-text-tertiary)] mt-6"
-                      data-testid="transport-distance-total"
-                      aria-live="polite"
-                    >
-                      Total: {formatDistanceKm(totalTransportDistanceKm)}
-                    </p>
-                  )}
                 </div>
               </FormField>
             </ActionableFocusTarget>

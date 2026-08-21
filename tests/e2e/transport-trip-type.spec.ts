@@ -1,14 +1,14 @@
 /**
  * Transport Trip Type E2E Tests (issue #316)
  *
- * The GHG Accounting Module defaults transport to a full round trip; a
- * one-way trip needs an evidenced onward destination. Covers:
+ * Trip type is recorded as evidence: the journey the operator actually made.
+ * It does not scale the submitted distance, which noma sends once (2026-08-14).
+ * Covers:
  * - Feedstock form: Trip type selector defaults to Return; a One-way override
  *   persists onto the derived transport leg and prefills on reopen.
  * - Biochar delivery form: same selector, persisted on the delivery row.
- * - Relabeled party-record distance copy ("one-way … per leg") on the
- *   supplier and customer-location forms, so operators know the ×2 happens
- *   at emissions time, not at the stored distance.
+ * - Party-record distance copy ("one-way … per leg") on the supplier and
+ *   customer-location forms, so operators know which distance to store.
  */
 import type { Page } from "@playwright/test";
 import { test, expect, type SeededChainData } from "./fixtures";
@@ -89,9 +89,8 @@ test.describe("Transport trip type (#316)", () => {
       seededData.feedstockType.name
     );
     await page.fill('input[name="transportDistanceKm"]', "40");
-    await expect(dialog.getByTestId("transport-distance-total")).toHaveText(
-      "Total: 80 km"
-    );
+    // No doubled-distance preview: the entered distance is what gets submitted.
+    await expect(dialog.getByTestId("transport-distance-total")).toHaveCount(0);
     await page.fill('input[name="totalWetMassKg"]', "100");
     await page.fill('input[name="moisturePercent"]', "25");
     await selectEntity(
@@ -103,7 +102,6 @@ test.describe("Transport trip type (#316)", () => {
 
     // Override to One-way, then save.
     await tripType.selectOption("one_way");
-    await expect(dialog.getByTestId("transport-distance-total")).toHaveCount(0);
     await dialog.locator('button:has-text("Create Feedstock")').click();
     await waitForSideSheetClose(page);
 

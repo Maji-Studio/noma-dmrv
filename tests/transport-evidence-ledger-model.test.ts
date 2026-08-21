@@ -65,7 +65,7 @@ describe("buildLedgerModel", () => {
     );
   });
 
-  it("doubles a Return leg's distance and t·km, reconciling to the subtotal (#316)", () => {
+  it("shows a Return leg's entered distance once and reconciles to the subtotal", () => {
     const model = buildLedgerModel({
       ...META,
       legsByCategory: {
@@ -74,11 +74,12 @@ describe("buildLedgerModel", () => {
       },
     });
     const cat = model.categories.find((c) => c.key === "feedstock")!;
-    // Round trip: distance shown as 68 (34 × 2), t·km = 68 × 4.5 = 306.
-    expect(cat.legs[0].distanceKm).toBe(68);
+    // The ledger runs the same arithmetic noma submits: 34 × 4.5 = 153. Trip
+    // type still prints as evidence, but no local ×2 is applied (2026-08-14).
+    expect(cat.legs[0].distanceKm).toBe(34);
     expect(cat.legs[0].roundTrip).toBe(true);
-    expect(cat.legs[0].tkm).toBe(306);
-    expect(cat.subtotalTkm).toBe(306);
+    expect(cat.legs[0].tkm).toBe(153);
+    expect(cat.subtotalTkm).toBe(153);
   });
 
   it("sets subtotal from the canonical raw-sum scalar, not Σ rounded rows", () => {

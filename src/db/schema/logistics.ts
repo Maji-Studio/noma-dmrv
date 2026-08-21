@@ -138,9 +138,8 @@ export const deliveries = pgTable(
     // has trip-specific evidence for the inherited customer-location distance.
     distanceSource: distanceSource('distance_source'),
     distanceNote: text('distance_note'),
-    // Round-trip vs one-way accounting for the distribution transport leg
-    // (issue #316, §4.2). `return` (default) doubles the one-way distance at
-    // aggregation; `one_way` requires an evidenced onward destination.
+    // Return-vs-one-way evidence metadata for the distribution transport leg.
+    // Noma submits the entered distance once to Isometric for either value.
     tripType: transportTripType('trip_type').notNull().default('return'),
 
     // --- Product Batch ---
@@ -262,10 +261,9 @@ export const transportLegs = pgTable(
     // --- Load Details (Isometric: Distance-Based Method, Eq. 3 — W_j, the cargo mass) ---
     loadMassKg: massKg('load_mass_kg'),
 
-    // Round-trip vs one-way accounting (issue #316, §4.2 ruling). The stored
-    // distanceKm stays ONE-WAY per leg; `return` (default, conservative) applies
-    // the ×2 multiplier in `aggregateTransportMassDistance`, `one_way` (evidenced
-    // onward destination) does not. Orthogonal to distanceSource / isDerived.
+    // Return-vs-one-way evidence metadata. The stored distanceKm is the single
+    // entered per-leg distance and is submitted once for either value.
+    // Orthogonal to distanceSource / isDerived.
     tripType: transportTripType('trip_type').notNull().default('return'),
 
     // --- Method (distance-based only — see ADR/changes; the emission factor

@@ -226,7 +226,8 @@ itself is **built and enforced** — see the invariants section,
     fallback justification (§3.1 "appropriately evidenced"), weigh-scale
     calibration record, vehicle class/model year.
   - **Current state** (`src/db/schema/logistics.ts`): `tripType` **exists**
-    (`'return'` default, ×2 multiplier — see the invariants section), as do
+    (`'return'` default, evidence metadata only since 2026-08-14 — noma submits
+    the entered distance once, see the invariants section), as do
     `billOfLading` and `weighScaleTicketRef`. There is **no**
     `emissionFactorSource` column anywhere in the schema, and none for factor
     vintage, onward destination, or fallback evidence. Form text mentions §3.2

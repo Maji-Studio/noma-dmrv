@@ -274,7 +274,7 @@ export function TransportLegForm({
             id="tripType"
             label="Trip type"
             error={errors.tripType?.message}
-            helperText="Return doubles the distance (vehicle returns empty). Choose One-way only with an evidenced onward destination."
+            helperText="Records the journey type as evidence. The entered distance is submitted once either way."
           >
             <FormSelect
               id="tripType"

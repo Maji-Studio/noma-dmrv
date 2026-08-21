@@ -214,9 +214,11 @@ export const distanceSource = pgEnum('distance_source', [
 // Transport trip type (Isometric GHG Accounting Module v1.1, "Transportation
 // Emissions" — Distance-Based Method). `return` = full round trip assumed
 // (vehicle returns empty / next destination unknown — the conservative
-// protocol default); `one_way` = evidenced onward destination, distance
-// counted one-way only. Drives the ×2 round-trip multiplier at the
-// mass-distance aggregation seam (issue #316). Orthogonal to distanceSource.
+// protocol default); `one_way` = evidenced onward destination. Retained as
+// evidence metadata only: noma submits the entered distance once for either
+// value, because the Isometric transport component applies its own round-trip
+// treatment (decided 2026-08-14, superseding issue #316). Orthogonal to
+// distanceSource.
 export const transportTripType = pgEnum('transport_trip_type', [
   'return',
   'one_way',

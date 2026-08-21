@@ -52,9 +52,8 @@ export interface DeriveTransportLegInput {
   /** Provenance of the override; an override without one was hand-typed. */
   distanceSourceOverride?: DistanceSourceValue | null;
   /**
-   * Round-trip vs one-way accounting (issue #316). Omitted / null defaults to
-   * `return` — the conservative protocol default. The stored distance stays
-   * one-way; the ×2 is applied downstream at mass-distance aggregation.
+   * Return-vs-one-way evidence metadata. Omitted / null defaults to `return`.
+   * The stored distance is submitted once regardless of this value.
    */
   tripType?: TripTypeValue | null;
 }
@@ -76,7 +75,7 @@ export interface DerivedTransportLeg {
   vehicleType: string | null;
   modelYear: number | null;
   loadMassKg: number | null;
-  /** Round-trip vs one-way accounting; drives the ×2 at aggregation (#316). */
+  /** Return-vs-one-way evidence metadata. */
   tripType: TripTypeValue;
   /** Inputs missing for a complete, persistable leg. */
   missing: string[];

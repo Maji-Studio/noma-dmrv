@@ -81,7 +81,9 @@ describe("aggregateTransportMassDistance", () => {
       "Biochar",
     );
 
-    expect(result.massDistanceTonneKm).toBe(14.015);
+    // Four Return lanes at 0.25 t each: (7 + 7.015 + 7 + 7.015) × 0.25.
+    // Return does not double the entered distance (2026-08-14).
+    expect(result.massDistanceTonneKm).toBe(7.0075);
     expect(result.warning).toBeNull();
   });
 

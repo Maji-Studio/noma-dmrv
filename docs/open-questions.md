@@ -54,15 +54,18 @@ code today; breaking one compiles cleanly and fails silently.
   and that one is **not** mitigated: `src/db/index.ts` runs `max: env.DB_POOL_MAX
   ?? 1`, and `DB_POOL_MAX` is unset in every environment. Applies to every
   tx-scoped read, not just this helper.
-- **`transport_legs.tripType` defaults to `'return'` and is credit-bearing.**
-  `roundTripDistanceFactor` (defined in `src/schemas/trip-type.ts`; imported by
-  `src/lib/isometric/utils/aggregation.ts` and
-  `src/lib/certification/evidence-ledger/build-model.ts`) applies
-  ×2 for `return` and ×1 for `one_way` (issue #316, §4.2 — conservative by
-  default; `one_way` requires an evidenced onward destination). "Simplifying"
-  the default or the multiplier halves submitted transport emissions in the
-  **anti-conservative** direction — the same integrity class as the
-  `pyrolyzer_direct` zero-stub trap below.
+- **`transport_legs.tripType` is evidence metadata, not a multiplier.** Noma
+  submits the entered leg distance once for both `return` and `one_way`
+  (`aggregateTransportMassDistance` in `src/lib/isometric/utils/aggregation.ts`,
+  mirrored by the evidence ledger in
+  `src/lib/certification/evidence-ledger/build-model.ts`). The local ×2 that
+  issue #316 §4.2 introduced was removed on 2026-08-14: the Isometric transport
+  component applies its own round-trip treatment, so doubling here counted the
+  empty return twice. **Re-introducing a local multiplier double-counts
+  submitted transport emissions.** The reverse mistake is equally live: if the
+  registry-side component is ever reconfigured to expect a one-way distance,
+  this seam is where the factor comes back, and the default `return` alone will
+  not save the number.
 - **`sReflectanceFraction` is stored 0–1 but captured as a percentage.** The
   form converts on entry and clears the field on a durability-mode switch
   (`src/components/samples/sample-form.tsx`); `src/schemas/samples.ts` makes it

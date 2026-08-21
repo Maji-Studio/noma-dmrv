@@ -1,7 +1,6 @@
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { formatCount } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
-import { roundTripDistanceFactor } from "@/schemas/trip-type";
 import type { ProductionRun, Sample, TransportLeg } from "@/db/schema";
 
 export type ProductionRunWithSamples = ProductionRun & {
@@ -171,20 +170,16 @@ export function aggregateTransportMassDistance(
     };
   }
 
-  // Σⱼ(round-trip-factorⱼ × distⱼ_km × massⱼ_tonnes). One mass-distance scalar
-  // per category — the single SCALAR the blueprint expects (there is no
-  // LIST-shaped transport input in the Certify catalog). Per issue #316 (§4.2
-  // ruling, resolved 2026-07-09, interpretation (a)): a `return` leg counts the
-  // full round-trip distance (×2 of the stored one-way distance) against the
-  // outbound load mass; a `one_way` leg (evidenced onward destination) counts
-  // the one-way distance only. The stored `distanceKm` stays one-way; the ×2
-  // lives here, not in the leg.
+  // Σⱼ(distⱼ_km × massⱼ_tonnes). One mass-distance scalar per category — the
+  // single SCALAR the blueprint expects (there is no LIST-shaped transport
+  // input in the Certify catalog). Each entered leg distance is submitted
+  // exactly once: the Isometric transport component applies its own
+  // round-trip treatment, so a local ×2 for `return` legs double-counted the
+  // empty return (decided 2026-08-14, superseding issue #316 §4.2). `tripType`
+  // stays evidence metadata and does not move this scalar.
   let massDistanceTonneKm = 0;
   for (const leg of legs) {
-    massDistanceTonneKm +=
-      roundTripDistanceFactor(leg.tripType) *
-      leg.distanceKm *
-      kgToTonnes(leg.loadMassKg as number);
+    massDistanceTonneKm += leg.distanceKm * kgToTonnes(leg.loadMassKg as number);
   }
   return { massDistanceTonneKm, warning: null };
 }

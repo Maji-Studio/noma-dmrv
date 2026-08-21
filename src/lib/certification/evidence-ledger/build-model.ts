@@ -14,7 +14,6 @@
  */
 import type { TransportLeg } from "@/db/schema";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { roundTripDistanceFactor } from "@/schemas/trip-type";
 import {
   aggregateTransportMassDistance,
   clampFactor,
@@ -91,12 +90,10 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
   const loadMassKg =
     leg.loadMassKg != null && leg.loadMassKg > 0 ? leg.loadMassKg : 0;
   const massMissing = loadMassKg === 0;
-  // Round-trip legs (#316, §4.2) carry the doubled distance into the t·km so the
-  // per-leg row reconciles to the category subtotal, which
-  // `aggregateTransportMassDistance` also doubles.
-  const factor = roundTripDistanceFactor(leg.tripType);
-  const effectiveDistanceKm = leg.distanceKm * factor;
-  const tkm = round2(effectiveDistanceKm * kgToTonnes(loadMassKg));
+  // The ledger row must reconcile to the category subtotal, so it runs the same
+  // arithmetic noma submits: the entered distance once, no local round-trip
+  // multiplier (decided 2026-08-14). `tripType` still prints as evidence.
+  const tkm = round2(leg.distanceKm * kgToTonnes(loadMassKg));
   const vehicle =
     leg.vehicleType && leg.modelYear
       ? `${leg.vehicleType} · ${leg.modelYear}`
@@ -107,9 +104,9 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
     destinationName: leg.destinationName,
     originGeo: geoOf(leg.originGpsLatitude, leg.originGpsLongitude),
     destinationGeo: geoOf(leg.destinationGpsLatitude, leg.destinationGpsLongitude),
-    distanceKm: effectiveDistanceKm,
+    distanceKm: leg.distanceKm,
     loadMassKg,
-    roundTrip: factor > 1,
+    roundTrip: leg.tripType !== "one_way",
     mode: capitalize(leg.transportMethodType),
     vehicle,
     basis: basisOf(leg),

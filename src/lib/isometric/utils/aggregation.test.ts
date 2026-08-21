@@ -70,7 +70,10 @@ describe("aggregateTransportMassDistance", () => {
     expect(result.warning).toBeNull();
   });
 
-  it("doubles the distance of a Return leg (#316 §4.2 round trip)", () => {
+  // Isometric's transport component applies its own round-trip treatment, so
+  // noma sends the entered distance once (2026-08-14, superseding #316 §4.2).
+  // Re-introducing a local ×2 here double-counts the empty return.
+  it("does not double the distance of a Return leg", () => {
     const result = aggregateTransportMassDistance(
       [
         leg("00000000-0000-0000-0000-000000000001", {
@@ -82,12 +85,12 @@ describe("aggregateTransportMassDistance", () => {
       "Feedstock",
     );
 
-    // (100 km × 2) × 0.05 t = 10 t·km
-    expect(result.massDistanceTonneKm).toBeCloseTo(10, 6);
+    // 100 km × 0.05 t = 5 t·km
+    expect(result.massDistanceTonneKm).toBeCloseTo(5, 6);
     expect(result.warning).toBeNull();
   });
 
-  it("treats a null trip type as Return (conservative default)", () => {
+  it("treats a null trip type the same as any other", () => {
     const result = aggregateTransportMassDistance(
       [
         leg("00000000-0000-0000-0000-000000000001", {
@@ -99,11 +102,11 @@ describe("aggregateTransportMassDistance", () => {
       "Feedstock",
     );
 
-    // Null → Return → ×2: (100 × 2) × 0.05 = 10 t·km
-    expect(result.massDistanceTonneKm).toBeCloseTo(10, 6);
+    // 100 km × 0.05 t = 5 t·km
+    expect(result.massDistanceTonneKm).toBeCloseTo(5, 6);
   });
 
-  it("mixes Return (×2) and one-way (×1) legs per leg", () => {
+  it("sums mixed Return and one-way legs without weighting either", () => {
     const result = aggregateTransportMassDistance(
       [
         leg("00000000-0000-0000-0000-000000000001", {
@@ -120,8 +123,8 @@ describe("aggregateTransportMassDistance", () => {
       "Feedstock",
     );
 
-    // (100×2)×0.05 + 200×0.1 = 10 + 20 = 30 t·km
-    expect(result.massDistanceTonneKm).toBeCloseTo(30, 6);
+    // 100×0.05 + 200×0.1 = 5 + 20 = 25 t·km
+    expect(result.massDistanceTonneKm).toBeCloseTo(25, 6);
     expect(result.warning).toBeNull();
   });
 

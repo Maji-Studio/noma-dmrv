@@ -42,14 +42,16 @@ export interface LedgerLeg {
   originGeo: string | null;
   destinationGeo: string | null;
   /**
-   * The distance carried into the t·km calc — the ROUND-TRIP distance for a
-   * `return` leg (2 × one-way), the one-way distance for a `one_way` leg
-   * (issue #316). Shown in the ledger so `distance × mass ÷ 1000 = t·km`
-   * reconciles on the row.
+   * The distance carried into the t·km calc — the single entered leg distance,
+   * whatever the trip type. Shown in the ledger so
+   * `distance × mass ÷ 1000 = t·km` reconciles on the row.
    */
   distanceKm: number;
   loadMassKg: number;
-  /** True when distanceKm is a doubled round trip (vehicle returns empty). */
+  /**
+   * True when the leg was recorded as a round trip (vehicle returns empty).
+   * Evidence only: `distanceKm` is the entered distance either way.
+   */
   roundTrip: boolean;
   /** Capitalised mode, e.g. "Road" / "Rail". */
   mode: string;
