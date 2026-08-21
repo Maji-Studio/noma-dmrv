@@ -7,7 +7,7 @@
  * multiple batches in one bin and shows physically remaining stock.
  */
 
-import { and, desc, eq, gt, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
@@ -21,11 +21,11 @@ import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import {
-  deriveEffectiveMoisturePercent,
-  formatWetDryMass,
-} from "@/lib/mass-moisture";
-import { fromCompositionMassJsonb } from "@/lib/biochar-composition";
+  deriveBlendEffectiveMoisturePercent,
+  fromCompositionMassJsonb,
+} from "@/lib/biochar-composition";
 import { resolveProductDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
 import { buildSourceAllocationAggregate } from "./source-allocation-aggregate";
@@ -49,6 +49,7 @@ function formatStockSubtitle(
   deliveredDryKg: number,
   unresolvedDeliveredDryCount: number,
   sourceAllocatedDryMassKg?: number | null,
+  labelVariant?: NonNullable<EntityOption["remainingMass"]>["labelVariant"],
 ): string {
   const remainingWetKg =
     (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg;
@@ -63,6 +64,10 @@ function formatStockSubtitle(
     deliveredDryKg,
     unresolvedDeliveredDryCount,
   );
+  const availabilityLabel =
+    labelVariant === "excluding-this-order"
+      ? "available excluding this order"
+      : "available";
   return `${formatWetDryMass({
     wetKg: remainingWetKg,
     dryKg: remainingDryKg,
@@ -70,13 +75,19 @@ function formatStockSubtitle(
     dryLabel: "Dry biochar",
     separator: " | ",
     unitSpacing: "compact",
-  })} available`;
+  })} ${availabilityLabel}`;
 }
 
 // Total delivered wet mass per product batch. A delivery's product is its own
 // override when set, otherwise the linked order's product. Only 'delivered' rows
-// have physically left the bin.
-function buildDeliveredMassAggregate(ctx: OrgContext) {
+// have physically left the bin. `excludeOrderId` nets out one order's own
+// deliveries so an edit form's "remaining" means "available to other demand"
+// — without it the order being edited reads its own fulfilment as competing
+// consumption (DR-002 / OR-26-001).
+function buildDeliveredMassAggregate(
+  ctx: OrgContext,
+  opts: { excludeOrderId?: string } = {},
+) {
   return db
   .select({
     biocharProductId:
@@ -108,6 +119,9 @@ function buildDeliveredMassAggregate(ctx: OrgContext) {
     and(
       eq(deliveries.status, "delivered"),
       eq(deliveries.organizationId, ctx.organizationId),
+      ...(opts.excludeOrderId
+        ? [ne(deliveries.orderId, opts.excludeOrderId)]
+        : []),
     ),
   )
   .groupBy(sql`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`)
@@ -141,21 +155,24 @@ function buildSelection(
   };
 }
 
-export function toBiocharProductEntityOption(r: {
-  id: string;
-  code: string | null;
-  name: string | null;
-  productCode: string;
-  formulationName: string | null;
-  massKg: number | null;
-  waterAddedKg: number | null;
-  moisturePercent: number | null;
-  composition?: unknown;
-  totalDeliveredKg: number;
-  totalDeliveredDryKg: number;
-  unresolvedDeliveredDryCount: number;
-  sourceAllocatedDryMassKg?: number | null;
-}): EntityOption {
+export function toBiocharProductEntityOption(
+  r: {
+    id: string;
+    code: string | null;
+    name: string | null;
+    productCode: string;
+    formulationName: string | null;
+    massKg: number | null;
+    waterAddedKg: number | null;
+    moisturePercent: number | null;
+    composition?: unknown;
+    totalDeliveredKg: number;
+    totalDeliveredDryKg: number;
+    unresolvedDeliveredDryCount: number;
+    sourceAllocatedDryMassKg?: number | null;
+  },
+  options: { excludeCurrentOrder?: boolean } = {},
+): EntityOption {
   const productLabel = r.formulationName ?? PURE_BIOCHAR_LABEL;
   const remainingWetKg =
     (r.massKg ?? 0) + (r.waterAddedKg ?? 0) - r.totalDeliveredKg;
@@ -176,15 +193,22 @@ export function toBiocharProductEntityOption(r: {
     code: r.code ?? r.productCode,
     name: r.name ? `${r.name} • ${productLabel}` : productLabel,
     mass: {
-      moisturePercent: deriveEffectiveMoisturePercent(
-        r.massKg,
-        r.moisturePercent,
-        r.waterAddedKg,
-      ),
+      // Composition-aware: massKg is the blend total, which the
+      // single-material moisture helper must never see (BP-26-001).
+      moisturePercent: deriveBlendEffectiveMoisturePercent({
+        blendMassKg: r.massKg,
+        waterAddedKg: r.waterAddedKg,
+        biocharMoisturePercent: r.moisturePercent,
+        ingredients: fromCompositionMassJsonb(r.composition),
+        sourceAllocatedDryMassKg: r.sourceAllocatedDryMassKg,
+      }),
     },
     remainingMass: {
       wetKg: remainingWetKg,
       dryKg: remainingDryKg,
+      labelVariant: options.excludeCurrentOrder
+        ? "excluding-this-order"
+        : undefined,
     },
     subtitle: formatStockSubtitle(
       r.massKg,
@@ -195,6 +219,7 @@ export function toBiocharProductEntityOption(r: {
       r.totalDeliveredDryKg,
       r.unresolvedDeliveredDryCount,
       r.sourceAllocatedDryMassKg,
+      options.excludeCurrentOrder ? "excluding-this-order" : undefined,
     ),
   };
 }
@@ -202,10 +227,13 @@ export function toBiocharProductEntityOption(r: {
 export async function getBiocharProducts(ctx: OrgContext, params: {
   search?: string;
   facilityId?: string;
+  excludeOrderId?: string;
   limit: number;
 }): Promise<EntityOption[]> {
   requireOrgScope(ctx);
-  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx);
+  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx, {
+    excludeOrderId: params.excludeOrderId,
+  });
   const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
   const selection = buildSelection(deliveredMassAggregate, sourceAllocationAggregate);
   const { search, facilityId, limit } = params;
@@ -279,15 +307,22 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
     .orderBy(desc(biocharProducts.productionDate))
     .limit(limit);
 
-  return results.map(toBiocharProductEntityOption);
+  return results.map((result) =>
+    toBiocharProductEntityOption(result, {
+      excludeCurrentOrder: Boolean(params.excludeOrderId),
+    }),
+  );
 }
 
 export async function getBiocharProductEntityById(
   ctx: OrgContext,
-  id: string
+  id: string,
+  opts: { excludeOrderId?: string } = {},
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
-  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx);
+  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx, {
+    excludeOrderId: opts.excludeOrderId,
+  });
   const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
   const selection = buildSelection(deliveredMassAggregate, sourceAllocationAggregate);
   const [result] = await db
@@ -320,5 +355,7 @@ export async function getBiocharProductEntityById(
 
   if (!result) return null;
 
-  return toBiocharProductEntityOption(result);
+  return toBiocharProductEntityOption(result, {
+    excludeCurrentOrder: Boolean(opts.excludeOrderId),
+  });
 }

@@ -1,10 +1,10 @@
 import type { EntityOption } from "./types";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 const KG_SUFFIX = "kg";
-const UNKNOWN_MASS = "Not recorded";
 
 function formatWholeKg(kg: number | null): string {
-  if (kg == null || !Number.isFinite(kg)) return UNKNOWN_MASS;
+  if (kg == null || !Number.isFinite(kg)) return MISSING_VALUE.notRecorded;
   return `${Math.round(kg).toLocaleString("en-US")}${KG_SUFFIX}`;
 }
 
@@ -13,7 +13,11 @@ export function formatRemainingMass(
   remainingMass: NonNullable<EntityOption["remainingMass"]>,
   includeDryMass = true,
 ): string {
-  const wet = `Remaining wet mass: ${formatWholeKg(remainingMass.wetKg)}`;
+  const wetLabel =
+    remainingMass.labelVariant === "excluding-this-order"
+      ? "Remaining wet mass excluding this order"
+      : "Remaining wet mass";
+  const wet = `${wetLabel}: ${formatWholeKg(remainingMass.wetKg)}`;
   if (!includeDryMass || !("dryKg" in remainingMass)) return wet;
   return `${wet} | dry mass: ${formatWholeKg(remainingMass.dryKg ?? null)}`;
 }

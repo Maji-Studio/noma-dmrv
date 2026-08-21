@@ -15,6 +15,7 @@ import { test, expect, type SeededChainData } from "./fixtures";
 import {
   selectEntity,
   selectEntityByText,
+  waitForFacilityHydration,
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
@@ -27,11 +28,7 @@ async function createOrderViaUi(page: Page, seededData: SeededChainData) {
   await page.goto(`/orders?facility=${seededData.facility.id}`);
   await expect(page).toHaveURL(/\/orders/, { timeout: 10000 });
 
-  // Wait for hydration — the sidebar shows the facility name once the
-  // FacilityProvider resolves.
-  await expect(
-    page.locator("aside").getByText(seededData.facility.name, { exact: false })
-  ).toBeVisible({ timeout: 15000 });
+  await waitForFacilityHydration(page, seededData.facility.name);
 
   await page.click('button:has-text("New Order")');
   await waitForSideSheet(page);
@@ -62,6 +59,8 @@ test.describe("Transport trip type (#316)", () => {
     void cleanupTestData;
     await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
+
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     await page.click('button:has-text("New Feedstock")');
     await waitForSideSheet(page);
@@ -129,6 +128,7 @@ test.describe("Transport trip type (#316)", () => {
 
     await page.goto(`/deliveries?facility=${seededData.facility.id}`);
     await expect(page).toHaveURL(/\/deliveries/, { timeout: 10000 });
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     await page.click('button:has-text("New Delivery")');
     await waitForSideSheet(page);

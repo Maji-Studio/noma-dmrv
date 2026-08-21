@@ -136,7 +136,12 @@ function ctx(overrides?: {
     memberBatches: [{ id: BATCH, code: "CB-26-001" }],
     // Full application (fraction 1) — the ledger builder reads the removal's
     // run summary for the §8.6.2 delivery-bucket applied share (ADR 0020).
-    runSummary: { runCount: 1, totalBiocharOutputKg: 1000, appliedDryKg: 1000 },
+    runSummary: {
+      runCount: 1,
+      totalBiocharOutputKg: 1000,
+      deliveryBiocharOutputKg: 1000,
+      appliedDryKg: 1000,
+    },
     transportLegs: overrides?.legs ?? {
       feedstock: [leg(34, 4500)],
       biochar: [],

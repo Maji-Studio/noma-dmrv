@@ -101,6 +101,7 @@ function CredentialsForm({
     useState<CertifierCredentialsVerification | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     reset,
@@ -207,6 +208,7 @@ function CredentialsForm({
       {verification && <VerificationNotice verification={verification} />}
 
       <FormActions
+        control={control}
         isSubmitting={setCredentials.isPending}
         errorMessage={serverError}
         submitLabel="Save keys"

@@ -46,13 +46,17 @@ export function useEntityOptions(params: UseEntityOptionsParams) {
  */
 export function useEntityById(
   entityType: EntityType,
-  id: string | undefined
+  id: string | undefined,
+  // Per-caller derivation params (e.g. biocharProduct's excludeOrderId);
+  // part of the query key so two callers with different exclusions never
+  // share a cached figure.
+  filterBy?: Record<string, string>,
 ) {
   return useQuery({
-    queryKey: entityKeys.detail(entityType, id),
+    queryKey: entityKeys.detail(entityType, id, filterBy),
     queryFn: async () => {
       if (!id) return null;
-      const result = await getEntityByIdFn(entityType, id);
+      const result = await getEntityByIdFn(entityType, id, filterBy);
       if (!result.success) {
         throw new Error(result.error);
       }

@@ -12,6 +12,7 @@ describe("storeSyntheticSeedDocuments", () => {
       putObject,
       createUploadUrl: vi.fn(),
       createDownloadUrl: vi.fn(),
+      getObject: vi.fn(),
       headObject: vi.fn(),
       deleteObject: vi.fn(),
     };
@@ -69,6 +70,7 @@ describe("storeSyntheticSeedDocuments", () => {
       putObject,
       createUploadUrl: vi.fn(),
       createDownloadUrl: vi.fn(),
+      getObject: vi.fn(),
       headObject: vi.fn(),
       deleteObject: vi.fn(),
     };

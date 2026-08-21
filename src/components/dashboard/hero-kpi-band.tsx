@@ -1,7 +1,7 @@
 /**
  * HeroKpiBand — the Flow Hero's 4-stat band: one bordered strip divided into
  * equal cells (mono micro label over a bold value), per the hero design.
- * "—" means no data in range, never a fabricated zero; the delta vs the
+ * "Not available" means no data in range, never a fabricated zero; the delta vs the
  * previous equal period rides along as a quiet mono suffix.
  *
  * Cells avoid <p>/<h*> elements — the global element type rules are unlayered
@@ -10,12 +10,13 @@
 "use client";
 
 import type { DashboardKpi } from "@/data-access/dashboard-overview";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** Pinned so server and client format the number identically (no hydration drift). */
 const NUMBER_LOCALE = "en-US";
 
 function formatValue(kpi: DashboardKpi): string {
-  if (kpi.value == null) return "Not available";
+  if (kpi.value == null) return MISSING_VALUE.notAvailable;
   const digits = Math.abs(kpi.value) >= 100 ? 0 : 1;
   return kpi.value.toLocaleString(NUMBER_LOCALE, {
     minimumFractionDigits: digits,

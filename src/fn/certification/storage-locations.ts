@@ -52,6 +52,13 @@ const STORAGE_LOCATION_COORDINATE_TOLERANCE = 0.000001;
 export interface EnsureStorageLocationArgs {
   orgCtx: OrgContext;
   applicationId: string;
+  expected?: {
+    customerLocationId: string;
+    certifierProjectId: string;
+    externalProjectId: string;
+    supplierReference: string;
+    payload: CreateStorageLocationRequest;
+  };
   log: Logger;
 }
 
@@ -109,6 +116,25 @@ export async function ensureStorageLocation(
   }
   const certifierProjectId = input.certifierProjectId;
   const externalProjectId = input.externalProjectId;
+  if (args.expected) {
+    const current = tryBuildCurrentStorageLocationPayload(input);
+    const currentReference = buildStorageLocationReference({
+      customerLocationId,
+      externalProjectId,
+    });
+    if (
+      args.expected.customerLocationId !== customerLocationId ||
+      args.expected.certifierProjectId !== certifierProjectId ||
+      args.expected.externalProjectId !== externalProjectId ||
+      args.expected.supplierReference !== currentReference ||
+      !current.body ||
+      payloadHash(current.body) !== payloadHash(args.expected.payload)
+    ) {
+      throw new SafeError(
+        "The application site changed after this Removal was reviewed. Refresh the review before submitting.",
+      );
+    }
+  }
   const existing = await getStorageLocationRegistration(
     args.orgCtx,
     customerLocationId,

@@ -10,6 +10,7 @@ import {
 import { RowActionsMenu } from "@/components/ui";
 import type { FacilityWithRelations } from "@/data-access/facilities";
 import { formatMass } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface FacilityCardProps {
   facility: FacilityWithRelations;
@@ -90,7 +91,7 @@ export function FacilityCard({
       {/* Footer */}
       <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          {facility.address || "No address"}
+          {facility.address || MISSING_VALUE.notRecorded}
         </span>
 
         <RowActionsMenu

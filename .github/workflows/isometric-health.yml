@@ -3,8 +3,8 @@ name: Isometric API health
 # Daily read-only ping of the Isometric Certify sandbox to catch upstream
 # breakage (auth regressions, schema drift, downtime) before it surfaces as a
 # user-facing submit failure. Reuses the existing opt-in vitest in
-# tests/isometric-sandbox.integration.test.ts — three GET endpoints
-# (projects, removal templates for the demo project, component blueprints).
+# tests/isometric-sandbox.integration.test.ts — the registry's read paths,
+# including projects, templates, components, GHG entries, and blueprints.
 # No writes. No noma DB. No app boot.
 #
 # This workflow intentionally uses its dedicated environment credential pair
@@ -13,10 +13,10 @@ name: Isometric API health
 # Secrets come from 1Password via the "Load Isometric secrets" step below:
 #   op://Environment Variables/noma-dmrv env staging/{ISOMETRIC_CLIENT_SECRET,
 #   ISOMETRIC_ACCESS_TOKEN, ISOMETRIC_DEMO_PROJECT_ID}
-# CI authenticates with a single repo secret, OP_SERVICE_ACCOUNT_TOKEN. When it
-# is absent the load step is skipped and the integration test self-skips. Keep
+# CI authenticates with a single repo secret, OP_SERVICE_ACCOUNT_TOKEN. Keep
 # the 1Password item in the same Isometric org that owns the sandbox demo
-# project.
+# project. A missing token or credential fails this health check rather than
+# reporting a false green result.
 
 on:
   schedule:
@@ -26,30 +26,32 @@ on:
     - cron: "17 9 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       RUN_ISOMETRIC_SANDBOX_TESTS: "1"
       ISOMETRIC_ENVIRONMENT: sandbox
-      LOAD_OP_SECRETS: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN != '' }}
       # Pinned Certify OpenAPI spec URL — used by the regenerate-certify-types
       # step below to detect upstream schema drift.
       ISOMETRIC_OPENAPI_URL: "https://docs.isometric.com/api-reference/certify/mrv.openapi.json"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           # Don't persist GITHUB_TOKEN into the workspace — read-only ping,
           # no commits or pushes; keeping the token out of .git/config
           # avoids leaking it to later steps or artifacts.
           persist-credentials: false
 
-      # Skipped if OP_SERVICE_ACCOUNT_TOKEN is unset — the integration test
-      # then self-skips on missing Isometric credentials rather than erroring.
+      # Not gated on OP_SERVICE_ACCOUNT_TOKEN: a health check that skips its own
+      # credentials reports green while the registry is unreachable. Missing
+      # secrets fail the run.
       - name: Load Isometric secrets from 1Password
-        if: ${{ env.LOAD_OP_SECRETS == 'true' }}
         uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
         with:
           export-env: true
@@ -60,12 +62,12 @@ jobs:
           ISOMETRIC_DEMO_PROJECT_ID: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_DEMO_PROJECT_ID
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           version: 9
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm

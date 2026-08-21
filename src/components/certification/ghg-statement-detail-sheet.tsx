@@ -143,13 +143,18 @@ function DetailState({
     );
   }
 
-  const { statementSubmission, linkedRemovals, remote, recentSyncEvents } =
-    query.data;
+  const {
+    statementSubmission,
+    statementSubmissionForStatus,
+    linkedRemovals,
+    remote,
+    recentSyncEvents,
+  } = query.data;
   const locked = statementSubmission
     ? isLockedInFlight(statementSubmission)
     : false;
   const derived = deriveSubmissionStatus(
-    statementSubmission,
+    statementSubmissionForStatus,
     locked,
     "ghgStatement",
   );

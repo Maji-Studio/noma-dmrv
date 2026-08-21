@@ -201,6 +201,7 @@ export function SupplierQuickAddDialog({
         />
 
         <FormActions
+          control={control}
           onCancel={handleClose}
           isSubmitting={createSupplier.isPending}
           errorMessage={error ?? undefined}

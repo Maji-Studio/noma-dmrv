@@ -25,8 +25,9 @@ import {
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { DataTable } from "@/components/ui/data-table";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useRemovalPreflightSummaries,
@@ -34,6 +35,7 @@ import {
 } from "@/hooks/use-certification";
 import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
 import {
@@ -62,32 +64,22 @@ export function RemovalsList() {
 
   return (
     <div className="container-max page-shell">
-      <header className="flex items-start justify-between gap-16">
-        <div className="flex flex-col gap-8">
-          <span className="title-chapter-title text-[var(--color-text-tertiary)]">
-            Certification
-          </span>
-          <h1 className="title-heading-2">Removals</h1>
-          <p className="body-medium text-[var(--color-text-secondary)] max-w-[680px]">
-            A Removal is the registry submission unit. Group one or more complete
-            credit batches that share a reporting period, then submit the
-            Removal to the registry.
-          </p>
-        </div>
-        {facilityId && (
-          <Button variant="primary" onClick={() => setDialogOpen(true)}>
-            <PlusIcon size={16} weight="bold" />
-            New Removal
-          </Button>
-        )}
-      </header>
+      <PageHeader
+        area="certification"
+        title="Removals"
+        subtitle="A Removal is the registry submission unit. Group one or more complete credit batches that share a reporting period, then submit the Removal to the registry."
+        actions={
+          facilityId ? (
+            <Button variant="primary" onClick={() => setDialogOpen(true)}>
+              <PlusIcon size={16} weight="bold" />
+              New Removal
+            </Button>
+          ) : undefined
+        }
+      />
 
       {!facilityId ? (
-        <EmptyState
-          icon={<SealCheckIcon size={48} />}
-          title="Select a facility"
-          description="Choose a facility from the sidebar to view its Removals."
-        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its Removals." />
       ) : (
         <ListBody facilityId={facilityId} onNewRemoval={() => setDialogOpen(true)} />
       )}
@@ -138,7 +130,11 @@ function RemovalCell({ summary }: { summary: RemovalListRow }) {
 function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
   const { memberBatchCodes } = summary;
   if (memberBatchCodes.length === 0) {
-    return <span className="body-small text-[var(--color-text-tertiary)]">None</span>;
+    return (
+      <span className="body-small text-[var(--color-text-tertiary)]">
+        {MISSING_VALUE.none}
+      </span>
+    );
   }
   return (
     <div className="flex flex-col gap-2 min-w-0">

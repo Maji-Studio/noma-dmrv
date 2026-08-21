@@ -95,7 +95,7 @@ describe("1000-year sequestration input sources", () => {
     ).toThrow(/no value from the durability evidence.*Check the Samples/);
   });
 
-  it("builds three direct s_fraction datapoints and one standalone product-mass datapoint", () => {
+  it("binds s_fraction from measurement samples and builds one standalone product-mass datapoint", () => {
     const replicates = [
       { totalCarbonContentFraction: 0.77, inorganicCarbonContentFraction: 0.01, sFraction: 0.93 },
       { totalCarbonContentFraction: 0.755, inorganicCarbonContentFraction: 0.011, sFraction: 0.94 },
@@ -139,9 +139,11 @@ describe("1000-year sequestration input sources", () => {
       CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
       "s_fraction",
     )).toMatchObject({
-      source: "direct-datapoint",
-      quantityKind: "dimensionless",
-      unit: "dimensionless",
+      source: "measurement-property",
+      measurementProperty: {
+        quantity_kind: "dimensionless_ratio",
+        qualifier: "inertinite_fraction",
+      },
     });
     expect(getSequestrationInputBinding(
       CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
@@ -152,45 +154,22 @@ describe("1000-year sequestration input sources", () => {
       quantityKind: "mass",
       unit: PRODUCT_MASS_UNIT,
     });
-    expect(direct).toHaveLength(4);
+    expect(direct).toHaveLength(1);
     expect(direct.map((entry) => [entry.inputKey, entry.body.quantity])).toEqual([
       ["product_mass", { magnitude: 1_970, unit: PRODUCT_MASS_UNIT }],
-      ["s_fraction", { magnitude: 0.93, unit: "dimensionless" }],
-      ["s_fraction", { magnitude: 0.94, unit: "dimensionless" }],
-      ["s_fraction", { magnitude: 0.93, unit: "dimensionless" }],
     ]);
     expect(direct.every((entry) => entry.body.source_ids[0] === "src-evidence")).toBe(
       true,
     );
     expect(
       new Set(direct.map((entry) => entry.body.supplier_reference_id)).size,
-    ).toBe(4);
+    ).toBe(1);
     expect(
       direct.every((entry) => entry.body.supplier_reference_id.endsWith("-v2")),
     ).toBe(true);
-    expect(
-      buildDirectSequestrationDatapoints({
-        template: template([
-          {
-            id: "rtc_SEQ",
-            blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-            inputs: [{ input_key: "s_fraction" }],
-          },
-        ]),
-        measurementSampleSubmissions,
-        projectId: PROJECT_ID,
-        removalId: "rem-test",
-        version: 2,
-        sourceIds: ["src-evidence"],
-      }).map((entry) => entry.body.supplier_reference_id),
-    ).toEqual(
-      direct
-        .filter((entry) => entry.inputKey === "s_fraction")
-        .map((entry) => entry.body.supplier_reference_id),
-    );
   });
 
-  it("binds s_fraction only from direct datapoints, not measurement-sample IDs", () => {
+  it("binds all three replicate lists from measurement-sample IDs", () => {
     const bound = bindSequestrationDatapointsToTemplate({
       template: template([
         {
@@ -216,15 +195,15 @@ describe("1000-year sequestration input sources", () => {
         ["mass", ["dtp-product-mass"]],
         [
           "dimensionless_ratio|inertinite_fraction",
-          ["dtp-measurement-s-1", "dtp-measurement-s-2"],
+          [
+            "dtp-measurement-s-1",
+            "dtp-measurement-s-2",
+            "dtp-measurement-s-3",
+          ],
         ],
       ]),
       datapointIdsByRtcInput: new Map([
         ["rtc_SEQ::product_mass", ["dtp-product-mass"]],
-        [
-          "rtc_SEQ::s_fraction",
-          ["dtp-direct-s-1", "dtp-direct-s-2", "dtp-direct-s-3"],
-        ],
       ]),
     });
 
@@ -240,13 +219,13 @@ describe("1000-year sequestration input sources", () => {
     ]);
     expect(bound.get("rtc_SEQ::product_mass")).toEqual(["dtp-product-mass"]);
     expect(bound.get("rtc_SEQ::s_fraction")).toEqual([
-      "dtp-direct-s-1",
-      "dtp-direct-s-2",
-      "dtp-direct-s-3",
+      "dtp-measurement-s-1",
+      "dtp-measurement-s-2",
+      "dtp-measurement-s-3",
     ]);
   });
 
-  it("fails loudly when the orchestrator has not resolved direct s_fraction IDs", () => {
+  it("fails loudly when measurement-sample s_fraction IDs are missing", () => {
     expect(() =>
       bindSequestrationDatapointsToTemplate({
         template: template([
@@ -256,12 +235,23 @@ describe("1000-year sequestration input sources", () => {
             inputs: [{ input_key: "s_fraction" }],
           },
         ]),
-        datapointIdsByMeasurementProperty: new Map([
-          [
-            "dimensionless_ratio|inertinite_fraction",
-            ["dtp-measurement-s-1"],
-          ],
+        datapointIdsByMeasurementProperty: new Map(),
+      }),
+    ).toThrowError(/no value from the durability measurement/);
+  });
+
+  it("fails loudly when the direct product-mass ID is missing", () => {
+    expect(() =>
+      bindSequestrationDatapointsToTemplate({
+        template: template([
+          {
+            id: "rtc_SEQ",
+            blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+            inputs: [{ input_key: "product_mass" }],
+          },
         ]),
+        datapointIdsByMeasurementProperty: new Map(),
+        datapointIdsByRtcInput: new Map(),
       }),
     ).toThrowError(/A durability field has no submitted value/);
   });
@@ -761,6 +751,31 @@ describe("buildCreateGhgEntryRequest", () => {
       expect(input.datapoint_id).toBe("dtp_1");
       expect(input.input_key).toBe("mass");
     }
+  });
+
+  it("omits production components from a delivery-only follow-up Removal", () => {
+    const tmpl = template([
+      { id: "rtc_production", blueprint_key: "mass_blueprint", inputs: [{ input_key: "mass" }] },
+      { id: "rtc_delivery", blueprint_key: "mass_blueprint", inputs: [{ input_key: "mass" }] },
+    ]);
+    const result = buildCreateGhgEntryRequest({
+      template: tmpl,
+      blueprintsByKey: new Map([["mass_blueprint", blueprintMass]]),
+      datapointIdsByRtcInput: new Map([
+        ["rtc_production::mass", ["dtp_production"]],
+        ["rtc_delivery::mass", ["dtp_delivery"]],
+      ]),
+      reportingWindow: baseReportingWindow,
+      projectId: PROJECT_ID,
+      supplierRefId: SUPPLIER_REF,
+      omittedTemplateComponentIds: ["rtc_production"],
+    });
+
+    expect(
+      result.ghg_entry_template_components?.map(
+        (component) => component.ghg_entry_template_component_id,
+      ),
+    ).toEqual(["rtc_delivery"]);
   });
 
   it("emits CreateComponentListInput when the blueprint declares data_shape=LIST", () => {

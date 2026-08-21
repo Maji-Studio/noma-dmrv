@@ -304,6 +304,7 @@ export function ProductionSampleForm({
       </FormSection>
 
       <FormActions
+        control={control}
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

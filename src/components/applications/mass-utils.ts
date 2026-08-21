@@ -4,6 +4,7 @@ import { formatWetDryMass } from "@/lib/mass-moisture";
 import { formatRemainingMass } from "@/components/forms/entity-select/remaining-mass";
 import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** The only source a delivery-derived prefill can assert (approved global dataset). */
 export const SOIL_TEMPERATURE_SOURCE_GLOBAL =
@@ -188,16 +189,13 @@ export function formatApplicationKgFromTons(value: number | null | undefined): s
 
 /** Field size is a surveyed parcel area — two decimals resolve a 100 m² strip. */
 const FIELD_SIZE_HA_FRACTION_DIGITS = 2;
-/** Same em-dash the shared formatters in `@/lib/format-utils` render for null. */
-const FALLBACK_DISPLAY = "Not recorded";
-
 /**
  * Field size in hectares, one precision for every read surface (list column,
  * detail sheet, entity card). The unit rides with the value so a row and a
  * detail row can never disagree about which of the two carries it.
- * Returns "—" for null/undefined.
+ * Returns "Not recorded" for null/undefined.
  */
 export function formatFieldSizeHa(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) return FALLBACK_DISPLAY;
+  if (value == null || Number.isNaN(value)) return MISSING_VALUE.notRecorded;
   return `${value.toFixed(FIELD_SIZE_HA_FRACTION_DIGITS)} ha`;
 }

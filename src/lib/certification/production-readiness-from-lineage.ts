@@ -67,19 +67,10 @@ export function productionReadinessGapForScope(args: {
   const lineageGap = productionReadinessGapFromLineages(args.lineages);
   if (lineageGap) return lineageGap;
 
-  const applicationRunIds = new Set(
-    args.lineages
-      .flatMap((lineage) => [
-        lineage.biocharProduct?.linkedProductionRunId,
-        ...sourceProductionRunIds(lineage),
-      ])
-      .filter((id): id is string => !!id),
-  );
-  const hasCompletedRunWithoutApplication =
-    args.completedMemberProductionRunIds.some(
-      (runId) => !applicationRunIds.has(runId),
-    );
-  if (args.lineages.length > 0 && !hasCompletedRunWithoutApplication) {
+  // One valid Application makes the Removal submittable. Other completed
+  // member runs may still be unapplied: their whole-batch production inputs
+  // are front-loaded now while their stored/delivery mass remains zero.
+  if (args.lineages.length > 0) {
     return null;
   }
 

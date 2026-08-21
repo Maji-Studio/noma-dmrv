@@ -7,7 +7,11 @@ const entityState = vi.hoisted(() => ({
     code: string;
     name: string;
     subtitle?: string;
-    remainingMass?: { wetKg: number | null; dryKg?: number | null };
+    remainingMass?: {
+      wetKg: number | null;
+      dryKg?: number | null;
+      labelVariant?: "excluding-this-order";
+    };
   }>,
   selected: undefined as
     | {
@@ -15,7 +19,11 @@ const entityState = vi.hoisted(() => ({
         code: string;
         name: string;
         subtitle?: string;
-        remainingMass?: { wetKg: number | null; dryKg?: number | null };
+        remainingMass?: {
+          wetKg: number | null;
+          dryKg?: number | null;
+          labelVariant?: "excluding-this-order";
+        };
       }
     | undefined,
   selectedPending: true,
@@ -141,6 +149,32 @@ describe("EntitySelect selected-value display", () => {
     );
     expect(html).toContain('aria-describedby="field-helper ');
     expect(html).toContain('aria-invalid="true"');
+  });
+
+  it("qualifies a selected stock figure that excludes the edited order", () => {
+    entityState.selected = {
+      id: "product-1",
+      code: "PB-26-001",
+      name: "North product bin",
+      remainingMass: {
+        wetKg: 3_000,
+        dryKg: 2_900,
+        labelVariant: "excluding-this-order",
+      },
+    };
+    entityState.selectedPending = false;
+
+    const html = renderToStaticMarkup(
+      <EntitySelect
+        entityType="biocharProduct"
+        value="product-1"
+        onChange={() => undefined}
+      />,
+    );
+
+    expect(html).toContain(
+      "Remaining wet mass excluding this order: 3,000kg | dry mass: 2,900kg",
+    );
   });
 
   it("can limit the selected remaining mass caption to wet mass", () => {

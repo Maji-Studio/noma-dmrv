@@ -77,6 +77,7 @@ export {
 // Deferred-create — the New-Removal wizard's "Confirm" step. Server re-derives
 // each selected batch's health before atomically creating the removal.
 export { createRemovalWithBatchesAction } from "./create-removal-with-batches";
+export { discardRemovalDraftAction } from "./discard-removal-draft";
 // GHG Statement flow — wired live by Phase 4.5. A GHG Statement is an
 // independent, period-anchored artifact that rolls up multiple Removals
 // (ADR 0003).

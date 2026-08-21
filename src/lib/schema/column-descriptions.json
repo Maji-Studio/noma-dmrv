@@ -119,7 +119,7 @@
     "name": "Display name for this location",
     "gps_latitude": "Latitude in decimal degrees",
     "gps_longitude": "Longitude in decimal degrees",
-    "address": "Street address of this location",
+    "address": "Optional site description: a landmark, parcel name, access note, or street address",
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"
   },
@@ -451,6 +451,8 @@
     "moisture_content_percent": "Moisture content of delivered product as percentage",
     "delivered_wet_mass_kg": "Wet mass delivered in kilograms",
     "mass_dry_kg": "Dry mass delivered in kilograms",
+    "truck_mass_on_arrival_kg": "Observed truck mass before unloading in kilograms",
+    "truck_mass_on_departure_kg": "Observed truck mass after unloading in kilograms",
     "driver_id": "FK to the driver handling the delivery",
     "vehicle_id": "FK to the vehicle used for delivery",
     "createdAt": "Timestamp when the record was created",

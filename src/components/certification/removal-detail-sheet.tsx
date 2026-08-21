@@ -17,13 +17,16 @@ import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, buttonVariants } from "@/components/ui";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import {
   deriveRemovalWorkflowStatus,
   type RemovalWorkflowStatus,
 } from "@/lib/certification/status";
+import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
 import { formatDateRange } from "@/lib/format-utils";
-import { pluralize } from "@/lib/copy-utils";
+import { isometricRegistry } from "@/lib/isometric/links";
 import { EnvBanner } from "./env-banner";
+import { IsometricLink } from "./isometric-link";
 import { ProductionBatchLinks } from "./production-batch-links";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
@@ -49,6 +52,29 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       </span>
       <div className="body-small text-[var(--color-text-primary)]">{children}</div>
     </div>
+  );
+}
+
+export function RemovalStorageSitesField({
+  externalProjectId,
+  isProduction,
+}: {
+  externalProjectId: string | null;
+  isProduction: boolean;
+}) {
+  if (!externalProjectId) return null;
+
+  const environment = isProduction ? "production" : "sandbox";
+
+  return (
+    <Field label="Storage sites">
+      <IsometricLink
+        href={isometricRegistry.storageSites({
+          environment,
+          externalProjectId,
+        })}
+      />
+    </Field>
   );
 }
 
@@ -134,6 +160,12 @@ export function RemovalDetailSheet({
   open,
   onClose,
 }: RemovalDetailSheetProps) {
+  const { data: certifierSummary } = useFacilityCertifierSummary(
+    facilityId,
+    open,
+  );
+  const externalProjectId =
+    certifierSummary?.mapping?.externalProjectId ?? null;
   const workflowStatus = deriveRemovalWorkflowStatus({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
@@ -192,7 +224,7 @@ export function RemovalDetailSheet({
             <Field label="Reporting window">{window}</Field>
             <Field label={`Credit batches (${summary.memberBatchCodes.length})`}>
               <span className="font-mono">
-                {summary.memberBatchCodes.join(", ") || "None"}
+                {summary.memberBatchCodes.join(", ") || MISSING_VALUE.none}
               </span>
             </Field>
 
@@ -212,6 +244,11 @@ export function RemovalDetailSheet({
               removalId={summary.removalId}
               isProduction={isProduction}
               enabled={open}
+            />
+
+            <RemovalStorageSitesField
+              externalProjectId={externalProjectId}
+              isProduction={isProduction}
             />
 
             {summary.evidenceHealth && (

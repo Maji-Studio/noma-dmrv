@@ -378,6 +378,14 @@ beforeEach(() => {
       }
     },
   );
+  vi.mocked(
+    ledgerClaim.recordConfirmedSubmissionIdentity,
+  ).mockImplementation(async (_userId, id, args) => {
+    const row = storedLedger.find((candidate) => candidate.id === id);
+    if (!row) return false;
+    row.externalId = args.externalId;
+    return true;
+  });
   vi.mocked(ledger.markSubmissionRejected).mockImplementation(
     async (_userId, id, args) => {
       const row = storedLedger.find((candidate) => candidate.id === id);
@@ -789,8 +797,8 @@ describe("submitGhgStatementToVerifier — recovery audit ordering", () => {
     await expect(
       submitGhgStatementToVerifier(STATEMENT_ID, { reportId: REPORT_ID }),
     ).resolves.toMatchObject({
-      success: false,
-      error: expect.stringMatching(/already awaiting verification/i),
+      success: true,
+      data: { remoteStatus: "AWAITING_VERIFICATION" },
     });
     expect(reportDA.promotePendingVerifierReportToken).toHaveBeenCalledWith(
       makeTestOrgContext("user-test-1"),

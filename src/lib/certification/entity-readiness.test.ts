@@ -5,6 +5,9 @@ import {
   isCertifyFormField,
 } from "./certify-field-registry";
 
+const DELIVERY_TRUCK_MASS_ON_ARRIVAL_KG = 1_400;
+const DELIVERY_TRUCK_MASS_ON_DEPARTURE_KG = 1_000;
+
 describe("deriveEntityCertifyReadiness", () => {
   it.each(["failed", "cancelled"])(
     "reports only the lifecycle gap for a %s production run",
@@ -341,6 +344,8 @@ describe("deriveEntityCertifyReadiness", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "upcoming",
       deliveredWetMassKg: 400,
+      truckMassOnArrivalKg: DELIVERY_TRUCK_MASS_ON_ARRIVAL_KG,
+      truckMassOnDepartureKg: DELIVERY_TRUCK_MASS_ON_DEPARTURE_KG,
       effectiveDistanceSource: "document",
       transportEvidenceDocumentCount: 1,
     });
@@ -355,8 +360,24 @@ describe("deriveEntityCertifyReadiness", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "delivered",
       deliveredWetMassKg: 400,
+      truckMassOnArrivalKg: DELIVERY_TRUCK_MASS_ON_ARRIVAL_KG,
+      truckMassOnDepartureKg: DELIVERY_TRUCK_MASS_ON_DEPARTURE_KG,
       effectiveDistanceSource: "document",
       transportEvidenceDocumentCount: 1,
+    });
+
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
+  });
+
+  it("keeps a delivered delivery ready without truck masses", () => {
+    // Mass verification runs on the documentation-based proof-of-delivery
+    // pathway; missing truck masses gate the registry Biochar Application
+    // and must never surface as a certify gap or badge.
+    const readiness = deriveEntityCertifyReadiness("delivery", {
+      status: "delivered",
+      deliveredWetMassKg: 400,
+      truckMassOnArrivalKg: null,
+      truckMassOnDepartureKg: null,
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
@@ -366,6 +387,8 @@ describe("deriveEntityCertifyReadiness", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "delivered",
       deliveredWetMassKg: 400,
+      truckMassOnArrivalKg: DELIVERY_TRUCK_MASS_ON_ARRIVAL_KG,
+      truckMassOnDepartureKg: DELIVERY_TRUCK_MASS_ON_DEPARTURE_KG,
       effectiveDistanceSource: "manual",
       transportEvidenceDocumentCount: 0,
     });
@@ -389,6 +412,8 @@ describe("deriveEntityCertifyReadiness", () => {
       {
         status: "delivered",
         deliveredWetMassKg: 400,
+        truckMassOnArrivalKg: DELIVERY_TRUCK_MASS_ON_ARRIVAL_KG,
+        truckMassOnDepartureKg: DELIVERY_TRUCK_MASS_ON_DEPARTURE_KG,
         effectiveDistanceSource: "manual",
         transportEvidenceDocumentCount: 0,
       },

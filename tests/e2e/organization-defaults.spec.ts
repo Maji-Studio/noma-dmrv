@@ -31,7 +31,7 @@ test.describe("Organization operating defaults", () => {
     seededData,
   }) => {
     await clearOrganizationSettings();
-    await page.goto("/settings/defaults");
+    await page.goto(`/settings/defaults?facility=${seededData.facility.id}`);
 
     await expect(
       page.getByRole("heading", { name: "Defaults", exact: true, level: 1 }),

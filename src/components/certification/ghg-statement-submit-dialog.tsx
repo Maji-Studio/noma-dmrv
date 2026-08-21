@@ -32,10 +32,7 @@ import {
   findApprovedGhgStatementReport,
   GhgStatementWorkflow,
 } from "./ghg-statement-workflow";
-import {
-  canRetrySubmissionProgress,
-  SubmissionProgress,
-} from "./submission-progress";
+import { SubmissionProgress } from "./submission-progress";
 
 interface GhgStatementSubmitDialogProps {
   ghgStatementId: string;
@@ -151,9 +148,6 @@ export function GhgStatementSubmitDialog({
   const showProgress =
     mutation.isPending || mutation.isSuccess || mutation.isError;
   const submissionStalled = isSubmissionStreamStalledError(mutation.error);
-  const canRetry =
-    !submissionStalled &&
-    canRetrySubmissionProgress("ghg_statement", progressUpdates);
   const idleTitle = isResubmit
     ? "Resubmit GHG Statement"
     : "Submit GHG Statement";
@@ -206,9 +200,7 @@ export function GhgStatementSubmitDialog({
                       ? "The verifier status is saved in noma."
                       : submissionStalled
                         ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
-                      : canRetry
-                        ? "Completed registry operations are preserved for a safe retry."
-                        : "Review the submission details and resolve the error before submitting again."}
+                        : "Completed registry operations are preserved for a safe retry."}
                 </span>
                 {!mutation.isPending && (
                   <div className="flex items-center gap-12">
@@ -216,7 +208,7 @@ export function GhgStatementSubmitDialog({
                       <Button variant="primary" onClick={onClose}>
                         {submissionStalled ? "Close" : "Done"}
                       </Button>
-                    ) : canRetry && lastInput ? (
+                    ) : (
                       <>
                         <Button
                           onClick={() => {
@@ -228,21 +220,13 @@ export function GhgStatementSubmitDialog({
                         </Button>
                         <Button
                           variant="primary"
-                          onClick={() => void runSubmission(lastInput)}
+                          onClick={() => {
+                            if (lastInput) void runSubmission(lastInput);
+                          }}
                         >
                           Try again
                         </Button>
                       </>
-                    ) : (
-                      <Button
-                        variant="primary"
-                        onClick={() => {
-                          mutation.reset();
-                          setProgressUpdates([]);
-                        }}
-                      >
-                        Review submission
-                      </Button>
                     )}
                   </div>
                 )}

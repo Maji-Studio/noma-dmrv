@@ -26,6 +26,7 @@ import {
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useCreateTransportLeg } from "@/hooks/use-transport-legs";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
@@ -113,6 +114,7 @@ function createColumns(
   return [
     {
       accessorKey: "sampleCode",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">
@@ -122,6 +124,7 @@ function createColumns(
     },
     {
       accessorKey: "samplingTime",
+      meta: { nowrap: true },
       header: "Sampling time",
       cell: ({ row }) => formatDateTime(row.original.samplingTime),
     },
@@ -131,24 +134,27 @@ function createColumns(
       accessorFn: (row) => row.creditBatchCode ?? "",
       cell: ({ row }) => (
         <span className="text-[var(--clr-dark-purple)]">
-          {row.original.creditBatchCode ?? "Not set"}
+          {row.original.creditBatchCode ?? MISSING_VALUE.notSet}
         </span>
       ),
     },
     {
       accessorKey: "totalCarbonPercent",
       header: "Total C (%)",
-      cell: ({ row }) => row.original.totalCarbonPercent?.toFixed(1) ?? "Not recorded",
+      cell: ({ row }) =>
+        row.original.totalCarbonPercent?.toFixed(1) ?? MISSING_VALUE.notRecorded,
     },
     {
       accessorKey: "organicCarbonPercent",
       header: "Organic C (%)",
-      cell: ({ row }) => row.original.organicCarbonPercent?.toFixed(1) ?? "Not recorded",
+      cell: ({ row }) =>
+        row.original.organicCarbonPercent?.toFixed(1) ?? MISSING_VALUE.notRecorded,
     },
     {
       accessorKey: "hToCOrgRatio",
       header: "H:C org ratio",
-      cell: ({ row }) => row.original.hToCOrgRatio?.toFixed(3) ?? "Not recorded",
+      cell: ({ row }) =>
+        row.original.hToCOrgRatio?.toFixed(3) ?? MISSING_VALUE.notRecorded,
     },
     {
       accessorKey: "durabilityOption",
@@ -168,6 +174,7 @@ function createColumns(
     },
     {
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end">
@@ -586,7 +593,7 @@ export function SampleList({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
         <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} description="All lab Samples" isLoading={statsLoading} />
-        <StatCard title="Avg Carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? "Not available"} icon={<LeafIcon size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
+        <StatCard title="Avg Carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? MISSING_VALUE.notAvailable} icon={<LeafIcon size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
         <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<FireIcon size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
         <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<CertificateIcon size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
       </div>

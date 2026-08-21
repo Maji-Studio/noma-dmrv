@@ -114,8 +114,12 @@ export function getUtcOffsetLabel(
     timeZoneName: "shortOffset",
   }).formatToParts(referenceInstant);
   const offsetPart = parts.find((p) => p.type === "timeZoneName");
-  // Returns e.g. "GMT+3" — normalise to "UTC+3"
-  return offsetPart?.value.replace("GMT", "UTC") ?? "UTC";
+  // Returns e.g. "GMT+3" — normalise to "UTC+3". Zero offset must collapse to
+  // a single canonical "UTC": engines disagree on its spelling (Node emits
+  // "GMT+0" where Chromium emits bare "GMT"), and this label is rendered
+  // during SSR, so any variance is a hydration mismatch.
+  const label = offsetPart?.value.replace("GMT", "UTC") ?? "UTC";
+  return /^UTC[+-]0{1,2}(:00)?$/.test(label) ? "UTC" : label;
 }
 
 /** Format an IANA timezone for display, e.g. "Africa/Nairobi (UTC+3)". */
@@ -125,7 +129,7 @@ export function formatTimezoneLabel(
 ): string {
   const readable = timezone.replace(/_/g, " ");
   const offset = getUtcOffsetLabel(timezone, referenceInstant);
-  return `${readable} (${offset})`;
+  return offset === readable ? readable : `${readable} (${offset})`;
 }
 
 /**

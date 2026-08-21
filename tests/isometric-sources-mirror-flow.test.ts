@@ -63,9 +63,10 @@ vi.mock("@/lib/storage", () => {
         contentType: DOCUMENT_FIXTURE.mimeType,
         etag: "etag-1",
       })),
-      createDownloadUrl: vi.fn(
-        async () => "https://noma-test.s3.amazonaws.com/download-url",
-      ),
+      getObject: vi.fn(async () => ({
+        bytes: Buffer.from("file-bytes"),
+        contentType: DOCUMENT_FIXTURE.mimeType,
+      })),
     })),
   };
 });
@@ -359,17 +360,12 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       kind: "url",
       uploadUrl: "https://noma-test.s3.amazonaws.com/signed-upload",
     });
-    // Global fetch handles both the storage download and the PUT.
+    // Global fetch handles only the Isometric PUT; storage reads use the
+    // provider seam.
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === "string" ? input : input.toString();
-        if (url.includes("download-url")) {
-          return new Response("file-bytes", {
-            status: 200,
-            headers: { "Content-Type": DOCUMENT_FIXTURE.mimeType },
-          });
-        }
         if (url.includes("signed-upload") && init?.method === "PUT") {
           return new Response(null, { status: 200 });
         }
@@ -512,12 +508,6 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === "string" ? input : input.toString();
-        if (url.includes("download-url")) {
-          return new Response("file-bytes", {
-            status: 200,
-            headers: { "Content-Type": DOCUMENT_FIXTURE.mimeType },
-          });
-        }
         if (url.includes("policy-signed-upload") && init?.method === "PUT") {
           return new Response(null, { status: 200 });
         }

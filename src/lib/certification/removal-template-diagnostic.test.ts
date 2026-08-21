@@ -159,7 +159,7 @@ describe("buildRemovalTemplateDiagnostic", () => {
             key: "inorganic_carbon_contents",
             quantityKind: "mass_fraction_dry_basis",
           },
-          { key: "s_fraction", quantityKind: "dimensionless" },
+          { key: "s_fraction", quantityKind: "dimensionless_ratio" },
           { key: "product_mass", quantityKind: "mass" },
         ],
         "co2-stored",
@@ -184,6 +184,13 @@ describe("buildRemovalTemplateDiagnostic", () => {
                   },
                   value: { magnitude: 0.01, unit: "dimensionless" },
                 },
+                {
+                  measurement_property: {
+                    quantity_kind: "dimensionless_ratio",
+                    qualifier: "inertinite_fraction",
+                  },
+                  value: { magnitude: 0.91, unit: "dimensionless" },
+                },
               ],
             },
           ],
@@ -193,12 +200,6 @@ describe("buildRemovalTemplateDiagnostic", () => {
               inputKey: "product_mass",
               magnitude: 900,
               unit: "kg",
-            },
-            {
-              componentId: "rtc-test",
-              inputKey: "s_fraction",
-              magnitude: 0.91,
-              unit: "dimensionless",
             },
           ],
         },
@@ -226,11 +227,14 @@ describe("buildRemovalTemplateDiagnostic", () => {
     expect(inputs.s_fraction).toMatchObject({
       nomaSource: "Sample sReflectanceFraction[]",
       transform: "Unchanged",
-      resolved: { binding: "datapoint", count: 1, magnitudes: [0.91] },
+      status: "externally-unconfirmed-contract",
+      resolved: {
+        binding: "measurement-sample",
+        count: 1,
+        magnitudes: [0.91],
+      },
     });
-    expect(inputs.s_fraction.wirePath).toContain(
-      "Direct datapoint plus measurement evidence",
-    );
+    expect(inputs.s_fraction.wirePath).toContain("/measurement-samples.values[]");
     expect(inputs.product_mass).toMatchObject({
       nomaSource: "Attribution-scaled dry applied biochar mass",
       transform: "Unchanged",

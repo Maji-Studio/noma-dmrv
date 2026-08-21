@@ -16,6 +16,7 @@ import type {
   ImportIsometricFeedstockTypeData,
   UpdateFeedstockTypeData,
 } from "@/schemas/feedstock-types";
+import { certificationKeys } from "./use-certification";
 
 export const feedstockTypeKeys = {
   all: ["feedstock-types"] as const,
@@ -38,6 +39,7 @@ function useInvalidateFeedstockTypes() {
   const queryClient = useQueryClient();
   return () => {
     void queryClient.invalidateQueries({ queryKey: feedstockTypeKeys.all });
+    void queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     void queryClient.invalidateQueries({
       queryKey: entityKeys.listPrefix("feedstockType"),
     });

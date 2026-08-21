@@ -197,6 +197,11 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   parent footer for that step.
 - Submission-level server/action/root errors go through `errorMessage`; `FormActions` renders the shared `ServerError` immediately above the buttons inside the same sticky footer. Do not render the same error in a parent sheet or earlier in the form.
 - Nested inline forms (child-entity editors, transport legs) pass `sticky={false}`.
+- Sheet forms pass `control` (the RHF `control` object). It feeds the side
+  sheet's unsaved-changes guard with `formState.isDirty`, which is the only
+  signal that sees programmatic `setValue` from custom widgets. Inside a sheet
+  the Cancel *click* routes through the sheet's guarded cancel; the caller's
+  `onCancel` still decides whether a Cancel button renders at all.
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).

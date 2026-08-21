@@ -1,4 +1,5 @@
 import type {
+  CreditBatchFeedstockTypeFact,
   CreditBatchRollup,
 } from "@/data-access/credit-batch-accounting";
 import type {
@@ -16,6 +17,7 @@ export interface MemberCreditBatch {
   appliedDryWeightTons: number;
   durabilityOption: DurabilityOption;
   sampling: CreditBatchSampling;
+  feedstockType: CreditBatchFeedstockTypeFact;
   productionRunCount: number;
   applicationCount: number;
   /** Exact submission blockers, separated by their remediation workflow. */
@@ -40,6 +42,7 @@ export function toMemberCreditBatch(
     ),
     durabilityOption: batch.durabilityOption,
     sampling: batch.sampling,
+    feedstockType: accounting.feedstockType,
     productionRunCount: lineageFacts.productionRunIds.length,
     applicationCount: lineageFacts.applicationIds.length,
   };
@@ -57,6 +60,7 @@ export function toMemberCreditBatchView(
     appliedDryWeightTons: batch.appliedDryWeightTons,
     durabilityOption: batch.durabilityOption,
     sampling: batch.sampling,
+    feedstockType: batch.feedstockType,
     productionRunCount: batch.productionRunCount,
     applicationCount: batch.applicationCount,
     durabilityGateBlockers: batch.durabilityGateBlockers,

@@ -49,7 +49,6 @@ function formatKg(value: number | null): string | null {
 }
 
 function formatStepDate(value: Date | string | null): string {
-  if (!value) return "No date";
   return formatDate(value);
 }
 

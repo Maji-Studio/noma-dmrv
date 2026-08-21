@@ -445,6 +445,35 @@ companion inherits this file's schema, invariants, and resolution rules.
   record the outcome in [`docs/isometric/changes.md`](./isometric/changes.md)
   (M).
 
+### Sample transport is mapped locally but no longer seen in the live template (`isometric/sample-transport-template-drift`, opened 2026-08-21, `needs-registry-check`)
+
+- **Observed:** the live sandbox check in
+  `tests/isometric-sandbox.integration.test.ts` ("resolves every transport
+  category to mass_distance") once required three
+  `mass_distance_based_ci_emissions` components. It was relaxed to the two it
+  actually found (feedstock and biochar transport) when the scheduled live
+  workflows were repaired, so `sampling-required-for-mrv` is no longer exercised
+  against the registry.
+- The binding is still live in code and docs:
+  `src/lib/isometric/transformers/datapoint.ts:INPUT_MAPPING` and
+  `src/lib/certification/certify-field-registry.ts` both declare
+  `sampling-required-for-mrv / mass_distance_based_ci_emissions /
+  mass_distance`, and `docs/isometric/sandbox-template-authoring.md` still lists
+  the row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
+  derives required categories from the live template, so a category the template
+  drops is silently no longer collected or submitted.
+- Two explanations are open and only a registry probe separates them: the
+  re-authored template genuinely dropped sample transport, or the spec picked a
+  different template — `pickTransportTemplate` falls back to the first template
+  carrying any transport component, and `isometric-health.yml` sets no
+  `ISOMETRIC_DEMO_TEMPLATE_ID`.
+- **Resolve via:** inspect the live template (`pnpm tsx scripts/isometric-smoke.ts
+  inspect-template <prj>` or the Isometric MCP server). If sample transport is
+  gone, drop the mapping row and the authoring-doc row and record it in
+  [`docs/isometric/changes.md`](./isometric/changes.md); if it is present, pin
+  `ISOMETRIC_DEMO_TEMPLATE_ID` in the workflow and restore the third category to
+  the assertion (S).
+
 Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](./open-questions-audit-follow-ups.md).
 
 ## Product bins & formulations
@@ -583,48 +612,8 @@ selectors. See [`docs/testing.md`](./testing.md).
   (shard by test) after confirming no in-file ordering deps, replacing
   networkidle waits with role-based expects, and `eslint-plugin-playwright` (S).
 
-## Tooling & toolchain upgrades (research pass, opened 2026-06-12)
-
-Verified findings from a sourced research sweep (Next 16 / TS 7 / Drizzle v1,
-mid-2026). Already confirmed fine: Turbopack default (no stale flags, no webpack
-config), `reactCompiler: true` opt-in, `src/proxy.ts` rename, generate+migrate CI
-workflow.
-
-### TypeScript 7 (tsgo) for CI typecheck (`tooling/ts7`)
-
-- Still open: `package.json` pins TS `^5.9.3` and there is no `tsgo` anywhere.
-- **Resolve via:** add a non-blocking `tsgo --noEmit` CI job to validate parity
-  against the large Drizzle schema and Zod-heavy types; flip the blocking typecheck
-  once TS 7 ships stable (S).
-
-### Drizzle ORM/Kit v1.0 upgrade (`db/drizzle-v1`)
-
-- v1 was at `1.0.0-rc.3` (stable line still 0.45.x). Bundles a full drizzle-kit
-  rewrite (with materially faster introspection for a schema of this size), migrations folder
-  v3 (journal.json removed, per-migration folders, ends git conflicts on
-  migrations), and Relational Queries v2 (breaking; official v1→v2 guide).
-  Release notes warn "something will definitely break".
-- **Resolve via:** do NOT adopt at RC. When stable ships, use a dedicated
-  upgrade branch; the no-prod-data reseed-over-migrate stance makes the
-  migrations-folder restructure cheap if done before launch (M).
-
-### Cache Components pilot (`app/cache-components`)
-
-- Next 16 caching is fully opt-in via `cacheComponents: true` (`'use cache'` +
-  PPR model; `cacheLife`/`cacheTag` stable, old PPR flags removed). For an
-  auth-gated, org-scoped app there's no urgency, and no verified real-world
-  adoption evidence for auth-heavy apps yet. See
-  [`docs/modern-patterns.md`](./modern-patterns.md).
-- **Resolve via:** a selective pilot on read-heavy views (dashboard,
-  chain-of-custody roll-ups) when perf data justifies it; not codebase-wide (M).
-
-### Unverified research areas needing a follow-up pass
-
-Lint tooling (Biome 2 / oxlint vs ESLint 9), OpenAPI contract testing for the
-Isometric client, Renovate vs Dependabot, pnpm supply-chain guidance — the sweep
-produced no adversarially-verified claims in these areas. (Vitest 4 and
-Playwright 1.58+ were on this list and are both already adopted — `vitest`
-`^4.1.0`, `@playwright/test` `^1.58.2`.)
+Tooling and dependency upgrade deferrals are tracked in
+[Toolchain open questions](./open-questions-toolchain.md).
 
 ## QA 2026-07-21 remediation follow-ups (opened 2026-07-21)
 
@@ -857,6 +846,25 @@ bound); these are the decisions it deliberately did not make.
   payload validation before any datapoint POST so a refused submission leaves
   zero registry residue (S each).
 
+### Where the certification lock falls, and what "Request amendment" does (`certification/amendment-flow`)
+
+- Server-side enforcement exists and is tested
+  (`assertCanMutateCertifiedLineage`,
+  `tests/certification-lineage-guards.test.ts`); the UI carries an interim
+  lock affordance (`isRemovalStatusLocked` drives the credit-batch menu and
+  sheet lock plus the dropped-claimed-run warning).
+- Interim state: the UI says "amend the Removal with the registry" without
+  offering a flow. The UI predicate (derived status kinds) is deliberately
+  looser than the server predicate (`BLOCKING_SUBMISSION_STATUSES`, where a
+  stale draft submission still blocks), so an edge-case operator can reach a
+  server rejection the UI did not preempt.
+- **Resolve via:** DEC carbon team + Isometric decide where the lock falls
+  per lifecycle state and what an amendment request does (registry API or
+  operational process). Then align the two predicates and replace the locked
+  Edit affordance with the amendment entry point (M). Per project memory,
+  verify any Isometric requirement verbatim before building a gate.
+  Follow-up issue: #687.
+
 ## Promotion #682 review follow-ups (opened 2026-08-14)
 
 Findings from the multi-agent review of the staging-to-main promotion PR #682
@@ -952,3 +960,24 @@ applied weeks after production, so a run completed late in a crediting period
 blocks an otherwise-complete batch until its product is applied. The sub-commit
 says deliberate; needs a product confirmation that this is the intended
 operational tradeoff, and this is not a registry requirement we verified.
+
+## Design review 2026-08-13 follow-ups (opened 2026-08-14)
+
+### The two requiredness systems have no legend, and its wording is undecided (`ui/requiredness-legend`) — DR-015
+
+A form carries two independent requiredness markers and explains neither. The
+red asterisk rendered by `FormField` (`src/components/forms/form-field.tsx`)
+means the field blocks **saving**; the `CertificationFieldTag`
+(`src/components/ui/certification-field-tag/index.tsx`) means the field blocks
+**certification**. An operator sees a red star and an orange "CERT" chip on the
+same row with nothing that distinguishes them.
+
+The fix is one legend, mounted once per form and read sheet, built from
+`CERT_FIELD_STATUS_DESCRIPTION` plus the asterisk's `sr-only` "Required" copy
+(both already single-sourced — the seam is marked in the tag module). What is
+**not** decided is the legend's wording, its placement (sheet header vs footer
+vs an info hint), and whether it appears on every form or only on
+certification-bearing ones. Those are stakeholder calls, so #689 Phase A
+deliberately shipped the seam and no copy. **Resolve via:** a wording decision
+from the product owner, then a `RequirednessLegend` in
+`src/components/forms/`.

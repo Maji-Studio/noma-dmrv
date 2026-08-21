@@ -118,6 +118,7 @@ import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 import {
   assertCompositionIngredientDrawsWithinStock,
   compositionAllocationChanged,
@@ -887,6 +888,12 @@ export async function updateBiocharProduct(
       })
       .where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)))
       .returning();
+
+    if (changesSourceAllocation) {
+      await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
+        biocharProductIds: [productId],
+      });
+    }
 
     // Claim an unassigned bin for this formulation so it stays clean going
     // forward. Safe under the row lock held above.

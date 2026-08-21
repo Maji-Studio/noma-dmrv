@@ -92,6 +92,35 @@ describe("toBiocharProductEntityOption", () => {
     });
   });
 
+  it("qualifies both edit-mode availability surfaces as excluding this order", () => {
+    expect(
+      toBiocharProductEntityOption(
+        {
+          id: "product-1",
+          code: "PB-01",
+          name: "North product bin",
+          productCode: "BP-01",
+          formulationName: null,
+          massKg: 3_500,
+          waterAddedKg: 0,
+          moisturePercent: 15,
+          totalDeliveredKg: 500,
+          totalDeliveredDryKg: 425,
+          unresolvedDeliveredDryCount: 0,
+        },
+        { excludeCurrentOrder: true },
+      ),
+    ).toMatchObject({
+      remainingMass: {
+        wetKg: 3_000,
+        dryKg: 2_550,
+        labelVariant: "excluding-this-order",
+      },
+      subtitle:
+        "Wet biochar product: 3,000kg | Dry biochar: 2,550kg available excluding this order",
+    });
+  });
+
   it("exposes moisture against blended product mass for order previews", () => {
     expect(
       toBiocharProductEntityOption({

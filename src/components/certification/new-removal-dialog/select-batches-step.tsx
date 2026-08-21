@@ -109,15 +109,19 @@ function Metric({ label, value }: { label: string; value: string }) {
 function ReadyCard({
   batch,
   selected,
+  disabled,
   onToggle,
 }: {
   batch: SelectableBatch;
   selected: boolean;
+  disabled: boolean;
   onToggle: (id: string) => void;
 }) {
   return (
     <label
-      className={`flex cursor-pointer flex-col gap-12 border bg-[var(--color-background-white)] p-16 transition-colors ${
+      className={`flex flex-col gap-12 border bg-[var(--color-background-white)] p-16 transition-colors ${
+        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+      } ${
         selected
           ? "border-[var(--color-interaction)]"
           : "border-[var(--color-border-secondary)] hover:border-[var(--color-border-primary)]"
@@ -131,12 +135,13 @@ function ReadyCard({
           type="checkbox"
           className="mt-px size-16 shrink-0 accent-[var(--color-interaction)]"
           checked={selected}
+          disabled={disabled}
           onChange={() => onToggle(batch.id)}
           aria-label={`Select credit batch for ${formatDateRange(batch.startDate, batch.endDate)}, ${batch.code}`}
         />
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        Credit batch
+        Credit batch {batch.code}
       </span>
       <div className="grid grid-cols-2 gap-8">
         <Metric label="Weight" value={formatTonnes(batch.appliedWeightTons)} />
@@ -178,7 +183,7 @@ function IncompleteCard({
         </span>
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        Credit batch
+        Credit batch {batch.code}
       </span>
       <ul className="flex flex-col gap-10">
         {gaps.map((check, index) => {
@@ -249,6 +254,10 @@ export function SelectBatchesStep({
   const readyBatches = batches.filter((b) => b.health.state === "ready");
   const notReadyBatches = batches.filter((b) => b.health.state !== "ready");
   const hasBatches = batches.length > 0;
+  const is1000YearFacility = batches.some(
+    (batch) => batch.durabilityOption === "1000_year",
+  );
+  const hasSelectedBatch = selectedIds.size > 0;
 
   return (
     <div className="flex flex-col gap-16">
@@ -258,6 +267,13 @@ export function SelectBatchesStep({
           Only batches whose data is complete can be grouped into a Removal.
         </InfoHint>
       </h3>
+
+      {is1000YearFacility && (
+        <p className="body-small text-[var(--color-text-secondary)]">
+          Select one credit batch. Each 1000-year credit batch needs a separate
+          Removal.
+        </p>
+      )}
 
       {/* Setup gaps render only once the readiness query has settled — a
           loading default must not flash a false "finish setup" instruction. */}
@@ -315,6 +331,11 @@ export function SelectBatchesStep({
                   key={batch.id}
                   batch={batch}
                   selected={selectedIds.has(batch.id)}
+                  disabled={
+                    is1000YearFacility &&
+                    hasSelectedBatch &&
+                    !selectedIds.has(batch.id)
+                  }
                   onToggle={onToggle}
                 />
               ))}

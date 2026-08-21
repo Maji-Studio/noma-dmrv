@@ -37,6 +37,7 @@ import { buildPartyLocationDetailFields } from "@/components/party-location-deta
 import { buildSupplierFallbackDistanceField } from "./supplier-detail-fields";
 import { SupplierLocationsReadState } from "./supplier-locations-read-state";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // ============================================
 // Column Definitions
@@ -49,6 +50,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
         <Link
@@ -73,7 +75,7 @@ function createColumns(
           {resolveSupplierLocationText(
             row.original.location,
             row.original.defaultLocationDisplay,
-          ) || "Not recorded"}
+          ) || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
@@ -83,12 +85,15 @@ function createColumns(
       accessorFn: (row) => row.contactName || row.contactEmail || "",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.contactName || row.original.contactEmail || "Not recorded"}
+          {row.original.contactName ||
+            row.original.contactEmail ||
+            MISSING_VALUE.notRecorded}
         </span>
       ),
     },
     {
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end">

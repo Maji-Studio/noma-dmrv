@@ -10,6 +10,7 @@ import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { formatMass } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   useCreateTransportLeg,
   useDeleteTransportLeg,
@@ -274,9 +275,9 @@ export function TransportLegsEditor({
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 text-[var(--color-text-primary)]">
-                    {(leg.originName?.trim() || "Not recorded") +
+                    {(leg.originName?.trim() || MISSING_VALUE.notRecorded) +
                       " → " +
-                      (leg.destinationName?.trim() || "Not recorded")}
+                      (leg.destinationName?.trim() || MISSING_VALUE.notRecorded)}
                   </td>
                   <td className="py-8 pr-12">
                     {leg.distanceKm} km
@@ -284,7 +285,7 @@ export function TransportLegsEditor({
                   <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
                     {leg.distanceSource
                       ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
-                      : "Not recorded"}
+                      : MISSING_VALUE.notRecorded}
                   </td>
                   <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
                     {isSavedTransportLeg(leg) &&
@@ -294,11 +295,11 @@ export function TransportLegsEditor({
                         .transportEvidenceDocumentCount,
                     )
                       ? "Attached"
-                      : "None"}
+                      : MISSING_VALUE.none}
                   </td>
                   <td className="py-8 pr-12">{formatMethod(leg.transportMethodType)}</td>
                   <td className="py-8 pr-12">
-                    {leg.loadMassKg != null ? formatMass(leg.loadMassKg) : "Not recorded"}
+                    {formatMass(leg.loadMassKg)}
                   </td>
                   {!readOnly && (
                     <td className="py-8 text-right">

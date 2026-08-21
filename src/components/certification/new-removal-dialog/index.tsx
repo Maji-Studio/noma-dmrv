@@ -130,10 +130,22 @@ function WizardBody({
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
-      else next.add(id);
+      else {
+        const batch = selectable.data?.batches.find((item) => item.id === id);
+        if (batch?.durabilityOption === "1000_year") {
+          next.clear();
+        }
+        next.add(id);
+      }
       return next;
     });
   };
+
+  const has1000YearSelection = [...selectedIds].some(
+    (id) =>
+      selectable.data?.batches.find((batch) => batch.id === id)
+        ?.durabilityOption === "1000_year",
+  );
 
   const confirmSelection = () => {
     createMutation.mutate(
@@ -247,7 +259,10 @@ function WizardBody({
         onCancel={onClose}
         onConfirm={confirmSelection}
         canConfirm={
-          selectedIds.size > 0 && facilitySetupComplete && !selectable.isLoading
+          selectedIds.size > 0 &&
+          (!has1000YearSelection || selectedIds.size === 1) &&
+          facilitySetupComplete &&
+          !selectable.isLoading
         }
       />
     </div>

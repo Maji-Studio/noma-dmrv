@@ -46,9 +46,9 @@ describe("CompiledSubmissionReview", () => {
             directSequestrationDatapoints: [
               {
                 componentId: "rtc-seq",
-                inputKey: "s_fraction",
-                magnitude: 0.91,
-                unit: "dimensionless",
+                inputKey: "product_mass",
+                magnitude: 910,
+                unit: "kg",
                 type: "REPORTED",
               },
             ],
@@ -60,6 +60,8 @@ describe("CompiledSubmissionReview", () => {
             ],
             memberCreditBatches: [{ id: "batch-1", code: "CB-1" }],
             productionRuns: [{ id: "run-1", code: "PR-1" }],
+            applications: [],
+            productionEmissionClaims: [],
             reportingWindow: {
               startedOn: "2026-01-01T00:00:00.000Z",
               completedOn: "2026-04-05T00:00:00.000Z",
@@ -69,6 +71,8 @@ describe("CompiledSubmissionReview", () => {
           warnings: ["Captured startup diesel is not represented."],
           compilationHash:
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          estimatedStoredCo2eTonnes: 1.2,
+          estimateMissingInputs: [],
           snapshot: {
             materialization: "claim-time",
             mappingRevision: "mapping-rev-1",
@@ -84,6 +88,7 @@ describe("CompiledSubmissionReview", () => {
       "42 t.km",
       "Set in template",
       "2026-01-31T23:59:59.000Z",
+      "910 kg",
       "1 registry value source attached",
       "Durability measurements",
       "CB-1",

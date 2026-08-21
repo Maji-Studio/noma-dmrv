@@ -37,6 +37,7 @@ import type {
 } from "@/lib/certification/removal-breakdown";
 import { formatCo2e } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // The copy that differs between the removal card and the statement roll-up.
 // Everything else (the bar, the ledger, the hints) is identical.
@@ -447,7 +448,7 @@ function CarbonBreakdownBody({
                 formatDeductionCo2e(activitiesKg)
               ) : (
                 <span className="text-[var(--color-text-tertiary)]">
-                  Not recorded
+                  {MISSING_VALUE.notRecorded}
                 </span>
               )
             }

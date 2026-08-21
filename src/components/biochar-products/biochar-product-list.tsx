@@ -32,6 +32,8 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -45,6 +47,7 @@ import {
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
 import {
+  deriveBlendEffectiveMoisturePercent,
   deriveSourceBiocharDryMassKg,
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
@@ -56,7 +59,6 @@ import {
 } from "@/config/product-labels";
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import {
-  deriveEffectiveMoisturePercent,
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
@@ -98,7 +100,26 @@ function finalWetProductMassKg(
 ): number | null {
   return product.massKg == null
     ? null
-    : product.massKg + (product.waterAddedKg ?? 0);
+    : sumNullable([product.massKg, product.waterAddedKg]);
+}
+
+function productEffectiveMoisturePercent(
+  product: Pick<
+    BiocharProductWithRelations,
+    | "massKg"
+    | "waterAddedKg"
+    | "moistureContentPercent"
+    | "composition"
+    | "sourceAllocatedDryMassKg"
+  >,
+): number | null {
+  return deriveBlendEffectiveMoisturePercent({
+    blendMassKg: product.massKg,
+    waterAddedKg: product.waterAddedKg,
+    biocharMoisturePercent: product.moistureContentPercent,
+    ingredients: fromCompositionJsonb(product.composition),
+    sourceAllocatedDryMassKg: product.sourceAllocatedDryMassKg,
+  });
 }
 
 // ============================================
@@ -112,6 +133,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -119,6 +141,7 @@ function createColumns(
     },
     {
       accessorKey: "productionDate",
+      meta: { nowrap: true },
       header: "Production date",
       cell: ({ row }) => formatDate(row.original.productionDate),
     },
@@ -126,7 +149,8 @@ function createColumns(
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facility?.name ?? "",
-      cell: ({ row }) => row.original.facility?.name || "Not available",
+      cell: ({ row }) =>
+        row.original.facility?.name || MISSING_VALUE.notAvailable,
     },
     {
       id: "formulation",
@@ -152,22 +176,14 @@ function createColumns(
     },
     {
       id: "moistureContentPercent",
-      header: "Moisture",
-      accessorFn: (row) =>
-        deriveEffectiveMoisturePercent(
-          row.massKg,
-          row.moistureContentPercent,
-          row.waterAddedKg,
-        ) ?? row.moistureContentPercent,
+      header: "Blend moisture",
+      // Composition-aware blend moisture: massKg is the blend total (biochar
+      // plus ingredient solids), so the single-material helper must not see
+      // it — that produced the 26.1% vs 34.3% contradiction (BP-26-001).
+      accessorFn: productEffectiveMoisturePercent,
       cell: ({ row }) => (
         <span className="font-mono">
-          {formatMoisturePercent(
-            deriveEffectiveMoisturePercent(
-              row.original.massKg,
-              row.original.moistureContentPercent,
-              row.original.waterAddedKg,
-            ) ?? row.original.moistureContentPercent,
-          )}
+          {formatMoisturePercent(productEffectiveMoisturePercent(row.original))}
         </span>
       ),
     },
@@ -175,10 +191,12 @@ function createColumns(
       id: "storageLocation",
       header: "Storage",
       accessorFn: (row) => row.storageLocation?.name ?? "",
-      cell: ({ row }) => row.original.storageLocation?.name || "Not set",
+      cell: ({ row }) =>
+        row.original.storageLocation?.name || MISSING_VALUE.notSet,
     },
     {
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end">
@@ -214,26 +232,19 @@ export function BiocharProductPageMassSummary({
   products,
   isLoading = false,
 }: BiocharProductPageMassSummaryProps) {
-  const pageMass = products.reduce(
-    (total, product) => {
-      const wetKg = finalWetProductMassKg(product);
-      const dryKg = sourceBiocharDryMassKg(product);
-      return {
-        wetKg: total.wetKg + (wetKg ?? 0),
-        dryKg: total.dryKg + (dryKg ?? 0),
-        hasMissingDry: total.hasMissingDry || dryKg == null,
-      };
-    },
-    { wetKg: 0, dryKg: 0, hasMissingDry: false },
-  );
+  const wetKg = sumNullableBy(products, finalWetProductMassKg);
+  const dryMassesKg = products.map(sourceBiocharDryMassKg);
+  const dryKg = dryMassesKg.some((massKg) => massKg === null)
+    ? null
+    : sumNullable(dryMassesKg);
 
   return (
     <StatCard
       title="Mass on This Page"
       value={
         <MassPair
-          wetKg={pageMass.wetKg}
-          dryKg={pageMass.hasMissingDry ? null : pageMass.dryKg}
+          wetKg={wetKg}
+          dryKg={dryKg}
           wetLabel={WET_PRODUCT_LABEL}
           dryLabel={DRY_BIOCHAR_LABEL}
         />

@@ -51,6 +51,7 @@ import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { ProductionRunFeedstockDrawRow } from "./production-run-feedstock-draw-row";
+import { summarizeFeedstockWetInput } from "./production-run-feedstock-input";
 
 // ============================================
 // Constants for select options
@@ -64,7 +65,6 @@ const isProductionRunCertifyField = (field: string) =>
 const BIOCHAR_BIN_QUICK_ADD_TYPES = ["biochar_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 const EMPTY_FEEDSTOCK_DRAW = { storageLocationId: "", wetMassKg: undefined };
-const FEEDSTOCK_MASS_MAX_FRACTION_DIGITS = 3;
 
 // ============================================
 // Component
@@ -220,9 +220,8 @@ export function ProductionRunForm({
   const watchedSourceBinId = watchedFeedstockDraws.find(
     (draw) => !!draw?.storageLocationId,
   )?.storageLocationId;
-  const selectedFeedstockDrawCount = watchedFeedstockDraws.filter(
-    (draw) => !!draw?.storageLocationId,
-  ).length;
+  const feedstockWetInput = summarizeFeedstockWetInput(watchedFeedstockDraws);
+  const selectedFeedstockDrawCount = feedstockWetInput.binCount;
   const watchedDestBinId = useWatch({ control, name: "biocharStorageLocationId" });
   const watchedBiocharKg = useWatch({ control, name: "biocharOutputKg" });
   const watchedBiocharMoisture = useWatch({ control, name: "biocharMoisturePercent" });
@@ -242,11 +241,7 @@ export function ProductionRunForm({
 
   // Every row is wet/as-received mass. The run-level moisture reading applies
   // once to their summed input.
-  const watchWetMass = watchedFeedstockDraws.reduce(
-    (total, draw) =>
-      total + (typeof draw?.wetMassKg === "number" ? draw.wetMassKg : 0),
-    0,
-  );
+  const watchWetMass = feedstockWetInput.totalWetMassKg;
   const watchMoisture = useWatch({ control, name: "feedstockMoisturePercent" });
 
   const previewDryMass =
@@ -600,7 +595,7 @@ export function ProductionRunForm({
           />
         ))}
 
-        {(selectedFeedstockDrawCount > 0 || watchWetMass > 0) && (
+        {feedstockWetInput.visible && (
           <div className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
             <p className="body-caption text-[var(--color-text-secondary)] flex items-center gap-6">
               Total wet input
@@ -608,11 +603,20 @@ export function ProductionRunForm({
                 <CertificationFieldTag status={certStatus("feedstockWetMassKg")} />
               )}
             </p>
-            <p className="body-small font-medium text-[var(--color-text-primary)] mt-2">
-              {watchWetMass.toLocaleString("en-US", {
-                maximumFractionDigits: FEEDSTOCK_MASS_MAX_FRACTION_DIGITS,
-              })} kg from {selectedFeedstockDrawCount} {selectedFeedstockDrawCount === 1 ? "bin" : "bins"}
+            <p
+              className={`body-small mt-2 ${
+                feedstockWetInput.hintText
+                  ? "font-normal text-[var(--color-text-tertiary)]"
+                  : "font-medium text-[var(--color-text-primary)]"
+              }`}
+            >
+              {feedstockWetInput.valueText}
             </p>
+            {feedstockWetInput.hintText && (
+              <p className="body-caption text-[var(--color-text-tertiary)] mt-2">
+                {feedstockWetInput.hintText}
+              </p>
+            )}
           </div>
         )}
 
@@ -865,6 +869,7 @@ export function ProductionRunForm({
       {children}
 
       <FormActions
+        control={control}
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

@@ -12,6 +12,7 @@ import {
 } from "@/hooks/use-certification";
 import type { RemovalTemplateDiagnosticModel } from "@/lib/certification/removal-template-diagnostic";
 import { attachRemovalCompilationToDiagnostic } from "@/lib/certification/removal-template-diagnostic-resolution";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDateRange } from "@/lib/format-utils";
 import {
   CompilationBlockers,
@@ -178,7 +179,7 @@ export function RemovalTemplateTraceView({
                 Compilation hash
               </p>
               <p className="body-caption break-all font-mono">
-                {compilation.data.compilationHash ?? "Not available while blocked"}
+                {compilation.data.compilationHash ?? MISSING_VALUE.notYetComputed}
               </p>
             </div>
           </section>

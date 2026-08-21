@@ -135,6 +135,15 @@ export type CreateRemovalWithBatchesInput = z.infer<
   typeof createRemovalWithBatchesSchema
 >;
 
+export const discardRemovalDraftSchema = z.object({
+  facilityId: z.uuid(),
+  removalId: z.uuid(),
+});
+
+export type DiscardRemovalDraftInput = z.infer<
+  typeof discardRemovalDraftSchema
+>;
+
 export const submitGhgStatementDialogSchema = z.object({
   reportId: z.string().uuid().optional(),
   externalReportUrl: httpsUrlSchema.optional(),

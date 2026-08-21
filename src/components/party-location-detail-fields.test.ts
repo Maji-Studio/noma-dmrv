@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { isMissingValueCopy } from "@/lib/copy-utils";
 import { buildPartyLocationDetailFields } from "./party-location-detail-fields";
 
+/** Mirrors the customer-list call site verbatim (customer-list.tsx). */
 const options = {
   distanceLabel: "One-way distance from facility (per leg, km)",
   defaultLabel: "Default destination",
   positionLabel: "Application site position",
+  descriptionLabel: "Site description",
   includeSoilTemperature: true,
 };
 
@@ -17,7 +20,7 @@ describe("buildPartyLocationDetailFields", () => {
       "Country",
       "State / region",
       "City",
-      "Address / description",
+      "Site description",
       "Application site position latitude",
       "Application site position longitude",
       "Default soil temperature (°C)",
@@ -26,9 +29,20 @@ describe("buildPartyLocationDetailFields", () => {
     ]);
     expect(
       fields.every(
-        (field) => field.value == null || field.value === "Not set",
+        (field) => field.value == null || isMissingValueCopy(field.value),
       ),
     ).toBe(true);
+  });
+
+  it("keeps the supplier wording when no description label is passed", () => {
+    const fields = buildPartyLocationDetailFields([], {
+      distanceLabel: options.distanceLabel,
+      defaultLabel: options.defaultLabel,
+      positionLabel: options.positionLabel,
+      includeSoilTemperature: options.includeSoilTemperature,
+    });
+
+    expect(fields[4].label).toBe("Address / description");
   });
 
   it("prefixes repeated locations while preserving each location's field order", () => {

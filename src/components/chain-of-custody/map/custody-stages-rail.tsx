@@ -31,6 +31,7 @@ import type {
 } from "@/data-access/chain-of-custody-geo";
 import { formatDistanceKm, formatMass } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   legAnchorNodeId,
   resolveLegEndpoints,
@@ -87,9 +88,6 @@ const ACCENT_SITE = "var(--acc-dist)";
 const ACCENT_SITE_INK = "var(--acc-dist-ink)";
 const ACCENT_PENDING = "var(--clr-dark-purple-30)";
 
-/** The viewer's one term for a value nobody has entered yet. */
-const MISSING_NAME = "Not recorded";
-
 /** The viewer's micro caps idiom (section labels, eyebrows, meta lines). */
 const MICRO_CAPS =
   "font-mono text-[9.5px] font-medium uppercase tracking-[0.1em]";
@@ -120,7 +118,7 @@ const METRIC_CLASS =
 /** The outer party of a leg: supplier (inbound) or application field (outbound). */
 function legOuterName(leg: ChainGeoLeg): string {
   const name = leg.kind === "inbound" ? leg.originName : leg.destinationName;
-  return name ?? leg.outerCode ?? MISSING_NAME;
+  return name ?? leg.outerCode ?? MISSING_VALUE.notRecorded;
 }
 
 /**

@@ -36,7 +36,7 @@ describe("credit-batch accounting read contract", () => {
       /export async function buildCreditBatchContexts[\s\S]*?loadCreditBatchRollups\(/,
     );
     expect(certification).toContain(
-      "loadCreditBatchRollups(orgCtx, batchIds)",
+      "loadCreditBatchRollups(orgCtx, creditBatchIds",
     );
     expect(selectable).toContain("buildCreditBatchContexts(");
     expect(traceability).toContain(

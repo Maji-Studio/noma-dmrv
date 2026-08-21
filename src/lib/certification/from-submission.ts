@@ -47,6 +47,39 @@ export function readRemoteStatus(
 }
 
 /**
+ * Overlay a live-fetched registry status onto a submission row copy, so every
+ * surface fed from one response derives from the same registry state. The
+ * persisted `metadata.remoteStatus` is only written by explicit operator
+ * actions (sync, refresh, submit) — a detail view that also fetched the live
+ * statement must not show a badge from the stale overlay next to raw state
+ * from the fresh fetch (DR-002 / #685). Pure copy; never writes back.
+ */
+export function overlayLiveRemoteStatus<
+  T extends CertificationSubmissionRow,
+>(latest: T, liveRemoteStatus: string | null | undefined): T {
+  if (
+    !liveRemoteStatus ||
+    !REMOTE_GHG_STATUSES.includes(liveRemoteStatus as RemoteGhgStatus)
+  ) {
+    return latest;
+  }
+  const metadata =
+    latest.metadata && typeof latest.metadata === "object"
+      ? (latest.metadata as Record<string, unknown>)
+      : {};
+  if (metadata[SUBMISSION_METADATA_KEYS.remoteStatus] === liveRemoteStatus) {
+    return latest;
+  }
+  return {
+    ...latest,
+    metadata: {
+      ...metadata,
+      [SUBMISSION_METADATA_KEYS.remoteStatus]: liveRemoteStatus,
+    },
+  };
+}
+
+/**
  * Derive the operator-facing status for a submission row. Removals are
  * local-only; GHG statements fold in the persisted remote overlay.
  */

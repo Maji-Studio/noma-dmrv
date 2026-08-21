@@ -17,7 +17,6 @@ import {
   ZERO_SOURCE_BIOCHAR_ERROR,
 } from "@/lib/biochar-composition";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import {
   assertCompositionIngredientDrawsWithinStock,
   deriveCompositionSourceBiocharMassKg,
@@ -241,19 +240,6 @@ export async function createBiocharProduct(
           requestedWetMassKg: sourceBiocharMassKg,
           requestedDryMassKg: sourceBiocharDryMassKg,
         });
-      for (const allocation of sourceAllocationPlan.allocations) {
-        await assertCanMutateCertifiedLineage(
-          ctx,
-          tx,
-          {
-            entityType: "productionRun",
-            entityId: allocation.productionRunId,
-          },
-          "create",
-          "biocharProduct",
-          "linked",
-        );
-      }
       productionDate =
         sourceAllocationPlan.productionDate ?? new Date();
       const [sourceAllocation] = sourceAllocationPlan.allocations;
@@ -306,13 +292,6 @@ export async function createBiocharProduct(
           "Linked production run belongs to a different facility",
         );
       }
-      await assertCanMutateCertifiedLineage(
-        ctx,
-        tx,
-        { entityType: "productionRun", entityId: run.id },
-        "create",
-        "biocharProduct",
-      );
       if (
         lockedRun.status !==
         COMPLETED_PRODUCTION_RUN_STATUS

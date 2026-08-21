@@ -20,6 +20,7 @@
  */
 
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMassKg, formatPercent } from "@/lib/format-utils";
 
 /** Moisture is reported to one decimal everywhere; more reads as false precision. */
@@ -195,7 +196,7 @@ export function parseWatchedNumber(value: unknown): number | null {
   return null;
 }
 
-/** Format a moisture percentage — one decimal, trailing ".0" trimmed, "—" for null. */
+/** Format a moisture percentage: one decimal, trailing ".0" trimmed, "Not recorded" for null. */
 export function formatMoisturePercent(value: number | null | undefined): string {
   return formatPercent(value, { digits: MOISTURE_FRACTION_DIGITS });
 }
@@ -237,7 +238,7 @@ export function formatRecordedMass(
   unitSpacing: "spaced" | "compact" = "spaced",
 ): string {
   if (kg == null || !Number.isFinite(kg) || kg < 0) {
-    return "Not recorded";
+    return MISSING_VALUE.notRecorded;
   }
 
   const formatted = formatSplitMass(kg);

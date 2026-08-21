@@ -18,8 +18,12 @@ interface BuildPartyLocationDetailFieldsOptions {
   distanceLabel: string;
   defaultLabel: string;
   positionLabel: string;
+  /** Label for the free-text location description. Defaults to the supplier wording. */
+  descriptionLabel?: string;
   includeSoilTemperature?: boolean;
 }
+
+const DEFAULT_DESCRIPTION_LABEL = "Address / description";
 
 /** Mirrors the location forms without dropping empty optional values. */
 export function buildPartyLocationDetailFields(
@@ -35,7 +39,10 @@ export function buildPartyLocationDetailFields(
       { label: `${prefix}Country`, value: location?.country ?? null },
       { label: `${prefix}State / region`, value: location?.stateRegion ?? null },
       { label: `${prefix}City`, value: location?.city ?? null },
-      { label: `${prefix}Address / description`, value: location?.address ?? null },
+      {
+        label: `${prefix}${options.descriptionLabel ?? DEFAULT_DESCRIPTION_LABEL}`,
+        value: location?.address ?? null,
+      },
       { label: `${prefix}${options.positionLabel} latitude`, value: location?.gpsLatitude ?? null },
       { label: `${prefix}${options.positionLabel} longitude`, value: location?.gpsLongitude ?? null },
     ];

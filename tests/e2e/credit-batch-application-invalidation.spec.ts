@@ -25,6 +25,7 @@ import { seedCreditBatchProductionLineage } from "./fixtures/seed-chain-data";
 import {
   selectEntity,
   selectFirstEntity,
+  waitForFacilityHydration,
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
@@ -38,6 +39,7 @@ async function createApplicationForLineage(
   // Order (biochar product is the one wired to the seeded production run).
   await page.goto(`/orders?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData.facility.name);
   await page.click('button:has-text("New Order")');
   await waitForSideSheet(page);
 
@@ -65,6 +67,7 @@ async function createApplicationForLineage(
   // Delivery, already delivered (applications require a delivered delivery).
   await page.goto(`/deliveries?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData.facility.name);
   await page.click('button:has-text("New Delivery")');
   await waitForSideSheet(page);
 
@@ -79,6 +82,7 @@ async function createApplicationForLineage(
   // Application against that delivery — 5000 tons applied initially.
   await page.goto(`/applications?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData.facility.name);
   await page.click('button:has-text("New Application")');
   await waitForSideSheet(page);
 
@@ -129,7 +133,7 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     await page.waitForURL(/\/applications/);
     await page.waitForLoadState("networkidle");
 
-    const applicationRow = page.locator("table tbody tr[role='button']").first();
+    const applicationRow = page.locator("table tbody tr[tabindex='0']").first();
     await applicationRow.click();
     await waitForSideSheet(page);
     await page.getByRole("button", { name: "Edit Application" }).click();

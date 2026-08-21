@@ -1,10 +1,46 @@
 import { describe, expect, it } from "vitest";
+import { MISSING_VALUE } from "./copy-utils";
 import {
+  formatCo2e,
   formatDayString,
+  formatDistanceKm,
   formatFacilityDateTimeWithOffset,
+  formatFileSize,
   formatMass,
+  formatMassKg,
   formatPercent,
+  formatTonnes,
 } from "./format-utils";
+
+describe("missing-value routing", () => {
+  // The rule: a formatter that receives a value an operator records returns
+  // "Not recorded" for null; one that receives a value the app derives returns
+  // "Not available". See the vocabulary in ./copy-utils.
+  it.each([
+    ["formatMass", formatMass],
+    ["formatMassKg", formatMassKg],
+    ["formatPercent", formatPercent],
+    ["formatDistanceKm", formatDistanceKm],
+  ])("%s reports a recorded quantity as not recorded", (_name, format) => {
+    expect(format(null)).toBe(MISSING_VALUE.notRecorded);
+    expect(format(undefined)).toBe(MISSING_VALUE.notRecorded);
+  });
+
+  it.each([
+    ["formatCo2e", formatCo2e],
+    ["formatTonnes", formatTonnes],
+    ["formatFileSize", formatFileSize],
+  ])("%s reports a derived quantity as not available", (_name, format) => {
+    expect(format(null)).toBe(MISSING_VALUE.notAvailable);
+    expect(format(undefined)).toBe(MISSING_VALUE.notAvailable);
+  });
+
+  it("still formats a measured zero rather than a placeholder", () => {
+    expect(formatMass(0)).toBe("0 kg");
+    expect(formatDistanceKm(0)).toBe("0 km");
+    expect(formatPercent(0)).toBe("0%");
+  });
+});
 
 describe("formatFacilityDateTimeWithOffset", () => {
   it("formats facility-local time with its numeric UTC offset", () => {
@@ -49,6 +85,24 @@ describe("formatMass", () => {
     expect(formatMass(null)).toBe("Not recorded");
     expect(formatMass(undefined)).toBe("Not recorded");
     expect(formatMass(Number.NaN)).toBe("Not recorded");
+  });
+});
+
+describe("formatCo2e", () => {
+  it("keeps kilograms whole below a tonne and gives tonnes three decimals", () => {
+    expect(formatCo2e(15.4)).toBe("15 kg CO₂e");
+    expect(formatCo2e(3_704)).toBe("3.704 t CO₂e");
+  });
+
+  it("returns the shared missing marker for null and undefined", () => {
+    expect(formatCo2e(null)).toBe("Not available");
+    expect(formatCo2e(undefined)).toBe("Not available");
+  });
+
+  it("signs from the displayed magnitude so a rounded zero stays unsigned", () => {
+    expect(formatCo2e(1_040, { signed: true })).toBe("+1.04 t CO₂e");
+    expect(formatCo2e(-15.4, { signed: true })).toBe("−15 kg CO₂e");
+    expect(formatCo2e(0.4, { signed: true })).toBe("0 kg CO₂e");
   });
 });
 

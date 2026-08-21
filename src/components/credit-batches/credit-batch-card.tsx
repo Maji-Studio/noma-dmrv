@@ -3,13 +3,16 @@
 import { formatDateRange } from "@/lib/format-utils";
 import {
   CertificateIcon,
+  EyeIcon,
   PencilSimpleIcon,
   TrashIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { RowActionsMenu } from "@/components/ui";
+import { isRemovalStatusLocked } from "@/lib/certification/status";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { CreditBatchLifecycleRail } from "./credit-batch-lifecycle";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface CreditBatchCardProps {
   creditBatch: CreditBatchWithRelations;
@@ -30,6 +33,10 @@ export function CreditBatchCard({
   onDelete,
 }: CreditBatchCardProps) {
   const co2eStored = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
+  // Interim certification lock (DR-003): once the batch backs a submitted
+  // removal its definition is frozen, so the menu offers no Edit or Delete.
+  // The view sheet explains the lock; the server guard enforces it.
+  const locked = isRemovalStatusLocked(health?.removalStatus);
 
   return (
     <article
@@ -48,16 +55,25 @@ export function CreditBatchCard({
             label={`Actions for credit batch ${creditBatch.code}`}
             actions={[
               {
-                label: "Edit",
-                icon: <PencilSimpleIcon size={16} />,
-                onSelect: () => onEdit(creditBatch),
+                label: "Open details",
+                icon: <EyeIcon size={16} />,
+                onSelect: () => onView(creditBatch),
               },
-              {
-                label: "Delete",
-                destructive: true,
-                icon: <TrashIcon size={16} />,
-                onSelect: () => onDelete(creditBatch.id),
-              },
+              ...(locked
+                ? []
+                : [
+                    {
+                      label: "Edit",
+                      icon: <PencilSimpleIcon size={16} />,
+                      onSelect: () => onEdit(creditBatch),
+                    },
+                    {
+                      label: "Delete",
+                      destructive: true,
+                      icon: <TrashIcon size={16} />,
+                      onSelect: () => onDelete(creditBatch.id),
+                    },
+                  ]),
             ]}
           />
         </div>
@@ -65,8 +81,29 @@ export function CreditBatchCard({
         {/* Feedstock is the production cohort's identity; facility is already
             fixed by the page context and deliberately not repeated here. */}
         <div className="flex flex-col gap-4">
+          {/* The card's pointer target is the whole article; this button is
+              the keyboard and screen-reader route to the same view action
+              (the article itself must not be role="button": it contains the
+              actions menu, and nested interactive controls are invalid). */}
+          {/* Deliberately a raw <button>, not the Button primitive: Button's
+              contract (label-button type, nowrap, fixed heights, centered
+              flex) cannot render a wrapping h3 title without overriding all
+              of it. The focus ring below mirrors Button's own treatment so
+              the interaction state stays uniform. */}
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
-            {creditBatch.feedstockTypeName ?? "Feedstock not set"}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onView(creditBatch);
+              }}
+              className="cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)]"
+            >
+              {creditBatch.feedstockTypeName ?? "Feedstock not set"}
+              <span className="sr-only">
+                {`, open credit batch ${creditBatch.code}`}
+              </span>
+            </button>
           </h3>
           <p className="body-small text-[var(--color-text-secondary)]">
             {formatDateRange(creditBatch.startDate, creditBatch.endDate)}
@@ -94,7 +131,7 @@ export function CreditBatchCard({
             <span className="title-heading-3 leading-none">
               {creditBatch.appliedWeightTons != null
                 ? `${creditBatch.appliedWeightTons.toFixed(2)} t`
-                : "Not recorded"}
+                : MISSING_VALUE.notRecorded}
             </span>
           </div>
           {co2eStored != null && (

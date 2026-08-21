@@ -26,7 +26,7 @@ import {
   ClipboardTextIcon,
   PlusIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -41,7 +41,7 @@ import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
-import { formatCount } from "@/lib/copy-utils";
+import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
 
@@ -146,15 +146,11 @@ export function GhgStatementsList() {
 
   return (
     <div className="container-max page-shell">
-      <header className="flex flex-col gap-8">
-        <span className="title-chapter-title text-[var(--color-text-tertiary)]">
-          Certification
-        </span>
-        <h1 className="title-heading-2">GHG Statements</h1>
-        <p className="body-medium text-[var(--color-text-secondary)] max-w-[680px]">
-          Reporting periods and the Removals Isometric links to each.
-        </p>
-      </header>
+      <PageHeader
+        area="certification"
+        title="GHG Statements"
+        subtitle="Reporting periods and the Removals Isometric links to each."
+      />
 
       {!facilityId ? (
         <EmptyState
@@ -221,7 +217,9 @@ function RegistryRecordCell({ item }: { item: GhgStatementListItem }) {
   const { latestSubmission } = item;
   if (!latestSubmission?.externalId) {
     return (
-      <span className="body-small text-[var(--color-text-tertiary)]">None</span>
+      <span className="body-small text-[var(--color-text-tertiary)]">
+        {MISSING_VALUE.none}
+      </span>
     );
   }
   return (

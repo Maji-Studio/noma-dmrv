@@ -13,6 +13,7 @@ import type {
   GhgStatementReportEntry,
   GhgStatementReportModel,
 } from "./model";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // Column widths in points (A4 content ≈ 527pt; the GHG Entry column flexes).
 const COL = {
@@ -111,7 +112,7 @@ const KG_DECIMAL_PLACES = 3;
 const THOUSANDS_GROUPING = /\B(?=(\d{3})+(?!\d))/g;
 
 const formatKg = (value: number | null): string => {
-  if (value === null) return "Not available";
+  if (value === null) return MISSING_VALUE.notAvailable;
   const [whole, fraction] = Math.abs(value)
     .toFixed(KG_DECIMAL_PLACES)
     .split(".");

@@ -305,11 +305,17 @@ export function ApplicationForm({
   const deliveryCapacityKg = selectedDelivery?.deliveredWetMassKg ?? null;
   const alreadyApplied = selectedDelivery?.alreadyAppliedWetKg ?? 0;
   const isSameDelivery = isEditMode && application?.deliveryId === selectedDeliveryId;
-  const currentApplicationKg = isSameDelivery ? (applicationTonsToKg(application?.biocharAppliedTons) ?? 0) : 0;
-  const currentApplicationDryKg = isSameDelivery
-    ? applicationTonsToKg(application?.biocharAppliedDryTons) ?? 0
+  const currentApplicationKg = isSameDelivery
+    ? (applicationTonsToKg(application?.biocharAppliedTons) ?? 0)
     : 0;
-  const availableKg = deliveryCapacityKg !== null ? deliveryCapacityKg - alreadyApplied + currentApplicationKg : null;
+  const currentApplicationDryKg = isSameDelivery
+    ? (applicationTonsToKg(application?.biocharAppliedDryTons) ?? 0)
+    : 0;
+  const alreadyAppliedDryKg = selectedDelivery?.alreadyAppliedDryKg ?? 0;
+  const availableKg =
+    deliveryCapacityKg !== null
+      ? deliveryCapacityKg - alreadyApplied + currentApplicationKg
+      : null;
   const appliedDryBiocharKg = allocateTrackedDryBiocharKg({
     totalWetKg: deliveryCapacityKg,
     totalDryBiocharKg: selectedDelivery?.massDryKg ?? null,
@@ -317,7 +323,7 @@ export function ApplicationForm({
     allocatedWetKg: Math.max(0, alreadyApplied - currentApplicationKg),
     allocatedDryBiocharKg: Math.max(
       0,
-      (selectedDelivery?.alreadyAppliedDryKg ?? 0) - currentApplicationDryKg,
+      alreadyAppliedDryKg - currentApplicationDryKg,
     ),
   });
   const applicationStockError =
@@ -374,7 +380,11 @@ export function ApplicationForm({
     const biocharAppliedTons = applicationKgToTons(data.biocharAppliedTons);
 
     if (biocharAppliedTons == null) {
-      throw new Error("Biochar product applied is required");
+      setError("biocharAppliedTons", {
+        type: "manual",
+        message: "Biochar product applied is required",
+      });
+      return;
     }
 
     if (appliedDryBiocharKg == null) {
@@ -640,6 +650,7 @@ export function ApplicationForm({
       </FormSpine>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={routedServerError.footerError}

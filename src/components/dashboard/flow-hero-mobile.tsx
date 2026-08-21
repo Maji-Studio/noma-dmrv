@@ -123,7 +123,7 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
               )}
               <span className="flex min-w-0 flex-1 flex-col gap-2">
                 <span className="text-[13.5px] font-bold">{station.name}</span>
-                <span className="font-[family-name:var(--font-mono)] text-[9px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-50)]">
+                <span className="font-[family-name:var(--font-mono)] text-[9px] uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
                   {station.totalLabel}
                   {runningReason ? ` · ${runningReason.text}` : ""}
                 </span>
@@ -149,7 +149,7 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
                 </span>
               )}
               <span
-                className="font-[family-name:var(--font-mono)] text-[12px] text-[var(--clr-dark-purple-50)]"
+                className="font-[family-name:var(--font-mono)] text-[12px] text-[var(--color-text-tertiary)]"
                 aria-hidden
               >
                 →

@@ -20,16 +20,27 @@ import {
 const LOCATION_PART_MAX = 100;
 const locationPartSchema = z.string().max(LOCATION_PART_MAX).optional().nullable().or(z.literal(""));
 
+// Optional free text describing the application site: a landmark, parcel name,
+// access note, or street address. Rural application sites frequently have no
+// postal address at all, and the GPS position is the identifying field, so
+// requiring this forced operators to type filler.
+const CUSTOMER_LOCATION_DESCRIPTION_MAX = 500;
+const customerLocationDescriptionSchema = z
+  .string()
+  .max(
+    CUSTOMER_LOCATION_DESCRIPTION_MAX,
+    `Site description must be ${CUSTOMER_LOCATION_DESCRIPTION_MAX} characters or fewer`,
+  )
+  .optional()
+  .nullable();
+
 // ============================================
 // GPS Coordinate Validation
 // ============================================
 
 const optionalLatitudeSchema = requiredLat.nullable().optional();
 const optionalLongitudeSchema = requiredLng.nullable().optional();
-const customerLocationTextSchema = z
-  .string()
-  .min(1, "Address / description is required")
-  .max(500, "Address / description must be less than 500 characters");
+
 // ============================================
 // Customer Form Schema (Client-side validation)
 // ============================================
@@ -88,7 +99,7 @@ export const customerLocationFormSchema = z.object({
   country: z.string().min(1, "Country is required").max(100, "Country must be less than 100 characters"),
   stateRegion: locationPartSchema,
   city: locationPartSchema,
-  address: customerLocationTextSchema,
+  address: customerLocationDescriptionSchema,
   gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   // Operational road distance (km) from the origin facility. Certifier
@@ -153,7 +164,7 @@ export const createCustomerLocationSchema = z.object({
   country: z.string().min(1, "Country is required").max(LOCATION_PART_MAX),
   stateRegion: locationPartSchema,
   city: locationPartSchema,
-  address: customerLocationTextSchema,
+  address: customerLocationDescriptionSchema,
   gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   distanceFromFacilityKm: optionalPositiveNumber,
@@ -173,7 +184,7 @@ export const updateCustomerLocationSchema = z.object({
   city: locationPartSchema,
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
-  address: customerLocationTextSchema.optional(),
+  address: customerLocationDescriptionSchema,
   distanceFromFacilityKm: optionalPositiveNumber,
   distanceSource: optionalDistanceSource,
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
