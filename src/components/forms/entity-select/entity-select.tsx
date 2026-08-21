@@ -669,6 +669,19 @@ export function EntitySelect({
                       href={emptyHint.href}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onBlur={(e) => {
+                        // Tab is allowed to land here (see handleKeyDown), so
+                        // closing falls to the link itself once focus leaves
+                        // the component; otherwise aria-expanded stays stale.
+                        if (
+                          !containerRef.current?.contains(
+                            e.relatedTarget as Node | null,
+                          )
+                        ) {
+                          setIsOpen(false);
+                          setSearchQuery("");
+                        }
+                      }}
                       className="flex min-h-44 w-full items-center gap-8 border-t border-[var(--color-border-primary)] px-12 py-8 body-small font-medium text-[var(--color-interaction)] transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
                     >
                       <ArrowSquareOutIcon aria-hidden size={16} weight="bold" />
