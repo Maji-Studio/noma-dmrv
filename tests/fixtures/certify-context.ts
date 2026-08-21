@@ -2,6 +2,7 @@ import type { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { CreditBatchLineageFacts } from "@/data-access/credit-batch-accounting";
 import type { DocumentRow } from "@/data-access/documents";
 import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
+import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 
 const DEFAULT_FACT_DATE = new Date("2026-01-20T00:00:00Z");
@@ -144,4 +145,54 @@ export function factsFromMockedLineages(
       0,
     ),
   };
+}
+
+export function transportTemplate(
+  id: string,
+  omit: ReadonlyArray<"feedstock" | "biochar" | "sample"> = [],
+): IsometricGhgEntryTemplate {
+  const categories = [
+    {
+      key: "biomass-feedstock-transport",
+      blueprint_key: "mass_distance_based_ci_emissions",
+      input_key: "mass_distance",
+      category: "feedstock" as const,
+    },
+    {
+      key: "biochar-transport",
+      blueprint_key: "mass_distance_based_ci_emissions",
+      input_key: "mass_distance",
+      category: "biochar" as const,
+    },
+    {
+      key: "sampling-required-for-mrv",
+      blueprint_key: "mass_distance_based_ci_emissions",
+      input_key: "mass_distance",
+      category: "sample" as const,
+    },
+  ].filter((category) => !omit.includes(category.category));
+
+  return {
+    id,
+    name: `Template ${id}`,
+    groups: categories.map((category, index) => ({
+      id: `${id}-grp-${index}`,
+      key: category.key,
+      name: category.key,
+      components: [
+        {
+          id: `${id}-comp-${index}`,
+          blueprint_key: category.blueprint_key,
+          display_name: category.blueprint_key,
+          inputs: [
+            {
+              type: "monitored",
+              input_key: category.input_key,
+              datapoint_id: null,
+            },
+          ],
+        },
+      ],
+    })),
+  } as unknown as IsometricGhgEntryTemplate;
 }
