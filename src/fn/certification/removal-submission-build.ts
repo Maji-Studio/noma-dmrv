@@ -786,6 +786,27 @@ export async function buildRemovalSubmissionBuild(args: {
       candidate.sourceId,
     ]),
   );
+  // Delivery-lineage mass evidence (proof of delivery, BoL) targets the
+  // sequestration datapoint, whose Sources resolve per member credit batch.
+  const deliveryIdByApplicationId = new Map(
+    ctx.lineages.map((lineage) => [
+      lineage.application.id,
+      lineage.delivery.id,
+    ]),
+  );
+  const deliveryIdsByCreditBatchId = new Map(
+    ctx.memberBatchClaims.map((batch) => [
+      batch.creditBatchId,
+      Array.from(
+        new Set(
+          batch.applicationIds.flatMap((applicationId) => {
+            const deliveryId = deliveryIdByApplicationId.get(applicationId);
+            return deliveryId ? [deliveryId] : [];
+          }),
+        ),
+      ),
+    ]),
+  );
   const sourceBindingPlan = buildRemovalSourceBindingPlan({
     candidates: sourceBindingCandidates,
     template: defaultTemplate,
@@ -801,6 +822,7 @@ export async function buildRemovalSubmissionBuild(args: {
         batch.samples.map((sample) => sample.id),
       ]),
     ),
+    deliveryIdsByCreditBatchId,
   });
   // The operator reviews every candidate file before pending Sources receive
   // registry IDs. Build the semantic plan from that complete candidate set,
@@ -827,6 +849,7 @@ export async function buildRemovalSubmissionBuild(args: {
         batch.samples.map((sample) => sample.id),
       ]),
     ),
+    deliveryIdsByCreditBatchId,
   });
 
   const {

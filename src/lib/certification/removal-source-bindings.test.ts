@@ -17,6 +17,12 @@ const application = {
   entityLabel: "Application APP-001",
 } as const;
 
+const delivery = {
+  entityType: "delivery",
+  entityId: "delivery-1",
+  entityLabel: "Delivery DEL-001",
+} as const;
+
 describe("classifyRemovalSourceCandidate", () => {
   it.each(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES)(
     "maps an application %s logbook subtype to sequestration product_mass",
@@ -130,6 +136,87 @@ describe("classifyRemovalSourceCandidate", () => {
       });
     },
   );
+
+  it("maps a delivery receipt to the proof-of-delivery product_mass target", () => {
+    expect(
+      classifyRemovalSourceCandidate({
+        documentType: "delivery_receipt",
+        metadata: {},
+        lineage: delivery,
+      }),
+    ).toMatchObject({
+      nomaRole: "proof_of_delivery",
+      nomaRoleLabel: "Proof of delivery",
+      intendedTarget: {
+        kind: "sequestration",
+        groupKey: "co2-stored",
+        inputKey: "product_mass",
+      },
+      additionalIntendedTargets: [
+        expect.objectContaining({
+          groupKey: "miscellaneous",
+          componentDisplayName: "Safety margin",
+          optionalInTemplate: true,
+        }),
+      ],
+    });
+  });
+
+  it("maps a role-stamped delivery photo to proof of delivery", () => {
+    expect(
+      classifyRemovalSourceCandidate({
+        documentType: "photo",
+        metadata: { deliveryEvidenceRole: "proof_of_delivery" },
+        lineage: delivery,
+      }),
+    ).toMatchObject({ nomaRole: "proof_of_delivery" });
+  });
+
+  it("does not bind a bare delivery photo without the role", () => {
+    expect(
+      classifyRemovalSourceCandidate({
+        documentType: "photo",
+        metadata: {},
+        lineage: delivery,
+      }),
+    ).toBeNull();
+    expect(
+      classifyRemovalSourceCandidate({
+        documentType: "photo",
+        metadata: { deliveryEvidenceRole: "something_else" },
+        lineage: delivery,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not bind a delivery receipt outside delivery lineage", () => {
+    expect(
+      classifyRemovalSourceCandidate({
+        documentType: "delivery_receipt",
+        metadata: {},
+        lineage: application,
+      }),
+    ).toBeNull();
+  });
+
+  it("gives the delivery bill of lading a dual proof-of-delivery target", () => {
+    expect(
+      classifyRemovalSourceCandidate({
+        documentType: "bill_of_lading",
+        metadata: {},
+        lineage: delivery,
+      }),
+    ).toMatchObject({
+      nomaRole: "delivery_bill_of_lading",
+      additionalIntendedTargets: [
+        {
+          kind: "sequestration",
+          groupKey: "co2-stored",
+          inputKey: "product_mass",
+        },
+      ],
+    });
+  });
 
   it("does not reinterpret a provider file type as the Inventory Noma role", () => {
     expect(
@@ -277,12 +364,16 @@ describe("buildRemovalSourceBindingPlan", () => {
   const applicationIdsByCreditBatchId = new Map([
     ["credit-batch-1", ["application-1"]],
   ]);
+  const deliveryIdsByCreditBatchId = new Map([
+    ["credit-batch-1", ["delivery-1"]],
+  ]);
 
   it("persists source identity, Noma role, lineage, target, and revision", () => {
     const plan = buildRemovalSourceBindingPlan({
       candidates: classified,
       template: template as never,
       applicationIdsByCreditBatchId,
+      deliveryIdsByCreditBatchId,
     });
 
     expect(plan).toContainEqual({
@@ -429,11 +520,96 @@ describe("buildRemovalSourceBindingPlan", () => {
     ).toThrow(/expected exactly one/i);
   });
 
+  it("resolves a proof-of-delivery Source to the sequestration datapoint by delivery lineage", () => {
+    const binding = classifyRemovalSourceCandidate({
+      documentType: "delivery_receipt",
+      metadata: {},
+      lineage: delivery,
+    });
+
+    const plan = buildRemovalSourceBindingPlan({
+      candidates: [
+        {
+          documentId: "document-receipt",
+          sourceId: "source-receipt",
+          binding: binding!,
+        },
+      ],
+      template: template as never,
+      applicationIdsByCreditBatchId,
+      deliveryIdsByCreditBatchId,
+    });
+
+    expect(plan).toContainEqual({
+      documentId: "document-receipt",
+      sourceId: "source-receipt",
+      nomaRole: "proof_of_delivery",
+      lineage: delivery,
+      intendedTarget: {
+        kind: "sequestration",
+        groupKey: "co2-stored",
+        componentId: "component-sequestration",
+        componentBlueprintKey: "carbon_rich_substance_sequestration",
+        inputKey: "product_mass",
+        creditBatchIds: ["credit-batch-1"],
+      },
+      mappingRevision: SOURCE_BINDING_MAPPING_REVISION,
+    });
+  });
+
+  it("fails closed when delivery lineage does not resolve to a credit batch", () => {
+    const binding = classifyRemovalSourceCandidate({
+      documentType: "delivery_receipt",
+      metadata: {},
+      lineage: delivery,
+    });
+
+    expect(() =>
+      buildRemovalSourceBindingPlan({
+        candidates: [
+          {
+            documentId: "document-receipt",
+            sourceId: "source-receipt",
+            binding: binding!,
+          },
+        ],
+        template: template as never,
+        applicationIdsByCreditBatchId,
+        deliveryIdsByCreditBatchId: new Map([
+          ["credit-batch-1", ["another-delivery"]],
+        ]),
+      }),
+    ).toThrow(/does not resolve to a Removal credit batch/i);
+  });
+
+  it("binds the delivery bill of lading to both transport and sequestration targets", () => {
+    const plan = buildRemovalSourceBindingPlan({
+      candidates: [classified[2]],
+      template: template as never,
+      applicationIdsByCreditBatchId,
+      deliveryIdsByCreditBatchId,
+    });
+
+    expect(plan.map((entry) => entry.intendedTarget)).toEqual([
+      expect.objectContaining({
+        groupKey: "biochar-transport",
+        inputKey: "mass_distance",
+        creditBatchIds: [],
+      }),
+      expect.objectContaining({
+        groupKey: "co2-stored",
+        inputKey: "product_mass",
+        creditBatchIds: ["credit-batch-1"],
+      }),
+    ]);
+  });
+
   it("gives ordinary datapoints only their targeted Source IDs", () => {
     const plan = buildRemovalSourceBindingPlan({
       candidates: classified,
       template: template as never,
       applicationIdsByCreditBatchId,
+      deliveryIdsByCreditBatchId,
     });
 
     expect(

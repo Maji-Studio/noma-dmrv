@@ -2,6 +2,7 @@ import { getBiocharApplicationRegistryInputs } from "@/data-access/certifier-bio
 import type { OrgContext } from "@/lib/auth/server";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
+import { MISSING_TRUCK_MASSES_GATE_REASON } from "@/lib/certification/biochar-application-gates";
 import {
   kgToTonnes,
   tonnesToKg,
@@ -21,7 +22,7 @@ const PREFLIGHT_EXTERNAL_PRODUCTION_BATCH_ID = "preflight-production-batch";
 const PREFLIGHT_EXTERNAL_STORAGE_LOCATION_ID = "preflight-storage-location";
 const SLICE_WET_MASS_TOLERANCE_KG = 0.01;
 
-export interface BiocharApplicationIntent {
+interface BiocharApplicationIntentBase {
   applicationId: string;
   applicationCode: string;
   creditBatchId: string;
@@ -32,12 +33,43 @@ export interface BiocharApplicationIntent {
   applicationDate: string;
   appliedTonnes: number;
   fieldSizeHa: number;
-  truckMassOnArrivalKg: number;
-  truckMassOnDepartureKg: number;
   supplierReference: string;
   storageLocationSupplierReference: string;
   storageLocationPayload: CreateStorageLocationRequest;
   sourceIds: string[];
+}
+
+/** An intent whose delivery carries both observed truck masses; it POSTs. */
+export interface ReadyBiocharApplicationIntent
+  extends BiocharApplicationIntentBase {
+  gateReason: null;
+  truckMassOnArrivalKg: number;
+  truckMassOnDepartureKg: number;
+}
+
+/**
+ * An intent whose delivery lacks observed truck masses. The registry payload
+ * requires both (`CreateBiocharApplicationRequest`) and values are never
+ * fabricated, so the registration is journaled `gated` with this reason and
+ * skipped; the Removal submission proceeds on documentation-based mass
+ * verification (Biochar Protocol v1.3, pre-approved). Registration un-gates
+ * automatically on a later submission once the masses exist.
+ */
+export interface GatedBiocharApplicationIntent
+  extends BiocharApplicationIntentBase {
+  gateReason: typeof MISSING_TRUCK_MASSES_GATE_REASON;
+  truckMassOnArrivalKg: number | null;
+  truckMassOnDepartureKg: number | null;
+}
+
+export type BiocharApplicationIntent =
+  | ReadyBiocharApplicationIntent
+  | GatedBiocharApplicationIntent;
+
+export function isReadyBiocharApplicationIntent(
+  intent: BiocharApplicationIntent,
+): intent is ReadyBiocharApplicationIntent {
+  return intent.gateReason === null;
 }
 
 export async function compileBiocharApplicationIntents(args: {
@@ -143,18 +175,17 @@ export async function compileBiocharApplicationIntents(args: {
         `Application ${input.applicationCode}'s immutable allocations total ${allocatedWetMassKg} kg, but its persisted applied mass is ${appliedWetMassKg} kg. Reconcile the Removal and submit again.`,
       );
     }
-    if (input.fieldSizeHa == null) {
+    if (
+      input.fieldSizeHa == null ||
+      !Number.isFinite(input.fieldSizeHa) ||
+      input.fieldSizeHa <= 0
+    ) {
       throw new SafeError(
         `Application ${input.applicationCode} needs a field size greater than 0 ha before submitting.`,
       );
     }
     const truckMassOnArrivalKg = input.truckMassOnArrivalKg;
     const truckMassOnDepartureKg = input.truckMassOnDepartureKg;
-    if (truckMassOnArrivalKg == null || truckMassOnDepartureKg == null) {
-      throw new SafeError(
-        `Application ${input.applicationCode} needs observed truck masses before and after unloading on delivery ${input.deliveryCode} before submitting.`,
-      );
-    }
     if (!input.customerLocationId) {
       throw new SafeError(
         `Application ${input.applicationCode} has no customer location. Select a delivery destination before submitting.`,
@@ -198,6 +229,34 @@ export async function compileBiocharApplicationIntents(args: {
         creditBatchId: slice.creditBatchId,
         environment: args.environment,
       });
+      const base = {
+        applicationId,
+        applicationCode: input.applicationCode,
+        creditBatchId: slice.creditBatchId,
+        deliveryId: input.deliveryId,
+        customerLocationId,
+        certifierProjectId,
+        externalProjectId,
+        applicationDate,
+        appliedTonnes,
+        fieldSizeHa,
+        supplierReference,
+        storageLocationSupplierReference,
+        storageLocationPayload,
+        sourceIds: [],
+      };
+
+      // Missing truck masses gate the registry Biochar Application instead of
+      // blocking the Removal: the API payload requires both masses and values
+      // are never fabricated, so the registration is journaled and skipped.
+      if (truckMassOnArrivalKg == null || truckMassOnDepartureKg == null) {
+        return {
+          ...base,
+          gateReason: MISSING_TRUCK_MASSES_GATE_REASON,
+          truckMassOnArrivalKg,
+          truckMassOnDepartureKg,
+        } satisfies GatedBiocharApplicationIntent;
+      }
 
       // A commingled physical application is represented by one registry
       // application per Production Batch. Applied mass follows the immutable
@@ -217,29 +276,17 @@ export async function compileBiocharApplicationIntents(args: {
       });
 
       return {
-        applicationId,
-        applicationCode: input.applicationCode,
-        creditBatchId: slice.creditBatchId,
-        deliveryId: input.deliveryId,
-        customerLocationId,
-        certifierProjectId,
-        externalProjectId,
-        applicationDate,
-        appliedTonnes,
-        fieldSizeHa,
+        ...base,
+        gateReason: null,
         truckMassOnArrivalKg,
         truckMassOnDepartureKg,
-        supplierReference,
-        storageLocationSupplierReference,
-        storageLocationPayload,
-        sourceIds: [],
-      } satisfies BiocharApplicationIntent;
+      } satisfies ReadyBiocharApplicationIntent;
     });
   });
 }
 
 export function buildBiocharApplicationRequestFromIntent(args: {
-  intent: BiocharApplicationIntent;
+  intent: ReadyBiocharApplicationIntent;
   externalProductionBatchId: string;
   externalStorageLocationId: string;
 }): CreateBiocharApplicationRequest {

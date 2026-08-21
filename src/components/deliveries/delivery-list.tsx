@@ -698,7 +698,7 @@ export function DeliveryList() {
                   ],
                 },
                 {
-                  title: "Transport evidence",
+                  title: "Delivery evidence",
                   fields: [],
                   content: (
                     <TransportEvidencePanel

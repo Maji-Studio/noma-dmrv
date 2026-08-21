@@ -8,6 +8,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
@@ -16,19 +17,98 @@ import {
   useDeleteDocument,
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
-import type { DocumentEntityType } from "@/schemas/documents";
+import {
+  DOCUMENT_TYPE_LABELS,
+  type DocumentEntityType,
+} from "@/schemas/documents";
 import { InfoHint } from "@/components/ui/tooltip";
 import {
-  isAcceptedTransportEvidenceDocument,
-  isTransportEvidenceDocumentType,
-  TRANSPORT_EVIDENCE_DOCUMENT_LABELS,
-} from "@/lib/certification/transport-evidence";
-import { ClassifiedTransportEvidenceUploader } from "./classified-transport-evidence-uploader";
+  hasProofOfDeliveryRole,
+  isAcceptedDeliveryEvidenceDocument,
+  isProofOfDeliveryDocument,
+} from "@/lib/certification/delivery-evidence";
+import { isAcceptedTransportEvidenceDocument } from "@/lib/certification/transport-evidence";
+import {
+  ClassifiedTransportEvidenceUploader,
+  evidenceUploaderLabel,
+} from "./classified-transport-evidence-uploader";
 
 type TransportEvidenceEntityType = Extract<
   DocumentEntityType,
   "feedstock" | "delivery" | "transport_leg"
 >;
+
+const PANEL_HEADINGS: Record<TransportEvidenceEntityType, string> = {
+  feedstock: "Transport evidence",
+  transport_leg: "Transport evidence",
+  delivery: "Delivery evidence",
+};
+
+const PANEL_HINTS: Record<TransportEvidenceEntityType, string> = {
+  feedstock:
+    "Optional. Attach a bill of lading, weigh-scale ticket, or other transport record if you have one.",
+  transport_leg:
+    "Optional. Attach a bill of lading, weigh-scale ticket, or other transport record if you have one.",
+  delivery:
+    "Attach proof of delivery: a delivery receipt, bill of lading, or delivery photo. These become registry mass evidence. Weighbridge tickets and other transport records are kept for verification.",
+};
+
+const PANEL_EMPTY_TITLE: Record<TransportEvidenceEntityType, string> = {
+  feedstock: "No transport evidence",
+  transport_leg: "No transport evidence",
+  delivery: "No delivery evidence",
+};
+
+function isAcceptedEvidenceDocument(
+  entityType: TransportEvidenceEntityType,
+  document: { uploadStatus: string; documentType: string },
+): boolean {
+  return entityType === "delivery"
+    ? isAcceptedDeliveryEvidenceDocument(document)
+    : isAcceptedTransportEvidenceDocument(document);
+}
+
+function documentLabel(
+  entityType: TransportEvidenceEntityType,
+  document: { documentType: string; metadata: unknown },
+): string {
+  // A delivery photo without the proof-of-delivery role was not uploaded
+  // through the "Delivery photo" chip; label it by its plain type.
+  if (
+    entityType === "delivery" &&
+    document.documentType === "photo" &&
+    !hasProofOfDeliveryRole(document.metadata)
+  ) {
+    return DOCUMENT_TYPE_LABELS.photo;
+  }
+  return evidenceUploaderLabel(entityType, document.documentType);
+}
+
+/**
+ * Marks which delivery documents the Removal submission binds as registry
+ * mass evidence (proof of delivery) versus records retained for verification
+ * sampling only. Non-delivery owners carry no badge: their documents are all
+ * retention records.
+ */
+function RegistryBindingBadge({
+  document,
+}: {
+  document: { documentType: string; metadata: unknown };
+}) {
+  const registryBound = isProofOfDeliveryDocument(document);
+  return (
+    <span
+      className={[
+        "body-caption inline-flex shrink-0 items-center border px-4 py-1",
+        registryBound
+          ? "border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] text-[var(--st-ok)]"
+          : "border-[var(--color-border-primary)] text-[var(--color-text-secondary)]",
+      ].join(" ")}
+    >
+      {registryBound ? "Registry evidence" : "Retention record"}
+    </span>
+  );
+}
 
 interface TransportEvidenceDocumentsProps {
   entityType: TransportEvidenceEntityType;
@@ -37,9 +117,10 @@ interface TransportEvidenceDocumentsProps {
 }
 
 /**
- * Transport evidence upload + list for a stable lineage entity or a saved
- * manual transport leg. The document layer keeps the same evidence controls
- * across all three supported owners.
+ * Evidence upload + list for a stable lineage entity or a saved manual
+ * transport leg. The document layer keeps the same evidence controls across
+ * all three supported owners; deliveries add the proof-of-delivery
+ * classifications and the per-document registry badge.
  */
 export function TransportEvidenceDocuments({
   entityType,
@@ -72,8 +153,8 @@ export function TransportEvidenceDocuments({
     }
   };
 
-  const uploadedDocs = (docs ?? []).filter(
-    isAcceptedTransportEvidenceDocument,
+  const uploadedDocs = (docs ?? []).filter((doc) =>
+    isAcceptedEvidenceDocument(entityType, doc),
   );
 
   return (
@@ -108,12 +189,13 @@ export function TransportEvidenceDocuments({
                   {doc.fileName}
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  {isTransportEvidenceDocumentType(doc.documentType)
-                    ? TRANSPORT_EVIDENCE_DOCUMENT_LABELS[doc.documentType]
-                    : doc.documentType} ·{" "}
+                  {documentLabel(entityType, doc)} ·{" "}
                   {formatFileSize(doc.fileSizeBytes)}
                 </span>
               </div>
+              {entityType === "delivery" && (
+                <RegistryBindingBadge document={doc} />
+              )}
               <a
                 href={`/api/documents/${doc.id}`}
                 target="_blank"
@@ -139,9 +221,12 @@ export function TransportEvidenceDocuments({
           ))}
         </ul>
       ) : readOnly ? (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          No transport evidence attached.
-        </p>
+        <EmptyState
+          icon={<FileIcon size={32} weight="bold" />}
+          title={PANEL_EMPTY_TITLE[entityType]}
+          description="No documents are attached."
+          padding="sm"
+        />
       ) : null}
 
       {!readOnly && (
@@ -189,6 +274,7 @@ export function TransportEvidencePanel({
   readOnly = false,
   embedded = false,
 }: TransportEvidencePanelProps) {
+  const heading = PANEL_HEADINGS[entityType];
   return (
     <section
       className={
@@ -196,17 +282,16 @@ export function TransportEvidencePanel({
           ? "space-y-16"
           : "space-y-16 border-t border-[var(--color-border-tertiary)] pt-16"
       }
-      aria-label={embedded ? "Transport evidence" : undefined}
+      aria-label={embedded ? heading : undefined}
     >
       <div className="flex items-center gap-6">
         {!embedded && (
           <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-            Transport evidence
+            {heading}
           </h3>
         )}
-        <InfoHint label="About transport evidence">
-          Optional. Attach a bill of lading, weigh-scale ticket, or other
-          transport record if you have one.
+        <InfoHint label={`About ${heading.toLowerCase()}`}>
+          {PANEL_HINTS[entityType]}
         </InfoHint>
       </div>
       <TransportEvidenceDocuments

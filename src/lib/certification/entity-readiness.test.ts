@@ -369,6 +369,20 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
+  it("keeps a delivered delivery ready without truck masses", () => {
+    // Mass verification runs on the documentation-based proof-of-delivery
+    // pathway; missing truck masses gate the registry Biochar Application
+    // and must never surface as a certify gap or badge.
+    const readiness = deriveEntityCertifyReadiness("delivery", {
+      status: "delivered",
+      deliveredWetMassKg: 400,
+      truckMassOnArrivalKg: null,
+      truckMassOnDepartureKg: null,
+    });
+
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
+  });
+
   it("keeps a delivered delivery ready without evidence", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "delivered",

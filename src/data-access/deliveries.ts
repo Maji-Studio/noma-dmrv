@@ -24,8 +24,12 @@ import {
   effectiveDeliveryDistanceSource,
 } from "./delivery-distance-projections";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
+import {
+  isDeliveryTruckMassCompletion,
+  type DeliveryUpdateData,
+} from "./delivery-mass-gated-correction";
+import { completeMassGatedDeliveryTruckMasses } from "./delivery-mass-gated-completion";
 
-// Types
 export interface DeliveryWithRelations extends Delivery {
   status: DeliveryStatus;
   orderCode: string | null;
@@ -659,24 +663,7 @@ export async function createDelivery(
 export async function updateDelivery(
   ctx: OrgContext,
   deliveryId: string,
-  data: {
-    code?: string;
-    orderId?: string;
-    facilityId?: string;
-    deliveryDate?: Date;
-    biocharProductId?: string | null;
-    driverId?: string | null;
-    vehicleId?: string | null;
-    status?: "upcoming" | "delivered";
-    deliveredWetMassKg?: number | null;
-    truckMassOnArrivalKg?: number | null;
-    truckMassOnDepartureKg?: number | null;
-    moistureContentPercent?: number | null;
-    distanceKmOverride?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
-    distanceNote?: string | null;
-    tripType?: "return" | "one_way" | null;
-  }
+  data: DeliveryUpdateData,
 ): Promise<Delivery> {
   requireOrgScope(ctx);
   const deliveryColumns = await getDeliveryColumnAvailability();
@@ -689,6 +676,20 @@ export async function updateDelivery(
 
   if (!existing) {
     throw new SafeError("Delivery not found");
+  }
+
+  if (isDeliveryTruckMassCompletion(existing, data)) {
+    const corrected = await completeMassGatedDeliveryTruckMasses(
+      ctx,
+      deliveryId,
+      {
+        currentArrivalKg: existing.truckMassOnArrivalKg,
+        currentDepartureKg: existing.truckMassOnDepartureKg,
+        arrivalKg: data.truckMassOnArrivalKg!,
+        departureKg: data.truckMassOnDepartureKg!,
+      },
+    );
+    if (corrected) return getDeliveryById(ctx, deliveryId);
   }
 
   // If code is being changed, check for duplicates
