@@ -173,26 +173,35 @@ export function transportTemplate(
   ].filter((category) => !omit.includes(category.category));
 
   return {
+    credit_type: "REMOVAL",
+    display_name: `Template ${id}`,
     id,
-    name: `Template ${id}`,
+    project_id: "prj_test",
+    supplier_reference_id: null,
     groups: categories.map((category, index) => ({
+      description: category.key,
+      display_name: category.key,
       id: `${id}-grp-${index}`,
       key: category.key,
-      name: category.key,
       components: [
         {
-          id: `${id}-comp-${index}`,
           blueprint_key: category.blueprint_key,
+          description: null,
           display_name: category.blueprint_key,
+          ghg_entry_template_component_group_id: `${id}-grp-${index}`,
+          ghg_entry_template_id: id,
+          id: `${id}-comp-${index}`,
           inputs: [
             {
-              type: "monitored",
-              input_key: category.input_key,
               datapoint_id: null,
+              display_name: category.input_key,
+              input_key: category.input_key,
+              quantity_kind: "mass_distance",
+              type: "monitored",
             },
           ],
         },
       ],
     })),
-  } as unknown as IsometricGhgEntryTemplate;
+  } satisfies IsometricGhgEntryTemplate;
 }
