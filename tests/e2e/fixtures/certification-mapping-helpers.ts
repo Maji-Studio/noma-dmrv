@@ -150,7 +150,12 @@ export async function fetchSubmittableSandboxRemovalTemplate(
       },
       signal: AbortSignal.timeout(TEMPLATE_FETCH_TIMEOUT_MS),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn(
+        `[certification-fixture] template fetch failed: HTTP ${response.status}`,
+      );
+      return null;
+    }
     const json = (await response.json()) as { nodes?: RawRemovalTemplate[] };
     for (const node of json.nodes ?? []) {
       if (node.id && !templateHasUnboundFixedInput(node)) {
@@ -165,7 +170,12 @@ export async function fetchSubmittableSandboxRemovalTemplate(
       }
     }
     return null;
-  } catch {
+  } catch (error) {
+    console.warn(
+      `[certification-fixture] template fetch error: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
     return null;
   }
 }
