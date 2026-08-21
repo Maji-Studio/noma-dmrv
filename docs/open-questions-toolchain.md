@@ -24,14 +24,18 @@ already match the current project toolchain and need no follow-up.
 
 ### Drizzle ORM/Kit v1.0 upgrade (`db/drizzle-v1`)
 
-- v1 was at `1.0.0-rc.3` (stable line still 0.45.x). Bundles a full drizzle-kit
-  rewrite (with materially faster introspection for a schema of this size), migrations folder
-  v3 (journal.json removed, per-migration folders, ends git conflicts on
-  migrations), and Relational Queries v2 (breaking; official v1→v2 guide).
-  Release notes warn "something will definitely break".
-- **Resolve via:** do NOT adopt at RC. When stable ships, use a dedicated
-  upgrade branch; the no-prod-data reseed-over-migrate stance makes the
-  migrations-folder restructure cheap if done before launch (M).
+- Still open: the project uses `drizzle-orm` 0.45 and `drizzle-kit` 0.31 while
+  Drizzle v1 remains on its release-candidate line. The v1 changes include a
+  full Drizzle Kit rewrite, Relational Queries v2, and a migration-folder
+  redesign that removes `journal.json`, reduces potential Git conflicts around
+  that file, and simplifies conflicted-migration handling. See the
+  [v1 beta.2 release notes](https://orm.drizzle.team/docs/latest-releases/drizzle-orm-v1beta2)
+  and the [v1 upgrade guide](https://orm.drizzle.team/docs/upgrade-v1).
+- **Resolve via:** verify the current status in the
+  [official releases](https://github.com/drizzle-team/drizzle-orm/releases), and
+  do not adopt a prerelease. Once v1 is stable, use a dedicated upgrade branch;
+  the no-production-data reseed-over-migrate stance makes the migration-folder
+  restructure cheap if done before launch (M).
 
 ### Cache Components pilot (`app/cache-components`)
 
