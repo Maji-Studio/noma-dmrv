@@ -10,6 +10,7 @@ loadEnv({ path: ".env.local", override: false });
 
 import { and, eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "@/db/org-defaults";
+import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
@@ -98,12 +99,18 @@ export async function deleteCertifierMapping(facilityId: string): Promise<void> 
   }
 }
 
-interface RawRemovalTemplate {
-  id?: string;
+type GhgTemplateComponent =
+  IsometricGhgEntryTemplate["groups"][number]["components"][number];
+type GhgTemplateInput = GhgTemplateComponent["inputs"][number];
+
+interface RawRemovalTemplate
+  extends Partial<Pick<IsometricGhgEntryTemplate, "id">> {
   groups?: Array<{
     components?: Array<{
-      blueprint_key?: string;
-      inputs?: Array<{ type?: string; datapoint_id?: string | null }>;
+      blueprint_key?: GhgTemplateComponent["blueprint_key"];
+      inputs?: Array<
+        Partial<Pick<GhgTemplateInput, "type" | "datapoint_id">>
+      >;
     }>;
   }>;
 }
