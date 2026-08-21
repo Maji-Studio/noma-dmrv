@@ -30,7 +30,12 @@
  */
 
 import type { Page } from "@playwright/test";
+import { eq } from "drizzle-orm";
+import * as crypto from "node:crypto";
 import { test, expect } from "./fixtures";
+import { createDbConnection } from "./fixtures/db";
+import * as schema from "../../src/db/schema";
+import { MISSING_VALUE } from "../../src/lib/copy-utils";
 import {
   STUB_GEOCODE_FIXTURES,
   stubRouteDistanceKm,
@@ -249,7 +254,7 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await expect(dialog.getByLabel("Country")).toBeVisible();
     await expect(dialog.getByLabel("State / region")).toBeVisible();
     await expect(dialog.getByLabel("City")).toBeVisible();
-    await expect(dialog.getByLabel("Address / description")).toBeVisible();
+    await expect(dialog.getByLabel("Site description")).toBeVisible();
     await expect(dialog.getByText("Application site position")).toBeVisible();
     await expect(
       dialog.getByPlaceholder(/Address search|Search address or place/i)
@@ -298,28 +303,81 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await expect(page.getByText("Application error")).toBeHidden();
   });
 
-  test("customer create sheet adds a pending location through a dialog", async ({
+  test("customer create sheet saves a location with a blank site description", async ({
     adminPage: page,
     seededData,
   }) => {
-    const dialog = await openNewCustomerLocationEditor(
-      page,
-      seededData.facility.id
-    );
+    const { db, pool } = createDbConnection();
+    const runId = crypto.randomUUID().slice(0, 8);
+    const customerName = `E2E Blank Site Customer ${runId}`;
+    const locationName = `E2E Customer Site ${runId}`;
+    let createdCustomerId: string | undefined;
 
-    await dialog.getByLabel("Location name").fill("E2E Customer Site");
-    await dialog.getByLabel("Country").fill("Tanzania");
-    await dialog
-      .getByLabel("Address / description")
-      .fill("E2E application site");
-    await dialog.getByLabel("GPS latitude").fill(String(DAR.lat));
-    await dialog.getByLabel("GPS longitude").fill(String(DAR.lng));
-    await dialog.getByRole("button", { name: "Add Location" }).click();
+    try {
+      const dialog = await openNewCustomerLocationEditor(
+        page,
+        seededData.facility.id
+      );
 
-    await expect(dialog).not.toBeVisible();
-    const customerSheet = page.getByRole("dialog", { name: "Create Customer" });
-    await expect(customerSheet).toBeVisible();
-    await expect(customerSheet.getByText("E2E Customer Site")).toBeVisible();
+      await dialog.getByLabel("Location name").fill(locationName);
+      await dialog.getByLabel("Country").fill("Tanzania");
+      // Site description deliberately left blank: it is optional, and a location
+      // saved with only a name, country, and GPS position must be accepted.
+      await dialog.getByLabel("GPS latitude").fill(String(DAR.lat));
+      await dialog.getByLabel("GPS longitude").fill(String(DAR.lng));
+      await dialog.getByRole("button", { name: "Add Location" }).click();
+
+      await expect(dialog).not.toBeVisible();
+      const customerSheet = page.getByRole("dialog", {
+        name: "Create Customer",
+      });
+      await expect(customerSheet).toBeVisible();
+      await expect(customerSheet.getByText(locationName)).toBeVisible();
+
+      // Submit the outer sheet — the pending location only reaches
+      // createCustomerLocationFn once the customer itself is created.
+      await customerSheet.getByLabel("Customer name").fill(customerName);
+      await customerSheet
+        .getByRole("button", { name: "Create Customer" })
+        .click();
+      await expect(customerSheet).toBeHidden();
+
+      // A blank site description must land as NULL, not as an empty string.
+      const [savedLocation] = await db
+        .select({
+          customerId: schema.customerLocations.customerId,
+          address: schema.customerLocations.address,
+        })
+        .from(schema.customerLocations)
+        .where(eq(schema.customerLocations.name, locationName));
+      expect(savedLocation, "the pending location was never persisted").toBeDefined();
+      expect(savedLocation?.address).toBeNull();
+      createdCustomerId = savedLocation?.customerId;
+
+      // The stored NULL reads back as the shared missing-value token.
+      await page.goto(`/customers/${createdCustomerId}`);
+      const locationRow = page
+        .getByRole("row")
+        .filter({ hasText: locationName });
+      await expect(locationRow).toBeVisible();
+      // Column order: name, country, state / region, city, site description.
+      await expect(locationRow.getByRole("cell").nth(4)).toHaveText(
+        MISSING_VALUE.notRecorded
+      );
+    } finally {
+      try {
+        if (createdCustomerId) {
+          await db
+            .delete(schema.customerLocations)
+            .where(eq(schema.customerLocations.customerId, createdCustomerId));
+          await db
+            .delete(schema.customers)
+            .where(eq(schema.customers.id, createdCustomerId));
+        }
+      } finally {
+        await pool.end();
+      }
+    }
   });
 
   test("supplier create sheet adds a pending location through a dialog", async ({
