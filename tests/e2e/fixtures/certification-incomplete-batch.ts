@@ -56,12 +56,14 @@ export async function seedUngroupedIncompleteBatch(
     cleanup: async () => {
       const connection = createDbConnection();
       try {
-        await connection.db
-          .delete(schema.creditBatches)
-          .where(eq(schema.creditBatches.id, id.creditBatch));
-        await connection.db
-          .delete(schema.productionProcesses)
-          .where(eq(schema.productionProcesses.id, id.productionProcess));
+        await connection.db.transaction(async (tx) => {
+          await tx
+            .delete(schema.creditBatches)
+            .where(eq(schema.creditBatches.id, id.creditBatch));
+          await tx
+            .delete(schema.productionProcesses)
+            .where(eq(schema.productionProcesses.id, id.productionProcess));
+        });
       } finally {
         await connection.pool.end();
       }
