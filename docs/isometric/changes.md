@@ -698,3 +698,35 @@ snapshot by design.
 - GHG statement creates now persist the interrupted marker (`lastError`,
   `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have
   reached the registry, matching the Removal pipeline.
+
+## 2026-08-21 (delivery proof-of-delivery evidence; truck masses gate, never block)
+
+Biochar Protocol v1.3, "Measurement of Mass of Biochar Stored", defines an
+alternative to weighbridge measurement: documentation-based verification via
+signed delivery receipts, bills of lading, or photographic evidence of
+delivery. Isometric pre-approved this pathway for this project (confirmed
+2026-08-21). Verbatim source:
+<https://registry.isometric.com/protocol/biochar/1.3#measurement-of-mass-of-biochar-stored>
+
+- New Noma evidence role `proof_of_delivery`: a delivery receipt or
+  role-stamped delivery photo (`metadata.deliveryEvidenceRole =
+  "proof_of_delivery"`) on delivery lineage binds to the sequestration
+  `co2-stored`/`product_mass` datapoint, plus the optional Safety margin mass
+  input. Bare photos never bind. The delivery bill of lading keeps its
+  `biochar-transport`/`mass_distance` target and gains the same
+  `product_mass` additional target (the protocol lists BoLs as accepted proof
+  of delivery).
+- Missing `deliveries.truckMassOnArrivalKg`/`truckMassOnDepartureKg` no
+  longer fail Removal submission. The `POST /biochar_applications` payload is
+  untouched and values are never fabricated: the registration is journaled
+  `lifecycleStatus: "gated"` with `gateReason: "missing_truck_masses"` (no
+  payload) and the POST is skipped. Once the delivery carries both masses, a
+  later submission upgrades the placeholder into the normal in-flight claim
+  automatically. All other guards (split-delivery refusal, positive field
+  size, immutable slices) are unchanged.
+- Snapshot format: `biocharApplicationIntents` entries now carry `gateReason`
+  (nullable truck masses when gated). Pre-gating drafts without the field
+  still resume; `SOURCE_BINDING_MAPPING_REVISION` bumped via the rules hash,
+  so an already-reviewed draft re-reviews on refresh.
+- PDD obligations for the pathway (production-site weighing, transport
+  protocols, chain of custody) are documented outside this codebase.

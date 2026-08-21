@@ -112,16 +112,47 @@ describe("compileBiocharApplicationIntents", () => {
     await expect(compile()).rejects.toThrow(/field size greater than 0 ha/i);
   });
 
-  it("fails closed when observed truck masses are absent", async () => {
+  it.each([
+    [null, null],
+    [15_000, null],
+    [null, 3_000],
+  ])(
+    "gates the intent instead of failing when truck masses are %s/%s",
+    async (truckMassOnArrivalKg, truckMassOnDepartureKg) => {
+      mocks.getInputs.mockResolvedValue([
+        input({ truckMassOnArrivalKg, truckMassOnDepartureKg }),
+      ]);
+
+      await expect(compile()).resolves.toEqual([
+        expect.objectContaining({
+          applicationId: APPLICATION_ID,
+          creditBatchId: CREDIT_BATCH_ID,
+          gateReason: "missing_truck_masses",
+          truckMassOnArrivalKg,
+          truckMassOnDepartureKg,
+        }),
+      ]);
+    },
+  );
+
+  it("keeps every other guard active for a mass-gated Application", async () => {
     mocks.getInputs.mockResolvedValue([
       input({
-        deliveredWetMassKg: 3_000,
         truckMassOnArrivalKg: null,
         truckMassOnDepartureKg: null,
+        fieldSizeHa: null,
       }),
     ]);
+    await expect(compile()).rejects.toThrow(/field size greater than 0 ha/i);
 
-    await expect(compile()).rejects.toThrow(/observed truck masses before and after/i);
+    mocks.getInputs.mockResolvedValue([
+      input({
+        truckMassOnArrivalKg: null,
+        truckMassOnDepartureKg: null,
+        customerLocationId: null,
+      }),
+    ]);
+    await expect(compile()).rejects.toThrow(/no customer location/i);
   });
 
   it("keeps explicit truck observations authoritative", async () => {

@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   claim: vi.fn(),
   confirm: vi.fn(),
   markDrift: vi.fn(),
+  recordGated: vi.fn(),
+  activateGated: vi.fn(),
   getProductionRegistrations: vi.fn(),
   ensureProduction: vi.fn(),
   ensureStorage: vi.fn(),
@@ -29,6 +31,8 @@ vi.mock("@/data-access/certifier-biochar-applications", () => ({
   claimBiocharApplicationRegistration: mocks.claim,
   confirmBiocharApplicationRegistration: mocks.confirm,
   markBiocharApplicationDrift: mocks.markDrift,
+  recordGatedBiocharApplicationRegistration: mocks.recordGated,
+  activateGatedBiocharApplicationRegistration: mocks.activateGated,
 }));
 vi.mock("@/data-access/certifier-production-batches", () => ({
   getProductionBatchRegistrations: mocks.getProductionRegistrations,
@@ -71,6 +75,7 @@ vi.mock("./registry-create", () => ({
 }));
 
 import { ensureRemovalBiocharApplications } from "./biochar-applications";
+import type { GatedBiocharApplicationIntent } from "./biochar-application-intents";
 
 const APPLICATION_ID = "11111111-1111-4111-8111-111111111111";
 const CREDIT_BATCH_ID = "22222222-2222-4222-8222-222222222222";
@@ -100,6 +105,7 @@ function intent(): BiocharApplicationIntent {
     applicationDate: "2026-04-05",
     appliedTonnes: 12,
     fieldSizeHa: 4,
+    gateReason: null,
     truckMassOnArrivalKg: 15_000,
     truckMassOnDepartureKg: 3_000,
     supplierReference: "nm-isometric-sandbox-bca-app-batch-v1",
@@ -114,6 +120,15 @@ function intent(): BiocharApplicationIntent {
       supplier_reference_id: "nm-slc-test",
     },
     sourceIds: [],
+  };
+}
+
+function gatedIntent(): GatedBiocharApplicationIntent {
+  return {
+    ...intent(),
+    gateReason: "missing_truck_masses",
+    truckMassOnArrivalKg: null,
+    truckMassOnDepartureKg: null,
   };
 }
 
@@ -267,6 +282,82 @@ describe("ensureRemovalBiocharApplications", () => {
         truck_mass_on_departure: { magnitude: 3_000, unit: "kg" },
       }),
     );
+  });
+
+  it("journals a gated registration and skips the registry POST for missing truck masses", async () => {
+    await ensureRemovalBiocharApplications({
+      orgCtx,
+      removalId: "removal-1",
+      externalRemovalId: EXTERNAL_REMOVAL_ID,
+      submissionRow: { id: "submission-1" } as CertificationSubmissionRow,
+      intents: [gatedIntent()],
+      log,
+    });
+
+    expect(mocks.ensureProduction).toHaveBeenCalledOnce();
+    expect(mocks.ensureStorage).toHaveBeenCalledOnce();
+    expect(mocks.recordGated).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        applicationId: APPLICATION_ID,
+        creditBatchId: CREDIT_BATCH_ID,
+        productionBatchRegistrationId: "production-journal-1",
+        storageLocationRegistrationId: "storage-journal-1",
+        externalProductionBatchId: "ptb-test",
+        externalStorageLocationId: "slc-test",
+        supplierReference: intent().supplierReference,
+        gateReason: "missing_truck_masses",
+      }),
+    );
+    expect(mocks.claim).not.toHaveBeenCalled();
+    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.confirm).not.toHaveBeenCalled();
+  });
+
+  it("upgrades a mass-gated placeholder into the in-flight claim once masses exist", async () => {
+    mocks.registration = registration(
+      {},
+      {
+        submittedPayload: null,
+        payloadHash: null,
+        gateReason: "missing_truck_masses",
+        observedGhgEntryId: null,
+      },
+    );
+    mocks.activateGated.mockImplementation(async (_ctx, input) => {
+      mocks.events.push("gated-activated");
+      mocks.registration = {
+        ...mocks.registration!,
+        submittedPayload: input.submittedPayload,
+        payloadHash: input.payloadHash,
+        gateReason: "create_in_flight",
+      };
+      return mocks.registration;
+    });
+    mocks.client.get.mockResolvedValue(page([]));
+    mocks.client.post.mockImplementation(async () => {
+      mocks.events.push("biochar-application");
+      return remote();
+    });
+
+    await ensure();
+
+    expect(mocks.activateGated).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        registrationId: "journal-1",
+        supplierReference: intent().supplierReference,
+      }),
+    );
+    expect(mocks.claim).not.toHaveBeenCalled();
+    expect(mocks.markDrift).not.toHaveBeenCalled();
+    expect(mocks.events).toContain("gated-activated");
+    expect(mocks.registration).toMatchObject({
+      lifecycleStatus: "confirmed",
+      externalApplicationId: "bca-test",
+      gateReason: null,
+    });
   });
 
   it("reconciles an ambiguous POST on retry without posting a duplicate", async () => {

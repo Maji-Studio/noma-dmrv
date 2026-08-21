@@ -1,9 +1,11 @@
 import { env } from "@/config/env";
 import {
+  activateGatedBiocharApplicationRegistration,
   claimBiocharApplicationRegistration,
   confirmBiocharApplicationRegistration,
   getBiocharApplicationRegistration,
   markBiocharApplicationDrift,
+  recordGatedBiocharApplicationRegistration,
 } from "@/data-access/certifier-biochar-applications";
 import { getProductionBatchRegistrations } from "@/data-access/certifier-production-batches";
 import { withDedicatedSessionAdvisoryLock } from "@/db";
@@ -22,7 +24,9 @@ import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { Logger } from "@/lib/log";
 import {
   buildBiocharApplicationRequestFromIntent,
+  isReadyBiocharApplicationIntent,
   type BiocharApplicationIntent,
+  type ReadyBiocharApplicationIntent,
 } from "./biochar-application-intents";
 import { ensureProductionBatchesForCreditBatches } from "./production-batches";
 import {
@@ -117,6 +121,31 @@ export async function ensureRemovalBiocharApplications(args: {
         `Application ${intent.applicationCode} could not resolve its registered Production Batch or Storage Location. Retry the Removal submission.`,
       );
     }
+    if (!isReadyBiocharApplicationIntent(intent)) {
+      // The delivery lacks observed truck masses, which the registry payload
+      // requires. Journal the gated registration (no POST) and continue; the
+      // Removal proceeds on documentation-based mass verification, and this
+      // registration un-gates on a later submission once the masses exist.
+      await recordGatedBiocharApplicationRegistration(args.orgCtx, {
+        applicationId: intent.applicationId,
+        creditBatchId: intent.creditBatchId,
+        productionBatchRegistrationId: production.id,
+        storageLocationRegistrationId: storage.registration.id,
+        externalProductionBatchId,
+        externalStorageLocationId: storage.externalStorageLocationId,
+        supplierReference: intent.supplierReference,
+        gateReason: intent.gateReason,
+      });
+      args.log.info(
+        {
+          applicationId: intent.applicationId,
+          creditBatchId: intent.creditBatchId,
+          gateReason: intent.gateReason,
+        },
+        "biochar application registration gated; registry create skipped",
+      );
+      continue;
+    }
     await ensureBiocharApplication({
       ...args,
       intent,
@@ -134,7 +163,7 @@ async function ensureBiocharApplication(args: {
   externalRemovalId: string;
   submissionRow: CertificationSubmissionRow;
   expectedLockedAt?: Date;
-  intent: BiocharApplicationIntent;
+  intent: ReadyBiocharApplicationIntent;
   productionBatchRegistrationId: string;
   externalProductionBatchId: string;
   storageLocationRegistrationId: string;
@@ -171,6 +200,33 @@ async function ensureBiocharApplication(args: {
           observedGhgEntryId: null,
           observedRemovalId: null,
         });
+      } else if (
+        registration.lifecycleStatus === "gated" &&
+        registration.payloadHash === null
+      ) {
+        // A prior submission journaled this Application as mass-gated (no
+        // payload, no POST). The delivery now carries observed truck masses,
+        // so upgrade the placeholder into the in-flight claim instead of
+        // treating its null payload hash as journal drift.
+        const activated = await activateGatedBiocharApplicationRegistration(
+          args.orgCtx,
+          {
+            registrationId: registration.id,
+            productionBatchRegistrationId: args.productionBatchRegistrationId,
+            storageLocationRegistrationId: args.storageLocationRegistrationId,
+            externalProductionBatchId: args.externalProductionBatchId,
+            externalStorageLocationId: args.externalStorageLocationId,
+            supplierReference: args.intent.supplierReference,
+            submittedPayload: body,
+            payloadHash: bodyHash,
+          },
+        );
+        if (!activated) {
+          throw new Error(
+            "Gated Biochar Application registration changed before activation",
+          );
+        }
+        registration = activated;
       }
       const identityMatches =
         registration.payloadHash === bodyHash &&

@@ -6,6 +6,7 @@ import type {
   ApplicationBoundaryLogbookEvidenceType,
   ApplicationVisualEvidenceRole,
 } from "@/lib/certification/application-evidence";
+import type { DeliveryEvidenceRole } from "@/lib/certification/delivery-evidence";
 import type { DocumentType } from "@/schemas/documents";
 
 export interface DeferredFileEntry {
@@ -17,6 +18,7 @@ export interface DeferredFileEntry {
 export interface DeferredAttachmentExtraMeta {
   applicationEvidenceRole?: ApplicationVisualEvidenceRole;
   applicationLogbookEvidenceType?: ApplicationBoundaryLogbookEvidenceType;
+  deliveryEvidenceRole?: DeliveryEvidenceRole;
 }
 
 export interface DeferredAttachment extends DeferredFileEntry {
@@ -181,6 +183,7 @@ export function useDeferredAttachments(): UseDeferredAttachmentsResult {
               attachment.extraMeta?.applicationEvidenceRole,
             applicationLogbookEvidenceType:
               attachment.extraMeta?.applicationLogbookEvidenceType,
+            deliveryEvidenceRole: attachment.extraMeta?.deliveryEvidenceRole,
           });
           lastDocumentId = result.documentId;
           succeeded.add(entityId);
