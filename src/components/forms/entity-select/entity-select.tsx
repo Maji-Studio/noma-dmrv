@@ -669,7 +669,7 @@ export function EntitySelect({
                       href={emptyHint.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex min-h-44 w-full items-center gap-8 border-t border-[var(--color-border-secondary)] px-12 py-8 body-small font-medium text-[var(--color-interaction)] transition-colors hover:bg-[var(--color-background-medium)] focus-visible:bg-[var(--color-background-medium)] focus-visible:outline-none"
+                      className="flex min-h-44 w-full items-center gap-8 border-t border-[var(--color-border-primary)] px-12 py-8 body-small font-medium text-[var(--color-interaction)] transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
                     >
                       <ArrowSquareOutIcon aria-hidden size={16} weight="bold" />
                       {emptyHint.linkLabel ?? "Open prerequisite"}
