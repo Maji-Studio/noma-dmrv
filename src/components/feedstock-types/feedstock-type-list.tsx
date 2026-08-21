@@ -455,12 +455,12 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
             <div className="flex flex-wrap gap-12">
               {hasRegistryConnection && (
                 <Button variant="default" onClick={() => setImportOpen(true)}>
-                  <SealCheckIcon size={18} weight="bold" />
+                  <SealCheckIcon size={20} weight="bold" />
                   Import from Isometric
                 </Button>
               )}
               <Button variant="primary" onClick={openCreate}>
-                <PlusIcon size={18} weight="bold" />
+                <PlusIcon size={20} weight="bold" />
                 New Feedstock Type
               </Button>
             </div>

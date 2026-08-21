@@ -15,6 +15,7 @@ import { test, expect, type SeededChainData } from "./fixtures";
 import {
   selectEntity,
   selectEntityByText,
+  waitForFacilityHydration,
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
@@ -63,11 +64,7 @@ test.describe("Transport trip type (#316)", () => {
     await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
-    // Wait for hydration — the sidebar shows the facility name once the
-    // FacilityProvider resolves.
-    await expect(
-      page.locator("aside").getByText(seededData.facility.name, { exact: false })
-    ).toBeVisible({ timeout: 15000 });
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     await page.click('button:has-text("New Feedstock")');
     await waitForSideSheet(page);

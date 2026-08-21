@@ -102,6 +102,11 @@ const applicationFormBaseSchema = z.object({
   // === Section 1: Application Details ===
   applicationDate: z.coerce.date({ error: "Application date is required" }),
   deliveryId: z.string().min(1, "Select a delivery.").uuid("Choose a valid delivery."),
+  // Hand-rolled rather than `positiveMassKgSchema()` on purpose: the field is
+  // entered in kg but stored in tonnes, and seeding the edit form multiplies
+  // the stored tonnes back by 1000, which yields float artefacts (4.001 t →
+  // 4001.0000000000005 kg) that the family's `multipleOf(0.001)` guard would
+  // reject on an untouched edit. The family's cap is applied here directly.
   biocharAppliedTons: z
     .number({ error: "Biochar product applied (kg) is required" })
     .positive("Must be greater than 0")
@@ -175,6 +180,8 @@ export const createApplicationSchema = applicationCreateBaseSchema.superRefine(
  * Schema for updating an application (server action)
  * GPS pair and evidence-method invariants are deferred until updateApplication
  * validates the payload merged with the saved evidence state.
+ * Fields stay `.optional()` so a partial patch can omit them, but a value that
+ * is present has to clear the same bounds as the create path.
  */
 export const updateApplicationSchema = z.object({
   applicationId: z.string().uuid("Choose a valid application."),
@@ -186,7 +193,11 @@ export const updateApplicationSchema = z.object({
     .optional(),
   applicationDate: z.coerce.date().optional(),
   deliveryId: z.string().uuid().optional(),
-  biocharAppliedTons: z.number().min(0).max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE).optional(),
+  biocharAppliedTons: z
+    .number()
+    .positive("Must be greater than 0")
+    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE)
+    .optional(),
   fieldSizeHa: z.number().min(0).optional().nullable(),
   fieldIdentifier: z.string().max(255).optional().nullable(),
   cropType: z.string().max(100).optional().nullable(),

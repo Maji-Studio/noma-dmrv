@@ -8,6 +8,23 @@ import { expect, type Page } from "@playwright/test";
 
 export const ACTION_LABEL_PREFIX = "Actions for ";
 
+/** Budget for the FacilityProvider to resolve after a navigation. */
+export const FACILITY_HYDRATION_TIMEOUT_MS = 15_000;
+
+/**
+ * Waits for the facility context to hydrate — the sidebar shows the facility
+ * name once the FacilityProvider resolves. Filling a form before then loses
+ * the values (docs/testing.md).
+ */
+export async function waitForFacilityHydration(
+  page: Page,
+  facilityName: string,
+) {
+  await expect(
+    page.locator("aside").getByText(facilityName, { exact: false }),
+  ).toBeVisible({ timeout: FACILITY_HYDRATION_TIMEOUT_MS });
+}
+
 export async function getListedActionCodes(
   page: Page,
 ): Promise<Set<string>> {

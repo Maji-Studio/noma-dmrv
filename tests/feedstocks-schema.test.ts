@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { feedstockFormSchema } from "@/schemas/feedstocks";
+import { feedstockFormSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 
 const validFeedstockInput = {
   facilityId: "11111111-1111-4111-8111-111111111111",
@@ -84,6 +84,40 @@ describe("feedstockFormSchema", () => {
         "Must be greater than 0",
       );
     }
+  });
+
+  it("rejects a zero wet mass on the update action but allows omitting it", () => {
+    const feedstockId = "55555555-5555-4555-8555-555555555555";
+    const result = updateFeedstockSchema.safeParse({
+      feedstockId,
+      massWetKg: 0,
+      massDryKg: 0,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const issueMessages = new Map(
+        result.error.issues.map((issue) => [
+          issue.path.join("."),
+          issue.message,
+        ]),
+      );
+      expect(issueMessages.get("massWetKg")).toBe("Must be greater than 0");
+      // Dry mass is derived, so a 100% moisture intake stays valid at zero.
+      expect(issueMessages.has("massDryKg")).toBe(false);
+    }
+
+    expect(
+      updateFeedstockSchema.safeParse({ feedstockId, notes: "Scale recheck" })
+        .success,
+    ).toBe(true);
+    expect(
+      updateFeedstockSchema.safeParse({
+        feedstockId,
+        massWetKg: 1500,
+        massDryKg: 0,
+      }).success,
+    ).toBe(true);
   });
 
   it("requires a justification when allocations exceed the declared wet mass", () => {
