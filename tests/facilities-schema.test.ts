@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  addressSchema,
   createFacilitySchema,
   facilityFormSchema,
+  quickAddFacilitySchema,
   updateFacilitySchema,
 } from "@/schemas/facilities";
 
@@ -36,6 +38,69 @@ describe("facility schemas", () => {
 
     expect(result.success).toBe(true);
   });
+
+  // `facilityFormSchema` and `updateFacilitySchema` are the live request paths.
+  // `addressSchema` and `quickAddFacilitySchema` are exported but currently
+  // unwired; they are covered so the country rule cannot drift apart from the
+  // live ones before a surface adopts them.
+  const countryEntryPaths = [
+    {
+      name: "addressSchema",
+      schema: addressSchema,
+      withCountry: (country: string) => ({ country }),
+    },
+    {
+      name: "facilityFormSchema",
+      schema: facilityFormSchema,
+      withCountry: (country: string) => ({
+        ...baseFacilityInput,
+        timezone: "Africa/Nairobi",
+        country,
+      }),
+    },
+    {
+      name: "updateFacilitySchema",
+      schema: updateFacilitySchema,
+      withCountry: (country: string) => ({
+        facilityId: "55555555-5555-4555-8555-555555555555",
+        country,
+      }),
+    },
+    {
+      name: "quickAddFacilitySchema",
+      schema: quickAddFacilitySchema,
+      withCountry: (country: string) => ({
+        name: "Moshi Biochar Production Center",
+        country,
+      }),
+    },
+  ] as const;
+
+  it.each(countryEntryPaths)(
+    "rejects a whitespace-only country and trims a padded one in $name",
+    ({ schema, withCountry }) => {
+      const whitespace = schema.safeParse(withCountry("   "));
+
+      expect(whitespace.success).toBe(false);
+      if (!whitespace.success) {
+        expect(whitespace.error.issues).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              path: ["country"],
+              message: "Country is required",
+            }),
+          ]),
+        );
+      }
+
+      const padded = schema.safeParse(withCountry("  Tanzania  "));
+
+      expect(padded.success).toBe(true);
+      if (padded.success) {
+        expect(padded.data.country).toBe("Tanzania");
+      }
+    },
+  );
 
   it("rejects a facility create with only one GPS coordinate", () => {
     const result = createFacilitySchema.safeParse({

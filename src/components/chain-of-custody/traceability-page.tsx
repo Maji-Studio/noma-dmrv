@@ -769,7 +769,9 @@ export function TraceabilityPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--color-text-primary)]">
-      <main className="flex flex-col h-screen">
+      {/* Not a <main>: the app shell already provides the #main-content
+          landmark, and a document must expose only one. */}
+      <div className="flex flex-col h-screen">
         {/* Horizontal rhythm matches the app shell (container-max); only the
             canvas below is full-bleed. */}
         <header className="shrink-0 border-b border-[var(--color-border-secondary)]">
@@ -835,7 +837,7 @@ export function TraceabilityPage() {
             batchBody
           )}
         </div>
-      </main>
+      </div>
 
       <ChainNodeSheet
         node={sheetNode}

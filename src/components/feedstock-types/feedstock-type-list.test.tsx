@@ -35,8 +35,13 @@ const archivedType: FeedstockType = {
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: "facility-1" }),
 }));
+// Mutable so a case can render the disconnected variant: the import trigger is
+// gated on a registry mapping being present.
+const certifier = vi.hoisted(() => ({
+  mapping: { id: "mapping-1" } as { id: string } | null,
+}));
 vi.mock("@/hooks/use-certification", () => ({
-  useFacilityCertifierSummary: () => ({ data: { mapping: { id: "mapping-1" } } }),
+  useFacilityCertifierSummary: () => ({ data: { mapping: certifier.mapping } }),
 }));
 vi.mock("@/hooks/use-open-create-intent", () => ({
   useOpenCreateIntent: () => undefined,
@@ -66,7 +71,12 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
 vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button>{children}</button>,
   EmptyState: ({ title }: { title: string }) => <section>{title}</section>,
-  PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
+  PageHeader: ({ title, actions }: { title: string; actions?: ReactNode }) => (
+    <header>
+      <h1>{title}</h1>
+      {actions}
+    </header>
+  ),
   RowActionsMenu: () => null,
 }));
 vi.mock("@/components/ui/data-table", () => ({
@@ -123,6 +133,35 @@ describe("FeedstockTypeList", () => {
     expect(html).toContain("Retired wood chips");
     expect(html).toContain('data-archived="true"');
     expect(html).toContain("Archived");
+  });
+
+  // The only other coverage of this trigger is `@live`-tagged and skipped
+  // without sandbox credentials, so PR CI would not catch it disappearing
+  // again (it already did once). This case keeps it hermetic.
+  it("renders the Isometric import trigger for a manager on a connected facility", () => {
+    const html = renderToStaticMarkup(<FeedstockTypeList canManage />);
+
+    expect(html).toContain("Import from Isometric");
+    expect(html).toContain("New Feedstock Type");
+  });
+
+  it("withholds the Isometric import trigger without a registry connection", () => {
+    certifier.mapping = null;
+    try {
+      const html = renderToStaticMarkup(<FeedstockTypeList canManage />);
+
+      expect(html).not.toContain("Import from Isometric");
+      expect(html).toContain("New Feedstock Type");
+    } finally {
+      certifier.mapping = { id: "mapping-1" };
+    }
+  });
+
+  it("withholds both header actions from a viewer who cannot manage", () => {
+    const html = renderToStaticMarkup(<FeedstockTypeList canManage={false} />);
+
+    expect(html).not.toContain("Import from Isometric");
+    expect(html).not.toContain("New Feedstock Type");
   });
 
   it("offers archive as the actionable delete-conflict resolution", () => {

@@ -11,8 +11,9 @@ import {
   emptyToNull,
   massKgSchema,
   optionalPositiveNumber,
-  requiredMassKgSchema,
+  positiveMassKgSchema,
   requiredNumber,
+  requiredPositiveMassKgSchema,
   storedPercentSchema,
 } from "./helpers";
 
@@ -25,7 +26,21 @@ const MOISTURE_MAX = 100;
 const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
   "Enter a justification when allocated wet mass exceeds the declared delivery mass";
 
-const requiredNonNegativeNumber = requiredMassKgSchema("Must be 0 or greater");
+// A feedstock delivery records a physical intake: a zero-mass delivery or bin
+// allocation is an auditable no-op record, so both bounds are strictly
+// positive. This schema is also the edit resolver, so a record already stored
+// with zero mass has to be given a positive mass before it saves — intended,
+// since the only way to hold one is a deliberate pre-fix entry and there is no
+// production data to grandfather. `updateFeedstockSchema` below applies the
+// same positive bound to a wet mass that is present, so the invariant holds at
+// the server boundary too; `mass_wet_kg` stays nullable in the database, and a
+// null (never a zero) is what `determineFeedstockStatus` reports as
+// `missing_data`.
+const requiredPositiveMass = requiredPositiveMassKgSchema(
+  "Required",
+  "Enter a valid number.",
+  "Must be greater than 0",
+);
 
 const requiredMoisturePercent = requiredNumber().pipe(
   storedPercentSchema()
@@ -54,7 +69,7 @@ export const binAllocationSchema = z.object({
     .string()
     .min(1, "Select a storage bin.")
     .uuid("Choose a valid storage bin."),
-  allocatedWetMassKg: requiredNonNegativeNumber,
+  allocatedWetMassKg: requiredPositiveMass,
 });
 
 export type BinAllocation = z.infer<typeof binAllocationSchema>;
@@ -94,7 +109,7 @@ export const feedstockFormSchema = z.object({
     .string()
     .min(1, "Select a feedstock type.")
     .uuid("Choose a valid feedstock type."),
-  totalWetMassKg: requiredNonNegativeNumber,
+  totalWetMassKg: requiredPositiveMass,
   moisturePercent: requiredMoisturePercent,
 
   // --- Bin Allocations ---
@@ -161,8 +176,10 @@ export const updateFeedstockSchema = z.object({
   transportDistanceSource: optionalDistanceSource,
   transportTripType: optionalTripType,
   feedstockTypeId: z.string().uuid().optional(),
-  massWetKg: massKgSchema().optional(),
+  massWetKg: positiveMassKgSchema("Must be greater than 0").optional(),
   moistureContentPercent: storedPercentSchema().min(0).max(100).optional(),
+  // Non-negative, not positive: dry mass is derived, and a 100% moisture
+  // intake legitimately derives to zero.
   massDryKg: massKgSchema().optional(),
   storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   overrideJustification: z.string().max(2000).optional().nullable().or(z.literal("")),

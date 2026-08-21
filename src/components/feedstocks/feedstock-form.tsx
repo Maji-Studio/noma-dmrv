@@ -131,8 +131,16 @@ export function FeedstockForm({
     feedstockTypeId: feedstock?.feedstockTypeId ?? "",
     totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
     moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
+    // An allocation mass the record does not have stays blank, never 0: the
+    // schema requires a positive mass, so seeding 0 would prefill a value that
+    // fails submit on a `missing_data` record with no wet mass yet.
     allocations: feedstock
-      ? [{ storageLocationId: feedstock.storageLocationId ?? "", allocatedWetMassKg: feedstock.massWetKg ?? 0 }]
+      ? [
+          {
+            storageLocationId: feedstock.storageLocationId ?? "",
+            allocatedWetMassKg: feedstock.massWetKg ?? ("" as unknown as number),
+          },
+        ]
       : [{ storageLocationId: "", allocatedWetMassKg: "" as unknown as number }],
     overrideJustification: feedstock?.overrideJustification ?? "",
     notes: feedstock?.notes ?? "",
@@ -679,7 +687,12 @@ export function FeedstockForm({
                   type="button"
                   variant="default"
                   size="small"
-                  onClick={() => append({ storageLocationId: "", allocatedWetMassKg: 0 })}
+                  onClick={() =>
+                    append({
+                      storageLocationId: "",
+                      allocatedWetMassKg: "" as unknown as number,
+                    })
+                  }
                   disabled={isSubmitting}
                 >
                   <PlusIcon size={16} weight="bold" />

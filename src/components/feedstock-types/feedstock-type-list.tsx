@@ -48,6 +48,7 @@ import {
 } from "@/lib/entity-deep-link";
 import { FeedstockTypeForm } from "./feedstock-type-form";
 import { FeedstockTypeSampling } from "./feedstock-type-sampling";
+import { IsometricFeedstockImportDialog } from "./isometric-feedstock-import-dialog";
 
 type ArchiveFilter = "all" | "active" | "archived";
 
@@ -247,6 +248,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   const [deletingType, setDeletingType] = useState<FeedstockType | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<FeedstockType | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { facilityId } = useFacilityContext();
   const certifierSummary = useFacilityCertifierSummary(
@@ -451,8 +453,14 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         actions={
           canManage ? (
             <div className="flex flex-wrap gap-12">
+              {hasRegistryConnection && (
+                <Button variant="default" onClick={() => setImportOpen(true)}>
+                  <SealCheckIcon size={20} weight="bold" />
+                  Import from Isometric
+                </Button>
+              )}
               <Button variant="primary" onClick={openCreate}>
-                <PlusIcon size={18} weight="bold" />
+                <PlusIcon size={20} weight="bold" />
                 New Feedstock Type
               </Button>
             </div>
@@ -589,6 +597,8 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Feedstock Type"}
         />
       </EntitySideSheet>
+
+      <IsometricFeedstockImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   );
 }

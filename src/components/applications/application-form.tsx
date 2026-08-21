@@ -380,7 +380,11 @@ export function ApplicationForm({
     const biocharAppliedTons = applicationKgToTons(data.biocharAppliedTons);
 
     if (biocharAppliedTons == null) {
-      throw new Error("Biochar product applied is required");
+      setError("biocharAppliedTons", {
+        type: "manual",
+        message: "Biochar product applied is required",
+      });
+      return;
     }
 
     if (appliedDryBiocharKg == null) {
