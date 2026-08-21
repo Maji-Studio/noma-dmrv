@@ -20,6 +20,8 @@ export const STICKY_END_CELL_CLASSES =
   "sticky right-0 z-10 bg-[var(--panel-bg)] [border-left:var(--hair-3)] group-hover/row:bg-[var(--row-hover-bg-solid)]";
 export const STICKY_END_HEADER_CLASSES =
   "sticky right-0 z-10 bg-[var(--panel-head-bg-solid)] [border-left:var(--hair-3)]";
+const INTERACTIVE_ROW_CONTROL_SELECTOR =
+  'button, a, label, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])';
 
 /**
  * Derive a human-readable label for a column, used by the mobile card view
@@ -47,7 +49,7 @@ export function handleRowActivationKeyDown(
 ) {
   if (event.key !== "Enter" && event.key !== " ") return;
   const interactive = (event.target as HTMLElement).closest(
-    'button, a, label, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])',
+    INTERACTIVE_ROW_CONTROL_SELECTOR,
   );
   if (interactive && interactive !== event.currentTarget) return;
   event.preventDefault();
@@ -60,7 +62,7 @@ export function handleRowActivationClick(
   activate: () => void,
 ) {
   const interactive = (event.target as HTMLElement).closest(
-    'button, a, label, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])',
+    INTERACTIVE_ROW_CONTROL_SELECTOR,
   );
   if (interactive && interactive !== event.currentTarget) return;
   activate();
