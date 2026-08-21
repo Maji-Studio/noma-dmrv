@@ -5,12 +5,11 @@ This companion holds tooling and dependency upgrade decisions split out of
 compiler, ORM, build, lint, or dependency-management toolchain; the parent
 document's schema, invariants, and resolution rules apply here.
 
-## Tooling & toolchain upgrades (research pass, opened 2026-06-12)
+## Tooling & toolchain upgrades
 
-Verified findings from a sourced research sweep (Next 16 / TS 7 / Drizzle v1,
-mid-2026). Already confirmed fine: Turbopack default (no stale flags, no webpack
-config), `reactCompiler: true` opt-in, `src/proxy.ts` rename, generate+migrate CI
-workflow.
+Each open decision below links to its authoritative source. Turbopack defaults,
+`reactCompiler: true`, `src/proxy.ts`, and the generate-and-migrate CI workflow
+already match the current project toolchain and need no follow-up.
 
 ### TypeScript 7 (tsgo) for CI typecheck (`tooling/ts7`)
 
@@ -40,10 +39,9 @@ workflow.
 - **Resolve via:** a selective pilot on read-heavy views (dashboard,
   chain-of-custody roll-ups) when perf data justifies it; not codebase-wide (M).
 
-### Unverified research areas needing a follow-up pass
+### Toolchain decisions requiring source review
 
 Lint tooling (Biome 2 / oxlint vs ESLint 9), OpenAPI contract testing for the
-Isometric client, Renovate vs Dependabot, pnpm supply-chain guidance — the sweep
-produced no adversarially-verified claims in these areas. (Vitest 4 and
-Playwright 1.58+ were on this list and are both already adopted — `vitest`
-`^4.1.0`, `@playwright/test` `^1.58.2`.)
+Isometric client, Renovate vs Dependabot, and pnpm supply-chain guidance remain
+open because they do not yet have source-backed recommendations. Vitest and
+Playwright are already adopted and are not open decisions.
