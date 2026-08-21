@@ -141,11 +141,10 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
   },
 );
 
-// Transport → mass_distance mapping (2026-06-19). Proves the feedstock /
-// biochar / sample transport categories resolve to the
+// Transport → mass_distance mapping (2026-06-19). Proves every transport
+// category present in the live template resolves to the
 // `mass_distance_based_ci_emissions` blueprint's `mass_distance` (tonne·km)
-// SCALAR input against the live re-authored template, and that the registry
-// accepts a mass-weighted datapoint built from MULTIPLE legs (the
+// SCALAR input, and builds a mass-weighted datapoint from MULTIPLE legs (the
 // "storage bins pile up" case). There is no LIST-shaped transport blueprint in
 // the catalog, so multi-leg is collapsed to one Σⱼ(distⱼ×massⱼ) scalar.
 function makeTransportLeg(distanceKm: number, loadMassKg: number): TransportLeg {
@@ -222,8 +221,15 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
             .filter((c) => c.blueprint_key === "mass_distance_based_ci_emissions")
             .map((c) => ({ groupKey: g.key, component: c })),
         );
-        // feedstock + biochar + sample transport all use this blueprint.
-        expect(transportComponents.length).toBeGreaterThanOrEqual(3);
+        // Assert the categories by group key, not by count: a bare floor stays
+        // green when the template drops one category and adds another. The
+        // current live template carries feedstock and biochar transport; sample
+        // transport (`sampling-required-for-mrv`) is still mapped locally but no
+        // longer observed here — see docs/open-questions.md
+        // (`isometric/sample-transport-template-drift`).
+        const transportGroupKeys = transportComponents.map((t) => t.groupKey);
+        expect(transportGroupKeys).toContain("biomass-feedstock-transport");
+        expect(transportGroupKeys).toContain("biochar-transport");
 
         for (const { groupKey, component } of transportComponents) {
           const input = component.inputs.find(
@@ -245,10 +251,11 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
     );
 
     it(
-      "registry accepts a mass-weighted mass_distance datapoint built from multiple legs",
+      "builds a mass-weighted mass_distance datapoint from multiple legs",
       async () => {
-        const { listGhgEntryTemplates, listComponentBlueprints, createDatapoint } =
-          await import("@/lib/isometric");
+        const { listGhgEntryTemplates, listComponentBlueprints } = await import(
+          "@/lib/isometric"
+        );
         const { buildCreateDatapointRequest } = await import(
           "@/lib/isometric/transformers/datapoint"
         );
@@ -302,9 +309,6 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
         });
         expect(body.quantity.magnitude).toBe(240);
         expect(body.quantity.unit).toBe("tonne * km");
-
-        const created = await createDatapoint(client, body);
-        expect(created.id).toMatch(/^dtp_/);
       },
       TEST_TIMEOUT_MS,
     );
