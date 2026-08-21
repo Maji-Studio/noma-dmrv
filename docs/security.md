@@ -183,8 +183,10 @@ fields named exactly like the env vars. Three consumers:
   `e2e.yml` uses no 1Password secrets at all. `isometric-health.yml` loads its
   secrets unconditionally and fails closed when the token or a required vault
   field is missing — a health check that skips its own credentials reports green
-  while the registry is unreachable. `storage-health.yml` still gates on
-  `OP_SERVICE_ACCOUNT_TOKEN != ''` and skips cleanly without it.
+  while the registry is unreachable. `e2e-live.yml` and `migrate.yml` also load
+  unconditionally and fail on a missing token. `storage-health.yml` is the only
+  workflow that still gates on `OP_SERVICE_ACCOUNT_TOKEN != ''` and skips
+  cleanly without it.
 
 Notes:
 

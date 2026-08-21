@@ -221,9 +221,15 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
             .filter((c) => c.blueprint_key === "mass_distance_based_ci_emissions")
             .map((c) => ({ groupKey: g.key, component: c })),
         );
-        // The current live template has feedstock and biochar transport. Keep
-        // a non-vacuous floor while allowing the registry to add categories.
-        expect(transportComponents.length).toBeGreaterThanOrEqual(2);
+        // Assert the categories by group key, not by count: a bare floor stays
+        // green when the template drops one category and adds another. The
+        // current live template carries feedstock and biochar transport; sample
+        // transport (`sampling-required-for-mrv`) is still mapped locally but no
+        // longer observed here — see docs/open-questions.md
+        // (`isometric/sample-transport-template-drift`).
+        const transportGroupKeys = transportComponents.map((t) => t.groupKey);
+        expect(transportGroupKeys).toContain("biomass-feedstock-transport");
+        expect(transportGroupKeys).toContain("biochar-transport");
 
         for (const { groupKey, component } of transportComponents) {
           const input = component.inputs.find(
