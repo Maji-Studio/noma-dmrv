@@ -53,6 +53,5 @@ Read first per CLAUDE.md: `docs/code-style.md`, `docs/architecture.md`, `docs/de
 
 ## Parked (Kenji's call, out of scope)
 
-- Lifting the production hard-block on the biochar-application layer (`biochar-application-intents.ts:57`, `biochar-applications.ts:50-54`).
 - Truck-mass entry UI (deliberately none for now; API path un-gates automatically once data exists).
 - PDD must document production-site weighing, transport protocols, chain of custody (Kenji-side, per protocol text).
