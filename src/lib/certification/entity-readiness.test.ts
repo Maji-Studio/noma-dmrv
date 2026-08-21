@@ -378,8 +378,6 @@ describe("deriveEntityCertifyReadiness", () => {
       deliveredWetMassKg: 400,
       truckMassOnArrivalKg: null,
       truckMassOnDepartureKg: null,
-      effectiveDistanceSource: "document",
-      transportEvidenceDocumentCount: 1,
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
