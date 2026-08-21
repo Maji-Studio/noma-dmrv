@@ -273,6 +273,7 @@ async function openLinkedProductForm(
   await page.goto(
     `${BIOCHAR_PRODUCTS_URL}?facility=${seededData.facility.id}`,
   );
+  await waitForFacilityHydration(page, seededData.facility.name);
   await expect(page.getByRole("button", { name: "New Product" })).toBeVisible();
   await page.getByRole("button", { name: "New Product" }).click();
   await waitForSideSheet(page);
@@ -363,9 +364,7 @@ async function cleanupProductScenario(
 /** Create an order large enough that only product stock limits the delivery. */
 async function createOrder(page: Page, seededData: SeededChainData) {
   await page.goto(`${ORDERS_URL}?facility=${seededData.facility.id}`);
-  await expect(
-    page.locator("aside").getByText(seededData.facility.name, { exact: false }),
-  ).toBeVisible({ timeout: 15000 });
+  await waitForFacilityHydration(page, seededData.facility.name);
   await page.getByRole("button", { name: "New Order" }).click();
   await waitForSideSheet(page);
 
@@ -401,6 +400,7 @@ async function openDeliveredDeliveryForm(
   wetMassKg: string,
 ) {
   await page.goto(`${DELIVERIES_URL}?facility=${seededData.facility.id}`);
+  await waitForFacilityHydration(page, seededData.facility.name);
   const newDeliveryButton = page
     .locator("header")
     .getByRole("button", { name: "New Delivery" });
@@ -688,9 +688,7 @@ test.describe("createDelivery order-balance guard", () => {
   }) => {
     await createOrder(page, seededData);
     await page.goto(`${DELIVERIES_URL}?facility=${seededData.facility.id}`);
-    await expect(
-      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
-    ).toBeVisible({ timeout: 15000 });
+    await waitForFacilityHydration(page, seededData.facility.name);
     const newDeliveryButton = page
       .locator("header")
       .getByRole("button", { name: "New Delivery" });

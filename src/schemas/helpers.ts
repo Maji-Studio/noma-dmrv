@@ -172,6 +172,8 @@ export const optionalPercent = z.preprocess(
 
 /** HTML/Zod increment for values stored through the `numeric(14,3)` family. */
 export const MASS_KG_INPUT_STEP = 0.001;
+/** HTML/Zod increment for values stored through the `numeric(14,6)` tonnes family. */
+export const MASS_TONNES_INPUT_STEP = 0.000001;
 /** HTML/Zod increment for values stored through the `numeric(9,6)` family. */
 export const STORED_PERCENT_INPUT_STEP = 0.000001;
 
@@ -219,6 +221,16 @@ export const MASS_INPUT_MAX_TONNES = MASS_INPUT_MAX_KG / 1000;
 
 export const MASS_MAX_KG_MESSAGE = `Must be ${MASS_INPUT_MAX_KG.toLocaleString("en-US")} kg or less`;
 export const MASS_MAX_TONNES_MESSAGE = `Must be ${MASS_INPUT_MAX_TONNES.toLocaleString("en-US")} tonnes or less`;
+
+/**
+ * Smallest mass either exact-numeric family can persist. `massKg`
+ * (`numeric(14,3)`) and `tonnes` (`numeric(14,6)`) both resolve to one gram,
+ * so a smaller positive entry rounds to a stored zero. The capped family's
+ * `multipleOf` guard already enforces this; schemas that cannot use it
+ * (entered in kg, stored in tonnes) bound on these instead of `.positive()`.
+ */
+export const MASS_MIN_KG_MESSAGE = `Must be at least ${MASS_KG_INPUT_STEP} kg`;
+export const MASS_MIN_TONNES_MESSAGE = `Must be at least ${MASS_TONNES_INPUT_STEP} tonnes`;
 
 function massKgRangeSchema(minMessage = "Must be 0 or greater") {
   return z

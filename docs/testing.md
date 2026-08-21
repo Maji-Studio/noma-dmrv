@@ -23,8 +23,9 @@ directory.
   `src/app/api/ghg-statement-reports/[reportId]/route.test.ts`).
 - `pnpm test:integration` — `RUN_ISOMETRIC_SANDBOX_TESTS=1` plus the substring
   filter `.integration.test.ts`, which selects every `*.integration.test.ts`
-  spec wherever it lives (today the Isometric sandbox smoke and the
-  dedicated-lock connection spec; the latter self-skips without a database).
+  spec wherever it lives. A spec that needs an external service (a database, a
+  sandbox credential) probes for it and self-skips when it is absent, so the
+  command stays runnable with nothing provisioned.
 - `pnpm test:e2e` — Playwright. CI gate in `e2e.yml`; nightly `@live` in `e2e-live.yml`.
 
 ## vitest specs are not all unit tests

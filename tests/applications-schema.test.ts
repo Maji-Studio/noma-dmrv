@@ -8,8 +8,12 @@ import {
 import {
   MASS_INPUT_MAX_KG,
   MASS_INPUT_MAX_TONNES,
+  MASS_KG_INPUT_STEP,
   MASS_MAX_KG_MESSAGE,
   MASS_MAX_TONNES_MESSAGE,
+  MASS_MIN_KG_MESSAGE,
+  MASS_MIN_TONNES_MESSAGE,
+  MASS_TONNES_INPUT_STEP,
 } from "@/schemas/helpers";
 
 describe("application schemas", () => {
@@ -67,35 +71,17 @@ describe("application schemas", () => {
     ).toBe(true);
   });
 
-  it("rejects a zero applied mass on the form and create schemas", () => {
-    const zeroInput = {
+  // A mass below one gram divides into a `numeric(14,6)` tonnes column as a
+  // stored zero, so the floor is the storage quantum, not a bare `> 0`.
+  it.each([
+    { label: "zero", value: 0 },
+    { label: "a sub-gram value", value: MASS_KG_INPUT_STEP / 10 },
+  ])("rejects $label applied mass on the form schema", ({ value }) => {
+    const result = applicationFormSchema.safeParse({
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
-      biocharAppliedTons: 0,
+      biocharAppliedTons: value,
       ...customerLocation,
-    };
-
-    for (const schema of [applicationFormSchema, createApplicationSchema]) {
-      const result = schema.safeParse(zeroInput);
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error.issues).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              path: ["biocharAppliedTons"],
-              message: "Must be greater than 0",
-            }),
-          ]),
-        );
-      }
-    }
-  });
-
-  it("rejects a zero applied mass on the update action but allows omitting it", () => {
-    const result = updateApplicationSchema.safeParse({
-      applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
-      biocharAppliedTons: 0,
     });
 
     expect(result.success).toBe(false);
@@ -104,10 +90,77 @@ describe("application schemas", () => {
         expect.arrayContaining([
           expect.objectContaining({
             path: ["biocharAppliedTons"],
-            message: "Must be greater than 0",
+            message: MASS_MIN_KG_MESSAGE,
           }),
         ]),
       );
+    }
+  });
+
+  it("accepts the smallest storable applied mass on the form schema", () => {
+    expect(
+      applicationFormSchema.safeParse({
+        applicationDate: new Date("2026-06-13"),
+        deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        biocharAppliedTons: MASS_KG_INPUT_STEP,
+        ...customerLocation,
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    { label: "zero", value: 0 },
+    { label: "a sub-gram value", value: MASS_TONNES_INPUT_STEP / 10 },
+  ])("rejects $label applied mass on the create schema", ({ value }) => {
+    const result = createApplicationSchema.safeParse({
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: value,
+      ...customerLocation,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["biocharAppliedTons"],
+            message: MASS_MIN_TONNES_MESSAGE,
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("accepts the smallest storable applied mass on the create schema", () => {
+    expect(
+      createApplicationSchema.safeParse({
+        applicationDate: new Date("2026-06-13"),
+        deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        biocharAppliedTons: MASS_TONNES_INPUT_STEP,
+        ...customerLocation,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a below-quantum applied mass on the update action but allows omitting it", () => {
+    for (const value of [0, MASS_TONNES_INPUT_STEP / 10]) {
+      const result = updateApplicationSchema.safeParse({
+        applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        biocharAppliedTons: value,
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              path: ["biocharAppliedTons"],
+              message: MASS_MIN_TONNES_MESSAGE,
+            }),
+          ]),
+        );
+      }
     }
 
     expect(

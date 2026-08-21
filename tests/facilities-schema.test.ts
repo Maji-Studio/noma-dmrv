@@ -39,6 +39,10 @@ describe("facility schemas", () => {
     expect(result.success).toBe(true);
   });
 
+  // `facilityFormSchema` and `updateFacilitySchema` are the live request paths.
+  // `addressSchema` and `quickAddFacilitySchema` are exported but currently
+  // unwired; they are covered so the country rule cannot drift apart from the
+  // live ones before a surface adopts them.
   const countryEntryPaths = [
     {
       name: "addressSchema",

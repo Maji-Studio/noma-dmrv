@@ -197,13 +197,13 @@ describe("getUtcOffsetLabel", () => {
     expect(
       getUtcOffsetLabel("Europe/London", new Date("2026-01-15T12:00:00Z")),
     ).toBe("UTC");
+    expect(formatTimezoneLabel("UTC")).toBe("UTC");
   });
 
   it("keeps non-zero offsets", () => {
     expect(
       getUtcOffsetLabel("Africa/Nairobi", new Date("2026-01-15T12:00:00Z")),
     ).toBe("UTC+3");
-    expect(formatTimezoneLabel("UTC")).toBe("UTC");
     expect(
       formatTimezoneLabel("Africa/Dar_es_Salaam", new Date("2026-01-15T12:00:00Z")),
     ).toBe("Africa/Dar es Salaam (UTC+3)");

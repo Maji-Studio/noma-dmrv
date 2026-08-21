@@ -5,8 +5,12 @@ import {
   longitudeSchema,
   MASS_INPUT_MAX_KG,
   MASS_INPUT_MAX_TONNES,
+  MASS_KG_INPUT_STEP,
   MASS_MAX_KG_MESSAGE,
   MASS_MAX_TONNES_MESSAGE,
+  MASS_MIN_KG_MESSAGE,
+  MASS_MIN_TONNES_MESSAGE,
+  MASS_TONNES_INPUT_STEP,
 } from "./helpers";
 import { gisBoundarySchema } from "./gis-boundary";
 
@@ -106,10 +110,13 @@ const applicationFormBaseSchema = z.object({
   // entered in kg but stored in tonnes, and seeding the edit form multiplies
   // the stored tonnes back by 1000, which yields float artefacts (4.001 t →
   // 4001.0000000000005 kg) that the family's `multipleOf(0.001)` guard would
-  // reject on an untouched edit. The family's cap is applied here directly.
+  // reject on an untouched edit. The family's cap is applied here directly,
+  // and its gram resolution as an explicit floor: the value is divided by
+  // 1000 into a `numeric(14,6)` tonnes column, so a smaller positive entry
+  // would persist as zero.
   biocharAppliedTons: z
     .number({ error: "Biochar product applied (kg) is required" })
-    .positive("Must be greater than 0")
+    .min(MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE)
     .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE),
   // === Section 2: Field Details ===
   fieldSizeHa: z
@@ -159,7 +166,7 @@ export const applicationFormSchema = applicationFormBaseSchema.superRefine(
 const applicationCreateBaseSchema = applicationFormBaseSchema.extend({
   biocharAppliedTons: z
     .number({ error: "Biochar product applied is required" })
-    .positive("Must be greater than 0")
+    .min(MASS_TONNES_INPUT_STEP, MASS_MIN_TONNES_MESSAGE)
     .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE),
 });
 
@@ -195,7 +202,7 @@ export const updateApplicationSchema = z.object({
   deliveryId: z.string().uuid().optional(),
   biocharAppliedTons: z
     .number()
-    .positive("Must be greater than 0")
+    .min(MASS_TONNES_INPUT_STEP, MASS_MIN_TONNES_MESSAGE)
     .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE)
     .optional(),
   fieldSizeHa: z.number().min(0).optional().nullable(),
