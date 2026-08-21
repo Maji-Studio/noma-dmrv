@@ -22,6 +22,19 @@ delivery. Isometric pre-approved this pathway for this project (confirmed
   `lifecycleStatus: "gated"` with `gateReason: "missing_truck_masses"` and no
   payload, then the POST is skipped. Once the delivery carries both masses, a
   later submission upgrades the placeholder into the normal in-flight claim.
+- A narrow certified-lineage exception lets an operator fill those missing
+  truck observations after the Removal is submitted. It accepts only a pure
+  truck-mass completion: both observations are supplied, at least one was
+  missing, neither existing observation is overwritten, every non-mass delivery
+  field is unchanged, and mass before unloading is greater than mass after
+  unloading. The submitted
+  lineage must contain only Removal submissions (no GHG Statement membership or
+  submission), and its application/batch keys must exactly match payload-less
+  `gated` registrations whose reason is `missing_truck_masses`. The transaction
+  locks those registration rows, rechecks the delivery observations
+  optimistically, and fails closed if certification artifact membership changes
+  while advisory locks are acquired. Any mismatch follows the normal certified
+  delivery lock and leaves the delivery unchanged.
 - Snapshot `biocharApplicationIntents` entries carry `gateReason` and nullable
   truck masses when gated. Pre-gating drafts without the field remain resumable.
   `SOURCE_BINDING_MAPPING_REVISION` changed through the rules hash.

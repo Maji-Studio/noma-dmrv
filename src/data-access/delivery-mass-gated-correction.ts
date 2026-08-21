@@ -23,6 +23,46 @@ function unchanged<T>(next: T | undefined, current: T): boolean {
   return next === undefined || next === current;
 }
 
+type TruckMassUpdateKey =
+  | "truckMassOnArrivalKg"
+  | "truckMassOnDepartureKg";
+type NonMassDeliveryUpdateKey = Exclude<
+  keyof DeliveryUpdateData,
+  TruckMassUpdateKey
+>;
+type NonMassFieldComparator = (
+  update: DeliveryUpdateData,
+  current: Delivery,
+) => boolean;
+
+const NON_MASS_FIELD_COMPARATORS = {
+  code: (update, current) => unchanged(update.code, current.code),
+  orderId: (update, current) => unchanged(update.orderId, current.orderId),
+  facilityId: (update, current) =>
+    unchanged(update.facilityId, current.facilityId),
+  deliveryDate: (update, current) =>
+    update.deliveryDate === undefined ||
+    update.deliveryDate.getTime() === current.deliveryDate.getTime(),
+  biocharProductId: (update, current) =>
+    unchanged(update.biocharProductId, current.biocharProductId),
+  driverId: (update, current) => unchanged(update.driverId, current.driverId),
+  vehicleId: (update, current) =>
+    unchanged(update.vehicleId, current.vehicleId),
+  status: (update, current) => unchanged(update.status, current.status),
+  deliveredWetMassKg: (update, current) =>
+    unchanged(update.deliveredWetMassKg, current.deliveredWetMassKg),
+  moistureContentPercent: (update, current) =>
+    unchanged(update.moistureContentPercent, current.moistureContentPercent),
+  distanceKmOverride: (update, current) =>
+    unchanged(update.distanceKmOverride, current.distanceKmOverride),
+  distanceSource: (update, current) =>
+    unchanged(update.distanceSource, current.distanceSource),
+  distanceNote: (update, current) =>
+    unchanged(update.distanceNote, current.distanceNote),
+  tripType: (update, current) =>
+    update.tripType == null || update.tripType === current.tripType,
+} satisfies Record<NonMassDeliveryUpdateKey, NonMassFieldComparator>;
+
 /**
  * Identifies the one correction allowed through a certified delivery lock:
  * completing missing truck observations without changing any captured fact.
@@ -53,21 +93,7 @@ export function isDeliveryTruckMassCompletion(
     return false;
   }
 
-  return (
-    unchanged(update.code, current.code) &&
-    unchanged(update.orderId, current.orderId) &&
-    unchanged(update.facilityId, current.facilityId) &&
-    (update.deliveryDate === undefined ||
-      update.deliveryDate.getTime() === current.deliveryDate.getTime()) &&
-    unchanged(update.biocharProductId, current.biocharProductId) &&
-    unchanged(update.driverId, current.driverId) &&
-    unchanged(update.vehicleId, current.vehicleId) &&
-    unchanged(update.status, current.status as "upcoming" | "delivered") &&
-    unchanged(update.deliveredWetMassKg, current.deliveredWetMassKg) &&
-    unchanged(update.moistureContentPercent, current.moistureContentPercent) &&
-    unchanged(update.distanceKmOverride, current.distanceKmOverride) &&
-    unchanged(update.distanceSource, current.distanceSource) &&
-    unchanged(update.distanceNote, current.distanceNote) &&
-    (update.tripType == null || update.tripType === current.tripType)
+  return Object.values(NON_MASS_FIELD_COMPARATORS).every((comparator) =>
+    comparator(update, current),
   );
 }
