@@ -80,7 +80,7 @@ Every posted comment starts with the triage disclaimer line:
   ```bash
   gh issue close <dupe> --duplicate-of <canonical> --comment "<disclaimer> Consolidated into #<canonical>."
   ```
-- **Split** — create sub-issues with the `to-issues` vertical-slice template (What to build / Acceptance criteria / Blocked by, glossary vocabulary), then attach natively and rewrite the parent as an epic overview (like #363's A1–B4):
+- **Split** — create sub-issues with the `to-tickets` vertical-slice template (What to build / Acceptance criteria / Blocked by, glossary vocabulary), then attach natively and rewrite the parent as an epic overview (like #363's A1–B4):
   ```bash
   gh issue create --title "<type>: <slice>" --body-file <slice.md> --label <labels>
   gh issue view <n> --json id --jq .id     # node IDs for parent + child
