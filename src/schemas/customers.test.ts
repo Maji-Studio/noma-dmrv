@@ -52,6 +52,15 @@ describe("customer location site description", () => {
     );
   });
 
+  it("accepts a site description of exactly 500 characters", () => {
+    expect(
+      customerLocationFormSchema.safeParse({
+        ...locationInput,
+        address: "a".repeat(500),
+      }).success,
+    ).toBe(true);
+  });
+
   it("rejects a site description longer than 500 characters", () => {
     const result = customerLocationFormSchema.safeParse({
       ...locationInput,
@@ -61,7 +70,7 @@ describe("customer location site description", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error.issues[0]?.message).toBe(
-      "Site description must be less than 500 characters",
+      "Site description must be 500 characters or fewer",
     );
   });
 });

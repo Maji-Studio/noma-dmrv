@@ -20,12 +20,6 @@ import {
 const LOCATION_PART_MAX = 100;
 const locationPartSchema = z.string().max(LOCATION_PART_MAX).optional().nullable().or(z.literal(""));
 
-// ============================================
-// GPS Coordinate Validation
-// ============================================
-
-const optionalLatitudeSchema = requiredLat.nullable().optional();
-const optionalLongitudeSchema = requiredLng.nullable().optional();
 // Optional free text describing the application site: a landmark, parcel name,
 // access note, or street address. Rural application sites frequently have no
 // postal address at all, and the GPS position is the identifying field, so
@@ -35,10 +29,18 @@ const customerLocationDescriptionSchema = z
   .string()
   .max(
     CUSTOMER_LOCATION_DESCRIPTION_MAX,
-    `Site description must be less than ${CUSTOMER_LOCATION_DESCRIPTION_MAX} characters`,
+    `Site description must be ${CUSTOMER_LOCATION_DESCRIPTION_MAX} characters or fewer`,
   )
   .optional()
   .nullable();
+
+// ============================================
+// GPS Coordinate Validation
+// ============================================
+
+const optionalLatitudeSchema = requiredLat.nullable().optional();
+const optionalLongitudeSchema = requiredLng.nullable().optional();
+
 // ============================================
 // Customer Form Schema (Client-side validation)
 // ============================================
