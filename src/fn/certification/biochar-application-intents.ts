@@ -2,6 +2,7 @@ import { getBiocharApplicationRegistryInputs } from "@/data-access/certifier-bio
 import type { OrgContext } from "@/lib/auth/server";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
+import { MISSING_TRUCK_MASSES_GATE_REASON } from "@/lib/certification/biochar-application-gates";
 import {
   kgToTonnes,
   tonnesToKg,
@@ -20,8 +21,6 @@ import {
 const PREFLIGHT_EXTERNAL_PRODUCTION_BATCH_ID = "preflight-production-batch";
 const PREFLIGHT_EXTERNAL_STORAGE_LOCATION_ID = "preflight-storage-location";
 const SLICE_WET_MASS_TOLERANCE_KG = 0.01;
-
-export const MISSING_TRUCK_MASSES_GATE_REASON = "missing_truck_masses";
 
 interface BiocharApplicationIntentBase {
   applicationId: string;
@@ -176,7 +175,11 @@ export async function compileBiocharApplicationIntents(args: {
         `Application ${input.applicationCode}'s immutable allocations total ${allocatedWetMassKg} kg, but its persisted applied mass is ${appliedWetMassKg} kg. Reconcile the Removal and submit again.`,
       );
     }
-    if (input.fieldSizeHa == null) {
+    if (
+      input.fieldSizeHa == null ||
+      !Number.isFinite(input.fieldSizeHa) ||
+      input.fieldSizeHa <= 0
+    ) {
       throw new SafeError(
         `Application ${input.applicationCode} needs a field size greater than 0 ha before submitting.`,
       );

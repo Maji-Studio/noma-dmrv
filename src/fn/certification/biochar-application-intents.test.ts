@@ -149,6 +149,15 @@ describe("compileBiocharApplicationIntents", () => {
       input({
         truckMassOnArrivalKg: null,
         truckMassOnDepartureKg: null,
+        fieldSizeHa: 0,
+      }),
+    ]);
+    await expect(compile()).rejects.toThrow(/field size greater than 0 ha/i);
+
+    mocks.getInputs.mockResolvedValue([
+      input({
+        truckMassOnArrivalKg: null,
+        truckMassOnDepartureKg: null,
         customerLocationId: null,
       }),
     ]);
