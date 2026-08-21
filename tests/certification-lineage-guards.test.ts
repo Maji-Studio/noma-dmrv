@@ -29,11 +29,16 @@ import {
   biocharProductSourceAllocations,
   biocharProducts,
   certificationSubmissions,
+  certifierBiocharApplications,
   certifierGhgStatements,
+  certifierProductionBatches,
+  certifierProjects,
   certifierRemovals,
+  certifierStorageLocations,
   creditBatchApplications,
   creditBatchProductionRuns,
   creditBatches,
+  customerLocations,
   customers,
   deliveries,
   facilities,
@@ -48,6 +53,8 @@ import {
   storageLocations,
   transportLegs,
 } from "@/db/schema";
+import { MISSING_TRUCK_MASSES_GATE_REASON } from "@/lib/certification/biochar-application-gates";
+import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 const LOCKED_COPY = "is locked by a certification submission.";
@@ -383,6 +390,111 @@ async function withFixture<T>(
   }
 }
 
+async function withMassGateRegistration<T>(
+  fixture: LineageFixture,
+  testFn: () => Promise<T>,
+): Promise<T> {
+  const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+  const created = await db.transaction(async (tx) => {
+    const [project] = await tx
+      .insert(certifierProjects)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: fixture.facilityId,
+        externalProjectId: `prj_clg_${tag}`,
+      })
+      .returning({ id: certifierProjects.id });
+    const [location] = await tx
+      .insert(customerLocations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        customerId: fixture.customerId,
+        name: `CLG Field ${tag}`,
+        country: "Tanzania",
+        gpsLatitude: -3.25,
+        gpsLongitude: 37.42,
+      })
+      .returning({ id: customerLocations.id });
+    const [production] = await tx
+      .insert(certifierProductionBatches)
+      .values({
+        organizationId: TEST_ORG_ID,
+        creditBatchId: fixture.batchId,
+        externalProductionBatchId: `ptb_clg_${tag}`,
+        supplierReference: `nm-ptb-clg-${tag}`,
+        massKg: 285,
+        startedOn: "2026-06-13",
+        endedOn: "2026-06-16",
+        payloadHash: `ptb-hash-${tag}`,
+      })
+      .returning({ id: certifierProductionBatches.id });
+    const storagePayload = buildCreateStorageLocationRequest({
+      externalProjectId: `prj_clg_${tag}`,
+      name: `CLG Field ${tag}`,
+      latitude: -3.25,
+      longitude: 37.42,
+      supplierReferenceId: `nm-slc-clg-${tag}`,
+    });
+    const [storage] = await tx
+      .insert(certifierStorageLocations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        customerLocationId: location.id,
+        certifierProjectId: project.id,
+        externalProjectId: `prj_clg_${tag}`,
+        externalStorageLocationId: `slc_clg_${tag}`,
+        supplierReference: `nm-slc-clg-${tag}`,
+        submittedPayload: storagePayload,
+        payloadHash: `slc-hash-${tag}`,
+      })
+      .returning({ id: certifierStorageLocations.id });
+    const [registration] = await tx
+      .insert(certifierBiocharApplications)
+      .values({
+        organizationId: TEST_ORG_ID,
+        applicationId: fixture.applicationId,
+        creditBatchId: fixture.batchId,
+        productionBatchRegistrationId: production.id,
+        storageLocationRegistrationId: storage.id,
+        externalProductionBatchId: `ptb_clg_${tag}`,
+        externalStorageLocationId: `slc_clg_${tag}`,
+        supplierReference: `nm-bca-clg-${tag}`,
+        lifecycleStatus: "gated",
+        gateReason: MISSING_TRUCK_MASSES_GATE_REASON,
+      })
+      .returning({ id: certifierBiocharApplications.id });
+    return {
+      locationId: location.id,
+      productionId: production.id,
+      projectId: project.id,
+      registrationId: registration.id,
+      storageId: storage.id,
+    };
+  });
+
+  try {
+    return await testFn();
+  } finally {
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(certifierBiocharApplications)
+        .where(eq(certifierBiocharApplications.id, created.registrationId));
+      await tx
+        .delete(certifierStorageLocations)
+        .where(eq(certifierStorageLocations.id, created.storageId));
+      await tx
+        .delete(certifierProductionBatches)
+        .where(eq(certifierProductionBatches.id, created.productionId));
+      await tx
+        .delete(customerLocations)
+        .where(eq(customerLocations.id, created.locationId));
+      await tx
+        .delete(certifierProjects)
+        .where(eq(certifierProjects.id, created.projectId));
+    });
+  }
+}
+
 
 beforeAll(() => ensureTestOrg());
 
@@ -570,6 +682,102 @@ describe("certification lineage guards", () => {
         }),
       ).rejects.toThrow(LOCKED_COPY);
     }, "ghgStatement");
+  });
+
+  it("allows only missing truck masses through a completed submitted Removal's matching gate", async () => {
+    await withFixture(async (fixture) => {
+      await db
+        .update(certifierRemovals)
+        .set({ startedOn: "2026-06-13", completedOn: "2026-06-16" })
+        .where(eq(certifierRemovals.id, fixture.removalId));
+
+      await withMassGateRegistration(fixture, async () => {
+        const updated = await updateDelivery(
+          makeTestOrgContext(TEST_USER_ID),
+          fixture.deliveryId,
+          {
+            truckMassOnArrivalKg: 8_000,
+            truckMassOnDepartureKg: 7_700,
+          },
+        );
+
+        expect(updated.truckMassOnArrivalKg).toBe(8_000);
+        expect(updated.truckMassOnDepartureKg).toBe(7_700);
+      });
+    });
+  });
+
+  it("keeps blocking GHG Statement lineage locked despite a matching mass gate", async () => {
+    await withFixture(async (fixture) => {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(certifierRemovals)
+          .set({ startedOn: "2026-06-13", completedOn: "2026-06-16" })
+          .where(eq(certifierRemovals.id, fixture.removalId));
+        await tx.insert(certificationSubmissions).values({
+          organizationId: TEST_ORG_ID,
+          provider: "isometric",
+          submissionType: "removal",
+          localEntityType: "removal",
+          localEntityId: fixture.removalId,
+          externalId: `ext_removal_${crypto.randomUUID()}`,
+          version: 1,
+          status: "submitted",
+          payloadHash: `hash-${crypto.randomUUID()}`,
+          payloadSnapshot: { fixture: "mass-gated-ghg-lock" },
+          submittedAt: new Date("2026-06-17T00:00:00Z"),
+        });
+      });
+
+      await withMassGateRegistration(fixture, async () => {
+        await expect(
+          updateDelivery(
+            makeTestOrgContext(TEST_USER_ID),
+            fixture.deliveryId,
+            {
+              truckMassOnArrivalKg: 8_000,
+              truckMassOnDepartureKg: 7_700,
+            },
+          ),
+        ).rejects.toThrow(LOCKED_COPY);
+      });
+    }, "ghgStatement");
+  });
+
+  it("keeps an in-flight replacement Removal snapshot locked despite a matching mass gate", async () => {
+    await withFixture(async (fixture) => {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(certifierRemovals)
+          .set({ startedOn: "2026-06-13", completedOn: "2026-06-16" })
+          .where(eq(certifierRemovals.id, fixture.removalId));
+        await tx.insert(certificationSubmissions).values({
+          organizationId: TEST_ORG_ID,
+          provider: "isometric",
+          submissionType: "removal",
+          localEntityType: "removal",
+          localEntityId: fixture.removalId,
+          version: 2,
+          status: "draft",
+          payloadHash: `replacement-${crypto.randomUUID()}`,
+          payloadSnapshot: { fixture: "mass-gated-replacement-lock" },
+          lockedAt: new Date(),
+        });
+      });
+
+      await withMassGateRegistration(fixture, async () => {
+        await expect(
+          updateDelivery(
+            makeTestOrgContext(TEST_USER_ID),
+            fixture.deliveryId,
+            {
+              truckMassOnArrivalKg: 8_000,
+              truckMassOnDepartureKg: 7_700,
+            },
+          ),
+        ).rejects.toThrow(LOCKED_COPY);
+      });
+    });
   });
 
   it("rejects biochar product edits once linked to a submitted removal", async () => {

@@ -82,7 +82,13 @@ function lineageQuery(
     .selectDistinct({
       removalId: certifierRemovals.id,
       ghgStatementId: certifierRemovals.ghgStatementId,
+      removalStartedOn: certifierRemovals.startedOn,
+      removalCompletedOn: certifierRemovals.completedOn,
+      creditBatchId: creditBatchApplications.creditBatchId,
+      applicationId: applications.id,
       removalSubmissionId: removalSubmission.id,
+      removalSubmissionType: removalSubmission.submissionType,
+      removalSubmissionStatus: removalSubmission.status,
       ghgStatementSubmissionId: ghgStatementSubmission.id,
     })
     .from(creditBatches)
@@ -197,21 +203,20 @@ function lineageQuery(
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), targetCondition(target)));
 }
 
+export type LockedCertifiedLineageRow = Awaited<
+  ReturnType<ReturnType<typeof lineageQuery>["execute"]>
+>[number];
+
 /**
- * Blocks upstream source-data mutation once the record is part of a live
- * certification artifact. The lineage path is re-derived from current DB state
- * instead of trusting UI context or stale denormalized membership. When the
- * initial lineage is empty there are no artifact rows to lock, so this falls
- * back to the caller's ordinary transaction isolation.
+ * Resolves a target's certification lineage, locks every referenced artifact in
+ * deterministic order, then re-resolves under those locks. Callers that need a
+ * narrowly scoped mutation exception must base it only on the returned rows.
  */
-export async function assertCanMutateCertifiedLineage(
+export async function getLockedCertifiedLineage(
   ctx: OrgContext,
   tx: DbTransaction,
   target: CertifiedLineageTarget,
-  mutation: CertificationLineageMutation,
-  subjectEntityType: CertificationLineageLockEntityType = target.entityType,
-  lineageRelationship?: "linked" | "selected",
-): Promise<void> {
+): Promise<LockedCertifiedLineageRow[]> {
   requireOrgScope(ctx);
   const lineage = await lineageQuery(ctx, tx, target);
   await acquireCertificationArtifactLocksSorted(tx, [
@@ -228,8 +233,25 @@ export async function assertCanMutateCertifiedLineage(
         localEntityId: row.ghgStatementId!,
       })),
   ]);
+  return lineageQuery(ctx, tx, target);
+}
 
-  const hit = (await lineageQuery(ctx, tx, target)).find(
+/**
+ * Blocks upstream source-data mutation once the record is part of a live
+ * certification artifact. The lineage path is re-derived from current DB state
+ * instead of trusting UI context or stale denormalized membership. When the
+ * initial lineage is empty there are no artifact rows to lock, so this falls
+ * back to the caller's ordinary transaction isolation.
+ */
+export async function assertCanMutateCertifiedLineage(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  target: CertifiedLineageTarget,
+  mutation: CertificationLineageMutation,
+  subjectEntityType: CertificationLineageLockEntityType = target.entityType,
+  lineageRelationship?: "linked" | "selected",
+): Promise<void> {
+  const hit = (await getLockedCertifiedLineage(ctx, tx, target)).find(
     (row) => row.removalSubmissionId || row.ghgStatementSubmissionId,
   );
 
