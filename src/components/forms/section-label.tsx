@@ -6,18 +6,24 @@
  */
 
 import { InfoHint } from "@/components/ui/tooltip";
-import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
+import {
+  CertificationFieldTag,
+  type CertFieldStatus,
+} from "@/components/ui/certification-field-tag";
 
 export function SectionLabel({
   children,
   hint,
   certifyRequired,
+  certifyStatus,
   icon,
 }: {
   children: React.ReactNode;
   /** Optional explanatory text shown via an info icon next to the label. */
   hint?: React.ReactNode;
   certifyRequired?: boolean;
+  /** Saved-state colour for the CERT chip; only meaningful with `certifyRequired`. */
+  certifyStatus?: CertFieldStatus;
   /** Optional leading glyph (e.g. a Phosphor icon) rendered before the label text. */
   icon?: React.ReactNode;
 }) {
@@ -29,7 +35,7 @@ export function SectionLabel({
         </span>
       )}
       {children}
-      {certifyRequired && <CertificationFieldTag />}
+      {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
       {hint != null && <InfoHint side="top">{hint}</InfoHint>}
     </h3>
   );

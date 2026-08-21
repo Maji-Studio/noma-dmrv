@@ -274,7 +274,10 @@ test.describe("Feedstock UI CRUD", () => {
     // (guards against passing the absence checks against a blank panel).
     await expect(dialog.getByText("Transport evidence").first()).toBeVisible();
     await expect(
-      dialog.getByText("No transport evidence attached.")
+      dialog.getByText("No transport evidence", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText("No documents are attached.", { exact: true }),
     ).toBeVisible();
     // View mode is read-only: no upload dropzone, no per-file delete buttons.
     await expect(dialog.locator('input[type="file"]')).toHaveCount(0);
