@@ -32,6 +32,7 @@ import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import {
   factsFromMockedLineages,
   satisfiedVisualEvidenceDocuments,
+  transportTemplate,
 } from "./fixtures/certify-context";
 
 vi.mock("@/data-access/credit-batches", () => ({
@@ -712,56 +713,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedGetLegs).toHaveBeenCalledTimes(3);
   });
 });
-
-function transportTemplate(
-  id: string,
-  omit: ReadonlyArray<"feedstock" | "biochar" | "sample"> = [],
-): IsometricGhgEntryTemplate {
-  const categories = [
-    {
-      key: "biomass-feedstock-transport",
-      blueprint_key: "mass_distance_based_ci_emissions",
-      input_key: "mass_distance",
-      category: "feedstock" as const,
-    },
-    {
-      key: "biochar-transport",
-      blueprint_key: "mass_distance_based_ci_emissions",
-      input_key: "mass_distance",
-      category: "biochar" as const,
-    },
-    {
-      key: "sampling-required-for-mrv",
-      blueprint_key: "mass_distance_based_ci_emissions",
-      input_key: "mass_distance",
-      category: "sample" as const,
-    },
-  ].filter((c) => !omit.includes(c.category));
-
-  return {
-    id,
-    name: `Template ${id}`,
-    groups: categories.map((c, idx) => ({
-      id: `${id}-grp-${idx}`,
-      key: c.key,
-      name: c.key,
-      components: [
-        {
-          id: `${id}-comp-${idx}`,
-          blueprint_key: c.blueprint_key,
-          display_name: c.blueprint_key,
-          inputs: [
-            {
-              type: "monitored",
-              input_key: c.input_key,
-              datapoint_id: null,
-            },
-          ],
-        },
-      ],
-    })),
-  } as unknown as IsometricGhgEntryTemplate;
-}
 
 describe("requiredTransportCategories", () => {
   beforeEach(() => {
