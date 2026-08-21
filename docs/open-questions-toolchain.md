@@ -11,12 +11,16 @@ Each open decision below links to its authoritative source. Turbopack defaults,
 `reactCompiler: true`, `src/proxy.ts`, and the generate-and-migrate CI workflow
 already match the current project toolchain and need no follow-up.
 
-### TypeScript 7 (tsgo) for CI typecheck (`tooling/ts7`)
+### TypeScript 7 for CI typecheck (`tooling/ts7`)
 
-- Still open: `package.json` pins TS `^5.9.3` and there is no `tsgo` anywhere.
-- **Resolve via:** add a non-blocking `tsgo --noEmit` CI job to validate parity
-  against the large Drizzle schema and Zod-heavy types; flip the blocking typecheck
-  once TS 7 ships stable (S).
+- Still open: `package.json` pins TypeScript `^5.9.3`; TypeScript 7 is stable,
+  but its compiler API transition still affects tools such as typescript-eslint.
+- **Resolve via:** install the stable TypeScript 7 package in a dedicated,
+  non-blocking parity job and run `pnpm exec tsc --noEmit` against the large
+  Drizzle schema and Zod-heavy types. Migrate the blocking typecheck after the
+  current lint and toolchain peers are compatible. See the
+  [official TypeScript 7 announcement](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/)
+  for installation and compatibility guidance (S).
 
 ### Drizzle ORM/Kit v1.0 upgrade (`db/drizzle-v1`)
 
