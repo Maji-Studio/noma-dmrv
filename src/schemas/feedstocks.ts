@@ -27,8 +27,12 @@ const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
 
 // A feedstock delivery records a physical intake: a zero-mass delivery or bin
 // allocation is an auditable no-op record, so both bounds are strictly
-// positive. The server update schema below keeps its non-negative bound so
-// legacy records stay patchable.
+// positive. This schema is also the edit resolver, so a record already stored
+// with zero mass has to be given a positive mass before it saves — intended,
+// since the only way to hold one is a deliberate pre-fix entry and there is no
+// production data to grandfather. The server update schema below keeps a
+// non-negative bound because it validates a partial column patch rather than a
+// filled-in form.
 const requiredPositiveMass = requiredPositiveMassKgSchema(
   "Required",
   "Enter a valid number.",
