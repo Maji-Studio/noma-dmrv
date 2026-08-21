@@ -12,6 +12,7 @@
 
 import dynamic from "next/dynamic";
 import { useRouteGeometries } from "@/hooks/use-geo";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDistanceKm } from "@/lib/format-utils";
 import {
   DISTANCE_SOURCE_LABELS,
@@ -141,7 +142,7 @@ export function CustomerLocationDetails({
             </p>
           ) : (
             <p className="body-medium text-[var(--color-text-tertiary)]">
-              No street address on file
+              {MISSING_VALUE.notRecorded}
             </p>
           )}
           {localityLine && (

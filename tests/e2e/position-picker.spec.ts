@@ -249,7 +249,7 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await expect(dialog.getByLabel("Country")).toBeVisible();
     await expect(dialog.getByLabel("State / region")).toBeVisible();
     await expect(dialog.getByLabel("City")).toBeVisible();
-    await expect(dialog.getByLabel("Address / description")).toBeVisible();
+    await expect(dialog.getByLabel("Site description")).toBeVisible();
     await expect(dialog.getByText("Application site position")).toBeVisible();
     await expect(
       dialog.getByPlaceholder(/Address search|Search address or place/i)
@@ -309,9 +309,8 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
 
     await dialog.getByLabel("Location name").fill("E2E Customer Site");
     await dialog.getByLabel("Country").fill("Tanzania");
-    await dialog
-      .getByLabel("Address / description")
-      .fill("E2E application site");
+    // Site description deliberately left blank: it is optional, and a location
+    // saved with only a name, country, and GPS position must be accepted.
     await dialog.getByLabel("GPS latitude").fill(String(DAR.lat));
     await dialog.getByLabel("GPS longitude").fill(String(DAR.lng));
     await dialog.getByRole("button", { name: "Add Location" }).click();

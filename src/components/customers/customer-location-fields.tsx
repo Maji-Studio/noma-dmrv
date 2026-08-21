@@ -161,15 +161,19 @@ export function CustomerLocationFields({
           </FormField>
         </div>
 
+        {/*
+          Optional: the GPS position identifies the site. Rural application
+          sites often have no postal address, so this is free text for whatever
+          actually helps someone find the place.
+        */}
         <FormField
           id={addressId}
-          label="Address / description"
+          label="Site description"
           error={errors.address?.message}
-          required
         >
           <FormTextarea
             id={addressId}
-            placeholder="Additional address details or site description"
+            placeholder="Landmark, parcel name, access details, or street address"
             disabled={isSubmitting}
             error={!!errors.address}
             {...register("address")}
