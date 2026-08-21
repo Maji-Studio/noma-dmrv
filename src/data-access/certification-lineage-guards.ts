@@ -17,7 +17,11 @@ import {
   productionRuns,
   samples,
 } from "@/db/schema";
-import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
+import {
+  acquireCertificationArtifactLocksSorted,
+  certificationArtifactLockKey,
+  type CertificationArtifactLock,
+} from "@/lib/certification/submission-lock";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import {
   formatCertificationLineageLockMessage,
@@ -82,8 +86,6 @@ function lineageQuery(
     .selectDistinct({
       removalId: certifierRemovals.id,
       ghgStatementId: certifierRemovals.ghgStatementId,
-      removalStartedOn: certifierRemovals.startedOn,
-      removalCompletedOn: certifierRemovals.completedOn,
       creditBatchId: creditBatchApplications.creditBatchId,
       applicationId: applications.id,
       removalSubmissionId: removalSubmission.id,
@@ -207,19 +209,10 @@ export type LockedCertifiedLineageRow = Awaited<
   ReturnType<ReturnType<typeof lineageQuery>["execute"]>
 >[number];
 
-/**
- * Resolves a target's certification lineage, locks every referenced artifact in
- * deterministic order, then re-resolves under those locks. Callers that need a
- * narrowly scoped mutation exception must base it only on the returned rows.
- */
-export async function getLockedCertifiedLineage(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  target: CertifiedLineageTarget,
-): Promise<LockedCertifiedLineageRow[]> {
-  requireOrgScope(ctx);
-  const lineage = await lineageQuery(ctx, tx, target);
-  await acquireCertificationArtifactLocksSorted(tx, [
+function lineageArtifactLocks(
+  lineage: LockedCertifiedLineageRow[],
+): CertificationArtifactLock[] {
+  return [
     ...lineage.map((row) => ({
       provider: "isometric",
       localEntityType: "removal",
@@ -232,8 +225,36 @@ export async function getLockedCertifiedLineage(
         localEntityType: "ghgStatement",
         localEntityId: row.ghgStatementId!,
       })),
-  ]);
-  return lineageQuery(ctx, tx, target);
+  ];
+}
+
+/**
+ * Resolves a target's certification lineage, locks every referenced artifact in
+ * deterministic order, then re-resolves under those locks. Callers that need a
+ * narrowly scoped mutation exception must base it only on the returned rows.
+ */
+export async function getLockedCertifiedLineage(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  target: CertifiedLineageTarget,
+): Promise<LockedCertifiedLineageRow[]> {
+  requireOrgScope(ctx);
+  const lineage = await lineageQuery(ctx, tx, target);
+  const lockedArtifacts = lineageArtifactLocks(lineage);
+  await acquireCertificationArtifactLocksSorted(tx, lockedArtifacts);
+
+  const resolvedLineage = await lineageQuery(ctx, tx, target);
+  const lockedKeys = new Set(lockedArtifacts.map(certificationArtifactLockKey));
+  const introducedUnlockedArtifact = lineageArtifactLocks(resolvedLineage).some(
+    (artifact) => !lockedKeys.has(certificationArtifactLockKey(artifact)),
+  );
+  if (introducedUnlockedArtifact) {
+    throw new SafeError(
+      "Certification lineage changed while it was being locked. Refresh and retry.",
+    );
+  }
+
+  return resolvedLineage;
 }
 
 /**

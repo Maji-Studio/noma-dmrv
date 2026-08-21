@@ -52,20 +52,29 @@ function canWaiveCompletedRemovalLineageLock(
   );
   if (gatedRegistrationKeys.size !== registrations.length) return false;
 
-  return lineage.every(
-    (row) =>
-      row.removalStartedOn !== null &&
-      row.removalCompletedOn !== null &&
+  const lineageRegistrationKeys = new Set<string>();
+  const hasOnlyEligibleRemovalLineage = lineage.every((row) => {
+    if (row.applicationId === null) return false;
+    lineageRegistrationKeys.add(registrationKey({
+      applicationId: row.applicationId,
+      creditBatchId: row.creditBatchId,
+    }));
+    return (
       row.removalSubmissionType === "removal" &&
       row.removalSubmissionStatus === "submitted" &&
+      row.ghgStatementId === null &&
       row.ghgStatementSubmissionId === null &&
-      row.applicationId !== null &&
       gatedRegistrationKeys.has(
         registrationKey({
           applicationId: row.applicationId,
           creditBatchId: row.creditBatchId,
         }),
-      ),
+      )
+    );
+  });
+  return (
+    hasOnlyEligibleRemovalLineage &&
+    lineageRegistrationKeys.size === gatedRegistrationKeys.size
   );
 }
 
@@ -79,6 +88,8 @@ export async function completeMassGatedDeliveryTruckMasses(
   input: TruckMassCompletionInput,
 ): Promise<boolean> {
   requireOrgScope(ctx);
+  if (!(input.arrivalKg > input.departureKg)) return false;
+
   return db.transaction(async (tx) => {
     const lineage = await getLockedCertifiedLineage(ctx, tx, {
       entityType: "delivery",
@@ -106,7 +117,7 @@ export async function completeMassGatedDeliveryTruckMasses(
         eq(certifierBiocharApplications.organizationId, ctx.organizationId),
       ))
       .orderBy(certifierBiocharApplications.id)
-      .for("update");
+      .for("update", { of: certifierBiocharApplications });
     if (!canWaiveCompletedRemovalLineageLock(lineage, registrations)) {
       return false;
     }
