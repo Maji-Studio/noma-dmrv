@@ -179,9 +179,14 @@ fields named exactly like the env vars. Three consumers:
   `storage-health.yml` and `migrate.yml` resolve `op://` references via
   `1password/load-secrets-action`, authenticating with the single repo secret
   **`OP_SERVICE_ACCOUNT_TOKEN`** (read-only Service Account scoped to that
-  vault). `CLAUDE_CODE_OAUTH_TOKEN` is the only other repo secret. Load steps are
-  gated on `OP_SERVICE_ACCOUNT_TOKEN != ''` so fork PRs skip cleanly. Plain
-  `e2e.yml` uses no 1Password secrets at all.
+  vault). `CLAUDE_CODE_OAUTH_TOKEN` is the only other repo secret. Plain
+  `e2e.yml` uses no 1Password secrets at all. `isometric-health.yml` loads its
+  secrets unconditionally and fails closed when the token or a required vault
+  field is missing — a health check that skips its own credentials reports green
+  while the registry is unreachable. `e2e-live.yml` and `migrate.yml` also load
+  unconditionally and fail on a missing token. `storage-health.yml` is the only
+  workflow that still gates on `OP_SERVICE_ACCOUNT_TOKEN != ''` and skips
+  cleanly without it.
 
 Notes:
 

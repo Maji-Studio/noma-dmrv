@@ -15,6 +15,9 @@ on:
     - cron: "30 5 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   playwright-live:
     runs-on: ubuntu-latest
@@ -127,8 +130,12 @@ jobs:
       - name: Run @live Playwright specs
         run: pnpm test:e2e --grep "@live"
 
+      # Only on a bad run: a green nightly has nothing worth keeping, and the
+      # traces carry sandbox response bodies. Expire them after two weeks.
+      # `cancelled()` covers the job timeout above — a hung sandbox is the
+      # hardest failure to reproduce and the one that most needs its trace.
       - name: Upload Playwright artifacts
-        if: always()
+        if: ${{ failure() || cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-live-artifacts
@@ -136,3 +143,4 @@ jobs:
             playwright-report
             test-results
           if-no-files-found: ignore
+          retention-days: 14

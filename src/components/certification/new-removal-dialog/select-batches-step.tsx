@@ -141,7 +141,7 @@ function ReadyCard({
         />
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        Credit batch
+        Credit batch {batch.code}
       </span>
       <div className="grid grid-cols-2 gap-8">
         <Metric label="Weight" value={formatTonnes(batch.appliedWeightTons)} />
@@ -183,7 +183,7 @@ function IncompleteCard({
         </span>
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        Credit batch
+        Credit batch {batch.code}
       </span>
       <ul className="flex flex-col gap-10">
         {gaps.map((check, index) => {
