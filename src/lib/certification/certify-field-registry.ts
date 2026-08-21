@@ -384,9 +384,9 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   // column/admin form stay (vestigial local estimate) but carry no certify
   // badge.
   facilityEmissionConfig: [],
-  // The kinds below are badge/mapping documentation only — they are never fed
-  // to `deriveEntityCertifyReadiness` (their gaps surface through the derived
-  // transport legs and the CO2e-stored preview instead).
+  // The kinds below stay out of the Removal submission's entity-readiness
+  // walk (which covers production runs, samples, and transport legs); their
+  // descriptors drive form/detail badges and the list readiness pills.
   delivery: [
     {
       // The biochar product wet mass is the submitted value. It becomes the
@@ -397,16 +397,12 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       kind: "entered",
       mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
-    {
-      key: "truckMassOnArrivalKg",
-      label: "Truck mass before unloading",
-      kind: "entered",
-    },
-    {
-      key: "truckMassOnDepartureKg",
-      label: "Truck mass after unloading",
-      kind: "entered",
-    },
+    // truckMassOnArrivalKg / truckMassOnDepartureKg deliberately carry no
+    // certify descriptor: mass verification runs on the documentation-based
+    // proof-of-delivery pathway (docs/isometric/changes.md 2026-08-21), and
+    // missing truck masses gate the registry Biochar Application without
+    // blocking anything. The delivery evidence section's CERT chip
+    // (delivery-evidence-cert-status.ts) is the certification signal.
   ],
   application: [
     // Carbon inputs for the CO2e-stored calculation

@@ -44,6 +44,9 @@ describe("SelectBatchesStep", () => {
     );
 
     expect(html).toContain("Batch data ready");
+    // The card names its own batch. The @live wizard specs locate a card by
+    // this exact caption, so it needs a hermetic guard in PR CI too.
+    expect(html).toContain("Credit batch CB-1");
     expect(html).not.toContain("Ready to certify");
     expect(html).toContain("1,000-year biochar sequestration");
     expect(html).not.toContain("biochar_sequestration_1000_year");

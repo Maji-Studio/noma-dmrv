@@ -14,9 +14,11 @@ import {
   TransportEvidencePanel,
 } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
+import { useDocumentsForEntity } from "@/hooks/use-documents";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
+import { deriveDeliveryEvidenceCertStatus } from "./delivery-evidence-cert-status";
 
 interface DeliveryEvidenceSectionProps {
   delivery?: Delivery;
@@ -36,16 +38,29 @@ export function DeliveryEvidenceSection({
   focusTarget,
   __spine,
 }: DeliveryEvidenceSectionProps) {
+  const persisted = isEditMode && !!delivery;
+  // The chip reads the saved document rows the embedded panel also lists;
+  // each upload is itself a save, so the status tracks the persisted record.
+  const { data: savedDocuments } = useDocumentsForEntity(
+    "delivery",
+    persisted ? delivery.id : null,
+  );
+
   return (
     <FormSection
-      title="Transport evidence"
+      title="Delivery evidence"
       icon={<PaperclipIcon size={14} weight="bold" />}
+      certifyRequired
+      certifyStatus={deriveDeliveryEvidenceCertStatus(
+        savedDocuments,
+        persisted,
+      )}
       __spine={__spine}
     >
       <ActionableFocusTarget
         target="transport-evidence"
         activeTarget={focusTarget}
-        actionLabel="Attach a transport document (optional)"
+        actionLabel="Attach a proof-of-delivery document"
       >
         {isEditMode && delivery ? (
           <div className="flex flex-col gap-12">

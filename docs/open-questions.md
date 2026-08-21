@@ -445,6 +445,35 @@ companion inherits this file's schema, invariants, and resolution rules.
   record the outcome in [`docs/isometric/changes.md`](./isometric/changes.md)
   (M).
 
+### Sample transport is mapped locally but no longer seen in the live template (`isometric/sample-transport-template-drift`, opened 2026-08-21, `needs-registry-check`)
+
+- **Observed:** the live sandbox check in
+  `tests/isometric-sandbox.integration.test.ts` ("resolves every transport
+  category to mass_distance") once required three
+  `mass_distance_based_ci_emissions` components. It was relaxed to the two it
+  actually found (feedstock and biochar transport) when the scheduled live
+  workflows were repaired, so `sampling-required-for-mrv` is no longer exercised
+  against the registry.
+- The binding is still live in code and docs:
+  `src/lib/isometric/transformers/datapoint.ts:INPUT_MAPPING` and
+  `src/lib/certification/certify-field-registry.ts` both declare
+  `sampling-required-for-mrv / mass_distance_based_ci_emissions /
+  mass_distance`, and `docs/isometric/sandbox-template-authoring.md` still lists
+  the row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
+  derives required categories from the live template, so a category the template
+  drops is silently no longer collected or submitted.
+- Two explanations are open and only a registry probe separates them: the
+  re-authored template genuinely dropped sample transport, or the spec picked a
+  different template — `pickTransportTemplate` falls back to the first template
+  carrying any transport component, and `isometric-health.yml` sets no
+  `ISOMETRIC_DEMO_TEMPLATE_ID`.
+- **Resolve via:** inspect the live template (`pnpm tsx scripts/isometric-smoke.ts
+  inspect-template <prj>` or the Isometric MCP server). If sample transport is
+  gone, drop the mapping row and the authoring-doc row and record it in
+  [`docs/isometric/changes.md`](./isometric/changes.md); if it is present, pin
+  `ISOMETRIC_DEMO_TEMPLATE_ID` in the workflow and restore the third category to
+  the assertion (S).
+
 Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](./open-questions-audit-follow-ups.md).
 
 ## Product bins & formulations
