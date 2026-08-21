@@ -171,7 +171,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                     City
                   </th>
                   <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    Address / Description
+                    Site description
                   </th>
                   <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
                     Application site position

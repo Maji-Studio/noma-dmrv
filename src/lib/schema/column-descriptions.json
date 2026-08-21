@@ -119,7 +119,7 @@
     "name": "Display name for this location",
     "gps_latitude": "Latitude in decimal degrees",
     "gps_longitude": "Longitude in decimal degrees",
-    "address": "Street address of this location",
+    "address": "Optional site description: a landmark, parcel name, access note, or street address",
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"
   },
