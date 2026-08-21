@@ -62,7 +62,7 @@ describe("TransportEvidencePanel chrome", () => {
       />,
     );
 
-    expect(html).not.toContain("<h3");
+    expect(html).not.toContain("Transport evidence</h3>");
     expect(html).not.toContain("border-t");
     expect(html).toContain('aria-label="Transport evidence"');
     expect(html).not.toContain("CERT");
@@ -78,7 +78,8 @@ describe("TransportEvidencePanel chrome", () => {
     );
 
     expect(html).toContain("Delivery evidence</h3>");
-    expect(html).toContain("No delivery evidence attached.");
+    expect(html).toContain("No delivery evidence");
+    expect(html).toContain("No documents are attached.");
   });
 });
 
@@ -117,7 +118,7 @@ describe("delivery document list", () => {
 
     expect(html).toContain("Delivery receipt");
     expect(html).toContain("Delivery photo");
-    expect(html).toContain("Weighbridge ticket");
+    expect(html).toContain("Weigh-scale ticket");
     expect(html.match(/Registry evidence/g)).toHaveLength(2);
     expect(html.match(/Retention record/g)).toHaveLength(1);
   });

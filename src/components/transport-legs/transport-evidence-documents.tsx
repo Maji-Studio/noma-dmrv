@@ -8,6 +8,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
@@ -52,10 +53,10 @@ const PANEL_HINTS: Record<TransportEvidenceEntityType, string> = {
     "Attach proof of delivery: a delivery receipt, bill of lading, or delivery photo. These become registry mass evidence. Weighbridge tickets and other transport records are kept for verification.",
 };
 
-const PANEL_EMPTY_TEXT: Record<TransportEvidenceEntityType, string> = {
-  feedstock: "No transport evidence attached.",
-  transport_leg: "No transport evidence attached.",
-  delivery: "No delivery evidence attached.",
+const PANEL_EMPTY_TITLE: Record<TransportEvidenceEntityType, string> = {
+  feedstock: "No transport evidence",
+  transport_leg: "No transport evidence",
+  delivery: "No delivery evidence",
 };
 
 function isAcceptedEvidenceDocument(
@@ -220,9 +221,12 @@ export function TransportEvidenceDocuments({
           ))}
         </ul>
       ) : readOnly ? (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          {PANEL_EMPTY_TEXT[entityType]}
-        </p>
+        <EmptyState
+          icon={<FileIcon size={32} weight="bold" />}
+          title={PANEL_EMPTY_TITLE[entityType]}
+          description="No documents are attached."
+          padding="sm"
+        />
       ) : null}
 
       {!readOnly && (

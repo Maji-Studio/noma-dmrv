@@ -14,6 +14,7 @@
  * https://registry.isometric.com/protocol/biochar/1.3#measurement-of-mass-of-biochar-stored
  */
 import type { DocumentType } from "@/schemas/documents";
+import { TRANSPORT_EVIDENCE_DOCUMENT_LABELS } from "./transport-evidence";
 
 /** `documents.metadata` key that carries a delivery document's evidence role. */
 export const DELIVERY_EVIDENCE_ROLE_METADATA_KEY = "deliveryEvidenceRole";
@@ -43,9 +44,7 @@ export const DELIVERY_EVIDENCE_DOCUMENT_LABELS: Record<
   DeliveryEvidenceDocumentType,
   string
 > = {
-  bill_of_lading: "Bill of lading",
-  weighbridge_ticket: "Weighbridge ticket",
-  other_transport_evidence: "Other transport",
+  ...TRANSPORT_EVIDENCE_DOCUMENT_LABELS,
   delivery_receipt: "Delivery receipt",
   photo: "Delivery photo",
 };
