@@ -388,6 +388,15 @@ async function seedBatchChain(seededData: SeededChainData) {
         creditBatchId: ids.creditBatch,
         productionRunId: ids.productionRun,
       });
+      await tx.insert(schema.creditBatchApplications).values(
+        memberChains.map((member) => ({
+          organizationId: DEC_ORG_ID,
+          creditBatchId: ids.creditBatch,
+          applicationId: member.applicationId,
+          allocatedWetMassKg: (member.appliedDryTons + 0.01) * 1000,
+          allocatedDryMassKg: member.appliedDryTons * 1000,
+        })),
+      );
 
       // Trail evidence: a document on delivery A and a production-run sample.
       await tx.insert(schema.documents).values({

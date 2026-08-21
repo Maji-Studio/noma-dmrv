@@ -122,17 +122,19 @@ export function OrderForm({
     name: "biocharProductId",
   });
   const watchedQuantityKg = useWatch({ control, name: "quantityKg" });
+  // In edit mode the product's "remaining" excludes this order's own
+  // deliveries (server-side excludeOrderId), so it means "available to other
+  // demand" and comparing the full quantity is valid — no edit-mode
+  // suppression needed (DR-002 / OR-26-001).
+  const productFilterBy = order ? { excludeOrderId: order.id } : undefined;
   const { data: selectedBiocharProduct } = useEntityById(
     "biocharProduct",
     watchedBiocharProductId || undefined,
+    productFilterBy,
   );
-  // Product availability already excludes fulfilled mass. Until edit-mode
-  // orders expose their delivered allocation, comparing the full quantity
-  // would produce a false warning for otherwise valid existing orders.
   const availabilityWarning = orderAvailabilityWarning(
     watchedQuantityKg,
     selectedBiocharProduct?.remainingMass?.wetKg,
-    { suppress: isEditMode },
   );
 
   // Fetch related data for dropdowns
@@ -287,7 +289,16 @@ export function OrderForm({
           placeholder="Select product bin..."
           required
           disabled={isSubmitting}
-          filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
+          filterBy={
+            contextFacilityId || productFilterBy
+              ? {
+                  ...(contextFacilityId
+                    ? { facilityId: contextFacilityId }
+                    : {}),
+                  ...productFilterBy,
+                }
+              : undefined
+          }
           emptyHint={{
             message:
               "No product bin contains a biochar product. Create one from a biochar bin first.",
@@ -379,6 +390,7 @@ export function OrderForm({
       </FormSpine>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}

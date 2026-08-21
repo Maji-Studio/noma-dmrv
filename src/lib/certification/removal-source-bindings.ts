@@ -7,11 +7,13 @@ import {
   APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
   isApplicationBoundaryLogbookEvidenceType,
 } from "@/lib/certification/application-evidence";
+import { hasProofOfDeliveryRole } from "@/lib/certification/delivery-evidence";
 import { TRANSPORT_EVIDENCE_LEDGER_KIND } from "./evidence-ledger/types";
 import { DURABILITY_EVIDENCE_LEDGER_KIND } from "./evidence-ledger/durability-types";
 
 export type NomaEvidenceRole =
   | "inventory"
+  | "proof_of_delivery"
   | "feedstock_bill_of_lading"
   | "delivery_bill_of_lading"
   | "transport_evidence_ledger"
@@ -133,6 +135,33 @@ const SOURCE_BINDING_RULES = {
       },
     ],
   },
+  proofOfDelivery: {
+    // Biochar Protocol v1.3 "Measurement of Mass of Biochar Stored",
+    // documentation-based verification: signed delivery receipts and
+    // role-stamped delivery photos evidence the delivered biochar mass in
+    // place of weighbridge truck masses (pre-approved by Isometric).
+    nomaRole: "proof_of_delivery",
+    nomaRoleLabel: "Proof of delivery",
+    intendedTarget: {
+      kind: "sequestration",
+      groupKey: "co2-stored",
+      inputKey: "product_mass",
+    },
+    additionalIntendedTargets: [
+      {
+        // Same rationale as the Inventory rule: the safety-margin deduction
+        // multiplies the SAME biochar mass the sequestration claim uses, so
+        // proof of the delivered mass justifies it. Optional: the two legacy
+        // templates declare an empty `miscellaneous` group.
+        kind: "ordinary",
+        groupKey: "miscellaneous",
+        componentBlueprintKey: "mass_based_ci_emissions",
+        componentDisplayName: "Safety margin",
+        inputKey: "mass",
+        optionalInTemplate: true,
+      },
+    ],
+  },
   feedstockBillOfLading: {
     nomaRole: "feedstock_bill_of_lading",
     nomaRoleLabel: "Feedstock bill of lading",
@@ -152,6 +181,16 @@ const SOURCE_BINDING_RULES = {
       componentBlueprintKey: "mass_distance_based_ci_emissions",
       inputKey: "mass_distance",
     },
+    additionalIntendedTargets: [
+      {
+        // The protocol lists bills of lading as accepted proof of delivery
+        // (documentation-based mass verification), so a delivery BoL also
+        // evidences the sequestration product mass.
+        kind: "sequestration",
+        groupKey: "co2-stored",
+        inputKey: "product_mass",
+      },
+    ],
   },
   transportEvidenceLedger: {
     nomaRole: "transport_evidence_ledger",
@@ -205,7 +244,7 @@ const DURABILITY_LEDGER_TARGETS = {
 // Datapoints. This makes the semantic submission hash supersede an already
 // submitted Removal whose target list is unchanged but whose wire attachment
 // behavior was corrected.
-const SOURCE_BINDING_MATERIALIZATION_REVISION = 3;
+const SOURCE_BINDING_MATERIALIZATION_REVISION = 4;
 
 export const SOURCE_BINDING_MAPPING_REVISION = payloadHash({
   rules: SOURCE_BINDING_RULES,
@@ -301,6 +340,15 @@ export function classifyRemovalSourceCandidate(
     facts.documentType === "bill_of_lading"
   ) {
     rule = SOURCE_BINDING_RULES.feedstockBillOfLading;
+  } else if (
+    lineage.entityType === "delivery" &&
+    (facts.documentType === "delivery_receipt" ||
+      // A delivery photo binds only when the uploader stamped the
+      // proof-of-delivery role; a bare photo never becomes mass evidence.
+      (facts.documentType === "photo" &&
+        hasProofOfDeliveryRole(facts.metadata)))
+  ) {
+    rule = SOURCE_BINDING_RULES.proofOfDelivery;
   } else if (
     lineage.entityType === "delivery" &&
     facts.documentType === "bill_of_lading"
@@ -475,6 +523,8 @@ export function buildRemovalSourceBindingPlan(args: {
   template: IsometricGhgEntryTemplate;
   applicationIdsByCreditBatchId: Map<string, string[]>;
   sampleIdsByCreditBatchId?: Map<string, string[]>;
+  /** Delivery-lineage evidence (proof of delivery, BoL) needs this map to resolve its sequestration targets. */
+  deliveryIdsByCreditBatchId?: Map<string, string[]>;
 }): RemovalSourceBindingPlanEntry[] {
   return args.candidates
     .flatMap(({ documentId, sourceId, binding }) => {
@@ -515,6 +565,13 @@ export function buildRemovalSourceBindingPlan(args: {
                 ? Array.from(args.sampleIdsByCreditBatchId?.entries() ?? [])
                     .filter(([, sampleIds]) =>
                       sampleIds.includes(binding.lineage.entityId),
+                    )
+                    .map(([creditBatchId]) => creditBatchId)
+                    .sort()
+              : binding.lineage.entityType === "delivery"
+                ? Array.from(args.deliveryIdsByCreditBatchId?.entries() ?? [])
+                    .filter(([, deliveryIds]) =>
+                      deliveryIds.includes(binding.lineage.entityId),
                     )
                     .map(([creditBatchId]) => creditBatchId)
                     .sort()

@@ -20,6 +20,7 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { cn } from "@/lib/utils";
+import { SideSheetActionsContext } from "@/components/ui/entity-side-sheet/side-sheet-context";
 
 /**
  * Named width tokens map to the dialog widths already used in the app.
@@ -177,7 +178,12 @@ export function Modal({
           >
             <CloseIcon />
           </Dialog.Close>
-          <div className={contentClassName}>{children}</div>
+          {/* Context barrier: a dialog opened from inside a side sheet is its
+              own interaction scope, so a FormActions Cancel in here must not
+              navigate the sheet underneath. */}
+          <SideSheetActionsContext.Provider value={null}>
+            <div className={contentClassName}>{children}</div>
+          </SideSheetActionsContext.Provider>
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

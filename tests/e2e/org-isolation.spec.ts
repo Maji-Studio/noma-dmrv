@@ -130,7 +130,7 @@ test("organization domain data is isolated across lists, record URLs, and picker
 
   await orgB.page.goto("/suppliers");
   await expect(
-    orgB.page.getByRole("button").filter({ hasText: orgB.supplier.name }),
+    orgB.page.getByRole("row").filter({ hasText: orgB.supplier.name }),
   ).toBeVisible();
   await expect(
     orgB.page.getByText(seededData.supplier.name, { exact: true }),

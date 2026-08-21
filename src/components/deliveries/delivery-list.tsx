@@ -77,6 +77,7 @@ import {
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // ============================================
 // Helper Functions
@@ -107,6 +108,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -114,6 +116,7 @@ function createColumns(
     },
     {
       accessorKey: "deliveryDate",
+      meta: { nowrap: true },
       header: "Date",
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
@@ -125,14 +128,16 @@ function createColumns(
     {
       accessorKey: "orderCode",
       header: "Order",
-      cell: ({ row }) => <span>{row.original.orderCode || "Not recorded"}</span>,
+      cell: ({ row }) => (
+        <span>{row.original.orderCode || MISSING_VALUE.notRecorded}</span>
+      ),
     },
     {
       accessorKey: "customerName",
       header: "Customer",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.customerName || "Not recorded"}
+          {row.original.customerName || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
@@ -188,6 +193,7 @@ function createColumns(
     },
     {
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end">
@@ -600,11 +606,14 @@ export function DeliveryList() {
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
-        onModeChange={(mode) =>
+        onModeChange={(mode) => {
+          // Mode changes are navigation; a submit error from the previous
+          // visit must not resurface on the next edit entry.
+          setFormError(null);
           setSideSheet(
             displaySideSheet ? { ...displaySideSheet, mode } : null,
-          )
-        }
+          );
+        }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit Delivery"
@@ -648,6 +657,31 @@ export function DeliveryList() {
                   ),
                 },
                 {
+                  title: "Truck weighing",
+                  fields: [
+                    {
+                      label: "Truck mass before unloading (kg)",
+                      ...certificationDetailField(
+                        "delivery",
+                        "truckMassOnArrivalKg",
+                      ),
+                      value: formatMassKg(
+                        sideSheetEntity.truckMassOnArrivalKg,
+                      ),
+                    },
+                    {
+                      label: "Truck mass after unloading (kg)",
+                      ...certificationDetailField(
+                        "delivery",
+                        "truckMassOnDepartureKg",
+                      ),
+                      value: formatMassKg(
+                        sideSheetEntity.truckMassOnDepartureKg,
+                      ),
+                    },
+                  ],
+                },
+                {
                   title: "Transport",
                   fields: [
                     { label: "One-way distance (per leg, km)", value: formatDistanceKm(sideSheetEntity.effectiveDistanceKm) },
@@ -664,7 +698,7 @@ export function DeliveryList() {
                   ],
                 },
                 {
-                  title: "Transport evidence",
+                  title: "Delivery evidence",
                   fields: [],
                   content: (
                     <TransportEvidencePanel

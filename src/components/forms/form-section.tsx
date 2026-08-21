@@ -18,6 +18,7 @@
  */
 
 import { cn } from "@/lib/utils";
+import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { SectionLabel } from "./section-label";
 import {
   SPINE_SECTION_TAG,
@@ -36,6 +37,8 @@ interface FormSectionProps {
   hint?: React.ReactNode;
   /** Show the CERT chip next to the label. */
   certifyRequired?: boolean;
+  /** Saved-state colour for the CERT chip; only meaningful with `certifyRequired`. */
+  certifyStatus?: CertFieldStatus;
   /** Trailing header chrome (e.g. an "Add" button or badge), right-aligned on the label row. */
   actions?: React.ReactNode;
   className?: string;
@@ -56,6 +59,7 @@ export function FormSection({
   divider = true,
   hint,
   certifyRequired,
+  certifyStatus,
   actions,
   className,
   icon,
@@ -65,7 +69,12 @@ export function FormSection({
   const spine = useSpineContext();
 
   const label = (
-    <SectionLabel hint={hint} certifyRequired={certifyRequired} icon={icon}>
+    <SectionLabel
+      hint={hint}
+      certifyRequired={certifyRequired}
+      certifyStatus={certifyStatus}
+      icon={icon}
+    >
       {title}
     </SectionLabel>
   );

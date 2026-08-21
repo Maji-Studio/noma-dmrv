@@ -175,6 +175,8 @@ interface MassMoistureFieldsProps {
   wetSplitLabel?: string;
   /** Overrides the dry figure label without changing the input label. */
   drySplitLabel?: string;
+  /** Overrides the added-water summary's final-moisture label. */
+  finalMoistureLabel?: string;
   /** Extra content rendered inside the split panel, below the bar. */
   splitFooter?: ReactNode;
 }
@@ -193,6 +195,7 @@ export function MassMoistureFields({
   materialLabel,
   wetSplitLabel,
   drySplitLabel,
+  finalMoistureLabel,
   splitFooter,
 }: MassMoistureFieldsProps) {
   return (
@@ -215,6 +218,7 @@ export function MassMoistureFields({
           materialLabel={materialLabel}
           wetLabel={wetSplitLabel}
           dryLabel={drySplitLabel}
+          finalMoistureLabel={finalMoistureLabel}
         />
         {splitFooter}
       </div>

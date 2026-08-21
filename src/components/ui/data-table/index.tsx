@@ -33,6 +33,13 @@ import {
   DEFAULT_LIST_PAGE_SIZE,
   LIST_PAGE_SIZE_OPTIONS,
 } from "@/config/list-controls";
+import {
+  STICKY_END_CELL_CLASSES,
+  STICKY_END_HEADER_CLASSES,
+  columnLabel,
+  handleRowActivationClick,
+  handleRowActivationKeyDown,
+} from "./data-table-helpers";
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Context                                                  */
@@ -105,59 +112,6 @@ const tableRowVariants = cva(
 );
 
 const MAX_LOADING_ROWS = 5;
-
-/**
- * Derive a human-readable label for a column, used by the mobile card view
- * where each cell is shown as a label/value pair. Prefers a string `header`;
- * falls back to a humanized column id. Returns "" for structural columns
- * (selection / actions) so their cell renders without a label.
- */
-function columnLabel(column: { id: string; columnDef: { header?: unknown } }): string {
-  const header = column.columnDef.header;
-  if (column.id === "select" || column.id === "actions") return "";
-  if (typeof header === "string") return header;
-  return column.id
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-/**
- * Shared Enter/Space activation for a clickable row or card. Ignores key
- * events bubbling up from nested interactive controls (buttons, links,
- * inputs, label-wrapped controls) so they don't also fire the row-level
- * action. `tabindex="-1"`
- * elements are excluded (programmatically focusable, not user-interactive).
- */
-function handleRowActivationKeyDown(
-  event: React.KeyboardEvent<HTMLElement>,
-  activate: () => void,
-) {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  const interactive = (event.target as HTMLElement).closest(
-    'button, a, label, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])',
-  );
-  if (interactive && interactive !== event.currentTarget) return;
-  event.preventDefault();
-  activate();
-}
-
-/**
- * Shared click activation for a clickable row or card. Mirrors the keydown
- * guard: a click that originates on (or bubbles up from) a nested interactive
- * control must not also fire the row-level action, so the nested control's own
- * handler is the only one that runs.
- */
-function handleRowActivationClick(
-  event: React.MouseEvent<HTMLElement>,
-  activate: () => void,
-) {
-  const interactive = (event.target as HTMLElement).closest(
-    'button, a, label, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])',
-  );
-  if (interactive && interactive !== event.currentTarget) return;
-  activate();
-}
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Props                                                    */
@@ -435,7 +389,10 @@ function DataTableRoot<TData, TValue>({
                           // Mono uppercase micro-label — every label is GT Flexa
                           // Mono Medium per the Maji DS (incl. table headers).
                           "label-micro py-10 px-12 text-left text-[var(--color-text-secondary)]",
-                          isSortable && "cursor-pointer select-none hover:bg-[var(--clr-dark-purple-5)]"
+                          isSortable && "cursor-pointer select-none hover:bg-[var(--clr-dark-purple-5)]",
+                          header.column.columnDef.meta?.nowrap && "whitespace-nowrap",
+                          header.column.columnDef.meta?.stickyEnd &&
+                            STICKY_END_HEADER_CLASSES
                         )}
                         style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
                         onClick={isSortable ? header.column.getToggleSortingHandler() : undefined}
@@ -493,6 +450,9 @@ function DataTableRoot<TData, TValue>({
                   <tr
                     key={row.id}
                     className={cn(
+                      // group/row lets pinned cells mirror the row hover wash
+                      // with their solid background twin.
+                      "group/row",
                       tableRowVariants({
                         striped,
                         hoverable: hoverable || !!onRowClick,
@@ -510,9 +470,10 @@ function DataTableRoot<TData, TValue>({
                         : undefined
                     }
                     // A clickable row must be reachable and activatable by
-                    // keyboard, so expose it as a focusable button when
-                    // onRowClick is wired.
-                    role={onRowClick ? "button" : undefined}
+                    // keyboard: focusable with Enter/Space activation, but
+                    // WITHOUT role="button" — that would override the implicit
+                    // role="row" and sever the cell to column-header
+                    // association for screen readers.
                     tabIndex={onRowClick ? 0 : undefined}
                     onKeyDown={
                       onRowClick
@@ -525,7 +486,16 @@ function DataTableRoot<TData, TValue>({
                     data-state={row.getIsSelected() ? "selected" : undefined}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="py-8 px-12 body-small">
+                      <td
+                        key={cell.id}
+                        className={cn(
+                          "py-8 px-12 body-small",
+                          cell.column.columnDef.meta?.nowrap &&
+                            "whitespace-nowrap",
+                          cell.column.columnDef.meta?.stickyEnd &&
+                            STICKY_END_CELL_CLASSES
+                        )}
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}

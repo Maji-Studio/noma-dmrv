@@ -13,6 +13,7 @@ import { CERT_REQUIREMENT_META } from "./requirement-labels";
 const HEALTHY: BatchHealthFacts = {
   carbonMissingInputs: [],
   facilityEmissionsBlockers: [],
+  feedstockTypeMappingGaps: [],
   entityReadinessGaps: [],
   hasSubmittableRuns: true,
   facilitySetupComplete: true,
@@ -38,6 +39,7 @@ describe("deriveBatchHealth", () => {
     expect(result.state).toBe("ready");
     expect(result.issueCount).toBe(0);
     expect(result.checks.map((c) => c.status)).toEqual([
+      "met",
       "met",
       "met",
       "met",
@@ -111,6 +113,37 @@ describe("deriveBatchHealth", () => {
     const entity = checkFor(result, "entityReadiness");
     expect(entity.status).toBe("unmet");
     expect(entity.detail).toContain("Electricity reading");
+  });
+
+  it("blocks a pyrolysis feedstock type without its Isometric mapping", () => {
+    const result = deriveBatchHealth(
+      facts({
+        feedstockTypeMappingGaps: [
+          {
+            creditBatchId: "batch-1",
+            creditBatchCode: "CB-1",
+            feedstockTypeId: "type-1",
+            feedstockTypeName: "Macadamia shells",
+          },
+        ],
+      }),
+    );
+
+    expect(result.state).toBe("incomplete");
+    const mapping = checkFor(result, "feedstockTypeMapping");
+    expect(mapping).toMatchObject({
+      status: "unmet",
+      fixTarget: "feedstockTypes",
+      affectedRecords: [
+        {
+          id: "type-1",
+          code: "Macadamia shells",
+        },
+      ],
+    });
+    expect(mapping.detail).toContain("Credit batch CB-1");
+    expect(mapping.detail).toContain("Macadamia shells");
+    expect(mapping.detail).toContain("Feedstock types");
   });
 
   it("counts one actionable issue per resolution destination", () => {
@@ -231,6 +264,7 @@ describe("deriveBatchHealth", () => {
     // Carbon + production are met; transport is skipped, not unmet — so the
     // batch is still selectable. The facility-setup gap is the wizard's concern.
     expect(checkFor(result, "transport").status).toBe("skipped");
+    expect(checkFor(result, "feedstockTypeMapping").status).toBe("skipped");
     expect(result.issueCount).toBe(0);
     expect(result.state).toBe("ready");
   });
@@ -244,6 +278,7 @@ describe("deriveBatchHealth", () => {
       }),
     );
     expect(checkFor(result, "transport").status).toBe("skipped");
+    expect(checkFor(result, "feedstockTypeMapping").status).toBe("skipped");
     expect(checkFor(result, "carbon").status).toBe("unmet");
     expect(result.issueCount).toBe(1);
     expect(result.state).toBe("incomplete");

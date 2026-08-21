@@ -61,6 +61,8 @@ interface MoistureSplitProps {
   wetLabel?: string;
   /** Override the dry figure label for a more specific surface. */
   dryLabel?: string;
+  /** Override the final-moisture label when added water changes its scope. */
+  finalMoistureLabel?: string;
   /**
    * Replaces the default footnote without added water; with added water, renders
    * before the breakdown. Pass provenance such as "Moisture from delivery record".
@@ -254,9 +256,11 @@ function SplitBar({
 function AddedWaterSummary({
   split,
   addedWaterState,
+  finalMoistureLabel,
 }: {
   split: MassSplit;
   addedWaterState: AddedWaterState;
+  finalMoistureLabel?: string;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-16 gap-y-4">
@@ -275,7 +279,7 @@ function AddedWaterSummary({
         {MASS_MOISTURE_LABELS.waterAdded}: {formatSplitMass(addedWaterState.addedWaterKg)}
       </span>
       <span className="font-medium text-[var(--color-text-secondary)]">
-        {MASS_MOISTURE_LABELS.finalMoisture}:{" "}
+        {finalMoistureLabel ?? MASS_MOISTURE_LABELS.finalMoisture}:{" "}
         {formatMoisturePercent(addedWaterState.finalSplit.moisturePercent)}
       </span>
     </div>
@@ -300,6 +304,7 @@ export function MoistureSplit({
   materialLabel,
   wetLabel,
   dryLabel,
+  finalMoistureLabel,
   note,
   className = "",
 }: MoistureSplitProps) {
@@ -411,6 +416,7 @@ export function MoistureSplit({
             <AddedWaterSummary
               split={split}
               addedWaterState={addedWaterState}
+              finalMoistureLabel={finalMoistureLabel}
             />
           </>
         ) : note ?? (

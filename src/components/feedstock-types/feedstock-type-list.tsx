@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   ArchiveIcon,
@@ -38,8 +39,16 @@ import {
   useUpdateFeedstockType,
 } from "@/hooks/use-feedstock-types";
 import type { FeedstockTypeFormData } from "@/schemas/feedstock-types";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import {
+  ENTITY_DEEP_LINK_EDIT_MODE,
+  ENTITY_DEEP_LINK_MODE_PARAM,
+  FEEDSTOCK_TYPE_EDIT_LABEL,
+  FEEDSTOCK_TYPE_QUERY_PARAM,
+} from "@/lib/entity-deep-link";
 import { FeedstockTypeForm } from "./feedstock-type-form";
 import { FeedstockTypeSampling } from "./feedstock-type-sampling";
+import { IsometricFeedstockImportDialog } from "./isometric-feedstock-import-dialog";
 
 type ArchiveFilter = "all" | "active" | "archived";
 
@@ -143,6 +152,7 @@ function createColumns(params: {
     },
     {
       accessorKey: "code",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
         <MutedValue archived={!!row.original.archivedAt}>
@@ -174,7 +184,9 @@ function createColumns(params: {
       accessorFn: (row) => row.isometricFeedstockTypeId ?? "",
       cell: ({ row }) => (
         <MutedValue archived={!!row.original.archivedAt}>
-          {row.original.isometricFeedstockTypeId ? <IsometricLinkedBadge /> : "Not linked"}
+          {row.original.isometricFeedstockTypeId
+            ? <IsometricLinkedBadge />
+            : MISSING_VALUE.notSet}
         </MutedValue>
       ),
     },
@@ -194,6 +206,7 @@ function createColumns(params: {
   if (canManage) {
     columns.push({
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex justify-end">
@@ -221,12 +234,21 @@ function createColumns(params: {
 }
 
 export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
+  const [focusedFeedstockTypeId, setFocusedFeedstockTypeId] = useQueryState(
+    FEEDSTOCK_TYPE_QUERY_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkMode, setDeepLinkMode] = useQueryState(
+    ENTITY_DEEP_LINK_MODE_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>("all");
   const [deletingType, setDeletingType] = useState<FeedstockType | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<FeedstockType | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { facilityId } = useFacilityContext();
   const certifierSummary = useFacilityCertifierSummary(
@@ -243,6 +265,19 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   const toast = useToast();
 
   const feedstockTypes = feedstockTypesQuery.data ?? [];
+  const deepLinkedFeedstockType = focusedFeedstockTypeId
+    ? feedstockTypes.find((type) => type.id === focusedFeedstockTypeId) ?? null
+    : null;
+  const deepLinkedSideSheet = deepLinkedFeedstockType
+    ? {
+        entity: deepLinkedFeedstockType,
+        mode:
+          deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE && canManage
+            ? ("edit" as const)
+            : ("view" as const),
+      }
+    : null;
+  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
   const filteredFeedstockTypes = feedstockTypes.filter((feedstockType) => {
     if (archiveFilter === "active" && feedstockType.archivedAt) return false;
     if (archiveFilter === "archived" && !feedstockType.archivedAt) return false;
@@ -258,21 +293,29 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
 
   const openCreate = () => {
     if (!canManage) return;
+    void setFocusedFeedstockTypeId(null);
+    void setDeepLinkMode(null);
     setFormError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
   useOpenCreateIntent(openCreate);
 
   const openView = (entity: FeedstockType) => {
+    void setFocusedFeedstockTypeId(null);
+    void setDeepLinkMode(null);
     setFormError(null);
     setSideSheet({ entity, mode: "view" });
   };
   const openEdit = (entity: FeedstockType) => {
     if (!canManage) return;
+    void setFocusedFeedstockTypeId(null);
+    void setDeepLinkMode(null);
     setFormError(null);
     setSideSheet({ entity, mode: "edit" });
   };
   const closeSideSheet = () => {
+    void setFocusedFeedstockTypeId(null);
+    void setDeepLinkMode(null);
     setSideSheet(null);
     setFormError(null);
   };
@@ -289,14 +332,18 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   };
 
   const handleUpdate = async (data: FeedstockTypeFormData) => {
-    if (!sideSheet?.entity) return;
+    const editing =
+      displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
+    if (!editing) return;
     setFormError(null);
     try {
       await updateFeedstockType.mutateAsync({
-        feedstockTypeId: sideSheet.entity.id,
+        feedstockTypeId: editing.id,
         ...data,
       });
       setSideSheet(null);
+      void setFocusedFeedstockTypeId(null);
+      void setDeepLinkMode(null);
       toast.success("Feedstock type updated.");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Feedstock type was not saved. Try again.");
@@ -355,7 +402,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     );
   }
 
-  const sideSheetEntity = sideSheet?.entity ?? null;
+  const sideSheetEntity = displaySideSheet?.entity ?? null;
   const showSampling = shouldShowFeedstockTypeSampling({
     feedstockType: sideSheetEntity,
     hasRegistryConnection,
@@ -406,8 +453,14 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         actions={
           canManage ? (
             <div className="flex flex-wrap gap-12">
+              {hasRegistryConnection && (
+                <Button variant="default" onClick={() => setImportOpen(true)}>
+                  <SealCheckIcon size={20} weight="bold" />
+                  Import from Isometric
+                </Button>
+              )}
               <Button variant="primary" onClick={openCreate}>
-                <PlusIcon size={18} weight="bold" />
+                <PlusIcon size={20} weight="bold" />
                 New Feedstock Type
               </Button>
             </div>
@@ -517,30 +570,35 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       />
 
       <EntitySideSheet
-        open={!!sideSheet}
+        open={!!displaySideSheet}
         onOpenChange={(open) => !open && closeSideSheet()}
-        mode={sideSheet?.mode ?? "create"}
-        onModeChange={(mode) =>
-          setSideSheet((current) =>
-            current ? { ...current, mode, entity: current.entity } : null,
-          )
-        }
-        title={sideSheet?.mode === "create" ? "Create Feedstock Type" : sideSheetEntity?.code ?? ""}
-        subtitle={sideSheet?.mode === "create" ? undefined : sideSheetEntity?.name}
-        sections={sideSheet?.mode === "view" ? detailSections : undefined}
-        editLabel="Edit Feedstock Type"
+        mode={displaySideSheet?.mode ?? "create"}
+        onModeChange={(mode) => {
+          // Mode changes are navigation; a submit error from the previous
+          // visit must not resurface on the next edit entry.
+          setFormError(null);
+          if (displaySideSheet) {
+            setSideSheet({ ...displaySideSheet, mode });
+          }
+        }}
+        title={displaySideSheet?.mode === "create" ? "Create Feedstock Type" : sideSheetEntity?.code ?? ""}
+        subtitle={displaySideSheet?.mode === "create" ? undefined : sideSheetEntity?.name}
+        sections={displaySideSheet?.mode === "view" ? detailSections : undefined}
+        editLabel={FEEDSTOCK_TYPE_EDIT_LABEL}
         canEdit={canManage}
       >
         <FeedstockTypeForm
           key={sideSheetEntity?.id ?? "create"}
-          feedstockType={sideSheet?.mode === "edit" ? sideSheetEntity ?? undefined : undefined}
-          onSubmit={sideSheet?.mode === "edit" ? handleUpdate : handleCreate}
+          feedstockType={displaySideSheet?.mode === "edit" ? sideSheetEntity ?? undefined : undefined}
+          onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={createFeedstockType.isPending || updateFeedstockType.isPending}
           errorMessage={formError ?? undefined}
-          submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Feedstock Type"}
+          submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Feedstock Type"}
         />
       </EntitySideSheet>
+
+      <IsometricFeedstockImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   );
 }

@@ -1,231 +1,20 @@
-import { DEC_ORG_ID } from "@/db/org-defaults";
 /**
  * Shared fixtures for the Certification workspace E2E specs
  * (`certification-workspace.spec.ts`, `certification-review-flow.spec.ts`).
- *
- * The load-bearing gotcha (see the remodel handoff): the certify loaders
- * (`loadFacilityCertifierMapping`, `buildRemovalContext`) ALWAYS read from
- * Isometric (`listProjects` + `listGhgEntryTemplates`). Without sandbox creds
- * those return `[]`, so a linked facility / resolvable template cannot be
- * produced. These helpers therefore:
- *   - expose `SANDBOX_PROJECT_ID` so specs can `test.skip` when unconfigured;
- *   - seed `certifier_projects` directly via Drizzle (never drive the live link
- *     dialog — that needs the API too);
- *   - resolve a real removal-template id with a tiny raw fetch (the client's
- *     auth is just two headers — replicated here so we never import the
- *     `@/config/env`-coupled client into the Playwright process).
- *
- * `loadEnv` runs HERE (not only in the spec): this module is evaluated during
- * the spec's import phase — before the spec's own top-level `loadEnv` — so
- * reading `process.env` at module scope would otherwise miss `.env.local`.
  */
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local", override: false });
-
 import * as crypto from "crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
-
-/** The sandbox project every gated scenario links facilities to. */
-export const SANDBOX_PROJECT_ID = process.env.ISOMETRIC_DEMO_PROJECT_ID;
-
-// Mirrors the biochar protocol pin the link dialog writes; only `externalProjectId`
-// + `defaultRemovalTemplateId` are load-bearing for the loaders under test.
-const PROTOCOL_SLUG = "biochar";
-const PROTOCOL_VERSION = "1.1";
-
-// Same base URLs + header auth as `src/lib/isometric/client.ts`, replicated so
-// the template fetch carries no `@/config/env` import surface into Playwright.
-const ISOMETRIC_BASE_URLS = {
-  sandbox: "https://api.sandbox.isometric.com/mrv/v0",
-  production: "https://api.isometric.com/mrv/v0",
-} as const;
-const TEMPLATE_FETCH_TIMEOUT_MS = 20_000;
-
-export interface SeededMapping {
-  cleanup: () => Promise<void>;
-}
-
-/**
- * The `certifier_projects` emission-estimate config a live submit needs. ADR
- * 0015 dropped the three stage-split columns; only the genset yield remains.
- */
-export interface FacilityEmissionConfigSeed {
-  gensetEnergyYieldKwhPerLitre: number;
-}
-
-/** Plausible default genset yield for the live create→submit happy path. */
-export const DEFAULT_FACILITY_EMISSION_CONFIG: FacilityEmissionConfigSeed = {
-  gensetEnergyYieldKwhPerLitre: 3,
-};
-
-/**
- * Insert a `certifier_projects` row linking `facilityId` to an Isometric
- * project. Returns a `cleanup()` the caller runs in `finally`.
- */
-export async function seedCertifierMapping(
-  facilityId: string,
-  opts: {
-    externalProjectId: string;
-    defaultRemovalTemplateId?: string | null;
-    /**
-     * Per-facility emission-estimate config a LIVE removal submit reads via
-     * `resolveFacilityEmissionConfig` (the genset yield; ADR 0015 dropped the
-     * stage splits). Omit for link-only scenarios that never submit — the
-     * column stays null and the wizard still mounts. Provide it for the full
-     * create→submit happy path or the submit throws "Set this facility's genset
-     * yield …".
-     */
-    emissionConfig?: FacilityEmissionConfigSeed;
-  },
-): Promise<SeededMapping> {
-  const { db, pool } = createDbConnection();
-  try {
-    await db.insert(schema.certifierProjects).values({
-      organizationId: DEC_ORG_ID,
-      facilityId,
-      provider: "isometric",
-      externalProjectId: opts.externalProjectId,
-      protocolSlug: PROTOCOL_SLUG,
-      protocolVersion: PROTOCOL_VERSION,
-      defaultRemovalTemplateId: opts.defaultRemovalTemplateId ?? null,
-      ...(opts.emissionConfig ?? {}),
-    });
-  } finally {
-    await pool.end();
-  }
-  return { cleanup: () => deleteCertifierMapping(facilityId) };
-}
-
-/**
- * Flip a seeded facility onto the 1000-year durability tier. The generic
- * facility helpers deliberately seed 200-year (the simpler soil-temp flow),
- * but this submit flow exercises the 1,000-year path once the sandbox template
- * migration has landed. The submit tier guard requires facility tier ↔ template
- * agreement (ADR 0021). No cleanup needed:
- * the per-test facility row is torn down by the seed fixture itself.
- */
-export async function setFacilityDurabilityTier(
-  facilityId: string,
-  tier: "200_year" | "1000_year",
-): Promise<void> {
-  const { db, pool } = createDbConnection();
-  try {
-    await db
-      .update(schema.facilities)
-      .set({ durabilityOption: tier })
-      .where(eq(schema.facilities.id, facilityId));
-  } finally {
-    await pool.end();
-  }
-}
-
-export async function deleteCertifierMapping(facilityId: string): Promise<void> {
-  const { db, pool } = createDbConnection();
-  try {
-    await db
-      .delete(schema.certifierProjects)
-      .where(
-        and(
-          eq(schema.certifierProjects.facilityId, facilityId),
-          eq(schema.certifierProjects.provider, "isometric"),
-        ),
-      );
-  } finally {
-    await pool.end();
-  }
-}
-
-// Shape of the slice of the raw `ghg_entry_templates` list response we read to
-// detect fixed-input binding (the list returns the full nested tree).
-interface RawRemovalTemplate {
-  id?: string;
-  groups?: Array<{
-    components?: Array<{
-      blueprint_key?: string;
-      inputs?: Array<{ type?: string; datapoint_id?: string | null }>;
-    }>;
-  }>;
-}
-
-function templateHasUnboundFixedInput(t: RawRemovalTemplate): boolean {
-  return (t.groups ?? []).some((g) =>
-    (g.components ?? []).some((c) =>
-      (c.inputs ?? []).some((i) => i.type === "fixed" && !i.datapoint_id),
-    ),
-  );
-}
-
-/**
- * Resolve the id of a SUBMITTABLE removal template on the sandbox project — one
- * whose every `type: "fixed"` input is bound to a datapoint. Returns `null` on
- * any failure (no creds, network, non-2xx) or when no fully-bound template
- * exists, so the caller can `test.skip` rather than fail.
- *
- * Why not just the first template: the wizard's readiness gate only checks that
- * the template's component blueprints resolve, NOT that its fixed inputs are
- * bound — but `submitRemoval` (`resolveTemplateInputs`) throws on an unbound
- * fixed input. The sandbox project carries several templates, including an
- * unbound "Protocol default"; picking the first would pass the wizard's
- * Requirements step yet fail the live submit. So we scan for one whose fixed
- * inputs are all bound. (The `ghg_entry_templates` list returns the full nested
- * component/input tree, so no per-template fetch is needed.)
- */
-export async function fetchSubmittableSandboxRemovalTemplate(
-  projectId: string,
-): Promise<{ id: string; componentBlueprintKeys: string[] } | null> {
-  const clientSecret = process.env.ISOMETRIC_CLIENT_SECRET;
-  const accessToken = process.env.ISOMETRIC_ACCESS_TOKEN;
-  if (!clientSecret || !accessToken) return null;
-
-  const envName =
-    process.env.ISOMETRIC_ENVIRONMENT === "production"
-      ? "production"
-      : "sandbox";
-  const url = `${ISOMETRIC_BASE_URLS[envName]}/projects/${encodeURIComponent(
-    projectId,
-  )}/ghg_entry_templates`;
-
-  try {
-    const res = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-        "X-Client-Secret": clientSecret,
-        Authorization: `Bearer ${accessToken}`,
-      },
-      signal: AbortSignal.timeout(TEMPLATE_FETCH_TIMEOUT_MS),
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { nodes?: RawRemovalTemplate[] };
-    for (const node of json.nodes ?? []) {
-      if (node.id && !templateHasUnboundFixedInput(node)) {
-        return {
-          id: node.id,
-          componentBlueprintKeys: (node.groups ?? []).flatMap((group) =>
-            (group.components ?? []).flatMap((component) =>
-              component.blueprint_key ? [component.blueprint_key] : [],
-            ),
-          ),
-        };
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export function sandboxTemplateSupportsCurrent1000YearComponent(template: {
-  componentBlueprintKeys: string[];
-}): boolean {
-  return template.componentBlueprintKeys.includes(
-    CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-  );
-}
+import {
+  CERTIFICATION_PROTOCOL_SLUG,
+  CERTIFICATION_PROTOCOL_VERSION,
+} from "./certification-mapping-helpers";
+export * from "./certification-mapping-helpers";
+export * from "./certification-incomplete-batch";
 
 /** Existing seeded chain entities the grouped-removal seed reuses (read-only). */
 export interface ChainSeedRefs {
@@ -451,7 +240,7 @@ export async function seedGroupedRemovalWithChain(
         facilityId: refs.facilityId,
         feedstockTypeId: feedstockRow.feedstockTypeId,
       });
-      // Group: a Removal ledger row + the credit batch pointing at it.
+      // Group: a Removal ledger row plus one immutable application slice.
       await tx.insert(schema.certifierRemovals).values({
         organizationId: DEC_ORG_ID,
         id: id.removal,
@@ -470,12 +259,19 @@ export async function seedGroupedRemovalWithChain(
         status: "draft",
         // Tier is inherited from the facility (ADR 0021), not a batch column.
         hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
-        removalId: id.removal,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
         organizationId: DEC_ORG_ID,
         creditBatchId: id.creditBatch,
         productionRunId: id.productionRun,
+      });
+      await tx.insert(schema.creditBatchApplications).values({
+        organizationId: DEC_ORG_ID,
+        creditBatchId: id.creditBatch,
+        applicationId: id.application,
+        allocatedWetMassKg: DELIVERED_WET_MASS_KG,
+        allocatedDryMassKg: DELIVERED_DRY_MASS_KG,
+        removalId: id.removal,
       });
     });
   } finally {
@@ -491,6 +287,11 @@ export async function seedGroupedRemovalWithChain(
         await conn.db.transaction(async (tx) => {
           // Reverse FK order; certifier_removals must go before the facility
           // teardown (it FKs the facility and cleanupChainData does not sweep it).
+          await tx
+            .delete(schema.creditBatchApplications)
+            .where(
+              eq(schema.creditBatchApplications.creditBatchId, id.creditBatch),
+            );
           await tx
             .delete(schema.creditBatchProductionRuns)
             .where(
@@ -555,8 +356,8 @@ export async function seedGroupedRemovalWithChain(
  * (deferred-create groups the batch into a fresh `certifier_removals` row and,
  * on a live submit, writes a `certification_submissions` row). The seed's own
  * `cleanup()` only knows the batch + chain, so the spec calls this BEFORE that
- * cleanup: it nulls the batch→removal FK, drops any submission rows, then the
- * removal. A no-op when "Confirm" never ran (the batch is still ungrouped).
+ * cleanup: it releases the batch's application slices, drops any submission
+ * rows, then the Removal. A no-op when "Confirm" never ran.
  */
 export async function teardownWizardRemovalForBatch(
   creditBatchId: string,
@@ -564,16 +365,32 @@ export async function teardownWizardRemovalForBatch(
   const { db, pool } = createDbConnection();
   try {
     const [row] = await db
-      .select({ removalId: schema.creditBatches.removalId })
-      .from(schema.creditBatches)
-      .where(eq(schema.creditBatches.id, creditBatchId));
+      .select({ removalId: schema.creditBatchApplications.removalId })
+      .from(schema.creditBatchApplications)
+      .innerJoin(
+        schema.certifierRemovals,
+        eq(
+          schema.certifierRemovals.id,
+          schema.creditBatchApplications.removalId,
+        ),
+      )
+      .where(eq(schema.creditBatchApplications.creditBatchId, creditBatchId))
+      .orderBy(
+        desc(schema.certifierRemovals.createdAt),
+        desc(schema.certifierRemovals.id),
+      );
     const removalId = row?.removalId;
     if (!removalId) return;
 
     await db
-      .update(schema.creditBatches)
+      .update(schema.creditBatchApplications)
       .set({ removalId: null })
-      .where(eq(schema.creditBatches.id, creditBatchId));
+      .where(
+        and(
+          eq(schema.creditBatchApplications.creditBatchId, creditBatchId),
+          eq(schema.creditBatchApplications.removalId, removalId),
+        ),
+      );
     // A LIVE submit also stamps the batch's front-loaded production-emissions
     // claim (credit_batches.production_emissions_claimed_by_removal_id); the
     // removal row cannot be deleted while any batch still claims through it.
@@ -595,78 +412,6 @@ export async function teardownWizardRemovalForBatch(
   } finally {
     await pool.end();
   }
-}
-
-export interface SeededIncompleteBatch {
-  creditBatchId: string;
-  code: string;
-  cleanup: () => Promise<void>;
-}
-
-/**
- * Seed an UNGROUPED credit batch with NO production runs, so `deriveBatchHealth`
- * → "incomplete" with the production (and carbon) checks unmet. Both the
- * New-Removal wizard's selection card and the credit-batch detail checklist then
- * render the SAME plain-language requirement string — the Phase 0 cross-surface
- * consistency the redesign guarantees. Needs only a facility + a feedstock type
- * (the credit batch is single-feedstock, NOT NULL — ADR 0016); no chain, samples
- * or transport legs, which keeps it independent of the Isometric sandbox.
- */
-export async function seedUngroupedIncompleteBatch(
-  refs: { facilityId: string; feedstockTypeId: string },
-  testRunId: string,
-): Promise<SeededIncompleteBatch> {
-  const { db, pool } = createDbConnection();
-  const id = {
-    creditBatch: crypto.randomUUID(),
-    productionProcess: crypto.randomUUID(),
-  };
-  const code = `E2E-INC-${testRunId}`;
-  const today = new Date().toISOString().slice(0, 10);
-
-  try {
-    await db.transaction(async (tx) => {
-      await tx.insert(schema.productionProcesses).values({
-        organizationId: DEC_ORG_ID,
-        id: id.productionProcess,
-        facilityId: refs.facilityId,
-        feedstockTypeId: refs.feedstockTypeId,
-      });
-      await tx.insert(schema.creditBatches).values({
-        organizationId: DEC_ORG_ID,
-        id: id.creditBatch,
-        code,
-        facilityId: refs.facilityId,
-        feedstockTypeId: refs.feedstockTypeId,
-        productionProcessId: id.productionProcess,
-        startDate: today,
-        endDate: today,
-        status: "draft",
-        hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
-        // Ungrouped: no removalId, no linked production runs.
-      });
-    });
-  } finally {
-    await pool.end();
-  }
-
-  return {
-    creditBatchId: id.creditBatch,
-    code,
-    cleanup: async () => {
-      const conn = createDbConnection();
-      try {
-        await conn.db
-          .delete(schema.creditBatches)
-          .where(eq(schema.creditBatches.id, id.creditBatch));
-        await conn.db
-          .delete(schema.productionProcesses)
-          .where(eq(schema.productionProcesses.id, id.productionProcess));
-      } finally {
-        await conn.pool.end();
-      }
-    },
-  };
 }
 
 // ── Ungrouped "ready" batch (full create→submit happy path) ──────────────────
@@ -863,8 +608,8 @@ export async function seedUngroupedReadyBatchWithChain(
           facilityId: refs.facilityId,
           provider: "isometric",
           externalProjectId: `e2e-readiness-${testRunId}`,
-          protocolSlug: PROTOCOL_SLUG,
-          protocolVersion: PROTOCOL_VERSION,
+          protocolSlug: CERTIFICATION_PROTOCOL_SLUG,
+          protocolVersion: CERTIFICATION_PROTOCOL_VERSION,
           defaultSoilTemperatureC: READY_REFERENCE_SOIL_TEMPERATURE_C,
           defaultSoilTemperatureSource:
             READY_REFERENCE_SOIL_TEMPERATURE_SOURCE,
@@ -1038,6 +783,13 @@ export async function seedUngroupedReadyBatchWithChain(
         creditBatchId: id.creditBatch,
         productionRunId: id.productionRun,
       });
+      await tx.insert(schema.creditBatchApplications).values({
+        organizationId: DEC_ORG_ID,
+        creditBatchId: id.creditBatch,
+        applicationId: id.application,
+        allocatedWetMassKg,
+        allocatedDryMassKg,
+      });
       // A sampled credit batch needs at least three complete H/Corg + O/Corg
       // replicates pooled on the batch itself. The run link is provenance only.
       await tx.insert(schema.samples).values(
@@ -1114,6 +866,11 @@ export async function seedUngroupedReadyBatchWithChain(
           await tx
             .delete(schema.samples)
             .where(inArray(schema.samples.id, id.samples));
+          await tx
+            .delete(schema.creditBatchApplications)
+            .where(
+              eq(schema.creditBatchApplications.creditBatchId, id.creditBatch),
+            );
           await tx
             .delete(schema.creditBatches)
             .where(eq(schema.creditBatches.id, id.creditBatch));

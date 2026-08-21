@@ -1,4 +1,10 @@
-import { isValidElement, type ReactElement, type ReactNode } from "react";
+import {
+  isValidElement,
+  type ButtonHTMLAttributes,
+  type MouseEvent,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
@@ -19,6 +25,18 @@ function findRowActions(node: ReactNode): ReactElement<RowActionsMenuProps> | un
     return children.map(findRowActions).find(Boolean);
   }
   return findRowActions(children);
+}
+
+type ButtonElement = ReactElement<ButtonHTMLAttributes<HTMLButtonElement>>;
+
+function findTitleButton(node: ReactNode): ButtonElement | undefined {
+  if (!isValidElement<ElementProps>(node)) return undefined;
+  if (node.type === "button") return node as unknown as ButtonElement;
+  const children = node.props.children;
+  if (Array.isArray(children)) {
+    return children.map(findTitleButton).find(Boolean);
+  }
+  return findTitleButton(children);
 }
 
 function collectText(node: ReactNode): string {
@@ -60,13 +78,67 @@ describe("CreditBatchCard", () => {
     view.props.onClick();
     menu?.props.actions[0]?.onSelect?.();
     menu?.props.actions[1]?.onSelect?.();
+    menu?.props.actions[2]?.onSelect?.();
 
     expect(onView).toHaveBeenCalledWith(creditBatch);
     expect(onEdit).toHaveBeenCalledWith(creditBatch);
     expect(onDelete).toHaveBeenCalledWith(creditBatch.id);
     expect(menu?.props.actions.map(({ label, destructive }) => [label, destructive])).toEqual([
+      ["Open details", undefined],
       ["Edit", undefined],
       ["Delete", true],
+    ]);
+  });
+
+  it("activates the view action from the keyboard title button", () => {
+    const onView = vi.fn();
+    const view = CreditBatchCard({
+      creditBatch,
+      onView,
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+    });
+
+    const markup = renderToStaticMarkup(view);
+    expect(markup).toContain(`open credit batch ${creditBatch.code}`);
+
+    const titleButton = findTitleButton(view);
+    expect(titleButton).toBeDefined();
+    titleButton?.props.onClick?.({
+      stopPropagation: () => {},
+    } as unknown as MouseEvent<HTMLButtonElement>);
+    expect(onView).toHaveBeenCalledWith(creditBatch);
+  });
+
+  it("offers only Open details once the batch backs a submitted removal", () => {
+    const onEdit = vi.fn();
+    const onDelete = vi.fn();
+    const lockedHealth: CreditBatchHealthSummary = {
+      state: "ready",
+      issueCount: 0,
+      removalId: "removal-1",
+      removalStatus: {
+        kind: "submitted",
+        value: "issued",
+        label: "Submitted",
+        isActionable: false,
+        isTerminal: true,
+      },
+      ghgStatementId: null,
+      ghgStatementStatus: null,
+    };
+
+    const view = CreditBatchCard({
+      creditBatch,
+      health: lockedHealth,
+      onView: vi.fn(),
+      onEdit,
+      onDelete,
+    });
+    const menu = findRowActions(view);
+
+    expect(menu?.props.actions.map(({ label }) => label)).toEqual([
+      "Open details",
     ]);
   });
 

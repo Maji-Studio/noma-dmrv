@@ -32,6 +32,7 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { ServerError } from "@/components/forms";
+import { isRemovalStatusLocked } from "@/lib/certification/status";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
 import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
@@ -65,6 +66,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useListPagination } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { sumNullableBy } from "@/lib/nullable-sum";
 
 // ============================================
 // Helpers
@@ -252,9 +254,9 @@ export function CreditBatchList({
     hydratedFilteredItems.length > 0 &&
     visibleCo2ePreviews.length === hydratedFilteredItems.length &&
     visibleCo2ePreviews.every((preview) => preview.co2eStoredTonnes != null);
-  const totalCo2e = visibleCo2ePreviews.reduce(
-    (sum, preview) => sum + (preview.co2eStoredTonnes ?? 0),
-    0
+  const totalCo2e = sumNullableBy(
+    visibleCo2ePreviews,
+    (preview) => preview.co2eStoredTonnes,
   );
 
   // Handlers
@@ -506,6 +508,13 @@ export function CreditBatchList({
       ? undefined
       : formatDateRange(sideSheetEntity.startDate, sideSheetEntity.endDate);
 
+  // Interim certification lock (DR-003): a batch backing a submitted removal
+  // is frozen — no Edit from the sheet, with the reason stated in view mode.
+  const sideSheetHealth = sideSheetEntity
+    ? batchHealthSummaries[sideSheetEntity.id]
+    : undefined;
+  const sideSheetLocked = isRemovalStatusLocked(sideSheetHealth?.removalStatus);
+
   return (
     <div className="container-max page-shell">
       {/* Header */}
@@ -531,7 +540,7 @@ export function CreditBatchList({
               ? "Readiness unavailable"
               : `${totalFiltered} ${totalFiltered === 1 ? "batch" : "batches"}`}
         </span>
-        {hasCompleteCo2eSummary && (
+        {hasCompleteCo2eSummary && totalCo2e != null && (
           <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
             <LeafIcon size={16} weight="bold" aria-hidden />
             {`${totalCo2e.toFixed(2)} t CO₂e stored`}
@@ -676,6 +685,7 @@ export function CreditBatchList({
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit Credit Batch"
+        canEdit={!sideSheetLocked}
         size="wide"
         sections={
           sideSheetEntity
@@ -696,6 +706,16 @@ export function CreditBatchList({
         viewModeChildren={
           sideSheetEntity ? (
             <>
+              {sideSheetLocked && (
+                <p
+                  role="note"
+                  className="border border-[var(--color-border-secondary)] bg-[var(--color-background-light)] px-16 py-12 body-small text-[var(--color-text-secondary)]"
+                >
+                  {`This credit batch backs a Removal (${
+                    sideSheetHealth?.removalStatus?.label ?? "submitted"
+                  }), so its definition is locked. To change it, the Removal must be amended with the registry.`}
+                </p>
+              )}
               <CreditBatchHealthStrip
                 creditBatchId={sideSheetEntity.id}
                 facilityId={sideSheetEntity.facilityId}

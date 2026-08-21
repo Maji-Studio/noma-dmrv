@@ -6,6 +6,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   FeedstockFilterData,
+  FeedstockStatsFilterData,
   CreateFeedstockData,
   UpdateFeedstockData,
 } from "@/schemas/feedstocks";
@@ -41,7 +42,8 @@ export const feedstockKeys = {
     [...feedstockKeys.lists(), filters] as const,
   details: () => [...feedstockKeys.all, "detail"] as const,
   detail: (id: string) => [...feedstockKeys.details(), id] as const,
-  stats: (facilityId?: string) => [...feedstockKeys.all, "stats", facilityId] as const,
+  stats: (scope?: Partial<FeedstockStatsFilterData>) =>
+    [...feedstockKeys.all, "stats", scope] as const,
   options: () => [...feedstockKeys.all, "options"] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...feedstockKeys.all, "codeCheck", code, excludeId] as const,
@@ -81,13 +83,13 @@ export function useFeedstock(feedstockId: string, enabled = true) {
 }
 
 export function useFeedstockStats(
-  facilityId?: string,
+  scope?: Partial<FeedstockStatsFilterData>,
   options?: { enabled?: boolean },
 ) {
   return useQuery({
-    queryKey: feedstockKeys.stats(facilityId),
+    queryKey: feedstockKeys.stats(scope),
     queryFn: async () => {
-      const result = await getFeedstockStatsFn(facilityId);
+      const result = await getFeedstockStatsFn(scope);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },

@@ -24,13 +24,14 @@ import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import type { ProductionSampleWithRelations } from "@/data-access/production-samples";
 import type { ProductionSampleFormData } from "@/schemas/production-samples";
 import { formatDateTime } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // ============================================
 // Helpers
 // ============================================
 
 function formatNum(v: number | null, unit?: string): string {
-  if (v == null) return "Not recorded";
+  if (v == null) return MISSING_VALUE.notRecorded;
   return unit ? `${v}${unit}` : String(v);
 }
 
@@ -218,14 +219,16 @@ export function ProductionSampleTable({
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 font-medium text-[var(--clr-dark-purple)]">
-                    {s.sampleCode ?? "Not recorded"}
+                    {s.sampleCode ?? MISSING_VALUE.notRecorded}
                   </td>
                   <td className="py-8 pr-12">{formatDateTime(s.timestamp)}</td>
                   <td className="py-8 pr-12">{formatNum(s.temperatureC, "\u00B0C")}</td>
                   <td className="py-8 pr-12">{formatNum(s.weightGrams, "g")}</td>
                   <td className="py-8 pr-12">{formatNum(s.moistureContentPercent, "%")}</td>
                   <td className="py-8 pr-12">{formatNum(s.fixedCarbonPercent, "%")}</td>
-                  <td className="py-8 pr-12">{s.operatorName ?? "Not recorded"}</td>
+                  <td className="py-8 pr-12">
+                    {s.operatorName ?? MISSING_VALUE.notRecorded}
+                  </td>
                   {!readOnly && (
                     <td className="py-8 text-right">
                       <div className="flex items-center justify-end gap-4">

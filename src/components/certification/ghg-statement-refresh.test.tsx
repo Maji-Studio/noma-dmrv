@@ -155,7 +155,6 @@ vi.mock("./removal-batches-accordion", () => ({
   RemovalBatchesAccordion: () => <div>Removals</div>,
 }));
 vi.mock("./submission-progress", () => ({
-  canRetrySubmissionProgress: () => false,
   SubmissionProgress: () => <div>Progress</div>,
 }));
 

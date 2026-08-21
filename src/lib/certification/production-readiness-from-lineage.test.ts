@@ -26,7 +26,7 @@ function multiRunLineage(runIds: string[]): ChainOfCustodyData {
 }
 
 describe("productionReadinessGapForScope", () => {
-  it("blocks a grouped removal when one completed member run lacks an application", () => {
+  it("allows whole-batch production front-loading when one member run is unapplied", () => {
     expect(
       productionReadinessGapForScope({
         lineages: [
@@ -39,10 +39,7 @@ describe("productionReadinessGapForScope", () => {
         completedMemberProductionRunIds: ["pr-applied", "pr-unapplied"],
         scope: "removal",
       }),
-    ).toMatchObject({
-      kind: "noApplications",
-      fixTarget: "applications",
-    });
+    ).toBeNull();
   });
 
   it("preserves a more specific broken-lineage gap", () => {

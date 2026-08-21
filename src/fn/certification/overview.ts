@@ -71,7 +71,7 @@ export interface CreditBatchHealthSummary {
   state: BatchHealthState;
   /** Count of unmet (blocking) checks; 0 when ready. */
   issueCount: number;
-  /** The Removal this batch belongs to, or null while it is still ungrouped. */
+  /** The latest Removal containing this batch, or null before its first one. */
   removalId: string | null;
   /** The Removal's own registry-submission status. */
   removalStatus: DerivedStatus | null;
@@ -234,6 +234,7 @@ export async function loadCertificationOverview(
       orgCtx,
       readyBatchIds,
       facilityFacts,
+      { unassignedOnly: true },
     );
     const readyToStartBatchCount = readyBatchIds.filter((batchId) => {
       const health = deriveBatchHealth(
@@ -293,7 +294,13 @@ export async function loadCreditBatchHealthSummaries(
     }
 
     const batchRowById = new Map(
-      batchFacilityRows.map((row) => [row.id, row]),
+      ids.map((batchId) => {
+        const rows = batchFacilityRows.filter((row) => row.id === batchId);
+        return [
+          batchId,
+          rows.find((row) => row.removalId != null) ?? rows[0],
+        ] as const;
+      }),
     );
     const removalIds = Array.from(
       new Set(

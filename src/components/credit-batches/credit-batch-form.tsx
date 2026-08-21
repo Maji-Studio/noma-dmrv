@@ -217,6 +217,19 @@ export function CreditBatchForm({
     selectedProductionRunIds.includes(run.id),
   );
 
+  // The pruning effect below silently removes saved members that fall outside
+  // the edited window; without a visible warning an out-of-range date change
+  // drops a claimed run and the save still succeeds (design review DR-003).
+  const savedProductionRunIds = creditBatch?.productionRunIds ?? [];
+  const droppedSavedRunIds = isEditMode
+    ? savedProductionRunIds.filter(
+        (id) => !selectedProductionRunIds.includes(id),
+      )
+    : [];
+  const droppedSavedRunCodes = droppedSavedRunIds.map(
+    (id) => productionRunOptionsById.get(id)?.code ?? null,
+  );
+
   // Edit mode: prune the batch's saved members down to the still-selectable set
   // when the window changes. Only against a successfully loaded options list —
   // on edit mount (or after a failed fetch, when options fall back to []) pruning
@@ -378,6 +391,25 @@ export function CreditBatchForm({
         </p>
       )}
 
+      {droppedSavedRunIds.length > 0 && (
+        <div
+          role="alert"
+          className="flex flex-col gap-4 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-16 py-12"
+        >
+          <span className="body-small font-medium text-[var(--st-wait)]">
+            {droppedSavedRunIds.length === 1
+              ? "Saving removes a claimed production run from this batch"
+              : `Saving removes ${droppedSavedRunIds.length} claimed production runs from this batch`}
+          </span>
+          <span className="body-caption text-[var(--color-text-secondary)]">
+            {droppedSavedRunCodes.every(Boolean)
+              ? `No longer in the production window: ${droppedSavedRunCodes.join(", ")}. `
+              : "The edited production window no longer covers them. "}
+            Restore the dates or feedstock type to keep the claims.
+          </span>
+        </div>
+      )}
+
       {/* ── Cohort input ledger (live front-loaded production inputs) ── */}
       <CohortInputLedger runs={selectedRuns} />
 
@@ -400,6 +432,7 @@ export function CreditBatchForm({
       </FormSection>
 
       <FormActions
+        control={control}
         sticky={stickyActions}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

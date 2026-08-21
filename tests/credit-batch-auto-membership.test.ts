@@ -816,7 +816,7 @@ describe("credit batch automatic production-run membership", () => {
     );
   });
 
-  it("auto-attaches to a mutable Removal's credit batch", async () => {
+  it("auto-attaches to a mutable credit batch", async () => {
     const batch = await createCreditBatch(ctx, {
       code: `CB-CBAM-REMOVAL-${tag}`,
       facilityId,
@@ -827,19 +827,6 @@ describe("credit batch automatic production-run membership", () => {
       currency: "TZS",
     });
     creditBatchIds.push(batch.id);
-    const [removal] = await db
-      .insert(certifierRemovals)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId,
-      })
-      .returning({ id: certifierRemovals.id });
-    removalIds.push(removal.id);
-    await db
-      .update(creditBatches)
-      .set({ removalId: removal.id })
-      .where(eq(creditBatches.id, batch.id));
-
     const run = await createProductionRun(ctx, {
       code: `PR-CBAM-REMOVAL-${tag}`,
       facilityId,

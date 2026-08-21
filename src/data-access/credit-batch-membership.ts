@@ -142,7 +142,6 @@ export interface LockedCreditBatchForUpdate {
   facilityId: string;
   startDate: string;
   endDate: string;
-  removalId: string | null;
   feedstockTypeId: string;
 }
 
@@ -197,7 +196,6 @@ export async function lockCreditBatchForUpdate(
     facilityId: creditBatches.facilityId,
     startDate: creditBatches.startDate,
     endDate: creditBatches.endDate,
-    removalId: creditBatches.removalId,
     feedstockTypeId: creditBatches.feedstockTypeId,
   };
   const [snapshot] = await tx
@@ -646,7 +644,6 @@ export async function attachProductionRunToMatchingCreditBatch(
     .select({
       id: creditBatches.id,
       code: creditBatches.code,
-      removalId: creditBatches.removalId,
     })
     .from(creditBatches)
     .where(
@@ -674,7 +671,7 @@ export async function attachProductionRunToMatchingCreditBatch(
     await isCreditBatchMembershipLockedBySubmission(
       ctx,
       tx,
-      batch.removalId,
+      batch.id,
     )
   ) {
     return null;

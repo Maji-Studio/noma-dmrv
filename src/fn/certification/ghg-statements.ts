@@ -14,6 +14,7 @@ import {
   getLatestSubmission,
   getLatestSubmissionWithExecutor,
   markSubmissionInterrupted,
+  recordConfirmedSubmissionIdentity,
   type ClaimBlockedReason,
 } from "@/data-access/certification-submissions";
 import {
@@ -37,6 +38,7 @@ import {
 import { withFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { requireOrgFacility } from "@/data-access/utils";
 import { redactReportSecrets } from "@/lib/certification/report-url";
+import { overlayLiveRemoteStatus } from "@/lib/certification/from-submission";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
@@ -133,6 +135,7 @@ export interface LinkedRemoval {
 export interface GhgStatementState {
   statement: CertifierGhgStatementRow;
   statementSubmission: CertificationSubmissionRow | null;
+  statementSubmissionForStatus: CertificationSubmissionRow | null;
   linkedRemovals: LinkedRemoval[];
   remote: GhgStatement | null;
   recentSyncEvents: CertifierSyncEventRow[];
@@ -252,15 +255,19 @@ export async function createGhgStatementDraft(
             ghgStatementCreateRefusalMessage(blocking.statement),
           );
         }
-        // List membership can lag detail, so reconcile the existing statement
-        // from its authoritative representation without minting anything.
-        const reconciled = await reconcileRegistryGhgStatementById(orgCtx, {
-          client,
-          facilityId: parsed.facilityId,
-          externalProjectId: project.externalProjectId,
-          externalId: singleMatch.id,
-        });
-        return { outcome: "existing" as const, ...reconciled };
+        if (existingRemoteSubmission.status !== "draft") {
+          // List membership can lag detail, so reconcile the existing
+          // statement from its authoritative representation without minting
+          // anything. A draft falls through to the claim path: it may be an
+          // interrupted post-identity finalization that must be resumed.
+          const reconciled = await reconcileRegistryGhgStatementById(orgCtx, {
+            client,
+            facilityId: parsed.facilityId,
+            externalProjectId: project.externalProjectId,
+            externalId: singleMatch.id,
+          });
+          return { outcome: "existing" as const, ...reconciled };
+        }
       }
     }
     const knownRemoteMatch = remoteMatches.length > 0;
@@ -467,9 +474,8 @@ async function createGhgStatementRemote(args: {
   // without touching the row. Record the interruption so the operator sees
   // the failure instead of a bare in-progress row until the lock TTL expires.
   let externalMutation: RegistryExternalMutation | null = null;
-  let created: { externalId: string; source: "create" | "reconciliation" };
   try {
-    created = await performRegistryCreate({
+    const { externalId, source } = await performRegistryCreate({
       orgCtx,
       entityType: GHG_STATEMENT_ENTITY_TYPE,
       entityId: statement.id,
@@ -489,6 +495,38 @@ async function createGhgStatementRemote(args: {
       onExternalMutation: (state) => {
         externalMutation = state;
       },
+      onConfirmed: async (externalId) => {
+        if (!row.lockedAt) {
+          throw new SafeError(
+            "The GHG Statement submission lock was lost before its registry identity could be saved. Try again.",
+          );
+        }
+        const recorded = await recordConfirmedSubmissionIdentity(
+          orgCtx,
+          row.id,
+          { externalId, expectedLockedAt: row.lockedAt },
+        );
+        if (!recorded) {
+          throw new SafeError(
+            "The GHG Statement registry identity could not be saved because the submission changed. Refresh and try again.",
+          );
+        }
+      },
+    });
+    externalMutation = "confirmed";
+    // Keep local finalization inside the same failure boundary as the remote
+    // create/reconciliation. Once performRegistryCreate returns, the external
+    // mutation is confirmed; if the local identity/status write fails, mark
+    // the exact claimed draft interrupted so the next click can reconcile it
+    // immediately through the shared fresh-interrupted claim path.
+    return await finalizeGhgStatement({
+      client,
+      orgCtx,
+      statement,
+      row,
+      externalId,
+      expected,
+      outcome: source === "create" ? "created" : "existing",
     });
   } catch (error) {
     if (externalMutation && row.lockedAt) {
@@ -523,17 +561,6 @@ async function createGhgStatementRemote(args: {
     }
     throw error;
   }
-  const { externalId, source } = created;
-
-  return finalizeGhgStatement({
-    client,
-    orgCtx,
-    statement,
-    row,
-    externalId,
-    expected,
-    outcome: source === "create" ? "created" : "existing",
-  });
 }
 
 // =====================================================================
@@ -692,9 +719,18 @@ export async function loadGhgStatementState(
         )
       : null;
 
+    // The badge reflects the live registry fetch, but the submission row stays
+    // byte-for-byte persisted for the technical metadata pane. Persisting
+    // reconciliation remains an explicit operator action.
+    const statementSubmissionForStatus =
+      statementSubmission && remote
+        ? overlayLiveRemoteStatus(statementSubmission, remote.status)
+        : statementSubmission;
+
     return {
       statement,
       statementSubmission,
+      statementSubmissionForStatus,
       linkedRemovals,
       // The verifier URL can carry the bearer token for the generated report.
       // Keep that plaintext capability on the server even though the rest of

@@ -73,6 +73,7 @@ import {
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 function productionRunDetailHref(run: ProductionRunWithRelations) {
   const params = new URLSearchParams({
@@ -109,6 +110,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -116,6 +118,7 @@ function createColumns(
     },
     {
       accessorKey: "date",
+      meta: { nowrap: true },
       header: "Date",
       cell: ({ row }) => formatDate(row.original.date),
     },
@@ -123,7 +126,9 @@ function createColumns(
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => <span>{row.original.facilityName || "Not available"}</span>,
+      cell: ({ row }) => (
+        <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
+      ),
     },
     {
       id: "reactor",
@@ -167,6 +172,7 @@ function createColumns(
     },
     {
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end">
@@ -498,8 +504,8 @@ export function ProductionRunList() {
           title="Biochar Output"
           value={
             <MassPair
-              wetKg={statsData?.totalBiocharKg ?? 0}
-              dryKg={statsData ? statsData.totalBiocharDryKg : 0}
+              wetKg={statsData?.totalBiocharKg ?? null}
+              dryKg={statsData?.totalBiocharDryKg ?? null}
             />
           }
           valueLayout="breakdown"

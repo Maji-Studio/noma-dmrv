@@ -6,8 +6,9 @@
  * Sample it POSTs one `biochar_production_batch` measurement sample carrying
  * that Sample's paired chemistry evidence.
  * Measurement-sample response datapoints bind inputs declared with the
- * `measurement-property` source. Values retained only as evidence (currently
- * 1000-year `s_fraction`) are bound through direct orchestrator datapoints.
+ * `measurement-property` source, including the 1000-year carbon and
+ * `s_fraction` lists. Product mass is bound through a direct orchestrator
+ * datapoint because it describes the credit batch, not a physical Sample.
  *
  * ─── ⚠️ SANDBOX ONLY — gated on `ISOMETRIC_ENVIRONMENT === "sandbox"` ─────────
  * Explicit binding is implemented for the verified 1000-year component. The

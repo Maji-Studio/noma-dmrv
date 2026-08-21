@@ -409,7 +409,8 @@ export async function createCustomerLocationFn(
       city: validated.city || null,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
-      address: validated.address,
+      // An empty textarea submits "", which must land as NULL, not a blank string.
+      address: validated.address || null,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
       distanceSource: resolveDistanceSource(
         validated.distanceFromFacilityKm ?? null,
@@ -456,7 +457,9 @@ export async function updateCustomerLocationFn(
       city: validated.city || null,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
-      address: validated.address,
+      // `undefined` leaves the column untouched (partial update); "" clears it.
+      address:
+        validated.address === undefined ? undefined : validated.address || null,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
       distanceSource: resolveDistanceSource(
         validated.distanceFromFacilityKm,

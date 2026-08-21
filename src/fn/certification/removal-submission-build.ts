@@ -1,7 +1,8 @@
 import type { OrgContext } from "@/lib/auth/server";
+import { env } from "@/config/env";
 import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { SafeError } from "@/lib/errors";
-import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   aggregateProductionRuns,
   buildRemovalSupplierRef,
@@ -11,10 +12,7 @@ import {
   type IsometricComponentBlueprint,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import {
-  buildCreateDatapointRequest,
-  MAPPING_REVISION,
-} from "@/lib/isometric/transformers/datapoint";
+import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import {
   expectedSequestrationBlueprintKeys,
   isSequestrationBlueprintFamily,
@@ -39,6 +37,10 @@ import {
 } from "./removal-reporting-window";
 import type { ResolvedFixedInput } from "./removal-snapshot-readers";
 import {
+  compileBiocharApplicationIntents,
+  type BiocharApplicationIntent,
+} from "./biochar-application-intents";
+import {
   collectCandidateSourceDocumentsForRemoval,
   resolveSourceBindingCandidates,
   type CandidateSourceDocument,
@@ -50,21 +52,14 @@ import {
   sourceIdsForDatapointTarget,
   type RemovalSourceBindingPlanEntry,
 } from "@/lib/certification/removal-source-bindings";
-
-export interface ResolvedMonitoredInput {
-  removalTemplateComponentId: string;
-  componentBlueprintKey: string;
-  componentDisplayName?: string;
-  inputKey: string;
-  quantity: { magnitude: number; unit: string };
-  datapointType: string;
-}
-
-export interface ResolvedTemplateInputs {
-  monitored: ResolvedMonitoredInput[];
-  fixed: ResolvedFixedInput[];
-  datapointBodyByKey: Map<string, CreateDatapointRequest>;
-}
+import {
+  resolveTemplateInputs,
+  type ResolvedMonitoredInput,
+} from "./removal-template-inputs";
+import {
+  includesProductionInputs,
+  productionClaimContribution,
+} from "./production-claim-policy";
 
 export interface RemovalSubmissionBuild {
   agg: AggregatedProductionData;
@@ -79,6 +74,8 @@ export interface RemovalSubmissionBuild {
   datapointBodyByKey: Map<string, CreateDatapointRequest>;
   durabilityMeasurementSampleArgs: DurabilityMeasurementSampleClaimArgs | null;
   memberCreditBatchIds: string[];
+  biocharApplicationIntents: BiocharApplicationIntent[];
+  omittedTemplateComponentIds: string[];
 }
 
 export interface RemovalSubmissionReview {
@@ -117,7 +114,34 @@ export interface RemovalSubmissionReview {
   intendedPostTargets: string[];
   memberCreditBatches: Array<{ id: string; code: string }>;
   productionRuns: Array<{ id: string; code: string | null }>;
+  applications: Array<{
+    id: string;
+    code: string;
+    deliveryId: string;
+    deliveryCode: string;
+  }>;
   reportingWindow: { startedOn: string; completedOn: string };
+  productionEmissionClaims?: Array<{
+    creditBatchId: string;
+    creditBatchCode: string;
+    claimingRemovalId: string | null;
+    contribution: "production-and-delivery" | "delivery-only";
+  }>;
+}
+
+export function buildProductionEmissionClaims(
+  memberBatchClaims: RemovalSubmissionContext["memberBatchClaims"],
+  removalId: string,
+): NonNullable<RemovalSubmissionReview["productionEmissionClaims"]> {
+  return memberBatchClaims.map((batch) => ({
+    creditBatchId: batch.creditBatchId,
+    creditBatchCode: batch.code,
+    claimingRemovalId: batch.claimedByRemovalId,
+    contribution: productionClaimContribution(
+      batch.claimedByRemovalId,
+      removalId,
+    ),
+  }));
 }
 
 export interface CompiledRemovalSubmission {
@@ -140,6 +164,7 @@ export interface MaterializedRemovalSubmissionSnapshot {
     sourceBindingPlan: RemovalSourceBindingPlanEntry[];
     transport: {
       removalSupplierRef: string;
+      omittedTemplateComponentIds: string[];
       datapointBodies: Array<{
         rtcId: string;
         inputKey: string;
@@ -189,7 +214,9 @@ function emptyReview(
     intendedPostTargets: [],
     memberCreditBatches: [],
     productionRuns: [],
+    applications: [],
     reportingWindow: { startedOn: "", completedOn: "" },
+    productionEmissionClaims: [],
   };
 }
 
@@ -215,13 +242,6 @@ export function removalTemplateTierCompatibilityBlocker(
   );
 }
 
-/**
- * Deep compile interface for the Removal workflow. Template walking, semantic
- * mappings, transforms and request planning stay behind this function. The
- * returned snapshot is explicitly a claim-time materialization plan; it is not
- * an immutable versioned POST snapshot until the ledger claim supplies a
- * version.
- */
 export async function compileRemovalSubmission(
   args: Parameters<typeof buildRemovalSubmissionBuild>[0] & {
     /**
@@ -420,10 +440,27 @@ export async function compileRemovalSubmission(
       id: run.id,
       code: "code" in run && typeof run.code === "string" ? run.code : null,
     })),
+    applications: [
+      ...new Map(
+        args.ctx.lineages.map((lineage) => [
+          lineage.application.id,
+          {
+            id: lineage.application.id,
+            code: lineage.application.code,
+            deliveryId: lineage.delivery.id,
+            deliveryCode: lineage.delivery.code,
+          },
+        ]),
+      ).values(),
+    ],
     reportingWindow: {
       startedOn: build.reportingWindow.startedOn.toISOString(),
       completedOn: build.reportingWindow.completedOn.toISOString(),
     },
+    productionEmissionClaims: buildProductionEmissionClaims(
+      args.ctx.memberBatchClaims,
+      args.removalId,
+    ),
   };
 
   return {
@@ -527,6 +564,8 @@ export function materializeRemovalSubmissionSnapshot(args: {
       sourceBindingPlan: compiled.sourceBindingPlan,
       transport: {
         removalSupplierRef,
+        omittedTemplateComponentIds:
+          compiled.omittedTemplateComponentIds,
         datapointBodies: [
           ...finalDatapointBodies,
           ...directSequestrationDatapoints,
@@ -614,6 +653,12 @@ export async function buildRemovalSubmissionBuild(args: {
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
   assertSequestrationTemplateBindings(defaultTemplate);
 
+  const biocharApplicationIntents = await compileBiocharApplicationIntents({
+    orgCtx,
+    memberBatches: ctx.memberBatchClaims,
+    environment: env.ISOMETRIC_ENVIRONMENT,
+  });
+
   const lineageWarnings: string[] = [];
   for (const lineage of ctx.lineages) {
     lineageWarnings.push(
@@ -639,9 +684,20 @@ export async function buildRemovalSubmissionBuild(args: {
   }
 
   const baseAgg = {
-    ...aggregateProductionRuns(ctx.runs, ctx.attributionByRunId),
+    ...aggregateProductionRuns(ctx.runs, ctx.attributionByRunId, {
+      productionRunIds: new Set(
+        ctx.memberBatchClaims
+          .filter((batch) =>
+            includesProductionInputs(batch.claimedByRemovalId, removalId),
+          )
+          .flatMap((batch) => batch.productionRunIds),
+      ),
+    }),
     ...weightedBatchChemistry(ctx.batchesWithSamples, ctx.attributionByRunId),
   };
+  const hasProductionContribution = ctx.memberBatchClaims.some((batch) =>
+    includesProductionInputs(batch.claimedByRemovalId, removalId),
+  );
   if (baseAgg.warnings.length > 0) {
     throw new SafeError(
       `Removal submission blocked:\n${baseAgg.warnings.join("\n")}`,
@@ -730,6 +786,27 @@ export async function buildRemovalSubmissionBuild(args: {
       candidate.sourceId,
     ]),
   );
+  // Delivery-lineage mass evidence (proof of delivery, BoL) targets the
+  // sequestration datapoint, whose Sources resolve per member credit batch.
+  const deliveryIdByApplicationId = new Map(
+    ctx.lineages.map((lineage) => [
+      lineage.application.id,
+      lineage.delivery.id,
+    ]),
+  );
+  const deliveryIdsByCreditBatchId = new Map(
+    ctx.memberBatchClaims.map((batch) => [
+      batch.creditBatchId,
+      Array.from(
+        new Set(
+          batch.applicationIds.flatMap((applicationId) => {
+            const deliveryId = deliveryIdByApplicationId.get(applicationId);
+            return deliveryId ? [deliveryId] : [];
+          }),
+        ),
+      ),
+    ]),
+  );
   const sourceBindingPlan = buildRemovalSourceBindingPlan({
     candidates: sourceBindingCandidates,
     template: defaultTemplate,
@@ -745,6 +822,7 @@ export async function buildRemovalSubmissionBuild(args: {
         batch.samples.map((sample) => sample.id),
       ]),
     ),
+    deliveryIdsByCreditBatchId,
   });
   // The operator reviews every candidate file before pending Sources receive
   // registry IDs. Build the semantic plan from that complete candidate set,
@@ -771,9 +849,15 @@ export async function buildRemovalSubmissionBuild(args: {
         batch.samples.map((sample) => sample.id),
       ]),
     ),
+    deliveryIdsByCreditBatchId,
   });
 
-  const { monitored, fixed, datapointBodyByKey } = resolveTemplateInputs({
+  const {
+    monitored,
+    fixed,
+    datapointBodyByKey,
+    omittedTemplateComponentIds,
+  } = resolveTemplateInputs({
     template: defaultTemplate,
     blueprintsByKey,
     agg,
@@ -781,6 +865,7 @@ export async function buildRemovalSubmissionBuild(args: {
     sourceIds,
     sourceBindingPlan,
     allowPeriodInputStub,
+    omitProductionComponents: !hasProductionContribution,
   });
   const hasOnly1000YearBatches =
     ctx.batchesWithSamples.length > 0 &&
@@ -815,6 +900,7 @@ export async function buildRemovalSubmissionBuild(args: {
     mappingRevision: MAPPING_REVISION,
     externalProjectId,
     templateId: defaultTemplate.id,
+    omittedTemplateComponentIds,
     sequestrationTemplate: normalizeSequestrationTemplateForHash(
       defaultTemplate,
     ),
@@ -834,6 +920,7 @@ export async function buildRemovalSubmissionBuild(args: {
     ...(semanticMeasurementSamples.length > 0
       ? { durabilityMeasurementSamples: semanticMeasurementSamples }
       : {}),
+    biocharApplicationIntents,
     inputs: [
       ...monitored.map((m) => ({
         rtcId: m.removalTemplateComponentId,
@@ -870,120 +957,7 @@ export async function buildRemovalSubmissionBuild(args: {
     datapointBodyByKey,
     durabilityMeasurementSampleArgs,
     memberCreditBatchIds,
+    biocharApplicationIntents,
+    omittedTemplateComponentIds,
   };
-}
-
-// Walks the removal template's components, classifying every input as a
-// monitored datapoint (built from the aggregation) or a pre-bound fixed datapoint.
-function resolveTemplateInputs(args: {
-  template: IsometricGhgEntryTemplate;
-  blueprintsByKey: Map<string, IsometricComponentBlueprint>;
-  agg: AggregatedProductionData;
-  externalProjectId: string;
-  sourceIds: string[];
-  sourceBindingPlan: RemovalSourceBindingPlanEntry[];
-  allowPeriodInputStub: boolean;
-}): ResolvedTemplateInputs {
-  const {
-    template,
-    blueprintsByKey,
-    agg,
-    externalProjectId,
-    sourceIds,
-    sourceBindingPlan,
-    allowPeriodInputStub,
-  } = args;
-
-  const monitored: ResolvedMonitoredInput[] = [];
-  const fixed: ResolvedFixedInput[] = [];
-  const datapointBodyByKey = new Map<string, CreateDatapointRequest>();
-  const unboundFixedInputs: { component: string; inputKey: string }[] = [];
-
-  for (const group of template.groups) {
-    for (const component of group.components) {
-      // EVERY sequestration component (200-year sampled/unsampled + 1000-year,
-      // and any unknown variant) is fed by the measurement-samples step
-      // (Phase 3), NOT the aggregation→datapoint loop, so skip it here — its
-      // inputs have no INPUT_MAPPING entry (skipping via the FAMILY predicate is
-      // what kills the misleading "no INPUT_MAPPING entry … update
-      // transformers/datapoint.ts" error for a 1000-year template), and
-      // buildCreateGhgEntryRequest binds the response datapoint IDs explicitly.
-      // The submit-time template↔tier guard fails closed on a sequestration
-      // component outside the facility tier's expected set.
-      if (isSequestrationBlueprintFamily(component.blueprint_key)) continue;
-      const blueprint = blueprintsByKey.get(component.blueprint_key);
-      if (!blueprint) {
-        throw new SafeError(
-          `Registry template component "${component.display_name}" is not available. Refresh the facility link in settings.`,
-        );
-      }
-      for (const rtcInput of component.inputs) {
-        if (rtcInput.type === "fixed") {
-          if (!rtcInput.datapoint_id) {
-            unboundFixedInputs.push({
-              component: component.display_name,
-              inputKey: rtcInput.input_key,
-            });
-            continue;
-          }
-          fixed.push({
-            removalTemplateComponentId: component.id,
-            inputKey: rtcInput.input_key,
-            preboundDatapointId: rtcInput.datapoint_id,
-          });
-          continue;
-        }
-
-        const blueprintInput = blueprint.inputs.find(
-          (i) => i.input_key === rtcInput.input_key,
-        );
-        if (!blueprintInput) {
-          throw new SafeError(
-            `Registry template component "${blueprint.key}" is missing a required field. Ask an Admin to update the template.`,
-          );
-        }
-        const draft = buildCreateDatapointRequest({
-          groupKey: group.key,
-          componentBlueprintKey: component.blueprint_key,
-          componentDisplayName: component.display_name,
-          rtcInput,
-          blueprintInput,
-          agg,
-          projectId: externalProjectId,
-          supplierRefId: "__placeholder__",
-          sourceIds:
-            sourceBindingPlan.length > 0
-              ? sourceIdsForDatapointTarget(sourceBindingPlan, {
-                  componentId: component.id,
-                  inputKey: rtcInput.input_key,
-                })
-              : sourceIds,
-          allowPeriodInputStub,
-        });
-        monitored.push({
-          removalTemplateComponentId: component.id,
-          componentBlueprintKey: component.blueprint_key,
-          componentDisplayName: component.display_name,
-          inputKey: rtcInput.input_key,
-          quantity: {
-            magnitude: draft.quantity.magnitude,
-            unit: draft.quantity.unit ?? "",
-          },
-          datapointType: draft.type,
-        });
-        datapointBodyByKey.set(`${component.id}::${rtcInput.input_key}`, draft);
-      }
-    }
-  }
-
-  if (unboundFixedInputs.length > 0) {
-    const components = Array.from(
-      new Set(unboundFixedInputs.map((input) => input.component)),
-    ).join(", ");
-    throw new SafeError(
-      `Removal template "${template.display_name}" has ${unboundFixedInputs.length} fixed ${pluralize(unboundFixedInputs.length, "value")} missing in ${components}. Set each value in the Isometric template editor before submitting.`,
-    );
-  }
-
-  return { monitored, fixed, datapointBodyByKey };
 }

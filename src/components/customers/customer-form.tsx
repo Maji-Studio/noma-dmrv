@@ -21,6 +21,7 @@ import {
   type CustomerLocationFormData,
 } from "@/schemas/customers";
 import type { Customer } from "@/db/schema/parties";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { useCustomerLocations, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,29 @@ function formatPendingLocationSummary({
     .filter((value): value is string => Boolean(value));
 
   return parts.length > 0 ? parts.join(", ") : null;
+}
+
+/**
+ * Second line of a saved location row: the site description and the position,
+ * whichever are on file. The site description is optional, so a location saved
+ * from GPS alone shows only its coordinates, and a row with neither falls back
+ * to the shared missing-value token rather than a hand-written string.
+ */
+function formatSavedLocationSummary({
+  address,
+  gpsLatitude,
+  gpsLongitude,
+}: Pick<
+  EditableCustomerLocation,
+  "address" | "gpsLatitude" | "gpsLongitude"
+>): string {
+  const position =
+    gpsLatitude !== null && gpsLongitude !== null
+      ? `${gpsLatitude.toFixed(4)}, ${gpsLongitude.toFixed(4)}`
+      : null;
+  const parts = [address?.trim() || null, position].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(", ") : MISSING_VALUE.notRecorded;
 }
 
 // ============================================
@@ -84,6 +108,7 @@ export function CustomerForm({
   const [locationError, setLocationError] = useState<string | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     formState: { errors },
@@ -214,6 +239,7 @@ export function CustomerForm({
       </FormSection>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
@@ -290,8 +316,8 @@ function CreateModeLocationsSection({
                       </p>
                     ) : null}
                     <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
-                      {loc.address}
-                      {`, ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`}
+                      {loc.address ? `${loc.address}, ` : ""}
+                      {`${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`}
                     </p>
                   </div>
                 </div>
@@ -397,10 +423,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
                 <div className="min-w-0">
                   <p className="body-small font-medium truncate">{loc.name}</p>
                   <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
-                    {loc.address || "Location not set"}
-                    {loc.gpsLatitude !== null && loc.gpsLongitude !== null
-                      ? `, ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`
-                      : ""}
+                    {formatSavedLocationSummary(loc)}
                   </p>
                 </div>
               </div>

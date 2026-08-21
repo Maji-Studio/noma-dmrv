@@ -38,6 +38,7 @@ import { formatDistanceKm, formatMass } from "@/lib/format-utils";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { getStatusState, getStatusStateColor } from "@/lib/status-state";
 import { cn } from "@/lib/utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import type { ChainNodeSheetNode } from "../chain-node-sheet";
 
 // ---------------------------------------------------------------------------
@@ -67,9 +68,6 @@ const STOP_ICON_PX = 13;
 const HERO_ICON_PX = 40;
 /** GPS pairs are shown at ~1 m resolution, the precision operators enter. */
 const COORD_DECIMALS = 5;
-/** The viewer's one term for a value nobody has entered yet. */
-const MISSING_NAME = "Not recorded";
-
 const MICRO_CAPS =
   "font-mono text-[9.5px] font-medium uppercase tracking-[0.1em]";
 const HAIRLINE = "border-b border-[var(--clr-dark-purple-10)]";
@@ -221,11 +219,11 @@ function IllustrationBand({ node, leg, facilityName }: IllustrationProps) {
   const inbound = leg.kind === "inbound";
   const facilityLabel = facilityName ?? "Facility";
   const origin = inbound
-    ? (leg.originName ?? leg.outerCode ?? MISSING_NAME)
+    ? (leg.originName ?? leg.outerCode ?? MISSING_VALUE.notRecorded)
     : facilityLabel;
   const destination = inbound
     ? facilityLabel
-    : (leg.destinationName ?? leg.outerCode ?? MISSING_NAME);
+    : (leg.destinationName ?? leg.outerCode ?? MISSING_VALUE.notRecorded);
 
   return (
     <div className={cn("px-16 py-16", HAIRLINE)} style={{ background: wash }}>

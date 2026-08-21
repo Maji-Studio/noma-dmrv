@@ -6,6 +6,7 @@ import {
   avgNumeric,
   countRows,
   numericAggregate,
+  sumNullableNumeric,
   sumNumeric,
 } from "@/db/aggregate";
 
@@ -32,6 +33,8 @@ describe("numeric aggregate helpers — decoder", () => {
     );
     const average = decode(avgNumeric(sql`mass_kg`), "5.5");
     const emptyAverage = decode(avgNumeric(sql`mass_kg`), null);
+    const nullableSum = decode(sumNullableNumeric(sql`mass_kg`), "6.5");
+    const emptyNullableSum = decode(sumNullableNumeric(sql`mass_kg`), null);
 
     expect(sum).toBe(12.5);
     expect(typeof sum).toBe("number");
@@ -46,6 +49,9 @@ describe("numeric aggregate helpers — decoder", () => {
     expect(average).toBe(5.5);
     expect(typeof average).toBe("number");
     expect(emptyAverage).toBeNull();
+    expect(nullableSum).toBe(6.5);
+    expect(typeof nullableSum).toBe("number");
+    expect(emptyNullableSum).toBeNull();
   });
 });
 
@@ -117,18 +123,26 @@ describe("numeric aggregate helpers — real SQL", () => {
     }
   });
 
-  it("preserves null for zero-row and all-null averages", async (ctx) => {
+  it("preserves null for zero-row and all-null nullable aggregates", async (ctx) => {
     if (!db) return ctx.skip();
 
     const [emptyRow] = await db
-      .select({ average: avgNumeric(sql`mass_kg`) })
+      .select({
+        average: avgNumeric(sql`mass_kg`),
+        total: sumNullableNumeric(sql`mass_kg`),
+      })
       .from(emptySource);
     const [allNullRow] = await db
-      .select({ average: avgNumeric(sql`mass_kg`) })
+      .select({
+        average: avgNumeric(sql`mass_kg`),
+        total: sumNullableNumeric(sql`mass_kg`),
+      })
       .from(allNullSource);
 
     expect(emptyRow.average).toBeNull();
+    expect(emptyRow.total).toBeNull();
     expect(allNullRow.average).toBeNull();
+    expect(allNullRow.total).toBeNull();
   });
 
   it("coalesces zero-row sums to 0 and counts to 0", async (ctx) => {

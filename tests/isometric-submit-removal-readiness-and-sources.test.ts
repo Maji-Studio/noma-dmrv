@@ -19,6 +19,8 @@ import {
 import * as ledger from "@/data-access/certification";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
+import * as biocharApplications from "@/fn/certification/biochar-applications";
+import * as biocharApplicationsDA from "@/data-access/certifier-biochar-applications";
 import * as sources from "@/fn/certification/sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { compileRemovalSubmission } from "@/fn/certification/removal-submission-build";
@@ -51,6 +53,77 @@ function attemptSummaryEvents() {
 }
 
 describe("submitRemoval — entity readiness gate", () => {
+  it("preflights every Biochar Application before any registry or claim mutation", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    vi.mocked(
+      biocharApplicationsDA.getBiocharApplicationRegistryInputs,
+    ).mockResolvedValueOnce([
+      {
+        applicationId: "app-test-1",
+        applicationCode: "APP-TEST-001",
+        applicationDate: new Date("2026-04-05T00:00:00Z"),
+        appliedTonnes: 1,
+        fieldSizeHa: null,
+        deliveryId: "del-1",
+        deliveryCode: "DEL-TEST-001",
+        deliveredWetMassKg: 1_000,
+        truckMassOnArrivalKg: 2_000,
+        truckMassOnDepartureKg: 1_000,
+        facilityId: "fac-test-1",
+        certifierProjectId: "cert-proj-1",
+        externalProjectId: "prj_test_1",
+        customerLocationId: "00000000-0000-4000-8000-000000000099",
+        customerLocationName: "Test field",
+        latitude: 46.948,
+        longitude: 7.447,
+      },
+    ]);
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/field size greater than 0 ha/i);
+
+    expect(storedRows).toHaveLength(0);
+    expect(isometric.createDatapoint).not.toHaveBeenCalled();
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
+    expect(
+      biocharApplications.ensureRemovalBiocharApplications,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("blocks an unmapped pyrolysis feedstock before submit side effects", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
+        feedstockTypeMappingGaps: [
+          {
+            creditBatchId: "batch-1",
+            creditBatchCode: "CB-TEST-001",
+            feedstockTypeId: "feedstock-type-1",
+            feedstockTypeName: "Macadamia shells",
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/Macadamia shells.*not linked to an Isometric feedstock type/i);
+
+    expect(
+      evidenceLedgers.ensureEvidenceLedgersFromContext,
+    ).not.toHaveBeenCalled();
+    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+
   it("blocks before submit-phase side effects", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(ORIGINAL_BIOCHAR_MASS_KG, {

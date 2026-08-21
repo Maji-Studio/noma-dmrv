@@ -1,5 +1,5 @@
-import { markSubmissionRejected } from "@/data-access/certification";
 import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
+import { rejectSubmissionAndReleaseProductionClaims } from "@/data-access/production-claim-reservations";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import type { Logger } from "@/lib/log";
@@ -77,7 +77,8 @@ export async function recordClaimedRemovalSubmissionFailureBestEffort(args: {
     safeError.errorMessage ?? UNEXPECTED_REMOVAL_SUBMISSION_ERROR;
   try {
     if (args.externalMutation === SUBMISSION_EXTERNAL_MUTATIONS.none) {
-      await markSubmissionRejected(args.orgCtx, args.submissionId, {
+      await rejectSubmissionAndReleaseProductionClaims(args.orgCtx, {
+        submissionId: args.submissionId,
         errorMessage,
         expectedLockedAt: args.expectedLockedAt,
       });

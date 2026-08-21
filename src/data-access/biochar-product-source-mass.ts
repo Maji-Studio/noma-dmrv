@@ -1,6 +1,14 @@
 import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { biocharProductSourceAllocations } from "@/db/schema";
 
+/** Persisted product wet mass: pre-water blend mass plus separately added water. */
+export function productWetMassKgSql(
+  blendMassKg: SQLWrapper,
+  waterAddedKg: SQLWrapper,
+): SQL<number> {
+  return sql<number>`COALESCE(${blendMassKg}, 0) + COALESCE(${waterAddedKg}, 0)`;
+}
+
 /**
  * Source-biochar mass for persisted product rows.
  *

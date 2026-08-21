@@ -25,6 +25,7 @@ import {
   attachRemovalCompilationToDiagnostic,
   type RemovalTemplateDiagnosticCompilation,
 } from "./removal-template-diagnostic-resolution";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 export type { RemovalTemplateDiagnosticCompilation } from "./removal-template-diagnostic-resolution";
 
@@ -125,7 +126,6 @@ export interface BuildRemovalTemplateDiagnosticArgs {
   compilation?: RemovalTemplateDiagnosticCompilation | null;
 }
 
-const UNKNOWN_VALUE = "Not available";
 const GHG_ENTRY_INPUT_PATH =
   "/ghg-entries.ghg_entry_template_components[].inputs[]";
 
@@ -165,9 +165,11 @@ function sourceLabel(source: string): string {
   return SOURCE_LABELS[source] ?? readableKey(source);
 }
 
+export const IDENTITY_TRANSFORM_LABEL = "Unchanged";
+
 function transformLabel(transformRevision: string | undefined): string {
   if (!transformRevision || transformRevision === "identity-v1") {
-    return "Unchanged";
+    return IDENTITY_TRANSFORM_LABEL;
   }
   if (transformRevision === "percent-to-fraction-v1") return "Divide by 100";
   return `Apply ${transformRevision}`;
@@ -254,9 +256,9 @@ function buildOrdinaryInputs(args: {
       inputKey: input.input_key,
     });
     const expected = {
-      dataShape: blueprintInput?.data_shape ?? UNKNOWN_VALUE,
+      dataShape: blueprintInput?.data_shape ?? MISSING_VALUE.notAvailable,
       quantityKind: blueprintInput?.quantity_kind ?? input.quantity_kind,
-      unit: blueprintInput?.compatible_unit ?? UNKNOWN_VALUE,
+      unit: blueprintInput?.compatible_unit ?? MISSING_VALUE.notAvailable,
     };
 
     if (!blueprint) {
@@ -266,7 +268,7 @@ function buildOrdinaryInputs(args: {
         presentInTemplate: true,
         expected,
         nomaSource: "No local blueprint contract",
-        transform: "Not available",
+        transform: MISSING_VALUE.notAvailable,
         wirePath: GHG_ENTRY_INPUT_PATH,
         evidenceRoles,
         status: "unsupported-component" as const,
@@ -285,7 +287,7 @@ function buildOrdinaryInputs(args: {
         presentInTemplate: true,
         expected,
         nomaSource: "No matching blueprint input",
-        transform: "Not available",
+        transform: MISSING_VALUE.notAvailable,
         wirePath: GHG_ENTRY_INPUT_PATH,
         evidenceRoles,
         status: "template-contract-drift" as const,
@@ -359,7 +361,7 @@ function buildOrdinaryInputs(args: {
         presentInTemplate: true,
         expected,
         nomaSource: "No noma dMRV source",
-        transform: "Not available",
+        transform: MISSING_VALUE.notAvailable,
         wirePath: "/datapoints -> " + GHG_ENTRY_INPUT_PATH,
         evidenceRoles,
         status: "missing-noma-mapping" as const,
@@ -458,13 +460,19 @@ function buildSequestrationInputs(args: {
         ? binding.measurementProperty.quantity_kind
         : binding?.quantityKind;
     const expected = {
-      dataShape: binding?.dataShape ?? blueprintInput?.data_shape ?? UNKNOWN_VALUE,
+      dataShape:
+        binding?.dataShape ??
+        blueprintInput?.data_shape ??
+        MISSING_VALUE.notAvailable,
       quantityKind:
-        expectedQuantityKind ?? blueprintInput?.quantity_kind ?? input?.quantity_kind ?? UNKNOWN_VALUE,
+        expectedQuantityKind ??
+        blueprintInput?.quantity_kind ??
+        input?.quantity_kind ??
+        MISSING_VALUE.notAvailable,
       unit:
         sourceContract?.wireUnit ??
         blueprintInput?.compatible_unit ??
-        UNKNOWN_VALUE,
+        MISSING_VALUE.notAvailable,
     };
     const raw = inputRaw({
       templateId: template.id,
@@ -513,18 +521,13 @@ function buildSequestrationInputs(args: {
     ) {
       status = "externally-unconfirmed-contract";
       statusDetail =
-        "Code implements the observed dry-basis inorganic-carbon contract, but Isometric confirmation for the project is still pending.";
+        "Code implements the observed registry contract, but Isometric confirmation for the project is still pending.";
     }
 
     const measurementPath =
       binding?.source === "direct-datapoint"
         ? "/datapoints.quantity -> " + GHG_ENTRY_INPUT_PATH
         : "/measurement-samples.values[] -> " + GHG_ENTRY_INPUT_PATH;
-    const sFractionEvidence =
-      binding?.source === "direct-datapoint"
-        ? " Direct datapoint plus measurement evidence."
-        : "";
-
     return {
       label: input?.display_name || readableKey(inputKey),
       inputKey,
@@ -537,8 +540,8 @@ function buildSequestrationInputs(args: {
           : "No supported noma dMRV source"),
       transform: sourceContract
         ? transformLabel(sourceContract.transformRevision)
-        : "Not available",
-      wirePath: measurementPath + sFractionEvidence,
+        : MISSING_VALUE.notAvailable,
+      wirePath: measurementPath,
       evidenceRoles,
       status,
       statusDetail,
@@ -596,7 +599,7 @@ function optionalNotPresent(
 
 /**
  * Normalizes the active Removal template against the exact production mapping
- * seams. Mapping, lineage, and Removal trace views consume this one model.
+ * seams. Mapping and Removal trace views consume this one model.
  */
 export function buildRemovalTemplateDiagnostic(
   args: BuildRemovalTemplateDiagnosticArgs,

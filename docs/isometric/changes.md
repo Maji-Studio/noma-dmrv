@@ -1,5 +1,62 @@
 # Isometric Docs Change Log
 
+## 2026-08-16 (1000-year Removal grouping and local draft recovery)
+
+- A 1000-year facility can group only one credit batch into each Removal. The
+  wizard enforces this before Continue, and the authoritative transaction
+  rechecks the locked facility tier before creating a Removal or assigning
+  application slices. When one physical Application spans multiple 1000-year
+  credit batches, each immutable batch slice can join its own Removal. The
+  200-year multi-batch flow still keeps the complete Application together.
+- An authenticated operator can discard a purely local Removal draft after
+  confirmation. Recovery releases only that Removal's application-slice
+  memberships and deletes its local row in one transaction.
+- Recovery refuses any Removal with a submission ledger row, production claim,
+  reporting dates, GHG Statement membership, or sticky possible-mutation
+  marker. Append-only sync events are retained as audit history but do not act
+  as registry state or block recovery by themselves. Recovery shares the
+  submission advisory lock so a concurrent claim cannot race the discard.
+  Before any submit-time Source mirroring can mutate Isometric, noma persists
+  the sticky marker under the same Removal and artifact locks, so recovery
+  stays fail-closed throughout the pre-ledger external-write window.
+- The legacy telemetry draft claim rechecks that its Removal still exists in
+  the active organization after taking the shared artifact lock. When discard
+  wins the race, telemetry creates no ledger row and performs no registry work.
+
+## 2026-08-16 (whole-batch production-claim concurrency hardening)
+
+- A Removal now reserves all unclaimed member credit batches atomically before
+  its first registry POST. A mutation-free failure releases the reservation;
+  possible or confirmed remote mutation keeps it fail-closed for reconciliation.
+- The earliest reporting period wins a shared batch's production inputs, using
+  the latest member Application date as the pre-submit completion date and the
+  draft creation time and ID only as tie-breakers.
+- Whole-batch production inputs include completed, unapplied member runs and
+  their feedstock transport. Those runs do not dilute the applied biochar
+  delivery-transport fraction.
+- For 200-year facilities, an Application may join a Removal only when all of
+  its credit-batch slices are unassigned; an existing sibling owner blocks the
+  assignment. A 1000-year Removal instead owns its single batch slice.
+
+## 2026-08-15 (application-slice Removal attribution and carbon ledger)
+
+- Biochar remaining in a source bin can be used for a new product after its
+  production run has supported a submitted Removal. Submitted source records
+  remain immutable; the new downstream draw is a new record.
+- Removal membership now freezes application-by-credit-batch wet and dry mass
+  slices. Newly applied mass from the same credit batch remains available for a
+  later Removal.
+- The first successful Removal claims the full production-emissions bucket.
+  Later Removals retain delivery and stored inputs and omit already-claimed
+  production inputs.
+- A commingled physical Application compiles one registry Biochar Application
+  per immutable credit-batch slice while retaining the shared observed truck
+  facts.
+- Removal review and credit-batch detail now show a compact carbon ledger, one
+  stored-CO₂e estimate, linked source records, and the prior production claim.
+- Noma submits accounting inputs; Isometric remains authoritative for project
+  emissions and the net removal result.
+
 ## 2026-08-13 (Production Batch physical run windows)
 
 New Isometric Production Batches now submit the earliest member production-run
@@ -20,25 +77,29 @@ reference, or a later physical window still emit drift. Open member runs fail
 before that batch's registry POST.
 The behavior is covered hermetically; fresh sandbox verification is pending.
 
-## 2026-08-13 (Storage Location traceability staged)
+## 2026-08-15 (Storage Location and Biochar Application Removal integration)
 
-One customer location now represents one reusable agricultural application
-site per Isometric project. Organization Owners/Admins can explicitly synchronize that site from an
-Application detail sheet. The action reconciles by a stable supplier reference
-before creating an Isometric `biochar_field` Storage Location, journals the
-confirmed `slc_...` identity, checks the remote record for drift, and surfaces
-not-synced, synced, drifted, and failed states with an explicit retry. Project
-mapping changes are blocked after a site is registered. Application create and update actions do not
-perform registry writes, and local name or coordinate drift never triggers an
-automatic PATCH.
+One customer location represents one reusable agricultural application site per
+Isometric project. Organization Owners/Admins can explicitly synchronize that
+site from an Application detail sheet. Sandbox Removal submission also ensures
+all required Production Batches, then Storage Locations, then Biochar
+Applications before completing the submission. Storage Location reconciliation
+and drift handling remain unchanged; application create and update actions do
+not perform registry writes, and local name or coordinate drift never triggers
+an automatic PATCH.
 
-The journal schema also reserves one Biochar Application identity per
-Application and credit-batch allocation slice. The Biochar Application adapter
-remains hard-gated: noma records net delivered/applied mass but the current
-request requires separate arrival and departure truck observations. No
-Biochar Application request is built or posted until Isometric confirms the
-mass encoding, application-rate unit and basis, multi-batch allocation, and
-correction lifecycle.
+Delivery create/edit now records optional observed truck mass before and after
+unloading in kilograms. Sandbox Removal preflight requires both observations
+for every included Application and never substitutes delivered wet mass or zero
+as observed evidence. It also requires a positive field size, compiles
+commingled mass as one immutable application-by-credit-batch slice per registry
+Production Batch, refuses deliveries split across multiple Applications, and
+snapshots the resolved values before any registry mutation. The Biochar Application
+journal claims the exact payload before POST and reconciles bounded list pages
+by its versioned environment/provider reference after retries. Rate is applied
+tonnes divided by field hectares (`t/ha`); truck mass values use `kg`.
+Production-environment registry synchronization remains explicitly disabled for
+both Storage Location and Biochar Application resources.
 
 This traceability layer does not change the GHG Entry `CO2 stored` component,
 its payload hash, or the existing sequestration calculation. Measurement
@@ -66,6 +127,18 @@ archived in
 Removal submission recovery and the observed Production Batch mass-unit
 readback are archived in
 [`docs/archive/2026-08-10-removal-submission-recovery.md`](../archive/2026-08-10-removal-submission-recovery.md).
+
+## 2026-08-14 (replacement s_fraction binding matches observed blueprint shape)
+
+The live `biochar_sequestration_1000_year_f_durable_max` blueprint declares
+`s_fraction` as a `dimensionless_ratio` LIST. Removal compilation now binds the
+existing `dimensionless_ratio/inertinite_fraction` Measurement Sample response
+Datapoints directly instead of duplicating them as `dimensionless` Datapoints.
+Product mass remains the only standalone durability Datapoint. The local
+contract now matches the read-only sandbox blueprint shape and removes the
+false template-admin blocker. Registry confirmation that this replacement
+governs the Protocol v1.1 project and a fresh end-to-end sandbox submission
+remain pending.
 
 ## 2026-08-13 (measurement Samples preserve local Sample grain)
 

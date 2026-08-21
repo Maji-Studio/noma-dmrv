@@ -74,6 +74,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
   } | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     reset,
@@ -222,6 +223,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
               </div>
             )}
             <FormActions
+              control={control}
               isSubmitting={inviteMember.isPending}
               submitLabel="Send invitation"
               submittingLabel="Sending…"

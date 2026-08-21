@@ -36,6 +36,7 @@ import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { deriveLaneStock } from "./lane-stock-derivation";
 import {
   productDryBiocharKgSql,
+  productWetMassKgSql,
   sourceBiocharMassKgSql,
 } from "./biochar-product-source-mass";
 import { requireOrgScope } from "./utils";
@@ -265,7 +266,10 @@ export async function enrichStorageLocationRows(
             storageLocationId: biocharProducts.storageLocationId,
             batchCount: count(),
             currentMassKg: sumNumeric(
-              sql`COALESCE(${biocharProducts.massKg}, 0) + COALESCE(${biocharProducts.waterAddedKg}, 0)`,
+              productWetMassKgSql(
+                biocharProducts.massKg,
+                biocharProducts.waterAddedKg,
+              ),
             ),
             biocharEquivalentKg: numericAggregate(sql<number>`
               COALESCE(
@@ -480,7 +484,10 @@ export async function enrichStorageLocationRows(
               bp.storage_location_id,
               'in',
               bp.created_at,
-              COALESCE(bp.mass_kg, 0) + COALESCE(bp.water_added_kg, 0),
+              ${productWetMassKgSql(
+                sql.raw("bp.mass_kg"),
+                sql.raw("bp.water_added_kg"),
+              )},
               ${productDryBiocharKgSql(
                 sql.raw("bp.id"),
                 sql.raw("bp.mass_kg"),

@@ -3,7 +3,7 @@
  * round trip (the vehicle returns to origin unloaded / next destination
  * unknown) or a one-way trip with an evidenced onward destination.
  *
- * Isometric GHG Accounting Module v1.1, "Transportation Emissions"
+ * Isometric Transportation Emissions Accounting Module v1.1, §5 "Measurements"
  * (Distance-Based Method): "When no onwards journey information is available,
  * the full round trip must be assumed in calculations." Resolved as
  * interpretation (a) on issue #316 (2026-07-09): a `return` leg contributes

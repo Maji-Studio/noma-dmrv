@@ -19,6 +19,8 @@ interface DeleteConfirmDialogProps {
   onCancel: () => void;
   isPending?: boolean;
   errorMessage?: string;
+  confirmLabel?: string;
+  pendingLabel?: string;
 }
 
 export function DeleteConfirmDialog({
@@ -29,6 +31,8 @@ export function DeleteConfirmDialog({
   onCancel,
   isPending = false,
   errorMessage,
+  confirmLabel = "Delete",
+  pendingLabel = "Deleting...",
 }: DeleteConfirmDialogProps) {
   const id = useId();
   const titleId = `${id}-delete-dialog-title`;
@@ -70,7 +74,7 @@ export function DeleteConfirmDialog({
             onClick={onConfirm}
             disabled={isPending}
           >
-            {isPending ? "Deleting..." : "Delete"}
+            {isPending ? pendingLabel : confirmLabel}
           </Button>
         </div>
       </div>

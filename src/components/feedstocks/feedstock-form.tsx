@@ -50,6 +50,7 @@ import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
 import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
+import { matchesSupplierDefaultForDisplay } from "./feedstock-distance-source";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 const SUPPLIER_DEFAULT_DISTANCE_SOURCE = "supplier_default" as const;
@@ -130,8 +131,16 @@ export function FeedstockForm({
     feedstockTypeId: feedstock?.feedstockTypeId ?? "",
     totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
     moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
+    // An allocation mass the record does not have stays blank, never 0: the
+    // schema requires a positive mass, so seeding 0 would prefill a value that
+    // fails submit on a `missing_data` record with no wet mass yet.
     allocations: feedstock
-      ? [{ storageLocationId: feedstock.storageLocationId ?? "", allocatedWetMassKg: feedstock.massWetKg ?? 0 }]
+      ? [
+          {
+            storageLocationId: feedstock.storageLocationId ?? "",
+            allocatedWetMassKg: feedstock.massWetKg ?? ("" as unknown as number),
+          },
+        ]
       : [{ storageLocationId: "", allocatedWetMassKg: "" as unknown as number }],
     overrideJustification: feedstock?.overrideJustification ?? "",
     notes: feedstock?.notes ?? "",
@@ -236,11 +245,17 @@ export function FeedstockForm({
     isEditMode && !supplierAnchorChanged && existingLegDistanceKm != null
       ? (existingLegs?.[0]?.distanceSource ?? null)
       : storedDistanceSource;
-  const matchesSupplierDefault =
-    storedDistanceKm != null &&
-    transportDistanceKm === storedDistanceKm &&
-    draftTransportDistanceSource === storedDistanceSource &&
-    draftTransportDistanceSource !== "document";
+  // A saved leg's provenance is authoritative: in edit mode with an existing
+  // leg, the select shows the persisted source verbatim and never relabels it
+  // "Supplier default" on a numeric coincidence (DR-002 / FS-26-001).
+  const matchesSupplierDefault = matchesSupplierDefaultForDisplay({
+    seededFromSavedLeg:
+      isEditMode && !supplierAnchorChanged && existingLegDistanceKm != null,
+    storedDistanceKm,
+    storedDistanceSource,
+    transportDistanceKm,
+    draftTransportDistanceSource,
+  });
   const selectedDistanceSource =
     distanceSourceChoiceOverride?.supplierId === watchedSupplierId
       ? distanceSourceChoiceOverride.value
@@ -252,6 +267,11 @@ export function FeedstockForm({
       ? [{ value: SUPPLIER_DEFAULT_DISTANCE_SOURCE, label: "Supplier default" }]
       : []),
     { value: "manual", label: DISTANCE_SOURCE_LABELS.manual },
+    // Read-only provenance values stay selectable-in-place so the persisted
+    // source renders instead of a blank select.
+    ...(selectedDistanceSource === "map_estimate"
+      ? [{ value: "map_estimate", label: DISTANCE_SOURCE_LABELS.map_estimate }]
+      : []),
     ...(selectedDistanceSource === "document"
       ? [{ value: "document", label: DISTANCE_SOURCE_LABELS.document }]
       : []),
@@ -667,7 +687,12 @@ export function FeedstockForm({
                   type="button"
                   variant="default"
                   size="small"
-                  onClick={() => append({ storageLocationId: "", allocatedWetMassKg: 0 })}
+                  onClick={() =>
+                    append({
+                      storageLocationId: "",
+                      allocatedWetMassKg: "" as unknown as number,
+                    })
+                  }
                   disabled={isSubmitting}
                 >
                   <PlusIcon size={16} weight="bold" />
@@ -761,6 +786,7 @@ export function FeedstockForm({
       </FormSpine>
 
       <FormActions
+        control={control}
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

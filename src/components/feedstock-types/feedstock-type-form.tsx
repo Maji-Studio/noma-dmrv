@@ -410,6 +410,7 @@ export function FeedstockTypeForm({
               </FormField>
 
               <FormActions
+                control={control}
                 onCancel={onCancel}
                 isSubmitting={isSubmitting}
                 errorMessage={errorMessage}
@@ -458,6 +459,7 @@ export function FeedstockTypeForm({
                   </FormField>
 
                   <FormActions
+                    control={control}
                     onCancel={onCancel}
                     isSubmitting={isSubmitting}
                     errorMessage={errorMessage}

@@ -44,6 +44,9 @@ describe("SelectBatchesStep", () => {
     );
 
     expect(html).toContain("Batch data ready");
+    // The card names its own batch. The @live wizard specs locate a card by
+    // this exact caption, so it needs a hermetic guard in PR CI too.
+    expect(html).toContain("Credit batch CB-1");
     expect(html).not.toContain("Ready to certify");
     expect(html).toContain("1,000-year biochar sequestration");
     expect(html).not.toContain("biochar_sequestration_1000_year");
@@ -69,6 +72,51 @@ describe("SelectBatchesStep", () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Continue<\/button>/);
     expect(html).toContain("1 of 1 batches with complete data");
     expect(html).not.toContain("batches ready");
+  });
+
+  it("communicates and enforces one batch for a 1000-year facility", () => {
+    const html = renderToStaticMarkup(
+      <SelectBatchesStep
+        batches={[
+          READY_BATCH,
+          { ...READY_BATCH, id: "batch-2", code: "CB-2" },
+        ]}
+        facilitySetupGaps={[]}
+        facilityId="facility-1"
+        selectedIds={new Set(["batch-1"])}
+        onToggle={vi.fn()}
+        isLoading={false}
+        isError={false}
+      />,
+    );
+
+    expect(html).toContain(
+      "Select one credit batch. Each 1000-year credit batch needs a separate Removal.",
+    );
+    expect(html).toMatch(
+      /disabled="" aria-label="Select credit batch for [^"]*CB-2"/,
+    );
+  });
+
+  it("keeps normal multi-selection available for a 200-year facility", () => {
+    const batch200 = {
+      ...READY_BATCH,
+      durabilityOption: "200_year",
+    } as unknown as SelectableBatch;
+    const html = renderToStaticMarkup(
+      <SelectBatchesStep
+        batches={[batch200, { ...batch200, id: "batch-2", code: "CB-2" }]}
+        facilitySetupGaps={[]}
+        facilityId="facility-1"
+        selectedIds={new Set(["batch-1"])}
+        onToggle={vi.fn()}
+        isLoading={false}
+        isError={false}
+      />,
+    );
+
+    expect(html).not.toContain("needs a separate Removal");
+    expect(html).not.toContain('disabled=""');
   });
 });
 

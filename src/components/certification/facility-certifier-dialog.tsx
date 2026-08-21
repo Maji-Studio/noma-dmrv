@@ -318,6 +318,7 @@ export function FacilityCertifierForm({
       )}
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting || saveMutation.isPending}
         errorMessage={errors.root?.serverError?.message}

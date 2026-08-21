@@ -35,6 +35,7 @@ import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
 import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // ============================================
 // Column Definitions
@@ -47,6 +48,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
+      meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
         <Link
@@ -66,7 +68,7 @@ function createColumns(
       header: "Crop type",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.cropType || "Not recorded"}
+          {row.original.cropType || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
@@ -81,6 +83,7 @@ function createColumns(
     },
     {
       id: "actions",
+      meta: { stickyEnd: true },
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end">
@@ -366,6 +369,7 @@ export function CustomerList() {
                     distanceLabel: "One-way distance from facility (per leg, km)",
                     defaultLabel: "Default destination",
                     positionLabel: "Application site position",
+                    descriptionLabel: "Site description",
                     includeSoilTemperature: true,
                   }),
                 },

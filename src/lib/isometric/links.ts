@@ -1,3 +1,5 @@
+import type { IsometricEnvironment } from "./client";
+
 const REGISTRY = "https://registry.isometric.com";
 const DOCS = "https://docs.isometric.com";
 
@@ -9,8 +11,6 @@ const CERTIFY_HOSTS = {
   sandbox: "https://registry.sandbox.isometric.com",
   production: REGISTRY,
 } as const;
-
-export type IsometricEnvironment = keyof typeof CERTIFY_HOSTS;
 
 const REGISTRY_MINOR_VERSION_PATTERN = /\bv?(\d+\.\d+)(?:\.\d+)?\b/i;
 
@@ -42,6 +42,18 @@ export const isometricRegistry = {
     `${CERTIFY_HOSTS[args.environment]}/account/certify/project/${encodeURIComponent(
       args.externalProjectId,
     )}/overview`,
+  // Storage sites are managed from a project-scoped Certify page. The sites
+  // tab must be selected explicitly because the route also hosts other tabs
+  // (Biochar applications, Soil samples). Verified against a live sandbox URL
+  // on 2026-08-14: Certify's own nav normalizes /storage-sites to
+  //   {host}/account/certify/project/{projectId}/storage-sites?tab=sites
+  storageSites: (args: {
+    environment: IsometricEnvironment;
+    externalProjectId: string;
+  }) =>
+    `${CERTIFY_HOSTS[args.environment]}/account/certify/project/${encodeURIComponent(
+      args.externalProjectId,
+    )}/storage-sites?tab=sites`,
   // A facility lives in the supplier's private Certify workspace, nested under
   // its project. Verified against a live sandbox URL on 2026-08-04:
   //   {host}/account/certify/project/{projectId}/facilities/{facilityId}

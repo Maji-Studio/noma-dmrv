@@ -2,11 +2,28 @@ import type { DetailPanelField } from "@/components/ui/detail-panel";
 import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { positiveOrNull } from "@/lib/calculations/transport-leg";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface SupplierFallbackDistanceInput {
   defaultLocationDistanceKm: number | null;
   legacySupplierDistanceKm: number | null;
   locationsLoaded: boolean;
+}
+
+/**
+ * The one derivation of a supplier's effective transport distance: the
+ * default structured location wins; the supplier column remains the legacy
+ * fallback. Every surface showing "distance to facility" (list side sheet,
+ * detail page summary) must resolve through this, never read one column raw.
+ */
+export function resolveSupplierEffectiveDistanceKm({
+  defaultLocationDistanceKm,
+  legacySupplierDistanceKm,
+}: Omit<SupplierFallbackDistanceInput, "locationsLoaded">): number | null {
+  return (
+    positiveOrNull(defaultLocationDistanceKm) ??
+    positiveOrNull(legacySupplierDistanceKm)
+  );
 }
 
 /** The default structured location wins; the supplier column remains the legacy fallback. */
@@ -26,9 +43,10 @@ export function buildSupplierFallbackDistanceField(
     };
   }
 
-  const effectiveDistanceKm =
-    positiveOrNull(defaultLocationDistanceKm) ??
-    positiveOrNull(legacySupplierDistanceKm);
+  const effectiveDistanceKm = resolveSupplierEffectiveDistanceKm({
+    defaultLocationDistanceKm,
+    legacySupplierDistanceKm,
+  });
 
   return {
     label: "Distance to facility",
@@ -37,6 +55,9 @@ export function buildSupplierFallbackDistanceField(
       true,
       effectiveDistanceKm !== null,
     ),
-    value: effectiveDistanceKm !== null ? `${effectiveDistanceKm} km` : null,
+    value:
+      effectiveDistanceKm !== null
+        ? `${effectiveDistanceKm} km`
+        : MISSING_VALUE.notSet,
   };
 }

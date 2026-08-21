@@ -7,6 +7,8 @@ import {
   certificationEmissionEstimatesHref,
   certificationRemovalsHref,
   certificationSettingsHref,
+  productionRunDeepLinkHref,
+  traceabilityApplicationHref,
 } from "./links";
 
 describe("certificationEmissionEstimatesHref", () => {
@@ -133,6 +135,17 @@ describe("certificationRemovalsHref", () => {
   it("URL-encodes special characters in param values", () => {
     expect(certificationRemovalsHref({ facility: "my facility/1" })).toContain(
       "facility=my+facility%2F1",
+    );
+  });
+});
+
+describe("record deep links", () => {
+  it("encodes production-run and traceability identities", () => {
+    expect(productionRunDeepLinkHref("run/1", "facility 1")).toBe(
+      "/production-runs?facility=facility+1&run=run%2F1",
+    );
+    expect(traceabilityApplicationHref("batch/1", "application 1")).toBe(
+      "/traceability?batch=batch%2F1&application=application+1",
     );
   });
 });

@@ -15,10 +15,12 @@
 import * as React from "react";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import {
   DetailSpine,
   type DetailPanelSection,
 } from "@/components/ui/detail-panel";
+import { SideSheetActionsContext } from "./side-sheet-context";
 
 /* -------------------------------------------------------------------------------------------------
  * Back Arrow Icon
@@ -110,27 +112,88 @@ function EntitySideSheet({
   size = "wide",
 }: EntitySideSheetProps) {
   const isViewMode = mode === "view";
-  const isCreateMode = mode === "create";
 
-  // Determine header title/subtitle based on mode
-  const headerTitle = isViewMode ? title : isCreateMode ? title : title;
-  const headerSubtitle = isViewMode
-    ? subtitle
-    : isCreateMode
-      ? subtitle
-      : subtitle;
+  const bodyRef = React.useRef<HTMLDivElement>(null);
+  // Dirty tracking is two sources OR-ed together: a native input/change
+  // heuristic (covers plain fields even in forms that don't report), and the
+  // form's authoritative RHF `formState.isDirty` via `reportDirty` (covers
+  // programmatic setValue from custom widgets the heuristic can't see).
+  const dirtyRef = React.useRef(false);
+  const reportedDirtyRef = React.useRef(false);
+  const isDirty = () => dirtyRef.current || reportedDirtyRef.current;
+  // A close/back attempt that hit unsaved changes and awaits confirmation.
+  const [pendingDiscard, setPendingDiscard] = React.useState<
+    "close" | "view" | null
+  >(null);
+  const discardTitleId = React.useId();
+
+  // Imperative scrollport work (sanctioned useEffect): the body element
+  // persists across view -> edit, so without a reset the edit form inherits
+  // the read view's scroll offset and opens mid-record. Also moves focus to
+  // the first field so keyboard entry starts at the top of the form.
+  React.useEffect(() => {
+    dirtyRef.current = false;
+    reportedDirtyRef.current = false;
+    setPendingDiscard(null);
+    if (!open) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    body.scrollTop = 0;
+    if (mode === "view") return;
+    const frame = requestAnimationFrame(() => {
+      const firstField = body.querySelector<HTMLElement>(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [role="combobox"]:not([disabled])'
+      );
+      firstField?.focus({ preventScroll: true });
+      body.scrollTop = 0;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, mode]);
+
+  function confirmDiscard(action: "close" | "view") {
+    if (action === "close") onOpenChange(false);
+    else onModeChange("view");
+  }
 
   function handleOpenChange(nextOpen: boolean) {
-    if (
-      !nextOpen &&
-      !isViewMode &&
-      onCloseAttempt &&
-      !onCloseAttempt()
-    ) {
-      return;
+    if (!nextOpen && !isViewMode) {
+      if (onCloseAttempt && !onCloseAttempt()) return;
+      if (isDirty()) {
+        setPendingDiscard("close");
+        return;
+      }
     }
     onOpenChange(nextOpen);
   }
+
+  function backToView() {
+    if (isDirty()) {
+      setPendingDiscard("view");
+      return;
+    }
+    onModeChange("view");
+  }
+
+  // Sheet-level Cancel (consumed by sticky FormActions): edit returns to the
+  // read view it came from, create closes, both behind the dirty guard.
+  const sheetActions = {
+    cancel: () => {
+      if (mode === "edit") backToView();
+      else handleOpenChange(false);
+    },
+    reportDirty: (dirty: boolean) => {
+      reportedDirtyRef.current = dirty;
+    },
+  };
+
+  // React propagates synthetic events from portaled children (nested dialogs)
+  // through the component tree; only events from real DOM descendants of the
+  // body may mark the sheet dirty, or typing in a quick-add dialog would
+  // trigger a spurious discard prompt on a clean sheet.
+  const markDirtyFromBody = (event: React.SyntheticEvent) => {
+    if (!bodyRef.current?.contains(event.target as Node)) return;
+    dirtyRef.current = true;
+  };
 
   return (
     <SlideOverPanel.Root open={open} onOpenChange={handleOpenChange}>
@@ -143,7 +206,7 @@ function EntitySideSheet({
               <Button
                 variant="noOutline"
                 size="icon"
-                onClick={() => onModeChange("view")}
+                onClick={backToView}
                 className="shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
                 aria-label="Back to view"
               >
@@ -151,10 +214,10 @@ function EntitySideSheet({
               </Button>
             )}
             <div className="flex flex-col gap-4 min-w-0">
-              <SlideOverPanel.Title>{headerTitle}</SlideOverPanel.Title>
-              {headerSubtitle && (
+              <SlideOverPanel.Title>{title}</SlideOverPanel.Title>
+              {subtitle && (
                 <SlideOverPanel.Description>
-                  {headerSubtitle}
+                  {subtitle}
                 </SlideOverPanel.Description>
               )}
             </div>
@@ -163,9 +226,12 @@ function EntitySideSheet({
 
         {/* Body */}
         <SlideOverPanel.Body
+          ref={bodyRef}
           className={isViewMode ? "flex flex-col gap-20" : undefined}
           noPaddingBottom={!isViewMode}
           fillHeight={!isViewMode}
+          onInputCapture={isViewMode ? undefined : markDirtyFromBody}
+          onChangeCapture={isViewMode ? undefined : markDirtyFromBody}
         >
           {isViewMode ? (
             <>
@@ -178,7 +244,9 @@ function EntitySideSheet({
               {viewModeChildren}
             </>
           ) : (
-            children
+            <SideSheetActionsContext.Provider value={sheetActions}>
+              {children}
+            </SideSheetActionsContext.Provider>
           )}
         </SlideOverPanel.Body>
 
@@ -201,6 +269,39 @@ function EntitySideSheet({
             </SlideOverPanel.Close>
           </SlideOverPanel.Footer>
         )}
+
+        {/* Unsaved-changes guard: Escape, backdrop, close icon, Cancel and the
+            back arrow all funnel here instead of discarding typed work. */}
+        <Modal
+          isOpen={pendingDiscard !== null}
+          onClose={() => setPendingDiscard(null)}
+          ariaLabelledBy={discardTitleId}
+          width="sm"
+        >
+          <div className="flex flex-col gap-16">
+            <h2 id={discardTitleId} className="title-heading-4">
+              Discard unsaved changes?
+            </h2>
+            <p className="body-small text-[var(--color-text-secondary)]">
+              This form has changes that are not saved.
+            </p>
+            <div className="flex items-center justify-start gap-16">
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  const action = pendingDiscard;
+                  setPendingDiscard(null);
+                  if (action) confirmDiscard(action);
+                }}
+              >
+                Discard changes
+              </Button>
+              <Button variant="default" onClick={() => setPendingDiscard(null)}>
+                Keep editing
+              </Button>
+            </div>
+          </div>
+        </Modal>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
   );

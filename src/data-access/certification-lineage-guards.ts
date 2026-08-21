@@ -7,6 +7,7 @@ import {
   biocharProducts,
   certifierRemovals,
   certificationSubmissions,
+  creditBatchApplications,
   creditBatchProductionRuns,
   creditBatches,
   deliveries,
@@ -16,7 +17,11 @@ import {
   productionRuns,
   samples,
 } from "@/db/schema";
-import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
+import {
+  acquireCertificationArtifactLocksSorted,
+  certificationArtifactLockKey,
+  type CertificationArtifactLock,
+} from "@/lib/certification/submission-lock";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import {
   formatCertificationLineageLockMessage,
@@ -57,7 +62,10 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
     case "sample":
       return eq(samples.id, target.entityId);
     case "application":
-      return eq(applications.id, target.entityId);
+      return or(
+        eq(applications.id, target.entityId),
+        eq(creditBatchApplications.applicationId, target.entityId),
+      )!;
     case "delivery":
       return eq(deliveries.id, target.entityId);
     case "order":
@@ -78,10 +86,24 @@ function lineageQuery(
     .selectDistinct({
       removalId: certifierRemovals.id,
       ghgStatementId: certifierRemovals.ghgStatementId,
+      creditBatchId: creditBatchApplications.creditBatchId,
+      applicationId: applications.id,
       removalSubmissionId: removalSubmission.id,
+      removalSubmissionType: removalSubmission.submissionType,
+      removalSubmissionStatus: removalSubmission.status,
       ghgStatementSubmissionId: ghgStatementSubmission.id,
     })
     .from(creditBatches)
+    // Removal ownership is authoritative on the batch slice itself. Join it
+    // directly so an incomplete product/delivery reconstruction cannot release
+    // a production-run or sample lock.
+    .innerJoin(
+      creditBatchApplications,
+      and(
+        eq(creditBatchApplications.creditBatchId, creditBatches.id),
+        eq(creditBatchApplications.organizationId, ctx.organizationId),
+      ),
+    )
     .innerJoin(
       creditBatchProductionRuns,
       and(eq(creditBatchProductionRuns.creditBatchId, creditBatches.id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)),
@@ -153,7 +175,7 @@ function lineageQuery(
     .leftJoin(applications, and(eq(applications.deliveryId, deliveries.id), eq(applications.organizationId, ctx.organizationId)))
     .innerJoin(
       certifierRemovals,
-      and(eq(certifierRemovals.id, creditBatches.removalId), eq(certifierRemovals.organizationId, ctx.organizationId)),
+      and(eq(certifierRemovals.id, creditBatchApplications.removalId), eq(certifierRemovals.organizationId, ctx.organizationId)),
     )
     .leftJoin(
       removalSubmission,
@@ -183,6 +205,58 @@ function lineageQuery(
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), targetCondition(target)));
 }
 
+export type LockedCertifiedLineageRow = Awaited<
+  ReturnType<ReturnType<typeof lineageQuery>["execute"]>
+>[number];
+
+function lineageArtifactLocks(
+  lineage: LockedCertifiedLineageRow[],
+): CertificationArtifactLock[] {
+  return [
+    ...lineage.map((row) => ({
+      provider: "isometric",
+      localEntityType: "removal",
+      localEntityId: row.removalId,
+    })),
+    ...lineage
+      .filter((row) => row.ghgStatementId)
+      .map((row) => ({
+        provider: "isometric",
+        localEntityType: "ghgStatement",
+        localEntityId: row.ghgStatementId!,
+      })),
+  ];
+}
+
+/**
+ * Resolves a target's certification lineage, locks every referenced artifact in
+ * deterministic order, then re-resolves under those locks. Callers that need a
+ * narrowly scoped mutation exception must base it only on the returned rows.
+ */
+export async function getLockedCertifiedLineage(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  target: CertifiedLineageTarget,
+): Promise<LockedCertifiedLineageRow[]> {
+  requireOrgScope(ctx);
+  const lineage = await lineageQuery(ctx, tx, target);
+  const lockedArtifacts = lineageArtifactLocks(lineage);
+  await acquireCertificationArtifactLocksSorted(tx, lockedArtifacts);
+
+  const resolvedLineage = await lineageQuery(ctx, tx, target);
+  const lockedKeys = new Set(lockedArtifacts.map(certificationArtifactLockKey));
+  const introducedUnlockedArtifact = lineageArtifactLocks(resolvedLineage).some(
+    (artifact) => !lockedKeys.has(certificationArtifactLockKey(artifact)),
+  );
+  if (introducedUnlockedArtifact) {
+    throw new SafeError(
+      "Certification lineage changed while it was being locked. Refresh and retry.",
+    );
+  }
+
+  return resolvedLineage;
+}
+
 /**
  * Blocks upstream source-data mutation once the record is part of a live
  * certification artifact. The lineage path is re-derived from current DB state
@@ -198,24 +272,7 @@ export async function assertCanMutateCertifiedLineage(
   subjectEntityType: CertificationLineageLockEntityType = target.entityType,
   lineageRelationship?: "linked" | "selected",
 ): Promise<void> {
-  requireOrgScope(ctx);
-  const lineage = await lineageQuery(ctx, tx, target);
-  await acquireCertificationArtifactLocksSorted(tx, [
-    ...lineage.map((row) => ({
-      provider: "isometric",
-      localEntityType: "removal",
-      localEntityId: row.removalId,
-    })),
-    ...lineage
-      .filter((row) => row.ghgStatementId)
-      .map((row) => ({
-        provider: "isometric",
-        localEntityType: "ghgStatement",
-        localEntityId: row.ghgStatementId!,
-      })),
-  ]);
-
-  const hit = (await lineageQuery(ctx, tx, target)).find(
+  const hit = (await getLockedCertifiedLineage(ctx, tx, target)).find(
     (row) => row.removalSubmissionId || row.ghgStatementSubmissionId,
   );
 

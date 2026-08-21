@@ -77,6 +77,7 @@ export function ReactorForm({
     : undefined;
 
   const {
+    control,
     register,
     handleSubmit,
     getValues,
@@ -177,6 +178,7 @@ export function ReactorForm({
       </FormSection>
 
       <FormActions
+        control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}

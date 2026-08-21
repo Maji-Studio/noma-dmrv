@@ -9,7 +9,7 @@ import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import {
   getCreditBatchById,
-  getCreditBatchRemovalId,
+  getCreditBatchActiveScopeRemovalId,
 } from "@/data-access/credit-batches";
 import {
   listDocumentsForEntityIds,
@@ -32,11 +32,12 @@ import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import {
   factsFromMockedLineages,
   satisfiedVisualEvidenceDocuments,
+  transportTemplate,
 } from "./fixtures/certify-context";
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
-  getCreditBatchRemovalId: vi.fn(),
+  getCreditBatchActiveScopeRemovalId: vi.fn(),
 }));
 
 vi.mock("@/data-access/certification", () => ({
@@ -87,7 +88,9 @@ vi.mock("@/lib/isometric", async () => {
 });
 
 const mockedGetCreditBatch = vi.mocked(getCreditBatchById);
-const mockedGetCreditBatchRemovalId = vi.mocked(getCreditBatchRemovalId);
+const mockedGetCreditBatchRemovalId = vi.mocked(
+  getCreditBatchActiveScopeRemovalId,
+);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
@@ -136,7 +139,6 @@ function mockNormalizedLineageFacts(
               id: batchId,
               code: batch?.code ?? "CB-1",
               facilityId: batch?.facilityId ?? FACILITY_ID,
-              removalId: batch?.removalId ?? null,
               durabilityOption: batch?.durabilityOption ?? "200_year",
               productionEmissionsClaimedByRemovalId:
                 batch?.productionEmissionsClaimedByRemovalId ?? null,
@@ -393,12 +395,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 
-  it("still walks production lineage when the default template is missing", async () => {
+  it("loads unapplied member runs for a whole-batch production claim", async () => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      productionRunIds: ["pr-1"],
+      productionRunIds: ["pr-1", "pr-unapplied"],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
@@ -438,6 +440,15 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         biocharDryMassKg: 1000,
         samples: [],
       } as never,
+      {
+        id: "pr-unapplied",
+        code: "PR-UNAPPLIED",
+        status: "complete",
+        hasReadingsFile: true,
+        startTime: new Date("2026-01-06T00:00:00Z"),
+        biocharDryMassKg: 500,
+        samples: [],
+      } as never,
     ]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
@@ -446,9 +457,15 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
 
     expect(result.defaultTemplate).toBeNull();
-    expect(result.hasSubmittableRuns).toBe(true);
-    expect(result.productionReadinessGap).toBeNull();
-    expect(result.runSummary.runCount).toBe(1);
+    expect(result.runSummary).toMatchObject({
+      runCount: 2,
+      totalBiocharOutputKg: 1_500,
+      appliedDryKg: 1_000,
+    });
+    expect(mockedGetRuns).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      ["pr-1", "pr-unapplied"],
+    );
     expect(mockedGetLineage).toHaveBeenCalledWith(makeTestOrgContext(USER_ID), "app-1");
   });
 
@@ -696,56 +713,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedGetLegs).toHaveBeenCalledTimes(3);
   });
 });
-
-function transportTemplate(
-  id: string,
-  omit: ReadonlyArray<"feedstock" | "biochar" | "sample"> = [],
-): IsometricGhgEntryTemplate {
-  const categories = [
-    {
-      key: "biomass-feedstock-transport",
-      blueprint_key: "mass_distance_based_ci_emissions",
-      input_key: "mass_distance",
-      category: "feedstock" as const,
-    },
-    {
-      key: "biochar-transport",
-      blueprint_key: "mass_distance_based_ci_emissions",
-      input_key: "mass_distance",
-      category: "biochar" as const,
-    },
-    {
-      key: "sampling-required-for-mrv",
-      blueprint_key: "mass_distance_based_ci_emissions",
-      input_key: "mass_distance",
-      category: "sample" as const,
-    },
-  ].filter((c) => !omit.includes(c.category));
-
-  return {
-    id,
-    name: `Template ${id}`,
-    groups: categories.map((c, idx) => ({
-      id: `${id}-grp-${idx}`,
-      key: c.key,
-      name: c.key,
-      components: [
-        {
-          id: `${id}-comp-${idx}`,
-          blueprint_key: c.blueprint_key,
-          display_name: c.blueprint_key,
-          inputs: [
-            {
-              type: "monitored",
-              input_key: c.input_key,
-              datapoint_id: null,
-            },
-          ],
-        },
-      ],
-    })),
-  } as unknown as IsometricGhgEntryTemplate;
-}
 
 describe("requiredTransportCategories", () => {
   beforeEach(() => {
