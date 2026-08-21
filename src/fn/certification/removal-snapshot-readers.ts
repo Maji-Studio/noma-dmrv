@@ -127,11 +127,20 @@ const biocharApplicationIntentBaseSchema = z.object({
 // hand-written (like the nomaRole enum above): this file validates the stored
 // snapshot independently of the current in-memory constants.
 const biocharApplicationIntentSchema = z.union([
-  biocharApplicationIntentBaseSchema.extend({
-    gateReason: z.literal("missing_truck_masses"),
-    truckMassOnArrivalKg: z.number().finite().nonnegative().nullable(),
-    truckMassOnDepartureKg: z.number().finite().nonnegative().nullable(),
-  }),
+  biocharApplicationIntentBaseSchema
+    .extend({
+      gateReason: z.literal("missing_truck_masses"),
+      truckMassOnArrivalKg: z.number().finite().nonnegative().nullable(),
+      truckMassOnDepartureKg: z.number().finite().nonnegative().nullable(),
+    })
+    // A gated intent with both masses present is malformed: the compiler
+    // gates only when a mass is missing, so refuse to resume it (the ready
+    // variant then also rejects the literal gateReason).
+    .refine(
+      (intent) =>
+        intent.truckMassOnArrivalKg == null ||
+        intent.truckMassOnDepartureKg == null,
+    ),
   biocharApplicationIntentBaseSchema.extend({
     gateReason: z.null().default(null),
     truckMassOnArrivalKg: z.number().finite().nonnegative(),

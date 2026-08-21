@@ -168,6 +168,19 @@ describe("readRemovalBiocharApplicationIntents", () => {
     expect(read([legacy])).toEqual([{ ...legacy, gateReason: null }]);
   });
 
+  it("fails closed for a gated intent that carries both truck masses", () => {
+    expect(() =>
+      read([
+        {
+          ...baseIntent,
+          gateReason: "missing_truck_masses",
+          truckMassOnArrivalKg: 15_000,
+          truckMassOnDepartureKg: 3_000,
+        },
+      ]),
+    ).toThrow(/older Biochar Application format/i);
+  });
+
   it("fails closed for a ready intent whose truck masses are missing", () => {
     expect(() =>
       read([

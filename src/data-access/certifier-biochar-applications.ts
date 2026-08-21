@@ -304,6 +304,8 @@ export async function activateGatedBiocharApplicationRegistration(
   ctx: OrgContext,
   input: {
     registrationId: string;
+    applicationId: string;
+    creditBatchId: string;
     productionBatchRegistrationId: string;
     storageLocationRegistrationId: string;
     externalProductionBatchId: string;
@@ -311,9 +313,12 @@ export async function activateGatedBiocharApplicationRegistration(
     supplierReference: string;
     submittedPayload: CreateBiocharApplicationRequest;
     payloadHash: string;
+    provider?: CertifierProvider;
   },
 ): Promise<CertifierBiocharApplication | null> {
   requireOrgScope(ctx);
+  const provider = input.provider ?? DEFAULT_PROVIDER;
+  await assertRegistryDependenciesAvailable(ctx, input, provider);
   const [row] = await db
     .update(certifierBiocharApplications)
     .set({
@@ -331,6 +336,9 @@ export async function activateGatedBiocharApplicationRegistration(
       and(
         eq(certifierBiocharApplications.id, input.registrationId),
         eq(certifierBiocharApplications.organizationId, ctx.organizationId),
+        eq(certifierBiocharApplications.provider, provider),
+        eq(certifierBiocharApplications.applicationId, input.applicationId),
+        eq(certifierBiocharApplications.creditBatchId, input.creditBatchId),
         eq(certifierBiocharApplications.lifecycleStatus, "gated"),
         isNull(certifierBiocharApplications.payloadHash),
       ),

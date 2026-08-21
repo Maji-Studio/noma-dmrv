@@ -347,6 +347,8 @@ describe("ensureRemovalBiocharApplications", () => {
       orgCtx,
       expect.objectContaining({
         registrationId: "journal-1",
+        applicationId: APPLICATION_ID,
+        creditBatchId: CREDIT_BATCH_ID,
         supplierReference: intent().supplierReference,
       }),
     );

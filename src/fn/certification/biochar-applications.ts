@@ -212,6 +212,8 @@ async function ensureBiocharApplication(args: {
           args.orgCtx,
           {
             registrationId: registration.id,
+            applicationId: args.intent.applicationId,
+            creditBatchId: args.intent.creditBatchId,
             productionBatchRegistrationId: args.productionBatchRegistrationId,
             storageLocationRegistrationId: args.storageLocationRegistrationId,
             externalProductionBatchId: args.externalProductionBatchId,
