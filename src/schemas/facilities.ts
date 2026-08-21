@@ -64,6 +64,17 @@ export type Timezone = (typeof timezones)[number];
 // ============================================
 
 /**
+ * One country rule for every facility entry path (address, facility form,
+ * quick add, update). `.trim()` runs before the length bounds so a
+ * whitespace-only country is rejected and a padded one normalizes.
+ */
+const countrySchema = z
+  .string()
+  .trim()
+  .min(1, "Country is required")
+  .max(100, "Country must be less than 100 characters");
+
+/**
  * Schema for address fields with validation
  * Supports structured address data with country validation
  */
@@ -88,10 +99,7 @@ export const addressSchema = z.object({
     .max(20, "Postal code must be less than 20 characters")
     .optional()
     .or(z.literal("")),
-  country: z
-    .string()
-    .min(1, "Country is required")
-    .max(100, "Country must be less than 100 characters"),
+  country: countrySchema,
 });
 
 /**
@@ -153,10 +161,7 @@ const facilityFormBaseSchema = z.object({
     .trim()
     .min(1, "Facility name is required")
     .max(255, "Facility name must be less than 255 characters"),
-  country: z
-    .string()
-    .min(1, "Country is required")
-    .max(100, "Country must be less than 100 characters"),
+  country: countrySchema,
 
   // Optional fields
   location: z
@@ -204,7 +209,7 @@ export const updateFacilitySchema = z.object({
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
   name: z.string().trim().min(1).max(255).optional(),
-  country: z.string().min(1).max(100).optional(),
+  country: countrySchema.optional(),
   location: z.string().max(255).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
   gpsLatitude: latitudeSchema,
@@ -305,7 +310,7 @@ export type FacilitySelectData = z.infer<typeof facilitySelectSchema>;
  */
 export const quickAddFacilitySchema = z.object({
   name: z.string().trim().min(1, "Facility name is required").max(255),
-  country: z.string().min(1, "Country is required").max(100),
+  country: countrySchema,
   location: z.string().max(255).optional().or(z.literal("")),
 });
 

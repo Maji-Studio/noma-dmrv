@@ -40,6 +40,7 @@ export {
 export {
   waitForSideSheet,
   waitForSideSheetClose,
+  waitForFacilityHydration,
   selectEntity,
   selectFirstEntity,
 } from "./page-helpers";
