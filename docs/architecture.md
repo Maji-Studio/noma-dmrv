@@ -157,14 +157,10 @@ because of a Turbopack/Vercel runtime bug.
 - No `"use cache"`, no Cache Components — React Query owns all caching. See
   [modern-patterns.md](./modern-patterns.md).
 
-## next.config.ts — four load-bearing settings
+## next.config.ts — three load-bearing settings
 
 - `reactCompiler: true` — this is what makes the "no manual memo" rule in
   [code-style.md](./code-style.md) load-bearing rather than stylistic.
-- `experimental.turbopackFileSystemCacheForBuild` follows the dedicated
-  `NOMA_TURBOPACK_BUILD_CACHE=true` marker. Next 16 keeps its production
-  compiler cache opt-in, so PR builds persist `.next/cache/turbopack` while
-  base-branch, local, and deployed builds remain on the stable default.
 - `logging: { serverFunctions: false }` — deliberate. Some server actions accept
   write-only credentials as arguments and Next's dev logger would serialize
   them. Re-enabling leaks secrets into local logs.
@@ -174,6 +170,12 @@ because of a Turbopack/Vercel runtime bug.
   lets the Removal submit successfully in production but without its
   evidence-ledger Source — silent compliance-evidence loss that is harder to
   detect than a submission failure.
+
+The same file also contains an optional CI performance setting:
+`experimental.turbopackFileSystemCacheForBuild` follows the dedicated
+`NOMA_TURBOPACK_BUILD_CACHE=true` marker. Next 16 keeps its production compiler
+cache opt-in, so PR builds persist `.next/cache/turbopack` while base-branch,
+local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
 

@@ -4,6 +4,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 # Cancel superseded runs on the same ref (e.g. new push to an open PR).
 concurrency:
   group: e2e-${{ github.workflow }}-${{ github.ref }}
@@ -106,6 +109,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache/turbopack
+          # Keep build-config inputs aligned with the CI profile's key.
           key: ${{ runner.os }}-nextjs-e2e-${{ hashFiles('**/pnpm-lock.yaml') }}-pr-${{ github.event.pull_request.number }}-${{ hashFiles('next.config.*', 'tsconfig*.json', 'postcss.config.*', 'package.json', '.github/workflows/e2e.yml') }}
 
       - name: Install dependencies
@@ -158,12 +162,17 @@ jobs:
         run: pnpm test:e2e --shard=${{ matrix.shard_id }}/4 --grep-invert "@live"
 
       - name: Save Next.js build cache
+        id: next-cache-save
         if: ${{ success() && github.event_name == 'pull_request' && matrix.shard_id == 1 && steps.next-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache/turbopack
           key: ${{ steps.next-cache.outputs.cache-primary-key }}
+
+      - name: Report Next.js build cache save failure
+        if: ${{ steps.next-cache-save.outcome == 'failure' }}
+        run: echo "::warning::Next.js build cache save failed; test results remain valid."
 
       - name: Upload Playwright artifacts
         if: always()

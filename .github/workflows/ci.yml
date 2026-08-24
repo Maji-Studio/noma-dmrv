@@ -169,6 +169,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache/turbopack
+          # Keep build-config inputs aligned with the E2E profile's key.
           key: ${{ runner.os }}-nextjs-ci-build-${{ hashFiles('**/pnpm-lock.yaml') }}-pr-${{ github.event.pull_request.number }}-${{ hashFiles('next.config.*', 'tsconfig*.json', 'postcss.config.*', 'package.json', '.github/workflows/ci.yml') }}
 
       - name: Install dependencies
@@ -178,9 +179,14 @@ jobs:
         run: pnpm build
 
       - name: Save Next.js build cache
+        id: next-cache-save
         if: ${{ success() && github.event_name == 'pull_request' && steps.next-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache/turbopack
           key: ${{ steps.next-cache.outputs.cache-primary-key }}
+
+      - name: Report Next.js build cache save failure
+        if: ${{ steps.next-cache-save.outcome == 'failure' }}
+        run: echo "::warning::Next.js build cache save failed; build results remain valid."
