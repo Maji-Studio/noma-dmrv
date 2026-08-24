@@ -14,10 +14,14 @@ and need no follow-up.
 
 ### Turbopack production filesystem cache (`tooling/turbopack-build-fs-cache`)
 
-- Current decision: pull-request builds opt into
-  `experimental.turbopackFileSystemCacheForBuild` and persist only
-  `.next/cache/turbopack`; base-branch and deployed builds keep the stable
-  default. The feature remains experimental for production builds in the
+- Current decision: `next.config.ts:nextConfig` gates
+  `experimental.turbopackFileSystemCacheForBuild` on
+  `NOMA_TURBOPACK_BUILD_CACHE`. The pull-request build paths in
+  `.github/workflows/ci.yml:jobs.build` and
+  `.github/workflows/e2e.yml:jobs.playwright` persist only
+  `.next/cache/turbopack`; reuse is intra-PR, and base-branch and deployed
+  builds keep the stable default. The feature remains experimental for
+  production builds in the
   [official Next.js documentation](https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopackFileSystemCache).
 - **Resolve via:** keep comparing cold and warm GitHub-hosted timings and cache
   transfer/storage cost. Re-evaluate the flag when Next marks production

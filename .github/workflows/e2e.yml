@@ -38,7 +38,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_e2e
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       NOMA_HERMETIC_CI: "true"
-      NOMA_TURBOPACK_BUILD_CACHE: "true"
+      NOMA_TURBOPACK_BUILD_CACHE: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
       ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
       # Playwright builds + serves a production bundle on CI
@@ -97,16 +97,16 @@ jobs:
           cache: pnpm
 
       # Cache only Next's incremental compiler data, not the runnable .next
-      # output or any local development output. All shards restore the same
-      # build profile; shard 1 is the sole writer after a successful test run.
+      # output or any local development output. Turbopack invalidates changed
+      # source inputs, so one immutable seed per PR avoids an archive per push.
+      # All shards restore the same profile; shard 1 writes after a green run.
       - name: Restore Next.js build cache
+        if: github.event_name == 'pull_request'
         id: next-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache/turbopack
-          key: ${{ runner.os }}-nextjs-e2e-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('src/**/*', 'public/**/*', 'next.config.*', 'tsconfig*.json', 'postcss.config.*', 'package.json', '.github/workflows/e2e.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-e2e-${{ hashFiles('**/pnpm-lock.yaml') }}-
+          key: ${{ runner.os }}-nextjs-e2e-${{ hashFiles('**/pnpm-lock.yaml') }}-pr-${{ github.event.pull_request.number }}-${{ hashFiles('next.config.*', 'tsconfig*.json', 'postcss.config.*', 'package.json', '.github/workflows/e2e.yml') }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -158,7 +158,7 @@ jobs:
         run: pnpm test:e2e --shard=${{ matrix.shard_id }}/4 --grep-invert "@live"
 
       - name: Save Next.js build cache
-        if: ${{ success() && matrix.shard_id == 1 && steps.next-cache.outputs.cache-hit != 'true' }}
+        if: ${{ success() && github.event_name == 'pull_request' && matrix.shard_id == 1 && steps.next-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

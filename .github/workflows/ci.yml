@@ -160,16 +160,16 @@ jobs:
           cache: pnpm
 
       # Cache only Next's incremental compiler data, not the runnable .next
-      # output. The build profile stays separate from E2E because its env differs.
+      # output. Turbopack invalidates changed source inputs, so one immutable
+      # seed per PR avoids an archive per push. CI stays separate from E2E
+      # because the two builds use different environment profiles.
       - name: Restore Next.js build cache
         if: github.event_name == 'pull_request'
         id: next-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache/turbopack
-          key: ${{ runner.os }}-nextjs-ci-build-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('src/**/*', 'public/**/*', 'next.config.*', 'tsconfig*.json', 'postcss.config.*', 'package.json', '.github/workflows/ci.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-ci-build-${{ hashFiles('**/pnpm-lock.yaml') }}-
+          key: ${{ runner.os }}-nextjs-ci-build-${{ hashFiles('**/pnpm-lock.yaml') }}-pr-${{ github.event.pull_request.number }}-${{ hashFiles('next.config.*', 'tsconfig*.json', 'postcss.config.*', 'package.json', '.github/workflows/ci.yml') }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
