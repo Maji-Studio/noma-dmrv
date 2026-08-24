@@ -145,6 +145,25 @@ async function insertManagedDocument(
   return document.id;
 }
 
+async function createOutboxOrganizationFixture(
+  tag: string,
+  purpose: string,
+) {
+  const organizationId = `org_document_outbox_${purpose}_${tag}`;
+  await db.insert(organizations).values({
+    id: organizationId,
+    name: `Document outbox ${purpose} organization ${tag}`,
+    slug: `document-outbox-${purpose}-${tag}`,
+  });
+  return {
+    organizationId,
+    ctx: {
+      ...makeTestOrgContext(TEST_USER_ID),
+      organizationId,
+    },
+  };
+}
+
 describe("parent document retirement", () => {
   it("deletes managed and external evidence while preserving another organization's rows", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
@@ -623,6 +642,10 @@ describe("parent document retirement", () => {
 
   it("does not let permanent configuration mismatches starve valid deletions", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
+    const { organizationId, ctx } = await createOutboxOrganizationFixture(
+      tag,
+      "mismatch",
+    );
     const validKey = `outbox/${tag}/valid.pdf`;
     const mismatchKeys = Array.from(
       { length: DELETION_BATCH_SIZE },
@@ -633,14 +656,14 @@ describe("parent document retirement", () => {
     try {
       await db.insert(storageObjectDeletions).values([
         ...mismatchKeys.map((storageKey) => ({
-          organizationId: TEST_ORG_ID,
+          organizationId,
           storageProvider: "retired-provider",
           storageBucket: "retired-bucket",
           storageKey,
           createdAt: RETRY_BACKOFF_ELAPSED_AT,
         })),
         {
-          organizationId: TEST_ORG_ID,
+          organizationId,
           storageProvider: provider.name,
           storageBucket: provider.bucket,
           storageKey: validKey,
@@ -648,9 +671,7 @@ describe("parent document retirement", () => {
       ]);
 
       await expect(
-        processPendingStorageObjectDeletions(
-          makeTestOrgContext(TEST_USER_ID),
-        ),
+        processPendingStorageObjectDeletions(ctx),
       ).resolves.toEqual({
         completed: 1,
         failed: DELETION_BATCH_SIZE,
@@ -678,15 +699,17 @@ describe("parent document retirement", () => {
     } finally {
       await db
         .delete(storageObjectDeletions)
-        .where(inArray(storageObjectDeletions.storageKey, [
-          validKey,
-          ...mismatchKeys,
-        ]));
+        .where(eq(storageObjectDeletions.organizationId, organizationId));
+      await db.delete(organizations).where(eq(organizations.id, organizationId));
     }
   });
 
   it("drains never-attempted rows before an older eligible retry backlog", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
+    const { organizationId, ctx } = await createOutboxOrganizationFixture(
+      tag,
+      "drain",
+    );
     const newKey = `outbox/${tag}/never-attempted.pdf`;
     const retryKeys = Array.from(
       { length: DELETION_BATCH_SIZE },
@@ -697,7 +720,7 @@ describe("parent document retirement", () => {
     try {
       await db.insert(storageObjectDeletions).values([
         ...retryKeys.map((storageKey) => ({
-          organizationId: TEST_ORG_ID,
+          organizationId,
           storageProvider: provider.name,
           storageBucket: provider.bucket,
           storageKey,
@@ -707,7 +730,7 @@ describe("parent document retirement", () => {
           createdAt: RETRY_BACKOFF_ELAPSED_AT,
         })),
         {
-          organizationId: TEST_ORG_ID,
+          organizationId,
           storageProvider: provider.name,
           storageBucket: provider.bucket,
           storageKey: newKey,
@@ -715,9 +738,7 @@ describe("parent document retirement", () => {
       ]);
 
       await expect(
-        processPendingStorageObjectDeletions(
-          makeTestOrgContext(TEST_USER_ID),
-        ),
+        processPendingStorageObjectDeletions(ctx),
       ).resolves.toEqual({ completed: DELETION_BATCH_SIZE, failed: 0 });
       expect(provider.deleteCalls[0]).toBe(newKey);
       expect(provider.objects.has(newKey)).toBe(false);
@@ -734,7 +755,8 @@ describe("parent document retirement", () => {
     } finally {
       await db
         .delete(storageObjectDeletions)
-        .where(inArray(storageObjectDeletions.storageKey, [newKey, ...retryKeys]));
+        .where(eq(storageObjectDeletions.organizationId, organizationId));
+      await db.delete(organizations).where(eq(organizations.id, organizationId));
     }
   });
 
