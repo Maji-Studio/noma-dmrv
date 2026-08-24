@@ -1,13 +1,14 @@
 import type { NextConfig } from "next";
 
-const isHermeticCiBuild = process.env.NOMA_HERMETIC_CI === "true";
+const usesTurbopackBuildCache =
+  process.env.NOMA_TURBOPACK_BUILD_CACHE === "true";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
   // Next 16's Turbopack production cache is experimental, so enable it only
-  // for the explicitly marked hermetic CI/E2E builds that persist the cache.
+  // for PR builds that explicitly persist the compiler cache.
   experimental: {
-    turbopackFileSystemCacheForBuild: isHermeticCiBuild,
+    turbopackFileSystemCacheForBuild: usesTurbopackBuildCache,
   },
   // Next's development logger serializes Server Function arguments by default.
   // Some actions accept write-only credentials, so argument logging must remain

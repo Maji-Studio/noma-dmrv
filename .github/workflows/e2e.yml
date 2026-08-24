@@ -38,6 +38,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_e2e
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       NOMA_HERMETIC_CI: "true"
+      NOMA_TURBOPACK_BUILD_CACHE: "true"
       ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
       # Playwright builds + serves a production bundle on CI
@@ -158,6 +159,7 @@ jobs:
 
       - name: Save Next.js build cache
         if: ${{ success() && matrix.shard_id == 1 && steps.next-cache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache/turbopack

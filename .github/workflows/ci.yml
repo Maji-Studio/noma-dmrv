@@ -120,7 +120,9 @@ jobs:
       - name: Unit tests
         run: pnpm exec vitest run
 
-  # Production build check. `next build` runs as NODE_ENV=production, so
+  # Production build check. PRs opt into the experimental Turbopack filesystem
+  # cache; pushes to main/staging keep it off and exercise the deploy-equivalent
+  # compiler path from scratch. `next build` runs as NODE_ENV=production, so
   # @/config/env demands s3-compatible storage + a few core vars. The values
   # below are throwaway placeholders that ONLY satisfy Zod schema validation —
   # no real secrets, no network or DB access (routes are dynamic/auth-gated, so
@@ -132,6 +134,7 @@ jobs:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_build
       NEXT_PUBLIC_APP_URL: http://localhost:3100
       NOMA_HERMETIC_CI: "true"
+      NOMA_TURBOPACK_BUILD_CACHE: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
       BETTER_AUTH_SECRET: ci-build-placeholder-secret-not-a-real-key
       ISOMETRIC_ENVIRONMENT: sandbox
       STORAGE_PROVIDER: s3-compatible
@@ -159,6 +162,7 @@ jobs:
       # Cache only Next's incremental compiler data, not the runnable .next
       # output. The build profile stays separate from E2E because its env differs.
       - name: Restore Next.js build cache
+        if: github.event_name == 'pull_request'
         id: next-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -174,7 +178,8 @@ jobs:
         run: pnpm build
 
       - name: Save Next.js build cache
-        if: ${{ success() && steps.next-cache.outputs.cache-hit != 'true' }}
+        if: ${{ success() && github.event_name == 'pull_request' && steps.next-cache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache/turbopack

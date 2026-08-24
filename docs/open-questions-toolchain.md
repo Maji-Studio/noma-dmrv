@@ -8,9 +8,21 @@ document's schema, invariants, and resolution rules apply here.
 ## Tooling & toolchain upgrades
 
 Each open decision below links to its authoritative source. The Turbopack
-default bundler, the hermetic-CI-only production filesystem cache,
-`reactCompiler: true`, `src/proxy.ts`, and the generate-and-migrate CI workflow
-already match the current project toolchain and need no follow-up.
+default bundler, `reactCompiler: true`, `src/proxy.ts`, and the
+generate-and-migrate CI workflow already match the current project toolchain
+and need no follow-up.
+
+### Turbopack production filesystem cache (`tooling/turbopack-build-fs-cache`)
+
+- Current decision: pull-request builds opt into
+  `experimental.turbopackFileSystemCacheForBuild` and persist only
+  `.next/cache/turbopack`; base-branch and deployed builds keep the stable
+  default. The feature remains experimental for production builds in the
+  [official Next.js documentation](https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopackFileSystemCache).
+- **Resolve via:** keep comparing cold and warm GitHub-hosted timings and cache
+  transfer/storage cost. Re-evaluate the flag when Next marks production
+  filesystem caching stable, renames/removes it, or measurements show that
+  transfer and eviction cost outweigh compilation savings (S).
 
 ### TypeScript 7 for CI typecheck (`tooling/ts7`)
 
