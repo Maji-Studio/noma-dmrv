@@ -7,7 +7,8 @@ document's schema, invariants, and resolution rules apply here.
 
 ## Tooling & toolchain upgrades
 
-Each open decision below links to its authoritative source. Turbopack defaults,
+Each open decision below links to its authoritative source. The Turbopack
+default bundler, the hermetic-CI-only production filesystem cache,
 `reactCompiler: true`, `src/proxy.ts`, and the generate-and-migrate CI workflow
 already match the current project toolchain and need no follow-up.
 

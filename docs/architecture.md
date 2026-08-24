@@ -157,10 +157,14 @@ because of a Turbopack/Vercel runtime bug.
 - No `"use cache"`, no Cache Components — React Query owns all caching. See
   [modern-patterns.md](./modern-patterns.md).
 
-## next.config.ts — three load-bearing settings
+## next.config.ts — four load-bearing settings
 
 - `reactCompiler: true` — this is what makes the "no manual memo" rule in
   [code-style.md](./code-style.md) load-bearing rather than stylistic.
+- `experimental.turbopackFileSystemCacheForBuild` follows the explicit
+  `NOMA_HERMETIC_CI=true` marker. Next 16 keeps its production compiler cache
+  opt-in, so the PR workflows enable and persist `.next/cache/turbopack` while
+  local and deployed builds remain on the stable default.
 - `logging: { serverFunctions: false }` — deliberate. Some server actions accept
   write-only credentials as arguments and Next's dev logger would serialize
   them. Re-enabling leaks secrets into local logs.

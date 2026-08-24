@@ -102,7 +102,7 @@ jobs:
         id: next-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: .next/cache
+          path: .next/cache/turbopack
           key: ${{ runner.os }}-nextjs-e2e-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('src/**/*', 'public/**/*', 'next.config.*', 'tsconfig*.json', 'postcss.config.*', 'package.json', '.github/workflows/e2e.yml') }}
           restore-keys: |
             ${{ runner.os }}-nextjs-e2e-${{ hashFiles('**/pnpm-lock.yaml') }}-
@@ -160,7 +160,7 @@ jobs:
         if: ${{ success() && matrix.shard_id == 1 && steps.next-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: .next/cache
+          path: .next/cache/turbopack
           key: ${{ steps.next-cache.outputs.cache-primary-key }}
 
       - name: Upload Playwright artifacts
