@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -33,7 +33,7 @@ jobs:
           version: 9
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -96,7 +96,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -106,7 +106,7 @@ jobs:
           version: 9
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -120,7 +120,9 @@ jobs:
       - name: Unit tests
         run: pnpm exec vitest run
 
-  # Production build check. `next build` runs as NODE_ENV=production, so
+  # Production build check. PRs opt into the experimental Turbopack filesystem
+  # cache; pushes to main/staging keep it off and exercise the deploy-equivalent
+  # compiler path from scratch. `next build` runs as NODE_ENV=production, so
   # @/config/env demands s3-compatible storage + a few core vars. The values
   # below are throwaway placeholders that ONLY satisfy Zod schema validation —
   # no real secrets, no network or DB access (routes are dynamic/auth-gated, so
@@ -132,6 +134,7 @@ jobs:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_build
       NEXT_PUBLIC_APP_URL: http://localhost:3100
       NOMA_HERMETIC_CI: "true"
+      NOMA_TURBOPACK_BUILD_CACHE: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
       BETTER_AUTH_SECRET: ci-build-placeholder-secret-not-a-real-key
       ISOMETRIC_ENVIRONMENT: sandbox
       STORAGE_PROVIDER: s3-compatible
@@ -141,7 +144,7 @@ jobs:
       STORAGE_SECRET_ACCESS_KEY: ci-build-placeholder
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -151,13 +154,39 @@ jobs:
           version: 9
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
+
+      # Cache only Next's incremental compiler data, not the runnable .next
+      # output. Turbopack invalidates changed source inputs, so one immutable
+      # seed per PR avoids an archive per push. CI stays separate from E2E
+      # because the two builds use different environment profiles.
+      - name: Restore Next.js build cache
+        if: github.event_name == 'pull_request'
+        id: next-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .next/cache/turbopack
+          # Keep build-config inputs aligned with the E2E profile's key.
+          key: ${{ runner.os }}-nextjs-ci-build-${{ hashFiles('**/pnpm-lock.yaml') }}-pr-${{ github.event.pull_request.number }}-${{ hashFiles('next.config.*', 'tsconfig*.json', 'postcss.config.*', 'package.json', '.github/workflows/ci.yml') }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
+
+      - name: Save Next.js build cache
+        id: next-cache-save
+        if: ${{ success() && github.event_name == 'pull_request' && steps.next-cache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .next/cache/turbopack
+          key: ${{ steps.next-cache.outputs.cache-primary-key }}
+
+      - name: Report Next.js build cache save failure
+        if: ${{ steps.next-cache-save.outcome == 'failure' }}
+        run: echo "::warning::Next.js build cache save failed; build results remain valid."

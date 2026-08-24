@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
+const usesTurbopackBuildCache =
+  process.env.NOMA_TURBOPACK_BUILD_CACHE === "true";
+
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  // Next 16's Turbopack production cache is experimental, so enable it only
+  // for PR builds that explicitly persist the compiler cache.
+  experimental: {
+    turbopackFileSystemCacheForBuild: usesTurbopackBuildCache,
+  },
   // Next's development logger serializes Server Function arguments by default.
   // Some actions accept write-only credentials, so argument logging must remain
   // disabled even in local development.

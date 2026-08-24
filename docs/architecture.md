@@ -171,6 +171,12 @@ because of a Turbopack/Vercel runtime bug.
   evidence-ledger Source — silent compliance-evidence loss that is harder to
   detect than a submission failure.
 
+The same file also contains an optional CI performance setting:
+`experimental.turbopackFileSystemCacheForBuild` follows the dedicated
+`NOMA_TURBOPACK_BUILD_CACHE=true` marker. Next 16 keeps its production compiler
+cache opt-in, so PR builds persist `.next/cache/turbopack` while base-branch,
+local, and deployed builds remain on the stable default.
+
 ## Database Boundaries
 
 `src/db/schema/*` defines tables and types; `src/data-access/*` owns queries and
