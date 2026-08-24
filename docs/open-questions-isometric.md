@@ -122,6 +122,19 @@ uses it.
   wording, no response body). One-line change in `reconcileToResult` plus the
   pinned assertion; no migration.
 
+### Supplier-reference reconciliation is a bounded full-list scan (`isometric/reconciliation-lookup-bound`, opened 2026-08-24)
+
+- The Storage Location and Biochar Application endpoints expose no
+  supplier-reference filter, so reconcile-before-POST scans the full paginated
+  list (`src/lib/isometric/storage-locations.ts`,
+  `src/lib/isometric/biochar-applications.ts`) and **fails loudly after 1,000
+  records** (50 x 20 pages) instead of risking a duplicate POST. A project
+  exceeding that bound cannot register new sites/applications until the limit
+  is raised — deliberate fail-closed design, far above current scale.
+- **Resolve via:** ask Isometric for a supplier-reference filter (report via
+  MCP `submit_feedback`), or raise `DEFAULT_LOOKUP_MAX_PAGES` when a real
+  project approaches the bound.
+
 ### GHG Entry deprecated-alias cleanup after the September 2026 sunset (`isometric/ghg-entry-migration`, opened 2026-06-10)
 
 noma already calls only the `ghg_entry` route family. The remaining work begins

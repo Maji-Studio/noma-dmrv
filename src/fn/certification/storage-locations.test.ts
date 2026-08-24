@@ -19,7 +19,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/config/env", () => ({ env: mocks.env }));
 
-vi.mock("@/data-access/certifier-storage-locations", () => ({
+// Spread the real module so withStorageLocationRegistrationLocks keeps
+// running against the mocked @/db advisory lock below.
+vi.mock("@/data-access/certifier-storage-locations", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/data-access/certifier-storage-locations")
+  >()),
   getStorageLocationRegistryInput: mocks.getInput,
   getStorageLocationRegistration: mocks.getRegistration,
   persistStorageLocationRegistration: mocks.persistRegistration,

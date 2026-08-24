@@ -26,7 +26,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/config/env", () => ({ env: mocks.env }));
-vi.mock("@/data-access/certifier-biochar-applications", () => ({
+// Spread the real module so withBiocharApplicationRegistrationLock keeps
+// running against the mocked @/db advisory lock below.
+vi.mock("@/data-access/certifier-biochar-applications", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/data-access/certifier-biochar-applications")
+  >()),
   getBiocharApplicationRegistration: mocks.getRegistration,
   claimBiocharApplicationRegistration: mocks.claim,
   confirmBiocharApplicationRegistration: mocks.confirm,
