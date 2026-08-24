@@ -138,7 +138,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache
-          key: ${{ runner.os }}-nextjs-ci-build-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx', '**/*.json', '**/*.css', '**/*.mdx') }}
+          key: ${{ runner.os }}-nextjs-ci-build-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('src/**/*', 'public/**/*', 'next.config.*', 'tsconfig*.json', 'postcss.config.*', 'package.json', '.github/workflows/ci.yml') }}
           restore-keys: |
             ${{ runner.os }}-nextjs-ci-build-${{ hashFiles('**/pnpm-lock.yaml') }}-
 

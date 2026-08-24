@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  // Next 16 builds with Turbopack by default, but production filesystem
+  // caching remains opt-in. CI persists only this compiler data directory.
+  experimental: {
+    turbopackFileSystemCacheForBuild: true,
+  },
   // Next's development logger serializes Server Function arguments by default.
   // Some actions accept write-only credentials, so argument logging must remain
   // disabled even in local development.
