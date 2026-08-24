@@ -14,15 +14,62 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Quality gate: lint + typecheck + unit/integration tests. No secrets —
-  # tests/setup.ts fills safe env defaults and the lone *.integration.test.ts
-  # self-skips without RUN_ISOMETRIC_SANDBOX_TESTS. A throwaway Postgres service
-  # is provisioned because a handful of suites (applications, credit-batch,
-  # biochar-product-bin-formulation) exercise the real `@/db` connection +
-  # transactions rather than mocking the data-access layer; without it they fail
-  # with ECONNREFUSED. Complements e2e.yml, whose dev-server harness does NOT
-  # surface type errors or build breakage.
-  quality:
+  # Static quality checks run independently from the database-backed test suite,
+  # so they can complete in parallel without waiting for Postgres provisioning.
+  # Complements e2e.yml, whose dev-server harness does NOT surface type errors or
+  # build breakage.
+  quality-static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Documentation references
+        run: pnpm docs:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Org-scoping check
+        run: pnpm check:org-scoping
+
+      # Tailwind's spacing scale is an allow-list here (`--spacing-*: initial`),
+      # so an off-scale utility compiles to nothing and fails silently at
+      # runtime rather than at build time. Nothing else catches it.
+      - name: Spacing-scale check
+        run: pnpm check:spacing-scale
+
+      # docs/ux-writing.md bans en and em dashes in user-facing copy; this
+      # parses string literals and JSX text (never comments) to enforce it.
+      - name: UX-copy dash check
+        run: pnpm check:ux-copy
+
+  # Full Vitest suite. No secrets — tests/setup.ts fills safe env defaults and
+  # the lone *.integration.test.ts self-skips without
+  # RUN_ISOMETRIC_SANDBOX_TESTS. A throwaway Postgres service is required
+  # because several suites exercise the real `@/db` connection + transactions
+  # rather than mocking the data-access layer.
+  quality-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -66,29 +113,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Documentation references
-        run: pnpm docs:check
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Org-scoping check
-        run: pnpm check:org-scoping
-
-      # Tailwind's spacing scale is an allow-list here (`--spacing-*: initial`),
-      # so an off-scale utility compiles to nothing and fails silently at
-      # runtime rather than at build time. Nothing else catches it.
-      - name: Spacing-scale check
-        run: pnpm check:spacing-scale
-
-      # docs/ux-writing.md bans en and em dashes in user-facing copy; this
-      # parses string literals and JSX text (never comments) to enforce it.
-      - name: UX-copy dash check
-        run: pnpm check:ux-copy
 
       - name: Apply schema
         run: pnpm drizzle-kit push --force
