@@ -130,7 +130,7 @@ uses it.
   `src/lib/isometric/biochar-applications.ts`) and **fails loudly after 1,000
   records** (50 x 20 pages) instead of risking a duplicate POST. A project
   exceeding that bound cannot register new sites/applications until the limit
-  is raised — deliberate fail-closed design, far above current scale.
+  is raised — deliberate fail-closed design.
 - **Resolve via:** ask Isometric for a supplier-reference filter (report via
   MCP `submit_feedback`), or raise `DEFAULT_LOOKUP_MAX_PAGES` when a real
   project approaches the bound.
