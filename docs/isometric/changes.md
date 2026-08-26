@@ -9,11 +9,8 @@
   departure mass is zero kg. Commingled slices partition the physical
   Application total.
 - Biochar Applications use the ordinary claim, reconciliation, drift, retry,
-  and confirmation journal lifecycle. The former missing-mass gate and
-  placeholder lifecycle were removed. Migration discards legacy gated or
-  payload-less journal placeholders before enforcing the restored lifecycle;
-  this is intentionally destructive because the local journal is not registry
-  source-of-truth and those placeholders cannot be resumed safely.
+  and confirmation journal lifecycle. There is no missing-mass gate or
+  placeholder lifecycle.
 - Delivery truck weighing was removed. Delivery receipts and photos remain
   retained documents but do not bind to sequestration inputs. Delivery bills
   of lading retain only their biochar transport binding.
