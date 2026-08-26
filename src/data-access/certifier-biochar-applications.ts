@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, withDedicatedSessionAdvisoryLock } from "@/db";
 import { applications } from "@/db/schema/application";
 import { creditBatches } from "@/db/schema/credits";
 import {
@@ -17,6 +17,26 @@ import { assertSameOrg, requireOrgScope } from "./utils";
 
 type CertifierProvider = CertifierBiocharApplication["provider"];
 const DEFAULT_PROVIDER: CertifierProvider = "isometric";
+
+const BIOCHAR_APPLICATION_LOCK_SCOPE =
+  "certifier-biochar-application:isometric";
+
+/**
+ * Serializes registry create/reconcile for one (application, credit batch)
+ * registration so concurrent submissions cannot POST the same Biochar
+ * Application twice.
+ */
+export async function withBiocharApplicationRegistrationLock<T>(
+  ctx: OrgContext,
+  input: { applicationId: string; creditBatchId: string },
+  fn: () => Promise<T>,
+): Promise<T> {
+  requireOrgScope(ctx);
+  return withDedicatedSessionAdvisoryLock(
+    `${BIOCHAR_APPLICATION_LOCK_SCOPE}:${ctx.organizationId}:${input.applicationId}:${input.creditBatchId}`,
+    fn,
+  );
+}
 
 export interface BiocharApplicationRegistryInput {
   applicationId: string;

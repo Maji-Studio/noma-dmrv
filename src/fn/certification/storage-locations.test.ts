@@ -19,7 +19,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/config/env", () => ({ env: mocks.env }));
 
-vi.mock("@/data-access/certifier-storage-locations", () => ({
+// Spread the real module so withStorageLocationRegistrationLocks keeps
+// running against the mocked @/db advisory lock below.
+vi.mock("@/data-access/certifier-storage-locations", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/data-access/certifier-storage-locations")
+  >()),
   getStorageLocationRegistryInput: mocks.getInput,
   getStorageLocationRegistration: mocks.getRegistration,
   persistStorageLocationRegistration: mocks.persistRegistration,
@@ -229,20 +234,61 @@ describe("ensureStorageLocation", () => {
     expect(result.source).toBe("reconciliation");
   });
 
-  it("rechecks the journal under the site lock before registry access", async () => {
+  it("enters the exact nested registration locks before rechecking the journal", async () => {
+    const {
+      buildCreateStorageLocationRequest,
+      buildStorageLocationReference,
+    } = await import("@/lib/isometric/storage-locations");
+    const { payloadHash } = await import("@/lib/isometric/utils/payload-hash");
+    const supplierReference = buildStorageLocationReference({
+      customerLocationId: CUSTOMER_LOCATION_ID,
+      externalProjectId: "prj-test",
+    });
+    const submittedPayload = buildCreateStorageLocationRequest({
+      externalProjectId: "prj-test",
+      name: "North Field",
+      latitude: -3.25,
+      longitude: 37.42,
+      supplierReferenceId: supplierReference,
+    });
+    mocks.client.get.mockResolvedValue(remote(supplierReference));
+    const events: string[] = [];
     mocks.getRegistration
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(registration({ payloadHash: expect.any(String) }));
+      .mockImplementationOnce(async () => {
+        events.push("journal:before-locks");
+        return null;
+      })
+      .mockImplementationOnce(async () => {
+        events.push("journal:under-locks");
+        return registration({
+          supplierReference,
+          submittedPayload,
+          payloadHash: payloadHash(submittedPayload),
+        });
+      });
+    mocks.withLock.mockImplementation(
+      async (key: string, fn: () => Promise<unknown>) => {
+        events.push(`lock-acquired:${key}`);
+        return fn();
+      },
+    );
 
     const result = await ensure();
 
-    expect(mocks.withLock).toHaveBeenCalledWith(
+    const lockKeys = [
       `certifier-storage-location:isometric:prj-test:${CUSTOMER_LOCATION_ID}`,
-      expect.any(Function),
-    );
+      "certifier-project-mapping:org-test:isometric:facility-1",
+      "certifier-external-project:org-test:isometric:prj-test",
+    ];
+    expect(mocks.withLock.mock.calls.map(([key]) => key)).toEqual(lockKeys);
+    expect(events).toEqual([
+      "journal:before-locks",
+      ...lockKeys.map((key) => `lock-acquired:${key}`),
+      "journal:under-locks",
+    ]);
     expect(mocks.client.get).toHaveBeenCalledTimes(1);
     expect(mocks.client.post).not.toHaveBeenCalled();
-    expect(result.source).toBe("journal");
+    expect(result).toMatchObject({ source: "journal", drifted: false });
   });
 
   it("revalidates customer-location identity and facts under both locks before POSTing", async () => {

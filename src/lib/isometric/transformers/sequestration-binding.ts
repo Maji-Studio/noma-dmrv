@@ -138,7 +138,10 @@ export const SEQUESTRATION_COMPONENT_INPUT_BINDINGS = {
           nomaSource: "Attribution-scaled dry applied biochar mass",
           transformRevision: "identity-v1",
           wireUnit: PRODUCT_MASS_UNIT,
-          confirmation: "confirmed",
+          // Standalone direct product_mass acceptance is still open in
+          // docs/open-questions-isometric.md (fdurable-1000-r0-semantics);
+          // keep the diagnostic honest until the registry confirms it.
+          confirmation: "externally-unconfirmed",
         },
       },
       s_fraction: {
