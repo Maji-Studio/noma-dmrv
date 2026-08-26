@@ -154,4 +154,20 @@ describe("compileBiocharApplicationIntents", () => {
       /immutable allocations total.*persisted applied mass/i,
     );
   });
+
+  it("allows a partial single-batch slice for a 1000-year Removal", async () => {
+    await expect(
+      compile([
+        {
+          ...batch(APPLICATION_ID, 7_000),
+          durabilityOption: "1000_year",
+        },
+      ]),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        creditBatchId: CREDIT_BATCH_ID,
+        allocatedWetMassKg: 7_000,
+      }),
+    ]);
+  });
 });
