@@ -1,6 +1,13 @@
 ALTER TABLE "certifier_biochar_applications" RENAME COLUMN "gate_reason" TO "drift_reason";--> statement-breakpoint
 ALTER TABLE "certifier_biochar_applications" DROP CONSTRAINT "certifier_biochar_applications_payload_pair";--> statement-breakpoint
 ALTER TABLE "certifier_biochar_applications" DROP CONSTRAINT "certifier_biochar_applications_confirmed_identity";--> statement-breakpoint
+-- The former gate created local placeholder rows without a submitted payload.
+-- This table is only an idempotency journal, so discard placeholders that cannot
+-- participate in the restored create/confirm lifecycle before tightening it.
+DELETE FROM "certifier_biochar_applications"
+WHERE "lifecycle_status" = 'gated'
+   OR "submitted_payload" IS NULL
+   OR "payload_hash" IS NULL;--> statement-breakpoint
 ALTER TABLE "deliveries" DROP CONSTRAINT "deliveries_truck_mass_on_arrival_non_negative";--> statement-breakpoint
 ALTER TABLE "deliveries" DROP CONSTRAINT "deliveries_truck_mass_on_departure_non_negative";--> statement-breakpoint
 ALTER TABLE "deliveries" DROP CONSTRAINT "deliveries_truck_mass_arrival_gte_departure";--> statement-breakpoint
