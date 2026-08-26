@@ -235,6 +235,23 @@ describe("ensureStorageLocation", () => {
   });
 
   it("enters the exact nested registration locks before rechecking the journal", async () => {
+    const {
+      buildCreateStorageLocationRequest,
+      buildStorageLocationReference,
+    } = await import("@/lib/isometric/storage-locations");
+    const { payloadHash } = await import("@/lib/isometric/utils/payload-hash");
+    const supplierReference = buildStorageLocationReference({
+      customerLocationId: CUSTOMER_LOCATION_ID,
+      externalProjectId: "prj-test",
+    });
+    const submittedPayload = buildCreateStorageLocationRequest({
+      externalProjectId: "prj-test",
+      name: "North Field",
+      latitude: -3.25,
+      longitude: 37.42,
+      supplierReferenceId: supplierReference,
+    });
+    mocks.client.get.mockResolvedValue(remote(supplierReference));
     const events: string[] = [];
     mocks.getRegistration
       .mockImplementationOnce(async () => {
@@ -243,7 +260,11 @@ describe("ensureStorageLocation", () => {
       })
       .mockImplementationOnce(async () => {
         events.push("journal:under-locks");
-        return registration({ payloadHash: expect.any(String) });
+        return registration({
+          supplierReference,
+          submittedPayload,
+          payloadHash: payloadHash(submittedPayload),
+        });
       });
     mocks.withLock.mockImplementation(
       async (key: string, fn: () => Promise<unknown>) => {
@@ -267,7 +288,7 @@ describe("ensureStorageLocation", () => {
     ]);
     expect(mocks.client.get).toHaveBeenCalledTimes(1);
     expect(mocks.client.post).not.toHaveBeenCalled();
-    expect(result.source).toBe("journal");
+    expect(result).toMatchObject({ source: "journal", drifted: false });
   });
 
   it("revalidates customer-location identity and facts under both locks before POSTing", async () => {
