@@ -125,6 +125,10 @@ Read directly from `process.env`, **not** validated by `env.ts`:
 - `NOMA_HERMETIC_CI` — the literal `"true"` marks only the production-bundle
   builds in `ci.yml` and the hermetic PR Playwright workflow. Live sandbox
   workflows and deployments must not set it.
+- `NOMA_TURBOPACK_BUILD_CACHE` — the literal `"true"` enables Next's
+  experimental production compiler cache only for pull-request builds. It is a
+  performance switch, not a security-gate exception; base-branch, local, live,
+  and deployed builds leave it unset or false.
 - `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
   (`src/lib/cli/ensure-admin.ts`), never by the running app.
 - `DB_RESET_ALLOW_REMOTE` — consumed only by the database-reset CLI. Only the
