@@ -235,16 +235,35 @@ describe("ensureStorageLocation", () => {
   });
 
   it("enters the exact nested registration locks before rechecking the journal", async () => {
+    const events: string[] = [];
     mocks.getRegistration
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(registration({ payloadHash: expect.any(String) }));
+      .mockImplementationOnce(async () => {
+        events.push("journal:before-locks");
+        return null;
+      })
+      .mockImplementationOnce(async () => {
+        events.push("journal:under-locks");
+        return registration({ payloadHash: expect.any(String) });
+      });
+    mocks.withLock.mockImplementation(
+      async (key: string, fn: () => Promise<unknown>) => {
+        events.push(`lock-acquired:${key}`);
+        return fn();
+      },
+    );
 
     const result = await ensure();
 
-    expect(mocks.withLock.mock.calls.map(([key]) => key)).toEqual([
+    const lockKeys = [
       `certifier-storage-location:isometric:prj-test:${CUSTOMER_LOCATION_ID}`,
       "certifier-project-mapping:org-test:isometric:facility-1",
       "certifier-external-project:org-test:isometric:prj-test",
+    ];
+    expect(mocks.withLock.mock.calls.map(([key]) => key)).toEqual(lockKeys);
+    expect(events).toEqual([
+      "journal:before-locks",
+      ...lockKeys.map((key) => `lock-acquired:${key}`),
+      "journal:under-locks",
     ]);
     expect(mocks.client.get).toHaveBeenCalledTimes(1);
     expect(mocks.client.post).not.toHaveBeenCalled();
