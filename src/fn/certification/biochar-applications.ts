@@ -3,9 +3,9 @@ import {
   confirmBiocharApplicationRegistration,
   getBiocharApplicationRegistration,
   markBiocharApplicationDrift,
+  withBiocharApplicationRegistrationLock,
 } from "@/data-access/certifier-biochar-applications";
 import { getProductionBatchRegistrations } from "@/data-access/certifier-production-batches";
-import { withDedicatedSessionAdvisoryLock } from "@/db";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgRole } from "@/lib/auth/server";
@@ -30,9 +30,6 @@ import {
   type RegistryExternalMutationReporter,
 } from "./registry-create";
 import { ensureStorageLocation } from "./storage-locations";
-
-const BIOCHAR_APPLICATION_LOCK_SCOPE =
-  "certifier-biochar-application:isometric";
 
 export async function ensureRemovalBiocharApplications(args: {
   orgCtx: OrgContext;
@@ -143,8 +140,12 @@ async function ensureBiocharApplication(args: {
     externalStorageLocationId: args.externalStorageLocationId,
   });
   const bodyHash = payloadHash(body);
-  await withDedicatedSessionAdvisoryLock(
-    `${BIOCHAR_APPLICATION_LOCK_SCOPE}:${args.orgCtx.organizationId}:${args.intent.applicationId}:${args.intent.creditBatchId}`,
+  await withBiocharApplicationRegistrationLock(
+    args.orgCtx,
+    {
+      applicationId: args.intent.applicationId,
+      creditBatchId: args.intent.creditBatchId,
+    },
     async () => {
       let registration = await getBiocharApplicationRegistration(
         args.orgCtx,
