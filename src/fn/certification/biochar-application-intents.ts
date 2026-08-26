@@ -186,6 +186,9 @@ export async function compileBiocharApplicationIntents(args: {
         sourceIds: [],
       };
 
+      // Validate slice facts against the provider contract during preflight.
+      // Submission resolves the real dependency IDs, so placeholders satisfy
+      // required identity here and the built request is intentionally discarded.
       buildCreateBiocharApplicationRequest({
         applicationCode: input.applicationCode,
         applicationDate,
