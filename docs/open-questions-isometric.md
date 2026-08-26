@@ -124,13 +124,18 @@ uses it.
 
 ### Supplier-reference reconciliation is a bounded full-list scan (`isometric/reconciliation-lookup-bound`, opened 2026-08-24)
 
-- The Storage Location and Biochar Application endpoints expose no
-  supplier-reference filter, so reconcile-before-POST scans the full paginated
-  list (`src/lib/isometric/storage-locations.ts`,
-  `src/lib/isometric/biochar-applications.ts`) and **fails loudly after 1,000
-  records** (50 x 20 pages) instead of risking a duplicate POST. A project
-  exceeding that bound cannot register new sites/applications until the limit
-  is raised — deliberate fail-closed design.
+- Neither endpoint exposes a supplier-reference filter, so each
+  reconcile-before-POST lookup performs a bounded paginated scan. Storage
+  Location lookup is scoped to one Isometric project by
+  `GET /projects/{project_id}/storage_locations`; its independent 1,000-record
+  bound (50 x 20 pages) therefore applies per project, and exceeding it blocks
+  new site registration for that project. Biochar Application lookup uses the
+  unscoped `GET /biochar_applications`; it scans every application visible to
+  the credential/account, with its own independent 1,000-record bound, and
+  exceeding that account-visible bound blocks new application registration.
+  Both paths fail loudly instead of risking a duplicate POST
+  (`src/lib/isometric/storage-locations.ts`,
+  `src/lib/isometric/biochar-applications.ts`).
 - **Resolve via:** ask Isometric for a supplier-reference filter (report via
   MCP `submit_feedback`), or raise `DEFAULT_LOOKUP_MAX_PAGES` when a real
   project approaches the bound.

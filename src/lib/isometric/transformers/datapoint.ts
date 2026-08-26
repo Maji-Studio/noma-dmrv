@@ -8,7 +8,9 @@ import { payloadHash } from "../utils/payload-hash";
 import {
   RegistryMappingError,
   SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
+  type SequestrationInputBinding,
 } from "./sequestration-binding";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "./measurement-sample";
 
 type DatapointType = components["schemas"]["DatapointType"];
 type QuantityKindType = components["schemas"]["QuantityKindType"];
@@ -449,14 +451,98 @@ function declarativeInputMappingRevision(
   return groups;
 }
 
+type MappingRevisionSequestrationBindings = Readonly<
+  Record<
+    string,
+    {
+      readonly inputs: Readonly<Record<string, SequestrationInputBinding>>;
+    }
+  >
+>;
+
+type SequestrationPresentationRevision = Readonly<
+  Record<
+    string,
+    Readonly<
+      Record<
+        string,
+        { readonly confirmation: string; readonly nomaSource: string }
+      >
+    >
+  >
+>;
+
+const LEGACY_SEQUESTRATION_PRESENTATION_REVISION: SequestrationPresentationRevision =
+  {
+    [CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR]: {
+      total_carbon_contents: {
+        confirmation: "confirmed",
+        nomaSource: "Sample totalCarbonPercent[]",
+      },
+      inorganic_carbon_contents: {
+        confirmation: "externally-unconfirmed",
+        nomaSource: "Sample inorganicCarbonPercent[]",
+      },
+      product_mass: {
+        confirmation: "confirmed",
+        nomaSource: "Attribution-scaled dry applied biochar mass",
+      },
+      s_fraction: {
+        confirmation: "externally-unconfirmed",
+        nomaSource: "Sample sReflectanceFraction[]",
+      },
+    },
+  };
+const DEFAULT_PRESENTATION_REVISION = {
+  confirmation: "diagnostic-only",
+  nomaSource: "diagnostic-only",
+} as const;
+
+// Revision identity excludes diagnostic/presentation metadata while retaining
+// every operative binding field and the source contract's wire semantics. The
+// frozen presentation values preserve the revision emitted before this
+// normalization existed, so diagnostic corrections do not supersede an
+// otherwise unchanged registry submission.
+function declarativeSequestrationBindingRevision(
+  bindings: MappingRevisionSequestrationBindings,
+): Record<string, unknown> {
+  const blueprints: Record<string, unknown> = {};
+  for (const [blueprintKey, blueprint] of Object.entries(bindings)) {
+    const inputs: Record<string, unknown> = {};
+    for (const [inputKey, binding] of Object.entries(blueprint.inputs)) {
+      const { sourceContract, ...operativeBinding } = binding;
+      const presentationRevision =
+        LEGACY_SEQUESTRATION_PRESENTATION_REVISION[blueprintKey]?.[inputKey] ??
+        DEFAULT_PRESENTATION_REVISION;
+      inputs[inputKey] = {
+        ...operativeBinding,
+        sourceContract: {
+          ...presentationRevision,
+          transformRevision: sourceContract.transformRevision,
+          wireUnit: sourceContract.wireUnit,
+        },
+      };
+    }
+    blueprints[blueprintKey] = { inputs };
+  }
+  return blueprints;
+}
+
 const PRODUCTION_CLAIM_POLICY = "application-slice-delivery-only-v1";
 
-export const MAPPING_REVISION_INPUT = {
-  productionClaimPolicy: PRODUCTION_CLAIM_POLICY,
-  inputMapping: declarativeInputMappingRevision(INPUT_MAPPING),
-  sequestrationComponentInputBindings:
+export function buildMappingRevisionInput(
+  sequestrationBindings: MappingRevisionSequestrationBindings =
     SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
-};
+): Record<string, unknown> {
+  return {
+    productionClaimPolicy: PRODUCTION_CLAIM_POLICY,
+    inputMapping: declarativeInputMappingRevision(INPUT_MAPPING),
+    sequestrationComponentInputBindings:
+      declarativeSequestrationBindingRevision(sequestrationBindings),
+  };
+}
+
+export const MAPPING_REVISION_INPUT = buildMappingRevisionInput();
 
 export const MAPPING_REVISION: string = payloadHash(MAPPING_REVISION_INPUT);
 

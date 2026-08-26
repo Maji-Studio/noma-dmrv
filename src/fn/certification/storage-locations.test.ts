@@ -234,17 +234,18 @@ describe("ensureStorageLocation", () => {
     expect(result.source).toBe("reconciliation");
   });
 
-  it("rechecks the journal under the site lock before registry access", async () => {
+  it("enters the exact nested registration locks before rechecking the journal", async () => {
     mocks.getRegistration
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(registration({ payloadHash: expect.any(String) }));
 
     const result = await ensure();
 
-    expect(mocks.withLock).toHaveBeenCalledWith(
+    expect(mocks.withLock.mock.calls.map(([key]) => key)).toEqual([
       `certifier-storage-location:isometric:prj-test:${CUSTOMER_LOCATION_ID}`,
-      expect.any(Function),
-    );
+      "certifier-project-mapping:org-test:isometric:facility-1",
+      "certifier-external-project:org-test:isometric:prj-test",
+    ]);
     expect(mocks.client.get).toHaveBeenCalledTimes(1);
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(result.source).toBe("journal");
