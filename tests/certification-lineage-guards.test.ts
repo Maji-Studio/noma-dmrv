@@ -1,6 +1,6 @@
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   createApplication,
   deleteApplication,
@@ -24,6 +24,7 @@ import {
 import { deleteSample, updateSample } from "@/data-access/samples";
 import { createTransportLeg } from "@/data-access/transport-legs";
 import { db } from "@/db";
+import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import {
   applications,
   biocharProductSourceAllocations,
@@ -51,6 +52,7 @@ import {
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 const LOCKED_COPY = "is locked by a certification submission.";
+const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
 
 interface LineageFixture {
   applicationId: string;
@@ -383,6 +385,33 @@ async function withFixture<T>(
   }
 }
 
+async function waitForAdvisoryLockWait(heldByPid: number): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const result = await db.execute<{ waiting: boolean }>(sql`
+          select exists (
+            select 1
+            from pg_locks waiting
+            join pg_locks held
+              on held.locktype = waiting.locktype
+             and held.database is not distinct from waiting.database
+             and held.classid is not distinct from waiting.classid
+             and held.objid is not distinct from waiting.objid
+             and held.objsubid is not distinct from waiting.objsubid
+            where waiting.locktype = 'advisory'
+              and not waiting.granted
+              and held.granted
+              and held.pid = ${heldByPid}
+          ) as waiting
+        `);
+        return result.rows[0]?.waiting ?? false;
+      },
+      { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS },
+    )
+    .toBe(true);
+}
+
 
 beforeAll(() => ensureTestOrg());
 
@@ -570,6 +599,144 @@ describe("certification lineage guards", () => {
         }),
       ).rejects.toThrow(LOCKED_COPY);
     }, "ghgStatement");
+  });
+
+  it("does not wait on an application row while checking its delivery lineage", async () => {
+    await withFixture(async (fixture) => {
+      let releaseApplicationLock = () => {};
+      let signalApplicationLocked = () => {};
+      const applicationLocked = new Promise<void>((resolve) => {
+        signalApplicationLocked = resolve;
+      });
+      const release = new Promise<void>((resolve) => {
+        releaseApplicationLock = resolve;
+      });
+      const blocker = db.transaction(async (tx) => {
+        await tx
+          .select({ id: applications.id })
+          .from(applications)
+          .where(eq(applications.id, fixture.applicationId))
+          .for("update");
+        signalApplicationLocked();
+        await release;
+      });
+      await applicationLocked;
+
+      let completionSettled = false;
+      const completion = updateDelivery(
+        makeTestOrgContext(TEST_USER_ID),
+        fixture.deliveryId,
+        { distanceNote: "lineage lock independence" },
+      ).finally(() => {
+        completionSettled = true;
+      });
+      const completionAssertion = expect(completion).rejects.toThrow(
+        LOCKED_COPY,
+      );
+      try {
+        await expect
+          .poll(() => completionSettled, {
+            timeout: CONCURRENCY_BARRIER_TIMEOUT_MS,
+          })
+          .toBe(true);
+        await completionAssertion;
+      } finally {
+        releaseApplicationLock();
+        await blocker;
+      }
+    });
+  });
+
+  it("fails closed when locked lineage gains a GHG Statement artifact", async () => {
+    await withFixture(async (fixture) => {
+      let releaseArtifactLock = () => {};
+      let signalArtifactLocked!: (pid: number) => void;
+      const artifactLocked = new Promise<number>((resolve) => {
+        signalArtifactLocked = resolve;
+      });
+      const release = new Promise<void>((resolve) => {
+        releaseArtifactLock = resolve;
+      });
+      const blocker = db.transaction(async (tx) => {
+        await acquireCertificationArtifactLocksSorted(tx, [
+          {
+            provider: "isometric",
+            localEntityType: "removal",
+            localEntityId: fixture.removalId,
+          },
+        ]);
+        const backend = await tx.execute<{ pid: number }>(
+          sql`select pg_backend_pid() as pid`,
+        );
+        signalArtifactLocked(backend.rows[0]?.pid ?? 0);
+        await release;
+      });
+      const blockerPid = await artifactLocked;
+      const completion = updateDelivery(
+        makeTestOrgContext(TEST_USER_ID),
+        fixture.deliveryId,
+        { distanceNote: "concurrent lineage mutation" },
+      );
+      const completionAssertion = expect(completion).rejects.toThrow(
+        "Certification lineage changed while it was being locked",
+      );
+      let ghgStatementId: string | null = null;
+      try {
+        await waitForAdvisoryLockWait(blockerPid);
+        const [ghgStatement] = await db
+          .insert(certifierGhgStatements)
+          .values({
+            organizationId: TEST_ORG_ID,
+            facilityId: fixture.facilityId,
+            reportingPeriodEndOn: "2026-06-30",
+          })
+          .returning({ id: certifierGhgStatements.id });
+        ghgStatementId = ghgStatement.id;
+        await db
+          .update(certifierRemovals)
+          .set({ ghgStatementId })
+          .where(eq(certifierRemovals.id, fixture.removalId));
+      } finally {
+        releaseArtifactLock();
+        await blocker;
+      }
+      try {
+        await completionAssertion;
+      } finally {
+        if (ghgStatementId) {
+          await db
+            .update(certifierRemovals)
+            .set({ ghgStatementId: null })
+            .where(eq(certifierRemovals.id, fixture.removalId));
+          await db
+            .delete(certifierGhgStatements)
+            .where(eq(certifierGhgStatements.id, ghgStatementId));
+        }
+      }
+    }, "none");
+  });
+
+  it("keeps an in-flight replacement Removal snapshot locked", async () => {
+    await withFixture(async (fixture) => {
+      await db.insert(certificationSubmissions).values({
+        organizationId: TEST_ORG_ID,
+        provider: "isometric",
+        submissionType: "removal",
+        localEntityType: "removal",
+        localEntityId: fixture.removalId,
+        version: 2,
+        status: "draft",
+        payloadHash: `replacement-${crypto.randomUUID()}`,
+        payloadSnapshot: { fixture: "replacement-lineage-lock" },
+        lockedAt: new Date(),
+      });
+
+      await expect(
+        updateDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId, {
+          distanceNote: "must stay locked",
+        }),
+      ).rejects.toThrow(LOCKED_COPY);
+    });
   });
 
   it("rejects biochar product edits once linked to a submitted removal", async () => {
