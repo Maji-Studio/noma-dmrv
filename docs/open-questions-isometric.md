@@ -137,8 +137,8 @@ uses it.
   (`src/lib/isometric/storage-locations.ts`,
   `src/lib/isometric/biochar-applications.ts`).
 - **Resolve via:** ask Isometric for a supplier-reference filter (report via
-  MCP `submit_feedback`), or raise `DEFAULT_LOOKUP_MAX_PAGES` when a real
-  project approaches the bound.
+  MCP `submit_feedback`), or raise `DEFAULT_LOOKUP_MAX_PAGES` when a project or
+  credential/account approaches its respective bound.
 
 ### GHG Entry deprecated-alias cleanup after the September 2026 sunset (`isometric/ghg-entry-migration`, opened 2026-06-10)
 
