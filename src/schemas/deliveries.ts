@@ -18,10 +18,6 @@ import {
   requiredNumber,
   storedPercentSchema,
 } from "./helpers";
-import {
-  optionalTruckMass,
-  validateTruckMasses,
-} from "./truck-weighing";
 
 // ============================================
 // Constants and Enums
@@ -78,26 +74,6 @@ function validateDistanceOverride(
   }
 }
 
-function validateTruckMassUpdatePair(
-  value: {
-    truckMassOnArrivalKg?: number | null;
-    truckMassOnDepartureKg?: number | null;
-  },
-  ctx: z.RefinementCtx,
-) {
-  const arrivalChanged = value.truckMassOnArrivalKg !== undefined;
-  const departureChanged = value.truckMassOnDepartureKg !== undefined;
-  if (arrivalChanged === departureChanged) return;
-
-  ctx.addIssue({
-    code: z.ZodIssueCode.custom,
-    path: [
-      arrivalChanged ? "truckMassOnDepartureKg" : "truckMassOnArrivalKg",
-    ],
-    message: "Update both truck mass observations together",
-  });
-}
-
 // ============================================
 // Delivery Form Schema (Client-side validation)
 // ============================================
@@ -116,8 +92,6 @@ const deliveryFormBaseSchema = z.object({
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalWetMassKg,
-  truckMassOnArrivalKg: optionalTruckMass,
-  truckMassOnDepartureKg: optionalTruckMass,
   moistureContentPercent: requiredProductMoisturePercent,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
   distanceKmOverride: optionalNumber,
@@ -133,7 +107,6 @@ const deliveryFormBaseSchema = z.object({
  */
 export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
-  validateTruckMasses(value, ctx);
 });
 
 // ============================================
@@ -158,8 +131,6 @@ export const createDeliverySchema = z.object({
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalWetMassKg,
-  truckMassOnArrivalKg: optionalTruckMass,
-  truckMassOnDepartureKg: optionalTruckMass,
   moistureContentPercent: requiredProductMoisturePercent,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
@@ -167,7 +138,6 @@ export const createDeliverySchema = z.object({
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
-  validateTruckMasses(value, ctx);
 });
 
 /**
@@ -190,8 +160,6 @@ export const updateDeliverySchema = z.object({
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).optional(),
   deliveredWetMassKg: optionalWetMassKg,
-  truckMassOnArrivalKg: optionalTruckMass,
-  truckMassOnDepartureKg: optionalTruckMass,
   moistureContentPercent: requiredProductMoisturePercent.optional(),
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
@@ -199,8 +167,6 @@ export const updateDeliverySchema = z.object({
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
-  validateTruckMassUpdatePair(value, ctx);
-  validateTruckMasses(value, ctx);
 });
 
 /**

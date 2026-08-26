@@ -1,7 +1,7 @@
 /**
  * Server-internal create/reconcile seam for Isometric Storage Locations.
- * It is deliberately not wired to application CRUD or the existing Removal
- * payload. The explicit sandbox action is its only supported caller.
+ * It is deliberately not wired to application CRUD. Removal submission and
+ * the explicit sync action call it in the configured Isometric environment.
  */
 
 import {
@@ -12,7 +12,6 @@ import {
   withStorageLocationRegistrationLocks,
   type StorageLocationRegistryInput,
 } from "@/data-access/certifier-storage-locations";
-import { env } from "@/config/env";
 import type { CertifierStorageLocation } from "@/db/schema/certifier-storage-locations";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
@@ -84,11 +83,6 @@ export async function ensureStorageLocation(
   args: EnsureStorageLocationArgs,
 ): Promise<EnsureStorageLocationResult> {
   requireOrgRole(args.orgCtx, "admin");
-  if (env.ISOMETRIC_ENVIRONMENT === "production") {
-    throw new SafeError(
-      "Storage Location synchronization is not enabled for production yet.",
-    );
-  }
   const input = await getStorageLocationRegistryInput(
     args.orgCtx,
     args.applicationId,

@@ -40,3 +40,12 @@ delivery. Isometric pre-approved this pathway for this project (confirmed
   `SOURCE_BINDING_MAPPING_REVISION` changed through the rules hash.
 - PDD obligations for the pathway (production-site weighing, transport
   protocols, chain of custody) are documented outside this codebase.
+
+## Superseded on 2026-08-26
+
+The Biochar Application API restoration removed the missing-truck-mass gate
+and placeholder lifecycle described above. Migration `0112` discards legacy
+`gated` or payload-less journal placeholders before enforcing the restored
+claim lifecycle. This is intentionally destructive because the local journal
+is not the registry source of truth and those placeholders cannot be resumed
+safely.

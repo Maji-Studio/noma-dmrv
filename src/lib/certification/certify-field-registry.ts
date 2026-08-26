@@ -397,12 +397,6 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       kind: "entered",
       mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
-    // truckMassOnArrivalKg / truckMassOnDepartureKg deliberately carry no
-    // certify descriptor: mass verification runs on the documentation-based
-    // proof-of-delivery pathway (docs/isometric/changes.md 2026-08-21), and
-    // missing truck masses gate the registry Biochar Application without
-    // blocking anything. The delivery evidence section's CERT chip
-    // (delivery-evidence-cert-status.ts) is the certification signal.
   ],
   application: [
     // Carbon inputs for the CO2e-stored calculation

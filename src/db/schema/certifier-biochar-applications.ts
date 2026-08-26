@@ -46,21 +46,23 @@ export const certifierBiocharApplications = pgTable(
     externalStorageLocationId: text("external_storage_location_id").notNull(),
     externalApplicationId: text("external_application_id"),
     supplierReference: text("supplier_reference").notNull(),
-    submittedPayload: jsonb("submitted_payload").$type<CreateBiocharApplicationRequest>(),
-    payloadHash: text("payload_hash"),
+    submittedPayload: jsonb("submitted_payload")
+      .$type<CreateBiocharApplicationRequest>()
+      .notNull(),
+    payloadHash: text("payload_hash").notNull(),
     observedGhgEntryId: text("observed_ghg_entry_id"),
     observedRemovalId: text("observed_removal_id"),
     lifecycleStatus: certifierBiocharApplicationLifecycleStatus(
       "lifecycle_status",
     )
       .notNull()
-      .default("gated"),
+      .default("creating"),
     correctionStatus: certifierBiocharApplicationCorrectionStatus(
       "correction_status",
     )
       .notNull()
       .default("none"),
-    gateReason: text("gate_reason"),
+    driftReason: text("drift_reason"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -110,12 +112,8 @@ export const certifierBiocharApplications = pgTable(
       sql`${table.provider} = 'isometric'`,
     ),
     check(
-      "certifier_biochar_applications_payload_pair",
-      sql`(${table.submittedPayload} is null) = (${table.payloadHash} is null)`,
-    ),
-    check(
       "certifier_biochar_applications_confirmed_identity",
-      sql`${table.lifecycleStatus} <> 'confirmed' or (${table.externalApplicationId} is not null and ${table.submittedPayload} is not null)`,
+      sql`${table.lifecycleStatus} <> 'confirmed' or ${table.externalApplicationId} is not null`,
     ),
   ],
 );

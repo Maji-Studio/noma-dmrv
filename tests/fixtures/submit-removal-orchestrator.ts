@@ -729,8 +729,6 @@ beforeEach(() => {
       deliveryId: "del-1",
       deliveryCode: "DEL-TEST-001",
       deliveredWetMassKg: 1_000,
-      truckMassOnArrivalKg: 2_000,
-      truckMassOnDepartureKg: 1_000,
       facilityId: FACILITY_ID,
       certifierProjectId: "cert-proj-1",
       externalProjectId: EXTERNAL_PROJECT_ID,
