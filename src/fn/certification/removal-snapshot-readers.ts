@@ -55,7 +55,6 @@ const removalSourceBindingPlanSchema = z.array(
     sourceId: z.string().min(1),
     nomaRole: z.enum([
       "inventory",
-      "proof_of_delivery",
       "feedstock_bill_of_lading",
       "delivery_bill_of_lading",
       "transport_evidence_ledger",
@@ -100,7 +99,7 @@ const biocharApplicationIntentBaseSchema = z.object({
   certifierProjectId: z.string().min(1),
   externalProjectId: z.string().min(1),
   applicationDate: z.iso.date(),
-  appliedTonnes: z.number().finite().positive(),
+  allocatedWetMassKg: z.number().finite().positive(),
   fieldSizeHa: z.number().finite().positive(),
   supplierReference: z.string().min(1).max(100),
   storageLocationSupplierReference: z.string().min(1),
@@ -121,32 +120,7 @@ const biocharApplicationIntentBaseSchema = z.object({
   sourceIds: z.array(z.string()),
 });
 
-// The gated shape is tried first so its literal gateReason discriminates.
-// Pre-gating snapshots carry no gateReason field at all; the ready shape's
-// `.default(null)` keeps those drafts resumable. The literal is deliberately
-// hand-written (like the nomaRole enum above): this file validates the stored
-// snapshot independently of the current in-memory constants.
-const biocharApplicationIntentSchema = z.union([
-  biocharApplicationIntentBaseSchema
-    .extend({
-      gateReason: z.literal("missing_truck_masses"),
-      truckMassOnArrivalKg: z.number().finite().nonnegative().nullable(),
-      truckMassOnDepartureKg: z.number().finite().nonnegative().nullable(),
-    })
-    // A gated intent with both masses present is malformed: the compiler
-    // gates only when a mass is missing, so refuse to resume it (the ready
-    // variant then also rejects the literal gateReason).
-    .refine(
-      (intent) =>
-        intent.truckMassOnArrivalKg == null ||
-        intent.truckMassOnDepartureKg == null,
-    ),
-  biocharApplicationIntentBaseSchema.extend({
-    gateReason: z.null().default(null),
-    truckMassOnArrivalKg: z.number().finite().nonnegative(),
-    truckMassOnDepartureKg: z.number().finite().nonnegative(),
-  }),
-]);
+const biocharApplicationIntentSchema = biocharApplicationIntentBaseSchema;
 
 export function readRemovalTransport(
   row: CertificationSubmissionRow,

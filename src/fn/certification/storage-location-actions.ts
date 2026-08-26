@@ -1,7 +1,6 @@
 "use server";
 
 import { z } from "zod";
-import { env } from "@/config/env";
 import { listRecentSyncEvents } from "@/data-access/certification";
 import {
   getStorageLocationRegistration,
@@ -74,11 +73,6 @@ export async function syncApplicationStorageLocation(
     if (!input.customerLocationId) {
       throw new SafeError(
         "Select a customer location on the delivery before synchronizing.",
-      );
-    }
-    if (env.ISOMETRIC_ENVIRONMENT === "production") {
-      throw new SafeError(
-        "Storage Location synchronization is not enabled for production yet.",
       );
     }
     const log = logger.child({
@@ -188,10 +182,7 @@ async function loadApplicationStorageLocationSyncForOrg(
       attemptedAt: failureIsLatest
         ? latestFailedAttempt.attemptedAt
         : registration.updatedAt,
-      blocker:
-        env.ISOMETRIC_ENVIRONMENT === "production"
-          ? "Storage Location synchronization is not enabled for production yet."
-          : null,
+      blocker: null,
       viewerCanManage,
     };
   }
@@ -222,9 +213,6 @@ function storageLocationBlocker(
     missingFacts.includes("longitude")
   ) {
     return "Add customer-location coordinates before synchronizing.";
-  }
-  if (env.ISOMETRIC_ENVIRONMENT === "production") {
-    return "Storage Location synchronization is not enabled for production yet.";
   }
   return null;
 }

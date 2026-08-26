@@ -69,8 +69,6 @@ describe("submitRemoval — entity readiness gate", () => {
         deliveryId: "del-1",
         deliveryCode: "DEL-TEST-001",
         deliveredWetMassKg: 1_000,
-        truckMassOnArrivalKg: 2_000,
-        truckMassOnDepartureKg: 1_000,
         facilityId: "fac-test-1",
         certifierProjectId: "cert-proj-1",
         externalProjectId: "prj_test_1",

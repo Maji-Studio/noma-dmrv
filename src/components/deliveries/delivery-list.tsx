@@ -657,31 +657,6 @@ export function DeliveryList() {
                   ),
                 },
                 {
-                  title: "Truck weighing",
-                  fields: [
-                    {
-                      label: "Truck mass before unloading (kg)",
-                      ...certificationDetailField(
-                        "delivery",
-                        "truckMassOnArrivalKg",
-                      ),
-                      value: formatMassKg(
-                        sideSheetEntity.truckMassOnArrivalKg,
-                      ),
-                    },
-                    {
-                      label: "Truck mass after unloading (kg)",
-                      ...certificationDetailField(
-                        "delivery",
-                        "truckMassOnDepartureKg",
-                      ),
-                      value: formatMassKg(
-                        sideSheetEntity.truckMassOnDepartureKg,
-                      ),
-                    },
-                  ],
-                },
-                {
                   title: "Transport",
                   fields: [
                     { label: "One-way distance (per leg, km)", value: formatDistanceKm(sideSheetEntity.effectiveDistanceKm) },

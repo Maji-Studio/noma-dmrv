@@ -86,7 +86,8 @@ The current workflow is:
 6. On Admin confirmation, rerun preflight, materialize generated evidence
    ledgers, mirror required Sources, recompile, claim the submission ledger,
    create/reconcile Datapoints and durability measurements, create/reconcile the
-   GHG Entry, then verify Source bindings.
+   GHG Entry, ensure Production Batches then Storage Locations then Biochar
+   Applications, and verify Source bindings.
 
 The submission scope is the applied-mass-scoped union of production lineage for
 all member credit batches. Lineage and credit-batch roll-ups come from
@@ -110,6 +111,26 @@ Cross-period allocation follows the recorded front-loading interpretation:
 production-side emissions attach to the earliest applicable GHG Entry for the
 batch; later-period entries carry their delivery emissions and applied-mass
 storage claim.
+
+## Biochar Applications and storage sites
+
+Removal preflight freezes one Biochar Application intent per immutable
+Application by credit-batch allocation slice. Submission first confirms all
+referenced Production Batches, then each reusable project-scoped Storage
+Location, then creates or reconciles the Biochar Applications in the configured
+Isometric environment. Multiple Applications may share a Delivery subject to
+the existing allocation and capacity rules.
+
+For the provider request, `truck_mass_on_arrival` is exactly the slice's
+allocated wet kg and `truck_mass_on_departure` is zero kg. These fields encode
+the applied slice mass convention, not Delivery weighing observations.
+Commingled slices partition and sum to the physical Application total.
+
+Each slice uses the ordinary local idempotency journal. Noma claims the exact
+payload and stable supplier reference before POST, reconciles all bounded list
+pages on retry, confirms one remote identity, and fails closed on payload or
+identity drift. Registry failure blocks Removal submission and leaves the claim
+safely retryable. There is no gate or placeholder lifecycle.
 
 ## Template and input contract
 
@@ -207,6 +228,8 @@ component/input targets:
 
 - feedstock bill of lading to feedstock transport `mass_distance`;
 - delivery bill of lading to biochar transport `mass_distance`;
+- delivery receipts and photos remain retained Delivery documents and do not
+  bind to sequestration inputs;
 - application-boundary inventory/logbook evidence to sequestration
   `product_mass` and, when present, safety-margin `mass`;
 - generated transport ledger to the transport inputs present in the template;

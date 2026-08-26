@@ -1,5 +1,21 @@
 # Isometric Docs Change Log
 
+## 2026-08-26 (Biochar Application API restored)
+
+- Removal submission now ensures Production Batches, then Storage Locations,
+  then one Biochar Application per immutable Application by credit-batch slice
+  in the configured Isometric environment.
+- Biochar Application arrival mass is exactly the slice's allocated wet kg and
+  departure mass is zero kg. Commingled slices partition the physical
+  Application total.
+- Biochar Applications use the ordinary claim, reconciliation, drift, retry,
+  and confirmation journal lifecycle. The former missing-mass gate and
+  placeholder lifecycle were removed.
+- Delivery truck weighing was removed. Delivery receipts and photos remain
+  retained documents but do not bind to sequestration inputs. Delivery bills
+  of lading retain only their biochar transport binding.
+- Storage Location synchronization now follows the configured environment.
+
 ## 2026-08-16 (1000-year Removal grouping and local draft recovery)
 
 - A 1000-year facility can group only one credit batch into each Removal. The

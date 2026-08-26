@@ -521,12 +521,15 @@ describe("ensureStorageLocation", () => {
     expect(mocks.client.post).not.toHaveBeenCalled();
   });
 
-  it("refuses production writes at the registry seam", async () => {
+  it("uses the same synchronization lifecycle in production", async () => {
     mocks.env.ISOMETRIC_ENVIRONMENT = "production";
 
-    await expect(ensure()).rejects.toThrow(/not enabled for production/);
-    expect(mocks.getInput).not.toHaveBeenCalled();
-    expect(mocks.client.post).not.toHaveBeenCalled();
+    await expect(ensure()).resolves.toMatchObject({
+      externalStorageLocationId: "slc-test",
+      source: "create",
+    });
+    expect(mocks.getInput).toHaveBeenCalled();
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
   });
 
   it("fails loudly when a concurrent winner fixed a different identity", async () => {

@@ -3,7 +3,6 @@ import {
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
   APPLICATION_VISUAL_EVIDENCE_ROLES,
 } from "@/lib/certification/application-evidence";
-import { PROOF_OF_DELIVERY_EVIDENCE_ROLE } from "@/lib/certification/delivery-evidence";
 import { DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/upload-policy";
 
 export const DOCUMENT_TYPES = [
@@ -153,15 +152,12 @@ export const requestUploadSchema = z
     applicationLogbookEvidenceType: z
       .enum(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES)
       .optional(),
-    deliveryEvidenceRole: z
-      .literal(PROOF_OF_DELIVERY_EVIDENCE_ROLE)
-      .optional(),
   })
   // Reject contradictory evidence classifications at the contract boundary, the
   // same rule updateApplicationEvidenceMetadata enforces on reclassification: a
   // visual role belongs only on a photo, a logbook type only on a logbook
   // document (typed PDF, weighbridge ticket, or affidavit), and the
-  // proof-of-delivery role only on a delivery photo.
+  // visual and logbook classifications only on their supported document types.
   .superRefine((data, ctx) => {
     if (
       data.applicationEvidenceRole !== undefined &&
@@ -184,17 +180,6 @@ export const requestUploadSchema = z
         path: ["applicationLogbookEvidenceType"],
         message:
           "Boundary logbook evidence type can only be set on logbook documents",
-      });
-    }
-    if (
-      data.deliveryEvidenceRole !== undefined &&
-      (data.documentType !== "photo" || data.entityType !== "delivery")
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["deliveryEvidenceRole"],
-        message:
-          "Proof of delivery role can only be set on delivery photo uploads",
       });
     }
   });
