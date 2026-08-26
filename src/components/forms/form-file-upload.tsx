@@ -28,7 +28,6 @@ import type {
   ApplicationBoundaryLogbookEvidenceType,
   ApplicationVisualEvidenceRole,
 } from "@/lib/certification/application-evidence";
-import type { DeliveryEvidenceRole } from "@/lib/certification/delivery-evidence";
 import type { DocumentType } from "@/schemas/documents";
 
 export type { DeferredFileEntry } from "@/hooks/use-deferred-attachments";
@@ -62,7 +61,6 @@ interface FormFileUploadProps {
   documentType?: DocumentType;
   applicationEvidenceRole?: ApplicationVisualEvidenceRole;
   applicationLogbookEvidenceType?: ApplicationBoundaryLogbookEvidenceType;
-  deliveryEvidenceRole?: DeliveryEvidenceRole;
   onUploaded?: (documentId: string) => void;
   onUploadError?: (error: string) => void;
   deferred?: boolean;
@@ -118,7 +116,6 @@ export function FormFileUpload({
   documentType,
   applicationEvidenceRole,
   applicationLogbookEvidenceType,
-  deliveryEvidenceRole,
   onUploaded,
   onUploadError,
   deferred = false,
@@ -166,7 +163,6 @@ export function FormFileUpload({
         file,
         applicationEvidenceRole,
         applicationLogbookEvidenceType,
-        deliveryEvidenceRole,
         onProgress: (p) => {
           setUploads((prev) =>
             prev.map((u) =>

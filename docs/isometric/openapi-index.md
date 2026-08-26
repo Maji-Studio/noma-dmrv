@@ -90,16 +90,16 @@ presence is not evidence of a live 200-year or production path.
 |---|---|---|---|
 | `GET /production_batches` | wired | Supplier-reference reconciliation through client-side pagination | `src/lib/isometric/production-batches.ts` → `findProductionBatchBySupplierRef`; consumer in `src/fn/certification/production-batches.ts` |
 | `POST /production_batches` | wired | Register one Isometric Production Batch per noma credit batch | `src/lib/isometric/production-batches.ts` → `createProductionBatch`; consumer in `src/fn/certification/production-batches.ts` |
-| `GET /projects/{project_id}/storage_locations` | wired, sandbox verification pending | Bounded supplier-reference reconciliation before an explicit sync | `src/lib/isometric/storage-locations.ts` → `findStorageLocationBySupplierReference`; consumer in `src/fn/certification/storage-locations.ts` |
-| `POST /projects/{project_id}/storage_locations` | wired, sandbox verification pending | Explicitly register a customer location as a reusable `biochar_field` site | `src/lib/isometric/storage-locations.ts` → `createStorageLocation`; consumers in `src/fn/certification/storage-locations.ts` and `storage-location-actions.ts` |
-| `GET /projects/{project_id}/storage_locations/{id}` | wired, sandbox verification pending | Explicit drift check against the immutable submitted snapshot | `src/lib/isometric/storage-locations.ts` → `getStorageLocation`; consumer in `src/fn/certification/storage-locations.ts` |
-| `GET /biochar_applications` | wired for sandbox Removal submission | Bounded client-side pagination and exact supplier-reference reconciliation because the API exposes no supplier-reference filter | `src/lib/isometric/biochar-applications.ts` → `findBiocharApplicationBySupplierReference`; consumer in `src/fn/certification/biochar-applications.ts` |
-| `POST /biochar_applications` | wired for sandbox Removal submission | Register one application only after its Production Batch and Storage Location are confirmed; a delivery without observed truck masses journals a gated registration and skips the POST instead of blocking the Removal ([archived implementation note](../archive/2026-08-21-delivery-proof-of-delivery-evidence.md)) | `src/lib/isometric/biochar-applications.ts` → `createBiocharApplication`; consumer in `src/fn/certification/biochar-applications.ts` |
+| `GET /projects/{project_id}/storage_locations` | wired | Bounded supplier-reference reconciliation before an explicit or Removal-submission sync | `src/lib/isometric/storage-locations.ts` → `findStorageLocationBySupplierReference`; consumer in `src/fn/certification/storage-locations.ts` |
+| `POST /projects/{project_id}/storage_locations` | wired | Register a customer location as a reusable `biochar_field` site in the configured environment | `src/lib/isometric/storage-locations.ts` → `createStorageLocation`; consumers in `src/fn/certification/storage-locations.ts` and `storage-location-actions.ts` |
+| `GET /projects/{project_id}/storage_locations/{id}` | wired | Drift check against the immutable submitted snapshot | `src/lib/isometric/storage-locations.ts` → `getStorageLocation`; consumer in `src/fn/certification/storage-locations.ts` |
+| `GET /biochar_applications` | wired | Bounded client-side pagination and exact supplier-reference reconciliation because the API exposes no supplier-reference filter | `src/lib/isometric/biochar-applications.ts` → `findBiocharApplicationBySupplierReference`; consumer in `src/fn/certification/biochar-applications.ts` |
+| `POST /biochar_applications` | wired | After Production Batch and Storage Location confirmation, register one record per immutable Application by credit-batch slice. Arrival is the slice's allocated wet kg and departure is zero. | `src/lib/isometric/biochar-applications.ts` → `createBiocharApplication`; consumer in `src/fn/certification/biochar-applications.ts` |
 
 Storage Location PATCH and Biochar Application correction/delete operations
 remain intentionally unwired. Drift is surfaced for operator review. Both
-Storage Location and Biochar Application synchronization remain blocked in
-production until their sandbox behavior is explicitly promoted.
+Storage Location and Biochar Application synchronization follow the configured
+Isometric environment.
 
 ## Telemetry operations
 

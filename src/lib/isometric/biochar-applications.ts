@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { SafeError } from "@/lib/errors";
 import type { IsometricClient, IsometricEnvironment } from "./client";
 export type { IsometricEnvironment } from "./client";
@@ -14,6 +15,7 @@ type BiocharApplicationPage =
 
 export const BIOCHAR_APPLICATION_RATE_UNIT = "t/ha";
 export const BIOCHAR_APPLICATION_TRUCK_MASS_UNIT = "kg";
+export const BIOCHAR_APPLICATION_DEPARTURE_MASS_KG = 0;
 export const BIOCHAR_APPLICATION_REFERENCE_VERSION = 1;
 export const BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH = 100;
 
@@ -57,10 +59,8 @@ export function buildBiocharApplicationReference(
 export interface BuildCreateBiocharApplicationRequestArgs {
   applicationCode: string;
   applicationDate: string;
-  appliedTonnes: number;
+  applicationWetMassKg: number;
   fieldSizeHa: number;
-  truckMassOnArrivalKg: number;
-  truckMassOnDepartureKg: number;
   externalProjectId: string;
   externalProductionBatchId: string;
   externalStorageLocationId: string;
@@ -73,26 +73,13 @@ export function buildCreateBiocharApplicationRequest(
 ): CreateBiocharApplicationRequest {
   const code = args.applicationCode.trim() || "Application";
   assertPositiveFinite(
-    args.appliedTonnes,
+    args.applicationWetMassKg,
     `Application ${code} needs a positive applied biochar mass before submitting.`,
   );
   assertPositiveFinite(
     args.fieldSizeHa,
     `Application ${code} needs a field size greater than 0 ha before submitting.`,
   );
-  assertNonNegativeFinite(
-    args.truckMassOnArrivalKg,
-    `Application ${code} needs a valid observed truck mass before unloading.`,
-  );
-  assertNonNegativeFinite(
-    args.truckMassOnDepartureKg,
-    `Application ${code} needs a valid observed truck mass after unloading.`,
-  );
-  if (args.truckMassOnArrivalKg <= args.truckMassOnDepartureKg) {
-    throw new SafeError(
-      `Application ${code} needs a truck mass before unloading that exceeds the mass after unloading when applied biochar mass is positive. Correct the delivery measurements before submitting.`,
-    );
-  }
   if (!ISO_DATE_PATTERN.test(args.applicationDate)) {
     throw new SafeError(
       `Application ${code} needs a valid application date before submitting.`,
@@ -120,7 +107,8 @@ export function buildCreateBiocharApplicationRequest(
     );
   }
 
-  const averageApplicationRate = args.appliedTonnes / args.fieldSizeHa;
+  const averageApplicationRate =
+    kgToTonnes(args.applicationWetMassKg) / args.fieldSizeHa;
   assertPositiveFinite(
     averageApplicationRate,
     `Application ${code} has an invalid average application rate. Correct its applied mass and field size.`,
@@ -138,11 +126,14 @@ export function buildCreateBiocharApplicationRequest(
     storage_site_id: externalStorageLocationId,
     supplier_reference_id: supplierReferenceId,
     truck_mass_on_arrival: {
-      magnitude: args.truckMassOnArrivalKg,
+      // Isometric support confirmed the mass/zero convention for individually
+      // logged applications when site scales are unavailable. This is the
+      // immutable application-slice wet mass, not a local truck observation.
+      magnitude: args.applicationWetMassKg,
       unit: BIOCHAR_APPLICATION_TRUCK_MASS_UNIT,
     },
     truck_mass_on_departure: {
-      magnitude: args.truckMassOnDepartureKg,
+      magnitude: BIOCHAR_APPLICATION_DEPARTURE_MASS_KG,
       unit: BIOCHAR_APPLICATION_TRUCK_MASS_UNIT,
     },
   };
@@ -239,7 +230,7 @@ export function biocharApplicationMismatchMessage(
     );
   return matches
     ? null
-    : `Isometric Biochar Application ${remote.id} does not match this application's Production Batch, Storage Location, date, rate, or truck measurements. Resolve the registry drift before retrying.`;
+    : `Isometric Biochar Application ${remote.id} does not match this application's Production Batch, Storage Location, date, rate, or application mass. Resolve the registry drift before retrying.`;
 }
 
 function quantitiesMatch(
@@ -264,10 +255,6 @@ function shortHash(value: string): string {
 
 function assertPositiveFinite(value: number, message: string): void {
   if (!Number.isFinite(value) || value <= 0) throw new SafeError(message);
-}
-
-function assertNonNegativeFinite(value: number, message: string): void {
-  if (!Number.isFinite(value) || value < 0) throw new SafeError(message);
 }
 
 function requiredIdentity(value: string, message: string): string {

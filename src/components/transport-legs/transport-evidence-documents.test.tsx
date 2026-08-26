@@ -80,6 +80,7 @@ describe("TransportEvidencePanel chrome", () => {
     expect(html).toContain("Delivery evidence</h3>");
     expect(html).toContain("No delivery evidence");
     expect(html).toContain("No documents are attached.");
+    expect(html).not.toContain("CERT");
   });
 });
 
@@ -88,7 +89,7 @@ describe("delivery document list", () => {
     mocks.documents = [];
   });
 
-  it("badges proof-of-delivery documents as registry evidence and the rest as retention records", () => {
+  it("lists Delivery documents as ordinary retained evidence", () => {
     mocks.documents = [
       uploadedDocument({
         id: "document-receipt",
@@ -99,7 +100,6 @@ describe("delivery document list", () => {
         id: "document-photo",
         fileName: "drop.jpg",
         documentType: "photo",
-        metadata: { deliveryEvidenceRole: "proof_of_delivery" },
       }),
       uploadedDocument({
         id: "document-ticket",
@@ -119,11 +119,11 @@ describe("delivery document list", () => {
     expect(html).toContain("Delivery receipt");
     expect(html).toContain("Delivery photo");
     expect(html).toContain("Weigh-scale ticket");
-    expect(html.match(/Registry evidence/g)).toHaveLength(2);
-    expect(html.match(/Retention record/g)).toHaveLength(1);
+    expect(html).not.toContain("Registry evidence");
+    expect(html).not.toContain("Retention record");
   });
 
-  it("labels a bare delivery photo without the role as a plain photo", () => {
+  it("labels every delivery photo consistently", () => {
     mocks.documents = [
       uploadedDocument({
         id: "document-photo",
@@ -140,9 +140,8 @@ describe("delivery document list", () => {
       />,
     );
 
-    expect(html).not.toContain("Delivery photo");
-    expect(html).toContain("Photo");
-    expect(html).toContain("Retention record");
+    expect(html).toContain("Delivery photo");
+    expect(html).not.toContain("Registry evidence");
   });
 
   it("never badges non-delivery owners", () => {

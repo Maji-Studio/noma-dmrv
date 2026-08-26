@@ -24,11 +24,22 @@ import {
   effectiveDeliveryDistanceSource,
 } from "./delivery-distance-projections";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
-import {
-  isDeliveryTruckMassCompletion,
-  type DeliveryUpdateData,
-} from "./delivery-mass-gated-correction";
-import { completeMassGatedDeliveryTruckMasses } from "./delivery-mass-gated-completion";
+interface DeliveryUpdateData {
+  code?: string;
+  orderId?: string;
+  facilityId?: string;
+  deliveryDate?: Date;
+  biocharProductId?: string | null;
+  driverId?: string | null;
+  vehicleId?: string | null;
+  status?: "upcoming" | "delivered";
+  deliveredWetMassKg?: number | null;
+  moistureContentPercent?: number | null;
+  distanceKmOverride?: number | null;
+  distanceSource?: "map_estimate" | "manual" | "document" | null;
+  distanceNote?: string | null;
+  tripType?: "return" | "one_way" | null;
+}
 
 export interface DeliveryWithRelations extends Delivery {
   status: DeliveryStatus;
@@ -170,8 +181,6 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     status: deliveries.status,
     deliveredWetMassKg: deliveries.deliveredWetMassKg,
     massDryKg: deliveries.massDryKg,
-    truckMassOnArrivalKg: deliveries.truckMassOnArrivalKg,
-    truckMassOnDepartureKg: deliveries.truckMassOnDepartureKg,
     moistureContentPercent: deliveries.moistureContentPercent,
     distanceKmOverride: columns.distanceKmOverride
       ? deliveries.distanceKmOverride
@@ -434,8 +443,6 @@ export async function getDeliveryWithRelations(
     status: deliveryRow.status,
     deliveredWetMassKg: deliveryRow.deliveredWetMassKg,
     massDryKg: deliveryRow.massDryKg,
-    truckMassOnArrivalKg: deliveryRow.truckMassOnArrivalKg,
-    truckMassOnDepartureKg: deliveryRow.truckMassOnDepartureKg,
     moistureContentPercent: deliveryRow.moistureContentPercent,
     distanceKmOverride: deliveryRow.distanceKmOverride,
     distanceSource: deliveryRow.distanceSource,
@@ -538,8 +545,6 @@ export async function createDelivery(
     vehicleId?: string | null;
     status?: "upcoming" | "delivered";
     deliveredWetMassKg?: number | null;
-    truckMassOnArrivalKg?: number | null;
-    truckMassOnDepartureKg?: number | null;
     moistureContentPercent?: number | null;
     distanceKmOverride?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
@@ -624,8 +629,6 @@ export async function createDelivery(
         status: effectiveStatus,
         deliveredWetMassKg: data.deliveredWetMassKg ?? null,
         massDryKg,
-        truckMassOnArrivalKg: data.truckMassOnArrivalKg ?? null,
-        truckMassOnDepartureKg: data.truckMassOnDepartureKg ?? null,
         moistureContentPercent: data.moistureContentPercent ?? null,
         ...(deliveryColumns.distanceKmOverride
           ? { distanceKmOverride: data.distanceKmOverride ?? null }
@@ -676,20 +679,6 @@ export async function updateDelivery(
 
   if (!existing) {
     throw new SafeError("Delivery not found");
-  }
-
-  if (isDeliveryTruckMassCompletion(existing, data)) {
-    const corrected = await completeMassGatedDeliveryTruckMasses(
-      ctx,
-      deliveryId,
-      {
-        currentArrivalKg: existing.truckMassOnArrivalKg,
-        currentDepartureKg: existing.truckMassOnDepartureKg,
-        arrivalKg: data.truckMassOnArrivalKg!,
-        departureKg: data.truckMassOnDepartureKg!,
-      },
-    );
-    if (corrected) return getDeliveryById(ctx, deliveryId);
   }
 
   // If code is being changed, check for duplicates
@@ -810,10 +799,6 @@ export async function updateDelivery(
       data.deliveredWetMassKg !== undefined
         ? data.deliveredWetMassKg
         : lockedDelivery.deliveredWetMassKg;
-    if (data.truckMassOnArrivalKg !== undefined || data.truckMassOnDepartureKg !== undefined) {
-      if (data.truckMassOnArrivalKg === undefined) data.truckMassOnArrivalKg = lockedDelivery.truckMassOnArrivalKg;
-      if (data.truckMassOnDepartureKg === undefined) data.truckMassOnDepartureKg = lockedDelivery.truckMassOnDepartureKg;
-    }
     const orderChanged = lockedEffectiveOrderId !== lockedDelivery.orderId;
     const wetMassIncreased =
       lockedEffectiveWetMass != null &&

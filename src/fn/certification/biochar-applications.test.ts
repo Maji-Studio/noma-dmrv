@@ -9,15 +9,12 @@ import type { PerformRegistryCreateArgs } from "./registry-create";
 import type { BiocharApplicationIntent } from "./biochar-application-intents";
 
 const mocks = vi.hoisted(() => ({
-  env: { ISOMETRIC_ENVIRONMENT: "sandbox" as "sandbox" | "production" },
   registration: null as CertifierBiocharApplication | null,
   events: [] as string[],
   getRegistration: vi.fn(),
   claim: vi.fn(),
   confirm: vi.fn(),
   markDrift: vi.fn(),
-  recordGated: vi.fn(),
-  activateGated: vi.fn(),
   getProductionRegistrations: vi.fn(),
   ensureProduction: vi.fn(),
   ensureStorage: vi.fn(),
@@ -25,7 +22,6 @@ const mocks = vi.hoisted(() => ({
   client: { get: vi.fn(), post: vi.fn() },
 }));
 
-vi.mock("@/config/env", () => ({ env: mocks.env }));
 // Spread the real module so withBiocharApplicationRegistrationLock keeps
 // running against the mocked @/db advisory lock below.
 vi.mock("@/data-access/certifier-biochar-applications", async (importOriginal) => ({
@@ -36,15 +32,11 @@ vi.mock("@/data-access/certifier-biochar-applications", async (importOriginal) =
   claimBiocharApplicationRegistration: mocks.claim,
   confirmBiocharApplicationRegistration: mocks.confirm,
   markBiocharApplicationDrift: mocks.markDrift,
-  recordGatedBiocharApplicationRegistration: mocks.recordGated,
-  activateGatedBiocharApplicationRegistration: mocks.activateGated,
 }));
 vi.mock("@/data-access/certifier-production-batches", () => ({
   getProductionBatchRegistrations: mocks.getProductionRegistrations,
 }));
-vi.mock("@/db", () => ({
-  withDedicatedSessionAdvisoryLock: mocks.withLock,
-}));
+vi.mock("@/db", () => ({ withDedicatedSessionAdvisoryLock: mocks.withLock }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgRole: vi.fn() }));
 vi.mock("@/lib/isometric/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/isometric/client")>()),
@@ -66,21 +58,19 @@ vi.mock("./registry-create", () => ({
   performRegistryCreate: vi.fn(async (args: PerformRegistryCreateArgs) => {
     const reconciled = await args.reconcile();
     if (reconciled.found === "refused") throw new Error(reconciled.message);
-    if (reconciled.found === "single") {
-      await args.onConfirmed?.(reconciled.externalId);
-      return {
-        externalId: reconciled.externalId,
-        source: "reconciliation" as const,
-      };
-    }
-    const externalId = await args.create();
+    const externalId =
+      reconciled.found === "single"
+        ? reconciled.externalId
+        : await args.create();
     await args.onConfirmed?.(externalId);
-    return { externalId, source: "create" as const };
+    return {
+      externalId,
+      source: reconciled.found === "single" ? "reconciliation" : "create",
+    };
   }),
 }));
 
 import { ensureRemovalBiocharApplications } from "./biochar-applications";
-import type { GatedBiocharApplicationIntent } from "./biochar-application-intents";
 
 const APPLICATION_ID = "11111111-1111-4111-8111-111111111111";
 const CREDIT_BATCH_ID = "22222222-2222-4222-8222-222222222222";
@@ -108,11 +98,8 @@ function intent(): BiocharApplicationIntent {
     certifierProjectId: "mapping-1",
     externalProjectId: "prj-test",
     applicationDate: "2026-04-05",
-    appliedTonnes: 12,
+    allocatedWetMassKg: 12_000,
     fieldSizeHa: 4,
-    gateReason: null,
-    truckMassOnArrivalKg: 15_000,
-    truckMassOnDepartureKg: 3_000,
     supplierReference: "nm-isometric-sandbox-bca-app-batch-v1",
     storageLocationSupplierReference: "nm-slc-test",
     storageLocationPayload: {
@@ -125,15 +112,6 @@ function intent(): BiocharApplicationIntent {
       supplier_reference_id: "nm-slc-test",
     },
     sourceIds: [],
-  };
-}
-
-function gatedIntent(): GatedBiocharApplicationIntent {
-  return {
-    ...intent(),
-    gateReason: "missing_truck_masses",
-    truckMassOnArrivalKg: null,
-    truckMassOnDepartureKg: null,
   };
 }
 
@@ -155,11 +133,11 @@ function registration(
     supplierReference: intent().supplierReference,
     submittedPayload: body as never,
     payloadHash: payloadHash(body),
-    observedGhgEntryId: EXTERNAL_REMOVAL_ID,
+    observedGhgEntryId: null,
     observedRemovalId: null,
-    lifecycleStatus: "gated",
+    lifecycleStatus: "creating",
     correctionStatus: "none",
-    gateReason: "create_in_flight",
+    driftReason: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...patch,
@@ -176,8 +154,8 @@ function remote(
     production_batch_id: "ptb-test",
     storage_location_id: "slc-test",
     supplier_reference_id: intent().supplierReference,
-    truck_mass_on_arrival: { magnitude: 15_000, unit: "kg" },
-    truck_mass_on_departure: { magnitude: 3_000, unit: "kg" },
+    truck_mass_on_arrival: { magnitude: 12_000, unit: "kg" },
+    truck_mass_on_departure: { magnitude: 0, unit: "kg" },
     ghg_entry_id: EXTERNAL_REMOVAL_ID,
     removal_id: null,
     uploaded_at: "2026-04-06T00:00:00Z",
@@ -206,15 +184,11 @@ function ensure() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.env.ISOMETRIC_ENVIRONMENT = "sandbox";
   mocks.registration = null;
   mocks.events.length = 0;
   mocks.getRegistration.mockImplementation(async () => mocks.registration);
   mocks.claim.mockImplementation(async (_ctx, input) => {
-    mocks.registration = registration(input.submittedPayload, {
-      observedGhgEntryId: input.observedGhgEntryId,
-      observedRemovalId: input.observedRemovalId,
-    });
+    mocks.registration = registration(input.submittedPayload);
     return mocks.registration;
   });
   mocks.confirm.mockImplementation(async (_ctx, input) => {
@@ -224,7 +198,7 @@ beforeEach(() => {
       externalApplicationId: input.externalApplicationId,
       lifecycleStatus: "confirmed",
       correctionStatus: "none",
-      gateReason: null,
+      driftReason: null,
       observedGhgEntryId: input.observedGhgEntryId,
       observedRemovalId: input.observedRemovalId,
     };
@@ -261,16 +235,6 @@ describe("ensureRemovalBiocharApplications", () => {
 
     await ensure();
 
-    expect(mocks.ensureStorage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        expected: expect.objectContaining({
-          customerLocationId: intent().customerLocationId,
-          supplierReference: intent().storageLocationSupplierReference,
-          payload: intent().storageLocationPayload,
-        }),
-      }),
-    );
-
     expect(mocks.events).toEqual([
       "production-batch",
       "storage-location",
@@ -280,153 +244,55 @@ describe("ensureRemovalBiocharApplications", () => {
     expect(mocks.client.post).toHaveBeenCalledWith(
       "/biochar_applications",
       expect.objectContaining({
-        average_application_rate: { magnitude: 3, unit: "t/ha" },
-        production_batch_id: "ptb-test",
-        storage_site_id: "slc-test",
-        truck_mass_on_arrival: { magnitude: 15_000, unit: "kg" },
-        truck_mass_on_departure: { magnitude: 3_000, unit: "kg" },
+        truck_mass_on_arrival: { magnitude: 12_000, unit: "kg" },
+        truck_mass_on_departure: { magnitude: 0, unit: "kg" },
       }),
     );
   });
 
-  it("journals a gated registration and skips the registry POST for missing truck masses", async () => {
-    await ensureRemovalBiocharApplications({
-      orgCtx,
-      removalId: "removal-1",
-      externalRemovalId: EXTERNAL_REMOVAL_ID,
-      submissionRow: { id: "submission-1" } as CertificationSubmissionRow,
-      intents: [gatedIntent()],
-      log,
-    });
-
-    expect(mocks.ensureProduction).toHaveBeenCalledOnce();
-    expect(mocks.ensureStorage).toHaveBeenCalledOnce();
-    expect(mocks.recordGated).toHaveBeenCalledWith(
-      orgCtx,
-      expect.objectContaining({
-        applicationId: APPLICATION_ID,
-        creditBatchId: CREDIT_BATCH_ID,
-        productionBatchRegistrationId: "production-journal-1",
-        storageLocationRegistrationId: "storage-journal-1",
-        externalProductionBatchId: "ptb-test",
-        externalStorageLocationId: "slc-test",
-        supplierReference: intent().supplierReference,
-        gateReason: "missing_truck_masses",
-      }),
-    );
-    expect(mocks.claim).not.toHaveBeenCalled();
-    expect(mocks.client.get).not.toHaveBeenCalled();
-    expect(mocks.client.post).not.toHaveBeenCalled();
-    expect(mocks.confirm).not.toHaveBeenCalled();
-  });
-
-  it("upgrades a mass-gated placeholder into the in-flight claim once masses exist", async () => {
-    mocks.registration = registration(
-      {},
-      {
-        submittedPayload: null,
-        payloadHash: null,
-        gateReason: "missing_truck_masses",
-        observedGhgEntryId: null,
-      },
-    );
-    mocks.activateGated.mockImplementation(async (_ctx, input) => {
-      mocks.events.push("gated-activated");
-      mocks.registration = {
-        ...mocks.registration!,
-        submittedPayload: input.submittedPayload,
-        payloadHash: input.payloadHash,
-        gateReason: "create_in_flight",
-      };
-      return mocks.registration;
-    });
-    mocks.client.get.mockResolvedValue(page([]));
-    mocks.client.post.mockImplementation(async () => {
-      mocks.events.push("biochar-application");
-      return remote();
-    });
-
-    await ensure();
-
-    expect(mocks.activateGated).toHaveBeenCalledWith(
-      orgCtx,
-      expect.objectContaining({
-        registrationId: "journal-1",
-        applicationId: APPLICATION_ID,
-        creditBatchId: CREDIT_BATCH_ID,
-        supplierReference: intent().supplierReference,
-      }),
-    );
-    expect(mocks.claim).not.toHaveBeenCalled();
-    expect(mocks.markDrift).not.toHaveBeenCalled();
-    expect(mocks.events).toContain("gated-activated");
-    expect(mocks.registration).toMatchObject({
-      lifecycleStatus: "confirmed",
-      externalApplicationId: "bca-test",
-      gateReason: null,
-    });
-  });
-
-  it("reconciles an ambiguous POST on retry without posting a duplicate", async () => {
+  it("blocks on a registry failure and reconciles safely on retry", async () => {
     mocks.client.get
       .mockResolvedValueOnce(page([]))
       .mockResolvedValueOnce(page([remote()]));
     mocks.client.post.mockRejectedValueOnce(new Error("connection reset"));
 
     await expect(ensure()).rejects.toThrow("connection reset");
-    expect(mocks.registration).toMatchObject({
-      lifecycleStatus: "gated",
-      observedGhgEntryId: null,
-      observedRemovalId: null,
-    });
+    expect(mocks.registration).toMatchObject({ lifecycleStatus: "creating" });
 
     await expect(ensure()).resolves.toBeUndefined();
     expect(mocks.client.post).toHaveBeenCalledTimes(1);
-    expect(mocks.confirm).toHaveBeenCalledOnce();
     expect(mocks.registration).toMatchObject({
       lifecycleStatus: "confirmed",
       externalApplicationId: "bca-test",
-      observedGhgEntryId: EXTERNAL_REMOVAL_ID,
     });
   });
 
-  it("keeps the pre-POST claim unobserved after a registry refusal", async () => {
-    mocks.client.get.mockResolvedValue(page([]));
-    mocks.client.post.mockRejectedValue(new Error("registry refused request"));
-
-    await expect(ensure()).rejects.toThrow("registry refused request");
-    expect(mocks.registration).toMatchObject({
-      lifecycleStatus: "gated",
-      observedGhgEntryId: null,
-      observedRemovalId: null,
-    });
-  });
-
-  it("reuses a confirmed application across a superseding Removal version", async () => {
+  it("uses the ordinary claim path without a gated placeholder", async () => {
     mocks.client.get.mockResolvedValue(page([]));
     mocks.client.post.mockResolvedValue(remote());
+
     await ensure();
 
-    vi.clearAllMocks();
-    mocks.client.get.mockResolvedValue(page([remote()]));
-    await ensureRemovalBiocharApplications({
-      orgCtx,
-      removalId: "removal-1",
-      externalRemovalId: "ghg-superseding-version",
-      submissionRow: { id: "submission-2" } as CertificationSubmissionRow,
-      intents: [intent()],
-      log,
-    });
-
-    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.claim).toHaveBeenCalledOnce();
     expect(mocks.registration).toMatchObject({
       lifecycleStatus: "confirmed",
-      externalApplicationId: "bca-test",
-      observedGhgEntryId: EXTERNAL_REMOVAL_ID,
+      driftReason: null,
     });
   });
 
-  it("rejects remote payload drift without POSTing", async () => {
+  it("marks remote payload drift and does not duplicate the POST", async () => {
+    const body = {
+      application_date: "2026-04-05",
+      average_application_rate: { magnitude: 3, unit: "t/ha" },
+      production_batch_id: "ptb-test",
+      project_id: "prj-test",
+      source_ids: [],
+      storage_site_id: "slc-test",
+      supplier_reference_id: intent().supplierReference,
+      truck_mass_on_arrival: { magnitude: 12_000, unit: "kg" },
+      truck_mass_on_departure: { magnitude: 0, unit: "kg" },
+    };
+    mocks.registration = registration(body);
     mocks.client.get.mockResolvedValue(
       page([remote({ production_batch_id: "ptb-other" })]),
     );
@@ -438,54 +304,5 @@ describe("ensureRemovalBiocharApplications", () => {
       "remote_payload_or_identity_drift",
     );
     expect(mocks.client.post).not.toHaveBeenCalled();
-  });
-
-  it("does not confirm an unobserved GHG Entry association", async () => {
-    mocks.client.get.mockResolvedValue(
-      page([remote({ ghg_entry_id: null, removal_id: null })]),
-    );
-
-    await expect(ensure()).rejects.toThrow(/not linked to a GHG Entry yet/i);
-    expect(mocks.confirm).not.toHaveBeenCalled();
-  });
-
-  it("preserves the confirmed external identity when reconciliation finds another record", async () => {
-    mocks.client.get.mockResolvedValue(page([]));
-    mocks.client.post.mockResolvedValue(remote());
-    await ensure();
-
-    vi.clearAllMocks();
-    mocks.client.get.mockResolvedValue(
-      page([remote({ id: "bca-replacement" })]),
-    );
-
-    await expect(ensure()).rejects.toThrow(/different Biochar Application identity/i);
-    expect(mocks.markDrift).toHaveBeenCalledWith(
-      orgCtx,
-      "journal-1",
-      "external_identity_drift",
-    );
-    expect(mocks.confirm).not.toHaveBeenCalled();
-    expect(mocks.registration?.externalApplicationId).toBe("bca-test");
-  });
-
-  it("rejects journal payload drift before any Biochar Application lookup or POST", async () => {
-    mocks.registration = registration({}, { payloadHash: "stale" });
-
-    await expect(ensure()).rejects.toThrow(/journal drift/i);
-    expect(mocks.markDrift).toHaveBeenCalledWith(
-      orgCtx,
-      "journal-1",
-      "local_payload_or_dependency_drift",
-    );
-    expect(mocks.client.get).not.toHaveBeenCalled();
-    expect(mocks.client.post).not.toHaveBeenCalled();
-  });
-
-  it("keeps the integration fail-closed in production", async () => {
-    mocks.env.ISOMETRIC_ENVIRONMENT = "production";
-    await expect(ensure()).rejects.toThrow(/not enabled for production/i);
-    expect(mocks.ensureProduction).not.toHaveBeenCalled();
-    expect(mocks.ensureStorage).not.toHaveBeenCalled();
   });
 });

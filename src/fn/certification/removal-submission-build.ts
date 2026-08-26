@@ -786,8 +786,7 @@ export async function buildRemovalSubmissionBuild(args: {
       candidate.sourceId,
     ]),
   );
-  // Delivery-lineage mass evidence (proof of delivery, BoL) targets the
-  // sequestration datapoint, whose Sources resolve per member credit batch.
+  // Delivery bills of lading target batch-scoped transport inputs.
   const deliveryIdByApplicationId = new Map(
     ctx.lineages.map((lineage) => [
       lineage.application.id,

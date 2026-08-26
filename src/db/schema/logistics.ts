@@ -160,12 +160,6 @@ export const deliveries = pgTable(
     // Server-authoritative dry biochar allocated from the linked product.
     massDryKg: massKg('mass_dry_kg'),
 
-    // Independent delivery-site observations required by Isometric's
-    // Biochar Application API. Their difference is evidence, not a substitute
-    // for the separately recorded delivered wet mass.
-    truckMassOnArrivalKg: massKg('truck_mass_on_arrival_kg'),
-    truckMassOnDepartureKg: massKg('truck_mass_on_departure_kg'),
-
     // --- Operational transport (emissions canonical in transport_legs) ---
     driverId: uuid('driver_id').references(() => drivers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
@@ -203,18 +197,6 @@ export const deliveries = pgTable(
     check(
       'deliveries_mass_dry_lte_wet_mass',
       sql`${table.massDryKg} is null or ${table.deliveredWetMassKg} is null or ${table.massDryKg} <= ${table.deliveredWetMassKg}`
-    ),
-    check(
-      'deliveries_truck_mass_on_arrival_non_negative',
-      sql`${table.truckMassOnArrivalKg} is null or ${table.truckMassOnArrivalKg} >= 0`
-    ),
-    check(
-      'deliveries_truck_mass_on_departure_non_negative',
-      sql`${table.truckMassOnDepartureKg} is null or ${table.truckMassOnDepartureKg} >= 0`
-    ),
-    check(
-      'deliveries_truck_mass_arrival_gte_departure',
-      sql`${table.truckMassOnArrivalKg} is null or ${table.truckMassOnDepartureKg} is null or ${table.truckMassOnArrivalKg} >= ${table.truckMassOnDepartureKg}`
     ),
     check(
       'deliveries_distance_km_override_non_negative',

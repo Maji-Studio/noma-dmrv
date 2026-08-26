@@ -10,7 +10,6 @@ import type {
   ApplicationBoundaryLogbookEvidenceType,
   ApplicationVisualEvidenceRole,
 } from "@/lib/certification/application-evidence";
-import type { DeliveryEvidenceRole } from "@/lib/certification/delivery-evidence";
 import type { DocumentType } from "@/schemas/documents";
 
 interface EvidenceExif {
@@ -48,7 +47,6 @@ export interface UploadParams {
   description?: string;
   applicationEvidenceRole?: ApplicationVisualEvidenceRole;
   applicationLogbookEvidenceType?: ApplicationBoundaryLogbookEvidenceType;
-  deliveryEvidenceRole?: DeliveryEvidenceRole;
   onProgress?: (progress: number) => void;
   signal?: AbortSignal;
 }
@@ -193,7 +191,6 @@ export function useFileUpload(): UseFileUploadResult {
       description,
       applicationEvidenceRole,
       applicationLogbookEvidenceType,
-      deliveryEvidenceRole,
       onProgress,
       signal,
     }) => {
@@ -225,7 +222,6 @@ export function useFileUpload(): UseFileUploadResult {
           description,
           applicationEvidenceRole,
           applicationLogbookEvidenceType,
-          deliveryEvidenceRole,
         });
         if (controller.signal.aborted) throw new Error("Upload aborted");
 

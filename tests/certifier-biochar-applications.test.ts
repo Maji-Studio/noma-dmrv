@@ -174,8 +174,6 @@ beforeAll(async () => {
       status: "delivered",
       deliveredWetMassKg: 12_000,
       massDryKg: 10_800,
-      truckMassOnArrivalKg: 15_000,
-      truckMassOnDepartureKg: 3_000,
     })
     .returning({ id: deliveries.id });
   ids.delivery = delivery.id;
@@ -266,8 +264,6 @@ describe("certifier Biochar Application data access", () => {
         applicationId: ids.application,
         fieldSizeHa: 4,
         deliveredWetMassKg: 12_000,
-        truckMassOnArrivalKg: 15_000,
-        truckMassOnDepartureKg: 3_000,
       }),
     ]);
     await expect(
@@ -277,10 +273,8 @@ describe("certifier Biochar Application data access", () => {
     const body = buildCreateBiocharApplicationRequest({
       applicationCode: `AP-BCA-${tag}`,
       applicationDate: "2026-04-05",
-      appliedTonnes: 12,
+      applicationWetMassKg: 12_000,
       fieldSizeHa: 4,
-      truckMassOnArrivalKg: 15_000,
-      truckMassOnDepartureKg: 3_000,
       externalProjectId: `prj_bca_${tag}`,
       externalProductionBatchId: `ptb_bca_${tag}`,
       externalStorageLocationId: `slc_bca_${tag}`,
@@ -306,7 +300,7 @@ describe("certifier Biochar Application data access", () => {
     await expect(
       confirmBiocharApplicationRegistration(foreignCtx, {
         registrationId: journal.id,
-        expectedPayloadHash: journal.payloadHash!,
+        expectedPayloadHash: journal.payloadHash,
         externalApplicationId: "bca-foreign",
         observedGhgEntryId: "ghg-test",
         observedRemovalId: null,
@@ -315,7 +309,7 @@ describe("certifier Biochar Application data access", () => {
     await expect(
       confirmBiocharApplicationRegistration(ctx, {
         registrationId: journal.id,
-        expectedPayloadHash: journal.payloadHash!,
+        expectedPayloadHash: journal.payloadHash,
         externalApplicationId: "bca-test",
         observedGhgEntryId: "ghg-test",
         observedRemovalId: null,

@@ -121,7 +121,7 @@ export const certifierStorageLocationDriftStatus = pgEnum(
 
 export const certifierBiocharApplicationLifecycleStatus = pgEnum(
   'certifier_biochar_application_lifecycle_status',
-  ['gated', 'confirmed', 'deleted'],
+  ['creating', 'confirmed', 'deleted'],
 );
 
 export const certifierBiocharApplicationCorrectionStatus = pgEnum(

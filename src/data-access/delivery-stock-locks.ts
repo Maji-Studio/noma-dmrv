@@ -15,8 +15,6 @@ interface DeliveryStockState {
   status: string | null;
   deliveredWetMassKg: number | null;
   massDryKg: number | null;
-  truckMassOnArrivalKg: number | null;
-  truckMassOnDepartureKg: number | null;
 }
 
 interface DeliveryStockUpdate {
@@ -101,8 +99,6 @@ export async function lockDeliveryUpdateStock(
       status: deliveries.status,
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
       massDryKg: deliveries.massDryKg,
-      truckMassOnArrivalKg: deliveries.truckMassOnArrivalKg,
-      truckMassOnDepartureKg: deliveries.truckMassOnDepartureKg,
     })
     .from(deliveries)
     .where(and(
@@ -186,8 +182,6 @@ export async function lockDeliveryUpdateStock(
       status: deliveries.status,
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
       massDryKg: deliveries.massDryKg,
-      truckMassOnArrivalKg: deliveries.truckMassOnArrivalKg,
-      truckMassOnDepartureKg: deliveries.truckMassOnDepartureKg,
     })
     .from(deliveries)
     .where(and(
@@ -203,9 +197,7 @@ export async function lockDeliveryUpdateStock(
       locked.biocharProductId === snapshot.biocharProductId &&
       locked.status === snapshot.status &&
       locked.deliveredWetMassKg === snapshot.deliveredWetMassKg &&
-      locked.massDryKg === snapshot.massDryKg &&
-      locked.truckMassOnArrivalKg === snapshot.truckMassOnArrivalKg &&
-      locked.truckMassOnDepartureKg === snapshot.truckMassOnDepartureKg,
+      locked.massDryKg === snapshot.massDryKg,
   );
 
   if (!stockDerivationChanged) return locked;
@@ -295,8 +287,6 @@ export async function lockDeleteDeliveryStock(
       status: deliveries.status,
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
       massDryKg: deliveries.massDryKg,
-      truckMassOnArrivalKg: deliveries.truckMassOnArrivalKg,
-      truckMassOnDepartureKg: deliveries.truckMassOnDepartureKg,
     })
     .from(deliveries)
     .where(and(
@@ -344,8 +334,6 @@ export async function lockDeleteDeliveryStock(
       status: deliveries.status,
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
       massDryKg: deliveries.massDryKg,
-      truckMassOnArrivalKg: deliveries.truckMassOnArrivalKg,
-      truckMassOnDepartureKg: deliveries.truckMassOnDepartureKg,
     })
     .from(deliveries)
     .where(and(
@@ -362,9 +350,7 @@ export async function lockDeleteDeliveryStock(
       locked.biocharProductId === snapshot.biocharProductId &&
       locked.status === snapshot.status &&
       locked.deliveredWetMassKg === snapshot.deliveredWetMassKg &&
-      locked.massDryKg === snapshot.massDryKg &&
-      locked.truckMassOnArrivalKg === snapshot.truckMassOnArrivalKg &&
-      locked.truckMassOnDepartureKg === snapshot.truckMassOnDepartureKg,
+      locked.massDryKg === snapshot.massDryKg,
   );
 
   const [lockedOrder] = await tx

@@ -24,6 +24,7 @@ import {
 import { deleteSample, updateSample } from "@/data-access/samples";
 import { createTransportLeg } from "@/data-access/transport-legs";
 import { db } from "@/db";
+import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import {
   applications,
   biocharProductSourceAllocations,
@@ -48,10 +49,6 @@ import {
   storageLocations,
   transportLegs,
 } from "@/db/schema";
-import {
-  acquireCertificationArtifactLocksSorted,
-} from "@/lib/certification/submission-lock";
-import { withMassGateRegistration } from "./helpers/mass-gate-registration";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 const LOCKED_COPY = "is locked by a certification submission.";
@@ -389,26 +386,32 @@ async function withFixture<T>(
 }
 
 async function waitForAdvisoryLockWait(heldByPid: number): Promise<void> {
-  await expect.poll(async () => {
-    const result = await db.execute<{ waiting: boolean }>(sql`
-      select exists (
-        select 1
-        from pg_locks waiting
-        join pg_locks held
-          on held.locktype = waiting.locktype
-         and held.database is not distinct from waiting.database
-         and held.classid is not distinct from waiting.classid
-         and held.objid is not distinct from waiting.objid
-         and held.objsubid is not distinct from waiting.objsubid
-        where waiting.locktype = 'advisory'
-          and not waiting.granted
-          and held.granted
-          and held.pid = ${heldByPid}
-      ) as waiting
-    `);
-    return result.rows[0]?.waiting ?? false;
-  }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
+  await expect
+    .poll(
+      async () => {
+        const result = await db.execute<{ waiting: boolean }>(sql`
+          select exists (
+            select 1
+            from pg_locks waiting
+            join pg_locks held
+              on held.locktype = waiting.locktype
+             and held.database is not distinct from waiting.database
+             and held.classid is not distinct from waiting.classid
+             and held.objid is not distinct from waiting.objid
+             and held.objsubid is not distinct from waiting.objsubid
+            where waiting.locktype = 'advisory'
+              and not waiting.granted
+              and held.granted
+              and held.pid = ${heldByPid}
+          ) as waiting
+        `);
+        return result.rows[0]?.waiting ?? false;
+      },
+      { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS },
+    )
+    .toBe(true);
 }
+
 
 beforeAll(() => ensureTestOrg());
 
@@ -598,246 +601,141 @@ describe("certification lineage guards", () => {
     }, "ghgStatement");
   });
 
-  it("recovers a submitted Removal's payload-less missing-mass gate without reporting-window fields", async () => {
+  it("does not wait on an application row while checking its delivery lineage", async () => {
     await withFixture(async (fixture) => {
-      await withMassGateRegistration(fixture, async () => {
-        const updated = await updateDelivery(
-          makeTestOrgContext(TEST_USER_ID),
-          fixture.deliveryId,
-          {
-            truckMassOnArrivalKg: 8_000,
-            truckMassOnDepartureKg: 7_700,
-          },
-        );
-
-        expect(updated.truckMassOnArrivalKg).toBe(8_000);
-        expect(updated.truckMassOnDepartureKg).toBe(7_700);
+      let releaseApplicationLock = () => {};
+      let signalApplicationLocked = () => {};
+      const applicationLocked = new Promise<void>((resolve) => {
+        signalApplicationLocked = resolve;
       });
-    });
-  });
+      const release = new Promise<void>((resolve) => {
+        releaseApplicationLock = resolve;
+      });
+      const blocker = db.transaction(async (tx) => {
+        await tx
+          .select({ id: applications.id })
+          .from(applications)
+          .where(eq(applications.id, fixture.applicationId))
+          .for("update");
+        signalApplicationLocked();
+        await release;
+      });
+      await applicationLocked;
 
-  it("keeps an unsubmitted GHG Statement lineage locked despite a matching mass gate", async () => {
-    await withFixture(async (fixture) => {
-      const [ghgStatement] = await db.insert(certifierGhgStatements).values({
-        organizationId: TEST_ORG_ID,
-        facilityId: fixture.facilityId,
-        reportingPeriodEndOn: "2026-06-30",
-      }).returning({ id: certifierGhgStatements.id });
+      let completionSettled = false;
+      const completion = updateDelivery(
+        makeTestOrgContext(TEST_USER_ID),
+        fixture.deliveryId,
+        { distanceNote: "lineage lock independence" },
+      ).finally(() => {
+        completionSettled = true;
+      });
+      const completionAssertion = expect(completion).rejects.toThrow(
+        LOCKED_COPY,
+      );
       try {
-        await db.update(certifierRemovals)
-          .set({ ghgStatementId: ghgStatement.id })
-          .where(eq(certifierRemovals.id, fixture.removalId));
-        await withMassGateRegistration(fixture, async () => {
-          await expect(updateDelivery(
-            makeTestOrgContext(TEST_USER_ID),
-            fixture.deliveryId,
-            { truckMassOnArrivalKg: 8_000, truckMassOnDepartureKg: 7_700 },
-          )).rejects.toThrow(LOCKED_COPY);
-        });
+        await expect
+          .poll(() => completionSettled, {
+            timeout: CONCURRENCY_BARRIER_TIMEOUT_MS,
+          })
+          .toBe(true);
+        await completionAssertion;
       } finally {
-        await db.update(certifierRemovals).set({ ghgStatementId: null })
-          .where(eq(certifierRemovals.id, fixture.removalId));
-        await db.delete(certifierGhgStatements)
-          .where(eq(certifierGhgStatements.id, ghgStatement.id));
+        releaseApplicationLock();
+        await blocker;
       }
     });
   });
 
-  it("rejects equal truck masses without leaving the missing-mass gate stuck", async () => {
+  it("fails closed when locked lineage gains a GHG Statement artifact", async () => {
     await withFixture(async (fixture) => {
-      await withMassGateRegistration(fixture, async () => {
-        await expect(updateDelivery(
-          makeTestOrgContext(TEST_USER_ID),
-          fixture.deliveryId,
-          { truckMassOnArrivalKg: 8_000, truckMassOnDepartureKg: 8_000 },
-        )).rejects.toThrow(LOCKED_COPY);
-
-        const [unchanged] = await db.select({
-          arrivalKg: deliveries.truckMassOnArrivalKg,
-          departureKg: deliveries.truckMassOnDepartureKg,
-        }).from(deliveries).where(eq(deliveries.id, fixture.deliveryId));
-        expect(unchanged).toEqual({ arrivalKg: null, departureKg: null });
-
-        const recovered = await updateDelivery(
-          makeTestOrgContext(TEST_USER_ID),
-          fixture.deliveryId,
-          { truckMassOnArrivalKg: 8_000, truckMassOnDepartureKg: 7_700 },
-        );
-        expect(recovered.truckMassOnArrivalKg).toBe(8_000);
-        expect(recovered.truckMassOnDepartureKg).toBe(7_700);
+      let releaseArtifactLock = () => {};
+      let signalArtifactLocked!: (pid: number) => void;
+      const artifactLocked = new Promise<number>((resolve) => {
+        signalArtifactLocked = resolve;
       });
-    });
-  });
-
-  it("does not wait on the joined application row while locking a mass gate", async () => {
-    await withFixture(async (fixture) => {
-      await withMassGateRegistration(fixture, async () => {
-        let releaseApplicationLock = () => {};
-        let signalApplicationLocked = () => {};
-        const applicationLocked = new Promise<void>((resolve) => {
-          signalApplicationLocked = resolve;
-        });
-        const release = new Promise<void>((resolve) => {
-          releaseApplicationLock = resolve;
-        });
-        const blocker = db.transaction(async (tx) => {
-          await tx.select({ id: applications.id }).from(applications)
-            .where(eq(applications.id, fixture.applicationId)).for("update");
-          signalApplicationLocked();
-          await release;
-        });
-        await applicationLocked;
-
-        let completionSettled = false;
-        const completion = updateDelivery(
-          makeTestOrgContext(TEST_USER_ID),
-          fixture.deliveryId,
-          { truckMassOnArrivalKg: 8_000, truckMassOnDepartureKg: 7_700 },
-        ).finally(() => { completionSettled = true; });
-        try {
-          await expect.poll(() => completionSettled, {
-            timeout: CONCURRENCY_BARRIER_TIMEOUT_MS,
-          }).toBe(true);
-          expect((await completion).truckMassOnArrivalKg).toBe(8_000);
-        } finally {
-          releaseApplicationLock();
-          await blocker;
-        }
+      const release = new Promise<void>((resolve) => {
+        releaseArtifactLock = resolve;
       });
-    });
-  });
-
-  it("fails closed when the locked lineage gains a new artifact key", async () => {
-    await withFixture(async (fixture) => {
-      await withMassGateRegistration(fixture, async () => {
-        let releaseArtifactLock = () => {};
-        let signalArtifactLocked!: (pid: number) => void;
-        const artifactLocked = new Promise<number>((resolve) => {
-          signalArtifactLocked = resolve;
-        });
-        const release = new Promise<void>((resolve) => {
-          releaseArtifactLock = resolve;
-        });
-        const blocker = db.transaction(async (tx) => {
-          await acquireCertificationArtifactLocksSorted(tx, [{
+      const blocker = db.transaction(async (tx) => {
+        await acquireCertificationArtifactLocksSorted(tx, [
+          {
             provider: "isometric",
             localEntityType: "removal",
             localEntityId: fixture.removalId,
-          }]);
-          const backend = await tx.execute<{ pid: number }>(
-            sql`select pg_backend_pid() as pid`,
-          );
-          signalArtifactLocked(backend.rows[0]?.pid ?? 0);
-          await release;
-        });
-        const blockerPid = await artifactLocked;
-        const completion = updateDelivery(
-          makeTestOrgContext(TEST_USER_ID),
-          fixture.deliveryId,
-          { truckMassOnArrivalKg: 8_000, truckMassOnDepartureKg: 7_700 },
+          },
+        ]);
+        const backend = await tx.execute<{ pid: number }>(
+          sql`select pg_backend_pid() as pid`,
         );
-        const completionAssertion = expect(completion).rejects.toThrow(
-          "Certification lineage changed while it was being locked",
-        );
-        let ghgStatementId: string | null = null;
-        try {
-          await waitForAdvisoryLockWait(blockerPid);
-          const [ghgStatement] = await db.insert(certifierGhgStatements).values({
+        signalArtifactLocked(backend.rows[0]?.pid ?? 0);
+        await release;
+      });
+      const blockerPid = await artifactLocked;
+      const completion = updateDelivery(
+        makeTestOrgContext(TEST_USER_ID),
+        fixture.deliveryId,
+        { distanceNote: "concurrent lineage mutation" },
+      );
+      const completionAssertion = expect(completion).rejects.toThrow(
+        "Certification lineage changed while it was being locked",
+      );
+      let ghgStatementId: string | null = null;
+      try {
+        await waitForAdvisoryLockWait(blockerPid);
+        const [ghgStatement] = await db
+          .insert(certifierGhgStatements)
+          .values({
             organizationId: TEST_ORG_ID,
             facilityId: fixture.facilityId,
             reportingPeriodEndOn: "2026-06-30",
-          }).returning({ id: certifierGhgStatements.id });
-          ghgStatementId = ghgStatement.id;
-          await db.update(certifierRemovals).set({ ghgStatementId })
+          })
+          .returning({ id: certifierGhgStatements.id });
+        ghgStatementId = ghgStatement.id;
+        await db
+          .update(certifierRemovals)
+          .set({ ghgStatementId })
+          .where(eq(certifierRemovals.id, fixture.removalId));
+      } finally {
+        releaseArtifactLock();
+        await blocker;
+      }
+      try {
+        await completionAssertion;
+      } finally {
+        if (ghgStatementId) {
+          await db
+            .update(certifierRemovals)
+            .set({ ghgStatementId: null })
             .where(eq(certifierRemovals.id, fixture.removalId));
-        } finally {
-          releaseArtifactLock();
-          await blocker;
+          await db
+            .delete(certifierGhgStatements)
+            .where(eq(certifierGhgStatements.id, ghgStatementId));
         }
-        try {
-          await completionAssertion;
-        } finally {
-          if (ghgStatementId) {
-            await db.update(certifierRemovals).set({ ghgStatementId: null })
-              .where(eq(certifierRemovals.id, fixture.removalId));
-            await db.delete(certifierGhgStatements)
-              .where(eq(certifierGhgStatements.id, ghgStatementId));
-          }
-        }
-      });
-    });
+      }
+    }, "none");
   });
 
-  it("keeps blocking GHG Statement lineage locked despite a matching mass gate", async () => {
+  it("keeps an in-flight replacement Removal snapshot locked", async () => {
     await withFixture(async (fixture) => {
-      await db.transaction(async (tx) => {
-        await tx
-          .update(certifierRemovals)
-          .set({ startedOn: "2026-06-13", completedOn: "2026-06-16" })
-          .where(eq(certifierRemovals.id, fixture.removalId));
-        await tx.insert(certificationSubmissions).values({
-          organizationId: TEST_ORG_ID,
-          provider: "isometric",
-          submissionType: "removal",
-          localEntityType: "removal",
-          localEntityId: fixture.removalId,
-          externalId: `ext_removal_${crypto.randomUUID()}`,
-          version: 1,
-          status: "submitted",
-          payloadHash: `hash-${crypto.randomUUID()}`,
-          payloadSnapshot: { fixture: "mass-gated-ghg-lock" },
-          submittedAt: new Date("2026-06-17T00:00:00Z"),
-        });
+      await db.insert(certificationSubmissions).values({
+        organizationId: TEST_ORG_ID,
+        provider: "isometric",
+        submissionType: "removal",
+        localEntityType: "removal",
+        localEntityId: fixture.removalId,
+        version: 2,
+        status: "draft",
+        payloadHash: `replacement-${crypto.randomUUID()}`,
+        payloadSnapshot: { fixture: "replacement-lineage-lock" },
+        lockedAt: new Date(),
       });
 
-      await withMassGateRegistration(fixture, async () => {
-        await expect(
-          updateDelivery(
-            makeTestOrgContext(TEST_USER_ID),
-            fixture.deliveryId,
-            {
-              truckMassOnArrivalKg: 8_000,
-              truckMassOnDepartureKg: 7_700,
-            },
-          ),
-        ).rejects.toThrow(LOCKED_COPY);
-      });
-    }, "ghgStatement");
-  });
-
-  it("keeps an in-flight replacement Removal snapshot locked despite a matching mass gate", async () => {
-    await withFixture(async (fixture) => {
-      await db.transaction(async (tx) => {
-        await tx
-          .update(certifierRemovals)
-          .set({ startedOn: "2026-06-13", completedOn: "2026-06-16" })
-          .where(eq(certifierRemovals.id, fixture.removalId));
-        await tx.insert(certificationSubmissions).values({
-          organizationId: TEST_ORG_ID,
-          provider: "isometric",
-          submissionType: "removal",
-          localEntityType: "removal",
-          localEntityId: fixture.removalId,
-          version: 2,
-          status: "draft",
-          payloadHash: `replacement-${crypto.randomUUID()}`,
-          payloadSnapshot: { fixture: "mass-gated-replacement-lock" },
-          lockedAt: new Date(),
-        });
-      });
-
-      await withMassGateRegistration(fixture, async () => {
-        await expect(
-          updateDelivery(
-            makeTestOrgContext(TEST_USER_ID),
-            fixture.deliveryId,
-            {
-              truckMassOnArrivalKg: 8_000,
-              truckMassOnDepartureKg: 7_700,
-            },
-          ),
-        ).rejects.toThrow(LOCKED_COPY);
-      });
+      await expect(
+        updateDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId, {
+          distanceNote: "must stay locked",
+        }),
+      ).rejects.toThrow(LOCKED_COPY);
     });
   });
 
