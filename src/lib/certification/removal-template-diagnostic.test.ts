@@ -238,6 +238,7 @@ describe("buildRemovalTemplateDiagnostic", () => {
     expect(inputs.product_mass).toMatchObject({
       nomaSource: "Attribution-scaled dry applied biochar mass",
       transform: "Unchanged",
+      status: "externally-unconfirmed-contract",
       resolved: { binding: "datapoint", count: 1, magnitudes: [900] },
     });
     expect(diagnostic.aggregateStatus).toBe("drift");

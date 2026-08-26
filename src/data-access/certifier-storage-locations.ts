@@ -9,12 +9,57 @@ import {
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customerLocations } from "@/db/schema/parties";
 import type { OrgContext } from "@/lib/auth/server";
-import { certifierExternalProjectLockKey } from "@/lib/certification/certifier-project-lock";
+import {
+  certifierExternalProjectLockKey,
+  certifierProjectLockKey,
+} from "@/lib/certification/certifier-project-lock";
 import type { CreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
 type CertifierProvider = CertifierStorageLocation["provider"];
 const DEFAULT_PROVIDER: CertifierProvider = "isometric";
+
+const STORAGE_LOCATION_LOCK_SCOPE = "certifier-storage-location:isometric";
+
+/**
+ * Serializes one application site's registry registration: site lock first,
+ * then the facility-project lock, then the external-project lock. Lock order
+ * matches withCertifierProjectMappingLocks (facility-project lock before
+ * external-project lock) — taking them in the opposite order would deadlock
+ * against a concurrent project remap/unlink.
+ */
+export async function withStorageLocationRegistrationLocks<T>(
+  ctx: OrgContext,
+  input: {
+    facilityId: string;
+    externalProjectId: string;
+    customerLocationId: string;
+    provider: CertifierProvider;
+  },
+  fn: () => Promise<T>,
+): Promise<T> {
+  requireOrgScope(ctx);
+  return withDedicatedSessionAdvisoryLock(
+    `${STORAGE_LOCATION_LOCK_SCOPE}:${input.externalProjectId}:${input.customerLocationId}`,
+    () =>
+      withDedicatedSessionAdvisoryLock(
+        certifierProjectLockKey({
+          organizationId: ctx.organizationId,
+          facilityId: input.facilityId,
+          provider: input.provider,
+        }),
+        () =>
+          withDedicatedSessionAdvisoryLock(
+            certifierExternalProjectLockKey({
+              organizationId: ctx.organizationId,
+              externalProjectId: input.externalProjectId,
+              provider: input.provider,
+            }),
+            fn,
+          ),
+      ),
+  );
+}
 
 export async function withCertifierExternalProjectLocks<T>(
   ctx: OrgContext,
