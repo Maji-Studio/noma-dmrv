@@ -3,6 +3,7 @@ import type { DbTransaction } from "@/db";
 import { biocharProducts, deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { DELIVERED_WET_MASS_REQUIRED_MESSAGE } from "@/lib/delivery-wet-mass";
 import { assertBiocharProductDrawWithinStock } from "./bin-stock-guards";
 import {
   assertStockLockSnapshot,
@@ -38,16 +39,14 @@ export function deliveryDrawsStock(
 
 /** A persisted delivered row must satisfy the same positive-mass predicate. */
 export function assertDeliveredWetMass(
-  status: "upcoming" | "delivered",
+  status: string | null | undefined,
   deliveredWetMassKg: number | null | undefined,
 ): void {
   if (
     status === "delivered" &&
     !deliveryDrawsStock(status, deliveredWetMassKg)
   ) {
-    throw new SafeError(
-      "Wet mass must be greater than 0 for a delivered delivery",
-    );
+    throw new SafeError(DELIVERED_WET_MASS_REQUIRED_MESSAGE);
   }
 }
 

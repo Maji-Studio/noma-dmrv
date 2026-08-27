@@ -11,7 +11,7 @@ describe("delivery persisted mass state", () => {
 
     for (const mass of [undefined, null, 0, -1]) {
       expect(() => assertDeliveredWetMass("delivered", mass)).toThrow(
-        "Wet mass must be greater than 0",
+        "Enter a wet mass greater than 0 before marking this delivery as delivered",
       );
     }
     expect(() => assertDeliveredWetMass("delivered", 1)).not.toThrow();

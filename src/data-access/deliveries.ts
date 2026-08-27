@@ -801,9 +801,7 @@ export async function updateDelivery(
       data.deliveredWetMassKg !== undefined
         ? data.deliveredWetMassKg
         : lockedDelivery.deliveredWetMassKg;
-    const lockedEffectiveStatus =
-      data.status ??
-      (lockedDelivery.status === "delivered" ? "delivered" : "upcoming");
+    const lockedEffectiveStatus = data.status ?? lockedDelivery.status;
     assertDeliveredWetMass(lockedEffectiveStatus, lockedEffectiveWetMass);
     const orderChanged = lockedEffectiveOrderId !== lockedDelivery.orderId;
     const wetMassIncreased =

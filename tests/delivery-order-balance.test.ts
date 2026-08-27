@@ -117,7 +117,9 @@ describe("delivery order balance", () => {
       });
       await expect(
         updateDelivery(ctx, unweighed.id, { status: "delivered" }),
-      ).rejects.toThrow("Wet mass must be greater than 0");
+      ).rejects.toThrow(
+        "Enter a wet mass greater than 0 before marking this delivery as delivered",
+      );
     } finally {
       await seeded.cleanup();
     }

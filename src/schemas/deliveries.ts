@@ -12,6 +12,7 @@ import {
   type DistanceSourceValue,
 } from "./distance-source";
 import { optionalTripType } from "./trip-type";
+import { DELIVERED_WET_MASS_REQUIRED_MESSAGE } from "@/lib/delivery-wet-mass";
 import {
   emptyToNull,
   positiveMassKgSchema,
@@ -84,7 +85,7 @@ function validateDeliveredWetMass(
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["deliveredWetMassKg"],
-      message: WET_MASS_RANGE_MESSAGE,
+      message: DELIVERED_WET_MASS_REQUIRED_MESSAGE,
     });
   }
 }

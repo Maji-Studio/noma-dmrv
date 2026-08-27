@@ -101,6 +101,8 @@ describe("delivery range validation copy", () => {
       result.error.issues.find(
         (issue) => issue.path[0] === "deliveredWetMassKg",
       )?.message,
-    ).toBe("Wet mass must be greater than 0");
+    ).toBe(
+      "Enter a wet mass greater than 0 before marking this delivery as delivered",
+    );
   });
 });
