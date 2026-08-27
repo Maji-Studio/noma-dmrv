@@ -36,11 +36,7 @@ import {
   formulations,
 } from "@/db/schema/products";
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
-import {
-  FIELD_SIZE_REQUIRED_MESSAGE,
-  FIELD_SIZE_POSITIVE_MESSAGE,
-  isPositiveApplicationFieldSize,
-} from "@/lib/application-field-size";
+import { isPositiveApplicationFieldSize } from "@/lib/application-field-size";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
 import {
@@ -72,12 +68,11 @@ const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
 const INVALID_APPLICATION_EVIDENCE_MESSAGE = "Application evidence is invalid.";
 function assertPositiveApplicationFieldSize(
   fieldSizeHa: number | null | undefined,
+  applicationCode: string,
 ): asserts fieldSizeHa is number {
   if (!isPositiveApplicationFieldSize(fieldSizeHa)) {
     throw new SafeError(
-      fieldSizeHa == null
-        ? FIELD_SIZE_REQUIRED_MESSAGE
-        : FIELD_SIZE_POSITIVE_MESSAGE,
+      `Application ${applicationCode} needs a field size greater than 0 ha. Enter a field size and save again.`,
     );
   }
 }
@@ -687,7 +682,7 @@ export async function createApplication(
   data: CreateApplicationInput & { code: string }
 ): Promise<Application> {
   requireOrgScope(ctx);
-  assertPositiveApplicationFieldSize(data.fieldSizeHa);
+  assertPositiveApplicationFieldSize(data.fieldSizeHa, data.code);
 
   return db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
@@ -785,6 +780,7 @@ export async function updateApplication(
       data.fieldSizeHa === undefined
         ? existingApplication.fieldSizeHa
         : data.fieldSizeHa,
+      existingApplication.code,
     );
 
     const evidenceState = applicationEvidenceStateSchema.safeParse({

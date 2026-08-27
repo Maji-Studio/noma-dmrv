@@ -191,13 +191,17 @@ describe("application mutations", () => {
         ...base,
         fieldSizeHa: 0,
       }),
-    ).rejects.toThrow("Field size must be greater than 0");
+    ).rejects.toThrow(
+      `Application ${base.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
+    );
     await expect(
       createApplication(
         makeTestOrgContext(TEST_USER_ID),
         base as unknown as Parameters<typeof createApplication>[1],
       ),
-    ).rejects.toThrow("Field size is required");
+    ).rejects.toThrow(
+      `Application ${base.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
+    );
   });
 
   it("creates an application from the delivery's tracked dry-biochar ratio", async () => {
@@ -222,7 +226,9 @@ describe("application mutations", () => {
           application.id,
           { fieldSizeHa: 0 },
         ),
-      ).rejects.toThrow("Field size must be greater than 0");
+      ).rejects.toThrow(
+        `Application ${application.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
+      );
 
       const options = await getApplicationDeliveryOptions(
         makeTestOrgContext(TEST_USER_ID),
