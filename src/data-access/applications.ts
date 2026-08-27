@@ -36,6 +36,10 @@ import {
   formulations,
 } from "@/db/schema/products";
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
+import {
+  FIELD_SIZE_POSITIVE_MESSAGE,
+  isPositiveApplicationFieldSize,
+} from "@/lib/application-field-size";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
 import {
@@ -65,13 +69,11 @@ import { parseGisBoundary } from "@/schemas/gis-boundary";
 const DEFAULT_PAGE_SIZE = 100;
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
 const INVALID_APPLICATION_EVIDENCE_MESSAGE = "Application evidence is invalid.";
-const INVALID_FIELD_SIZE_MESSAGE = "Field size must be greater than 0";
-
 function assertPositiveApplicationFieldSize(
   fieldSizeHa: number | null | undefined,
 ): asserts fieldSizeHa is number {
-  if (fieldSizeHa == null || !Number.isFinite(fieldSizeHa) || fieldSizeHa <= 0) {
-    throw new SafeError(INVALID_FIELD_SIZE_MESSAGE);
+  if (!isPositiveApplicationFieldSize(fieldSizeHa)) {
+    throw new SafeError(FIELD_SIZE_POSITIVE_MESSAGE);
   }
 }
 
@@ -774,9 +776,9 @@ export async function updateApplication(
       "update",
     );
 
-    assertPositiveApplicationFieldSize(
-      data.fieldSizeHa ?? existingApplication.fieldSizeHa,
-    );
+    if (data.fieldSizeHa !== undefined) {
+      assertPositiveApplicationFieldSize(data.fieldSizeHa);
+    }
 
     const evidenceState = applicationEvidenceStateSchema.safeParse({
       evidenceMethod:

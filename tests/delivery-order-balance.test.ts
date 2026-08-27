@@ -88,6 +88,41 @@ async function seedOrder(quantityKg: number) {
 }
 
 describe("delivery order balance", () => {
+  it("validates status-only delivery updates against the stored wet mass", async () => {
+    const seeded = await seedOrder(100);
+
+    try {
+      const weighed = await createDelivery(ctx, {
+        code: `DL-ORDER-BAL-${seeded.tag}-WEIGHED`,
+        orderId: seeded.orderId,
+        facilityId: seeded.facilityId,
+        deliveryDate: new Date("2026-08-01T00:00:00Z"),
+        status: "upcoming",
+        deliveredWetMassKg: 50,
+      });
+      const unweighed = await createDelivery(ctx, {
+        code: `DL-ORDER-BAL-${seeded.tag}-UNWEIGHED`,
+        orderId: seeded.orderId,
+        facilityId: seeded.facilityId,
+        deliveryDate: new Date("2026-08-02T00:00:00Z"),
+        status: "upcoming",
+        deliveredWetMassKg: null,
+      });
+
+      await expect(
+        updateDelivery(ctx, weighed.id, { status: "delivered" }),
+      ).resolves.toMatchObject({
+        status: "delivered",
+        deliveredWetMassKg: 50,
+      });
+      await expect(
+        updateDelivery(ctx, unweighed.id, { status: "delivered" }),
+      ).rejects.toThrow("Wet mass must be greater than 0");
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
   it("allocates full product dry biochar independently of delivery moisture", async () => {
     const seeded = await seedOrder(10_000);
 

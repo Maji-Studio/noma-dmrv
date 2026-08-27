@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { assertDeliveredWetMass } from "./delivery-state";
+import {
+  assertDeliveredWetMass,
+  deliveryDrawsStock,
+} from "./delivery-stock-locks";
 
-describe("assertDeliveredWetMass", () => {
-  it("requires positive mass for delivered rows", () => {
+describe("delivery persisted mass state", () => {
+  it("uses the stock predicate for positive delivered mass", () => {
+    expect(deliveryDrawsStock("delivered", 1)).toBe(true);
+    expect(deliveryDrawsStock("delivered", 0)).toBe(false);
+
     for (const mass of [undefined, null, 0, -1]) {
       expect(() => assertDeliveredWetMass("delivered", mass)).toThrow(
         "Wet mass must be greater than 0",

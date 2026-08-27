@@ -24,7 +24,6 @@ import {
   effectiveDeliveryDistanceSource,
 } from "./delivery-distance-projections";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
-import { assertDeliveredWetMass } from "./delivery-state";
 interface DeliveryUpdateData {
   code?: string;
   orderId?: string;
@@ -104,6 +103,7 @@ import {
 } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
+  assertDeliveredWetMass,
   deliveryDrawsStock,
   lockCreateDeliveryStock,
   lockDeleteDeliveryStock,

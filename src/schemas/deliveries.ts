@@ -184,7 +184,6 @@ export const updateDeliverySchema = z.object({
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
-  validateDeliveredWetMass(value, ctx);
 });
 
 /**

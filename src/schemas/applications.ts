@@ -13,6 +13,11 @@ import {
   MASS_TONNES_INPUT_STEP,
 } from "./helpers";
 import { gisBoundarySchema } from "./gis-boundary";
+import {
+  FIELD_SIZE_POSITIVE_MESSAGE,
+  FIELD_SIZE_REQUIRED_MESSAGE,
+  isPositiveApplicationFieldSize,
+} from "@/lib/application-field-size";
 
 // ============================================
 // Constants and Enums
@@ -50,8 +55,8 @@ export type ApplicationEvidenceMethod = (typeof applicationEvidenceMethods)[numb
 const CUSTOMER_LOCATION_REQUIRED_MESSAGE =
   "Customer location coordinates are required.";
 const positiveFieldSizeHaSchema = z
-  .number({ error: "Field size is required" })
-  .positive("Field size must be greater than 0");
+  .number({ error: FIELD_SIZE_REQUIRED_MESSAGE })
+  .refine(isPositiveApplicationFieldSize, FIELD_SIZE_POSITIVE_MESSAGE);
 
 function applicationEvidenceSuperRefine(
   data: {

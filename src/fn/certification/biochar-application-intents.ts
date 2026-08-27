@@ -2,6 +2,7 @@ import { getBiocharApplicationRegistryInputs } from "@/data-access/certifier-bio
 import type { OrgContext } from "@/lib/auth/server";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
+import { isPositiveApplicationFieldSize } from "@/lib/application-field-size";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import {
   buildBiocharApplicationReference,
@@ -118,11 +119,7 @@ export async function compileBiocharApplicationIntents(args: {
         `Application ${input.applicationCode}'s immutable allocations total ${allocatedWetMassKg} kg, but its persisted applied mass is ${appliedWetMassKg} kg. Reconcile the Removal and submit again.`,
       );
     }
-    if (
-      input.fieldSizeHa == null ||
-      !Number.isFinite(input.fieldSizeHa) ||
-      input.fieldSizeHa <= 0
-    ) {
+    if (!isPositiveApplicationFieldSize(input.fieldSizeHa)) {
       throw new SafeError(
         `Application ${input.applicationCode} needs a field size greater than 0 ha before submitting.`,
       );

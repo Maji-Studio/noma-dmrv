@@ -84,19 +84,18 @@ describe("delivery wet mass", () => {
     ).toBe(true);
   });
 
-  it("requires a positive wet mass when an update marks a delivery delivered", () => {
+  it("defers delivered status/mass validation until a partial update is merged", () => {
+    expect(
+      updateDeliverySchema.safeParse({
+        deliveryId: UUID_A,
+        status: "delivered",
+      }).success,
+    ).toBe(true);
     expect(
       updateDeliverySchema.safeParse({
         deliveryId: UUID_A,
         status: "delivered",
         deliveredWetMassKg: null,
-      }).success,
-    ).toBe(false);
-    expect(
-      updateDeliverySchema.safeParse({
-        deliveryId: UUID_A,
-        status: "delivered",
-        deliveredWetMassKg: 1,
       }).success,
     ).toBe(true);
   });

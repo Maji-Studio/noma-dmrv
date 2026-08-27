@@ -36,6 +36,21 @@ export function deliveryDrawsStock(
   );
 }
 
+/** A persisted delivered row must satisfy the same positive-mass predicate. */
+export function assertDeliveredWetMass(
+  status: "upcoming" | "delivered",
+  deliveredWetMassKg: number | null | undefined,
+): void {
+  if (
+    status === "delivered" &&
+    !deliveryDrawsStock(status, deliveredWetMassKg)
+  ) {
+    throw new SafeError(
+      "Wet mass must be greater than 0 for a delivered delivery",
+    );
+  }
+}
+
 export async function lockCreateDeliveryStock(
   ctx: OrgContext,
   tx: DbTransaction,
