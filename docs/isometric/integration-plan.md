@@ -127,10 +127,11 @@ the applied slice mass convention, not Delivery weighing observations.
 Commingled slices partition and sum to the physical Application total.
 
 Each slice uses the ordinary local idempotency journal. Noma claims the exact
-payload and stable supplier reference before POST, reconciles all bounded list
-pages on retry, confirms one remote identity, and fails closed on payload or
-identity drift. Registry failure blocks Removal submission and leaves the claim
-safely retryable. There is no gate or placeholder lifecycle.
+payload and stable supplier reference before POST, reconciles unconfirmed
+orphans across bounded list pages, reads confirmed retries by their persisted
+external identity, and fails closed on payload, current-GHG-Entry, or identity
+drift. Registry failure blocks Removal submission and leaves the claim safely
+retryable. There is no gate or placeholder lifecycle.
 
 ## Template and input contract
 

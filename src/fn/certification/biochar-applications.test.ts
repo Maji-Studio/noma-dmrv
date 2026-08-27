@@ -283,6 +283,79 @@ describe("ensureRemovalBiocharApplications", () => {
       lifecycleStatus: "confirmed",
       externalApplicationId: "bca-test",
     });
+    expect(
+      mocks.client.get.mock.calls.every(
+        ([path]) => path === "/biochar_applications",
+      ),
+    ).toBe(true);
+  });
+
+  it("reads a confirmed identity directly and accepts its current Removal association", async () => {
+    const body = {
+      application_date: "2026-04-05",
+      average_application_rate: { magnitude: 3, unit: "t/ha" },
+      production_batch_id: "ptb-test",
+      project_id: "prj-test",
+      source_ids: [],
+      storage_site_id: "slc-test",
+      supplier_reference_id: intent().supplierReference,
+      truck_mass_on_arrival: { magnitude: 12_000, unit: "kg" },
+      truck_mass_on_departure: { magnitude: 0, unit: "kg" },
+    };
+    mocks.registration = registration(body, {
+      externalApplicationId: "bca-test",
+      lifecycleStatus: "confirmed",
+      observedGhgEntryId: "ghg-previous",
+    });
+    mocks.client.get.mockImplementation(async (path: string) => {
+      if (path === "/biochar_applications/bca-test") {
+        return canonicalRemote();
+      }
+      throw new Error("confirmed retry must not scan the account-wide list");
+    });
+
+    await expect(ensure()).resolves.toBeUndefined();
+
+    expect(mocks.client.get).toHaveBeenCalledOnce();
+    expect(mocks.client.get).toHaveBeenCalledWith(
+      "/biochar_applications/bca-test",
+    );
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({ observedGhgEntryId: EXTERNAL_REMOVAL_ID }),
+    );
+  });
+
+  it("rejects a confirmed identity still associated with the superseded Removal", async () => {
+    const body = {
+      application_date: "2026-04-05",
+      average_application_rate: { magnitude: 3, unit: "t/ha" },
+      production_batch_id: "ptb-test",
+      project_id: "prj-test",
+      source_ids: [],
+      storage_site_id: "slc-test",
+      supplier_reference_id: intent().supplierReference,
+      truck_mass_on_arrival: { magnitude: 12_000, unit: "kg" },
+      truck_mass_on_departure: { magnitude: 0, unit: "kg" },
+    };
+    mocks.registration = registration(body, {
+      externalApplicationId: "bca-test",
+      lifecycleStatus: "confirmed",
+      observedGhgEntryId: "ghg-previous",
+    });
+    mocks.client.get.mockResolvedValue(
+      canonicalRemote({ ghg_entry_id: "ghg-previous" }),
+    );
+
+    await expect(ensure()).rejects.toThrow(/different GHG Entry/i);
+
+    expect(mocks.markDrift).toHaveBeenCalledWith(
+      orgCtx,
+      "journal-1",
+      "remote_payload_or_identity_drift",
+    );
+    expect(mocks.client.post).not.toHaveBeenCalled();
   });
 
   it("reuses the first of two applications, creates only the missing second, and makes no writes on another retry", async () => {
@@ -358,7 +431,11 @@ describe("ensureRemovalBiocharApplications", () => {
       ]),
     );
 
-    mocks.client.get.mockResolvedValue(page([firstRemote, secondRemote]));
+    mocks.client.get.mockImplementation(async (path: string) => {
+      if (path === "/biochar_applications/bca-test") return firstRemote;
+      if (path === "/biochar_applications/bca-test-2") return secondRemote;
+      return page([firstRemote, secondRemote]);
+    });
     await ensure(intents);
 
     expect(mocks.client.post).toHaveBeenCalledTimes(1);

@@ -8,6 +8,9 @@
   Quantity magnitudes, application and dependency identities, dates, supplier
   references, and GHG Entry associations remain strict; unrelated units still
   fail closed as registry drift.
+- Confirmed Biochar Application retries read the persisted external identity
+  directly and require its association to match the current GHG Entry. Bounded
+  supplier-reference scans remain only for unconfirmed orphan recovery.
 - Kilogram request/readback comparison is shared with Production Batch
   reconciliation so both endpoints retain the same verified alias contract.
 

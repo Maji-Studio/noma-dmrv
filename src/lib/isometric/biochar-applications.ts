@@ -160,6 +160,15 @@ export function createBiocharApplication(
   );
 }
 
+export function getBiocharApplication(
+  client: IsometricClient,
+  biocharApplicationId: string,
+): Promise<IsometricBiocharApplication> {
+  return client.get<IsometricBiocharApplication>(
+    `/biochar_applications/${encodeURIComponent(biocharApplicationId)}`,
+  );
+}
+
 export async function findBiocharApplicationBySupplierReference(
   client: IsometricClient,
   supplierReferenceId: string,
