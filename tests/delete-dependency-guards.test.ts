@@ -197,6 +197,7 @@ describe("delete dependency guards", () => {
           deliveryId: delivery.id,
           biocharAppliedTons: 0.1,
           biocharAppliedDryTons: 0.1,
+          fieldSizeHa: 1,
         })
         .returning({ id: applications.id });
 

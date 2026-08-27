@@ -142,6 +142,7 @@ function registration(
     provider: "isometric",
     applicationId: APPLICATION_ID,
     creditBatchId: CREDIT_BATCH_ID,
+    removalSubmissionId: "submission-1",
     productionBatchRegistrationId: "production-journal-1",
     storageLocationRegistrationId: "storage-journal-1",
     externalProductionBatchId: "ptb-test",
@@ -213,13 +214,31 @@ function ensure(intents: BiocharApplicationIntent[] = [intent()]) {
   });
 }
 
+function ensureVersion(args: {
+  submissionId: string;
+  externalRemovalId: string;
+  intent: BiocharApplicationIntent;
+}) {
+  return ensureRemovalBiocharApplications({
+    orgCtx,
+    removalId: "removal-1",
+    externalRemovalId: args.externalRemovalId,
+    submissionRow: { id: args.submissionId } as CertificationSubmissionRow,
+    intents: [args.intent],
+    log,
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.registration = null;
   mocks.events.length = 0;
   mocks.getRegistration.mockImplementation(async () => mocks.registration);
   mocks.claim.mockImplementation(async (_ctx, input) => {
-    mocks.registration = registration(input.submittedPayload);
+    mocks.registration = registration(input.submittedPayload, {
+      removalSubmissionId: input.removalSubmissionId,
+      supplierReference: input.supplierReference,
+    });
     return mocks.registration;
   });
   mocks.confirm.mockImplementation(async (_ctx, input) => {
@@ -348,6 +367,92 @@ describe("ensureRemovalBiocharApplications", () => {
       "remote_payload_or_identity_drift",
     );
     expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
+  it("creates one versioned Biochar Application per superseding Removal and reuses v2", async () => {
+    const firstIntent = intent();
+    const secondIntent = intent({
+      supplierReference: "nm-isometric-sandbox-bca-app-batch-s2-v1",
+    });
+    const registrations = new Map<string, CertifierBiocharApplication>();
+    mocks.getRegistration.mockImplementation(
+      async (_ctx, _applicationId, _creditBatchId, removalSubmissionId) =>
+        registrations.get(removalSubmissionId) ?? null,
+    );
+    mocks.claim.mockImplementation(async (_ctx, input) => {
+      const row = registration(input.submittedPayload, {
+        id: `journal-${input.removalSubmissionId}`,
+        removalSubmissionId: input.removalSubmissionId,
+        supplierReference: input.supplierReference,
+      });
+      registrations.set(input.removalSubmissionId, row);
+      return row;
+    });
+    mocks.confirm.mockImplementation(async (_ctx, input) => {
+      const entry = [...registrations.entries()].find(
+        ([, row]) => row.id === input.registrationId,
+      );
+      if (!entry) throw new Error("registration not found");
+      const [submissionId, row] = entry;
+      registrations.set(submissionId, {
+        ...row,
+        externalApplicationId: input.externalApplicationId,
+        lifecycleStatus: "confirmed",
+        observedGhgEntryId: input.observedGhgEntryId,
+        observedRemovalId: input.observedRemovalId,
+      });
+      return registrations.get(submissionId)!;
+    });
+
+    const firstRemote = canonicalRemote({
+      id: "bca-v1",
+      ghg_entry_id: "ghg-v1",
+      supplier_reference_id: firstIntent.supplierReference,
+    });
+    const secondRemote = canonicalRemote({
+      id: "bca-v2",
+      ghg_entry_id: "ghg-v2",
+      supplier_reference_id: secondIntent.supplierReference,
+    });
+    mocks.client.get.mockImplementation(async (path: string) => {
+      if (path === "/biochar_applications/bca-v1") return firstRemote;
+      if (path === "/biochar_applications/bca-v2") return secondRemote;
+      return page([]);
+    });
+    mocks.client.post.mockImplementation(async (_path, body) => {
+      const supplierReference = (
+        body as { supplier_reference_id: string }
+      ).supplier_reference_id;
+      return supplierReference === firstIntent.supplierReference
+        ? firstRemote
+        : secondRemote;
+    });
+
+    await ensureVersion({
+      submissionId: "submission-v1",
+      externalRemovalId: "ghg-v1",
+      intent: firstIntent,
+    });
+    await ensureVersion({
+      submissionId: "submission-v2",
+      externalRemovalId: "ghg-v2",
+      intent: secondIntent,
+    });
+    await ensureVersion({
+      submissionId: "submission-v2",
+      externalRemovalId: "ghg-v2",
+      intent: secondIntent,
+    });
+
+    expect(mocks.client.post).toHaveBeenCalledTimes(2);
+    expect(registrations.get("submission-v1")).toMatchObject({
+      externalApplicationId: "bca-v1",
+      observedGhgEntryId: "ghg-v1",
+    });
+    expect(registrations.get("submission-v2")).toMatchObject({
+      externalApplicationId: "bca-v2",
+      observedGhgEntryId: "ghg-v2",
+    });
   });
 
   it("reuses the first of two applications, creates only the missing second, and makes no writes on another retry", async () => {

@@ -41,6 +41,7 @@ export interface BuildBiocharApplicationReferenceArgs {
   applicationId: string;
   creditBatchId: string;
   environment: IsometricEnvironment;
+  removalSubmissionVersion?: number;
   provider?: "isometric";
 }
 
@@ -58,7 +59,22 @@ export function buildBiocharApplicationReference(
   }
   const applicationHash = shortHash(applicationId);
   const batchHash = shortHash(creditBatchId);
-  const reference = `nm-${provider}-${environment}-bca-${applicationHash}-${batchHash}-v${BIOCHAR_APPLICATION_REFERENCE_VERSION}`;
+  const removalSubmissionVersion = args.removalSubmissionVersion ?? 1;
+  if (
+    !Number.isInteger(removalSubmissionVersion) ||
+    removalSubmissionVersion < 1
+  ) {
+    throw new Error(
+      "Biochar Application Removal submission version must be positive",
+    );
+  }
+  // Preserve the already-deployed v1 reference so an interrupted first
+  // submission can still reconcile its remote artifact. Superseding Removal
+  // submissions receive a distinct reference and therefore a distinct remote
+  // Biochar Application associated with that new GHG Entry.
+  const submissionVersionSuffix =
+    removalSubmissionVersion === 1 ? "" : `-s${removalSubmissionVersion}`;
+  const reference = `nm-${provider}-${environment}-bca-${applicationHash}-${batchHash}${submissionVersionSuffix}-v${BIOCHAR_APPLICATION_REFERENCE_VERSION}`;
   if (reference.length > BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH) {
     throw new Error(
       `Biochar Application supplier reference exceeds ${BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH} characters`,

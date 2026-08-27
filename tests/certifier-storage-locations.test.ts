@@ -140,6 +140,7 @@ async function createFixture(): Promise<Fixture> {
         applicationDate: new Date("2026-08-03T00:00:00Z"),
         biocharAppliedTons: 1,
         biocharAppliedDryTons: 0.9,
+        fieldSizeHa: 1,
       })
       .returning({ id: applications.id });
     return {

@@ -382,6 +382,7 @@ export async function createTestApplication(
       applicationDate: application.applicationDate,
       biocharAppliedTons: application.biocharAppliedTons,
       biocharAppliedDryTons: application.biocharAppliedDryTons,
+      fieldSizeHa: 1,
       status: application.status,
     });
 

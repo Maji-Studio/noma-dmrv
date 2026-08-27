@@ -46,7 +46,7 @@ export const applications = pgTable(
     gpsLongitude: doublePrecision("gps_longitude"),
 
     // Field details
-    fieldSizeHa: real("field_size_ha"),
+    fieldSizeHa: real("field_size_ha").notNull(),
     cropType: text("crop_type"),
     applicationMethodType: applicationMethod("application_method"), // manual/mechanical
     fieldIdentifier: text("field_identifier"), // Field name/parcel ID
@@ -89,6 +89,10 @@ export const applications = pgTable(
     check(
       "applications_gps_longitude_range",
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`,
+    ),
+    check(
+      "applications_field_size_positive",
+      sql`${table.fieldSizeHa} > 0`,
     ),
     // Mirror the Zod range (-50..60 °C) and the certifier_projects /
     // customer_locations default-soil-temperature constraints so a direct SQL

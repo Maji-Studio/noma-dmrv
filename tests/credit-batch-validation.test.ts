@@ -402,6 +402,7 @@ beforeAll(async () => {
       applicationDate: new Date("2025-06-15"),
       biocharAppliedTons: 5,
       biocharAppliedDryTons: 4.5,
+      fieldSizeHa: 1,
     })
     .returning({ id: applications.id });
   const [aB] = await db
@@ -413,6 +414,7 @@ beforeAll(async () => {
       applicationDate: new Date("2025-06-15"),
       biocharAppliedTons: 5,
       biocharAppliedDryTons: 4.5,
+      fieldSizeHa: 1,
     })
     .returning({ id: applications.id });
   appInFacilityA = aA;

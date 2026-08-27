@@ -11,8 +11,16 @@
 - Confirmed Biochar Application retries read the persisted external identity
   directly and require its association to match the current GHG Entry. Bounded
   supplier-reference scans remain only for unconfirmed orphan recovery.
+- Biochar Application journal identity and supplier references are versioned by
+  immutable Removal submission. A superseding GHG Entry creates one new
+  associated Biochar Application while the prior registry application remains
+  linked to the prior GHG Entry; retries reuse the current version without a
+  duplicate write.
 - Kilogram request/readback comparison is shared with Production Batch
   reconciliation so both endpoints retain the same verified alias contract.
+- Application field size is required and positive in the database as well as
+  form, create, update, and submission boundaries. Delivered wet mass copy
+  states the persisted minimum of 0.001 kg explicitly.
 
 ## 2026-08-26 (Biochar Application API restored)
 

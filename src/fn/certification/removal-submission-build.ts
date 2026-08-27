@@ -24,6 +24,7 @@ import {
 } from "@/lib/isometric/transformers/sequestration-binding";
 import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
 import type { Logger } from "@/lib/log";
+import { buildBiocharApplicationReference } from "@/lib/isometric/biochar-applications";
 import {
   buildVersionedMeasurementSampleSubmissions,
   normalizeMeasurementSamplesForHash,
@@ -165,6 +166,7 @@ export interface MaterializedRemovalSubmissionSnapshot {
     transport: {
       removalSupplierRef: string;
       omittedTemplateComponentIds: string[];
+      biocharApplicationIntents: BiocharApplicationIntent[];
       datapointBodies: Array<{
         rtcId: string;
         inputKey: string;
@@ -503,6 +505,17 @@ export function materializeRemovalSubmissionSnapshot(args: {
     role: "removal",
     version: nextVersion,
   });
+  const biocharApplicationIntents = compiled.biocharApplicationIntents.map(
+    (intent) => ({
+      ...intent,
+      supplierReference: buildBiocharApplicationReference({
+        applicationId: intent.applicationId,
+        creditBatchId: intent.creditBatchId,
+        environment: env.ISOMETRIC_ENVIRONMENT,
+        removalSubmissionVersion: nextVersion,
+      }),
+    }),
+  );
   const finalDatapointBodies = compiled.monitored.map((input) => {
     const supplierRefId = buildRemovalSupplierRef({
       removalId,
@@ -566,6 +579,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
         removalSupplierRef,
         omittedTemplateComponentIds:
           compiled.omittedTemplateComponentIds,
+        biocharApplicationIntents,
         datapointBodies: [
           ...finalDatapointBodies,
           ...directSequestrationDatapoints,

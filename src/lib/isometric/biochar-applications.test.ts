@@ -92,6 +92,31 @@ describe("Biochar Application request", () => {
     expect(sandbox).not.toBe(production);
   });
 
+  it("preserves the first-submission reference and versions superseding Removals", () => {
+    const first = buildBiocharApplicationReference({
+      applicationId: "app-1",
+      creditBatchId: "batch-1",
+      environment: "sandbox",
+      removalSubmissionVersion: 1,
+    });
+    const second = buildBiocharApplicationReference({
+      applicationId: "app-1",
+      creditBatchId: "batch-1",
+      environment: "sandbox",
+      removalSubmissionVersion: 2,
+    });
+
+    expect(first).toBe(
+      buildBiocharApplicationReference({
+        applicationId: "app-1",
+        creditBatchId: "batch-1",
+        environment: "sandbox",
+      }),
+    );
+    expect(second).toContain("-s2-v1");
+    expect(second).not.toBe(first);
+  });
+
   it("detects payload-critical remote drift", () => {
     expect(
       biocharApplicationMismatchMessage(

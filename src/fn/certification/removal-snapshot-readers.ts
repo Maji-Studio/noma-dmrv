@@ -201,10 +201,14 @@ export function readRemovalBiocharApplicationIntents(
 ): BiocharApplicationIntent[] {
   const snapshot = row.payloadSnapshot as {
     semantic?: { biocharApplicationIntents?: unknown } | null;
+    transport?: { biocharApplicationIntents?: unknown } | null;
   } | null;
   const parsed = z
     .array(biocharApplicationIntentSchema)
-    .safeParse(snapshot?.semantic?.biocharApplicationIntents);
+    .safeParse(
+      snapshot?.transport?.biocharApplicationIntents ??
+        snapshot?.semantic?.biocharApplicationIntents,
+    );
   if (!parsed.success) {
     throw new SafeError(
       "This saved submission uses an older Biochar Application format and cannot resume. Select Refresh review, then submit again.",

@@ -106,6 +106,21 @@ describe("readRemovalBiocharApplicationIntents", () => {
     } as never);
   }
 
+  it("prefers claim-time versioned transport intents", () => {
+    const versionedIntent = {
+      ...baseIntent,
+      supplierReference: "nm-isometric-sandbox-bca-app-batch-s2-v1",
+    };
+    expect(
+      readRemovalBiocharApplicationIntents({
+        payloadSnapshot: {
+          semantic: { biocharApplicationIntents: [baseIntent] },
+          transport: { biocharApplicationIntents: [versionedIntent] },
+        },
+      } as never),
+    ).toEqual([versionedIntent]);
+  });
+
   it("round-trips the ordinary immutable-slice intent", () => {
     expect(read([baseIntent])).toEqual([baseIntent]);
   });

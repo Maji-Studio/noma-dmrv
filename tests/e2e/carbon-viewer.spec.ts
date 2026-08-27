@@ -174,6 +174,7 @@ async function seedGeoLineage(
         applicationDate: new Date("2026-02-16T10:30:00.000Z"),
         biocharAppliedTons: 0.21,
         biocharAppliedDryTons: 0.2,
+        fieldSizeHa: 1,
         fieldIdentifier: `Field ${suffix}`,
         status: "applied",
         gpsLatitude: withGeo ? FIELD_POINT.lat : null,

@@ -149,17 +149,20 @@ async function ensureBiocharApplication(args: {
     {
       applicationId: args.intent.applicationId,
       creditBatchId: args.intent.creditBatchId,
+      removalSubmissionId: args.submissionRow.id,
     },
     async () => {
       let registration = await getBiocharApplicationRegistration(
         args.orgCtx,
         args.intent.applicationId,
         args.intent.creditBatchId,
+        args.submissionRow.id,
       );
       if (!registration) {
         registration = await claimBiocharApplicationRegistration(args.orgCtx, {
           applicationId: args.intent.applicationId,
           creditBatchId: args.intent.creditBatchId,
+          removalSubmissionId: args.submissionRow.id,
           productionBatchRegistrationId:
             args.productionBatchRegistrationId,
           storageLocationRegistrationId: args.storageLocationRegistrationId,

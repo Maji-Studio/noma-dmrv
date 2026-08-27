@@ -116,6 +116,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         applicationDate: new Date("2026-02-16T10:30:00.000Z"),
         biocharAppliedTons: 0.21,
         biocharAppliedDryTons: 0.2,
+        fieldSizeHa: 1,
         fieldIdentifier,
         status: "applied",
       });
@@ -358,6 +359,7 @@ async function seedBatchChain(seededData: SeededChainData) {
           applicationDate: new Date(`2026-03-${member.day}T15:00:00.000Z`),
           biocharAppliedTons: member.appliedDryTons + 0.01,
           biocharAppliedDryTons: member.appliedDryTons,
+          fieldSizeHa: 1,
           fieldIdentifier: `Field ${member.day}-${suffix}`,
           status: "applied",
         });
