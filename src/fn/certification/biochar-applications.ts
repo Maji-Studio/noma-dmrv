@@ -35,6 +35,11 @@ import {
 } from "./registry-create";
 import { ensureStorageLocation } from "./storage-locations";
 
+const ASSOCIATION_READ_ATTEMPTS = 4;
+const ASSOCIATION_RETRY_DELAY_MS = 250;
+
+class PendingBiocharApplicationAssociationError extends SafeError {}
+
 export async function ensureRemovalBiocharApplications(args: {
   orgCtx: OrgContext;
   removalId: string;
@@ -211,10 +216,14 @@ async function ensureBiocharApplication(args: {
         // reconcile by stable reference before this non-idempotent create.
         resumed: true,
         create: async () => {
-          const remote = await createBiocharApplication(client, body);
-          assertRemoteMatchesCurrentRemoval(remote, body, args.externalRemovalId);
-          confirmedRemote = remote;
-          return remote.id;
+          const created = await createBiocharApplication(client, body);
+          confirmedRemote = await waitForCurrentRemovalAssociation(
+            client,
+            created,
+            body,
+            args.externalRemovalId,
+          );
+          return confirmedRemote.id;
         },
         reconcile: async () => {
           let remote: IsometricBiocharApplication | null;
@@ -250,12 +259,19 @@ async function ensureBiocharApplication(args: {
           }
           if (remote) {
             try {
-              assertRemoteMatchesCurrentRemoval(
+              remote = await waitForCurrentRemovalAssociation(
+                client,
                 remote,
                 body,
                 args.externalRemovalId,
               );
             } catch (error) {
+              if (error instanceof PendingBiocharApplicationAssociationError) {
+                return {
+                  found: "refused" as const,
+                  message: error.message,
+                };
+              }
               await markBiocharApplicationDrift(
                 args.orgCtx,
                 registration!.id,
@@ -331,7 +347,7 @@ function assertRemoteMatchesCurrentRemoval(
 ): void {
   assertRemotePayloadMatches(remote, body);
   if (!remote.ghg_entry_id && !remote.removal_id) {
-    throw new SafeError(
+    throw new PendingBiocharApplicationAssociationError(
       `Isometric Biochar Application ${remote.id} is not linked to a GHG Entry yet. Retry after Isometric records the association.`,
     );
   }
@@ -343,4 +359,33 @@ function assertRemoteMatchesCurrentRemoval(
       `Isometric Biochar Application ${remote.id} is linked to a different GHG Entry. Resolve the registry identity before retrying.`,
     );
   }
+}
+
+async function waitForCurrentRemovalAssociation(
+  client: Awaited<ReturnType<typeof getIsometricClientForOrg>>,
+  initialRemote: IsometricBiocharApplication,
+  body: Parameters<typeof biocharApplicationMismatchMessage>[1],
+  externalRemovalId: string,
+): Promise<IsometricBiocharApplication> {
+  let remote = initialRemote;
+  for (let attempt = 0; attempt < ASSOCIATION_READ_ATTEMPTS; attempt += 1) {
+    try {
+      assertRemoteMatchesCurrentRemoval(remote, body, externalRemovalId);
+      return remote;
+    } catch (error) {
+      if (!(error instanceof PendingBiocharApplicationAssociationError)) {
+        throw error;
+      }
+      if (attempt === ASSOCIATION_READ_ATTEMPTS - 1) throw error;
+    }
+    if (attempt > 0) await associationRetryDelay();
+    remote = await getBiocharApplication(client, remote.id);
+  }
+  throw new Error("Biochar Application association polling exhausted");
+}
+
+function associationRetryDelay(): Promise<void> {
+  return new Promise((resolve) =>
+    setTimeout(resolve, ASSOCIATION_RETRY_DELAY_MS),
+  );
 }

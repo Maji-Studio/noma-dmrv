@@ -301,6 +301,34 @@ describe("ensureRemovalBiocharApplications", () => {
     expect(mocks.client.post).toHaveBeenCalledTimes(1);
   });
 
+  it("waits for the new Biochar Application to receive its GHG Entry association", async () => {
+    const unlinkedRemote = canonicalRemote({
+      ghg_entry_id: null,
+      removal_id: null,
+    });
+    mocks.client.get
+      .mockResolvedValueOnce(page([]))
+      .mockResolvedValueOnce(unlinkedRemote)
+      .mockResolvedValueOnce(canonicalRemote());
+    mocks.client.post.mockResolvedValue(unlinkedRemote);
+
+    await ensure();
+
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
+    expect(mocks.client.get).toHaveBeenNthCalledWith(
+      2,
+      "/biochar_applications/bca-test",
+    );
+    expect(mocks.client.get).toHaveBeenNthCalledWith(
+      3,
+      "/biochar_applications/bca-test",
+    );
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({ observedGhgEntryId: EXTERNAL_REMOVAL_ID }),
+    );
+  });
+
   it("reconciles canonical units on retry without a duplicate POST", async () => {
     mocks.client.get
       .mockResolvedValueOnce(page([]))
