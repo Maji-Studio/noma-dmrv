@@ -325,6 +325,17 @@ describe("ensureRemovalBiocharApplications", () => {
         ([path]) => path === "/biochar_applications",
       ),
     ).toBe(true);
+    expect(log.warn).toHaveBeenCalledWith(
+      {
+        applicationId: APPLICATION_ID,
+        creditBatchId: CREDIT_BATCH_ID,
+        removalId: "removal-1",
+        submissionId: "submission-1",
+        externalApplicationId: "bca-test",
+        externalRemovalId: EXTERNAL_REMOVAL_ID,
+      },
+      "Biochar Application has no registry GHG Entry association; accepting the provider-null readback",
+    );
   });
 
   it("reconciles an existing matching Biochar Application with no GHG Entry association", async () => {
@@ -345,6 +356,14 @@ describe("ensureRemovalBiocharApplications", () => {
         observedGhgEntryId: null,
         observedRemovalId: null,
       }),
+    );
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationId: APPLICATION_ID,
+        submissionId: "submission-1",
+        externalApplicationId: "bca-test",
+      }),
+      "Biochar Application has no registry GHG Entry association; accepting the provider-null readback",
     );
   });
 

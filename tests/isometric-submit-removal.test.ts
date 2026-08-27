@@ -360,7 +360,7 @@ describe("submitRemoval — happy path", () => {
     });
   });
 
-  it("keeps the ledger draft when Biochar Application association is incomplete", async () => {
+  it("keeps the ledger draft when the Biochar Application registry identity has drifted", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),
     );
@@ -374,7 +374,7 @@ describe("submitRemoval — happy path", () => {
       biocharApplications.ensureRemovalBiocharApplications,
     ).mockRejectedValueOnce(
       new Error(
-        "Isometric Biochar Application is not linked to a GHG Entry yet.",
+        "Isometric Biochar Application bca-test is linked to a different GHG Entry. Resolve the registry identity before retrying.",
       ),
     );
 
@@ -383,7 +383,7 @@ describe("submitRemoval — happy path", () => {
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/not linked to a GHG Entry yet/i);
+    ).rejects.toThrow(/linked to a different GHG Entry/i);
 
     expect(storedRows[0]).toMatchObject({
       status: "draft",

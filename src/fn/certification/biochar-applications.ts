@@ -196,6 +196,13 @@ async function ensureBiocharApplication(args: {
       const client = await getIsometricClientForOrg(
         args.orgCtx.organizationId,
       );
+      const remoteClaimContext = {
+        log: args.log,
+        applicationId: args.intent.applicationId,
+        creditBatchId: args.intent.creditBatchId,
+        removalId: args.removalId,
+        removalSubmissionId: args.submissionRow.id,
+      };
       let confirmedRemote: IsometricBiocharApplication | null = null;
       await performRegistryCreate({
         orgCtx: args.orgCtx,
@@ -212,10 +219,11 @@ async function ensureBiocharApplication(args: {
         resumed: true,
         create: async () => {
           confirmedRemote = await createBiocharApplication(client, body);
-          assertRemoteMatchesCurrentRemoval(
+          assertRemoteClaimableForCurrentRemoval(
             confirmedRemote,
             body,
             args.externalRemovalId,
+            remoteClaimContext,
           );
           return confirmedRemote.id;
         },
@@ -253,10 +261,11 @@ async function ensureBiocharApplication(args: {
           }
           if (remote) {
             try {
-              assertRemoteMatchesCurrentRemoval(
+              assertRemoteClaimableForCurrentRemoval(
                 remote,
                 body,
                 args.externalRemovalId,
+                remoteClaimContext,
               );
             } catch (error) {
               await markBiocharApplicationDrift(
@@ -327,10 +336,17 @@ function assertRemotePayloadMatches(
   if (mismatch) throw new SafeError(mismatch);
 }
 
-function assertRemoteMatchesCurrentRemoval(
+function assertRemoteClaimableForCurrentRemoval(
   remote: IsometricBiocharApplication,
   body: Parameters<typeof biocharApplicationMismatchMessage>[1],
   externalRemovalId: string,
+  context: {
+    log: Logger;
+    applicationId: string;
+    creditBatchId: string;
+    removalId: string;
+    removalSubmissionId: string;
+  },
 ): void {
   assertRemotePayloadMatches(remote, body);
   // Isometric's create request has no GHG Entry field and the response schema
@@ -338,6 +354,19 @@ function assertRemoteMatchesCurrentRemoval(
   // remain unassociated even after the Application is fully persisted. Treat
   // a present association as an identity invariant, but do not turn an absent
   // provider-managed association into an unrecoverable Removal submission.
+  if (!remote.ghg_entry_id && !remote.removal_id) {
+    context.log.warn(
+      {
+        applicationId: context.applicationId,
+        creditBatchId: context.creditBatchId,
+        removalId: context.removalId,
+        submissionId: context.removalSubmissionId,
+        externalApplicationId: remote.id,
+        externalRemovalId,
+      },
+      "Biochar Application has no registry GHG Entry association; accepting the provider-null readback",
+    );
+  }
   if (
     (remote.ghg_entry_id && remote.ghg_entry_id !== externalRemovalId) ||
     (remote.removal_id && remote.removal_id !== externalRemovalId)

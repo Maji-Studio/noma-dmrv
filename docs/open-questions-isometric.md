@@ -145,7 +145,7 @@ uses it.
 - **Observed — needs-registry-check:** sandbox Biochar Application
   `bse_1M11R23Y2SBXKCE9` was fully persisted with both provider-managed
   `ghg_entry_id` and `removal_id` null. The create request exposes no GHG Entry
-  field, so `assertRemoteMatchesCurrentRemoval`
+  field, so `assertRemoteClaimableForCurrentRemoval`
   (`src/fn/certification/biochar-applications.ts`) accepts both-null readback,
   records the null observations, and still rejects any present association to a
   different GHG Entry.
