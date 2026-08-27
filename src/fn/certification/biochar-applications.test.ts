@@ -301,31 +301,26 @@ describe("ensureRemovalBiocharApplications", () => {
     expect(mocks.client.post).toHaveBeenCalledTimes(1);
   });
 
-  it("waits for the new Biochar Application to receive its GHG Entry association", async () => {
+  it("accepts a matching Biochar Application when Isometric leaves its optional GHG Entry association empty", async () => {
     const unlinkedRemote = canonicalRemote({
       ghg_entry_id: null,
       removal_id: null,
     });
-    mocks.client.get
-      .mockResolvedValueOnce(page([]))
-      .mockResolvedValueOnce(unlinkedRemote)
-      .mockResolvedValueOnce(canonicalRemote());
+    mocks.client.get.mockImplementation(async (path: string) =>
+      path === "/biochar_applications" ? page([]) : unlinkedRemote,
+    );
     mocks.client.post.mockResolvedValue(unlinkedRemote);
 
-    await ensure();
+    await expect(ensure()).resolves.toBeUndefined();
 
     expect(mocks.client.post).toHaveBeenCalledTimes(1);
-    expect(mocks.client.get).toHaveBeenNthCalledWith(
-      2,
-      "/biochar_applications/bca-test",
-    );
-    expect(mocks.client.get).toHaveBeenNthCalledWith(
-      3,
-      "/biochar_applications/bca-test",
-    );
     expect(mocks.confirm).toHaveBeenCalledWith(
       orgCtx,
-      expect.objectContaining({ observedGhgEntryId: EXTERNAL_REMOVAL_ID }),
+      expect.objectContaining({
+        externalApplicationId: "bca-test",
+        observedGhgEntryId: null,
+        observedRemovalId: null,
+      }),
     );
   });
 

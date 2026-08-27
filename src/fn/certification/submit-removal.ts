@@ -538,6 +538,11 @@ async function submitRemovalCore(
         intents: readRemovalBiocharApplicationIntents(ctx.latestSubmission),
         log,
       });
+      await persistRemovalReportingWindow(
+        orgCtx,
+        removalId,
+        readRemovalReportingWindow(ctx.latestSubmission),
+      );
       onProgress?.({
         step: "removal.verifying_evidence",
         state: "active",
@@ -892,15 +897,6 @@ async function runRemovalSubmission({
       reconcileRemoval(client, { supplierRefId: transport.removalSupplierRef }).then(
         supplierRefLookup,
       ),
-    onConfirmed: (externalId) =>
-      markSubmissionSubmitted(orgCtx, row.id, {
-        externalId,
-        supersedePreviousId,
-        productionEmissionsClaim: {
-          removalId,
-          creditBatchIds: claimBatchIds,
-        },
-      }),
     failureMessagePrefix: "Removal POST failed",
     onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
     log,
@@ -918,19 +914,10 @@ async function runRemovalSubmission({
   });
   onProgress?.({ step: "removal.creating", state: "complete" });
 
-  // Persist the derived reporting window onto the removal row (best-effort —
-  // a failure here doesn't unwind a successful submission).
-  try {
-    await updateRemovalDates(orgCtx, removalId, {
-      startedOn: formatUtcDate(effectiveWindow.startedOn),
-      completedOn: formatUtcDate(effectiveWindow.completedOn),
-    });
-  } catch (err) {
-    log.warn(
-      { err: err instanceof Error ? err.message : String(err) },
-      "failed to persist removal reporting window",
-    );
-  }
+  // The reporting window drives GHG Statement membership. Keep the ledger
+  // draft retryable until it is persisted; otherwise a remote GHG Entry can be
+  // shown locally as Submitted while no reporting period can include it.
+  await persistRemovalReportingWindow(orgCtx, removalId, effectiveWindow);
 
   if (resumed) {
     await appendSyncEventBestEffort(
@@ -959,6 +946,18 @@ async function runRemovalSubmission({
     externalRemovalId,
     log,
   });
+  // Finalize only after every dependent Biochar Application (and its Storage
+  // Location) has reconciled and the local reporting window exists. Any
+  // earlier failure keeps this row as an interrupted draft so the next submit
+  // can safely reuse the already-created registry identities.
+  await markSubmissionSubmitted(orgCtx, row.id, {
+    externalId: externalRemovalId,
+    supersedePreviousId,
+    productionEmissionsClaim: {
+      removalId,
+      creditBatchIds: claimBatchIds,
+    },
+  });
   onProgress?.({
     step: "removal.verifying_evidence",
     state: "complete",
@@ -966,4 +965,15 @@ async function runRemovalSubmission({
   onProgress?.({ step: "removal.complete", state: "complete" });
 
   return { removalId, externalId: externalRemovalId, version: row.version };
+}
+
+async function persistRemovalReportingWindow(
+  orgCtx: OrgContext,
+  removalId: string,
+  reportingWindow: { startedOn: Date; completedOn: Date },
+): Promise<void> {
+  await updateRemovalDates(orgCtx, removalId, {
+    startedOn: formatUtcDate(reportingWindow.startedOn),
+    completedOn: formatUtcDate(reportingWindow.completedOn),
+  });
 }

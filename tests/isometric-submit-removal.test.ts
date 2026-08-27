@@ -256,10 +256,10 @@ describe("submitRemoval — happy path", () => {
         .invocationCallOrder[0],
     );
     expect(
-      vi.mocked(ledger.markSubmissionSubmitted).mock
+      vi.mocked(biocharApplications.ensureRemovalBiocharApplications).mock
         .invocationCallOrder[0],
     ).toBeLessThan(
-      vi.mocked(biocharApplications.ensureRemovalBiocharApplications).mock
+      vi.mocked(ledger.markSubmissionSubmitted).mock
         .invocationCallOrder[0],
     );
     expect(progress).toHaveBeenCalledWith({
@@ -357,6 +357,67 @@ describe("submitRemoval — happy path", () => {
         ghg_entry_external_mutation: "confirmed",
       },
     });
+  });
+
+  it("keeps the ledger draft when Biochar Application persistence is incomplete", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+    vi.mocked(
+      biocharApplications.ensureRemovalBiocharApplications,
+    ).mockRejectedValue(
+      new Error("Isometric Biochar Application could not be persisted."),
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/could not be persisted/i);
+
+    expect(storedRows[0]).toMatchObject({
+      status: "draft",
+      externalId: null,
+    });
+    expect(storedRows[0].lockedAt).not.toBeNull();
+    expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
+    expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
+  });
+
+  it("keeps the ledger draft when the reporting window cannot be persisted", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+    vi.mocked(removalsDA.updateRemovalDates).mockRejectedValue(
+      new Error("reporting window unavailable"),
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/reporting window unavailable/i);
+
+    expect(storedRows[0]).toMatchObject({
+      status: "draft",
+      externalId: null,
+    });
+    expect(storedRows[0].lockedAt).not.toBeNull();
+    expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
   });
 
   it("keeps a confirmed submission when the attempt audit cannot be persisted", async () => {
@@ -554,10 +615,14 @@ describe("submitRemoval — happy path", () => {
     expect(second.version).toBe(1);
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
     expect(isometric.createGhgEntry).not.toHaveBeenCalled();
-    // return-existing must also skip local persistence — no ledger
-    // transition, no removal-date rewrite.
+    // return-existing skips the ledger transition but reasserts the reporting
+    // window so rows affected by the former early-finalization bug recover.
     expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
-    expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
+    expect(removalsDA.updateRemovalDates).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      REMOVAL_ID,
+      { startedOn: "2026-01-01", completedOn: "2026-04-05" },
+    );
     // No new ledger row.
     expect(storedRows).toHaveLength(1);
     expect(progress).toHaveBeenCalledWith({

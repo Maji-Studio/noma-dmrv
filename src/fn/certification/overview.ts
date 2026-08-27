@@ -134,18 +134,22 @@ async function buildRemovalPreflightSummary(
     }),
   ]);
   const facts = toRemovalReadinessFacts(ctx);
+  const startedOn = scope.removal?.startedOn ?? null;
+  const completedOn = scope.removal?.completedOn ?? null;
+  const submissionInterrupted =
+    isRemovalSubmissionInterrupted(ctx.latestSubmission?.metadata) ||
+    (ctx.latestSubmission?.status === "submitted" &&
+      (!startedOn || !completedOn));
   return {
     removalId,
-    startedOn: scope.removal?.startedOn ?? null,
-    completedOn: scope.removal?.completedOn ?? null,
+    startedOn,
+    completedOn,
     memberBatchCodes: ctx.memberBatches.map((batch) => batch.code),
     externalId: ctx.latestSubmission?.externalId ?? null,
     version: ctx.latestSubmission?.version ?? null,
     local: facts.local,
     lockInFlight: facts.lockInFlight,
-    submissionInterrupted: isRemovalSubmissionInterrupted(
-      ctx.latestSubmission?.metadata,
-    ),
+    submissionInterrupted,
     readiness: deriveRemovalReadiness(facts),
     evidenceHealth: deriveRemovalEvidenceHealth({
       submissionId: ctx.latestSubmission?.id ?? null,

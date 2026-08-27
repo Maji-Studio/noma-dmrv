@@ -129,12 +129,14 @@ Commingled slices partition and sum to the physical Application total.
 Each slice uses the ordinary local idempotency journal. Noma claims the exact
 payload and stable supplier reference before POST, reconciles unconfirmed
 orphans across bounded list pages, reads confirmed retries by their persisted
-external identity, and fails closed on payload, current-GHG-Entry, or identity
-drift. The journal row and supplier reference are versioned by immutable
-Removal submission: supersession creates a fresh Biochar Application associated
-with the new GHG Entry and leaves the prior association intact. Registry failure
-blocks Removal submission and leaves the claim safely retryable. There is no
-gate or placeholder lifecycle.
+external identity, and fails closed on payload, dependency, or non-null
+current-GHG-Entry identity drift. Isometric's create request cannot set a GHG
+Entry association and live readback may leave both association fields null, so
+that provider-managed absence is recorded but does not block submission. The
+journal row and supplier reference are versioned by immutable Removal
+submission; supersession creates a fresh Biochar Application for the new
+version. Registry failure blocks Removal submission and leaves the claim safely
+retryable. There is no gate or placeholder lifecycle.
 
 ## Template and input contract
 

@@ -1,16 +1,26 @@
 # Isometric Docs Change Log
 
+## 2026-08-27 (nullable Biochar Application association readback)
+
+- Live sandbox Biochar Applications can remain persisted with both
+  `ghg_entry_id` and deprecated `removal_id` unset. The create request exposes
+  no field with which noma can assign either association.
+- Removal submission now accepts that provider-managed null state after the
+  complete Biochar Application payload and dependencies reconcile. If
+  Isometric returns either association, it must still match the current GHG
+  Entry or submission fails closed as registry drift.
+
 ## 2026-08-27 (Biochar Application canonical readback units)
 
 - Live Certify Biochar Application responses canonicalize submitted `t/ha` to
   `metric_ton / hectare` and submitted `kg` to `kilogram` on readback.
 - Reconciliation accepts only those semantically identical spelling pairs.
   Quantity magnitudes, application and dependency identities, dates, supplier
-  references, and GHG Entry associations remain strict; unrelated units still
-  fail closed as registry drift.
+  references, and non-null GHG Entry associations remain strict; unrelated
+  units still fail closed as registry drift.
 - Confirmed Biochar Application retries read the persisted external identity
-  directly and require its association to match the current GHG Entry. Bounded
-  supplier-reference scans remain only for unconfirmed orphan recovery.
+  directly and require any returned association to match the current GHG Entry.
+  Bounded supplier-reference scans remain only for unconfirmed orphan recovery.
 - Biochar Application journal identity and supplier references are versioned by
   immutable Removal submission. A superseding GHG Entry creates one new
   associated Biochar Application while the prior registry application remains
