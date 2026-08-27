@@ -3,6 +3,7 @@
  */
 
 import { z } from "zod";
+import { MASS_KG_STORAGE_INCREMENT } from "@/config/numeric-storage";
 
 /**
  * Zod literal that matches "" and transforms it to null.
@@ -171,7 +172,7 @@ export const optionalPercent = z.preprocess(
 // ============================================
 
 /** HTML/Zod increment for values stored through the `numeric(14,3)` family. */
-export const MASS_KG_INPUT_STEP = 0.001;
+export const MASS_KG_INPUT_STEP = MASS_KG_STORAGE_INCREMENT;
 /** HTML/Zod increment for values stored through the `numeric(14,6)` tonnes family. */
 export const MASS_TONNES_INPUT_STEP = 0.000001;
 /** HTML/Zod increment for values stored through the `numeric(9,6)` family. */
