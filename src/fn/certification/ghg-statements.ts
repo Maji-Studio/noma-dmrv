@@ -26,6 +26,7 @@ import {
   getRemovalsByGhgStatementId,
   hasMissingRemotePeriod,
   listFacilityIdsForExternalProject,
+  listFinalizingRemovalsForFacility,
   listGhgStatementsForFacility,
   listOpenRemovalsForFacility,
   type CertifierGhgStatementRow,
@@ -35,7 +36,10 @@ import {
   type CertifierRemovalRow,
   type RemovalCreditBatchSummary,
 } from "@/data-access/certifier-removals";
-import { withFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
+import {
+  withFacilityDurabilityLock,
+} from "@/data-access/facility-durability-lock";
+import { withFacilityCertificationBoundarySessionLock } from "@/data-access/facility-certification-boundary-lock";
 import { requireOrgFacility } from "@/data-access/utils";
 import { redactReportSecrets } from "@/lib/certification/report-url";
 import { overlayLiveRemoteStatus } from "@/lib/certification/from-submission";
@@ -61,6 +65,7 @@ import {
   overlappingEnd,
 } from "@/lib/isometric/utils/ghg-reporting-window";
 import { isLockedInFlight as computeIsLockedInFlight } from "@/lib/isometric/utils/lock";
+import { formatUtcDate } from "@/lib/date-utils";
 import {
   createGhgStatementSchema,
   type CreateGhgStatementInput,
@@ -92,6 +97,7 @@ import {
   REMOVAL_SUBMISSION_TYPE,
   submitRateLimit,
 } from "./shared";
+import { readRemovalReportingWindow } from "./removal-reporting-window";
 
 // =====================================================================
 // Result + state shapes
@@ -199,8 +205,18 @@ export async function createGhgStatementDraft(
     requireOrgRole(orgCtx, "admin");
     const parsed = createGhgStatementSchema.parse(input);
     await requireOrgFacility(orgCtx, parsed.facilityId);
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
-    assertProductionConfirmed(parsed.confirmProduction);
+    return withFacilityCertificationBoundarySessionLock(orgCtx, parsed.facilityId, () =>
+      createGhgStatementDraftLocked(orgCtx, parsed),
+    );
+  }, { rateLimit: submitRateLimit("cert:create-ghg-statement") });
+}
+
+async function createGhgStatementDraftLocked(
+  orgCtx: OrgContext,
+  parsed: ReturnType<typeof createGhgStatementSchema.parse>,
+): Promise<CreateGhgStatementResult> {
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  assertProductionConfirmed(parsed.confirmProduction);
 
     const submissionAttemptId = crypto.randomUUID();
     logger.info(
@@ -281,6 +297,7 @@ export async function createGhgStatementDraft(
       facilityId: parsed.facilityId,
       provider: ISOMETRIC_PROVIDER,
       expectedExternalProjectId: project.externalProjectId,
+      facilityCertificationBoundaryLockHeldBySession: true as const,
     };
 
     // Reporting periods are consecutive and non-overlapping — Isometric
@@ -334,6 +351,27 @@ export async function createGhgStatementDraft(
         parsed.reportingPeriodEndOn,
         existingEnds,
       );
+      const finalizingRemovals = await listFinalizingRemovalsForFacility(
+        orgCtx,
+        parsed.facilityId,
+      );
+      const blockingFinalizing = finalizingRemovals.find(({ submission }) => {
+        try {
+          const window = readRemovalReportingWindow(submission);
+          return isRemovalInWindow(
+            formatUtcDate(window.completedOn),
+            derivedStart,
+            parsed.reportingPeriodEndOn,
+          );
+        } catch {
+          return true;
+        }
+      });
+      if (blockingFinalizing) {
+        throw new SafeError(
+          `Removal ${blockingFinalizing.removal.id} is still finalizing in the registry. Retry that Removal before creating this GHG Statement.`,
+        );
+      }
       const openRemovals = await listOpenRemovalsForFacility(
         orgCtx,
         parsed.facilityId,
@@ -433,7 +471,6 @@ export async function createGhgStatementDraft(
           expected,
         });
     }
-  }, { rateLimit: submitRateLimit("cert:create-ghg-statement") });
 }
 
 // Creates or reconciles a remote draft by (project, end_on). Multiple remote

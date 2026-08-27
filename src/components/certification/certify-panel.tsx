@@ -128,6 +128,10 @@ function RemovalStatusRow({ data }: { data: RemovalCertifyContext }) {
             latest={latest}
             isLockedInFlight={lockedInFlight}
             artifact="removal"
+            reportingWindow={{
+              startedOn: data.reportingWindowStartedOn,
+              completedOn: data.reportingWindowCompletedOn,
+            }}
           />
         ) : (
           <span className="body-caption text-[var(--color-text-tertiary)]">

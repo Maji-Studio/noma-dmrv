@@ -157,6 +157,7 @@ function DetailState({
     statementSubmissionForStatus,
     locked,
     "ghgStatement",
+    "unknown",
   );
   const created = Boolean(statementSubmission?.externalId);
   const approvedReport = findApprovedGhgStatementReport(
@@ -289,6 +290,10 @@ function DetailState({
                           isLockedInFlight={
                             submission ? isLockedInFlight(submission) : false
                           }
+                          reportingWindow={{
+                            startedOn: removal.startedOn,
+                            completedOn: removal.completedOn,
+                          }}
                         />
                       ),
                     }),

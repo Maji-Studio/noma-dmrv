@@ -179,6 +179,7 @@ export interface MaterializedRemovalSubmissionSnapshot {
       >;
     };
   };
+  metadata: { supersedePreviousId: string | null };
 }
 
 const DATAPOINT_POST_TARGET = "/datapoints";
@@ -492,6 +493,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
   externalProjectId: string;
   removalId: string;
   nextVersion: number;
+  supersedePreviousId: string | null;
 }): MaterializedRemovalSubmissionSnapshot {
   const {
     compiled,
@@ -499,6 +501,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
     externalProjectId,
     removalId,
     nextVersion,
+    supersedePreviousId,
   } = args;
   const removalSupplierRef = buildRemovalSupplierRef({
     removalId,
@@ -589,6 +592,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
         ? { durabilityMeasurementSamples }
         : {}),
     },
+    metadata: { supersedePreviousId },
   };
 }
 

@@ -41,6 +41,19 @@ vi.mock("@/data-access/certifier-removals");
 vi.mock("@/data-access/certifier-production-batches");
 vi.mock("@/data-access/certifier-biochar-applications");
 vi.mock("@/data-access/production-claim-reservations");
+vi.mock("@/data-access/facility-durability-lock", () => ({
+  withFacilityDurabilityLock: vi.fn(
+    async (_ctx, _facilityId, callback) => callback({ __fakeTx: true }),
+  ),
+}));
+vi.mock("@/data-access/facility-certification-boundary-lock", () => ({
+  withFacilityCertificationBoundarySessionLock: vi.fn(
+    async (_ctx, _facilityId, callback) => callback(),
+  ),
+}));
+vi.mock("@/lib/certification/submission-lock", () => ({
+  acquireCertificationArtifactLocksSorted: vi.fn(),
+}));
 vi.mock("@/fn/certification/certify-context-core");
 vi.mock("@/fn/certification/ensure-evidence-ledgers");
 vi.mock("@/fn/certification/biochar-applications", () => ({
@@ -227,6 +240,16 @@ export function makeResolvedInventorySource(
 
 export let storedRows: CertificationSubmissionRow[];
 let nextLedgerRowId = 1;
+let storedRemovalStartedOn: string | null = null;
+let storedRemovalCompletedOn: string | null = null;
+
+export function setStoredRemovalReportingWindow(
+  startedOn: string | null,
+  completedOn: string | null,
+): void {
+  storedRemovalStartedOn = startedOn;
+  storedRemovalCompletedOn = completedOn;
+}
 
 export function newLedgerRow(
   input: InsertDraftSubmissionInput,
@@ -539,6 +562,8 @@ export function makeContext(
     facilityId: FACILITY_ID,
     hasOrgCredentials: true,
     removalId: REMOVAL_ID,
+    reportingWindowStartedOn: storedRemovalStartedOn,
+    reportingWindowCompletedOn: storedRemovalCompletedOn,
     mapping: makeMapping(),
     project: { id: EXTERNAL_PROJECT_ID, name: "Test project" } as never,
     defaultTemplate: makeTemplate(),
@@ -716,6 +741,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   storedRows = [];
   nextLedgerRowId = 1;
+  setStoredRemovalReportingWindow(null, null);
   durabilityFlag.live = false;
   vi.mocked(
     biocharApplicationsDA.getBiocharApplicationRegistryInputs,
@@ -770,7 +796,10 @@ beforeEach(() => {
   vi.mocked(ledger.markSubmissionSubmitted).mockImplementation(
     async (_userId, id, args) => {
       const row = storedRows.find((r) => r.id === id);
-      if (row) {
+      const ownsLock =
+        !args.expectedLockedAt ||
+        row?.lockedAt?.getTime() === args.expectedLockedAt.getTime();
+      if (row?.status === "draft" && ownsLock) {
         row.status = "submitted";
         row.externalId = args.externalId;
         row.submittedAt = new Date();
@@ -780,6 +809,8 @@ beforeEach(() => {
             ([key]) => !INTERRUPTION_METADATA_KEYS.has(key),
           ),
         );
+      } else if (args.expectedLockedAt) {
+        throw new Error("The submission changed before it could be finalized.");
       }
       if (args.supersedePreviousId) {
         const prev = storedRows.find((r) => r.id === args.supersedePreviousId);
@@ -790,6 +821,23 @@ beforeEach(() => {
       }
     },
   );
+  vi.mocked(
+    ledgerClaim.recordConfirmedSubmissionIdentity,
+  ).mockImplementation(async (_ctx, id, args) => {
+    const row = storedRows.find((candidate) => candidate.id === id);
+    if (
+      row?.status !== "draft" ||
+      row.lockedAt?.getTime() !== args.expectedLockedAt.getTime()
+    ) {
+      return false;
+    }
+    row.externalId = args.externalId;
+    row.metadata = {
+      ...(row.metadata ?? {}),
+      [SUBMISSION_METADATA_KEYS.externalMutation]: "confirmed",
+    };
+    return true;
+  });
   vi.mocked(ledger.markSubmissionRejected).mockImplementation(
     async (_userId, id, args) => {
       const row = storedRows.find((r) => r.id === id);
@@ -846,8 +894,11 @@ beforeEach(() => {
     },
   );
   vi.mocked(ledger.appendSyncEvent).mockResolvedValue(undefined as never);
-  vi.mocked(removalsDA.updateRemovalDates).mockResolvedValue(
-    undefined as never,
+  vi.mocked(removalsDA.updateRemovalDates).mockImplementation(
+    async (_ctx, _removalId, dates) => {
+      storedRemovalStartedOn = dates.startedOn;
+      storedRemovalCompletedOn = dates.completedOn;
+    },
   );
   vi.mocked(evidenceLedgers.ensureEvidenceLedgersFromContext).mockResolvedValue(
     undefined,

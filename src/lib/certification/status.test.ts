@@ -51,6 +51,20 @@ describe("deriveRemovalStatus", () => {
     expect(s.isActionable).toBe(false);
   });
 
+  it("keeps a prematurely submitted removal actionable for recovery", () => {
+    const s = deriveRemovalStatus({
+      local: "submitted",
+      lockInFlight: false,
+      submissionInterrupted: true,
+    });
+    expect(s).toMatchObject({
+      kind: "interrupted",
+      label: "Submission interrupted",
+      isTerminal: false,
+      isActionable: true,
+    });
+  });
+
   it("treats a retired superseded draft as not submitted and actionable", () => {
     const s = deriveRemovalStatus({ local: "superseded", lockInFlight: false });
     expect(s.label).toBe("Not submitted");
