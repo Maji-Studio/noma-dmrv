@@ -44,7 +44,7 @@ describe("delivery range validation copy", () => {
   });
 
   it.each([
-    ["deliveredWetMassKg", -1, "Wet mass must be 0 or more"],
+    ["deliveredWetMassKg", -1, "Wet mass must be greater than 0"],
     ["distanceKmOverride", -1, "Distance must be 0 or more"],
     [
       "moistureContentPercent",
@@ -70,6 +70,22 @@ describe("delivery range validation copy", () => {
   });
 
   it("accepts an ordinary delivery without truck observations", () => {
+    expect(deliveryFormSchema.safeParse(baseDelivery).success).toBe(true);
+  });
+
+  it("rejects zero delivered wet mass while allowing it to be omitted", () => {
+    const result = deliveryFormSchema.safeParse({
+      ...baseDelivery,
+      deliveredWetMassKg: 0,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(
+      result.error.issues.find(
+        (issue) => issue.path[0] === "deliveredWetMassKg",
+      )?.message,
+    ).toBe("Wet mass must be greater than 0");
     expect(deliveryFormSchema.safeParse(baseDelivery).success).toBe(true);
   });
 });

@@ -35,3 +35,32 @@ describe("delivery moisture precision", () => {
     },
   );
 });
+
+describe("delivery wet mass", () => {
+  const createBase = {
+    code: "DEL-001",
+    orderId: UUID_A,
+    facilityId: UUID_B,
+    deliveryDate: new Date("2026-07-26T00:00:00Z"),
+    moistureContentPercent: 20,
+  };
+
+  it("rejects zero at the create and update server boundaries", () => {
+    expect(
+      createDeliverySchema.safeParse({
+        ...createBase,
+        deliveredWetMassKg: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      updateDeliverySchema.safeParse({
+        deliveryId: UUID_A,
+        deliveredWetMassKg: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("allows an upcoming delivery to omit its wet mass", () => {
+    expect(createDeliverySchema.safeParse(createBase).success).toBe(true);
+  });
+});

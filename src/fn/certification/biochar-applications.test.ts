@@ -163,6 +163,20 @@ function remote(
   };
 }
 
+function canonicalRemote(
+  patch: Partial<IsometricBiocharApplication> = {},
+): IsometricBiocharApplication {
+  return remote({
+    average_application_rate: {
+      magnitude: 3,
+      unit: "metric_ton / hectare",
+    },
+    truck_mass_on_arrival: { magnitude: 12_000, unit: "kilogram" },
+    truck_mass_on_departure: { magnitude: 0, unit: "kilogram" },
+    ...patch,
+  });
+}
+
 function page(nodes: IsometricBiocharApplication[]) {
   return {
     nodes,
@@ -226,11 +240,11 @@ beforeEach(() => {
 });
 
 describe("ensureRemovalBiocharApplications", () => {
-  it("orders Production Batch, Storage Location, then Biochar Application", async () => {
+  it("accepts canonical units on immediate POST readback after its dependencies", async () => {
     mocks.client.get.mockResolvedValue(page([]));
     mocks.client.post.mockImplementation(async () => {
       mocks.events.push("biochar-application");
-      return remote();
+      return canonicalRemote();
     });
 
     await ensure();
@@ -248,12 +262,13 @@ describe("ensureRemovalBiocharApplications", () => {
         truck_mass_on_departure: { magnitude: 0, unit: "kg" },
       }),
     );
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks on a registry failure and reconciles safely on retry", async () => {
+  it("reconciles canonical units on retry without a duplicate POST", async () => {
     mocks.client.get
       .mockResolvedValueOnce(page([]))
-      .mockResolvedValueOnce(page([remote()]));
+      .mockResolvedValueOnce(page([canonicalRemote()]));
     mocks.client.post.mockRejectedValueOnce(new Error("connection reset"));
 
     await expect(ensure()).rejects.toThrow("connection reset");

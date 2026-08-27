@@ -26,6 +26,17 @@ const DEFAULT_LOOKUP_MAX_PAGES = 20;
 const QUANTITY_COMPARISON_EPSILON = 1e-9;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
+// Verified from a live Certify Biochar Application response on 2026-08-27:
+// Isometric canonicalizes the submitted rate and mass units on readback.
+const APPLICATION_RATE_UNIT_ALIASES = new Set([
+  BIOCHAR_APPLICATION_RATE_UNIT,
+  "metric_ton / hectare",
+]);
+const APPLICATION_MASS_UNIT_ALIASES = new Set([
+  BIOCHAR_APPLICATION_TRUCK_MASS_UNIT,
+  "kilogram",
+]);
+
 export interface BuildBiocharApplicationReferenceArgs {
   applicationId: string;
   creditBatchId: string;
@@ -238,11 +249,21 @@ function quantitiesMatch(
   expected: { magnitude: number; unit: string },
 ): boolean {
   return (
-    actual.unit === expected.unit &&
+    quantityUnitsMatch(actual.unit, expected.unit) &&
     Number.isFinite(actual.magnitude) &&
     Math.abs(actual.magnitude - expected.magnitude) <=
       QUANTITY_COMPARISON_EPSILON *
         Math.max(1, Math.abs(actual.magnitude), Math.abs(expected.magnitude))
+  );
+}
+
+function quantityUnitsMatch(actual: string, expected: string): boolean {
+  return (
+    actual === expected ||
+    (APPLICATION_RATE_UNIT_ALIASES.has(actual) &&
+      APPLICATION_RATE_UNIT_ALIASES.has(expected)) ||
+    (APPLICATION_MASS_UNIT_ALIASES.has(actual) &&
+      APPLICATION_MASS_UNIT_ALIASES.has(expected))
   );
 }
 

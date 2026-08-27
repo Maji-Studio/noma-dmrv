@@ -100,6 +100,39 @@ describe("Biochar Application request", () => {
       ),
     ).toContain("does not match");
   });
+
+  it("accepts Isometric's canonical application-rate and mass units", () => {
+    expect(
+      biocharApplicationMismatchMessage(
+        remote({
+          average_application_rate: {
+            magnitude: 3,
+            unit: "metric_ton / hectare",
+          },
+          truck_mass_on_arrival: {
+            magnitude: 12_000,
+            unit: "kilogram",
+          },
+          truck_mass_on_departure: {
+            magnitude: 0,
+            unit: "kilogram",
+          },
+        }),
+        buildCreateBiocharApplicationRequest(BASE),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects an unapproved quantity unit instead of converting it", () => {
+    expect(
+      biocharApplicationMismatchMessage(
+        remote({
+          truck_mass_on_arrival: { magnitude: 12_000, unit: "gram" },
+        }),
+        buildCreateBiocharApplicationRequest(BASE),
+      ),
+    ).toContain("does not match");
+  });
 });
 
 describe("Biochar Application reconciliation", () => {

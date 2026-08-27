@@ -108,6 +108,44 @@ describe("application schemas", () => {
     ).toBe(true);
   });
 
+  it("rejects a zero-hectare field on the client form schema", () => {
+    const result = applicationFormSchema.safeParse({
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 100,
+      fieldSizeHa: 0,
+      ...customerLocation,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(
+      result.error.issues.find((issue) => issue.path[0] === "fieldSizeHa")
+        ?.message,
+    ).toBe("Field size must be greater than 0");
+  });
+
+  it("rejects a zero-hectare field at the create server boundary", () => {
+    expect(
+      createApplicationSchema.safeParse({
+        applicationDate: new Date("2026-06-13"),
+        deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        biocharAppliedTons: 1,
+        fieldSizeHa: 0,
+        ...customerLocation,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a zero-hectare field at the update server boundary", () => {
+    expect(
+      updateApplicationSchema.safeParse({
+        applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        fieldSizeHa: 0,
+      }).success,
+    ).toBe(false);
+  });
+
   it.each([
     { label: "zero", value: 0 },
     { label: "a sub-gram value", value: MASS_TONNES_INPUT_STEP / 10 },
