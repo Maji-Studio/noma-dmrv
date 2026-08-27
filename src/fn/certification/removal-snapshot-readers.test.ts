@@ -102,6 +102,7 @@ describe("readRemovalBiocharApplicationIntents", () => {
 
   function read(intents: unknown[]) {
     return readRemovalBiocharApplicationIntents({
+      version: 1,
       payloadSnapshot: { semantic: { biocharApplicationIntents: intents } },
     } as never);
   }
@@ -123,6 +124,17 @@ describe("readRemovalBiocharApplicationIntents", () => {
 
   it("round-trips the ordinary immutable-slice intent", () => {
     expect(read([baseIntent])).toEqual([baseIntent]);
+  });
+
+  it("refuses an unversioned semantic fallback after the first submission", () => {
+    expect(() =>
+      readRemovalBiocharApplicationIntents({
+        version: 2,
+        payloadSnapshot: {
+          semantic: { biocharApplicationIntents: [baseIntent] },
+        },
+      } as never),
+    ).toThrow(/older Biochar Application format/i);
   });
 
   it("fails closed for an intent without its immutable slice mass", () => {

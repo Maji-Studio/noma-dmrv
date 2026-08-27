@@ -22,6 +22,7 @@ export const BIOCHAR_APPLICATION_TRUCK_MASS_UNIT = ISOMETRIC_KILOGRAM_UNIT;
 export const BIOCHAR_APPLICATION_DEPARTURE_MASS_KG = 0;
 export const BIOCHAR_APPLICATION_REFERENCE_VERSION = 1;
 export const BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH = 100;
+export const FIRST_REMOVAL_SUBMISSION_VERSION = 1;
 
 const REFERENCE_HASH_LENGTH = 12;
 const MAX_LOOKUP_PAGE_SIZE = 50;
@@ -59,7 +60,8 @@ export function buildBiocharApplicationReference(
   }
   const applicationHash = shortHash(applicationId);
   const batchHash = shortHash(creditBatchId);
-  const removalSubmissionVersion = args.removalSubmissionVersion ?? 1;
+  const removalSubmissionVersion =
+    args.removalSubmissionVersion ?? FIRST_REMOVAL_SUBMISSION_VERSION;
   if (
     !Number.isInteger(removalSubmissionVersion) ||
     removalSubmissionVersion < 1
@@ -73,7 +75,9 @@ export function buildBiocharApplicationReference(
   // submissions receive a distinct reference and therefore a distinct remote
   // Biochar Application associated with that new GHG Entry.
   const submissionVersionSuffix =
-    removalSubmissionVersion === 1 ? "" : `-s${removalSubmissionVersion}`;
+    removalSubmissionVersion === FIRST_REMOVAL_SUBMISSION_VERSION
+      ? ""
+      : `-s${removalSubmissionVersion}`;
   const reference = `nm-${provider}-${environment}-bca-${applicationHash}-${batchHash}${submissionVersionSuffix}-v${BIOCHAR_APPLICATION_REFERENCE_VERSION}`;
   if (reference.length > BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH) {
     throw new Error(
