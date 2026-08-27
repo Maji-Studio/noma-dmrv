@@ -197,7 +197,7 @@ describe("application mutations", () => {
         makeTestOrgContext(TEST_USER_ID),
         base as unknown as Parameters<typeof createApplication>[1],
       ),
-    ).rejects.toThrow("Field size must be greater than 0");
+    ).rejects.toThrow("Field size is required");
   });
 
   it("creates an application from the delivery's tracked dry-biochar ratio", async () => {
@@ -233,44 +233,6 @@ describe("application mutations", () => {
       ).toMatchObject({
         alreadyAppliedWetKg: 2_000,
         alreadyAppliedDryKg: 1_600,
-      });
-    } finally {
-      await cleanupMutationFixture(fixture);
-    }
-  });
-
-  it("allows an unrelated edit of a legacy application with no field size", async () => {
-    const runId = crypto.randomUUID();
-    const fixture = await createMutationFixture(runId);
-
-    try {
-      const application = await createApplication(
-        makeTestOrgContext(TEST_USER_ID),
-        {
-          code: `AP-AM-${runId}-LEGACY-FIELD`,
-          deliveryId: fixture.deliveryIds[0],
-          applicationDate: new Date("2025-07-08"),
-          biocharAppliedTons: 2,
-          fieldSizeHa: 1,
-          gpsLatitude: -3.3349,
-          gpsLongitude: 37.3404,
-        },
-      );
-      fixture.applicationIds.push(application.id);
-      await db
-        .update(applications)
-        .set({ fieldSizeHa: null })
-        .where(eq(applications.id, application.id));
-
-      await expect(
-        updateApplication(
-          makeTestOrgContext(TEST_USER_ID),
-          application.id,
-          { fieldIdentifier: "legacy-field" },
-        ),
-      ).resolves.toMatchObject({
-        fieldIdentifier: "legacy-field",
-        fieldSizeHa: null,
       });
     } finally {
       await cleanupMutationFixture(fixture);

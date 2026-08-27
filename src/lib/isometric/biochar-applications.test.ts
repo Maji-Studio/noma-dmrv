@@ -133,6 +133,29 @@ describe("Biochar Application request", () => {
       ),
     ).toContain("does not match");
   });
+
+  it("does not accept a verified alias on the wrong quantity field", () => {
+    const expected = buildCreateBiocharApplicationRequest(BASE);
+    expect(
+      biocharApplicationMismatchMessage(
+        remote({
+          average_application_rate: { magnitude: 3, unit: "kilogram" },
+        }),
+        expected,
+      ),
+    ).toContain("does not match");
+    expect(
+      biocharApplicationMismatchMessage(
+        remote({
+          truck_mass_on_arrival: {
+            magnitude: 12_000,
+            unit: "metric_ton / hectare",
+          },
+        }),
+        expected,
+      ),
+    ).toContain("does not match");
+  });
 });
 
 describe("Biochar Application reconciliation", () => {

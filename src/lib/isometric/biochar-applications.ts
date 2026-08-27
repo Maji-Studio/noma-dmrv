@@ -230,14 +230,17 @@ export function biocharApplicationMismatchMessage(
     quantitiesMatch(
       remote.average_application_rate,
       expected.average_application_rate,
+      applicationRateUnitsMatch,
     ) &&
     quantitiesMatch(
       remote.truck_mass_on_arrival,
       expected.truck_mass_on_arrival,
+      kilogramUnitsMatch,
     ) &&
     quantitiesMatch(
       remote.truck_mass_on_departure,
       expected.truck_mass_on_departure,
+      kilogramUnitsMatch,
     );
   return matches
     ? null
@@ -247,9 +250,10 @@ export function biocharApplicationMismatchMessage(
 function quantitiesMatch(
   actual: { magnitude: number; unit: string },
   expected: { magnitude: number; unit: string },
+  unitsMatch: (actual: string, expected: string) => boolean,
 ): boolean {
   return (
-    quantityUnitsMatch(actual.unit, expected.unit) &&
+    unitsMatch(actual.unit, expected.unit) &&
     Number.isFinite(actual.magnitude) &&
     Math.abs(actual.magnitude - expected.magnitude) <=
       QUANTITY_COMPARISON_EPSILON *
@@ -257,12 +261,11 @@ function quantitiesMatch(
   );
 }
 
-function quantityUnitsMatch(actual: string, expected: string): boolean {
+function applicationRateUnitsMatch(actual: string, expected: string): boolean {
   return (
     actual === expected ||
     (APPLICATION_RATE_UNIT_ALIASES.has(actual) &&
-      APPLICATION_RATE_UNIT_ALIASES.has(expected)) ||
-    kilogramUnitsMatch(actual, expected)
+      APPLICATION_RATE_UNIT_ALIASES.has(expected))
   );
 }
 

@@ -37,6 +37,7 @@ import {
 } from "@/db/schema/products";
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import {
+  FIELD_SIZE_REQUIRED_MESSAGE,
   FIELD_SIZE_POSITIVE_MESSAGE,
   isPositiveApplicationFieldSize,
 } from "@/lib/application-field-size";
@@ -73,7 +74,11 @@ function assertPositiveApplicationFieldSize(
   fieldSizeHa: number | null | undefined,
 ): asserts fieldSizeHa is number {
   if (!isPositiveApplicationFieldSize(fieldSizeHa)) {
-    throw new SafeError(FIELD_SIZE_POSITIVE_MESSAGE);
+    throw new SafeError(
+      fieldSizeHa == null
+        ? FIELD_SIZE_REQUIRED_MESSAGE
+        : FIELD_SIZE_POSITIVE_MESSAGE,
+    );
   }
 }
 
@@ -776,9 +781,11 @@ export async function updateApplication(
       "update",
     );
 
-    if (data.fieldSizeHa !== undefined) {
-      assertPositiveApplicationFieldSize(data.fieldSizeHa);
-    }
+    assertPositiveApplicationFieldSize(
+      data.fieldSizeHa === undefined
+        ? existingApplication.fieldSizeHa
+        : data.fieldSizeHa,
+    );
 
     const evidenceState = applicationEvidenceStateSchema.safeParse({
       evidenceMethod:
