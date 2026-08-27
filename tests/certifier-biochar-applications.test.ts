@@ -57,6 +57,18 @@ beforeAll(async () => {
       slug: `biochar-application-foreign-${tag}`,
     })
     .onConflictDoNothing();
+  const [foreignSubmission] = await db
+    .insert(certificationSubmissions)
+    .values({
+      organizationId: FOREIGN_ORG_ID,
+      provider: "isometric",
+      submissionType: "removal",
+      localEntityType: "removal",
+      localEntityId: crypto.randomUUID(),
+      version: 1,
+    })
+    .returning({ id: certificationSubmissions.id });
+  ids.foreignSubmission = foreignSubmission.id;
   const [facility] = await db
     .insert(facilities)
     .values({
@@ -266,6 +278,7 @@ afterAll(async () => {
   await cleanup(certifierProductionBatches, ids.production);
   await cleanup(certificationSubmissions, ids.submission);
   await cleanup(certificationSubmissions, ids.secondSubmission);
+  await cleanup(certificationSubmissions, ids.foreignSubmission);
   await cleanup(applications, ids.application);
   await cleanup(deliveries, ids.delivery);
   await cleanup(orders, ids.order);
@@ -307,6 +320,26 @@ describe("certifier Biochar Application data access", () => {
       externalStorageLocationId: `slc_bca_${tag}`,
       supplierReferenceId: `nm-isometric-sandbox-bca-${tag}-v1`,
       sourceIds: [],
+    });
+    await expect(
+      db.insert(certifierBiocharApplications).values({
+        organizationId: TEST_ORG_ID,
+        applicationId: ids.application,
+        creditBatchId: ids.batch,
+        removalSubmissionId: ids.foreignSubmission,
+        productionBatchRegistrationId: ids.production,
+        storageLocationRegistrationId: ids.storage,
+        externalProductionBatchId: `ptb_bca_${tag}`,
+        externalStorageLocationId: `slc_bca_${tag}`,
+        supplierReference: `nm-isometric-sandbox-bca-${tag}-foreign-v1`,
+        submittedPayload: body,
+        payloadHash: payloadHash(body),
+      }),
+    ).rejects.toMatchObject({
+      cause: {
+        code: "23503",
+        constraint: "certifier_bca_removal_submission_org_fk",
+      },
     });
     const journal = await claimBiocharApplicationRegistration(ctx, {
       applicationId: ids.application,

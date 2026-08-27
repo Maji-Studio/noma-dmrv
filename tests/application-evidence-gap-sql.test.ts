@@ -226,7 +226,6 @@ async function seedApplicationsAndDocuments(
         applicationDate: new Date("2025-06-15"),
         biocharAppliedTons: 5,
         biocharAppliedDryTons: 4.5,
-        fieldSizeHa: 1,
         evidenceMethod: spec.evidenceMethod,
         gpsLatitude: spec.gpsLatitude,
         gpsLongitude: spec.gpsLongitude,

@@ -305,7 +305,6 @@ describe("delivery order balance", () => {
           applicationDate: new Date("2026-08-02T00:00:00Z"),
           biocharAppliedTons: 0.5,
           biocharAppliedDryTons: 0.09,
-          fieldSizeHa: 1,
         })
         .returning({ id: applications.id });
       applicationId = application.id;

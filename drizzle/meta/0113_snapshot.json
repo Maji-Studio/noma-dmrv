@@ -1,5 +1,5 @@
 {
-  "id": "c41488d8-6414-45e4-99bf-bb4c8c37c9d4",
+  "id": "b9ae7a75-936f-4914-8be6-cdb1fa1e509c",
   "prevId": "8a8336d4-4125-4ded-9c88-1608f7e3165d",
   "version": "7",
   "dialect": "postgresql",
@@ -76,7 +76,7 @@
           "name": "field_size_ha",
           "type": "real",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "crop_type": {
           "name": "crop_type",
@@ -232,10 +232,6 @@
         "applications_gps_longitude_range": {
           "name": "applications_gps_longitude_range",
           "value": "\"applications\".\"gps_longitude\" is null or (\"applications\".\"gps_longitude\" >= -180 and \"applications\".\"gps_longitude\" <= 180)"
-        },
-        "applications_field_size_positive": {
-          "name": "applications_field_size_positive",
-          "value": "\"applications\".\"field_size_ha\" > 0"
         },
         "applications_soil_temperature_c_range": {
           "name": "applications_soil_temperature_c_range",
@@ -1410,6 +1406,14 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
+        "certification_submissions_id_organization_id_unique": {
+          "name": "certification_submissions_id_organization_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "organization_id"
+          ]
+        },
         "cert_submissions_entity_version_unique": {
           "name": "cert_submissions_entity_version_unique",
           "nullsNotDistinct": false,
@@ -2990,15 +2994,17 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "certifier_biochar_applications_removal_submission_id_certification_submissions_id_fk": {
-          "name": "certifier_biochar_applications_removal_submission_id_certification_submissions_id_fk",
+        "certifier_bca_removal_submission_org_fk": {
+          "name": "certifier_bca_removal_submission_org_fk",
           "tableFrom": "certifier_biochar_applications",
           "tableTo": "certification_submissions",
           "columnsFrom": [
-            "removal_submission_id"
+            "removal_submission_id",
+            "organization_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "organization_id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"

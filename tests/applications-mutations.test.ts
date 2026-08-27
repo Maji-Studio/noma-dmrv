@@ -204,41 +204,6 @@ describe("application mutations", () => {
     );
   });
 
-  it("rejects missing or zero field size at the database boundary", async () => {
-    const runId = crypto.randomUUID();
-    const fixture = await createMutationFixture(runId);
-    const base = {
-      organizationId: TEST_ORG_ID,
-      code: `AP-AM-${runId}-DB-FIELD`,
-      deliveryId: fixture.deliveryIds[0],
-      applicationDate: new Date("2025-07-08"),
-      biocharAppliedTons: 1,
-      biocharAppliedDryTons: 0.8,
-    };
-
-    try {
-      await expect(
-        db.insert(applications).values({ ...base, fieldSizeHa: 0 }),
-      ).rejects.toMatchObject({
-        cause: {
-          code: "23514",
-          constraint: "applications_field_size_positive",
-        },
-      });
-      await expect(
-        db.insert(applications).values({
-          ...base,
-          code: `${base.code}-NULL`,
-          fieldSizeHa: null as never,
-        }),
-      ).rejects.toMatchObject({
-        cause: { code: "23502", column: "field_size_ha" },
-      });
-    } finally {
-      await cleanupMutationFixture(fixture);
-    }
-  });
-
   it("creates an application from the delivery's tracked dry-biochar ratio", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);

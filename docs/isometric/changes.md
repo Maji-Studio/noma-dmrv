@@ -18,8 +18,8 @@
   duplicate write.
 - Kilogram request/readback comparison is shared with Production Batch
   reconciliation so both endpoints retain the same verified alias contract.
-- Application field size is required and positive in the database as well as
-  form, create, update, and submission boundaries. Delivered wet mass copy
+- Application field size is required and positive at form, create, update,
+  data-access, and submission boundaries. Delivered wet mass copy
   states the persisted minimum of 0.001 kg explicitly.
 
 ## 2026-08-26 (Biochar Application API restored)

@@ -216,7 +216,6 @@ async function createApplicationRecord(
       applicationDate: new Date("2025-06-15"),
       biocharAppliedTons: values.biocharAppliedTons,
       biocharAppliedDryTons: values.biocharAppliedDryTons,
-      fieldSizeHa: 1,
       co2eStoredTonnes: values.co2eStoredTonnes,
     })
     .returning({ id: applications.id });

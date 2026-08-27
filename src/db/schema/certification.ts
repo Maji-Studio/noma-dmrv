@@ -457,6 +457,10 @@ export const certificationSubmissions = pgTable(
   },
   (table) => [
     index('certification_submissions_organization_id_idx').on(table.organizationId),
+    unique('certification_submissions_id_organization_id_unique').on(
+      table.id,
+      table.organizationId
+    ),
     unique('cert_submissions_entity_version_unique').on(
       table.provider,
       table.submissionType,

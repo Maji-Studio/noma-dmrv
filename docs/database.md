@@ -124,16 +124,11 @@ submission and configuration boundary. Purpose per table:
 0008](./adr/0008-submission-ledger-internal-seam.md).
 
 `certifier_biochar_applications` is an organization-scoped idempotency journal,
-not a second source of application facts. Its exact payload/hash and dependency
-identities are claimed with lifecycle `creating` before the non-idempotent POST
-in the configured Isometric environment, then confirmed with the remote ID and
-observed GHG identity. Each row is one immutable Application by credit-batch
-slice for one immutable Removal submission version. A superseding Removal gets
-a new journal row and remote Biochar Application while the prior version stays
-associated with its prior GHG Entry. Its provider arrival mass is that slice's
-allocated wet kg and its departure mass is zero. Commingled rows partition and
-sum to the physical Application total. Failed calls retain the claim for
-reconciliation and retry; payload or identity drift fails closed.
+not a second source of application facts. Every row links its Application and
+credit-batch slice to an immutable Removal submission through same-organization
+composite foreign keys; exact payload/hash and registry identities remain on
+the journal. The versioned row grain, supersession ownership, and exact retry
+semantics are documented in [`schema-overview.md`](./schema-overview.md).
 
 `certifier_ghg_statement_reports` is the immutable-version record for the PDF
 sent with a GHG Statement verifier submission. Every preparation gets a

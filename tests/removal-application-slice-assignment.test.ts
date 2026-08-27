@@ -161,7 +161,6 @@ describe("Removal Application-slice assignment", () => {
         applicationDate: new Date("2026-04-05T00:00:00Z"),
         biocharAppliedTons: 0.3,
         biocharAppliedDryTons: 0.15,
-        fieldSizeHa: 1,
       })
       .returning();
     const batches = await db

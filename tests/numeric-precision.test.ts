@@ -174,7 +174,6 @@ describe("numeric precision round-trips (issue #280)", () => {
           deliveryId: delivery.id,
           biocharAppliedTons: 1,
           biocharAppliedDryTons: 0.9,
-          fieldSizeHa: 1,
           co2eStoredTonnes: TONNES_9_SIG_DIGITS,
         })
         .returning({ id: applications.id });

@@ -38,9 +38,7 @@ export const certifierBiocharApplications = pgTable(
     provider: certifierProvider("provider").notNull().default("isometric"),
     applicationId: uuid("application_id").notNull(),
     creditBatchId: uuid("credit_batch_id").notNull(),
-    removalSubmissionId: uuid("removal_submission_id")
-      .notNull()
-      .references(() => certificationSubmissions.id),
+    removalSubmissionId: uuid("removal_submission_id").notNull(),
     productionBatchRegistrationId: uuid(
       "production_batch_registration_id",
     ).notNull(),
@@ -82,6 +80,14 @@ export const certifierBiocharApplications = pgTable(
       table.id,
       table.organizationId,
     ),
+    foreignKey({
+      name: "certifier_bca_removal_submission_org_fk",
+      columns: [table.removalSubmissionId, table.organizationId],
+      foreignColumns: [
+        certificationSubmissions.id,
+        certificationSubmissions.organizationId,
+      ],
+    }),
     foreignKey({
       columns: [table.applicationId, table.organizationId],
       foreignColumns: [applications.id, applications.organizationId],
