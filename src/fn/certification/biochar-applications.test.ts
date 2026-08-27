@@ -88,7 +88,9 @@ const log = {
   debug: vi.fn(),
 } as unknown as Logger;
 
-function intent(): BiocharApplicationIntent {
+function intent(
+  patch: Partial<BiocharApplicationIntent> = {},
+): BiocharApplicationIntent {
   return {
     applicationId: APPLICATION_ID,
     applicationCode: "APP-001",
@@ -112,6 +114,21 @@ function intent(): BiocharApplicationIntent {
       supplier_reference_id: "nm-slc-test",
     },
     sourceIds: [],
+    ...patch,
+  };
+}
+
+function submittedBody(): Record<string, unknown> {
+  return {
+    application_date: "2026-04-05",
+    average_application_rate: { magnitude: 3, unit: "t/ha" },
+    production_batch_id: "ptb-test",
+    project_id: "prj-test",
+    source_ids: [],
+    storage_site_id: "slc-test",
+    supplier_reference_id: intent().supplierReference,
+    truck_mass_on_arrival: { magnitude: 12_000, unit: "kg" },
+    truck_mass_on_departure: { magnitude: 0, unit: "kg" },
   };
 }
 
@@ -125,6 +142,7 @@ function registration(
     provider: "isometric",
     applicationId: APPLICATION_ID,
     creditBatchId: CREDIT_BATCH_ID,
+    removalSubmissionId: "submission-1",
     productionBatchRegistrationId: "production-journal-1",
     storageLocationRegistrationId: "storage-journal-1",
     externalProductionBatchId: "ptb-test",
@@ -163,6 +181,20 @@ function remote(
   };
 }
 
+function canonicalRemote(
+  patch: Partial<IsometricBiocharApplication> = {},
+): IsometricBiocharApplication {
+  return remote({
+    average_application_rate: {
+      magnitude: 3,
+      unit: "metric_ton / hectare",
+    },
+    truck_mass_on_arrival: { magnitude: 12_000, unit: "kilogram" },
+    truck_mass_on_departure: { magnitude: 0, unit: "kilogram" },
+    ...patch,
+  });
+}
+
 function page(nodes: IsometricBiocharApplication[]) {
   return {
     nodes,
@@ -171,13 +203,28 @@ function page(nodes: IsometricBiocharApplication[]) {
   };
 }
 
-function ensure() {
+function ensure(intents: BiocharApplicationIntent[] = [intent()]) {
   return ensureRemovalBiocharApplications({
     orgCtx,
     removalId: "removal-1",
     externalRemovalId: EXTERNAL_REMOVAL_ID,
     submissionRow: { id: "submission-1" } as CertificationSubmissionRow,
-    intents: [intent()],
+    intents,
+    log,
+  });
+}
+
+function ensureVersion(args: {
+  submissionId: string;
+  externalRemovalId: string;
+  intent: BiocharApplicationIntent;
+}) {
+  return ensureRemovalBiocharApplications({
+    orgCtx,
+    removalId: "removal-1",
+    externalRemovalId: args.externalRemovalId,
+    submissionRow: { id: args.submissionId } as CertificationSubmissionRow,
+    intents: [args.intent],
     log,
   });
 }
@@ -188,7 +235,10 @@ beforeEach(() => {
   mocks.events.length = 0;
   mocks.getRegistration.mockImplementation(async () => mocks.registration);
   mocks.claim.mockImplementation(async (_ctx, input) => {
-    mocks.registration = registration(input.submittedPayload);
+    mocks.registration = registration(input.submittedPayload, {
+      removalSubmissionId: input.removalSubmissionId,
+      supplierReference: input.supplierReference,
+    });
     return mocks.registration;
   });
   mocks.confirm.mockImplementation(async (_ctx, input) => {
@@ -226,11 +276,11 @@ beforeEach(() => {
 });
 
 describe("ensureRemovalBiocharApplications", () => {
-  it("orders Production Batch, Storage Location, then Biochar Application", async () => {
+  it("accepts canonical units on immediate POST readback after its dependencies", async () => {
     mocks.client.get.mockResolvedValue(page([]));
     mocks.client.post.mockImplementation(async () => {
       mocks.events.push("biochar-application");
-      return remote();
+      return canonicalRemote();
     });
 
     await ensure();
@@ -248,12 +298,13 @@ describe("ensureRemovalBiocharApplications", () => {
         truck_mass_on_departure: { magnitude: 0, unit: "kg" },
       }),
     );
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks on a registry failure and reconciles safely on retry", async () => {
+  it("reconciles canonical units on retry without a duplicate POST", async () => {
     mocks.client.get
       .mockResolvedValueOnce(page([]))
-      .mockResolvedValueOnce(page([remote()]));
+      .mockResolvedValueOnce(page([canonicalRemote()]));
     mocks.client.post.mockRejectedValueOnce(new Error("connection reset"));
 
     await expect(ensure()).rejects.toThrow("connection reset");
@@ -265,6 +316,226 @@ describe("ensureRemovalBiocharApplications", () => {
       lifecycleStatus: "confirmed",
       externalApplicationId: "bca-test",
     });
+    expect(
+      mocks.client.get.mock.calls.every(
+        ([path]) => path === "/biochar_applications",
+      ),
+    ).toBe(true);
+  });
+
+  it("reads a confirmed identity directly and accepts its current Removal association", async () => {
+    mocks.registration = registration(submittedBody(), {
+      externalApplicationId: "bca-test",
+      lifecycleStatus: "confirmed",
+      observedGhgEntryId: "ghg-previous",
+    });
+    mocks.client.get.mockImplementation(async (path: string) => {
+      if (path === "/biochar_applications/bca-test") {
+        return canonicalRemote();
+      }
+      throw new Error("confirmed retry must not scan the account-wide list");
+    });
+
+    await expect(ensure()).resolves.toBeUndefined();
+
+    expect(mocks.client.get).toHaveBeenCalledOnce();
+    expect(mocks.client.get).toHaveBeenCalledWith(
+      "/biochar_applications/bca-test",
+    );
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({ observedGhgEntryId: EXTERNAL_REMOVAL_ID }),
+    );
+  });
+
+  it("rejects a confirmed identity still associated with the superseded Removal", async () => {
+    mocks.registration = registration(submittedBody(), {
+      externalApplicationId: "bca-test",
+      lifecycleStatus: "confirmed",
+      observedGhgEntryId: "ghg-previous",
+    });
+    mocks.client.get.mockResolvedValue(
+      canonicalRemote({ ghg_entry_id: "ghg-previous" }),
+    );
+
+    await expect(ensure()).rejects.toThrow(/different GHG Entry/i);
+
+    expect(mocks.markDrift).toHaveBeenCalledWith(
+      orgCtx,
+      "journal-1",
+      "remote_payload_or_identity_drift",
+    );
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
+  it("creates one versioned Biochar Application per superseding Removal and reuses v2", async () => {
+    const firstIntent = intent();
+    const secondIntent = intent({
+      supplierReference: "nm-isometric-sandbox-bca-app-batch-s2-v1",
+    });
+    const registrations = new Map<string, CertifierBiocharApplication>();
+    mocks.getRegistration.mockImplementation(
+      async (_ctx, _applicationId, _creditBatchId, removalSubmissionId) =>
+        registrations.get(removalSubmissionId) ?? null,
+    );
+    mocks.claim.mockImplementation(async (_ctx, input) => {
+      const row = registration(input.submittedPayload, {
+        id: `journal-${input.removalSubmissionId}`,
+        removalSubmissionId: input.removalSubmissionId,
+        supplierReference: input.supplierReference,
+      });
+      registrations.set(input.removalSubmissionId, row);
+      return row;
+    });
+    mocks.confirm.mockImplementation(async (_ctx, input) => {
+      const entry = [...registrations.entries()].find(
+        ([, row]) => row.id === input.registrationId,
+      );
+      if (!entry) throw new Error("registration not found");
+      const [submissionId, row] = entry;
+      registrations.set(submissionId, {
+        ...row,
+        externalApplicationId: input.externalApplicationId,
+        lifecycleStatus: "confirmed",
+        observedGhgEntryId: input.observedGhgEntryId,
+        observedRemovalId: input.observedRemovalId,
+      });
+      return registrations.get(submissionId)!;
+    });
+
+    const firstRemote = canonicalRemote({
+      id: "bca-v1",
+      ghg_entry_id: "ghg-v1",
+      supplier_reference_id: firstIntent.supplierReference,
+    });
+    const secondRemote = canonicalRemote({
+      id: "bca-v2",
+      ghg_entry_id: "ghg-v2",
+      supplier_reference_id: secondIntent.supplierReference,
+    });
+    mocks.client.get.mockImplementation(async (path: string) => {
+      if (path === "/biochar_applications/bca-v1") return firstRemote;
+      if (path === "/biochar_applications/bca-v2") return secondRemote;
+      return page([]);
+    });
+    mocks.client.post.mockImplementation(async (_path, body) => {
+      const supplierReference = (
+        body as { supplier_reference_id: string }
+      ).supplier_reference_id;
+      return supplierReference === firstIntent.supplierReference
+        ? firstRemote
+        : secondRemote;
+    });
+
+    await ensureVersion({
+      submissionId: "submission-v1",
+      externalRemovalId: "ghg-v1",
+      intent: firstIntent,
+    });
+    await ensureVersion({
+      submissionId: "submission-v2",
+      externalRemovalId: "ghg-v2",
+      intent: secondIntent,
+    });
+    await ensureVersion({
+      submissionId: "submission-v2",
+      externalRemovalId: "ghg-v2",
+      intent: secondIntent,
+    });
+
+    expect(mocks.client.post).toHaveBeenCalledTimes(2);
+    expect(registrations.get("submission-v1")).toMatchObject({
+      externalApplicationId: "bca-v1",
+      observedGhgEntryId: "ghg-v1",
+    });
+    expect(registrations.get("submission-v2")).toMatchObject({
+      externalApplicationId: "bca-v2",
+      observedGhgEntryId: "ghg-v2",
+    });
+  });
+
+  it("reuses the first of two applications, creates only the missing second, and makes no writes on another retry", async () => {
+    const secondIntent = intent({
+      applicationId: "44444444-4444-4444-8444-444444444444",
+      applicationCode: "APP-002",
+      deliveryId: "delivery-2",
+      customerLocationId: "55555555-5555-4555-8555-555555555555",
+      allocatedWetMassKg: 6_000,
+      fieldSizeHa: 2,
+      supplierReference: "nm-isometric-sandbox-bca-app-2-batch-v1",
+      storageLocationSupplierReference: "nm-slc-test-2",
+    });
+    const intents = [intent(), secondIntent];
+    const registrations = new Map<string, CertifierBiocharApplication>();
+    const key = (applicationId: string, creditBatchId: string) =>
+      `${applicationId}:${creditBatchId}`;
+
+    mocks.getRegistration.mockImplementation(
+      async (_ctx, applicationId, creditBatchId) =>
+        registrations.get(key(applicationId, creditBatchId)) ?? null,
+    );
+    mocks.claim.mockImplementation(async (_ctx, input) => {
+      const row = registration(input.submittedPayload, {
+        id: `journal-${input.applicationId}`,
+        applicationId: input.applicationId,
+        creditBatchId: input.creditBatchId,
+        supplierReference: input.supplierReference,
+      });
+      registrations.set(key(input.applicationId, input.creditBatchId), row);
+      return row;
+    });
+    mocks.confirm.mockImplementation(async (_ctx, input) => {
+      const entry = [...registrations.entries()].find(
+        ([, row]) => row.id === input.registrationId,
+      );
+      if (!entry) throw new Error("registration not found");
+      const [registrationKey, row] = entry;
+      registrations.set(registrationKey, {
+        ...row,
+        externalApplicationId: input.externalApplicationId,
+        lifecycleStatus: "confirmed",
+        correctionStatus: "none",
+        driftReason: null,
+        observedGhgEntryId: input.observedGhgEntryId,
+        observedRemovalId: input.observedRemovalId,
+      });
+      return registrations.get(registrationKey)!;
+    });
+
+    const firstRemote = canonicalRemote();
+    const secondRemote = canonicalRemote({
+      id: "bca-test-2",
+      supplier_reference_id: secondIntent.supplierReference,
+      truck_mass_on_arrival: { magnitude: 6_000, unit: "kilogram" },
+    });
+    mocks.client.get.mockResolvedValue(page([firstRemote]));
+    mocks.client.post.mockResolvedValue(secondRemote);
+
+    await ensure(intents);
+
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
+    expect(mocks.client.post).toHaveBeenCalledWith(
+      "/biochar_applications",
+      expect.objectContaining({
+        supplier_reference_id: secondIntent.supplierReference,
+      }),
+    );
+    expect([...registrations.values()]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ externalApplicationId: "bca-test" }),
+        expect.objectContaining({ externalApplicationId: "bca-test-2" }),
+      ]),
+    );
+
+    mocks.client.get.mockImplementation(async (path: string) => {
+      if (path === "/biochar_applications/bca-test") return firstRemote;
+      if (path === "/biochar_applications/bca-test-2") return secondRemote;
+      return page([firstRemote, secondRemote]);
+    });
+    await ensure(intents);
+
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
   });
 
   it("uses the ordinary claim path without a gated placeholder", async () => {

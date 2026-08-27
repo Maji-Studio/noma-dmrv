@@ -44,7 +44,7 @@ describe("delivery range validation copy", () => {
   });
 
   it.each([
-    ["deliveredWetMassKg", -1, "Wet mass must be 0 or more"],
+    ["deliveredWetMassKg", -1, "Wet mass must be at least 0.001 kg"],
     ["distanceKmOverride", -1, "Distance must be 0 or more"],
     [
       "moistureContentPercent",
@@ -69,7 +69,40 @@ describe("delivery range validation copy", () => {
     ).toBe(message);
   });
 
-  it("accepts an ordinary delivery without truck observations", () => {
+  it("accepts an upcoming delivery without truck observations", () => {
     expect(deliveryFormSchema.safeParse(baseDelivery).success).toBe(true);
+  });
+
+  it("rejects zero delivered wet mass while allowing it to be omitted", () => {
+    const result = deliveryFormSchema.safeParse({
+      ...baseDelivery,
+      deliveredWetMassKg: 0,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(
+      result.error.issues.find(
+        (issue) => issue.path[0] === "deliveredWetMassKg",
+      )?.message,
+    ).toBe("Wet mass must be at least 0.001 kg");
+    expect(deliveryFormSchema.safeParse(baseDelivery).success).toBe(true);
+  });
+
+  it("requires a positive wet mass when the form status is delivered", () => {
+    const result = deliveryFormSchema.safeParse({
+      ...baseDelivery,
+      status: "delivered",
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(
+      result.error.issues.find(
+        (issue) => issue.path[0] === "deliveredWetMassKg",
+      )?.message,
+    ).toBe(
+      "Enter a wet mass of at least 0.001 kg before marking this delivery as delivered",
+    );
   });
 });

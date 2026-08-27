@@ -4,6 +4,10 @@ import { SafeError } from "@/lib/errors";
 import type { IsometricClient, IsometricEnvironment } from "./client";
 export type { IsometricEnvironment } from "./client";
 import type { components } from "./generated/certify";
+import {
+  ISOMETRIC_KILOGRAM_UNIT,
+  kilogramUnitsMatch,
+} from "./quantity-units";
 
 export type IsometricBiocharApplication =
   components["schemas"]["BiocharApplication"];
@@ -14,10 +18,11 @@ type BiocharApplicationPage =
   components["schemas"]["PaginatedListResource_BiocharApplication_"];
 
 export const BIOCHAR_APPLICATION_RATE_UNIT = "t/ha";
-export const BIOCHAR_APPLICATION_TRUCK_MASS_UNIT = "kg";
+export const BIOCHAR_APPLICATION_TRUCK_MASS_UNIT = ISOMETRIC_KILOGRAM_UNIT;
 export const BIOCHAR_APPLICATION_DEPARTURE_MASS_KG = 0;
 export const BIOCHAR_APPLICATION_REFERENCE_VERSION = 1;
 export const BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH = 100;
+export const FIRST_REMOVAL_SUBMISSION_VERSION = 1;
 
 const REFERENCE_HASH_LENGTH = 12;
 const MAX_LOOKUP_PAGE_SIZE = 50;
@@ -26,10 +31,18 @@ const DEFAULT_LOOKUP_MAX_PAGES = 20;
 const QUANTITY_COMPARISON_EPSILON = 1e-9;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
+// Verified from a live Certify Biochar Application response on 2026-08-27:
+// Isometric canonicalizes the submitted rate and mass units on readback.
+const APPLICATION_RATE_UNIT_ALIASES = new Set([
+  BIOCHAR_APPLICATION_RATE_UNIT,
+  "metric_ton / hectare",
+]);
+
 export interface BuildBiocharApplicationReferenceArgs {
   applicationId: string;
   creditBatchId: string;
   environment: IsometricEnvironment;
+  removalSubmissionVersion?: number;
   provider?: "isometric";
 }
 
@@ -47,7 +60,25 @@ export function buildBiocharApplicationReference(
   }
   const applicationHash = shortHash(applicationId);
   const batchHash = shortHash(creditBatchId);
-  const reference = `nm-${provider}-${environment}-bca-${applicationHash}-${batchHash}-v${BIOCHAR_APPLICATION_REFERENCE_VERSION}`;
+  const removalSubmissionVersion =
+    args.removalSubmissionVersion ?? FIRST_REMOVAL_SUBMISSION_VERSION;
+  if (
+    !Number.isInteger(removalSubmissionVersion) ||
+    removalSubmissionVersion < 1
+  ) {
+    throw new Error(
+      "Biochar Application Removal submission version must be positive",
+    );
+  }
+  // Preserve the already-deployed v1 reference so an interrupted first
+  // submission can still reconcile its remote artifact. Superseding Removal
+  // submissions receive a distinct reference and therefore a distinct remote
+  // Biochar Application associated with that new GHG Entry.
+  const submissionVersionSuffix =
+    removalSubmissionVersion === FIRST_REMOVAL_SUBMISSION_VERSION
+      ? ""
+      : `-s${removalSubmissionVersion}`;
+  const reference = `nm-${provider}-${environment}-bca-${applicationHash}-${batchHash}${submissionVersionSuffix}-v${BIOCHAR_APPLICATION_REFERENCE_VERSION}`;
   if (reference.length > BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH) {
     throw new Error(
       `Biochar Application supplier reference exceeds ${BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH} characters`,
@@ -149,6 +180,15 @@ export function createBiocharApplication(
   );
 }
 
+export function getBiocharApplication(
+  client: IsometricClient,
+  biocharApplicationId: string,
+): Promise<IsometricBiocharApplication> {
+  return client.get<IsometricBiocharApplication>(
+    `/biochar_applications/${encodeURIComponent(biocharApplicationId)}`,
+  );
+}
+
 export async function findBiocharApplicationBySupplierReference(
   client: IsometricClient,
   supplierReferenceId: string,
@@ -219,14 +259,17 @@ export function biocharApplicationMismatchMessage(
     quantitiesMatch(
       remote.average_application_rate,
       expected.average_application_rate,
+      applicationRateUnitsMatch,
     ) &&
     quantitiesMatch(
       remote.truck_mass_on_arrival,
       expected.truck_mass_on_arrival,
+      kilogramUnitsMatch,
     ) &&
     quantitiesMatch(
       remote.truck_mass_on_departure,
       expected.truck_mass_on_departure,
+      kilogramUnitsMatch,
     );
   return matches
     ? null
@@ -236,13 +279,22 @@ export function biocharApplicationMismatchMessage(
 function quantitiesMatch(
   actual: { magnitude: number; unit: string },
   expected: { magnitude: number; unit: string },
+  unitsMatch: (actual: string, expected: string) => boolean,
 ): boolean {
   return (
-    actual.unit === expected.unit &&
+    unitsMatch(actual.unit, expected.unit) &&
     Number.isFinite(actual.magnitude) &&
     Math.abs(actual.magnitude - expected.magnitude) <=
       QUANTITY_COMPARISON_EPSILON *
         Math.max(1, Math.abs(actual.magnitude), Math.abs(expected.magnitude))
+  );
+}
+
+function applicationRateUnitsMatch(actual: string, expected: string): boolean {
+  return (
+    actual === expected ||
+    (APPLICATION_RATE_UNIT_ALIASES.has(actual) &&
+      APPLICATION_RATE_UNIT_ALIASES.has(expected))
   );
 }
 

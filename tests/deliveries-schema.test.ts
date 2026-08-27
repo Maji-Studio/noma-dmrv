@@ -35,3 +35,68 @@ describe("delivery moisture precision", () => {
     },
   );
 });
+
+describe("delivery wet mass", () => {
+  const createBase = {
+    code: "DEL-001",
+    orderId: UUID_A,
+    facilityId: UUID_B,
+    deliveryDate: new Date("2026-07-26T00:00:00Z"),
+    moistureContentPercent: 20,
+  };
+
+  it("rejects zero at the create and update server boundaries", () => {
+    expect(
+      createDeliverySchema.safeParse({
+        ...createBase,
+        deliveredWetMassKg: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      updateDeliverySchema.safeParse({
+        deliveryId: UUID_A,
+        deliveredWetMassKg: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("allows an upcoming delivery to omit its wet mass", () => {
+    expect(createDeliverySchema.safeParse(createBase).success).toBe(true);
+  });
+
+  it("requires a positive wet mass when a delivery is delivered", () => {
+    for (const deliveredWetMassKg of [undefined, null, 0]) {
+      expect(
+        createDeliverySchema.safeParse({
+          ...createBase,
+          status: "delivered",
+          deliveredWetMassKg,
+        }).success,
+      ).toBe(false);
+    }
+
+    expect(
+      createDeliverySchema.safeParse({
+        ...createBase,
+        status: "delivered",
+        deliveredWetMassKg: 1,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("defers delivered status/mass validation until a partial update is merged", () => {
+    expect(
+      updateDeliverySchema.safeParse({
+        deliveryId: UUID_A,
+        status: "delivered",
+      }).success,
+    ).toBe(true);
+    expect(
+      updateDeliverySchema.safeParse({
+        deliveryId: UUID_A,
+        status: "delivered",
+        deliveredWetMassKg: null,
+      }).success,
+    ).toBe(true);
+  });
+});

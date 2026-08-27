@@ -36,6 +36,7 @@ import {
   formulations,
 } from "@/db/schema/products";
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
+import { isPositiveApplicationFieldSize } from "@/lib/application-field-size";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
 import {
@@ -65,6 +66,16 @@ import { parseGisBoundary } from "@/schemas/gis-boundary";
 const DEFAULT_PAGE_SIZE = 100;
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
 const INVALID_APPLICATION_EVIDENCE_MESSAGE = "Application evidence is invalid.";
+function assertPositiveApplicationFieldSize(
+  fieldSizeHa: number | null | undefined,
+  applicationCode: string,
+): asserts fieldSizeHa is number {
+  if (!isPositiveApplicationFieldSize(fieldSizeHa)) {
+    throw new SafeError(
+      `Application ${applicationCode} needs a field size greater than 0 ha. Enter a field size and save again.`,
+    );
+  }
+}
 
 async function assertApplicationSlicesAreMutable(
   ctx: OrgContext,
@@ -671,6 +682,7 @@ export async function createApplication(
   data: CreateApplicationInput & { code: string }
 ): Promise<Application> {
   requireOrgScope(ctx);
+  assertPositiveApplicationFieldSize(data.fieldSizeHa, data.code);
 
   return db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
@@ -712,7 +724,7 @@ export async function createApplication(
         deliveryId: data.deliveryId,
         biocharAppliedTons: data.biocharAppliedTons,
         biocharAppliedDryTons,
-        fieldSizeHa: data.fieldSizeHa ?? null,
+        fieldSizeHa: data.fieldSizeHa,
         fieldIdentifier: optionalText(data.fieldIdentifier),
         cropType: optionalText(data.cropType),
         gpsLatitude: data.gpsLatitude ?? null,
@@ -762,6 +774,13 @@ export async function updateApplication(
       tx,
       { entityType: "application", entityId: id },
       "update",
+    );
+
+    assertPositiveApplicationFieldSize(
+      data.fieldSizeHa === undefined
+        ? existingApplication.fieldSizeHa
+        : data.fieldSizeHa,
+      existingApplication.code,
     );
 
     const evidenceState = applicationEvidenceStateSchema.safeParse({

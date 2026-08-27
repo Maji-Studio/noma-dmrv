@@ -178,6 +178,32 @@ async function cleanupMutationFixture(fixture: ApplicationMutationFixture): Prom
 beforeAll(() => ensureTestOrg());
 
 describe("application mutations", () => {
+  it("rejects missing or zero field size at the data-access create boundary", async () => {
+    const base = {
+      code: `AP-AM-${crypto.randomUUID()}-INVALID-FIELD`,
+      deliveryId: crypto.randomUUID(),
+      applicationDate: new Date("2025-07-08"),
+      biocharAppliedTons: 1,
+    };
+
+    await expect(
+      createApplication(makeTestOrgContext(TEST_USER_ID), {
+        ...base,
+        fieldSizeHa: 0,
+      }),
+    ).rejects.toThrow(
+      `Application ${base.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
+    );
+    await expect(
+      createApplication(
+        makeTestOrgContext(TEST_USER_ID),
+        base as unknown as Parameters<typeof createApplication>[1],
+      ),
+    ).rejects.toThrow(
+      `Application ${base.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
+    );
+  });
+
   it("creates an application from the delivery's tracked dry-biochar ratio", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
@@ -188,11 +214,21 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
       });
       fixture.applicationIds.push(application.id);
 
       expect(application.biocharAppliedTons).toBe(2);
       expect(application.biocharAppliedDryTons).toBeCloseTo(1.6);
+      await expect(
+        updateApplication(
+          makeTestOrgContext(TEST_USER_ID),
+          application.id,
+          { fieldSizeHa: 0 },
+        ),
+      ).rejects.toThrow(
+        `Application ${application.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
+      );
 
       const options = await getApplicationDeliveryOptions(
         makeTestOrgContext(TEST_USER_ID),
@@ -219,12 +255,14 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
       });
       const last = await createApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-REMAINDER`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-09"),
         biocharAppliedTons: 3,
+        fieldSizeHa: 1,
       });
       fixture.applicationIds.push(first.id, last.id);
 
@@ -249,6 +287,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 4,
+          fieldSizeHa: 1,
           biocharAppliedDryTons: 4.1,
         })
         .returning({ id: applications.id });
@@ -260,6 +299,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-09"),
           biocharAppliedTons: 1,
+          fieldSizeHa: 1,
         }),
       ).rejects.toThrow("Tracked dry biochar is not available");
     } finally {
@@ -277,6 +317,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -298,6 +339,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         evidenceMethod: "boundary",
         gisBoundary: TEST_GIS_BOUNDARY,
       });
@@ -320,6 +362,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         evidenceMethod: "boundary",
         gisBoundary: TEST_GIS_BOUNDARY,
       });
@@ -372,6 +415,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 6,
+          fieldSizeHa: 1,
         }),
       ).rejects.toThrow("Not enough biochar in this delivery");
 
@@ -402,6 +446,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
         });
       fixture.applicationIds.push(application.id);
       expect(application.biocharAppliedDryTons).toBeCloseTo(1.6);
@@ -428,6 +473,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
           gpsLatitude: -3.3349,
           gpsLongitude: 37.3404,
         },
@@ -457,6 +503,7 @@ describe("application mutations", () => {
           deliveryId: upcomingDeliveryId,
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
         }),
       ).rejects.toThrow(
         `Delivery DL-AM-${runId}-UPCOMING is not marked as delivered. Mark it as delivered before recording an application.`,
@@ -484,6 +531,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-04"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
         }),
       ).rejects.toThrow("cannot be before the delivery date");
     } finally {
@@ -501,6 +549,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-05"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
       });
       fixture.applicationIds.push(application.id);
 
@@ -520,6 +569,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -545,6 +595,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -574,6 +625,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -582,6 +634,7 @@ describe("application mutations", () => {
       const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
         deliveryId: fixture.deliveryIds[1],
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
       });
 
       expect(updated.deliveryId).toBe(fixture.deliveryIds[1]);
@@ -602,6 +655,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -641,6 +695,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -681,6 +736,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
           evidenceMethod: "boundary",
         },
       );
@@ -715,6 +771,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
           evidenceMethod: "boundary",
           gpsLatitude: -3.3349,
           gpsLongitude: 37.3404,
@@ -751,6 +808,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -759,6 +817,7 @@ describe("application mutations", () => {
       await expect(
         updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
           biocharAppliedTons: 6,
+          fieldSizeHa: 1,
         }),
       ).rejects.toThrow("Not enough biochar in this delivery");
 
@@ -766,6 +825,7 @@ describe("application mutations", () => {
         .select({
           deliveryId: applications.deliveryId,
           biocharAppliedTons: applications.biocharAppliedTons,
+          fieldSizeHa: applications.fieldSizeHa,
           biocharAppliedDryTons: applications.biocharAppliedDryTons,
         })
         .from(applications)
@@ -774,6 +834,7 @@ describe("application mutations", () => {
       expect(persisted).toEqual({
         deliveryId: fixture.deliveryIds[0],
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         biocharAppliedDryTons: expect.closeTo(1.6),
       });
     } finally {

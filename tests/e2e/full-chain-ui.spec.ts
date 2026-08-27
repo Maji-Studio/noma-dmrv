@@ -617,6 +617,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       }
 
       await page.fill('input[name="biocharAppliedTons"]', "50");
+      await page.fill('input[name="fieldSizeHa"]', "2");
       await page.fill('input[name="fieldIdentifier"]', `E2E-Field-${runId}`);
       await page.fill('input[name="cropType"]', "maize");
 

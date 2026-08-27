@@ -3,6 +3,10 @@ import type { DbTransaction } from "@/db";
 import { biocharProducts, deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import {
+  deliveryWetMassRequiredMessage,
+  hasStorableDeliveredWetMass,
+} from "@/lib/delivery-wet-mass";
 import { assertBiocharProductDrawWithinStock } from "./bin-stock-guards";
 import {
   assertStockLockSnapshot,
@@ -10,6 +14,7 @@ import {
 } from "./lock-bin-stocks";
 
 interface DeliveryStockState {
+  code: string;
   orderId: string;
   biocharProductId: string | null;
   status: string | null;
@@ -31,9 +36,22 @@ export function deliveryDrawsStock(
 ): deliveredWetMassKg is number {
   return (
     status === "delivered" &&
-    deliveredWetMassKg != null &&
-    deliveredWetMassKg > 0
+    hasStorableDeliveredWetMass(deliveredWetMassKg)
   );
+}
+
+/** A persisted delivered row must satisfy the same positive-mass predicate. */
+export function assertDeliveredWetMass(
+  status: string | null | undefined,
+  deliveredWetMassKg: number | null | undefined,
+  deliveryCode: string,
+): void {
+  if (
+    status === "delivered" &&
+    !deliveryDrawsStock(status, deliveredWetMassKg)
+  ) {
+    throw new SafeError(deliveryWetMassRequiredMessage(deliveryCode));
+  }
 }
 
 export async function lockCreateDeliveryStock(
@@ -94,6 +112,7 @@ export async function lockDeliveryUpdateStock(
   const [snapshot] = await tx
     .select({
       id: deliveries.id,
+      code: deliveries.code,
       orderId: deliveries.orderId,
       biocharProductId: deliveries.biocharProductId,
       status: deliveries.status,
@@ -177,6 +196,7 @@ export async function lockDeliveryUpdateStock(
   const [locked] = await tx
     .select({
       id: deliveries.id,
+      code: deliveries.code,
       orderId: deliveries.orderId,
       biocharProductId: deliveries.biocharProductId,
       status: deliveries.status,
@@ -193,7 +213,8 @@ export async function lockDeliveryUpdateStock(
     throw new SafeError("Delivery not found");
   }
   assertStockLockSnapshot(
-    locked.orderId === snapshot.orderId &&
+    locked.code === snapshot.code &&
+      locked.orderId === snapshot.orderId &&
       locked.biocharProductId === snapshot.biocharProductId &&
       locked.status === snapshot.status &&
       locked.deliveredWetMassKg === snapshot.deliveredWetMassKg &&
@@ -282,6 +303,7 @@ export async function lockDeleteDeliveryStock(
   const [snapshot] = await tx
     .select({
       id: deliveries.id,
+      code: deliveries.code,
       orderId: deliveries.orderId,
       biocharProductId: deliveries.biocharProductId,
       status: deliveries.status,
@@ -329,6 +351,7 @@ export async function lockDeleteDeliveryStock(
   const [locked] = await tx
     .select({
       id: deliveries.id,
+      code: deliveries.code,
       orderId: deliveries.orderId,
       biocharProductId: deliveries.biocharProductId,
       status: deliveries.status,
@@ -346,7 +369,8 @@ export async function lockDeleteDeliveryStock(
     throw new SafeError("Delivery not found");
   }
   assertStockLockSnapshot(
-    locked.orderId === snapshot.orderId &&
+    locked.code === snapshot.code &&
+      locked.orderId === snapshot.orderId &&
       locked.biocharProductId === snapshot.biocharProductId &&
       locked.status === snapshot.status &&
       locked.deliveredWetMassKg === snapshot.deliveredWetMassKg &&

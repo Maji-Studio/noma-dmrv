@@ -8,6 +8,7 @@
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import { SafeError } from "@/lib/errors";
 import type { CreateDatapointRequest } from "@/lib/isometric";
+import { FIRST_REMOVAL_SUBMISSION_VERSION } from "@/lib/isometric/biochar-applications";
 import type { RemovalSourceBindingPlanEntry } from "@/lib/certification/removal-source-bindings";
 import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import { z } from "zod";
@@ -201,10 +202,17 @@ export function readRemovalBiocharApplicationIntents(
 ): BiocharApplicationIntent[] {
   const snapshot = row.payloadSnapshot as {
     semantic?: { biocharApplicationIntents?: unknown } | null;
+    transport?: { biocharApplicationIntents?: unknown } | null;
   } | null;
+  const transportIntents = snapshot?.transport?.biocharApplicationIntents;
+  const storedIntents =
+    transportIntents ??
+    (row.version === FIRST_REMOVAL_SUBMISSION_VERSION
+      ? snapshot?.semantic?.biocharApplicationIntents
+      : undefined);
   const parsed = z
     .array(biocharApplicationIntentSchema)
-    .safeParse(snapshot?.semantic?.biocharApplicationIntents);
+    .safeParse(storedIntents);
   if (!parsed.success) {
     throw new SafeError(
       "This saved submission uses an older Biochar Application format and cannot resume. Select Refresh review, then submit again.",
