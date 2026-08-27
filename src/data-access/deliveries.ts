@@ -557,7 +557,11 @@ export async function createDelivery(
   const deliveryColumns = await getDeliveryColumnAvailability();
 
   const effectiveStatus = data.status ?? "upcoming";
-  assertDeliveredWetMass(effectiveStatus, data.deliveredWetMassKg);
+  assertDeliveredWetMass(
+    effectiveStatus,
+    data.deliveredWetMassKg,
+    data.code,
+  );
   if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
   if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
 
@@ -802,7 +806,11 @@ export async function updateDelivery(
         ? data.deliveredWetMassKg
         : lockedDelivery.deliveredWetMassKg;
     const lockedEffectiveStatus = data.status ?? lockedDelivery.status;
-    assertDeliveredWetMass(lockedEffectiveStatus, lockedEffectiveWetMass);
+    assertDeliveredWetMass(
+      lockedEffectiveStatus,
+      lockedEffectiveWetMass,
+      lockedDelivery.code,
+    );
     const orderChanged = lockedEffectiveOrderId !== lockedDelivery.orderId;
     const wetMassIncreased =
       lockedEffectiveWetMass != null &&

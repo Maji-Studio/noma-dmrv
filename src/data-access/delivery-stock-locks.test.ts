@@ -10,14 +10,18 @@ describe("delivery persisted mass state", () => {
     expect(deliveryDrawsStock("delivered", 0)).toBe(false);
 
     for (const mass of [undefined, null, 0, -1, 0.0004]) {
-      expect(() => assertDeliveredWetMass("delivered", mass)).toThrow(
-        "Enter a wet mass greater than 0 before marking this delivery as delivered",
+      expect(() => assertDeliveredWetMass("delivered", mass, "DL-001")).toThrow(
+        "Delivery DL-001 needs a wet mass of at least 0.001 kg before it can be marked as delivered.",
       );
     }
-    expect(() => assertDeliveredWetMass("delivered", 0.001)).not.toThrow();
+    expect(() =>
+      assertDeliveredWetMass("delivered", 0.001, "DL-001"),
+    ).not.toThrow();
   });
 
   it("allows upcoming rows to omit mass", () => {
-    expect(() => assertDeliveredWetMass("upcoming", null)).not.toThrow();
+    expect(() =>
+      assertDeliveredWetMass("upcoming", null, "DL-001"),
+    ).not.toThrow();
   });
 });

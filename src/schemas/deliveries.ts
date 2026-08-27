@@ -14,7 +14,8 @@ import {
 import { optionalTripType } from "./trip-type";
 import {
   DELIVERED_WET_MASS_REQUIRED_MESSAGE,
-  hasPositiveDeliveredWetMass,
+  DELIVERED_WET_MASS_RANGE_MESSAGE,
+  hasStorableDeliveredWetMass,
 } from "@/lib/delivery-wet-mass";
 import {
   emptyToNull,
@@ -52,9 +53,10 @@ export function resolveDeliveryDistanceSource(
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
-const WET_MASS_RANGE_MESSAGE = "Wet mass must be greater than 0";
 const DISTANCE_RANGE_MESSAGE = "Distance must be 0 or more";
-const optionalWetMassKg = positiveMassKgSchema(WET_MASS_RANGE_MESSAGE)
+const optionalWetMassKg = positiveMassKgSchema(
+  DELIVERED_WET_MASS_RANGE_MESSAGE,
+)
   .optional()
   .nullable();
 const requiredProductMoisturePercent = requiredNumber(
@@ -86,7 +88,7 @@ function validateDeliveredWetMass(
 ) {
   if (
     value.status === "delivered" &&
-    !hasPositiveDeliveredWetMass(value.deliveredWetMassKg)
+    !hasStorableDeliveredWetMass(value.deliveredWetMassKg)
   ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

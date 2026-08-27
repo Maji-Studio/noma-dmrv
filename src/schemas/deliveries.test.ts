@@ -44,7 +44,7 @@ describe("delivery range validation copy", () => {
   });
 
   it.each([
-    ["deliveredWetMassKg", -1, "Wet mass must be greater than 0"],
+    ["deliveredWetMassKg", -1, "Wet mass must be at least 0.001 kg"],
     ["distanceKmOverride", -1, "Distance must be 0 or more"],
     [
       "moistureContentPercent",
@@ -85,7 +85,7 @@ describe("delivery range validation copy", () => {
       result.error.issues.find(
         (issue) => issue.path[0] === "deliveredWetMassKg",
       )?.message,
-    ).toBe("Wet mass must be greater than 0");
+    ).toBe("Wet mass must be at least 0.001 kg");
     expect(deliveryFormSchema.safeParse(baseDelivery).success).toBe(true);
   });
 
@@ -102,7 +102,7 @@ describe("delivery range validation copy", () => {
         (issue) => issue.path[0] === "deliveredWetMassKg",
       )?.message,
     ).toBe(
-      "Enter a wet mass greater than 0 before marking this delivery as delivered",
+      "Enter a wet mass of at least 0.001 kg before marking this delivery as delivered",
     );
   });
 });

@@ -88,6 +88,23 @@ async function seedOrder(quantityKg: number) {
 }
 
 describe("delivery order balance", () => {
+  it("identifies an invalid delivered row by code at create", async () => {
+    const deliveryCode = `DL-ORDER-BAL-${crypto.randomUUID()}-NO-MASS`;
+
+    await expect(
+      createDelivery(ctx, {
+        code: deliveryCode,
+        orderId: crypto.randomUUID(),
+        facilityId: crypto.randomUUID(),
+        deliveryDate: new Date("2026-08-01T00:00:00Z"),
+        status: "delivered",
+        deliveredWetMassKg: null,
+      }),
+    ).rejects.toThrow(
+      `Delivery ${deliveryCode} needs a wet mass of at least 0.001 kg before it can be marked as delivered.`,
+    );
+  });
+
   it("validates status-only delivery updates against the stored wet mass", async () => {
     const seeded = await seedOrder(100);
 
@@ -118,7 +135,7 @@ describe("delivery order balance", () => {
       await expect(
         updateDelivery(ctx, unweighed.id, { status: "delivered" }),
       ).rejects.toThrow(
-        "Enter a wet mass greater than 0 before marking this delivery as delivered",
+        `Delivery ${unweighed.code} needs a wet mass of at least 0.001 kg before it can be marked as delivered.`,
       );
     } finally {
       await seeded.cleanup();
