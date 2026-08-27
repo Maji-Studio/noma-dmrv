@@ -12,7 +12,10 @@ import {
   type DistanceSourceValue,
 } from "./distance-source";
 import { optionalTripType } from "./trip-type";
-import { DELIVERED_WET_MASS_REQUIRED_MESSAGE } from "@/lib/delivery-wet-mass";
+import {
+  DELIVERED_WET_MASS_REQUIRED_MESSAGE,
+  hasPositiveDeliveredWetMass,
+} from "@/lib/delivery-wet-mass";
 import {
   emptyToNull,
   positiveMassKgSchema,
@@ -81,7 +84,10 @@ function validateDeliveredWetMass(
   value: { status?: DeliveryStatus; deliveredWetMassKg?: number | null },
   ctx: z.RefinementCtx,
 ) {
-  if (value.status === "delivered" && value.deliveredWetMassKg == null) {
+  if (
+    value.status === "delivered" &&
+    !hasPositiveDeliveredWetMass(value.deliveredWetMassKg)
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["deliveredWetMassKg"],
@@ -184,6 +190,8 @@ export const updateDeliverySchema = z.object({
   distanceNote: optionalNote,
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
+  // Delivered/mass validity depends on the saved row, so updateDelivery checks
+  // it after merging the partial patch under the delivery stock lock.
   validateDistanceOverride(value, ctx);
 });
 

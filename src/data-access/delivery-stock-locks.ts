@@ -3,7 +3,10 @@ import type { DbTransaction } from "@/db";
 import { biocharProducts, deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import { DELIVERED_WET_MASS_REQUIRED_MESSAGE } from "@/lib/delivery-wet-mass";
+import {
+  DELIVERED_WET_MASS_REQUIRED_MESSAGE,
+  hasPositiveDeliveredWetMass,
+} from "@/lib/delivery-wet-mass";
 import { assertBiocharProductDrawWithinStock } from "./bin-stock-guards";
 import {
   assertStockLockSnapshot,
@@ -32,8 +35,7 @@ export function deliveryDrawsStock(
 ): deliveredWetMassKg is number {
   return (
     status === "delivered" &&
-    deliveredWetMassKg != null &&
-    deliveredWetMassKg > 0
+    hasPositiveDeliveredWetMass(deliveredWetMassKg)
   );
 }
 

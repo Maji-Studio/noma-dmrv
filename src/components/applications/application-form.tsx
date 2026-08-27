@@ -503,9 +503,7 @@ export function ApplicationForm({
               placeholder="e.g., 2.5"
               disabled={isSubmitting}
               error={!!errors.fieldSizeHa}
-              {...register("fieldSizeHa", {
-                setValueAs: numericValue,
-              })}
+              {...register("fieldSizeHa")}
             />
           </FormField>
 
