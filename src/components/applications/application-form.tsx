@@ -490,7 +490,12 @@ export function ApplicationForm({
         fields={["fieldSizeHa", "fieldIdentifier", "cropType", "applicationMethodType", "gpsLatitude", "gpsLongitude"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="fieldSizeHa" label="Field size (ha)" error={errors.fieldSizeHa?.message}>
+          <FormField
+            id="fieldSizeHa"
+            label="Field size (ha)"
+            error={errors.fieldSizeHa?.message}
+            required
+          >
             <FormInput
               id="fieldSizeHa"
               type="number"

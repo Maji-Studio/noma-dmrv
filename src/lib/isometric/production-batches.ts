@@ -27,6 +27,10 @@ import { createHash } from "node:crypto";
 import { SafeError } from "@/lib/errors";
 import type { IsometricClient } from "./client";
 import type { components } from "./generated/certify";
+import {
+  ISOMETRIC_KILOGRAM_UNIT,
+  kilogramUnitsMatch,
+} from "./quantity-units";
 
 export type IsometricProductionBatch = components["schemas"]["ProductionBatch"];
 export type CreateProductionBatchRequest =
@@ -36,14 +40,7 @@ const CREDIT_BATCH_REF_PREFIX_LEN = 12;
 const DISPLAY_NAME_MAX_LEN = 100;
 
 /** Unit submitted for `M_biochar (DM)` — kilograms, per the approved mapping. */
-export const PRODUCTION_BATCH_MASS_UNIT = "kg";
-
-// Verified from a live Certify production-batch response on 2026-08-10:
-// Isometric canonicalizes the submitted `kg` unit to `kilogram` on readback.
-const KILOGRAM_UNIT_ALIASES = new Set([
-  PRODUCTION_BATCH_MASS_UNIT,
-  "kilogram",
-]);
+export const PRODUCTION_BATCH_MASS_UNIT = ISOMETRIC_KILOGRAM_UNIT;
 
 /** The only `ProductionBatchKind` the registry defines for this protocol. */
 export const PRODUCTION_BATCH_KIND = "biochar" as const;
@@ -53,11 +50,7 @@ export function productionBatchMassUnitsMatch(
   actual: string,
   expected: string,
 ): boolean {
-  return (
-    actual === expected ||
-    (KILOGRAM_UNIT_ALIASES.has(actual) &&
-      KILOGRAM_UNIT_ALIASES.has(expected))
-  );
+  return kilogramUnitsMatch(actual, expected);
 }
 
 /**

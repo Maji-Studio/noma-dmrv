@@ -6,7 +6,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { numericValue } from "@/lib/form-utils";
+import { nullableNumericValue } from "@/lib/form-utils";
 import { toDateInputValue } from "@/lib/date-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
@@ -411,7 +411,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             placeholder="e.g. 1000"
             certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
             certifyStatus={certStatus("deliveredWetMassKg")}
-            registration={register("deliveredWetMassKg", { setValueAs: numericValue })}
+            registration={register("deliveredWetMassKg", {
+              setValueAs: nullableNumericValue,
+            })}
           />
           <MoistureField
             id="moistureContentPercent"

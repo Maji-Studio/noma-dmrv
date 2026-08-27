@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  createApplication,
+  createApplication as createApplicationData,
   getApplicationDeliveryOptions,
   updateApplication,
 } from "@/data-access/applications";
@@ -16,6 +16,18 @@ import { biocharProducts, formulations } from "@/db/schema/products";
 import { TEST_GIS_BOUNDARY } from "./helpers/application-evidence-fixtures";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
+
+type TestCreateApplicationInput = Omit<
+  Parameters<typeof createApplicationData>[1],
+  "fieldSizeHa"
+> & { fieldSizeHa?: number };
+
+function createApplication(
+  ctx: Parameters<typeof createApplicationData>[0],
+  data: TestCreateApplicationInput,
+) {
+  return createApplicationData(ctx, { fieldSizeHa: 1, ...data });
+}
 
 interface ApplicationMutationFixture {
   facilityId: string;

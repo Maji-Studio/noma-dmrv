@@ -18,6 +18,7 @@ import {
 
 describe("application schemas", () => {
   const customerLocation = {
+    fieldSizeHa: 1,
     gpsLatitude: -3.3349,
     gpsLongitude: 37.3404,
   };
@@ -38,6 +39,7 @@ describe("application schemas", () => {
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 100,
+      fieldSizeHa: 1,
       evidenceMethod: "location",
     });
 
@@ -59,6 +61,7 @@ describe("application schemas", () => {
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 100,
+      fieldSizeHa: 1,
     };
 
     expect(
@@ -113,8 +116,8 @@ describe("application schemas", () => {
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 100,
-      fieldSizeHa: 0,
       ...customerLocation,
+      fieldSizeHa: 0,
     });
 
     expect(result.success).toBe(false);
@@ -131,10 +134,23 @@ describe("application schemas", () => {
         applicationDate: new Date("2026-06-13"),
         deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
         biocharAppliedTons: 1,
-        fieldSizeHa: 0,
         ...customerLocation,
+        fieldSizeHa: 0,
       }).success,
     ).toBe(false);
+  });
+
+  it("requires a field size on the client form and create server boundary", () => {
+    const input = {
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 1,
+      gpsLatitude: customerLocation.gpsLatitude,
+      gpsLongitude: customerLocation.gpsLongitude,
+    };
+
+    expect(applicationFormSchema.safeParse(input).success).toBe(false);
+    expect(createApplicationSchema.safeParse(input).success).toBe(false);
   });
 
   it("rejects a zero-hectare field at the update server boundary", () => {
@@ -214,6 +230,7 @@ describe("application schemas", () => {
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 1,
+      fieldSizeHa: 1,
       gpsLatitude: -3.3349,
     });
 

@@ -1,5 +1,16 @@
 # Isometric Docs Change Log
 
+## 2026-08-27 (Biochar Application canonical readback units)
+
+- Live Certify Biochar Application responses canonicalize submitted `t/ha` to
+  `metric_ton / hectare` and submitted `kg` to `kilogram` on readback.
+- Reconciliation accepts only those semantically identical spelling pairs.
+  Quantity magnitudes, application and dependency identities, dates, supplier
+  references, and GHG Entry associations remain strict; unrelated units still
+  fail closed as registry drift.
+- Kilogram request/readback comparison is shared with Production Batch
+  reconciliation so both endpoints retain the same verified alias contract.
+
 ## 2026-08-26 (Biochar Application API restored)
 
 - Removal submission now ensures Production Batches, then Storage Locations,

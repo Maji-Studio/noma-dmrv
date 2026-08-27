@@ -65,6 +65,15 @@ import { parseGisBoundary } from "@/schemas/gis-boundary";
 const DEFAULT_PAGE_SIZE = 100;
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
 const INVALID_APPLICATION_EVIDENCE_MESSAGE = "Application evidence is invalid.";
+const INVALID_FIELD_SIZE_MESSAGE = "Field size must be greater than 0";
+
+function assertPositiveApplicationFieldSize(
+  fieldSizeHa: number | null | undefined,
+): asserts fieldSizeHa is number {
+  if (fieldSizeHa == null || !Number.isFinite(fieldSizeHa) || fieldSizeHa <= 0) {
+    throw new SafeError(INVALID_FIELD_SIZE_MESSAGE);
+  }
+}
 
 async function assertApplicationSlicesAreMutable(
   ctx: OrgContext,
@@ -671,6 +680,7 @@ export async function createApplication(
   data: CreateApplicationInput & { code: string }
 ): Promise<Application> {
   requireOrgScope(ctx);
+  assertPositiveApplicationFieldSize(data.fieldSizeHa);
 
   return db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
@@ -712,7 +722,7 @@ export async function createApplication(
         deliveryId: data.deliveryId,
         biocharAppliedTons: data.biocharAppliedTons,
         biocharAppliedDryTons,
-        fieldSizeHa: data.fieldSizeHa ?? null,
+        fieldSizeHa: data.fieldSizeHa,
         fieldIdentifier: optionalText(data.fieldIdentifier),
         cropType: optionalText(data.cropType),
         gpsLatitude: data.gpsLatitude ?? null,
@@ -762,6 +772,10 @@ export async function updateApplication(
       tx,
       { entityType: "application", entityId: id },
       "update",
+    );
+
+    assertPositiveApplicationFieldSize(
+      data.fieldSizeHa ?? existingApplication.fieldSizeHa,
     );
 
     const evidenceState = applicationEvidenceStateSchema.safeParse({

@@ -63,4 +63,41 @@ describe("delivery wet mass", () => {
   it("allows an upcoming delivery to omit its wet mass", () => {
     expect(createDeliverySchema.safeParse(createBase).success).toBe(true);
   });
+
+  it("requires a positive wet mass when a delivery is delivered", () => {
+    for (const deliveredWetMassKg of [undefined, null, 0]) {
+      expect(
+        createDeliverySchema.safeParse({
+          ...createBase,
+          status: "delivered",
+          deliveredWetMassKg,
+        }).success,
+      ).toBe(false);
+    }
+
+    expect(
+      createDeliverySchema.safeParse({
+        ...createBase,
+        status: "delivered",
+        deliveredWetMassKg: 1,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("requires a positive wet mass when an update marks a delivery delivered", () => {
+    expect(
+      updateDeliverySchema.safeParse({
+        deliveryId: UUID_A,
+        status: "delivered",
+        deliveredWetMassKg: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      updateDeliverySchema.safeParse({
+        deliveryId: UUID_A,
+        status: "delivered",
+        deliveredWetMassKg: 1,
+      }).success,
+    ).toBe(true);
+  });
 });

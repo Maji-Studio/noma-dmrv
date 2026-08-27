@@ -50,7 +50,7 @@ export type ApplicationEvidenceMethod = (typeof applicationEvidenceMethods)[numb
 const CUSTOMER_LOCATION_REQUIRED_MESSAGE =
   "Customer location coordinates are required.";
 const positiveFieldSizeHaSchema = z
-  .number()
+  .number({ error: "Field size is required" })
   .positive("Field size must be greater than 0");
 
 function applicationEvidenceSuperRefine(
@@ -122,7 +122,7 @@ const applicationFormBaseSchema = z.object({
     .min(MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE)
     .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE),
   // === Section 2: Field Details ===
-  fieldSizeHa: positiveFieldSizeHaSchema.optional().nullable(),
+  fieldSizeHa: positiveFieldSizeHaSchema,
   fieldIdentifier: z
     .string()
     .max(255, "Field identifier must be less than 255 characters")
@@ -204,7 +204,7 @@ export const updateApplicationSchema = z.object({
     .min(MASS_TONNES_INPUT_STEP, MASS_MIN_TONNES_MESSAGE)
     .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE)
     .optional(),
-  fieldSizeHa: positiveFieldSizeHaSchema.optional().nullable(),
+  fieldSizeHa: positiveFieldSizeHaSchema.optional(),
   fieldIdentifier: z.string().max(255).optional().nullable(),
   cropType: z.string().max(100).optional().nullable(),
   gpsLatitude: latitudeSchema,

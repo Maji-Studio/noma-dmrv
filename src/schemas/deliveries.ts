@@ -76,6 +76,19 @@ function validateDistanceOverride(
   }
 }
 
+function validateDeliveredWetMass(
+  value: { status?: DeliveryStatus; deliveredWetMassKg?: number | null },
+  ctx: z.RefinementCtx,
+) {
+  if (value.status === "delivered" && value.deliveredWetMassKg == null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["deliveredWetMassKg"],
+      message: WET_MASS_RANGE_MESSAGE,
+    });
+  }
+}
+
 // ============================================
 // Delivery Form Schema (Client-side validation)
 // ============================================
@@ -109,6 +122,7 @@ const deliveryFormBaseSchema = z.object({
  */
 export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
+  validateDeliveredWetMass(value, ctx);
 });
 
 // ============================================
@@ -140,6 +154,7 @@ export const createDeliverySchema = z.object({
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
+  validateDeliveredWetMass(value, ctx);
 });
 
 /**
@@ -169,6 +184,7 @@ export const updateDeliverySchema = z.object({
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
+  validateDeliveredWetMass(value, ctx);
 });
 
 /**

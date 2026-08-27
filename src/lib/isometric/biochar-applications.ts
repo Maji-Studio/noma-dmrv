@@ -4,6 +4,10 @@ import { SafeError } from "@/lib/errors";
 import type { IsometricClient, IsometricEnvironment } from "./client";
 export type { IsometricEnvironment } from "./client";
 import type { components } from "./generated/certify";
+import {
+  ISOMETRIC_KILOGRAM_UNIT,
+  kilogramUnitsMatch,
+} from "./quantity-units";
 
 export type IsometricBiocharApplication =
   components["schemas"]["BiocharApplication"];
@@ -14,7 +18,7 @@ type BiocharApplicationPage =
   components["schemas"]["PaginatedListResource_BiocharApplication_"];
 
 export const BIOCHAR_APPLICATION_RATE_UNIT = "t/ha";
-export const BIOCHAR_APPLICATION_TRUCK_MASS_UNIT = "kg";
+export const BIOCHAR_APPLICATION_TRUCK_MASS_UNIT = ISOMETRIC_KILOGRAM_UNIT;
 export const BIOCHAR_APPLICATION_DEPARTURE_MASS_KG = 0;
 export const BIOCHAR_APPLICATION_REFERENCE_VERSION = 1;
 export const BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH = 100;
@@ -31,10 +35,6 @@ const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const APPLICATION_RATE_UNIT_ALIASES = new Set([
   BIOCHAR_APPLICATION_RATE_UNIT,
   "metric_ton / hectare",
-]);
-const APPLICATION_MASS_UNIT_ALIASES = new Set([
-  BIOCHAR_APPLICATION_TRUCK_MASS_UNIT,
-  "kilogram",
 ]);
 
 export interface BuildBiocharApplicationReferenceArgs {
@@ -262,8 +262,7 @@ function quantityUnitsMatch(actual: string, expected: string): boolean {
     actual === expected ||
     (APPLICATION_RATE_UNIT_ALIASES.has(actual) &&
       APPLICATION_RATE_UNIT_ALIASES.has(expected)) ||
-    (APPLICATION_MASS_UNIT_ALIASES.has(actual) &&
-      APPLICATION_MASS_UNIT_ALIASES.has(expected))
+    kilogramUnitsMatch(actual, expected)
   );
 }
 

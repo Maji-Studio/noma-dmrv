@@ -88,7 +88,9 @@ const log = {
   debug: vi.fn(),
 } as unknown as Logger;
 
-function intent(): BiocharApplicationIntent {
+function intent(
+  patch: Partial<BiocharApplicationIntent> = {},
+): BiocharApplicationIntent {
   return {
     applicationId: APPLICATION_ID,
     applicationCode: "APP-001",
@@ -112,6 +114,7 @@ function intent(): BiocharApplicationIntent {
       supplier_reference_id: "nm-slc-test",
     },
     sourceIds: [],
+    ...patch,
   };
 }
 
@@ -185,13 +188,13 @@ function page(nodes: IsometricBiocharApplication[]) {
   };
 }
 
-function ensure() {
+function ensure(intents: BiocharApplicationIntent[] = [intent()]) {
   return ensureRemovalBiocharApplications({
     orgCtx,
     removalId: "removal-1",
     externalRemovalId: EXTERNAL_REMOVAL_ID,
     submissionRow: { id: "submission-1" } as CertificationSubmissionRow,
-    intents: [intent()],
+    intents,
     log,
   });
 }
@@ -280,6 +283,85 @@ describe("ensureRemovalBiocharApplications", () => {
       lifecycleStatus: "confirmed",
       externalApplicationId: "bca-test",
     });
+  });
+
+  it("reuses the first of two applications, creates only the missing second, and makes no writes on another retry", async () => {
+    const secondIntent = intent({
+      applicationId: "44444444-4444-4444-8444-444444444444",
+      applicationCode: "APP-002",
+      deliveryId: "delivery-2",
+      customerLocationId: "55555555-5555-4555-8555-555555555555",
+      allocatedWetMassKg: 6_000,
+      fieldSizeHa: 2,
+      supplierReference: "nm-isometric-sandbox-bca-app-2-batch-v1",
+      storageLocationSupplierReference: "nm-slc-test-2",
+    });
+    const intents = [intent(), secondIntent];
+    const registrations = new Map<string, CertifierBiocharApplication>();
+    const key = (applicationId: string, creditBatchId: string) =>
+      `${applicationId}:${creditBatchId}`;
+
+    mocks.getRegistration.mockImplementation(
+      async (_ctx, applicationId, creditBatchId) =>
+        registrations.get(key(applicationId, creditBatchId)) ?? null,
+    );
+    mocks.claim.mockImplementation(async (_ctx, input) => {
+      const row = registration(input.submittedPayload, {
+        id: `journal-${input.applicationId}`,
+        applicationId: input.applicationId,
+        creditBatchId: input.creditBatchId,
+        supplierReference: input.supplierReference,
+      });
+      registrations.set(key(input.applicationId, input.creditBatchId), row);
+      return row;
+    });
+    mocks.confirm.mockImplementation(async (_ctx, input) => {
+      const entry = [...registrations.entries()].find(
+        ([, row]) => row.id === input.registrationId,
+      );
+      if (!entry) throw new Error("registration not found");
+      const [registrationKey, row] = entry;
+      registrations.set(registrationKey, {
+        ...row,
+        externalApplicationId: input.externalApplicationId,
+        lifecycleStatus: "confirmed",
+        correctionStatus: "none",
+        driftReason: null,
+        observedGhgEntryId: input.observedGhgEntryId,
+        observedRemovalId: input.observedRemovalId,
+      });
+      return registrations.get(registrationKey)!;
+    });
+
+    const firstRemote = canonicalRemote();
+    const secondRemote = canonicalRemote({
+      id: "bca-test-2",
+      supplier_reference_id: secondIntent.supplierReference,
+      truck_mass_on_arrival: { magnitude: 6_000, unit: "kilogram" },
+    });
+    mocks.client.get.mockResolvedValue(page([firstRemote]));
+    mocks.client.post.mockResolvedValue(secondRemote);
+
+    await ensure(intents);
+
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
+    expect(mocks.client.post).toHaveBeenCalledWith(
+      "/biochar_applications",
+      expect.objectContaining({
+        supplier_reference_id: secondIntent.supplierReference,
+      }),
+    );
+    expect([...registrations.values()]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ externalApplicationId: "bca-test" }),
+        expect.objectContaining({ externalApplicationId: "bca-test-2" }),
+      ]),
+    );
+
+    mocks.client.get.mockResolvedValue(page([firstRemote, secondRemote]));
+    await ensure(intents);
+
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
   });
 
   it("uses the ordinary claim path without a gated placeholder", async () => {

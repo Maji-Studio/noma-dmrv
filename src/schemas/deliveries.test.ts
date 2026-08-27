@@ -69,7 +69,7 @@ describe("delivery range validation copy", () => {
     ).toBe(message);
   });
 
-  it("accepts an ordinary delivery without truck observations", () => {
+  it("accepts an upcoming delivery without truck observations", () => {
     expect(deliveryFormSchema.safeParse(baseDelivery).success).toBe(true);
   });
 
@@ -87,5 +87,20 @@ describe("delivery range validation copy", () => {
       )?.message,
     ).toBe("Wet mass must be greater than 0");
     expect(deliveryFormSchema.safeParse(baseDelivery).success).toBe(true);
+  });
+
+  it("requires a positive wet mass when the form status is delivered", () => {
+    const result = deliveryFormSchema.safeParse({
+      ...baseDelivery,
+      status: "delivered",
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(
+      result.error.issues.find(
+        (issue) => issue.path[0] === "deliveredWetMassKg",
+      )?.message,
+    ).toBe("Wet mass must be greater than 0");
   });
 });

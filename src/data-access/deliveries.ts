@@ -24,6 +24,7 @@ import {
   effectiveDeliveryDistanceSource,
 } from "./delivery-distance-projections";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
+import { assertDeliveredWetMass } from "./delivery-state";
 interface DeliveryUpdateData {
   code?: string;
   orderId?: string;
@@ -556,6 +557,7 @@ export async function createDelivery(
   const deliveryColumns = await getDeliveryColumnAvailability();
 
   const effectiveStatus = data.status ?? "upcoming";
+  assertDeliveredWetMass(effectiveStatus, data.deliveredWetMassKg);
   if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
   if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
 
@@ -799,6 +801,10 @@ export async function updateDelivery(
       data.deliveredWetMassKg !== undefined
         ? data.deliveredWetMassKg
         : lockedDelivery.deliveredWetMassKg;
+    const lockedEffectiveStatus =
+      data.status ??
+      (lockedDelivery.status === "delivered" ? "delivered" : "upcoming");
+    assertDeliveredWetMass(lockedEffectiveStatus, lockedEffectiveWetMass);
     const orderChanged = lockedEffectiveOrderId !== lockedDelivery.orderId;
     const wetMassIncreased =
       lockedEffectiveWetMass != null &&
