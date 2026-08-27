@@ -118,6 +118,20 @@ function intent(
   };
 }
 
+function submittedBody(): Record<string, unknown> {
+  return {
+    application_date: "2026-04-05",
+    average_application_rate: { magnitude: 3, unit: "t/ha" },
+    production_batch_id: "ptb-test",
+    project_id: "prj-test",
+    source_ids: [],
+    storage_site_id: "slc-test",
+    supplier_reference_id: intent().supplierReference,
+    truck_mass_on_arrival: { magnitude: 12_000, unit: "kg" },
+    truck_mass_on_departure: { magnitude: 0, unit: "kg" },
+  };
+}
+
 function registration(
   body: Record<string, unknown>,
   patch: Partial<CertifierBiocharApplication> = {},
@@ -291,18 +305,7 @@ describe("ensureRemovalBiocharApplications", () => {
   });
 
   it("reads a confirmed identity directly and accepts its current Removal association", async () => {
-    const body = {
-      application_date: "2026-04-05",
-      average_application_rate: { magnitude: 3, unit: "t/ha" },
-      production_batch_id: "ptb-test",
-      project_id: "prj-test",
-      source_ids: [],
-      storage_site_id: "slc-test",
-      supplier_reference_id: intent().supplierReference,
-      truck_mass_on_arrival: { magnitude: 12_000, unit: "kg" },
-      truck_mass_on_departure: { magnitude: 0, unit: "kg" },
-    };
-    mocks.registration = registration(body, {
+    mocks.registration = registration(submittedBody(), {
       externalApplicationId: "bca-test",
       lifecycleStatus: "confirmed",
       observedGhgEntryId: "ghg-previous",
@@ -328,18 +331,7 @@ describe("ensureRemovalBiocharApplications", () => {
   });
 
   it("rejects a confirmed identity still associated with the superseded Removal", async () => {
-    const body = {
-      application_date: "2026-04-05",
-      average_application_rate: { magnitude: 3, unit: "t/ha" },
-      production_batch_id: "ptb-test",
-      project_id: "prj-test",
-      source_ids: [],
-      storage_site_id: "slc-test",
-      supplier_reference_id: intent().supplierReference,
-      truck_mass_on_arrival: { magnitude: 12_000, unit: "kg" },
-      truck_mass_on_departure: { magnitude: 0, unit: "kg" },
-    };
-    mocks.registration = registration(body, {
+    mocks.registration = registration(submittedBody(), {
       externalApplicationId: "bca-test",
       lifecycleStatus: "confirmed",
       observedGhgEntryId: "ghg-previous",
