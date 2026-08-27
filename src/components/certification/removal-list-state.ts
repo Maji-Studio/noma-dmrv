@@ -44,17 +44,21 @@ export function buildRemovalListRows(
     };
     const data = enrichment.data;
     const lifecycleData = enrichment.status === "available" ? data : null;
+    const startedOn = data?.startedOn ?? identity.removal.startedOn;
+    const completedOn = data?.completedOn ?? identity.removal.completedOn;
+    const local =
+      lifecycleData?.local ?? identity.latestSubmission?.status ?? null;
     return {
       removalId,
-      startedOn: data?.startedOn ?? identity.removal.startedOn,
-      completedOn: data?.completedOn ?? identity.removal.completedOn,
+      startedOn,
+      completedOn,
       memberBatchCodes:
         data?.memberBatchCodes ??
         identity.memberBatches.map((batch) => batch.code),
       externalId:
         data?.externalId ?? identity.latestSubmission?.externalId ?? null,
       version: data?.version ?? identity.latestSubmission?.version ?? null,
-      local: lifecycleData?.local ?? identity.latestSubmission?.status ?? null,
+      local,
       lockInFlight:
         lifecycleData?.lockInFlight ??
         (identity.latestSubmission
@@ -62,7 +66,8 @@ export function buildRemovalListRows(
           : false),
       submissionInterrupted:
         lifecycleData?.submissionInterrupted ??
-        isRemovalSubmissionInterrupted(identity.latestSubmission?.metadata),
+        (isRemovalSubmissionInterrupted(identity.latestSubmission?.metadata) ||
+          (local === "submitted" && (!startedOn || !completedOn))),
       readiness: lifecycleData?.readiness ?? null,
       evidenceHealth: data?.evidenceHealth ?? null,
       submissionWarnings: data?.submissionWarnings ?? [],

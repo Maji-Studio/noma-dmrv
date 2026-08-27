@@ -212,7 +212,10 @@ export function deriveRemovalStatus({
   lockInFlight,
   submissionInterrupted = false,
 }: RemovalStatusInput): DerivedStatus {
-  if (local === "draft" && submissionInterrupted) {
+  if (
+    (local === "draft" || local === "submitted") &&
+    submissionInterrupted
+  ) {
     return {
       kind: "interrupted",
       value: "failed",
