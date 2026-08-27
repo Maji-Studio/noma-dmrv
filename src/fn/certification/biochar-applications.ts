@@ -219,12 +219,18 @@ async function ensureBiocharApplication(args: {
         resumed: true,
         create: async () => {
           confirmedRemote = await createBiocharApplication(client, body);
-          assertRemoteClaimableForCurrentRemoval(
+          const associationAbsent = assertRemoteClaimableForCurrentRemoval(
             confirmedRemote,
             body,
             args.externalRemovalId,
-            remoteClaimContext,
           );
+          if (associationAbsent) {
+            logMissingRemoteAssociation(
+              confirmedRemote,
+              args.externalRemovalId,
+              remoteClaimContext,
+            );
+          }
           return confirmedRemote.id;
         },
         reconcile: async () => {
@@ -261,12 +267,18 @@ async function ensureBiocharApplication(args: {
           }
           if (remote) {
             try {
-              assertRemoteClaimableForCurrentRemoval(
+              const associationAbsent = assertRemoteClaimableForCurrentRemoval(
                 remote,
                 body,
                 args.externalRemovalId,
-                remoteClaimContext,
               );
+              if (associationAbsent) {
+                logMissingRemoteAssociation(
+                  remote,
+                  args.externalRemovalId,
+                  remoteClaimContext,
+                );
+              }
             } catch (error) {
               await markBiocharApplicationDrift(
                 args.orgCtx,
@@ -316,8 +328,10 @@ async function ensureBiocharApplication(args: {
             registrationId: registration!.id,
             expectedPayloadHash: bodyHash,
             externalApplicationId,
-            observedGhgEntryId: remote?.ghg_entry_id ?? null,
-            observedRemovalId: remote?.removal_id ?? null,
+            observedGhgEntryId:
+              remote?.ghg_entry_id ?? registration!.observedGhgEntryId ?? null,
+            observedRemovalId:
+              remote?.removal_id ?? registration!.observedRemovalId ?? null,
           });
         },
         failureMessagePrefix: `Biochar Application ${args.intent.applicationCode} could not be created`,
@@ -340,33 +354,13 @@ function assertRemoteClaimableForCurrentRemoval(
   remote: IsometricBiocharApplication,
   body: Parameters<typeof biocharApplicationMismatchMessage>[1],
   externalRemovalId: string,
-  context: {
-    log: Logger;
-    applicationId: string;
-    creditBatchId: string;
-    removalId: string;
-    removalSubmissionId: string;
-  },
-): void {
+): boolean {
   assertRemotePayloadMatches(remote, body);
   // Isometric's create request has no GHG Entry field and the response schema
   // makes both association fields nullable. Sandbox readback can therefore
   // remain unassociated even after the Application is fully persisted. Treat
   // a present association as an identity invariant, but do not turn an absent
   // provider-managed association into an unrecoverable Removal submission.
-  if (!remote.ghg_entry_id && !remote.removal_id) {
-    context.log.warn(
-      {
-        applicationId: context.applicationId,
-        creditBatchId: context.creditBatchId,
-        removalId: context.removalId,
-        submissionId: context.removalSubmissionId,
-        externalApplicationId: remote.id,
-        externalRemovalId,
-      },
-      "Biochar Application has no registry GHG Entry association; accepting the provider-null readback",
-    );
-  }
   if (
     (remote.ghg_entry_id && remote.ghg_entry_id !== externalRemovalId) ||
     (remote.removal_id && remote.removal_id !== externalRemovalId)
@@ -375,4 +369,29 @@ function assertRemoteClaimableForCurrentRemoval(
       `Isometric Biochar Application ${remote.id} is linked to a different GHG Entry. Resolve the registry identity before retrying.`,
     );
   }
+  return !remote.ghg_entry_id && !remote.removal_id;
+}
+
+function logMissingRemoteAssociation(
+  remote: IsometricBiocharApplication,
+  externalRemovalId: string,
+  context: {
+    log: Logger;
+    applicationId: string;
+    creditBatchId: string;
+    removalId: string;
+    removalSubmissionId: string;
+  },
+): void {
+  context.log.warn(
+    {
+      applicationId: context.applicationId,
+      creditBatchId: context.creditBatchId,
+      removalId: context.removalId,
+      submissionId: context.removalSubmissionId,
+      externalApplicationId: remote.id,
+      externalRemovalId,
+    },
+    "Biochar Application has no registry GHG Entry association; accepting the provider-null readback",
+  );
 }
