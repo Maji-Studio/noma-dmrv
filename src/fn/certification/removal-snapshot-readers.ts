@@ -31,13 +31,34 @@ export interface RemovalTransportSnapshot {
   omittedTemplateComponentIds: string[];
 }
 
+export function assertRemovalSnapshotConfigurationCurrent(
+  row: CertificationSubmissionRow,
+  expected: { externalProjectId: string; templateId: string },
+): void {
+  const snapshot = row.payloadSnapshot as {
+    semantic?: { externalProjectId?: unknown; templateId?: unknown };
+  } | null;
+  const parsed = z
+    .object({ externalProjectId: z.string().min(1), templateId: z.string().min(1) })
+    .safeParse(snapshot?.semantic);
+  if (
+    !parsed.success ||
+    parsed.data.externalProjectId !== expected.externalProjectId ||
+    parsed.data.templateId !== expected.templateId
+  ) {
+    throw new SafeError(
+      "The facility's registry mapping changed after this Removal was submitted. Ask support to reconcile it before retrying.",
+    );
+  }
+}
+
 export function readRemovalSupersedePreviousId(
   row: CertificationSubmissionRow,
 ): string | null {
-  const snapshot = row.payloadSnapshot as {
+  const metadata = row.metadata as {
     supersedePreviousId?: unknown;
   } | null;
-  const stored = snapshot?.supersedePreviousId;
+  const stored = metadata?.supersedePreviousId;
   if (stored === undefined || stored === null) return null;
   const parsed = z.string().min(1).safeParse(stored);
   if (!parsed.success) {

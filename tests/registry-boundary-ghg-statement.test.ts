@@ -48,10 +48,12 @@ import { db, withDedicatedLockConnection } from "@/db";
 import { claimSubmissionDraft } from "@/data-access/certification-submissions";
 import {
   getOrCreateGhgStatementDraft,
+  listFinalizingRemovalsForFacility,
   listOpenRemovalsForFacility,
   reconcileRemovalMembership,
 } from "@/data-access/certifier-ghg-statements";
 import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
+import { withFacilityCertificationBoundarySessionLock } from "@/data-access/facility-certification-boundary-lock";
 import {
   certificationSubmissions,
   certifierGhgStatements,
@@ -227,7 +229,52 @@ beforeEach(() => {
 
 beforeAll(() => ensureTestOrg());
 
-describe("loadGhgStatementsForFacility boundary", () => {
+describe("facility certification boundary lock", () => {
+  it("serializes a Removal claim behind the GHG creation boundary", async () => {
+    const fixture = await createFixture();
+    let claimPromise!: ReturnType<typeof claimSubmissionDraft>;
+
+    await withFacilityCertificationBoundarySessionLock(
+      makeTestOrgContext("test-user-boundary-lock"),
+      fixture.facilityId,
+      async () => {
+        claimPromise = claimSubmissionDraft(
+          makeTestOrgContext("test-user-boundary-lock"),
+          {
+            key: {
+              provider: "isometric",
+              submissionType: "removal",
+              localEntityType: "removal",
+              localEntityId: fixture.removalId!,
+            },
+            guard: {
+              facilityId: fixture.facilityId,
+              provider: "isometric",
+              expectedExternalProjectId: fixture.externalProjectId,
+            },
+            policy: { onSubmittedHashChanged: "supersede" },
+            tentativeInputs: { changed: true },
+            hashOf: payloadHash,
+            buildSnapshot: ({ inputs }) => ({
+              payloadSnapshot: { semantic: inputs },
+            }),
+          },
+        );
+        const state = await Promise.race([
+          claimPromise.then(() => "settled" as const),
+          new Promise<"waiting">((resolve) =>
+            setTimeout(() => resolve("waiting"), 50),
+          ),
+        ]);
+        expect(state).toBe("waiting");
+      },
+    );
+
+    await expect(claimPromise).resolves.toMatchObject({ kind: "claimed" });
+  });
+});
+
+describe("finalizing Removal GHG boundary", () => {
   it("fails closed while a confirmed Removal draft is still finalizing", async () => {
     const fixture = await createFixture();
     await db
@@ -235,12 +282,31 @@ describe("loadGhgStatementsForFacility boundary", () => {
       .set({ status: "draft", lockedAt: new Date() })
       .where(eq(certificationSubmissions.localEntityId, fixture.removalId!));
 
+    const ctx = makeTestOrgContext("test-user-confirmed-draft");
     await expect(
-      listOpenRemovalsForFacility(
-        makeTestOrgContext("test-user-confirmed-draft"),
-        fixture.facilityId,
-      ),
-    ).rejects.toThrow(/Removal is still finalizing/i);
+      listOpenRemovalsForFacility(ctx, fixture.facilityId),
+    ).resolves.toEqual([]);
+    await expect(
+      listFinalizingRemovalsForFacility(ctx, fixture.facilityId),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        removal: expect.objectContaining({ id: fixture.removalId }),
+        submission: expect.objectContaining({
+          status: "draft",
+          externalId: fixture.externalRemovalId,
+        }),
+      }),
+    ]);
+    const createResult = await createGhgStatementDraft({
+      facilityId: fixture.facilityId,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+      confirmProduction: true,
+    });
+    expect(createResult).toMatchObject({
+      success: false,
+      error: expect.stringMatching(/is still finalizing in the registry/i),
+    });
+    expect(registry.requestCount("POST", "/ghg_statements")).toBe(0);
 
     const [statement] = await db
       .insert(certifierGhgStatements)
@@ -257,7 +323,9 @@ describe("loadGhgStatementsForFacility boundary", () => {
     );
     expect(reconciliation.linkedRemovalIds).toEqual([]);
   });
+});
 
+describe("loadGhgStatementsForFacility boundary", () => {
   it("serves the local mirror without contacting or reconciling the registry", async () => {
     const fixture = await createFixture();
     registry.seedGhgStatement({

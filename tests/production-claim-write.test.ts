@@ -22,6 +22,7 @@ import {
   markSubmissionSubmitted,
 } from "@/data-access/certification";
 import {
+  findPreviousActiveSubmissionId,
   markSubmissionInterrupted,
   recordConfirmedSubmissionIdentity,
 } from "@/data-access/certification-submissions";
@@ -193,6 +194,29 @@ async function readReservation(batchId: string): Promise<string | null> {
 
 
 beforeAll(() => ensureTestOrg());
+
+describe("findPreviousActiveSubmissionId", () => {
+  it("recovers the prior submitted version for a legacy resumed correction", async () => {
+    const { removalAId } = await createFixture();
+    const previousId = await insertDraftSubmission(removalAId, 1);
+    await markSubmissionSubmitted(
+      makeTestOrgContext(TEST_USER_ID),
+      previousId,
+      { externalId: "ext_previous_active" },
+    );
+    await insertDraftSubmission(removalAId, 2);
+
+    await expect(
+      findPreviousActiveSubmissionId(makeTestOrgContext(TEST_USER_ID), {
+        provider: "isometric",
+        submissionType: "removal",
+        localEntityType: "removal",
+        localEntityId: removalAId,
+        version: 2,
+      }),
+    ).resolves.toBe(previousId);
+  });
+});
 
 describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)", () => {
   it("finalizes when the exact database lock is round-tripped", async () => {
@@ -391,7 +415,7 @@ describe("markSubmissionRejected", () => {
   });
 });
 
-describe("markSubmissionInterrupted", () => {
+describe("recordConfirmedSubmissionIdentity", () => {
   it("journals a confirmed external mutation with its registry identity", async () => {
     const { removalAId } = await createFixture();
     const submissionId = await insertDraftSubmission(removalAId, 1);
@@ -423,7 +447,9 @@ describe("markSubmissionInterrupted", () => {
       metadata: { externalMutation: "confirmed" },
     });
   });
+});
 
+describe("markSubmissionInterrupted", () => {
   it("records recovery metadata without unlocking or changing draft status", async () => {
     const { removalAId } = await createFixture();
     const submissionId = await insertDraftSubmission(removalAId, 1);

@@ -25,7 +25,7 @@ interface SubmissionStatusBadgeProps {
    * verifier overlay. Defaults to "removal" for backward compatibility.
    */
   artifact?: CertificationArtifact;
-  reportingWindow?: RemovalReportingWindowDates;
+  reportingWindow: RemovalReportingWindowDates | "unknown";
 }
 
 export function SubmissionStatusBadge({

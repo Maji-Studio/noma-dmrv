@@ -2,6 +2,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import {
   claimSubmissionDraft,
+  findPreviousActiveSubmissionId,
   type ClaimBlockedReason,
   type MappingClaimGuard,
 } from "@/data-access/certification-submissions";
@@ -54,14 +55,14 @@ import {
   type ResolvedFixedInput,
   type RemovalTransportSnapshot,
 } from "./removal-snapshot-readers";
-import { ensureRemovalBiocharApplications } from "./biochar-applications";
 import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
 import {
   finalizeRemovalSubmission,
-  persistRemovalReportingWindow,
+  removalReportingWindowNeedsRecovery,
+  recoverSubmittedRemoval,
   recordRemovalConfirmedIdentity,
-  recoverSubmittedRemovalReportingWindow,
+  reconcileRemovalRegistryArtifacts,
 } from "./removal-submission-finalization";
 import {
   assertEntityReadinessGapsResolved,
@@ -87,7 +88,6 @@ import {
   mirrorCandidateSourcesForSubmission,
   resolveSourceBindingCandidates,
 } from "./sources";
-import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import { describeFeedstockTypeMappingGap } from "@/lib/certification/feedstock-type-mapping";
 import type { SubmissionProgressReporter } from "@/lib/certification/submission-progress";
@@ -220,14 +220,33 @@ async function submitRemovalCore(
   if (
     ctx.latestSubmission?.status === "submitted" &&
     ctx.latestSubmission.externalId &&
-    (!ctx.reportingWindowStartedOn || !ctx.reportingWindowCompletedOn)
+    removalReportingWindowNeedsRecovery(ctx.latestSubmission, {
+      startedOn: ctx.reportingWindowStartedOn,
+      completedOn: ctx.reportingWindowCompletedOn,
+    })
   ) {
     assertProductionConfirmed(confirmProduction);
     attempt.externalMutation = "confirmed";
     const client = await getIsometricClientForOrg(orgCtx.organizationId);
     onProgress?.({ step: "removal.checking_data", state: "complete" });
     onProgress?.({ step: "removal.creating", state: "reused" });
-    await recoverSubmittedRemovalReportingWindow({ client, orgCtx, removalId, row: ctx.latestSubmission, log });
+    await recoverSubmittedRemoval({
+      client,
+      orgCtx,
+      facilityId: ctx.facilityId,
+      removalId,
+      row: ctx.latestSubmission,
+      externalRemovalId: ctx.latestSubmission.externalId,
+      externalProjectId: ctx.mapping.externalProjectId,
+      templateId: ctx.mapping.defaultRemovalTemplateId ?? "",
+      reportingWindow: readRemovalReportingWindow(ctx.latestSubmission),
+      biocharApplicationIntents: readRemovalBiocharApplicationIntents(
+        ctx.latestSubmission,
+      ),
+      onExternalMutation: (state) =>
+        recordRemovalExternalMutation(attempt, state),
+      log,
+    });
     onProgress?.({ step: "removal.complete", state: "complete" });
     return { removalId, externalId: ctx.latestSubmission.externalId, version: ctx.latestSubmission.version };
   }
@@ -545,24 +564,17 @@ async function submitRemovalCore(
           : "skipped",
       });
       onProgress?.({ step: "removal.creating", state: "reused" });
-      await ensureRemovalBiocharApplications({
-        orgCtx,
-        removalId,
-        externalRemovalId: claimed.externalId,
-        submissionRow: ctx.latestSubmission,
-        intents: readRemovalBiocharApplicationIntents(ctx.latestSubmission),
-        log,
-      });
-      onProgress?.({
-        step: "removal.verifying_evidence",
-        state: "active",
-      });
-      await verifyAndPersistRemovalSourceBindings({
+      onProgress?.({ step: "removal.verifying_evidence", state: "active" });
+      await reconcileRemovalRegistryArtifacts({
         client,
         orgCtx,
         removalId,
-        submissionRow: ctx.latestSubmission,
+        row: ctx.latestSubmission,
         externalRemovalId: claimed.externalId,
+        reportingWindow: null,
+        biocharApplicationIntents: readRemovalBiocharApplicationIntents(
+          ctx.latestSubmission,
+        ),
         log,
       });
       onProgress?.({
@@ -649,7 +661,10 @@ async function submitRemovalCore(
           sourceBindingPlan,
           claimBatchIds: productionClaimBatchIds,
           supersedePreviousId: claimed.resumed
-            ? readRemovalSupersedePreviousId(claimed.row)
+            ? readRemovalSupersedePreviousId(claimed.row) ??
+              (claimed.row.version > 1
+                ? await findPreviousActiveSubmissionId(orgCtx, claimed.row)
+                : null)
             : claimed.supersedePreviousId,
           resumed: claimed.resumed,
           expectedLockedAt,
@@ -925,23 +940,21 @@ async function runRemovalSubmission({
         log,
       })
     ).externalId;
-  await ensureRemovalBiocharApplications({
+  onProgress?.({ step: "removal.verifying_evidence", state: "active" });
+  await reconcileRemovalRegistryArtifacts({
+    client,
     orgCtx,
     removalId,
+    row,
     externalRemovalId,
-    submissionRow: row,
+    reportingWindow: effectiveWindow,
+    biocharApplicationIntents,
     expectedLockedAt,
-    intents: biocharApplicationIntents,
     onExternalMutation: (state) =>
       recordRemovalExternalMutation(attempt, state),
     log,
   });
   onProgress?.({ step: "removal.creating", state: "complete" });
-
-  // The reporting window drives GHG Statement membership. Keep the ledger
-  // draft retryable until it is persisted; otherwise a remote GHG Entry can be
-  // shown locally as Submitted while no reporting period can include it.
-  await persistRemovalReportingWindow(orgCtx, removalId, effectiveWindow);
 
   if (resumed) {
     await appendSyncEventBestEffort(
@@ -961,15 +974,6 @@ async function runRemovalSubmission({
     );
   }
 
-  onProgress?.({ step: "removal.verifying_evidence", state: "active" });
-  await verifyAndPersistRemovalSourceBindings({
-    client,
-    orgCtx,
-    removalId,
-    submissionRow: row,
-    externalRemovalId,
-    log,
-  });
   // Finalize only after every dependent Biochar Application (and its Storage
   // Location) has reconciled and the local reporting window exists. Any
   // earlier failure keeps this row as an interrupted draft so the next submit

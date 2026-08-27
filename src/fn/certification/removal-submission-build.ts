@@ -160,7 +160,6 @@ export interface CompiledRemovalSubmission {
 export interface MaterializedRemovalSubmissionSnapshot {
   payloadSnapshot: {
     __mappingRevision: string;
-    supersedePreviousId: string | null;
     semantic: Record<string, unknown>;
     memberCreditBatchIds: string[];
     sourceBindingPlan: RemovalSourceBindingPlanEntry[];
@@ -180,6 +179,7 @@ export interface MaterializedRemovalSubmissionSnapshot {
       >;
     };
   };
+  metadata: { supersedePreviousId: string | null };
 }
 
 const DATAPOINT_POST_TARGET = "/datapoints";
@@ -575,7 +575,6 @@ export function materializeRemovalSubmissionSnapshot(args: {
   return {
     payloadSnapshot: {
       __mappingRevision: MAPPING_REVISION,
-      supersedePreviousId,
       semantic: compiled.semanticPayload,
       memberCreditBatchIds: compiled.memberCreditBatchIds,
       sourceBindingPlan: compiled.sourceBindingPlan,
@@ -593,6 +592,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
         ? { durabilityMeasurementSamples }
         : {}),
     },
+    metadata: { supersedePreviousId },
   };
 }
 

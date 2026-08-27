@@ -674,7 +674,7 @@ describe("submitRemoval — happy path", () => {
       removalId: REMOVAL_ID,
     });
 
-    setStoredRemovalReportingWindow(null, null);
+    setStoredRemovalReportingWindow("2025-01-01", "2025-04-05");
     vi.mocked(removalsDA.updateRemovalDates).mockClear();
     vi.mocked(biocharApplications.ensureRemovalBiocharApplications).mockClear();
     vi.mocked(

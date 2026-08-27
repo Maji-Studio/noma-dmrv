@@ -34,6 +34,53 @@ const REMOTE_GHG_STATUSES: readonly RemoteGhgStatus[] = [
   "FAILED_VERIFICATION",
 ];
 
+function readSnapshotReportingWindow(
+  latest: CertificationSubmissionRow | null,
+): RemovalReportingWindowDates | "unknown" {
+  const semantic = (latest?.payloadSnapshot as {
+    semantic?: { startedOn?: unknown; completedOn?: unknown };
+  } | null)?.semantic;
+  if (
+    typeof semantic?.startedOn !== "string" ||
+    typeof semantic.completedOn !== "string"
+  ) {
+    return "unknown";
+  }
+  const startedOn = new Date(semantic.startedOn);
+  const completedOn = new Date(semantic.completedOn);
+  if (Number.isNaN(startedOn.getTime()) || Number.isNaN(completedOn.getTime())) {
+    return "unknown";
+  }
+  return {
+    startedOn: startedOn.toISOString().slice(0, 10),
+    completedOn: completedOn.toISOString().slice(0, 10),
+  };
+}
+
+export function isRemovalSubmissionInterruptedFromSubmission(
+  latest: CertificationSubmissionRow | null,
+  reportingWindow: RemovalReportingWindowDates | "unknown",
+): boolean {
+  const local = (latest?.status ?? null) as LocalSubmissionStatus | null;
+  if (
+    isRemovalSubmissionInterruptedForReportingWindow({
+      local,
+      metadata: latest?.metadata,
+      reportingWindow,
+    })
+  ) {
+    return true;
+  }
+  const snapshotWindow = readSnapshotReportingWindow(latest);
+  return (
+    local === "submitted" &&
+    reportingWindow !== "unknown" &&
+    snapshotWindow !== "unknown" &&
+    (reportingWindow.startedOn !== snapshotWindow.startedOn ||
+      reportingWindow.completedOn !== snapshotWindow.completedOn)
+  );
+}
+
 /** The persisted verifier status off a submission row, or null when absent. */
 export function readRemoteStatus(
   latest: CertificationSubmissionRow,
@@ -88,7 +135,7 @@ export function deriveSubmissionStatus(
   latest: CertificationSubmissionRow | null,
   isLockedInFlight: boolean,
   artifact: CertificationArtifact,
-  reportingWindow?: RemovalReportingWindowDates,
+  reportingWindow: RemovalReportingWindowDates | "unknown",
 ): DerivedStatus {
   const local = (latest?.status ?? null) as LocalSubmissionStatus | null;
   if (artifact === "ghgStatement") {
@@ -101,10 +148,9 @@ export function deriveSubmissionStatus(
   return deriveRemovalStatus({
     local,
     lockInFlight: isLockedInFlight,
-    submissionInterrupted: isRemovalSubmissionInterruptedForReportingWindow({
-      local,
-      metadata: latest?.metadata,
-      reportingWindow: reportingWindow ?? "unknown",
-    }),
+    submissionInterrupted: isRemovalSubmissionInterruptedFromSubmission(
+      latest,
+      reportingWindow,
+    ),
   });
 }

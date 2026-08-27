@@ -649,22 +649,14 @@ export interface OpenRemoval {
   externalId: string;
 }
 
-// "Open removals" — removals already submitted to Isometric (their latest
-// ledger row carries a remote externalId) and not yet absorbed by any GHG
-// Statement (ghgStatementId IS NULL). Feeds the GHG-statement stepper
-// preview. "Latest" means highest ledger version, the same rule as
-// getLatestSubmission.
-export async function listOpenRemovalsForFacility(
-  ctx: OrgContext,
-  facilityId: string,
-): Promise<OpenRemoval[]> {
-  requireOrgScope(ctx);
-  const latest = db
-    .selectDistinctOn([certificationSubmissions.localEntityId], {
-      removalId: certificationSubmissions.localEntityId,
-      externalId: certificationSubmissions.externalId,
-      status: certificationSubmissions.status,
-    })
+export interface FinalizingRemoval {
+  removal: CertifierRemovalRow;
+  submission: CertificationSubmissionRow;
+}
+
+function latestRemovalSubmissions(ctx: OrgContext) {
+  return db
+    .selectDistinctOn([certificationSubmissions.localEntityId])
     .from(certificationSubmissions)
     .where(
       and(
@@ -679,6 +671,19 @@ export async function listOpenRemovalsForFacility(
       desc(certificationSubmissions.version),
     )
     .as("latest_removal_submission");
+}
+
+// "Open removals" — removals already submitted to Isometric (their latest
+// ledger row carries a remote externalId) and not yet absorbed by any GHG
+// Statement (ghgStatementId IS NULL). Feeds the GHG-statement stepper
+// preview. "Latest" means highest ledger version, the same rule as
+// getLatestSubmission.
+export async function listOpenRemovalsForFacility(
+  ctx: OrgContext,
+  facilityId: string,
+): Promise<OpenRemoval[]> {
+  requireOrgScope(ctx);
+  const latest = latestRemovalSubmissions(ctx);
 
   const rows = await db
     .select({
@@ -687,7 +692,7 @@ export async function listOpenRemovalsForFacility(
       status: latest.status,
     })
     .from(certifierRemovals)
-    .innerJoin(latest, eq(latest.removalId, certifierRemovals.id))
+    .innerJoin(latest, eq(latest.localEntityId, certifierRemovals.id))
     .where(
       and(
         eq(certifierRemovals.facilityId, facilityId),
@@ -699,17 +704,54 @@ export async function listOpenRemovalsForFacility(
     .orderBy(desc(certifierRemovals.completedOn));
 
   // The isNotNull filter above guarantees externalId is present; narrow it.
-  if (rows.some((row) => row.status === "draft")) {
-    throw new SafeError(
-      "A Removal is still finalizing in the registry. Retry that Removal before creating a GHG Statement.",
-    );
-  }
   return rows.flatMap((r) =>
     r.externalId === null ||
     (r.status !== "submitted" && r.status !== "accepted")
       ? []
       : [{ removal: r.removal, externalId: r.externalId }],
   );
+}
+
+export async function listFinalizingRemovalsForFacility(
+  ctx: OrgContext,
+  facilityId: string,
+): Promise<FinalizingRemoval[]> {
+  requireOrgScope(ctx);
+  const latest = latestRemovalSubmissions(ctx);
+  const rows = await db
+    .select({
+      removal: certifierRemovals,
+      submission: {
+        id: latest.id,
+        organizationId: latest.organizationId,
+        provider: latest.provider,
+        submissionType: latest.submissionType,
+        localEntityType: latest.localEntityType,
+        localEntityId: latest.localEntityId,
+        version: latest.version,
+        status: latest.status,
+        externalId: latest.externalId,
+        payloadSnapshot: latest.payloadSnapshot,
+        payloadHash: latest.payloadHash,
+        metadata: latest.metadata,
+        submittedAt: latest.submittedAt,
+        lockedAt: latest.lockedAt,
+        supersededAt: latest.supersededAt,
+        createdAt: latest.createdAt,
+        updatedAt: latest.updatedAt,
+      },
+    })
+    .from(certifierRemovals)
+    .innerJoin(latest, eq(latest.localEntityId, certifierRemovals.id))
+    .where(
+      and(
+        eq(certifierRemovals.facilityId, facilityId),
+        isNull(certifierRemovals.ghgStatementId),
+        eq(latest.status, "draft"),
+        eq(certifierRemovals.organizationId, ctx.organizationId),
+      ),
+    );
+  return rows;
 }
 
 export interface ReconcileResult {

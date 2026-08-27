@@ -41,6 +41,19 @@ vi.mock("@/data-access/certifier-removals");
 vi.mock("@/data-access/certifier-production-batches");
 vi.mock("@/data-access/certifier-biochar-applications");
 vi.mock("@/data-access/production-claim-reservations");
+vi.mock("@/data-access/facility-durability-lock", () => ({
+  withFacilityDurabilityLock: vi.fn(
+    async (_ctx, _facilityId, callback) => callback({ __fakeTx: true }),
+  ),
+}));
+vi.mock("@/data-access/facility-certification-boundary-lock", () => ({
+  withFacilityCertificationBoundarySessionLock: vi.fn(
+    async (_ctx, _facilityId, callback) => callback(),
+  ),
+}));
+vi.mock("@/lib/certification/submission-lock", () => ({
+  acquireCertificationArtifactLocksSorted: vi.fn(),
+}));
 vi.mock("@/fn/certification/certify-context-core");
 vi.mock("@/fn/certification/ensure-evidence-ledgers");
 vi.mock("@/fn/certification/biochar-applications", () => ({

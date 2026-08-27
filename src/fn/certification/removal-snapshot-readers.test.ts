@@ -1,21 +1,48 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertRemovalSnapshotConfigurationCurrent,
   readRemovalBiocharApplicationIntents,
   readRemovalSourceBindingPlan,
   readRemovalSupersedePreviousId,
 } from "./removal-snapshot-readers";
 
+describe("assertRemovalSnapshotConfigurationCurrent", () => {
+  const row = {
+    payloadSnapshot: {
+      semantic: { externalProjectId: "project-1", templateId: "template-1" },
+    },
+  } as never;
+
+  it("accepts the project and template frozen in the snapshot", () => {
+    expect(() =>
+      assertRemovalSnapshotConfigurationCurrent(row, {
+        externalProjectId: "project-1",
+        templateId: "template-1",
+      }),
+    ).not.toThrow();
+  });
+
+  it("fails closed after a project or template repoint", () => {
+    expect(() =>
+      assertRemovalSnapshotConfigurationCurrent(row, {
+        externalProjectId: "project-2",
+        templateId: "template-1",
+      }),
+    ).toThrow(/registry mapping changed/i);
+  });
+});
+
 describe("readRemovalSupersedePreviousId", () => {
   it("keeps legacy snapshots resumable without a superseded version", () => {
     expect(
-      readRemovalSupersedePreviousId({ payloadSnapshot: {} } as never),
+      readRemovalSupersedePreviousId({ metadata: {} } as never),
     ).toBeNull();
   });
 
   it("reads a valid superseded-version link", () => {
     expect(
       readRemovalSupersedePreviousId({
-        payloadSnapshot: { supersedePreviousId: "submission-v1" },
+        metadata: { supersedePreviousId: "submission-v1" },
       } as never),
     ).toBe("submission-v1");
   });
@@ -23,7 +50,7 @@ describe("readRemovalSupersedePreviousId", () => {
   it("fails closed for a malformed superseded-version link", () => {
     expect(() =>
       readRemovalSupersedePreviousId({
-        payloadSnapshot: { supersedePreviousId: 42 },
+        metadata: { supersedePreviousId: 42 },
       } as never),
     ).toThrow(/invalid superseded-version link/i);
   });
