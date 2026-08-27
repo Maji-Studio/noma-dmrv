@@ -354,6 +354,8 @@ function makeContext(
     facilityId: fixture.facilityId,
     hasOrgCredentials: true,
     removalId: fixture.removalId,
+    reportingWindowStartedOn: null,
+    reportingWindowCompletedOn: null,
     mapping: makeMapping(fixture),
     project: { id: fixture.externalProjectId, name: "Boundary project" } as never,
     defaultTemplate: makeTemplate(),

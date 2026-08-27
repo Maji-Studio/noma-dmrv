@@ -507,6 +507,7 @@ describe("buildRemovalSubmissionBuild", () => {
       externalProjectId: "project-1",
       removalId: "removal-1",
       nextVersion: 2,
+      supersedePreviousId: null,
     });
 
     expect(snapshot.payloadSnapshot.sourceBindingPlan).toEqual(
@@ -621,6 +622,7 @@ describe("buildRemovalSubmissionBuild", () => {
       externalProjectId: "project-1",
       removalId: "removal-1",
       nextVersion: 2,
+      supersedePreviousId: null,
     });
 
     const directSFractionDatapoints =

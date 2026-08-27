@@ -24,14 +24,16 @@ import {
   type RemovalReadiness,
 } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
-import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
+import {
+  deriveSubmissionStatus,
+  isRemovalSubmissionInterruptedFromSubmission,
+} from "@/lib/certification/from-submission";
 import {
   deriveRemovalEvidenceHealth,
   type RemovalEvidenceHealth,
 } from "@/lib/certification/removal-evidence-health";
 import { SafeError } from "@/lib/errors";
 import {
-  isRemovalSubmissionInterrupted,
   type DerivedStatus,
   type LocalSubmissionStatus,
 } from "@/lib/certification/status";
@@ -134,18 +136,23 @@ async function buildRemovalPreflightSummary(
     }),
   ]);
   const facts = toRemovalReadinessFacts(ctx);
+  const startedOn = scope.removal?.startedOn ?? null;
+  const completedOn = scope.removal?.completedOn ?? null;
+  const submissionInterrupted =
+    isRemovalSubmissionInterruptedFromSubmission(ctx.latestSubmission, {
+      startedOn,
+      completedOn,
+    });
   return {
     removalId,
-    startedOn: scope.removal?.startedOn ?? null,
-    completedOn: scope.removal?.completedOn ?? null,
+    startedOn,
+    completedOn,
     memberBatchCodes: ctx.memberBatches.map((batch) => batch.code),
     externalId: ctx.latestSubmission?.externalId ?? null,
     version: ctx.latestSubmission?.version ?? null,
     local: facts.local,
     lockInFlight: facts.lockInFlight,
-    submissionInterrupted: isRemovalSubmissionInterrupted(
-      ctx.latestSubmission?.metadata,
-    ),
+    submissionInterrupted,
     readiness: deriveRemovalReadiness(facts),
     evidenceHealth: deriveRemovalEvidenceHealth({
       submissionId: ctx.latestSubmission?.id ?? null,
@@ -372,6 +379,10 @@ export async function loadCreditBatchHealthSummaries(
                 ? isLockedInFlight(removalSubmission)
                 : false,
               "removal",
+              {
+                startedOn: batchRow?.removalStartedOn ?? null,
+                completedOn: batchRow?.removalCompletedOn ?? null,
+              },
             )
           : null,
         ghgStatementId,
@@ -382,6 +393,7 @@ export async function loadCreditBatchHealthSummaries(
                 ? isLockedInFlight(ghgStatementSubmission)
                 : false,
               "ghgStatement",
+              "unknown",
             )
           : null,
       };

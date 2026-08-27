@@ -123,9 +123,9 @@ export function assertRemovalDatesNotFuture(args: {
 }
 
 // Guards the window inversion BEFORE any registry POST — the local stamp's
-// `startedOn <= completedOn` DB check runs inside a best-effort write the
-// submit path swallows, so a back-dated application must fail loudly instead
-// of silently posting an inverted window to Isometric. Compares each lineage
+// `startedOn <= completedOn` DB check happens later during finalization, so a
+// back-dated application must fail before posting an inverted window to
+// Isometric. Compares each lineage
 // against ITS OWN production run's start, not the removal-wide earliest:
 // biochar cannot be applied before the run that produced it started, and in a
 // mixed removal an earlier sibling run would otherwise mask a lineage whose
