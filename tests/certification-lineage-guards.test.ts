@@ -221,6 +221,7 @@ async function createLineageFixture(
         applicationDate: new Date("2026-06-16T00:00:00Z"),
         biocharAppliedTons: 0.3,
         biocharAppliedDryTons: 0.285,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       })
@@ -818,6 +819,7 @@ describe("certification lineage guards", () => {
           deliveryId: fixture.deliveryId,
           applicationDate: new Date("2026-06-17T00:00:00Z"),
           biocharAppliedTons: 0.01,
+          fieldSizeHa: 1,
         }),
       ).rejects.toThrow(
         "Cannot create this application because the selected delivery is locked by a certification submission. Select a delivery that is not locked.",

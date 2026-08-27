@@ -493,6 +493,13 @@ describe("buildRemovalSubmissionBuild", () => {
         datapointBodyByKey: new Map(),
         sourceBindingPlan,
         memberCreditBatchIds: ["batch-1"],
+        biocharApplicationIntents: [
+          {
+            applicationId: "application-1",
+            creditBatchId: "batch-1",
+            supplierReference: "unversioned-reference",
+          } as never,
+        ],
         durabilityMeasurementSampleArgs: null,
         omittedTemplateComponentIds: ["component-production"],
       } as never,
@@ -508,6 +515,10 @@ describe("buildRemovalSubmissionBuild", () => {
     expect(
       snapshot.payloadSnapshot.transport.omittedTemplateComponentIds,
     ).toEqual(["component-production"]);
+    expect(
+      snapshot.payloadSnapshot.transport.biocharApplicationIntents[0]
+        .supplierReference,
+    ).toContain("-s2-v1");
   });
 
   it("does not duplicate measurement-backed s_fraction as direct Datapoints", () => {
@@ -540,6 +551,7 @@ describe("buildRemovalSubmissionBuild", () => {
         datapointBodyByKey: new Map(),
         sourceBindingPlan,
         memberCreditBatchIds: ["batch-1"],
+        biocharApplicationIntents: [],
         semanticPayload: {},
         durabilityMeasurementSampleArgs: {
           removalId: "removal-1",

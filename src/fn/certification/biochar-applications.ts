@@ -14,9 +14,13 @@ import {
   biocharApplicationMismatchMessage,
   createBiocharApplication,
   findBiocharApplicationBySupplierReference,
+  getBiocharApplication,
   type IsometricBiocharApplication,
 } from "@/lib/isometric/biochar-applications";
-import { getIsometricClientForOrg } from "@/lib/isometric/client";
+import {
+  getIsometricClientForOrg,
+  IsometricApiError,
+} from "@/lib/isometric/client";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { Logger } from "@/lib/log";
 import {
@@ -145,17 +149,20 @@ async function ensureBiocharApplication(args: {
     {
       applicationId: args.intent.applicationId,
       creditBatchId: args.intent.creditBatchId,
+      removalSubmissionId: args.submissionRow.id,
     },
     async () => {
       let registration = await getBiocharApplicationRegistration(
         args.orgCtx,
         args.intent.applicationId,
         args.intent.creditBatchId,
+        args.submissionRow.id,
       );
       if (!registration) {
         registration = await claimBiocharApplicationRegistration(args.orgCtx, {
           applicationId: args.intent.applicationId,
           creditBatchId: args.intent.creditBatchId,
+          removalSubmissionId: args.submissionRow.id,
           productionBatchRegistrationId:
             args.productionBatchRegistrationId,
           storageLocationRegistrationId: args.storageLocationRegistrationId,
@@ -210,21 +217,44 @@ async function ensureBiocharApplication(args: {
           return remote.id;
         },
         reconcile: async () => {
-          const remote = await findBiocharApplicationBySupplierReference(
-            client,
-            args.intent.supplierReference,
-          );
+          let remote: IsometricBiocharApplication | null;
+          if (registration!.lifecycleStatus === "confirmed") {
+            const externalApplicationId = registration!.externalApplicationId;
+            if (!externalApplicationId) {
+              await markBiocharApplicationDrift(
+                args.orgCtx,
+                registration!.id,
+                "external_identity_drift",
+              );
+              return {
+                found: "refused" as const,
+                message: `Application ${args.intent.applicationCode}'s confirmed Biochar Application has no registry identity. Resolve the journal drift before retrying.`,
+              };
+            }
+            try {
+              remote = await getBiocharApplication(
+                client,
+                externalApplicationId,
+              );
+            } catch (error) {
+              if (!(error instanceof IsometricApiError) || error.status !== 404) {
+                throw error;
+              }
+              remote = null;
+            }
+          } else {
+            remote = await findBiocharApplicationBySupplierReference(
+              client,
+              args.intent.supplierReference,
+            );
+          }
           if (remote) {
             try {
-              if (registration!.lifecycleStatus === "confirmed") {
-                assertRemoteMatchesJournal(remote, body, registration!);
-              } else {
-                assertRemoteMatchesCurrentRemoval(
-                  remote,
-                  body,
-                  args.externalRemovalId,
-                );
-              }
+              assertRemoteMatchesCurrentRemoval(
+                remote,
+                body,
+                args.externalRemovalId,
+              );
             } catch (error) {
               await markBiocharApplicationDrift(
                 args.orgCtx,
@@ -311,30 +341,6 @@ function assertRemoteMatchesCurrentRemoval(
   ) {
     throw new SafeError(
       `Isometric Biochar Application ${remote.id} is linked to a different GHG Entry. Resolve the registry identity before retrying.`,
-    );
-  }
-}
-
-function assertRemoteMatchesJournal(
-  remote: IsometricBiocharApplication,
-  body: Parameters<typeof biocharApplicationMismatchMessage>[1],
-  registration: {
-    observedGhgEntryId: string | null;
-    observedRemovalId: string | null;
-  },
-): void {
-  assertRemotePayloadMatches(remote, body);
-  if (!registration.observedGhgEntryId && !registration.observedRemovalId) {
-    throw new SafeError(
-      `Isometric Biochar Application ${remote.id} has no confirmed journal association. Resolve the registry identity before retrying.`,
-    );
-  }
-  if (
-    remote.ghg_entry_id !== registration.observedGhgEntryId ||
-    remote.removal_id !== registration.observedRemovalId
-  ) {
-    throw new SafeError(
-      `Isometric Biochar Application ${remote.id} is linked to a different GHG Entry than its confirmed journal association. Resolve the registry identity before retrying.`,
     );
   }
 }

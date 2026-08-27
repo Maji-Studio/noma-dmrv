@@ -88,6 +88,60 @@ async function seedOrder(quantityKg: number) {
 }
 
 describe("delivery order balance", () => {
+  it("identifies an invalid delivered row by code at create", async () => {
+    const deliveryCode = `DL-ORDER-BAL-${crypto.randomUUID()}-NO-MASS`;
+
+    await expect(
+      createDelivery(ctx, {
+        code: deliveryCode,
+        orderId: crypto.randomUUID(),
+        facilityId: crypto.randomUUID(),
+        deliveryDate: new Date("2026-08-01T00:00:00Z"),
+        status: "delivered",
+        deliveredWetMassKg: null,
+      }),
+    ).rejects.toThrow(
+      `Delivery ${deliveryCode} needs a wet mass of at least 0.001 kg before it can be marked as delivered.`,
+    );
+  });
+
+  it("validates status-only delivery updates against the stored wet mass", async () => {
+    const seeded = await seedOrder(100);
+
+    try {
+      const weighed = await createDelivery(ctx, {
+        code: `DL-ORDER-BAL-${seeded.tag}-WEIGHED`,
+        orderId: seeded.orderId,
+        facilityId: seeded.facilityId,
+        deliveryDate: new Date("2026-08-01T00:00:00Z"),
+        status: "upcoming",
+        deliveredWetMassKg: 50,
+      });
+      const unweighed = await createDelivery(ctx, {
+        code: `DL-ORDER-BAL-${seeded.tag}-UNWEIGHED`,
+        orderId: seeded.orderId,
+        facilityId: seeded.facilityId,
+        deliveryDate: new Date("2026-08-02T00:00:00Z"),
+        status: "upcoming",
+        deliveredWetMassKg: null,
+      });
+
+      await expect(
+        updateDelivery(ctx, weighed.id, { status: "delivered" }),
+      ).resolves.toMatchObject({
+        status: "delivered",
+        deliveredWetMassKg: 50,
+      });
+      await expect(
+        updateDelivery(ctx, unweighed.id, { status: "delivered" }),
+      ).rejects.toThrow(
+        `Delivery ${unweighed.code} needs a wet mass of at least 0.001 kg before it can be marked as delivered.`,
+      );
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
   it("allocates full product dry biochar independently of delivery moisture", async () => {
     const seeded = await seedOrder(10_000);
 

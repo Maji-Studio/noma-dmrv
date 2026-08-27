@@ -165,6 +165,7 @@ function makeTransportLeg(distanceKm: number, loadMassKg: number): TransportLeg 
     modelYear: null,
     loadMassKg,
     calculationMethodType: "distance_based",
+    tripType: "return",
     isDerived: false,
     billOfLading: null,
     weighScaleTicketRef: null,
@@ -264,14 +265,15 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
         );
         const client = await getEnvClient();
 
-        // Two feedstock legs: 60 km × 2 t + 40 km × 3 t = 240 t·km
-        // (mass-weighted, same road factor → exact).
+        // Both stored distances are one-way and both vehicles return empty:
+        // (60 km × 2) × 2 t + (40 km × 2) × 3 t = 480 t·km.
+        // The full round trip is required when no onward journey is evidenced.
         const agg = aggregateTransportMassDistance(
           [makeTransportLeg(60, 2000), makeTransportLeg(40, 3000)],
           "Feedstock",
         );
         expect(agg.warning).toBeNull();
-        expect(agg.massDistanceTonneKm).toBe(240);
+        expect(agg.massDistanceTonneKm).toBe(480);
 
         const [templates, blueprints] = await Promise.all([
           listGhgEntryTemplates(client, PROJECT_ID),
@@ -307,7 +309,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
           supplierRefId: `noma-multileg-it-${Date.now()}`,
           sourceIds: [],
         });
-        expect(body.quantity.magnitude).toBe(240);
+        expect(body.quantity.magnitude).toBe(480);
         expect(body.quantity.unit).toBe("tonne * km");
       },
       TEST_TIMEOUT_MS,

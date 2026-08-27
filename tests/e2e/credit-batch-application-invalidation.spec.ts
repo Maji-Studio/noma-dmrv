@@ -96,6 +96,7 @@ async function createApplicationForLineage(
     await deliverySelect.selectOption(firstDeliveryValue);
   }
   await page.fill('input[name="biocharAppliedTons"]', "5000");
+  await page.fill('input[name="fieldSizeHa"]', "2");
   await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
   await waitForSideSheetClose(page);
 }

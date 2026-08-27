@@ -13,8 +13,13 @@ import {
 } from "./distance-source";
 import { optionalTripType } from "./trip-type";
 import {
+  DELIVERED_WET_MASS_REQUIRED_MESSAGE,
+  DELIVERED_WET_MASS_RANGE_MESSAGE,
+  hasStorableDeliveredWetMass,
+} from "@/lib/delivery-wet-mass";
+import {
   emptyToNull,
-  optionalMassKgSchema,
+  positiveMassKgSchema,
   requiredNumber,
   storedPercentSchema,
 } from "./helpers";
@@ -48,9 +53,12 @@ export function resolveDeliveryDistanceSource(
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
-const WET_MASS_RANGE_MESSAGE = "Wet mass must be 0 or more";
 const DISTANCE_RANGE_MESSAGE = "Distance must be 0 or more";
-const optionalWetMassKg = optionalMassKgSchema(WET_MASS_RANGE_MESSAGE);
+const optionalWetMassKg = positiveMassKgSchema(
+  DELIVERED_WET_MASS_RANGE_MESSAGE,
+)
+  .optional()
+  .nullable();
 const requiredProductMoisturePercent = requiredNumber(
   "Biochar product moisture is required",
   "Enter a valid biochar product moisture percentage",
@@ -70,6 +78,22 @@ function validateDistanceOverride(
       code: z.ZodIssueCode.custom,
       path: ["distanceKmOverride"],
       message: DISTANCE_RANGE_MESSAGE,
+    });
+  }
+}
+
+function validateDeliveredWetMass(
+  value: { status?: DeliveryStatus; deliveredWetMassKg?: number | null },
+  ctx: z.RefinementCtx,
+) {
+  if (
+    value.status === "delivered" &&
+    !hasStorableDeliveredWetMass(value.deliveredWetMassKg)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["deliveredWetMassKg"],
+      message: DELIVERED_WET_MASS_REQUIRED_MESSAGE,
     });
   }
 }
@@ -107,6 +131,7 @@ const deliveryFormBaseSchema = z.object({
  */
 export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
+  validateDeliveredWetMass(value, ctx);
 });
 
 // ============================================
@@ -138,6 +163,7 @@ export const createDeliverySchema = z.object({
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
+  validateDeliveredWetMass(value, ctx);
 });
 
 /**
@@ -166,6 +192,8 @@ export const updateDeliverySchema = z.object({
   distanceNote: optionalNote,
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
+  // Delivered/mass validity depends on the saved row, so updateDelivery checks
+  // it after merging the partial patch under the delivery stock lock.
   validateDistanceOverride(value, ctx);
 });
 

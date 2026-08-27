@@ -1,5 +1,27 @@
 # Isometric Docs Change Log
 
+## 2026-08-27 (Biochar Application canonical readback units)
+
+- Live Certify Biochar Application responses canonicalize submitted `t/ha` to
+  `metric_ton / hectare` and submitted `kg` to `kilogram` on readback.
+- Reconciliation accepts only those semantically identical spelling pairs.
+  Quantity magnitudes, application and dependency identities, dates, supplier
+  references, and GHG Entry associations remain strict; unrelated units still
+  fail closed as registry drift.
+- Confirmed Biochar Application retries read the persisted external identity
+  directly and require its association to match the current GHG Entry. Bounded
+  supplier-reference scans remain only for unconfirmed orphan recovery.
+- Biochar Application journal identity and supplier references are versioned by
+  immutable Removal submission. A superseding GHG Entry creates one new
+  associated Biochar Application while the prior registry application remains
+  linked to the prior GHG Entry; retries reuse the current version without a
+  duplicate write.
+- Kilogram request/readback comparison is shared with Production Batch
+  reconciliation so both endpoints retain the same verified alias contract.
+- Application field size is required and positive at form, create, update,
+  data-access, and submission boundaries. Delivered wet mass copy
+  states the persisted minimum of 0.001 kg explicitly.
+
 ## 2026-08-26 (Biochar Application API restored)
 
 - Removal submission now ensures Production Batches, then Storage Locations,

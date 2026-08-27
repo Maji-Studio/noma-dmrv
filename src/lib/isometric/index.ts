@@ -105,6 +105,7 @@ export {
   buildCreateBiocharApplicationRequest,
   createBiocharApplication,
   findBiocharApplicationBySupplierReference,
+  getBiocharApplication,
   biocharApplicationMismatchMessage,
   type CreateBiocharApplicationRequest,
   type IsometricBiocharApplication,

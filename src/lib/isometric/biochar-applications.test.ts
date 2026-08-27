@@ -92,11 +92,92 @@ describe("Biochar Application request", () => {
     expect(sandbox).not.toBe(production);
   });
 
+  it("preserves the first-submission reference and versions superseding Removals", () => {
+    const first = buildBiocharApplicationReference({
+      applicationId: "app-1",
+      creditBatchId: "batch-1",
+      environment: "sandbox",
+      removalSubmissionVersion: 1,
+    });
+    const second = buildBiocharApplicationReference({
+      applicationId: "app-1",
+      creditBatchId: "batch-1",
+      environment: "sandbox",
+      removalSubmissionVersion: 2,
+    });
+
+    expect(first).toBe(
+      buildBiocharApplicationReference({
+        applicationId: "app-1",
+        creditBatchId: "batch-1",
+        environment: "sandbox",
+      }),
+    );
+    expect(second).toContain("-s2-v1");
+    expect(second).not.toBe(first);
+  });
+
   it("detects payload-critical remote drift", () => {
     expect(
       biocharApplicationMismatchMessage(
         remote({ truck_mass_on_arrival: { magnitude: 11_000, unit: "kg" } }),
         buildCreateBiocharApplicationRequest(BASE),
+      ),
+    ).toContain("does not match");
+  });
+
+  it("accepts Isometric's canonical application-rate and mass units", () => {
+    expect(
+      biocharApplicationMismatchMessage(
+        remote({
+          average_application_rate: {
+            magnitude: 3,
+            unit: "metric_ton / hectare",
+          },
+          truck_mass_on_arrival: {
+            magnitude: 12_000,
+            unit: "kilogram",
+          },
+          truck_mass_on_departure: {
+            magnitude: 0,
+            unit: "kilogram",
+          },
+        }),
+        buildCreateBiocharApplicationRequest(BASE),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects an unapproved quantity unit instead of converting it", () => {
+    expect(
+      biocharApplicationMismatchMessage(
+        remote({
+          truck_mass_on_arrival: { magnitude: 12_000, unit: "gram" },
+        }),
+        buildCreateBiocharApplicationRequest(BASE),
+      ),
+    ).toContain("does not match");
+  });
+
+  it("does not accept a verified alias on the wrong quantity field", () => {
+    const expected = buildCreateBiocharApplicationRequest(BASE);
+    expect(
+      biocharApplicationMismatchMessage(
+        remote({
+          average_application_rate: { magnitude: 3, unit: "kilogram" },
+        }),
+        expected,
+      ),
+    ).toContain("does not match");
+    expect(
+      biocharApplicationMismatchMessage(
+        remote({
+          truck_mass_on_arrival: {
+            magnitude: 12_000,
+            unit: "metric_ton / hectare",
+          },
+        }),
+        expected,
       ),
     ).toContain("does not match");
   });

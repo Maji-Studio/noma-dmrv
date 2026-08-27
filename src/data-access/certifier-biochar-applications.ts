@@ -8,7 +8,10 @@ import {
 } from "@/db/schema/certifier-biochar-applications";
 import { certifierProductionBatches } from "@/db/schema/certifier-production-batches";
 import { certifierStorageLocations } from "@/db/schema/certifier-storage-locations";
-import { certifierProjects } from "@/db/schema/certification";
+import {
+  certificationSubmissions,
+  certifierProjects,
+} from "@/db/schema/certification";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customerLocations } from "@/db/schema/parties";
 import type { OrgContext } from "@/lib/auth/server";
@@ -22,18 +25,21 @@ const BIOCHAR_APPLICATION_LOCK_SCOPE =
   "certifier-biochar-application:isometric";
 
 /**
- * Serializes registry create/reconcile for one (application, credit batch)
- * registration so concurrent submissions cannot POST the same Biochar
- * Application twice.
+ * Serializes registry create/reconcile for one immutable application slice in
+ * one Removal submission version.
  */
 export async function withBiocharApplicationRegistrationLock<T>(
   ctx: OrgContext,
-  input: { applicationId: string; creditBatchId: string },
+  input: {
+    applicationId: string;
+    creditBatchId: string;
+    removalSubmissionId: string;
+  },
   fn: () => Promise<T>,
 ): Promise<T> {
   requireOrgScope(ctx);
   return withDedicatedSessionAdvisoryLock(
-    `${BIOCHAR_APPLICATION_LOCK_SCOPE}:${ctx.organizationId}:${input.applicationId}:${input.creditBatchId}`,
+    `${BIOCHAR_APPLICATION_LOCK_SCOPE}:${ctx.organizationId}:${input.applicationId}:${input.creditBatchId}:${input.removalSubmissionId}`,
     fn,
   );
 }
@@ -128,6 +134,7 @@ export async function getBiocharApplicationRegistration(
   ctx: OrgContext,
   applicationId: string,
   creditBatchId: string,
+  removalSubmissionId: string,
   provider: CertifierProvider = DEFAULT_PROVIDER,
 ): Promise<CertifierBiocharApplication | null> {
   requireOrgScope(ctx);
@@ -140,6 +147,10 @@ export async function getBiocharApplicationRegistration(
         eq(certifierBiocharApplications.provider, provider),
         eq(certifierBiocharApplications.applicationId, applicationId),
         eq(certifierBiocharApplications.creditBatchId, creditBatchId),
+        eq(
+          certifierBiocharApplications.removalSubmissionId,
+          removalSubmissionId,
+        ),
       ),
     )
     .limit(1);
@@ -149,6 +160,7 @@ export async function getBiocharApplicationRegistration(
 export interface ClaimBiocharApplicationInput {
   applicationId: string;
   creditBatchId: string;
+  removalSubmissionId: string;
   productionBatchRegistrationId: string;
   storageLocationRegistrationId: string;
   externalProductionBatchId: string;
@@ -168,6 +180,7 @@ async function assertRegistryDependenciesAvailable(
     creditBatchId: string;
     productionBatchRegistrationId: string;
     storageLocationRegistrationId: string;
+    removalSubmissionId: string;
   },
   provider: CertifierProvider,
 ): Promise<void> {
@@ -205,6 +218,24 @@ async function assertRegistryDependenciesAvailable(
       "Biochar Application registration references an unavailable registry dependency",
     );
   }
+  const [submission] = await db
+    .select({ id: certificationSubmissions.id })
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.id, input.removalSubmissionId),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+        eq(certificationSubmissions.provider, provider),
+        eq(certificationSubmissions.submissionType, "removal"),
+        eq(certificationSubmissions.localEntityType, "removal"),
+      ),
+    )
+    .limit(1);
+  if (!submission) {
+    throw new Error(
+      "Biochar Application registration references an unavailable Removal submission",
+    );
+  }
 }
 
 /** Inserts the durable in-flight claim before a non-idempotent remote POST. */
@@ -223,6 +254,7 @@ export async function claimBiocharApplicationRegistration(
       provider,
       applicationId: input.applicationId,
       creditBatchId: input.creditBatchId,
+      removalSubmissionId: input.removalSubmissionId,
       productionBatchRegistrationId: input.productionBatchRegistrationId,
       storageLocationRegistrationId: input.storageLocationRegistrationId,
       externalProductionBatchId: input.externalProductionBatchId,
@@ -241,6 +273,7 @@ export async function claimBiocharApplicationRegistration(
         certifierBiocharApplications.provider,
         certifierBiocharApplications.applicationId,
         certifierBiocharApplications.creditBatchId,
+        certifierBiocharApplications.removalSubmissionId,
       ],
     })
     .returning();
@@ -249,6 +282,7 @@ export async function claimBiocharApplicationRegistration(
     ctx,
     input.applicationId,
     input.creditBatchId,
+    input.removalSubmissionId,
     provider,
   );
   if (!winner) throw new Error("Biochar Application claim race produced no winner");
