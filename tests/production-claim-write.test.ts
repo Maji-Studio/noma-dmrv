@@ -21,7 +21,10 @@ import {
   markSubmissionRejected,
   markSubmissionSubmitted,
 } from "@/data-access/certification";
-import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
+import {
+  markSubmissionInterrupted,
+  recordConfirmedSubmissionIdentity,
+} from "@/data-access/certification-submissions";
 import { db } from "@/db";
 import {
   certificationSubmissions,
@@ -192,6 +195,41 @@ async function readReservation(batchId: string): Promise<string | null> {
 beforeAll(() => ensureTestOrg());
 
 describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)", () => {
+  it("finalizes when the exact database lock is round-tripped", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt: new Date() })
+      .where(eq(certificationSubmissions.id, submissionId));
+    const [claimed] = await db
+      .select({ lockedAt: certificationSubmissions.lockedAt })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(claimed.lockedAt).not.toBeNull();
+
+    await markSubmissionSubmitted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      {
+        externalId: "ext_exact_owner",
+        expectedLockedAt: claimed.lockedAt!,
+      },
+    );
+
+    const [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        externalId: certificationSubmissions.externalId,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toEqual({
+      status: "submitted",
+      externalId: "ext_exact_owner",
+    });
+  });
+
   it("refuses finalization after the exact draft lock has changed", async () => {
     const { removalAId } = await createFixture();
     const submissionId = await insertDraftSubmission(removalAId, 1);
@@ -354,6 +392,38 @@ describe("markSubmissionRejected", () => {
 });
 
 describe("markSubmissionInterrupted", () => {
+  it("journals a confirmed external mutation with its registry identity", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    const lockedAt = new Date();
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt })
+      .where(eq(certificationSubmissions.id, submissionId));
+
+    await expect(
+      recordConfirmedSubmissionIdentity(
+        makeTestOrgContext(TEST_USER_ID),
+        submissionId,
+        { externalId: "ext_confirmed_draft", expectedLockedAt: lockedAt },
+      ),
+    ).resolves.toBe(true);
+
+    const [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        externalId: certificationSubmissions.externalId,
+        metadata: certificationSubmissions.metadata,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toMatchObject({
+      status: "draft",
+      externalId: "ext_confirmed_draft",
+      metadata: { externalMutation: "confirmed" },
+    });
+  });
+
   it("records recovery metadata without unlocking or changing draft status", async () => {
     const { removalAId } = await createFixture();
     const submissionId = await insertDraftSubmission(removalAId, 1);

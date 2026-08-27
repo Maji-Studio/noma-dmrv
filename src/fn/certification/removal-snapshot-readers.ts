@@ -37,10 +37,15 @@ export function readRemovalSupersedePreviousId(
   const snapshot = row.payloadSnapshot as {
     supersedePreviousId?: unknown;
   } | null;
-  const parsed = z.string().min(1).nullable().optional().safeParse(
-    snapshot?.supersedePreviousId,
-  );
-  return parsed.success ? (parsed.data ?? null) : null;
+  const stored = snapshot?.supersedePreviousId;
+  if (stored === undefined || stored === null) return null;
+  const parsed = z.string().min(1).safeParse(stored);
+  if (!parsed.success) {
+    throw new SafeError(
+      "This saved submission has an invalid superseded-version link and cannot resume. Select Refresh review, then submit again.",
+    );
+  }
+  return parsed.data;
 }
 
 const datapointTransportSchema = z.object({

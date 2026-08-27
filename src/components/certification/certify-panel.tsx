@@ -129,8 +129,8 @@ function RemovalStatusRow({ data }: { data: RemovalCertifyContext }) {
             isLockedInFlight={lockedInFlight}
             artifact="removal"
             reportingWindow={{
-              startedOn: data.startedOn,
-              completedOn: data.completedOn,
+              startedOn: data.reportingWindowStartedOn,
+              completedOn: data.reportingWindowCompletedOn,
             }}
           />
         ) : (

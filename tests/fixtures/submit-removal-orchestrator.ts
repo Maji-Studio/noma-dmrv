@@ -227,6 +227,16 @@ export function makeResolvedInventorySource(
 
 export let storedRows: CertificationSubmissionRow[];
 let nextLedgerRowId = 1;
+let storedRemovalStartedOn: string | null = null;
+let storedRemovalCompletedOn: string | null = null;
+
+export function setStoredRemovalReportingWindow(
+  startedOn: string | null,
+  completedOn: string | null,
+): void {
+  storedRemovalStartedOn = startedOn;
+  storedRemovalCompletedOn = completedOn;
+}
 
 export function newLedgerRow(
   input: InsertDraftSubmissionInput,
@@ -539,6 +549,8 @@ export function makeContext(
     facilityId: FACILITY_ID,
     hasOrgCredentials: true,
     removalId: REMOVAL_ID,
+    reportingWindowStartedOn: storedRemovalStartedOn,
+    reportingWindowCompletedOn: storedRemovalCompletedOn,
     mapping: makeMapping(),
     project: { id: EXTERNAL_PROJECT_ID, name: "Test project" } as never,
     defaultTemplate: makeTemplate(),
@@ -716,6 +728,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   storedRows = [];
   nextLedgerRowId = 1;
+  setStoredRemovalReportingWindow(null, null);
   durabilityFlag.live = false;
   vi.mocked(
     biocharApplicationsDA.getBiocharApplicationRegistryInputs,
@@ -806,6 +819,10 @@ beforeEach(() => {
       return false;
     }
     row.externalId = args.externalId;
+    row.metadata = {
+      ...(row.metadata ?? {}),
+      [SUBMISSION_METADATA_KEYS.externalMutation]: "confirmed",
+    };
     return true;
   });
   vi.mocked(ledger.markSubmissionRejected).mockImplementation(
@@ -864,8 +881,11 @@ beforeEach(() => {
     },
   );
   vi.mocked(ledger.appendSyncEvent).mockResolvedValue(undefined as never);
-  vi.mocked(removalsDA.updateRemovalDates).mockResolvedValue(
-    undefined as never,
+  vi.mocked(removalsDA.updateRemovalDates).mockImplementation(
+    async (_ctx, _removalId, dates) => {
+      storedRemovalStartedOn = dates.startedOn;
+      storedRemovalCompletedOn = dates.completedOn;
+    },
   );
   vi.mocked(evidenceLedgers.ensureEvidenceLedgersFromContext).mockResolvedValue(
     undefined,

@@ -2,7 +2,32 @@ import { describe, expect, it } from "vitest";
 import {
   readRemovalBiocharApplicationIntents,
   readRemovalSourceBindingPlan,
+  readRemovalSupersedePreviousId,
 } from "./removal-snapshot-readers";
+
+describe("readRemovalSupersedePreviousId", () => {
+  it("keeps legacy snapshots resumable without a superseded version", () => {
+    expect(
+      readRemovalSupersedePreviousId({ payloadSnapshot: {} } as never),
+    ).toBeNull();
+  });
+
+  it("reads a valid superseded-version link", () => {
+    expect(
+      readRemovalSupersedePreviousId({
+        payloadSnapshot: { supersedePreviousId: "submission-v1" },
+      } as never),
+    ).toBe("submission-v1");
+  });
+
+  it("fails closed for a malformed superseded-version link", () => {
+    expect(() =>
+      readRemovalSupersedePreviousId({
+        payloadSnapshot: { supersedePreviousId: 42 },
+      } as never),
+    ).toThrow(/invalid superseded-version link/i);
+  });
+});
 
 describe("readRemovalSourceBindingPlan", () => {
   it("reads the immutable Source binding plan from a claimed snapshot", () => {

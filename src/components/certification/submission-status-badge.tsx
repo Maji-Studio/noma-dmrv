@@ -15,6 +15,7 @@ import {
   deriveSubmissionStatus,
   type CertificationArtifact,
 } from "@/lib/certification/from-submission";
+import type { RemovalReportingWindowDates } from "@/lib/certification/status";
 
 interface SubmissionStatusBadgeProps {
   latest: CertificationSubmissionRow | null;
@@ -24,7 +25,7 @@ interface SubmissionStatusBadgeProps {
    * verifier overlay. Defaults to "removal" for backward compatibility.
    */
   artifact?: CertificationArtifact;
-  reportingWindow?: { startedOn?: string | null; completedOn?: string | null };
+  reportingWindow?: RemovalReportingWindowDates;
 }
 
 export function SubmissionStatusBadge({

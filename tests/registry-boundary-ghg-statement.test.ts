@@ -46,7 +46,11 @@ vi.mock("@/lib/auth/server", async (importOriginal) => {
 
 import { db, withDedicatedLockConnection } from "@/db";
 import { claimSubmissionDraft } from "@/data-access/certification-submissions";
-import { getOrCreateGhgStatementDraft } from "@/data-access/certifier-ghg-statements";
+import {
+  getOrCreateGhgStatementDraft,
+  listOpenRemovalsForFacility,
+  reconcileRemovalMembership,
+} from "@/data-access/certifier-ghg-statements";
 import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import {
   certificationSubmissions,
@@ -224,6 +228,36 @@ beforeEach(() => {
 beforeAll(() => ensureTestOrg());
 
 describe("loadGhgStatementsForFacility boundary", () => {
+  it("fails closed while a confirmed Removal draft is still finalizing", async () => {
+    const fixture = await createFixture();
+    await db
+      .update(certificationSubmissions)
+      .set({ status: "draft", lockedAt: new Date() })
+      .where(eq(certificationSubmissions.localEntityId, fixture.removalId!));
+
+    await expect(
+      listOpenRemovalsForFacility(
+        makeTestOrgContext("test-user-confirmed-draft"),
+        fixture.facilityId,
+      ),
+    ).rejects.toThrow(/Removal is still finalizing/i);
+
+    const [statement] = await db
+      .insert(certifierGhgStatements)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: fixture.facilityId,
+        reportingPeriodEndOn: REPORTING_PERIOD_END,
+      })
+      .returning({ id: certifierGhgStatements.id });
+    const reconciliation = await reconcileRemovalMembership(
+      makeTestOrgContext("test-user-confirmed-draft"),
+      statement.id,
+      [fixture.externalRemovalId!],
+    );
+    expect(reconciliation.linkedRemovalIds).toEqual([]);
+  });
+
   it("serves the local mirror without contacting or reconciling the registry", async () => {
     const fixture = await createFixture();
     registry.seedGhgStatement({

@@ -61,6 +61,7 @@ import {
   finalizeRemovalSubmission,
   persistRemovalReportingWindow,
   recordRemovalConfirmedIdentity,
+  recoverSubmittedRemovalReportingWindow,
 } from "./removal-submission-finalization";
 import {
   assertEntityReadinessGapsResolved,
@@ -215,6 +216,20 @@ async function submitRemovalCore(
     throw new SafeError(
       "Configure organization Isometric credentials before submitting.",
     );
+  }
+  if (
+    ctx.latestSubmission?.status === "submitted" &&
+    ctx.latestSubmission.externalId &&
+    (!ctx.reportingWindowStartedOn || !ctx.reportingWindowCompletedOn)
+  ) {
+    assertProductionConfirmed(confirmProduction);
+    attempt.externalMutation = "confirmed";
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    onProgress?.({ step: "removal.checking_data", state: "complete" });
+    onProgress?.({ step: "removal.creating", state: "reused" });
+    await recoverSubmittedRemovalReportingWindow({ client, orgCtx, removalId, row: ctx.latestSubmission, log });
+    onProgress?.({ step: "removal.complete", state: "complete" });
+    return { removalId, externalId: ctx.latestSubmission.externalId, version: ctx.latestSubmission.version };
   }
   if (ctx.feedstockTypeMappingGaps.length > 0) {
     throw new SafeError(
@@ -530,11 +545,6 @@ async function submitRemovalCore(
           : "skipped",
       });
       onProgress?.({ step: "removal.creating", state: "reused" });
-      await persistRemovalReportingWindow(
-        orgCtx,
-        removalId,
-        readRemovalReportingWindow(ctx.latestSubmission),
-      );
       await ensureRemovalBiocharApplications({
         orgCtx,
         removalId,
@@ -573,9 +583,9 @@ async function submitRemovalCore(
         );
       }
       if (claimed.resumed) {
-        attempt.externalMutation = readRemovalSubmissionExternalMutation(
-          claimed.row.metadata,
-        );
+        attempt.externalMutation = claimed.row.externalId
+          ? "confirmed"
+          : readRemovalSubmissionExternalMutation(claimed.row.metadata);
       }
       try {
         if (claimed.resumed) {

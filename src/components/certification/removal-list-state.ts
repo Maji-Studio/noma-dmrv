@@ -69,8 +69,7 @@ export function buildRemovalListRows(
         isRemovalSubmissionInterruptedForReportingWindow({
           local,
           metadata: identity.latestSubmission?.metadata,
-          startedOn,
-          completedOn,
+          reportingWindow: { startedOn, completedOn },
         }),
       readiness: lifecycleData?.readiness ?? null,
       evidenceHealth: data?.evidenceHealth ?? null,

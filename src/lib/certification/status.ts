@@ -168,22 +168,22 @@ export const REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME =
 export const REMOVAL_SUBMISSION_INTERRUPTED_LABEL =
   "Submission interrupted";
 
-export function isRemovalSubmissionInterrupted(metadata: unknown): boolean {
-  return isSubmissionAttemptInterrupted(metadata);
+export interface RemovalReportingWindowDates {
+  startedOn: string | null;
+  completedOn: string | null;
 }
 
 export function isRemovalSubmissionInterruptedForReportingWindow(args: {
   local: LocalSubmissionStatus | null;
   metadata: unknown;
-  startedOn?: string | null;
-  completedOn?: string | null;
-  reportingWindowKnown?: boolean;
+  reportingWindow: RemovalReportingWindowDates | "unknown";
 }): boolean {
   return (
-    isRemovalSubmissionInterrupted(args.metadata) ||
-    (args.reportingWindowKnown !== false &&
+    isSubmissionAttemptInterrupted(args.metadata) ||
+    (args.reportingWindow !== "unknown" &&
       args.local === "submitted" &&
-      (!args.startedOn || !args.completedOn))
+      (!args.reportingWindow.startedOn ||
+        !args.reportingWindow.completedOn))
   );
 }
 

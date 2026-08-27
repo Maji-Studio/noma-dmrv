@@ -36,6 +36,7 @@ import {
   makeBatchesWithSamples,
   makeContext,
   makeRun,
+  setStoredRemovalReportingWindow,
   storedRows,
 } from "./fixtures/submit-removal-orchestrator";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -387,6 +388,7 @@ describe("submitRemoval — happy path", () => {
     expect(storedRows[0]).toMatchObject({
       status: "draft",
       externalId: "rmv_1",
+      metadata: { externalMutation: "confirmed" },
     });
     expect(storedRows[0].lockedAt).not.toBeNull();
     expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
@@ -637,14 +639,10 @@ describe("submitRemoval — happy path", () => {
     expect(second.version).toBe(1);
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
     expect(isometric.createGhgEntry).not.toHaveBeenCalled();
-    // return-existing skips the ledger transition but reasserts the reporting
-    // window so rows affected by the former early-finalization bug recover.
+    // A healthy return-existing skips both the ledger transition and local
+    // date persistence.
     expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
-    expect(removalsDA.updateRemovalDates).toHaveBeenCalledWith(
-      makeTestOrgContext(USER_ID),
-      REMOVAL_ID,
-      { startedOn: "2026-01-01", completedOn: "2026-04-05" },
-    );
+    expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
     // No new ledger row.
     expect(storedRows).toHaveLength(1);
     expect(progress).toHaveBeenCalledWith({
@@ -661,7 +659,7 @@ describe("submitRemoval — happy path", () => {
     });
   });
 
-  it("repairs an existing reporting window before retrying registry associations", async () => {
+  it("repairs an existing reporting window only after registry associations reconcile", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),
     );
@@ -676,6 +674,7 @@ describe("submitRemoval — happy path", () => {
       removalId: REMOVAL_ID,
     });
 
+    setStoredRemovalReportingWindow(null, null);
     vi.mocked(removalsDA.updateRemovalDates).mockClear();
     vi.mocked(biocharApplications.ensureRemovalBiocharApplications).mockClear();
     vi.mocked(
@@ -691,18 +690,23 @@ describe("submitRemoval — happy path", () => {
         removalId: REMOVAL_ID,
       }),
     ).rejects.toThrow("association still pending");
+    expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
+    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
+
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeChangedProductionContext(),
+    );
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).resolves.toMatchObject({ externalId: "rmv_1" });
     expect(removalsDA.updateRemovalDates).toHaveBeenCalledWith(
       makeTestOrgContext(USER_ID),
       REMOVAL_ID,
       { startedOn: "2026-01-01", completedOn: "2026-04-05" },
     );
-    expect(
-      vi.mocked(removalsDA.updateRemovalDates).mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      vi.mocked(biocharApplications.ensureRemovalBiocharApplications).mock
-        .invocationCallOrder[0],
-    );
-    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
   });
 
   it("marks absent datapoint and durability work as skipped when reusing a Removal", async () => {

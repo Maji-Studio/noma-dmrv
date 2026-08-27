@@ -20,6 +20,7 @@ import {
   deriveStatementStatus,
   type DerivedStatus,
   type LocalSubmissionStatus,
+  type RemovalReportingWindowDates,
   type RemoteGhgStatus,
 } from "./status";
 
@@ -87,7 +88,7 @@ export function deriveSubmissionStatus(
   latest: CertificationSubmissionRow | null,
   isLockedInFlight: boolean,
   artifact: CertificationArtifact,
-  reportingWindow?: { startedOn?: string | null; completedOn?: string | null },
+  reportingWindow?: RemovalReportingWindowDates,
 ): DerivedStatus {
   const local = (latest?.status ?? null) as LocalSubmissionStatus | null;
   if (artifact === "ghgStatement") {
@@ -103,9 +104,7 @@ export function deriveSubmissionStatus(
     submissionInterrupted: isRemovalSubmissionInterruptedForReportingWindow({
       local,
       metadata: latest?.metadata,
-      startedOn: reportingWindow?.startedOn,
-      completedOn: reportingWindow?.completedOn,
-      reportingWindowKnown: reportingWindow !== undefined,
+      reportingWindow: reportingWindow ?? "unknown",
     }),
   });
 }

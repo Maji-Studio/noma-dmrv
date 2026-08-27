@@ -126,7 +126,14 @@ export async function recordConfirmedSubmissionIdentity(
   requireOrgScope(ctx);
   const updated = await db
     .update(certificationSubmissions)
-    .set({ externalId: args.externalId, updatedAt: sql`now()` })
+    .set({
+      externalId: args.externalId,
+      updatedAt: sql`now()`,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object(
+        ${SUBMISSION_METADATA_KEYS.externalMutation}::text,
+        ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}::text
+      )`,
+    })
     .where(
       and(
         eq(certificationSubmissions.id, id),

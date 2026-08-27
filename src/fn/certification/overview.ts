@@ -140,8 +140,7 @@ async function buildRemovalPreflightSummary(
     isRemovalSubmissionInterruptedForReportingWindow({
       local: ctx.latestSubmission?.status ?? null,
       metadata: ctx.latestSubmission?.metadata,
-      startedOn,
-      completedOn,
+      reportingWindow: { startedOn, completedOn },
     });
   return {
     removalId,
@@ -380,8 +379,8 @@ export async function loadCreditBatchHealthSummaries(
                 : false,
               "removal",
               {
-                startedOn: batchRow?.removalStartedOn,
-                completedOn: batchRow?.removalCompletedOn,
+                startedOn: batchRow?.removalStartedOn ?? null,
+                completedOn: batchRow?.removalCompletedOn ?? null,
               },
             )
           : null,

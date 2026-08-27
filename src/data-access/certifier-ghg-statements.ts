@@ -663,6 +663,7 @@ export async function listOpenRemovalsForFacility(
     .selectDistinctOn([certificationSubmissions.localEntityId], {
       removalId: certificationSubmissions.localEntityId,
       externalId: certificationSubmissions.externalId,
+      status: certificationSubmissions.status,
     })
     .from(certificationSubmissions)
     .where(
@@ -683,6 +684,7 @@ export async function listOpenRemovalsForFacility(
     .select({
       removal: certifierRemovals,
       externalId: latest.externalId,
+      status: latest.status,
     })
     .from(certifierRemovals)
     .innerJoin(latest, eq(latest.removalId, certifierRemovals.id))
@@ -697,8 +699,14 @@ export async function listOpenRemovalsForFacility(
     .orderBy(desc(certifierRemovals.completedOn));
 
   // The isNotNull filter above guarantees externalId is present; narrow it.
+  if (rows.some((row) => row.status === "draft")) {
+    throw new SafeError(
+      "A Removal is still finalizing in the registry. Retry that Removal before creating a GHG Statement.",
+    );
+  }
   return rows.flatMap((r) =>
-    r.externalId === null
+    r.externalId === null ||
+    (r.status !== "submitted" && r.status !== "accepted")
       ? []
       : [{ removal: r.removal, externalId: r.externalId }],
   );
@@ -758,6 +766,11 @@ export async function reconcileRemovalMembership(
           eq(certificationSubmissions.submissionType, "removal"),
           eq(certificationSubmissions.localEntityType, "removal"),
           inArray(certificationSubmissions.externalId, externalRemovalIds),
+          inArray(certificationSubmissions.status, [
+            "submitted",
+            "accepted",
+            "superseded",
+          ]),
           eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
       );
