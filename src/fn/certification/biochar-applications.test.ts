@@ -306,14 +306,38 @@ describe("ensureRemovalBiocharApplications", () => {
       ghg_entry_id: null,
       removal_id: null,
     });
-    mocks.client.get.mockImplementation(async (path: string) =>
-      path === "/biochar_applications" ? page([]) : unlinkedRemote,
-    );
+    mocks.client.get.mockResolvedValue(page([]));
     mocks.client.post.mockResolvedValue(unlinkedRemote);
 
     await expect(ensure()).resolves.toBeUndefined();
 
     expect(mocks.client.post).toHaveBeenCalledTimes(1);
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        externalApplicationId: "bca-test",
+        observedGhgEntryId: null,
+        observedRemovalId: null,
+      }),
+    );
+    expect(
+      mocks.client.get.mock.calls.every(
+        ([path]) => path === "/biochar_applications",
+      ),
+    ).toBe(true);
+  });
+
+  it("reconciles an existing matching Biochar Application with no GHG Entry association", async () => {
+    const unlinkedRemote = canonicalRemote({
+      ghg_entry_id: null,
+      removal_id: null,
+    });
+    mocks.client.get.mockResolvedValue(page([unlinkedRemote]));
+
+    await expect(ensure()).resolves.toBeUndefined();
+
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.markDrift).not.toHaveBeenCalled();
     expect(mocks.confirm).toHaveBeenCalledWith(
       orgCtx,
       expect.objectContaining({
