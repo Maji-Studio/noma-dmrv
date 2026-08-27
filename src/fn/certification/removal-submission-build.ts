@@ -38,6 +38,7 @@ import {
 } from "./removal-reporting-window";
 import type { ResolvedFixedInput } from "./removal-snapshot-readers";
 import {
+  attachSourcesToBiocharApplicationIntents,
   compileBiocharApplicationIntents,
   type BiocharApplicationIntent,
 } from "./biochar-application-intents";
@@ -67,7 +68,9 @@ export interface RemovalSubmissionBuild {
   reportingWindow: { startedOn: Date; completedOn: Date };
   candidateDocumentIds: string[];
   candidateSourceDocuments: CandidateSourceDocument[];
+  readySourceDocumentCount: number;
   sourceIds: string[];
+  datapointSourceIds: string[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
   semanticPayload: Record<string, unknown>;
   monitored: ResolvedMonitoredInput[];
@@ -296,12 +299,7 @@ export async function compileRemovalSubmission(
   }
 
   const blockers: string[] = [];
-  const readySourceDocumentCount =
-    build.sourceBindingPlan.length > 0
-      ? new Set(
-          build.sourceBindingPlan.map((entry) => entry.documentId),
-        ).size
-      : build.sourceIds.length;
+  const readySourceDocumentCount = build.readySourceDocumentCount;
   const pendingSourceCount = Math.max(
     build.candidateDocumentIds.length - readySourceDocumentCount,
     0,
@@ -667,7 +665,8 @@ export async function buildRemovalSubmissionBuild(args: {
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
   assertSequestrationTemplateBindings(defaultTemplate);
 
-  const biocharApplicationIntents = await compileBiocharApplicationIntents({
+  const compiledBiocharApplicationIntents =
+    await compileBiocharApplicationIntents({
     orgCtx,
     memberBatches: ctx.memberBatchClaims,
     environment: env.ISOMETRIC_ENVIRONMENT,
@@ -794,6 +793,22 @@ export async function buildRemovalSubmissionBuild(args: {
     Array.from(
       new Set(sourceBindingCandidates.map((candidate) => candidate.sourceId)),
     ).sort();
+  const datapointSourceCandidates = sourceBindingCandidates.filter(
+    (
+      candidate,
+    ): candidate is ResolvedSourceBindingCandidate & {
+      binding: NonNullable<ResolvedSourceBindingCandidate["binding"]>;
+    } => candidate.binding !== null,
+  );
+  const datapointSourceIds =
+    args.sourceIds ??
+    Array.from(
+      new Set(datapointSourceCandidates.map((candidate) => candidate.sourceId)),
+    ).sort();
+  const biocharApplicationIntents = attachSourcesToBiocharApplicationIntents(
+    compiledBiocharApplicationIntents,
+    sourceBindingCandidates,
+  );
   const sourceIdByDocumentId = new Map(
     sourceBindingCandidates.map((candidate) => [
       candidate.documentId,
@@ -821,7 +836,7 @@ export async function buildRemovalSubmissionBuild(args: {
     ]),
   );
   const sourceBindingPlan = buildRemovalSourceBindingPlan({
-    candidates: sourceBindingCandidates,
+    candidates: datapointSourceCandidates,
     template: defaultTemplate,
     applicationIdsByCreditBatchId: new Map(
       ctx.memberBatchClaims.map((batch) => [
@@ -837,18 +852,21 @@ export async function buildRemovalSubmissionBuild(args: {
     ),
     deliveryIdsByCreditBatchId,
   });
-  // The operator reviews every candidate file before pending Sources receive
-  // registry IDs. Build the semantic plan from that complete candidate set,
-  // using an empty placeholder only for IDs that submission will materialize.
-  // `reviewPayloadHash` strips those IDs, so the reviewed and post-mirror plans
-  // compare identically while every role, lineage and intended target remains
-  // covered. The operational plan above stays strict and contains ready Sources
-  // only, so no empty ID can reach a wire payload.
+  // The semantic plan includes pending files with placeholder Source IDs. The
+  // operational plan above remains strict, so placeholders never reach the API.
   const semanticSourceBindingPlan = buildRemovalSourceBindingPlan({
-    candidates: candidateSourceDocuments.map((candidate) => ({
-      ...candidate,
-      sourceId: sourceIdByDocumentId.get(candidate.documentId) ?? "",
-    })),
+    candidates: candidateSourceDocuments
+      .filter(
+        (
+          candidate,
+        ): candidate is CandidateSourceDocument & {
+          binding: NonNullable<CandidateSourceDocument["binding"]>;
+        } => candidate.binding !== null,
+      )
+      .map((candidate) => ({
+        ...candidate,
+        sourceId: sourceIdByDocumentId.get(candidate.documentId) ?? "",
+      })),
     template: defaultTemplate,
     applicationIdsByCreditBatchId: new Map(
       ctx.memberBatchClaims.map((batch) => [
@@ -875,7 +893,7 @@ export async function buildRemovalSubmissionBuild(args: {
     blueprintsByKey,
     agg,
     externalProjectId,
-    sourceIds,
+    sourceIds: datapointSourceIds,
     sourceBindingPlan,
     allowPeriodInputStub,
     omitProductionComponents: !hasProductionContribution,
@@ -926,6 +944,7 @@ export async function buildRemovalSubmissionBuild(args: {
       .map((candidate) => ({
         documentId: candidate.documentId,
         binding: candidate.binding,
+        biocharApplicationId: candidate.biocharApplicationId,
       }))
       .sort((left, right) =>
         left.documentId.localeCompare(right.documentId),
@@ -962,7 +981,9 @@ export async function buildRemovalSubmissionBuild(args: {
     reportingWindow,
     candidateDocumentIds,
     candidateSourceDocuments,
+    readySourceDocumentCount: sourceBindingCandidates.length,
     sourceIds,
+    datapointSourceIds,
     sourceBindingPlan,
     semanticPayload,
     monitored,

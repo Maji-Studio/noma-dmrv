@@ -5,8 +5,9 @@
  * Form sections:
  * 1. Application details — applicationDate, delivery, biocharAppliedTons + auto-calculated dry mass card
  * 2. Field details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
- * 3. Evidence: evidenceMethod and evidence panel
- * 4. Soil temperature — soilTemperatureSource (enum toggle), soilTemperatureC
+ * 3. Evidence method: customer location or GIS reference
+ * 4. Supporting evidence: optional images and documents
+ * 5. Soil temperature — soilTemperatureSource (enum toggle), soilTemperatureC
  */
 "use client";
 
@@ -19,7 +20,7 @@ import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
-import { PackageIcon, MapPinIcon, CameraIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
+import { PackageIcon, MapPinIcon, FileIcon, MapTrifoldIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
@@ -29,6 +30,7 @@ import {
   soilTemperatureSources,
   formatApplicationMethod,
   formatSoilTemperatureSource,
+  isSelectableApplicationEvidenceMethod,
   type ApplicationFormData,
   type ApplicationEvidenceMethod,
   type ApplicationMethod,
@@ -39,6 +41,7 @@ import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachme
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
+import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
 import {
   FieldPositionField,
   resetFieldPosition,
@@ -154,6 +157,9 @@ export function ApplicationForm({
   // removals derive durability from petrographic reflectance + TGA.
   const hideSoilTemperature = durabilityOption === "1000_year";
 
+  const storedEvidenceMethod =
+    (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ??
+    "location";
   const defaultValues = {
     applicationDate: application?.applicationDate
       ? formatLocalDate(new Date(application.applicationDate))
@@ -166,11 +172,11 @@ export function ApplicationForm({
     gpsLatitude: application?.gpsLatitude ?? undefined,
     gpsLongitude: application?.gpsLongitude ?? undefined,
     applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
-    // The visual path remains UI-locked ("Available later"). Customer location
-    // is the default v1.1 proof path for new applications.
-    evidenceMethod:
-      (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ??
-      "location",
+    // Visual evidence is now an independent attachment step. Normalize legacy
+    // records to the default selectable method when they are next edited.
+    evidenceMethod: isSelectableApplicationEvidenceMethod(storedEvidenceMethod)
+      ? storedEvidenceMethod
+      : "location",
     gisBoundary: application?.gisBoundary ?? null,
     soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
     soilTemperatureC: application?.soilTemperatureC ?? undefined,
@@ -571,12 +577,10 @@ export function ApplicationForm({
 
       </FormSection>
 
-      {/* === Section 3: Evidence === */}
-      {/* Named "Evidence", not "Evidence method": the section carries the
-          declared method AND what proves it (GIS reference, uploaded files). */}
+      {/* === Section 3: Evidence method === */}
       <FormSection
-        title="Evidence"
-        icon={<CameraIcon size={14} weight="bold" />}
+        title="Evidence method"
+        icon={<MapTrifoldIcon size={14} weight="bold" />}
         hint="Choose one way to identify where the biochar was applied."
         fields={["evidenceMethod", "gisBoundary"]}
       >
@@ -601,7 +605,20 @@ export function ApplicationForm({
         />
       </FormSection>
 
-      {/* === Section 4: Soil Temperature (200-year only) === */}
+      {/* === Section 4: Supporting evidence === */}
+      <FormSection
+        title="Supporting evidence"
+        icon={<FileIcon size={14} weight="bold" />}
+        hint="Optional. Add images or documents that support this application."
+      >
+        <ApplicationSupportingEvidencePanel
+          applicationId={application?.id}
+          disabled={isSubmitting}
+          deferredAttachments={deferredAttachments}
+        />
+      </FormSection>
+
+      {/* === Section 5: Soil Temperature (200-year only) === */}
       {/* Hidden under 1000-year durability — soil temperature feeds only the
           Woolf 2021 200-year durable fraction (ADR 0021). */}
       {!hideSoilTemperature && (

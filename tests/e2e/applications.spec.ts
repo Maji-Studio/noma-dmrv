@@ -175,8 +175,15 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     ).toBeChecked();
     await expect(
       page.getByRole("radio", { name: /Visual evidence/ }),
-    ).toHaveAttribute("aria-disabled", "true");
-    await expect(page.getByText("Available later")).toBeVisible();
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("Supporting evidence", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.locator(
+        'input[type="file"][accept="image/*,application/pdf,.pdf"]',
+      ),
+    ).toHaveCount(1);
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
     await waitForSideSheetClose(page);

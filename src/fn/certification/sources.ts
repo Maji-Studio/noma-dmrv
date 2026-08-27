@@ -67,6 +67,7 @@ import {
   classifyRemovalSourceCandidate,
   type ClassifiedRemovalSource,
 } from "@/lib/certification/removal-source-bindings";
+import { biocharApplicationIdForSource } from "@/lib/certification/application-evidence";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Candidate-document discovery
@@ -92,7 +93,8 @@ export interface CandidateLineageEntity {
 export interface CandidateDocument {
   document: DocumentRow;
   lineageEntity: CandidateLineageEntity;
-  binding: ClassifiedRemovalSource;
+  binding: ClassifiedRemovalSource | null;
+  biocharApplicationId?: string | null;
   mirror: {
     externalDocumentId: string;
     isPublic: boolean;
@@ -236,7 +238,11 @@ export async function loadCandidateDocumentsForRemovalForUser(
         lineage: entity,
         removalId,
       });
-      if (!binding) return [];
+      const biocharApplicationId = biocharApplicationIdForSource(
+        entity,
+        doc.documentType,
+      );
+      if (!binding && !biocharApplicationId) return [];
       const mirror = mirrorByDocumentId.get(doc.id);
       const meta = (mirror?.metadata ?? null) as
         | (DocumentUploadMetadata & { [k: string]: unknown })
@@ -245,6 +251,7 @@ export async function loadCandidateDocumentsForRemovalForUser(
         document: doc,
         lineageEntity: entity,
         binding,
+        biocharApplicationId,
         mirror: mirror
           ? {
               externalDocumentId: mirror.externalDocumentId,
@@ -606,9 +613,9 @@ export async function mirrorDocumentToSourceForUser(
                 document,
                 supplierRefId,
                 isPublic: policyIsPublic,
-                sourceDescription: buildRemovalSourceDescription(
-                  candidate.binding,
-                ),
+                sourceDescription: candidate.binding
+                  ? buildRemovalSourceDescription(candidate.binding)
+                  : `Supporting evidence for ${candidate.lineageEntity.entityLabel}.`,
               }),
             ),
         );
@@ -838,7 +845,8 @@ export async function collectCandidateDocumentIdsForRemoval(
 
 export interface CandidateSourceDocument {
   documentId: string;
-  binding: ClassifiedRemovalSource;
+  binding: ClassifiedRemovalSource | null;
+  biocharApplicationId?: string | null;
 }
 
 interface SourceCandidateLineage {
@@ -919,8 +927,16 @@ export async function collectCandidateSourceDocumentsForRemoval(
         lineage,
         removalId: args.removalId,
       });
-      if (binding && !candidates.has(document.id)) {
-        candidates.set(document.id, { documentId: document.id, binding });
+      const biocharApplicationId = biocharApplicationIdForSource(
+        lineage,
+        document.documentType,
+      );
+      if ((binding || biocharApplicationId) && !candidates.has(document.id)) {
+        candidates.set(document.id, {
+          documentId: document.id,
+          binding,
+          biocharApplicationId,
+        });
       }
     }
   }

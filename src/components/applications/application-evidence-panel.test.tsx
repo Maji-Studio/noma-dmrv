@@ -21,7 +21,22 @@ vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
 }));
 vi.mock("@/components/forms", () => ({
-  FormFileUpload: () => <div data-testid="file-upload" />,
+  FormFileUpload: ({
+    accept,
+    documentType,
+    resolveDocumentType,
+  }: {
+    accept?: string;
+    documentType?: string;
+    resolveDocumentType?: (file: File) => string;
+  }) => (
+    <div
+      data-testid="file-upload"
+      data-accept={accept}
+      data-document-type={documentType}
+      data-resolves-document-type={!!resolveDocumentType}
+    />
+  ),
   ServerError: ({ message }: { message: string }) => <p>{message}</p>,
 }));
 vi.mock("@/components/forms/failed-deferred-attachments", () => ({
@@ -40,6 +55,7 @@ vi.mock("@/components/ui/tooltip", () => ({
 }));
 
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
+import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
 
 const APPLICATION_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -54,6 +70,20 @@ function boundaryDoc(logbookEvidenceType: string | null): DocumentRow {
     capturedAt: null,
     createdAt: new Date("2026-07-01T00:00:00.000Z"),
     metadata: logbookEvidenceType ? { logbookEvidenceType } : {},
+  } as unknown as DocumentRow;
+}
+
+function imageDoc(): DocumentRow {
+  return {
+    id: "image-doc-1",
+    fileName: "application.jpg",
+    fileSizeBytes: 2048,
+    fileUrl: "/files/image-doc-1",
+    documentType: "photo",
+    uploadStatus: "uploaded",
+    capturedAt: new Date("2026-07-01T00:00:00.000Z"),
+    createdAt: new Date("2026-07-01T00:00:00.000Z"),
+    metadata: { geotagStatus: "present" },
   } as unknown as DocumentRow;
 }
 
@@ -80,6 +110,25 @@ function renderPanel(
   );
 }
 
+function renderSupportingEvidencePanel(
+  docs: DocumentRow[],
+  readOnly = false,
+): string {
+  documentsForEntity.mockReturnValue({
+    data: docs,
+    isLoading: false,
+    error: null,
+  });
+  return renderToStaticMarkup(
+    <QueryClientProvider client={new QueryClient()}>
+      <ApplicationSupportingEvidencePanel
+        applicationId={APPLICATION_ID}
+        readOnly={readOnly}
+      />
+    </QueryClientProvider>,
+  );
+}
+
 describe("ApplicationEvidencePanel", () => {
   it("shows customer location first and selects it by default", () => {
     const html = renderPanel([]);
@@ -87,9 +136,7 @@ describe("ApplicationEvidencePanel", () => {
     expect(html.indexOf("Customer location")).toBeLessThan(
       html.indexOf("GIS reference"),
     );
-    expect(html.indexOf("GIS reference")).toBeLessThan(
-      html.indexOf("Visual evidence"),
-    );
+    expect(html).not.toContain("Visual evidence");
     const selectedCard = html.match(
       /<button[^>]*role="radio"[^>]*aria-checked="true"[^>]*>[\s\S]*?<\/button>/,
     )?.[0];
@@ -117,23 +164,41 @@ describe("ApplicationEvidencePanel", () => {
     expect(html).not.toContain("Add GIS reference");
   });
 
-  it("keeps visual evidence visible but locked", () => {
-    const html = renderPanel([]);
-
-    expect(html).toContain("Visual evidence");
-    expect(html).toContain("Available later");
-    expect(html).toMatch(
-      /role="radio"[^>]*aria-checked="false"[^>]*aria-disabled="true"/,
+  it("does not mix supporting files into the evidence method", () => {
+    const html = renderPanel(
+      [boundaryDoc("affidavit"), imageDoc()],
+      "boundary",
     );
-  });
 
-  it("keeps mass records without showing the obsolete type taxonomy", () => {
-    const html = renderPanel([boundaryDoc("affidavit")], "boundary");
-
-    expect(html).toContain("Application mass records");
-    expect(html).toContain("logbook.pdf");
+    expect(html).not.toContain("Application mass records");
+    expect(html).not.toContain("logbook.pdf");
+    expect(html).not.toContain("application.jpg");
     expect(html).not.toContain("Record type for the next upload");
     expect(html).not.toContain("Affidavit");
     expect(html).not.toContain("Classify logbook");
+  });
+});
+
+describe("ApplicationSupportingEvidencePanel", () => {
+  it("uses one upload field for images and application documents", () => {
+    const html = renderSupportingEvidencePanel([boundaryDoc(null), imageDoc()]);
+
+    expect(html).toContain("application.jpg");
+    expect(html).toContain("logbook.pdf");
+    expect(html.match(/data-testid="file-upload"/g)).toHaveLength(1);
+    expect(html).toContain(
+      'data-accept="image/*,application/pdf,.pdf"',
+    );
+    expect(html).toContain('data-resolves-document-type="true"');
+    expect(html).toContain("Images and PDFs");
+    expect(html).not.toContain("They are sent to Isometric as Sources");
+    expect(html).not.toContain("No supporting evidence attached yet.");
+  });
+
+  it("shows supporting evidence without uploaders in read mode", () => {
+    const html = renderSupportingEvidencePanel([], true);
+
+    expect(html).toContain("No supporting evidence attached yet.");
+    expect(html).not.toContain('data-testid="file-upload"');
   });
 });

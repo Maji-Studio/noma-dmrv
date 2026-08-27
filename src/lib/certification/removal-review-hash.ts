@@ -74,9 +74,19 @@ function stripSourceIds(
       );
       continue;
     }
-    out[key] = value;
+    out[key] = stripNestedSourceIds(value);
   }
   return out;
+}
+
+function stripNestedSourceIds(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripNestedSourceIds);
+  if (value == null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => key !== SOURCE_ID_KEY)
+      .map(([key, nestedValue]) => [key, stripNestedSourceIds(nestedValue)]),
+  );
 }
 
 function isGeneratedLedgerBinding(value: unknown): boolean {

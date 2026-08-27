@@ -30,6 +30,7 @@ import {
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { ApplicationForm } from "./application-form";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
+import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
 import { ApplicationStorageLocationSync } from "./application-storage-location-sync";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import {
@@ -736,7 +737,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ],
           },
           {
-            title: "Evidence",
+            title: "Evidence method",
             fields: [
               {
                 label: "Evidence method",
@@ -750,6 +751,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 applicationId={sideSheetEntity.id}
                 mode={(sideSheetEntity.evidenceMethod ?? "location") as ApplicationEvidenceMethod}
                 boundary={sideSheetEntity.gisBoundary ?? null}
+                readOnly
+              />
+            ),
+          },
+          {
+            title: "Supporting evidence",
+            fields: [],
+            content: (
+              <ApplicationSupportingEvidencePanel
+                applicationId={sideSheetEntity.id}
                 readOnly
               />
             ),

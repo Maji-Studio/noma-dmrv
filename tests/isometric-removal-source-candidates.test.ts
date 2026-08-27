@@ -98,7 +98,7 @@ describe("Removal source candidate discovery", () => {
     );
   });
 
-  it("returns only the three code-owned role candidates", async () => {
+  it("includes application evidence without inventing Datapoint targets", async () => {
     const candidates = await collectCandidateSourceDocumentsForRemoval(
       orgCtx,
       { lineages },
@@ -106,12 +106,14 @@ describe("Removal source candidate discovery", () => {
 
     expect(candidates.map((candidate) => candidate.documentId)).toEqual([
       "affidavit-document",
+      "application-gis-boundary",
+      "application-photo",
       "delivery-bol",
       "feedstock-bol",
       "inventory-document",
       "weighbridge-document",
     ]);
-    expect(candidates.map((candidate) => candidate.binding.nomaRole).sort()).toEqual([
+    expect(candidates.flatMap((candidate) => candidate.binding?.nomaRole ?? []).sort()).toEqual([
       "delivery_bill_of_lading",
       "feedstock_bill_of_lading",
       "inventory",
@@ -119,10 +121,21 @@ describe("Removal source candidate discovery", () => {
       "inventory",
     ]);
     expect(
+      candidates
+        .filter((candidate) => candidate.biocharApplicationId)
+        .map((candidate) => candidate.documentId),
+    ).toEqual([
+      "affidavit-document",
+      "application-gis-boundary",
+      "application-photo",
+      "inventory-document",
+      "weighbridge-document",
+    ]);
+    expect(
       candidates.find(
-        (candidate) => candidate.documentId === "application-gis-boundary",
-      ),
-    ).toBeUndefined();
+        (candidate) => candidate.documentId === "application-photo",
+      )?.binding,
+    ).toBeNull();
     expect(documentsDA.listDocumentsForEntity).not.toHaveBeenCalledWith(
       orgCtx,
       "production_run",
@@ -222,7 +235,7 @@ describe("Removal source candidate discovery", () => {
       "durability-ledger",
       "transport-ledger",
     ]);
-    expect(candidates.map((candidate) => candidate.binding.nomaRole)).toEqual([
+    expect(candidates.flatMap((candidate) => candidate.binding?.nomaRole ?? [])).toEqual([
       "durability_evidence_ledger",
       "transport_evidence_ledger",
     ]);

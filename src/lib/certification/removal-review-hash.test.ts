@@ -40,6 +40,24 @@ describe("reviewPayloadHash", () => {
     );
   });
 
+  it("is stable when Biochar Application Source IDs materialize", () => {
+    const pending = {
+      ...pendingPayload(),
+      biocharApplicationIntents: [
+        { applicationId: "app-1", sourceIds: [] },
+      ],
+    };
+    const materialized = {
+      ...pending,
+      biocharApplicationIntents: [
+        { applicationId: "app-1", sourceIds: ["src-photo"] },
+      ],
+    };
+
+    expect(reviewPayloadHash(materialized)).toBe(reviewPayloadHash(pending));
+    expect(payloadHash(materialized)).not.toBe(payloadHash(pending));
+  });
+
   it("differs from the full payload hash, which must still track Source IDs", () => {
     expect(payloadHash(materializedPayload())).not.toBe(
       payloadHash(pendingPayload()),
