@@ -21,6 +21,16 @@ import { assertResumedSnapshotRevisionCurrent } from "./production-claim-gate";
 import { assertRemovalSnapshotConfigurationCurrent } from "./removal-snapshot-readers";
 import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE } from "./shared";
 
+export function assertDefaultRemovalTemplateConfigured(
+  templateId: string | null,
+): asserts templateId is string {
+  if (!templateId) {
+    throw new SafeError(
+      "Set a default Removal template in facility settings before retrying this Removal.",
+    );
+  }
+}
+
 export async function persistRemovalReportingWindow(
   orgCtx: OrgContext,
   removalId: string,

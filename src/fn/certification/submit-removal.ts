@@ -58,6 +58,7 @@ import {
 import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
 import {
+  assertDefaultRemovalTemplateConfigured,
   finalizeRemovalSubmission,
   removalReportingWindowNeedsRecovery,
   recoverSubmittedRemoval,
@@ -226,6 +227,7 @@ async function submitRemovalCore(
     })
   ) {
     assertProductionConfirmed(confirmProduction);
+    assertDefaultRemovalTemplateConfigured(ctx.mapping.defaultRemovalTemplateId);
     attempt.externalMutation = "confirmed";
     const client = await getIsometricClientForOrg(orgCtx.organizationId);
     onProgress?.({ step: "removal.checking_data", state: "complete" });
@@ -238,7 +240,7 @@ async function submitRemovalCore(
       row: ctx.latestSubmission,
       externalRemovalId: ctx.latestSubmission.externalId,
       externalProjectId: ctx.mapping.externalProjectId,
-      templateId: ctx.mapping.defaultRemovalTemplateId ?? "",
+      templateId: ctx.mapping.defaultRemovalTemplateId,
       reportingWindow: readRemovalReportingWindow(ctx.latestSubmission),
       biocharApplicationIntents: readRemovalBiocharApplicationIntents(
         ctx.latestSubmission,

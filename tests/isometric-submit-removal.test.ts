@@ -709,6 +709,43 @@ describe("submitRemoval — happy path", () => {
     );
   });
 
+  it("names a missing default template before recovering a submitted Removal", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+    await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+    });
+
+    setStoredRemovalReportingWindow("2025-01-01", "2025-04-05");
+    vi.mocked(removalsDA.updateRemovalDates).mockClear();
+    const recoveryContext = makeContext();
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...recoveryContext,
+      mapping: {
+        ...recoveryContext.mapping!,
+        defaultRemovalTemplateId: null,
+      },
+      defaultTemplate: null,
+    });
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/set a default Removal template in facility settings/i);
+    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
+    expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
+  });
+
   it("marks absent datapoint and durability work as skipped when reusing a Removal", async () => {
     const fixedOnlyTemplate = {
       ...makeContext().defaultTemplate!,
