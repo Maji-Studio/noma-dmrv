@@ -1,20 +1,13 @@
 import type { OrgContext } from "@/lib/auth/server";
-import {
-  markSubmissionSubmitted,
-  type CertificationSubmissionRow,
-} from "@/data-access/certification";
+import type { CertificationSubmissionRow } from "@/data-access/certification";
 import {
   claimSubmissionDraft,
   type ClaimBlockedReason,
   type MappingClaimGuard,
 } from "@/data-access/certification-submissions";
 import { env } from "@/config/env";
-import {
-  markRemovalSubmissionExternalMutationPossible,
-  updateRemovalDates,
-} from "@/data-access/certifier-removals";
+import { markRemovalSubmissionExternalMutationPossible } from "@/data-access/certifier-removals";
 import { reserveProductionEmissionsClaims } from "@/data-access/production-claim-reservations";
-import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
 import {
@@ -56,6 +49,7 @@ import {
   readRemovalBiocharApplicationIntents,
   readRemovalFixedInputs,
   readRemovalSourceBindingPlan,
+  readRemovalSupersedePreviousId,
   readRemovalTransport,
   type ResolvedFixedInput,
   type RemovalTransportSnapshot,
@@ -63,6 +57,11 @@ import {
 import { ensureRemovalBiocharApplications } from "./biochar-applications";
 import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
+import {
+  finalizeRemovalSubmission,
+  persistRemovalReportingWindow,
+  recordRemovalConfirmedIdentity,
+} from "./removal-submission-finalization";
 import {
   assertEntityReadinessGapsResolved,
   buildRemovalSubmissionBuild,
@@ -495,13 +494,14 @@ async function submitRemovalCore(
       );
       return finalCompilation.transportPlan;
     },
-    buildSnapshot: ({ inputs, nextVersion }) =>
+    buildSnapshot: ({ inputs, nextVersion, supersedePreviousId }) =>
       materializeRemovalSubmissionSnapshot({
         compiled: inputs,
         template: defaultTemplate,
         externalProjectId,
         removalId,
         nextVersion,
+        supersedePreviousId,
       }),
   });
 
@@ -530,6 +530,11 @@ async function submitRemovalCore(
           : "skipped",
       });
       onProgress?.({ step: "removal.creating", state: "reused" });
+      await persistRemovalReportingWindow(
+        orgCtx,
+        removalId,
+        readRemovalReportingWindow(ctx.latestSubmission),
+      );
       await ensureRemovalBiocharApplications({
         orgCtx,
         removalId,
@@ -538,11 +543,6 @@ async function submitRemovalCore(
         intents: readRemovalBiocharApplicationIntents(ctx.latestSubmission),
         log,
       });
-      await persistRemovalReportingWindow(
-        orgCtx,
-        removalId,
-        readRemovalReportingWindow(ctx.latestSubmission),
-      );
       onProgress?.({
         step: "removal.verifying_evidence",
         state: "active",
@@ -638,7 +638,9 @@ async function submitRemovalCore(
           biocharApplicationIntents,
           sourceBindingPlan,
           claimBatchIds: productionClaimBatchIds,
-          supersedePreviousId: claimed.supersedePreviousId,
+          supersedePreviousId: claimed.resumed
+            ? readRemovalSupersedePreviousId(claimed.row)
+            : claimed.supersedePreviousId,
           resumed: claimed.resumed,
           expectedLockedAt,
           attempt,
@@ -881,26 +883,38 @@ async function runRemovalSubmission({
     supplierRefId: transport.removalSupplierRef,
     omittedTemplateComponentIds: transport.omittedTemplateComponentIds,
   });
-  const { externalId: externalRemovalId } = await performRegistryCreate({
-    orgCtx,
-    entityType: REMOVAL_ENTITY_TYPE,
-    entityId: removalId,
-    submissionRowId: row.id,
-    expectedLockedAt,
-    deferRejectionToAttempt: true,
-    operation: "removal:create",
-    requestPayload: removalBody,
-    supplierRefId: transport.removalSupplierRef,
-    resumed,
-    create: () => createGhgEntry(client, removalBody).then((r) => r.id),
-    reconcile: () =>
-      reconcileRemoval(client, { supplierRefId: transport.removalSupplierRef }).then(
-        supplierRefLookup,
-      ),
-    failureMessagePrefix: "Removal POST failed",
-    onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
-    log,
-  });
+  const externalRemovalId =
+    row.externalId ??
+    (
+      await performRegistryCreate({
+        orgCtx,
+        entityType: REMOVAL_ENTITY_TYPE,
+        entityId: removalId,
+        submissionRowId: row.id,
+        expectedLockedAt,
+        deferRejectionToAttempt: true,
+        operation: "removal:create",
+        requestPayload: removalBody,
+        supplierRefId: transport.removalSupplierRef,
+        resumed,
+        create: () => createGhgEntry(client, removalBody).then((r) => r.id),
+        reconcile: () =>
+          reconcileRemoval(client, {
+            supplierRefId: transport.removalSupplierRef,
+          }).then(supplierRefLookup),
+        failureMessagePrefix: "Removal POST failed",
+        onExternalMutation: (state) =>
+          recordRemovalExternalMutation(attempt, state),
+        onConfirmed: (externalId) =>
+          recordRemovalConfirmedIdentity({
+            orgCtx,
+            rowId: row.id,
+            externalId,
+            expectedLockedAt,
+          }),
+        log,
+      })
+    ).externalId;
   await ensureRemovalBiocharApplications({
     orgCtx,
     removalId,
@@ -950,13 +964,14 @@ async function runRemovalSubmission({
   // Location) has reconciled and the local reporting window exists. Any
   // earlier failure keeps this row as an interrupted draft so the next submit
   // can safely reuse the already-created registry identities.
-  await markSubmissionSubmitted(orgCtx, row.id, {
+  await finalizeRemovalSubmission({
+    orgCtx,
+    row,
     externalId: externalRemovalId,
+    expectedLockedAt,
     supersedePreviousId,
-    productionEmissionsClaim: {
-      removalId,
-      creditBatchIds: claimBatchIds,
-    },
+    removalId,
+    claimBatchIds,
   });
   onProgress?.({
     step: "removal.verifying_evidence",
@@ -965,15 +980,4 @@ async function runRemovalSubmission({
   onProgress?.({ step: "removal.complete", state: "complete" });
 
   return { removalId, externalId: externalRemovalId, version: row.version };
-}
-
-async function persistRemovalReportingWindow(
-  orgCtx: OrgContext,
-  removalId: string,
-  reportingWindow: { startedOn: Date; completedOn: Date },
-): Promise<void> {
-  await updateRemovalDates(orgCtx, removalId, {
-    startedOn: formatUtcDate(reportingWindow.startedOn),
-    completedOn: formatUtcDate(reportingWindow.completedOn),
-  });
 }

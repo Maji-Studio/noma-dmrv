@@ -56,3 +56,29 @@ describe("overlayLiveRemoteStatus", () => {
     ).toBe("DRAFT");
   });
 });
+
+describe("deriveSubmissionStatus", () => {
+  it("surfaces a submitted Removal with no reporting window as interrupted", () => {
+    const derived = deriveSubmissionStatus(
+      row(null),
+      false,
+      "removal",
+      { startedOn: null, completedOn: null },
+    );
+    expect(derived).toMatchObject({
+      kind: "interrupted",
+      isActionable: true,
+      isTerminal: false,
+    });
+  });
+
+  it("keeps a submitted Removal terminal when both dates exist", () => {
+    const derived = deriveSubmissionStatus(
+      row(null),
+      false,
+      "removal",
+      { startedOn: "2026-01-01", completedOn: "2026-04-05" },
+    );
+    expect(derived.kind).toBe("submitted");
+  });
+});

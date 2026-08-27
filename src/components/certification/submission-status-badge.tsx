@@ -24,13 +24,20 @@ interface SubmissionStatusBadgeProps {
    * verifier overlay. Defaults to "removal" for backward compatibility.
    */
   artifact?: CertificationArtifact;
+  reportingWindow?: { startedOn?: string | null; completedOn?: string | null };
 }
 
 export function SubmissionStatusBadge({
   latest,
   isLockedInFlight,
   artifact = "removal",
+  reportingWindow,
 }: SubmissionStatusBadgeProps) {
-  const derived = deriveSubmissionStatus(latest, isLockedInFlight, artifact);
+  const derived = deriveSubmissionStatus(
+    latest,
+    isLockedInFlight,
+    artifact,
+    reportingWindow,
+  );
   return <StatusBadge status={derived.value} label={derived.label} />;
 }

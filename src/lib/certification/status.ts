@@ -172,6 +172,21 @@ export function isRemovalSubmissionInterrupted(metadata: unknown): boolean {
   return isSubmissionAttemptInterrupted(metadata);
 }
 
+export function isRemovalSubmissionInterruptedForReportingWindow(args: {
+  local: LocalSubmissionStatus | null;
+  metadata: unknown;
+  startedOn?: string | null;
+  completedOn?: string | null;
+  reportingWindowKnown?: boolean;
+}): boolean {
+  return (
+    isRemovalSubmissionInterrupted(args.metadata) ||
+    (args.reportingWindowKnown !== false &&
+      args.local === "submitted" &&
+      (!args.startedOn || !args.completedOn))
+  );
+}
+
 export interface RemovalWorkflowStatus {
   /** The single operator-facing state used by list and detail surfaces. */
   kind: RemovalWorkflowStatusKind;

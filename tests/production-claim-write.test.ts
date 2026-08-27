@@ -192,6 +192,39 @@ async function readReservation(batchId: string): Promise<string | null> {
 beforeAll(() => ensureTestOrg());
 
 describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)", () => {
+  it("refuses finalization after the exact draft lock has changed", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    const staleLock = new Date("2026-08-27T10:00:00.000Z");
+    const successorLock = new Date("2026-08-27T10:01:00.000Z");
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt: successorLock })
+      .where(eq(certificationSubmissions.id, submissionId));
+
+    await expect(
+      markSubmissionSubmitted(
+        makeTestOrgContext(TEST_USER_ID),
+        submissionId,
+        {
+          externalId: "ext_stale_owner",
+          expectedLockedAt: staleLock,
+        },
+      ),
+    ).rejects.toThrow(/submission changed before it could be finalized/i);
+
+    const [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        externalId: certificationSubmissions.externalId,
+        lockedAt: certificationSubmissions.lockedAt,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toMatchObject({ status: "draft", externalId: null });
+    expect(row.lockedAt?.getTime()).toBe(successorLock.getTime());
+  });
+
   it("stamps an unclaimed batch, is idempotent on self re-claim, and fails loudly on a foreign claim", async () => {
     const { batchId, removalAId, removalBId } = await createFixture();
 

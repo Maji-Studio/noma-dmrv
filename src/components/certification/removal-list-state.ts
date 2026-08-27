@@ -1,7 +1,7 @@
 import type { RemovalHubEntry } from "@/fn/certification/certify-context";
 import type { RemovalPreflightSummary } from "@/fn/certification/overview";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
-import { isRemovalSubmissionInterrupted } from "@/lib/certification/status";
+import { isRemovalSubmissionInterruptedForReportingWindow } from "@/lib/certification/status";
 
 export type RemovalEnrichmentStatus =
   | "loading"
@@ -66,8 +66,12 @@ export function buildRemovalListRows(
           : false),
       submissionInterrupted:
         lifecycleData?.submissionInterrupted ??
-        (isRemovalSubmissionInterrupted(identity.latestSubmission?.metadata) ||
-          (local === "submitted" && (!startedOn || !completedOn))),
+        isRemovalSubmissionInterruptedForReportingWindow({
+          local,
+          metadata: identity.latestSubmission?.metadata,
+          startedOn,
+          completedOn,
+        }),
       readiness: lifecycleData?.readiness ?? null,
       evidenceHealth: data?.evidenceHealth ?? null,
       submissionWarnings: data?.submissionWarnings ?? [],

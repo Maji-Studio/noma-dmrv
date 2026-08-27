@@ -16,7 +16,7 @@ import {
 } from "@/lib/certification/submission-metadata";
 import {
   deriveRemovalStatus,
-  isRemovalSubmissionInterrupted,
+  isRemovalSubmissionInterruptedForReportingWindow,
   deriveStatementStatus,
   type DerivedStatus,
   type LocalSubmissionStatus,
@@ -87,6 +87,7 @@ export function deriveSubmissionStatus(
   latest: CertificationSubmissionRow | null,
   isLockedInFlight: boolean,
   artifact: CertificationArtifact,
+  reportingWindow?: { startedOn?: string | null; completedOn?: string | null },
 ): DerivedStatus {
   const local = (latest?.status ?? null) as LocalSubmissionStatus | null;
   if (artifact === "ghgStatement") {
@@ -99,6 +100,12 @@ export function deriveSubmissionStatus(
   return deriveRemovalStatus({
     local,
     lockInFlight: isLockedInFlight,
-    submissionInterrupted: isRemovalSubmissionInterrupted(latest?.metadata),
+    submissionInterrupted: isRemovalSubmissionInterruptedForReportingWindow({
+      local,
+      metadata: latest?.metadata,
+      startedOn: reportingWindow?.startedOn,
+      completedOn: reportingWindow?.completedOn,
+      reportingWindowKnown: reportingWindow !== undefined,
+    }),
   });
 }

@@ -160,6 +160,7 @@ export interface CompiledRemovalSubmission {
 export interface MaterializedRemovalSubmissionSnapshot {
   payloadSnapshot: {
     __mappingRevision: string;
+    supersedePreviousId: string | null;
     semantic: Record<string, unknown>;
     memberCreditBatchIds: string[];
     sourceBindingPlan: RemovalSourceBindingPlanEntry[];
@@ -492,6 +493,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
   externalProjectId: string;
   removalId: string;
   nextVersion: number;
+  supersedePreviousId: string | null;
 }): MaterializedRemovalSubmissionSnapshot {
   const {
     compiled,
@@ -499,6 +501,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
     externalProjectId,
     removalId,
     nextVersion,
+    supersedePreviousId,
   } = args;
   const removalSupplierRef = buildRemovalSupplierRef({
     removalId,
@@ -572,6 +575,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
   return {
     payloadSnapshot: {
       __mappingRevision: MAPPING_REVISION,
+      supersedePreviousId,
       semantic: compiled.semanticPayload,
       memberCreditBatchIds: compiled.memberCreditBatchIds,
       sourceBindingPlan: compiled.sourceBindingPlan,

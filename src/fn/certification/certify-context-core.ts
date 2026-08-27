@@ -119,6 +119,8 @@ export interface RemovalCertifyContext {
   // Null when the credit batch is not yet grouped into a removal (a 1:1
   // removal is created lazily on first submit).
   removalId: string | null;
+  startedOn?: string | null;
+  completedOn?: string | null;
   mapping: CertifierProjectRow | null;
   project: IsometricProject | null;
   defaultTemplate: IsometricGhgEntryTemplate | null;
@@ -622,6 +624,8 @@ export async function buildRemovalContext(
     return {
       facilityId: scope.facilityId,
       removalId: scope.removalId,
+      startedOn: scope.removal?.startedOn ?? null,
+      completedOn: scope.removal?.completedOn ?? null,
       ...facilityFacts,
       memberBatches: memberBatchesWithSubmissionGates,
       feedstockTypeMappingGaps,
@@ -714,6 +718,8 @@ export async function buildRemovalContext(
   return {
     facilityId: scope.facilityId,
     removalId: scope.removalId,
+    startedOn: scope.removal?.startedOn ?? null,
+    completedOn: scope.removal?.completedOn ?? null,
     ...facilityFacts,
     requiredTransportCategories,
     memberBatches: memberBatchesWithSubmissionGates,
@@ -768,6 +774,8 @@ function projectUiContext(
     facilityId: ctx.facilityId,
     hasOrgCredentials: ctx.hasOrgCredentials,
     removalId: ctx.removalId,
+    startedOn: ctx.startedOn ?? null,
+    completedOn: ctx.completedOn ?? null,
     mapping: ctx.mapping,
     project: ctx.project,
     defaultTemplate: ctx.defaultTemplate,

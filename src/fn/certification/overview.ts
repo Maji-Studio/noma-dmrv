@@ -31,7 +31,7 @@ import {
 } from "@/lib/certification/removal-evidence-health";
 import { SafeError } from "@/lib/errors";
 import {
-  isRemovalSubmissionInterrupted,
+  isRemovalSubmissionInterruptedForReportingWindow,
   type DerivedStatus,
   type LocalSubmissionStatus,
 } from "@/lib/certification/status";
@@ -137,9 +137,12 @@ async function buildRemovalPreflightSummary(
   const startedOn = scope.removal?.startedOn ?? null;
   const completedOn = scope.removal?.completedOn ?? null;
   const submissionInterrupted =
-    isRemovalSubmissionInterrupted(ctx.latestSubmission?.metadata) ||
-    (ctx.latestSubmission?.status === "submitted" &&
-      (!startedOn || !completedOn));
+    isRemovalSubmissionInterruptedForReportingWindow({
+      local: ctx.latestSubmission?.status ?? null,
+      metadata: ctx.latestSubmission?.metadata,
+      startedOn,
+      completedOn,
+    });
   return {
     removalId,
     startedOn,
@@ -376,6 +379,10 @@ export async function loadCreditBatchHealthSummaries(
                 ? isLockedInFlight(removalSubmission)
                 : false,
               "removal",
+              {
+                startedOn: batchRow?.removalStartedOn,
+                completedOn: batchRow?.removalCompletedOn,
+              },
             )
           : null,
         ghgStatementId,

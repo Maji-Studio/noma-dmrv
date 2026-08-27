@@ -31,6 +31,18 @@ export interface RemovalTransportSnapshot {
   omittedTemplateComponentIds: string[];
 }
 
+export function readRemovalSupersedePreviousId(
+  row: CertificationSubmissionRow,
+): string | null {
+  const snapshot = row.payloadSnapshot as {
+    supersedePreviousId?: unknown;
+  } | null;
+  const parsed = z.string().min(1).nullable().optional().safeParse(
+    snapshot?.supersedePreviousId,
+  );
+  return parsed.success ? (parsed.data ?? null) : null;
+}
+
 const datapointTransportSchema = z.object({
   rtcId: z.string().min(1),
   inputKey: z.string().min(1),

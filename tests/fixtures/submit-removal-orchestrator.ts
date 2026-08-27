@@ -770,7 +770,10 @@ beforeEach(() => {
   vi.mocked(ledger.markSubmissionSubmitted).mockImplementation(
     async (_userId, id, args) => {
       const row = storedRows.find((r) => r.id === id);
-      if (row) {
+      const ownsLock =
+        !args.expectedLockedAt ||
+        row?.lockedAt?.getTime() === args.expectedLockedAt.getTime();
+      if (row?.status === "draft" && ownsLock) {
         row.status = "submitted";
         row.externalId = args.externalId;
         row.submittedAt = new Date();
@@ -780,6 +783,8 @@ beforeEach(() => {
             ([key]) => !INTERRUPTION_METADATA_KEYS.has(key),
           ),
         );
+      } else if (args.expectedLockedAt) {
+        throw new Error("The submission changed before it could be finalized.");
       }
       if (args.supersedePreviousId) {
         const prev = storedRows.find((r) => r.id === args.supersedePreviousId);
@@ -790,6 +795,19 @@ beforeEach(() => {
       }
     },
   );
+  vi.mocked(
+    ledgerClaim.recordConfirmedSubmissionIdentity,
+  ).mockImplementation(async (_ctx, id, args) => {
+    const row = storedRows.find((candidate) => candidate.id === id);
+    if (
+      row?.status !== "draft" ||
+      row.lockedAt?.getTime() !== args.expectedLockedAt.getTime()
+    ) {
+      return false;
+    }
+    row.externalId = args.externalId;
+    return true;
+  });
   vi.mocked(ledger.markSubmissionRejected).mockImplementation(
     async (_userId, id, args) => {
       const row = storedRows.find((r) => r.id === id);
