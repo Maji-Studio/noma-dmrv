@@ -140,6 +140,21 @@ uses it.
   MCP `submit_feedback`), or raise `DEFAULT_LOOKUP_MAX_PAGES` when a project or
   credential/account approaches its respective bound.
 
+### Biochar Application GHG Entry association timing (`isometric/biochar-application-ghg-entry-association`, opened 2026-08-27)
+
+- **Observed — needs-registry-check:** sandbox Biochar Application
+  `bse_1M11R23Y2SBXKCE9` was fully persisted with both provider-managed
+  `ghg_entry_id` and `removal_id` null. The create request exposes no GHG Entry
+  field, so `assertRemoteClaimableForCurrentRemoval`
+  (`src/fn/certification/biochar-applications.ts`) accepts both-null readback,
+  records the null observations, and still rejects any present association to a
+  different GHG Entry.
+- **Still open — needs-registry-check:** confirm whether and when Isometric sets
+  either association, and whether inclusion in a GHG Entry is instead derived
+  from project and reporting-window facts. Close this only after `how_to` plus
+  the relevant OpenAPI/protocol check or a sandbox probe documents the
+  provider-owned lifecycle in [`docs/isometric/changes.md`](./isometric/changes.md).
+
 ### GHG Entry deprecated-alias cleanup after the September 2026 sunset (`isometric/ghg-entry-migration`, opened 2026-06-10)
 
 noma already calls only the `ghg_entry` route family. The remaining work begins

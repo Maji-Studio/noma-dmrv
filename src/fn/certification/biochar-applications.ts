@@ -35,11 +35,6 @@ import {
 } from "./registry-create";
 import { ensureStorageLocation } from "./storage-locations";
 
-const ASSOCIATION_READ_ATTEMPTS = 4;
-const ASSOCIATION_RETRY_DELAY_MS = 250;
-
-class PendingBiocharApplicationAssociationError extends SafeError {}
-
 export async function ensureRemovalBiocharApplications(args: {
   orgCtx: OrgContext;
   removalId: string;
@@ -201,6 +196,13 @@ async function ensureBiocharApplication(args: {
       const client = await getIsometricClientForOrg(
         args.orgCtx.organizationId,
       );
+      const remoteClaimContext = {
+        log: args.log,
+        applicationId: args.intent.applicationId,
+        creditBatchId: args.intent.creditBatchId,
+        removalId: args.removalId,
+        removalSubmissionId: args.submissionRow.id,
+      };
       let confirmedRemote: IsometricBiocharApplication | null = null;
       await performRegistryCreate({
         orgCtx: args.orgCtx,
@@ -216,13 +218,19 @@ async function ensureBiocharApplication(args: {
         // reconcile by stable reference before this non-idempotent create.
         resumed: true,
         create: async () => {
-          const created = await createBiocharApplication(client, body);
-          confirmedRemote = await waitForCurrentRemovalAssociation(
-            client,
-            created,
+          confirmedRemote = await createBiocharApplication(client, body);
+          const associationAbsent = assertRemoteClaimableForCurrentRemoval(
+            confirmedRemote,
             body,
             args.externalRemovalId,
           );
+          if (associationAbsent) {
+            logMissingRemoteAssociation(
+              confirmedRemote,
+              args.externalRemovalId,
+              remoteClaimContext,
+            );
+          }
           return confirmedRemote.id;
         },
         reconcile: async () => {
@@ -259,19 +267,19 @@ async function ensureBiocharApplication(args: {
           }
           if (remote) {
             try {
-              remote = await waitForCurrentRemovalAssociation(
-                client,
+              const associationAbsent = assertRemoteClaimableForCurrentRemoval(
                 remote,
                 body,
                 args.externalRemovalId,
               );
-            } catch (error) {
-              if (error instanceof PendingBiocharApplicationAssociationError) {
-                return {
-                  found: "refused" as const,
-                  message: error.message,
-                };
+              if (associationAbsent) {
+                logMissingRemoteAssociation(
+                  remote,
+                  args.externalRemovalId,
+                  remoteClaimContext,
+                );
               }
+            } catch (error) {
               await markBiocharApplicationDrift(
                 args.orgCtx,
                 registration!.id,
@@ -320,8 +328,10 @@ async function ensureBiocharApplication(args: {
             registrationId: registration!.id,
             expectedPayloadHash: bodyHash,
             externalApplicationId,
-            observedGhgEntryId: remote?.ghg_entry_id ?? null,
-            observedRemovalId: remote?.removal_id ?? null,
+            observedGhgEntryId:
+              remote?.ghg_entry_id ?? registration!.observedGhgEntryId ?? null,
+            observedRemovalId:
+              remote?.removal_id ?? registration!.observedRemovalId ?? null,
           });
         },
         failureMessagePrefix: `Biochar Application ${args.intent.applicationCode} could not be created`,
@@ -340,17 +350,17 @@ function assertRemotePayloadMatches(
   if (mismatch) throw new SafeError(mismatch);
 }
 
-function assertRemoteMatchesCurrentRemoval(
+function assertRemoteClaimableForCurrentRemoval(
   remote: IsometricBiocharApplication,
   body: Parameters<typeof biocharApplicationMismatchMessage>[1],
   externalRemovalId: string,
-): void {
+): boolean {
   assertRemotePayloadMatches(remote, body);
-  if (!remote.ghg_entry_id && !remote.removal_id) {
-    throw new PendingBiocharApplicationAssociationError(
-      `Isometric Biochar Application ${remote.id} is not linked to a GHG Entry yet. Retry after Isometric records the association.`,
-    );
-  }
+  // Isometric's create request has no GHG Entry field and the response schema
+  // makes both association fields nullable. Sandbox readback can therefore
+  // remain unassociated even after the Application is fully persisted. Treat
+  // a present association as an identity invariant, but do not turn an absent
+  // provider-managed association into an unrecoverable Removal submission.
   if (
     (remote.ghg_entry_id && remote.ghg_entry_id !== externalRemovalId) ||
     (remote.removal_id && remote.removal_id !== externalRemovalId)
@@ -359,33 +369,29 @@ function assertRemoteMatchesCurrentRemoval(
       `Isometric Biochar Application ${remote.id} is linked to a different GHG Entry. Resolve the registry identity before retrying.`,
     );
   }
+  return !remote.ghg_entry_id && !remote.removal_id;
 }
 
-async function waitForCurrentRemovalAssociation(
-  client: Awaited<ReturnType<typeof getIsometricClientForOrg>>,
-  initialRemote: IsometricBiocharApplication,
-  body: Parameters<typeof biocharApplicationMismatchMessage>[1],
+function logMissingRemoteAssociation(
+  remote: IsometricBiocharApplication,
   externalRemovalId: string,
-): Promise<IsometricBiocharApplication> {
-  let remote = initialRemote;
-  for (let attempt = 0; attempt < ASSOCIATION_READ_ATTEMPTS; attempt += 1) {
-    try {
-      assertRemoteMatchesCurrentRemoval(remote, body, externalRemovalId);
-      return remote;
-    } catch (error) {
-      if (!(error instanceof PendingBiocharApplicationAssociationError)) {
-        throw error;
-      }
-      if (attempt === ASSOCIATION_READ_ATTEMPTS - 1) throw error;
-    }
-    if (attempt > 0) await associationRetryDelay();
-    remote = await getBiocharApplication(client, remote.id);
-  }
-  throw new Error("Biochar Application association polling exhausted");
-}
-
-function associationRetryDelay(): Promise<void> {
-  return new Promise((resolve) =>
-    setTimeout(resolve, ASSOCIATION_RETRY_DELAY_MS),
+  context: {
+    log: Logger;
+    applicationId: string;
+    creditBatchId: string;
+    removalId: string;
+    removalSubmissionId: string;
+  },
+): void {
+  context.log.warn(
+    {
+      applicationId: context.applicationId,
+      creditBatchId: context.creditBatchId,
+      removalId: context.removalId,
+      submissionId: context.removalSubmissionId,
+      externalApplicationId: remote.id,
+      externalRemovalId,
+    },
+    "Biochar Application has no registry GHG Entry association; accepting the provider-null readback",
   );
 }
