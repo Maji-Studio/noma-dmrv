@@ -15,6 +15,8 @@ const state = vi.hoisted(() => ({
   submitData: null as { remoteStatus: string } | null,
   rootServerError: null as string | null,
   toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+  toastWarning: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -113,7 +115,8 @@ vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({
     info: vi.fn(),
     success: state.toastSuccess,
-    warning: vi.fn(),
+    error: state.toastError,
+    warning: state.toastWarning,
   }),
 }));
 
@@ -135,6 +138,23 @@ vi.mock("@/hooks/use-certification", () => ({
     mutateAsync: async (args: unknown) => {
       state.submitPending = true;
       try {
+        const onProgress = (
+          args as {
+            onProgress?: (update: {
+              step: string;
+              state: "complete";
+            }) => void;
+          }
+        ).onProgress;
+        for (const step of [
+          "ghg_statement.checking",
+          "ghg_statement.preparing_report",
+          "ghg_statement.sending",
+          "ghg_statement.confirming",
+          "ghg_statement.complete",
+        ]) {
+          onProgress?.({ step, state: "complete" });
+        }
         const result = await state.submit(args);
         state.submitData = result;
         state.submitSuccess = true;
@@ -195,10 +215,6 @@ vi.mock("./production-confirmation", () => ({
 vi.mock("./removal-batches-accordion", () => ({
   RemovalBatchesAccordion: () => <div>Removals</div>,
 }));
-vi.mock("./submission-progress", () => ({
-  SubmissionProgress: () => <div>Progress</div>,
-}));
-
 function findButton(renderer: ReactTestRenderer, label: string) {
   return renderer.root
     .findAllByType("button")
@@ -228,6 +244,8 @@ beforeEach(() => {
   state.submitData = null;
   state.rootServerError = null;
   state.toastSuccess.mockReset();
+  state.toastError.mockReset();
+  state.toastWarning.mockReset();
 });
 
 describe("GHG Statement route refreshes", () => {
@@ -415,6 +433,12 @@ describe("GHG Statement route refreshes", () => {
         ),
       ),
     ).toBe(true);
+    expect(
+      renderer!.root.findAllByType("span").some((span) =>
+        String(span.props.children).includes("Submission complete"),
+      ),
+    ).toBe(true);
+    expect(state.toastSuccess).toHaveBeenCalledOnce();
 
     await act(async () => findButton(renderer!, "Done")?.props.onClick());
     expect(onClose).toHaveBeenCalledOnce();
@@ -475,6 +499,19 @@ describe("GHG Statement route refreshes", () => {
       ).toBe(true);
       expect(findButton(renderer!, "Review submission")).toBeDefined();
       expect(findButton(renderer!, "Done")).toBeUndefined();
+      expect(
+        renderer!.root.findAllByType("span").some((span) =>
+          String(span.props.children).includes("Submission complete"),
+        ),
+      ).toBe(false);
+      expect(state.toastSuccess).not.toHaveBeenCalled();
+      if (remoteStatus === "FAILED_VERIFICATION") {
+        expect(state.toastError).toHaveBeenCalledOnce();
+        expect(state.toastWarning).not.toHaveBeenCalled();
+      } else {
+        expect(state.toastWarning).toHaveBeenCalledOnce();
+        expect(state.toastError).not.toHaveBeenCalled();
+      }
       await act(async () => renderer?.unmount());
     },
   );

@@ -158,7 +158,15 @@ function GhgStatementSubmitDialogContent({
         },
       });
       router.refresh();
-      toast.success(`GHG Statement: ${registryStatus(result.remoteStatus).label}.`);
+      const resultStatus = registryStatus(result.remoteStatus);
+      const resultMessage = `GHG Statement: ${resultStatus.label}.`;
+      if (resultStatus.kind === "verification-failed") {
+        toast.error(resultMessage);
+      } else if (resultStatus.kind === "in-registry") {
+        toast.warning(resultMessage);
+      } else {
+        toast.success(resultMessage);
+      }
     } catch (err) {
       setError("root.serverError", {
         message:
@@ -197,6 +205,7 @@ function GhgStatementSubmitDialogContent({
     ? registryStatus(mutation.data.remoteStatus)
     : null;
   const resultNeedsReview = needsSubmissionReview(reconciledStatus);
+  const showSubmissionProgress = !(mutation.isSuccess && resultNeedsReview);
   const idleTitle = isResubmit
     ? "Resubmit GHG Statement"
     : "Submit GHG Statement";
@@ -229,12 +238,14 @@ function GhgStatementSubmitDialogContent({
 
         {showProgress ? (
           <>
-              <SubmissionProgress
-                kind="ghg_statement"
-                updates={progressUpdates}
-                error={displayedServerError}
-                stalled={submissionStalled}
-              />
+              {showSubmissionProgress && (
+                <SubmissionProgress
+                  kind="ghg_statement"
+                  updates={progressUpdates}
+                  error={displayedServerError}
+                  stalled={submissionStalled}
+                />
+              )}
               {displayedServerError && (
                 <ServerError message={displayedServerError} />
               )}
