@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
+import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 
 const state = vi.hoisted(() => ({
   create: vi.fn(),
@@ -12,6 +13,7 @@ const state = vi.hoisted(() => ({
   submitSuccess: false,
   submitError: null as Error | null,
   submitData: null as { remoteStatus: string } | null,
+  rootServerError: null as string | null,
   toastSuccess: vi.fn(),
 }));
 
@@ -39,10 +41,16 @@ vi.mock("react-hook-form", () => ({
     watch: () => "2026-07-31",
     trigger: () => Promise.resolve(true),
     reset: vi.fn(),
-    setError: vi.fn(),
+    setError: (_path: string, error: { message: string }) => {
+      state.rootServerError = error.message;
+    },
     setValue: vi.fn(),
     clearErrors: vi.fn(),
-    formState: { errors: {} },
+    formState: {
+      errors: state.rootServerError
+        ? { root: { serverError: { message: state.rootServerError } } }
+        : {},
+    },
   }),
 }));
 
@@ -218,6 +226,7 @@ beforeEach(() => {
   state.submitSuccess = false;
   state.submitError = null;
   state.submitData = null;
+  state.rootServerError = null;
   state.toastSuccess.mockReset();
 });
 
@@ -409,6 +418,48 @@ describe("GHG Statement route refreshes", () => {
 
     await act(async () => findButton(renderer!, "Done")?.props.onClick());
     expect(onClose).toHaveBeenCalledOnce();
+    await act(async () => renderer?.unmount());
+  });
+
+  it("shows only the statement Refresh guidance when progress stalls", async () => {
+    const stalledError = new SubmissionStreamStalledError();
+    state.submit.mockRejectedValue(stalledError);
+
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await act(async () => renderer?.root.findByType("form").props.onSubmit());
+    await act(async () => {
+      renderer?.update(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    const visibleCopy = renderer!.root
+      .findAll((node) => typeof node.children[0] === "string")
+      .map((node) => String(node.children[0]));
+    expect(visibleCopy).toContain(
+      "Registry work may still be continuing. Close this dialog, then use Refresh on the GHG Statement before trying again.",
+    );
+    expect(visibleCopy).not.toContain(stalledError.message);
     await act(async () => renderer?.unmount());
   });
 });

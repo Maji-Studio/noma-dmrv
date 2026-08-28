@@ -186,6 +186,7 @@ function GhgStatementSubmitDialogContent({
   const showProgress =
     isPending || mutation.isSuccess || mutation.isError;
   const submissionStalled = isSubmissionStreamStalledError(mutation.error);
+  const displayedServerError = submissionStalled ? null : serverError;
   const reconciledStatus = mutation.data
     ? registryStatusLabel(mutation.data.remoteStatus)
     : null;
@@ -220,10 +221,12 @@ function GhgStatementSubmitDialogContent({
               <SubmissionProgress
                 kind="ghg_statement"
                 updates={progressUpdates}
-                error={serverError}
+                error={displayedServerError}
                 stalled={submissionStalled}
               />
-              {serverError && <ServerError message={serverError} />}
+              {displayedServerError && (
+                <ServerError message={displayedServerError} />
+              )}
               <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
                 <span className="body-caption text-[var(--color-text-tertiary)]">
                   {isPending
