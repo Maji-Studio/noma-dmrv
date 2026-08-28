@@ -256,7 +256,7 @@ For a cert input that is **not** a plain form value (a derived leg distance, an 
 
 `FormFileUpload` has **three modes** — check `src/components/forms/form-file-upload.tsx` before wiring one:
 
-1. **Real upload** — pass `entityType` + `entityId` + `documentType`; files go straight to storage by presigned PUT via `useFileUpload`, and `onUploaded(documentId)` / `onUploadError` fire per file. This is the mode you want for anything that must persist.
+1. **Real upload** — pass `entityType` + `entityId` and either a fixed `documentType` or `resolveDocumentType(file)` for a multi-type picker; files go straight to storage by presigned PUT via `useFileUpload`, and `onUploaded(documentId)` / `onUploadError` fire per file. This is the mode you want for anything that must persist.
 2. **Deferred** — parent holds real `File` objects until the parent entity exists (`deferred`, `deferredFiles`, `onDeferredAdd`, `onDeferredRemove`). No network calls.
 3. **Mockup** (default) — captures `{ name, size, type }` locally and emits via `onChange`. **No network calls, nothing reaches storage.** Legacy forms only; do not build new uploads on it.
 
@@ -272,7 +272,8 @@ selected delivery's customer location when available; operators can enter or
 correct that pair in Field details. Both coordinates are required when this
 method is selected. `boundary` reveals the GIS reference editor. `visual`
 remains visible but unavailable. Evidence-health gaps are informational and do
-not block certification submission.
+not block certification submission. Optional Application images and PDFs use
+the separate Supporting evidence section and do not change the selected method.
 
 ### Application GIS boundary evidence
 

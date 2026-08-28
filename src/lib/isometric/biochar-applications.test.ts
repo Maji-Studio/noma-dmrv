@@ -67,6 +67,15 @@ describe("Biochar Application request", () => {
     });
   });
 
+  it("includes deduplicated supporting Source IDs", () => {
+    expect(
+      buildCreateBiocharApplicationRequest({
+        ...BASE,
+        sourceIds: ["src-photo", "src-logbook", "src-photo"],
+      }).source_ids,
+    ).toEqual(["src-logbook", "src-photo"]);
+  });
+
   it("rejects non-positive application mass and field size", () => {
     expect(() =>
       buildCreateBiocharApplicationRequest({ ...BASE, applicationWetMassKg: 0 }),

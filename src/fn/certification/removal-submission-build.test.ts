@@ -4,7 +4,10 @@ vi.mock("./sources", () => ({
   collectCandidateSourceDocumentsForRemoval: vi.fn(),
   resolveSourceBindingCandidates: vi.fn(),
 }));
-vi.mock("./biochar-application-intents", () => ({
+vi.mock("./biochar-application-intents", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("./biochar-application-intents")
+  >()),
   compileBiocharApplicationIntents: vi.fn(async () => []),
 }));
 

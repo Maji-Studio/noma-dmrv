@@ -135,8 +135,11 @@ persisted Biochar Application; null is accepted and recorded, while any present
 association must match the current GHG Entry. The journal row and supplier
 reference are versioned by immutable Removal submission: supersession creates a
 fresh Biochar Application for the new GHG Entry and leaves the prior registry
-artifact intact. Registry failure blocks Removal submission and leaves the claim
-safely retryable. There is no gate or placeholder lifecycle.
+artifact intact. The current provider response type does not expose
+`source_ids`, so readback cannot verify that field; the immutable local intent
+and submission snapshot retain the exact Source IDs sent. Registry failure
+blocks Removal submission and leaves the claim safely retryable. There is no
+gate or placeholder lifecycle.
 
 ## Template and input contract
 

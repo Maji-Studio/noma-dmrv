@@ -54,9 +54,15 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
   return createFakeClientModule(actual);
 });
 vi.mock("@/fn/certification/certify-context-core");
-vi.mock("@/fn/certification/biochar-application-intents", () => ({
-  compileBiocharApplicationIntents: vi.fn(async () => []),
-}));
+vi.mock(
+  "@/fn/certification/biochar-application-intents",
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import("@/fn/certification/biochar-application-intents")
+    >()),
+    compileBiocharApplicationIntents: vi.fn(async () => []),
+  }),
+);
 vi.mock("@/fn/certification/ensure-evidence-ledgers", () => ({
   ensureEvidenceLedgersFromContext: vi.fn(async () => undefined),
 }));

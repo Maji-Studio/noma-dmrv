@@ -199,6 +199,11 @@ export async function isExternalSourceReferencedInSnapshots(
           '$.sourceBindingPlan[*].sourceId ? (@ == $val)',
           jsonb_build_object('val', ${externalDocumentId}::text)
         )
+        OR jsonb_path_exists(
+          payload_snapshot,
+          '$.transport.biocharApplicationIntents[*].sourceIds[*] ? (@ == $val)',
+          jsonb_build_object('val', ${externalDocumentId}::text)
+        )
       )
     LIMIT 1
   `);

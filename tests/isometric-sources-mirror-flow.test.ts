@@ -108,6 +108,8 @@ const DOCUMENT_FIXTURE = {
   capturedAt: new Date("2026-01-05T00:00:00Z"),
   createdAt: new Date("2026-01-05T00:00:00Z"),
   checksumSha256: null,
+  uploadStatus: "uploaded" as const,
+  fileUrl: null,
   metadata: { logbookEvidenceType: "inventory" },
 };
 
@@ -219,6 +221,36 @@ beforeEach(() => {
 });
 
 describe("mirrorDocumentToSource — orphan recovery", () => {
+  it("excludes unconfirmed documents and their old mappings from candidate readback", async () => {
+    vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
+      async (_userId, entityType, entityId) =>
+        entityType === "application" && entityId === APPLICATION_ID
+          ? ([
+              {
+                ...DOCUMENT_FIXTURE,
+                uploadStatus: "failed",
+                fileUrl: "https://example.test/failed-document.pdf",
+              },
+            ] as never)
+          : ([] as never),
+    );
+    vi.mocked(uploadsDA.listDocumentUploadsForDocuments).mockResolvedValue([
+      {
+        documentId: DOCUMENT_ID,
+        externalDocumentId: EXISTING_SOURCE_ID,
+        metadata: { isPublic: false },
+      },
+    ] as never);
+
+    const result = await loadCandidateDocumentsForRemovalForUser(
+      makeTestOrgContext(USER_ID),
+      REMOVAL_ID,
+    );
+
+    expect(result.candidates).toEqual([]);
+    expect(result.mirroredExternalIds).toEqual([]);
+  });
+
   it("mirrors a pending candidate when submission prepares its sources", async () => {
     vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue({
       id: EXISTING_SOURCE_ID,
@@ -569,6 +601,26 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     expect(result.error).toBe(
       "This document is not available for this Removal. Reload the panel and try again.",
     );
+    expect(isometric.findSourceBySupplierRef).not.toHaveBeenCalled();
+    expect(isometric.createSource).not.toHaveBeenCalled();
+    expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when a confirmed candidate becomes unconfirmed before mirroring", async () => {
+    vi.mocked(documentsDA.getDocumentById).mockResolvedValue({
+      ...DOCUMENT_FIXTURE,
+      uploadStatus: "failed",
+    } as never);
+
+    const result = await mirrorDocumentToSource({
+      removalId: REMOVAL_ID,
+      documentId: DOCUMENT_ID,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/upload has not been confirmed/i);
+    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
     expect(isometric.findSourceBySupplierRef).not.toHaveBeenCalled();
     expect(isometric.createSource).not.toHaveBeenCalled();
     expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalled();
