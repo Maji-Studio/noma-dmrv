@@ -27,6 +27,7 @@ import { ProductCompositionPreview } from "@/components/ui/product-composition-p
 import {
   applicationFormSchema,
   applicationMethods,
+  isSelectableApplicationEvidenceMethod,
   soilTemperatureSources,
   formatApplicationMethod,
   formatSoilTemperatureSource,
@@ -38,6 +39,7 @@ import {
 import type { Application } from "@/db/schema/application";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
@@ -152,6 +154,7 @@ export function ApplicationForm({
   deferredAttachments,
 }: ApplicationFormProps) {
   const isEditMode = !!application;
+  const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
   // removals derive durability from petrographic reflectance + TGA.
   const hideSoilTemperature = durabilityOption === "1000_year";
@@ -172,7 +175,11 @@ export function ApplicationForm({
     // declared evidence method when another field is edited.
     evidenceMethod:
       (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ??
-      "location",
+      (isSelectableApplicationEvidenceMethod(
+        organizationDefaults.defaultEvidenceMethod,
+      )
+        ? organizationDefaults.defaultEvidenceMethod
+        : "location"),
     gisBoundary: application?.gisBoundary ?? null,
     soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
     soilTemperatureC: application?.soilTemperatureC ?? undefined,

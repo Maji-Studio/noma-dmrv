@@ -58,6 +58,28 @@ describe("reviewPayloadHash", () => {
     expect(payloadHash(materialized)).not.toBe(payloadHash(pending));
   });
 
+  it("strips Biochar Application Source IDs from the transport snapshot path", () => {
+    const pending = {
+      ...pendingPayload(),
+      transport: {
+        biocharApplicationIntents: [
+          { applicationId: "app-1", sourceIds: [] },
+        ],
+      },
+    };
+    const materialized = {
+      ...pending,
+      transport: {
+        biocharApplicationIntents: [
+          { applicationId: "app-1", sourceIds: ["src-photo"] },
+        ],
+      },
+    };
+
+    expect(reviewPayloadHash(materialized)).toBe(reviewPayloadHash(pending));
+    expect(payloadHash(materialized)).not.toBe(payloadHash(pending));
+  });
+
   it("differs from the full payload hash, which must still track Source IDs", () => {
     expect(payloadHash(materializedPayload())).not.toBe(
       payloadHash(pendingPayload()),

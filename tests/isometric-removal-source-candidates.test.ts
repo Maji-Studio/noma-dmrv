@@ -81,6 +81,8 @@ describe("Removal source candidate discovery", () => {
             {
               id: "feedstock-bol",
               documentType: "bill_of_lading",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: {},
             },
           ] as never;
@@ -90,6 +92,8 @@ describe("Removal source candidate discovery", () => {
             {
               id: "delivery-bol",
               documentType: "bill_of_lading",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: {},
             },
           ] as never;
@@ -151,27 +155,47 @@ describe("Removal source candidate discovery", () => {
     );
   });
 
-  it("excludes unconfirmed application uploads from registry candidates", async () => {
+  it("excludes pending and failed uploads without losing legacy URL rows", async () => {
     vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
-      async (_ctx, entityType) =>
-        entityType === "application"
-          ? ([
-              {
-                id: "pending-photo",
-                documentType: "photo",
-                uploadStatus: "pending",
-                fileUrl: null,
-                metadata: {},
-              },
-              {
-                id: "legacy-photo",
-                documentType: "photo",
-                uploadStatus: "failed",
-                fileUrl: "https://example.test/photo.jpg",
-                metadata: {},
-              },
-            ] as never)
-          : ([] as never),
+      async (_ctx, entityType) => {
+        if (entityType === "application") {
+          return [
+            {
+              id: "pending-photo",
+              documentType: "photo",
+              uploadStatus: "pending",
+              fileUrl: "https://example.test/pending-photo.jpg",
+              metadata: {},
+            },
+            {
+              id: "failed-photo",
+              documentType: "photo",
+              uploadStatus: "failed",
+              fileUrl: "https://example.test/failed-photo.jpg",
+              metadata: {},
+            },
+            {
+              id: "legacy-photo",
+              documentType: "photo",
+              uploadStatus: null,
+              fileUrl: "https://example.test/legacy-photo.jpg",
+              metadata: {},
+            },
+          ] as never;
+        }
+        if (entityType === "delivery") {
+          return [
+            {
+              id: "failed-delivery-bol",
+              documentType: "bill_of_lading",
+              uploadStatus: "failed",
+              fileUrl: "https://example.test/failed-delivery-bol.pdf",
+              metadata: {},
+            },
+          ] as never;
+        }
+        return [] as never;
+      },
     );
 
     await expect(
@@ -231,6 +255,8 @@ describe("Removal source candidate discovery", () => {
           {
             id: "transport-ledger",
             documentType: "pdf",
+            uploadStatus: "uploaded",
+            fileUrl: null,
             metadata: {
               kind: "transport_evidence_ledger",
               removalId: "removal-1",
@@ -240,6 +266,8 @@ describe("Removal source candidate discovery", () => {
           {
             id: "durability-ledger",
             documentType: "pdf",
+            uploadStatus: "uploaded",
+            fileUrl: null,
             metadata: {
               kind: "durability_evidence_ledger",
               removalId: "removal-1",
@@ -250,6 +278,8 @@ describe("Removal source candidate discovery", () => {
           {
             id: "other-removal-ledger",
             documentType: "pdf",
+            uploadStatus: "uploaded",
+            fileUrl: null,
             metadata: {
               kind: "transport_evidence_ledger",
               removalId: "removal-2",

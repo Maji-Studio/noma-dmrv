@@ -139,22 +139,6 @@ export function biocharApplicationIdForSource(
     : null;
 }
 
-export function isApplicationSourceDocumentReady(
-  lineage: { entityType: string },
-  document: {
-    documentType: string;
-    uploadStatus: string | null;
-    fileUrl: string | null;
-  },
-): boolean {
-  return (
-    lineage.entityType !== APPLICATION_DOCUMENT_ENTITY_TYPE ||
-    !isApplicationIsometricSourceDocumentType(document.documentType) ||
-    document.uploadStatus === "uploaded" ||
-    document.fileUrl != null
-  );
-}
-
 /**
  * Document types that, when uploaded, attest application-boundary logbook
  * quantities (§8.5.2) on their own — a dedicated weighbridge ticket or affidavit.

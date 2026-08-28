@@ -1,15 +1,27 @@
 import type { OrgContext } from "@/lib/auth/server";
 import type { DbTransaction } from "@/db";
-import { listDocumentUploadsForDocuments } from "@/data-access/certifier-document-uploads";
-import { listDocumentsForEntity } from "@/data-access/documents";
 import {
-  biocharApplicationIdForSource,
-  isApplicationSourceDocumentReady,
-} from "@/lib/certification/application-evidence";
+  listDocumentUploadsForDocuments,
+  type CertifierDocumentUploadRow,
+  type DocumentUploadMetadata,
+} from "@/data-access/certifier-document-uploads";
+import {
+  getCertifierProjectByFacility,
+  type DocumentRow,
+} from "@/data-access/certification";
+import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
+import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
+import {
+  getCertifierRemovalById,
+  getCreditBatchesByRemovalId,
+} from "@/data-access/certifier-removals";
+import { listDocumentsForEntity } from "@/data-access/documents";
+import { biocharApplicationIdForSource } from "@/lib/certification/application-evidence";
 import {
   classifyRemovalSourceCandidate,
   type ClassifiedRemovalSource,
 } from "@/lib/certification/removal-source-bindings";
+import { SafeError } from "@/lib/errors";
 import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 
 export type CandidateLineageEntityType =
@@ -23,6 +35,220 @@ export interface CandidateLineageEntity {
   entityType: CandidateLineageEntityType;
   entityId: string;
   entityLabel: string;
+}
+
+export interface CandidateDocument {
+  document: DocumentRow;
+  lineageEntity: CandidateLineageEntity;
+  binding: ClassifiedRemovalSource | null;
+  biocharApplicationId?: string | null;
+  mirror: {
+    externalDocumentId: string;
+    isPublic: boolean;
+    mirroredAt: Date;
+  } | null;
+}
+
+export interface CandidateDocumentsForRemoval {
+  removalId: string;
+  facilityId: string;
+  candidates: CandidateDocument[];
+  mirroredExternalIds: string[];
+  hasMapping: boolean;
+}
+
+interface SourceDocumentReadiness {
+  uploadStatus?: string | null;
+  fileUrl?: string | null;
+}
+
+/**
+ * Registry Sources need a confirmed upload. The URL fallback is limited to
+ * legacy rows with no status at all, so an explicit pending or failed state
+ * can never be overridden merely because a URL was already allocated.
+ */
+export function isSourceDocumentReady(
+  document: SourceDocumentReadiness,
+): boolean {
+  return (
+    document.uploadStatus === "uploaded" ||
+    (document.uploadStatus == null && document.fileUrl != null)
+  );
+}
+
+async function collectLineageEntities(
+  orgCtx: OrgContext,
+  memberBatchIds: string[],
+): Promise<CandidateLineageEntity[]> {
+  if (memberBatchIds.length === 0) return [];
+
+  const accountingByBatch = await loadCreditBatchRollups(
+    orgCtx,
+    memberBatchIds,
+  );
+  const memberSamples = await getSamplesByCreditBatchIds(
+    orgCtx,
+    memberBatchIds,
+  );
+  const seen = new Map<string, CandidateLineageEntity>();
+  const add = (entity: CandidateLineageEntity) => {
+    const key = `${entity.entityType}:${entity.entityId}`;
+    if (!seen.has(key)) seen.set(key, entity);
+  };
+
+  for (const memberBatchId of memberBatchIds) {
+    const accounting = accountingByBatch[memberBatchId];
+    if (!accounting) {
+      throw new SafeError(`Credit batch ${memberBatchId} could not be loaded.`);
+    }
+    const { batch, lineageFacts } = accounting;
+    add({
+      entityType: "credit_batch",
+      entityId: batch.id,
+      entityLabel: `Credit batch ${batch.code}`,
+    });
+
+    for (const application of lineageFacts.applications) {
+      add({
+        entityType: "application",
+        entityId: application.id,
+        entityLabel: `Application ${application.code}`,
+      });
+      add({
+        entityType: "delivery",
+        entityId: application.delivery.id,
+        entityLabel: `Delivery ${application.delivery.code}`,
+      });
+    }
+
+    for (const run of lineageFacts.runs) {
+      for (const feedstock of run.feedstocks) {
+        add({
+          entityType: "feedstock",
+          entityId: feedstock.id,
+          entityLabel: `Feedstock ${feedstock.code}`,
+        });
+      }
+    }
+  }
+
+  for (const sample of memberSamples) {
+    add({
+      entityType: "sample",
+      entityId: sample.id,
+      entityLabel: `Sample ${sample.sampleCode || sample.id}`,
+    });
+  }
+
+  return Array.from(seen.values());
+}
+
+export async function loadCandidateDocumentsForRemovalForUser(
+  orgCtx: OrgContext,
+  removalId: string,
+): Promise<CandidateDocumentsForRemoval> {
+  const removal = await getCertifierRemovalById(orgCtx, removalId);
+  if (!removal) throw new SafeError("Removal not found.");
+
+  const mapping = await getCertifierProjectByFacility(
+    orgCtx,
+    removal.facilityId,
+    ISOMETRIC_PROVIDER,
+  );
+  const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
+  const lineageEntities = await collectLineageEntities(
+    orgCtx,
+    batches.map((batch) => batch.id),
+  );
+  const documentsByEntity = await Promise.all(
+    lineageEntities.map((entity) =>
+      listDocumentsForEntity(
+        orgCtx,
+        entity.entityType,
+        entity.entityId,
+      ).then((documents) => ({ entity, documents })),
+    ),
+  );
+
+  const seenDocuments = new Map<
+    string,
+    { document: DocumentRow; entity: CandidateLineageEntity }
+  >();
+  for (const { entity, documents } of documentsByEntity) {
+    for (const document of documents) {
+      if (!seenDocuments.has(document.id)) {
+        seenDocuments.set(document.id, { document, entity });
+      }
+    }
+  }
+
+  const mirrorRows = await listDocumentUploadsForDocuments(
+    orgCtx,
+    ISOMETRIC_PROVIDER,
+    Array.from(seenDocuments.keys()),
+  );
+  const mirrorByDocumentId = new Map<string, CertifierDocumentUploadRow>(
+    mirrorRows.map((row) => [row.documentId, row]),
+  );
+  const candidates = Array.from(seenDocuments.values()).flatMap(
+    ({ document, entity }): CandidateDocument[] => {
+      if (!isSourceDocumentReady(document)) return [];
+      const binding = classifyRemovalSourceCandidate({
+        documentType: document.documentType,
+        metadata: document.metadata,
+        lineage: entity,
+        removalId,
+      });
+      const biocharApplicationId = biocharApplicationIdForSource(
+        entity,
+        document.documentType,
+      );
+      if (!binding && !biocharApplicationId) return [];
+
+      const mirrorRow = mirrorByDocumentId.get(document.id);
+      const metadata = (mirrorRow?.metadata ?? null) as
+        | (DocumentUploadMetadata & { [key: string]: unknown })
+        | null;
+      return [
+        {
+          document,
+          lineageEntity: entity,
+          binding,
+          biocharApplicationId,
+          mirror: mirrorRow
+            ? {
+                externalDocumentId: mirrorRow.externalDocumentId,
+                isPublic: metadata?.isPublic ?? false,
+                mirroredAt: mirrorRow.createdAt,
+              }
+            : null,
+        },
+      ];
+    },
+  );
+
+  candidates.sort((left, right) => {
+    const mirrorOrder =
+      Number(Boolean(left.mirror)) - Number(Boolean(right.mirror));
+    return (
+      mirrorOrder ||
+      left.document.fileName.localeCompare(right.document.fileName)
+    );
+  });
+
+  return {
+    removalId,
+    facilityId: removal.facilityId,
+    candidates,
+    mirroredExternalIds: Array.from(
+      new Set(
+        candidates.flatMap((candidate) =>
+          candidate.mirror ? [candidate.mirror.externalDocumentId] : [],
+        ),
+      ),
+    ).sort(),
+    hasMapping: Boolean(mapping),
+  };
 }
 
 export interface CandidateSourceDocument {
@@ -124,7 +350,7 @@ export async function collectCandidateSourceDocumentsForRemoval(
   const candidates = new Map<string, CandidateSourceDocument>();
   for (const { lineage, documents } of documentsByEntity) {
     for (const document of documents) {
-      if (!isApplicationSourceDocumentReady(lineage, document)) continue;
+      if (!isSourceDocumentReady(document)) continue;
       const binding = classifyRemovalSourceCandidate({
         documentType: document.documentType,
         metadata: document.metadata,
