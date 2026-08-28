@@ -57,6 +57,12 @@ interface GhgStatementDetailSheetProps {
   onClose: () => void;
 }
 
+export function hasGhgStatementDetailData<T>(query: {
+  data: T | undefined;
+}): query is { data: T } {
+  return query.data !== undefined;
+}
+
 function statementPeriod(item: GhgStatementListItem): string {
   if (item.remotePeriodMissing) return "No period set";
   const { reportingPeriodStartOn } = item.statement;
@@ -129,7 +135,7 @@ function DetailState({
     );
   }
 
-  if (query.error || !query.data) {
+  if (!hasGhgStatementDetailData(query)) {
     return (
       <>
         <SlideOverPanel.Body>
