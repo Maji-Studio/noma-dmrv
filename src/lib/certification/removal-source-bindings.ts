@@ -258,9 +258,9 @@ export function classifyRemovalSourceCandidate(
 ): ClassifiedRemovalSource | null {
   const { lineage } = facts;
   // A GIS boundary supports the Application's storage-area evidence. The
-  // Removal Datapoint bindings are separate from Biochar Application
-  // `source_ids`, so classifying this file here would falsely attach it to
-  // product mass. The application-source pipeline handles it instead.
+  // Classifying this file here would falsely attach it to product mass. Keep
+  // it out of registry Source candidates until the Application model can
+  // identify the one active boundary document and exclude replaced uploads.
   //
   // This is a FORWARD guard: it preserves today's behaviour rather than
   // changing it, because `src/schemas/documents.ts` currently refuses the
