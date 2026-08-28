@@ -164,6 +164,25 @@ export interface ApplicationEvidenceDocument {
   metadata: unknown;
 }
 
+/** Minimal persisted upload state used by Application evidence consumers. */
+export interface ApplicationEvidenceUploadReadiness {
+  uploadStatus?: string | null;
+  fileUrl?: string | null;
+}
+
+/**
+ * Application evidence is ready after upload confirmation. The URL fallback
+ * is only for legacy rows that predate persisted upload statuses.
+ */
+export function isApplicationEvidenceDocumentReady(
+  document: ApplicationEvidenceUploadReadiness,
+): boolean {
+  return (
+    document.uploadStatus === "uploaded" ||
+    (document.uploadStatus == null && document.fileUrl != null)
+  );
+}
+
 /** Minimal application surface required by the application-evidence rule. */
 export interface ApplicationEvidenceApplication {
   evidenceMethod?: string | null;
@@ -303,11 +322,13 @@ function isUploadedDocument(
   document: ApplicationEvidenceDocument,
   predicate: ApplicationEvidenceUploadedDocumentPredicate,
 ): boolean {
-  return (
-    document[predicate.uploadStatusField] === predicate.uploadStatus ||
-    (predicate.fileUrlOperator === "not-null" &&
-      document[predicate.fileUrlField] !== null)
-  );
+  return isApplicationEvidenceDocumentReady({
+    uploadStatus: document[predicate.uploadStatusField],
+    fileUrl:
+      predicate.fileUrlOperator === "not-null"
+        ? document[predicate.fileUrlField]
+        : null,
+  });
 }
 
 /** Evaluate one declarative document matcher against a structural document. */

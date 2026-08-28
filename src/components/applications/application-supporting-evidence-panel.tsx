@@ -16,13 +16,11 @@ import {
 } from "@/hooks/use-documents";
 import {
   APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
+  isApplicationEvidenceDocumentReady,
   isApplicationIsometricSourceDocumentType,
 } from "@/lib/certification/application-evidence";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
-import {
-  ApplicationEvidenceDocumentList,
-  isUploadedDocument,
-} from "./application-evidence-document-list";
+import { ApplicationEvidenceDocumentList } from "./application-evidence-document-list";
 
 const ENTITY_TYPE = "application" satisfies DocumentEntityType;
 const DOCUMENT_TYPE: DocumentType = "pdf";
@@ -62,7 +60,7 @@ export function ApplicationSupportingEvidencePanel({
     entityType: ENTITY_TYPE,
   });
   const supportingDocs = (docs ?? [])
-    .filter(isUploadedDocument)
+    .filter(isApplicationEvidenceDocumentReady)
     .filter(
       (doc) =>
         doc.documentType === "gis_boundary" ||

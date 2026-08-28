@@ -16,7 +16,10 @@ import {
   getCreditBatchesByRemovalId,
 } from "@/data-access/certifier-removals";
 import { listDocumentsForEntity } from "@/data-access/documents";
-import { biocharApplicationIdForSource } from "@/lib/certification/application-evidence";
+import {
+  biocharApplicationIdForSource,
+  isApplicationEvidenceDocumentReady,
+} from "@/lib/certification/application-evidence";
 import {
   classifyRemovalSourceCandidate,
   type ClassifiedRemovalSource,
@@ -55,25 +58,6 @@ export interface CandidateDocumentsForRemoval {
   candidates: CandidateDocument[];
   mirroredExternalIds: string[];
   hasMapping: boolean;
-}
-
-interface SourceDocumentReadiness {
-  uploadStatus?: string | null;
-  fileUrl?: string | null;
-}
-
-/**
- * Registry Sources need a confirmed upload. The URL fallback is limited to
- * legacy rows with no status at all, so an explicit pending or failed state
- * can never be overridden merely because a URL was already allocated.
- */
-export function isSourceDocumentReady(
-  document: SourceDocumentReadiness,
-): boolean {
-  return (
-    document.uploadStatus === "uploaded" ||
-    (document.uploadStatus == null && document.fileUrl != null)
-  );
 }
 
 async function collectLineageEntities(
@@ -192,7 +176,7 @@ export async function loadCandidateDocumentsForRemovalForUser(
   );
   const candidates = Array.from(seenDocuments.values()).flatMap(
     ({ document, entity }): CandidateDocument[] => {
-      if (!isSourceDocumentReady(document)) return [];
+      if (!isApplicationEvidenceDocumentReady(document)) return [];
       const binding = classifyRemovalSourceCandidate({
         documentType: document.documentType,
         metadata: document.metadata,
@@ -350,7 +334,7 @@ export async function collectCandidateSourceDocumentsForRemoval(
   const candidates = new Map<string, CandidateSourceDocument>();
   for (const { lineage, documents } of documentsByEntity) {
     for (const document of documents) {
-      if (!isSourceDocumentReady(document)) continue;
+      if (!isApplicationEvidenceDocumentReady(document)) continue;
       const binding = classifyRemovalSourceCandidate({
         documentType: document.documentType,
         metadata: document.metadata,

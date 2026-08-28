@@ -18,10 +18,6 @@ function metadataRecord(value: unknown): Record<string, unknown> {
     ? (value as Record<string, unknown>)
     : {};
 }
-export function isUploadedDocument(doc: DocumentRow): boolean {
-  return doc.uploadStatus === "uploaded" || doc.fileUrl != null;
-}
-
 export function ApplicationEvidenceDocumentList({
   docs,
   emptyMessage,

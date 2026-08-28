@@ -62,6 +62,9 @@ import {
   includesProductionInputs,
   productionClaimContribution,
 } from "./production-claim-policy";
+import { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
+
+export { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
 
 export interface RemovalSubmissionBuild {
   agg: AggregatedProductionData;
@@ -592,36 +595,6 @@ export function materializeRemovalSubmissionSnapshot(args: {
     },
     metadata: { supersedePreviousId },
   };
-}
-
-export function normalizeSequestrationTemplateForHash(
-  template: IsometricGhgEntryTemplate,
-) {
-  return template.groups
-    .flatMap((group) =>
-      group.components
-        .filter((component) =>
-          isSequestrationBlueprintFamily(component.blueprint_key),
-        )
-        .map((component) => ({
-          groupKey: group.key,
-          rtcId: component.id,
-          blueprintKey: component.blueprint_key,
-          inputs: component.inputs
-            .map((input) => ({
-              inputKey: input.input_key,
-              type: input.type,
-              quantityKind: input.quantity_kind,
-              datapointId: input.datapoint_id,
-            }))
-            .sort((a, b) => a.inputKey.localeCompare(b.inputKey)),
-        })),
-    )
-    .sort((a, b) =>
-      `${a.groupKey}::${a.rtcId}::${a.blueprintKey}`.localeCompare(
-        `${b.groupKey}::${b.rtcId}::${b.blueprintKey}`,
-      ),
-    );
 }
 
 export function assertEntityReadinessGapsResolved(

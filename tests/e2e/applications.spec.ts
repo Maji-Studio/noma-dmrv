@@ -173,9 +173,14 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await expect(
       page.getByRole("radio", { name: /Customer location/ }),
     ).toBeChecked();
+    const visualEvidenceOption = page.getByRole("radio", {
+      name: /Visual evidence/,
+    });
+    await expect(visualEvidenceOption).toBeVisible();
+    await expect(visualEvidenceOption).toHaveAttribute("aria-disabled", "true");
     await expect(
-      page.getByRole("radio", { name: /Visual evidence/ }),
-    ).toHaveCount(0);
+      visualEvidenceOption.getByText("Available later", { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByText("Supporting evidence", { exact: true }),
     ).toBeVisible();

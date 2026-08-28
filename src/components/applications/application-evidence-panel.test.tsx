@@ -73,7 +73,11 @@ function boundaryDoc(logbookEvidenceType: string | null): DocumentRow {
   } as unknown as DocumentRow;
 }
 
-function imageDoc(): DocumentRow {
+type ImageDocumentOverrides = Omit<Partial<DocumentRow>, "uploadStatus"> & {
+  uploadStatus?: DocumentRow["uploadStatus"] | null;
+};
+
+function imageDoc(overrides: ImageDocumentOverrides = {}): DocumentRow {
   return {
     id: "image-doc-1",
     fileName: "application.jpg",
@@ -84,6 +88,7 @@ function imageDoc(): DocumentRow {
     capturedAt: new Date("2026-07-01T00:00:00.000Z"),
     createdAt: new Date("2026-07-01T00:00:00.000Z"),
     metadata: { geotagStatus: "present" },
+    ...overrides,
   } as unknown as DocumentRow;
 }
 
@@ -209,5 +214,31 @@ describe("ApplicationSupportingEvidencePanel", () => {
 
     expect(html).toContain("No supporting evidence attached yet.");
     expect(html).not.toContain('data-testid="file-upload"');
+  });
+
+  it("hides pending and failed URL rows but keeps uploaded and legacy rows", () => {
+    const html = renderSupportingEvidencePanel([
+      imageDoc({
+        id: "pending-doc",
+        fileName: "pending.jpg",
+        uploadStatus: "pending",
+      }),
+      imageDoc({
+        id: "failed-doc",
+        fileName: "failed.jpg",
+        uploadStatus: "failed",
+      }),
+      imageDoc({
+        id: "legacy-doc",
+        fileName: "legacy.jpg",
+        uploadStatus: null,
+      }),
+      imageDoc({ id: "uploaded-doc", fileName: "uploaded.jpg" }),
+    ]);
+
+    expect(html).not.toContain("pending.jpg");
+    expect(html).not.toContain("failed.jpg");
+    expect(html).toContain("legacy.jpg");
+    expect(html).toContain("uploaded.jpg");
   });
 });
