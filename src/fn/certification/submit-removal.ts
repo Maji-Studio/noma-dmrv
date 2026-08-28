@@ -430,7 +430,7 @@ async function submitRemovalCore(
 
   await mirrorCandidateSourcesForSubmission(orgCtx, {
     removalId,
-    candidateDocumentIds: reviewedBuild.candidateDocumentIds,
+    candidateSourceDocuments: reviewedBuild.candidateSourceDocuments,
   });
 
   // Compile again from persisted mappings. Only this strict artifact can be

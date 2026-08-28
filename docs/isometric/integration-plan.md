@@ -229,7 +229,7 @@ is not confirmed, so no production-live Method-B submission is claimed.
 
 ## Sources and evidence
 
-Source attribution is per input, not Removal-wide.
+Source attribution is target-specific, not Removal-wide.
 
 `src/lib/certification/removal-source-bindings.ts` classifies operator
 documents and generated evidence ledgers into an immutable plan of exact
@@ -243,6 +243,19 @@ component/input targets:
   `product_mass` and, when present, safety-margin `mass`;
 - generated transport ledger to the transport inputs present in the template;
 - generated durability ledger to the tier-specific durability inputs.
+
+Confirmed Application-owned photos, PDFs, weighbridge tickets, and affidavits
+are also mirrored as Sources and attached to each corresponding Biochar
+Application through its `source_ids`. GIS boundary uploads remain local: noma
+does not mirror them until the Application stores an explicit active-boundary
+document identity, so replaced or historical boundaries cannot be submitted.
+
+A draft retry reuses the exact operator-evidence tuple stored in its immutable
+submission snapshot. Submitted and accepted Removals keep that frozen operator
+evidence on a superseding claim while current deterministic transport and
+durability ledgers are regenerated and attached. Evidence added later requires
+a new Removal or a future amendment workflow; a rejected or superseded attempt
+that has no live claim rebuilds from current evidence.
 
 The plan and mapping revision are hash-covered in the submission snapshot.
 After GHG-entry creation, noma follows component attributions to Components and

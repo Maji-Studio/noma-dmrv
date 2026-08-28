@@ -536,8 +536,7 @@ export async function buildRemovalContext(
   }));
 
   // Load removal-owned facts up-front so every short-circuit carries them.
-  const [latestSubmission, linkedGhgStatement, supportingDocuments] =
-    await Promise.all([
+  const [latestSubmission, linkedGhgStatement] = await Promise.all([
       scope.removalId
         ? getLatestSubmission(orgCtx, {
             provider: ISOMETRIC_PROVIDER,
@@ -547,8 +546,12 @@ export async function buildRemovalContext(
           })
         : Promise.resolve(null),
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
-      loadEvidenceMirrorSummaryForScope(orgCtx, scope),
     ]);
+  const supportingDocuments = await loadEvidenceMirrorSummaryForScope(
+    orgCtx,
+    scope,
+    latestSubmission,
+  );
 
   // Walk every member batch's production-run applications into one deduped run union.
   const applicationIds = Array.from(

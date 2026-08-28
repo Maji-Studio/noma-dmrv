@@ -46,8 +46,10 @@ vi.mock("@/components/ui/delete-confirm-dialog", () => ({
   DeleteConfirmDialog: () => null,
 }));
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children }: { children?: ReactNode }) => (
-    <button type="button">{children}</button>
+  Button: ({ children, ...props }: { children?: ReactNode }) => (
+    <button type="button" {...props}>
+      {children}
+    </button>
   ),
 }));
 vi.mock("@/components/ui/tooltip", () => ({
@@ -90,6 +92,15 @@ function imageDoc(overrides: ImageDocumentOverrides = {}): DocumentRow {
     metadata: { geotagStatus: "present" },
     ...overrides,
   } as unknown as DocumentRow;
+}
+
+function gisBoundaryDoc(): DocumentRow {
+  return {
+    ...imageDoc(),
+    id: "gis-doc-1",
+    fileName: "field-boundary.geojson",
+    documentType: "gis_boundary",
+  } as DocumentRow;
 }
 
 function renderPanel(
@@ -240,5 +251,12 @@ describe("ApplicationSupportingEvidencePanel", () => {
     expect(html).not.toContain("failed.jpg");
     expect(html).toContain("legacy.jpg");
     expect(html).toContain("uploaded.jpg");
+  });
+
+  it("keeps uploaded GIS references visible and deletable", () => {
+    const html = renderSupportingEvidencePanel([gisBoundaryDoc()]);
+
+    expect(html).toContain("field-boundary.geojson");
+    expect(html).toContain('aria-label="Delete field-boundary.geojson"');
   });
 });

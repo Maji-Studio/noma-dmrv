@@ -1,4 +1,5 @@
 import type { OrgContext } from "@/lib/auth/server";
+import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { listDocumentUploadsForDocuments } from "@/data-access/certifier-document-uploads";
 import {
@@ -8,8 +9,13 @@ import {
 import { getStorageProvider } from "@/lib/storage";
 import { SOURCES_MAX_BYTES } from "@/schemas/certification-sources";
 import type { DocumentEntityType } from "@/schemas/documents";
-import { classifyRemovalSourceCandidate } from "@/lib/certification/removal-source-bindings";
 import { ISOMETRIC_PROVIDER } from "./shared";
+import {
+  sourceCandidateEligibility,
+  type CandidateLineageEntityType,
+  type CandidateSourceDocument,
+} from "./source-candidates";
+import { filterCandidateSourcesForSubmissionLifecycle } from "./removal-source-freeze";
 
 export interface EvidenceMirrorSummary {
   total: number;
@@ -41,10 +47,22 @@ function isMirrorCandidateDocument(
   );
 }
 
+function isSummaryCandidate(candidate: CandidateSourceDocument): boolean {
+  if (candidate.biocharApplicationId) return true;
+  const entityType = candidate.binding?.lineage.entityType;
+  return (
+    entityType === "application" ||
+    entityType === "delivery" ||
+    entityType === "feedstock" ||
+    entityType === "credit_batch"
+  );
+}
+
 /** Count source candidates from the submission scope without rebuilding it. */
 export async function loadEvidenceMirrorSummaryForScope(
   orgCtx: OrgContext,
   scope: EvidenceRemovalScope,
+  latestSubmission: CertificationSubmissionRow | null = null,
 ): Promise<EvidenceMirrorSummary> {
   if (!scope.removalId) return { total: 0, mirrored: 0 };
 
@@ -76,56 +94,78 @@ export async function loadEvidenceMirrorSummaryForScope(
       add("feedstock", feedstock.id, `Feedstock ${feedstock.code}`);
     }
   }
+  for (const batch of scope.memberBatches) {
+    add("credit_batch", batch.id, `Credit batch ${batch.id}`);
+  }
 
   const documentGroups = await Promise.all(
     Array.from(entityIds, ([entityType, ids]) =>
       listDocumentsForEntityIds(orgCtx, entityType, Array.from(ids)),
     ),
   );
-  const candidatesById = new Map(
-    documentGroups
-      .flat()
-      .filter(isMirrorCandidateDocument)
-      .filter((document) => {
-        const entityLabel = lineageLabels.get(
-          `${document.entityType}:${document.entityId}`,
-        );
-        return (
-          entityLabel !== undefined &&
-          classifyRemovalSourceCandidate({
-            documentType: document.documentType,
-            metadata: document.metadata,
-            lineage: {
-              entityType: document.entityType,
-              entityId: document.entityId,
-              entityLabel,
-            },
-          }) !== null
-        );
-      })
-      .map((document) => [document.id, document]),
+  const documentsById = new Map<string, MirrorCandidateDocument>();
+  const liveCandidates: CandidateSourceDocument[] = [];
+  for (const document of documentGroups
+    .flat()
+    .filter(isMirrorCandidateDocument)) {
+    documentsById.set(document.id, document);
+    const entityLabel = lineageLabels.get(
+      `${document.entityType}:${document.entityId}`,
+    );
+    if (entityLabel === undefined) continue;
+    const eligibility = sourceCandidateEligibility({
+      document,
+      lineage: {
+        entityType: document.entityType as CandidateLineageEntityType,
+        entityId: document.entityId,
+        entityLabel,
+      },
+      removalId: scope.removalId ?? undefined,
+    });
+    if (!eligibility) continue;
+    liveCandidates.push({
+      documentId: document.id,
+      binding: eligibility.binding,
+      biocharApplicationId: eligibility.biocharApplicationId,
+    });
+  }
+  const documentIds = Array.from(
+    new Set(
+      filterCandidateSourcesForSubmissionLifecycle(
+        liveCandidates,
+        latestSubmission,
+      )
+        .filter(isSummaryCandidate)
+        .map(({ documentId }) => documentId),
+    ),
   );
-  const documentIds = Array.from(candidatesById.keys());
   const mirrorRows = await listDocumentUploadsForDocuments(
     orgCtx,
     ISOMETRIC_PROVIDER,
     documentIds,
   );
+  const candidateDocumentIds = new Set(documentIds);
   const mirroredDocumentIds = new Set(
-    mirrorRows.map((row) => row.documentId),
+    mirrorRows
+      .map((row) => row.documentId)
+      .filter((documentId) => candidateDocumentIds.has(documentId)),
   );
   const provider = getStorageProvider();
   const availableDocumentIds = new Set(
     (
       await Promise.all(
-        Array.from(candidatesById.values(), async (document) => {
-          if (mirroredDocumentIds.has(document.id)) return document.id;
+        documentIds.map(async (documentId) => {
+          if (mirroredDocumentIds.has(documentId)) return documentId;
+          const document = documentsById.get(documentId);
+          // A frozen candidate that disappeared from live discovery must stay
+          // visible as pending; submission will fail closed while loading it.
+          if (!document) return documentId;
           try {
             const head = await provider.headObject(document.storageKey);
-            return head?.size === document.fileSizeBytes ? document.id : null;
+            return head?.size === document.fileSizeBytes ? documentId : null;
           } catch {
             // Keep the advisory warning conservative during a provider outage.
-            return document.id;
+            return documentId;
           }
         }),
       )

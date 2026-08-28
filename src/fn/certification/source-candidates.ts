@@ -63,12 +63,14 @@ export interface CandidateDocumentsForRemoval {
 async function collectLineageEntities(
   orgCtx: OrgContext,
   memberBatchIds: string[],
+  removalId: string,
 ): Promise<CandidateLineageEntity[]> {
   if (memberBatchIds.length === 0) return [];
 
   const accountingByBatch = await loadCreditBatchRollups(
     orgCtx,
     memberBatchIds,
+    { removalId },
   );
   const memberSamples = await getSamplesByCreditBatchIds(
     orgCtx,
@@ -143,6 +145,7 @@ export async function loadCandidateDocumentsForRemovalForUser(
   const lineageEntities = await collectLineageEntities(
     orgCtx,
     batches.map((batch) => batch.id),
+    removalId,
   );
   const documentsByEntity = await Promise.all(
     lineageEntities.map((entity) =>
@@ -176,18 +179,13 @@ export async function loadCandidateDocumentsForRemovalForUser(
   );
   const candidates = Array.from(seenDocuments.values()).flatMap(
     ({ document, entity }): CandidateDocument[] => {
-      if (!isApplicationEvidenceDocumentReady(document)) return [];
-      const binding = classifyRemovalSourceCandidate({
-        documentType: document.documentType,
-        metadata: document.metadata,
+      const eligibility = sourceCandidateEligibility({
+        document,
         lineage: entity,
         removalId,
       });
-      const biocharApplicationId = biocharApplicationIdForSource(
-        entity,
-        document.documentType,
-      );
-      if (!binding && !biocharApplicationId) return [];
+      if (!eligibility) return [];
+      const { binding, biocharApplicationId } = eligibility;
 
       const mirrorRow = mirrorByDocumentId.get(document.id);
       const metadata = (mirrorRow?.metadata ?? null) as
@@ -245,6 +243,40 @@ interface SourceCandidateLineage {
   application: { id: string; code?: string | null };
   delivery: { id: string; code?: string | null };
   feedstocks: Array<{ id: string; code?: string | null }>;
+}
+
+interface SourceCandidateDocumentFacts {
+  documentType: string;
+  metadata: unknown;
+  uploadStatus?: string | null;
+  fileUrl?: string | null;
+}
+
+export interface SourceCandidateEligibility {
+  binding: ClassifiedRemovalSource | null;
+  biocharApplicationId: string | null;
+}
+
+/** One eligibility rule shared by candidate readback, submission, and summaries. */
+export function sourceCandidateEligibility(args: {
+  document: SourceCandidateDocumentFacts;
+  lineage: CandidateLineageEntity;
+  removalId?: string;
+}): SourceCandidateEligibility | null {
+  if (!isApplicationEvidenceDocumentReady(args.document)) return null;
+  const binding = classifyRemovalSourceCandidate({
+    documentType: args.document.documentType,
+    metadata: args.document.metadata,
+    lineage: args.lineage,
+    removalId: args.removalId,
+  });
+  const biocharApplicationId = biocharApplicationIdForSource(
+    args.lineage,
+    args.document.documentType,
+  );
+  return binding || biocharApplicationId
+    ? { binding, biocharApplicationId }
+    : null;
 }
 
 export async function collectCandidateDocumentIdsForRemoval(
@@ -334,22 +366,15 @@ export async function collectCandidateSourceDocumentsForRemoval(
   const candidates = new Map<string, CandidateSourceDocument>();
   for (const { lineage, documents } of documentsByEntity) {
     for (const document of documents) {
-      if (!isApplicationEvidenceDocumentReady(document)) continue;
-      const binding = classifyRemovalSourceCandidate({
-        documentType: document.documentType,
-        metadata: document.metadata,
+      const eligibility = sourceCandidateEligibility({
+        document,
         lineage,
         removalId: args.removalId,
       });
-      const biocharApplicationId = biocharApplicationIdForSource(
-        lineage,
-        document.documentType,
-      );
-      if ((binding || biocharApplicationId) && !candidates.has(document.id)) {
+      if (eligibility && !candidates.has(document.id)) {
         candidates.set(document.id, {
           documentId: document.id,
-          binding,
-          biocharApplicationId,
+          ...eligibility,
         });
       }
     }
