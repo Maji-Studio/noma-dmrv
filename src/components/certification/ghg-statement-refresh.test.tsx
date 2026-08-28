@@ -402,7 +402,7 @@ describe("GHG Statement route refreshes", () => {
     expect(
       renderer!.root.findAllByType("span").some((span) =>
         String(span.props.children).includes(
-          "Isometric status: Awaiting verification. The reconciled status is saved in noma.",
+          "Isometric status: In verification. The reconciled status is saved in noma.",
         ),
       ),
     ).toBe(true);

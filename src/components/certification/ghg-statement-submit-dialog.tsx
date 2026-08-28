@@ -24,6 +24,10 @@ import {
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import {
+  deriveStatementStatus,
+  type RemoteGhgStatus,
+} from "@/lib/certification/status";
+import {
   buildSubmitGhgStatementDialogSchema,
   type SubmitGhgStatementDialogInput,
 } from "@/schemas/certification";
@@ -44,9 +48,12 @@ interface GhgStatementSubmitDialogProps {
   generationUnavailableReason?: string | null;
 }
 
-function formatRegistryStatus(status: string): string {
-  const normalized = status.replace(/_/g, " ").toLowerCase();
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+function registryStatusLabel(status: RemoteGhgStatus): string {
+  return deriveStatementStatus({
+    local: "submitted",
+    lockInFlight: false,
+    remoteStatus: status,
+  }).label;
 }
 
 export function GhgStatementSubmitDialog({
@@ -144,7 +151,7 @@ function GhgStatementSubmitDialogContent({
       });
       router.refresh();
       toast.success(
-        `GHG Statement: ${formatRegistryStatus(result.remoteStatus)}.`,
+        `GHG Statement: ${registryStatusLabel(result.remoteStatus)}.`,
       );
     } catch (err) {
       setError("root.serverError", {
@@ -180,7 +187,7 @@ function GhgStatementSubmitDialogContent({
     isPending || mutation.isSuccess || mutation.isError;
   const submissionStalled = isSubmissionStreamStalledError(mutation.error);
   const reconciledStatus = mutation.data
-    ? formatRegistryStatus(mutation.data.remoteStatus)
+    ? registryStatusLabel(mutation.data.remoteStatus)
     : null;
   const idleTitle = isResubmit
     ? "Resubmit GHG Statement"
@@ -221,8 +228,10 @@ function GhgStatementSubmitDialogContent({
                 <span className="body-caption text-[var(--color-text-tertiary)]">
                   {isPending
                     ? "noma is submitting the GHG Statement to the verifier."
-                    : mutation.isSuccess
-                      ? `Isometric status: ${reconciledStatus ?? "Submitted"}. The reconciled status is saved in noma.`
+                    : mutation.isSuccess && reconciledStatus
+                      ? `Isometric status: ${reconciledStatus}. The reconciled status is saved in noma.`
+                      : mutation.isSuccess
+                        ? "The reconciled Isometric status is saved in noma."
                       : submissionStalled
                         ? "Registry work may still be continuing. Reconcile the status before trying again."
                         : "Completed registry operations are preserved for a safe retry."}
