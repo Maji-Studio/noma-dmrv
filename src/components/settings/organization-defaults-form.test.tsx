@@ -53,7 +53,7 @@ describe("OrganizationDefaultsForm", () => {
 
     expect(html).toContain("Customer location");
     expect(html).toContain("GIS reference");
-    expect(html).toContain("Visual evidence");
+    expect(html).not.toContain("Visual evidence");
     expect(html).not.toContain("GIS boundary");
     expect(html).not.toMatch(/>Visual</);
   });

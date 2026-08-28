@@ -33,8 +33,9 @@ import {
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import {
-  applicationEvidenceMethods,
   formatApplicationEvidenceMethod,
+  isSelectableApplicationEvidenceMethod,
+  selectableApplicationEvidenceMethods,
 } from "@/schemas/applications";
 import { currencyCodes } from "@/schemas/credit-batches";
 import { timezones, type Timezone } from "@/schemas/facilities";
@@ -57,7 +58,7 @@ const TIMEZONE_OPTIONS = timezones.map((zone) => ({
   label: formatTimezoneLabel(zone),
 }));
 
-const EVIDENCE_METHOD_OPTIONS = applicationEvidenceMethods.map((method) => ({
+const EVIDENCE_METHOD_OPTIONS = selectableApplicationEvidenceMethods.map((method) => ({
   value: method,
   label: formatApplicationEvidenceMethod(method),
 }));
@@ -130,6 +131,11 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
       defaultTimezone: isOfferedTimezone(defaults.defaultTimezone)
         ? defaults.defaultTimezone
         : DEFAULT_ORGANIZATION_TIMEZONE,
+      defaultEvidenceMethod: isSelectableApplicationEvidenceMethod(
+        defaults.defaultEvidenceMethod,
+      )
+        ? defaults.defaultEvidenceMethod
+        : "location",
     },
   });
 
