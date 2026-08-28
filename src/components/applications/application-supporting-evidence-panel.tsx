@@ -21,16 +21,12 @@ import {
 } from "@/lib/certification/application-evidence";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
 import { ApplicationEvidenceDocumentList } from "./application-evidence-document-list";
+import { resolveSupportingEvidenceDocumentType } from "./application-supporting-evidence";
 
 const ENTITY_TYPE = "application" satisfies DocumentEntityType;
 const DOCUMENT_TYPE: DocumentType = "pdf";
 const SUPPORTING_EVIDENCE_ACCEPT = "image/*,application/pdf,.pdf";
 
-function resolveSupportingEvidenceDocumentType(file: File): DocumentType {
-  return file.type.toLowerCase().startsWith("image/")
-    ? APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE
-    : DOCUMENT_TYPE;
-}
 interface ApplicationSupportingEvidencePanelProps {
   applicationId?: string;
   disabled?: boolean;
