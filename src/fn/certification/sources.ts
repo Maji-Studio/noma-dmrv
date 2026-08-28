@@ -52,12 +52,46 @@ import {
 import { withSourceSyncEventOnFailure } from "./source-sync-events";
 import { buildRemovalSourceDescription } from "@/lib/certification/removal-source-bindings";
 import {
-  loadCandidateDocumentsForRemovalForUser,
+  collectCandidateDocumentIdsForRemoval as collectCandidateDocumentIdsForRemovalCandidate,
+  collectCandidateSourceDocumentsForRemoval as collectCandidateSourceDocumentsForRemovalCandidate,
+  loadCandidateDocumentsForRemovalForUser as loadCandidateDocumentsForRemovalForUserCandidate,
+  resolveSourceBindingCandidates as resolveSourceBindingCandidatesCandidate,
+  resolveSourceIdsForRemoval as resolveSourceIdsForRemovalCandidate,
   type CandidateDocument,
   type CandidateDocumentsForRemoval,
 } from "./source-candidates";
 
 const BYTES_PER_MEGABYTE = 1_000_000;
+
+export async function loadCandidateDocumentsForRemovalForUser(
+  ...args: Parameters<typeof loadCandidateDocumentsForRemovalForUserCandidate>
+) {
+  return loadCandidateDocumentsForRemovalForUserCandidate(...args);
+}
+
+export async function collectCandidateDocumentIdsForRemoval(
+  ...args: Parameters<typeof collectCandidateDocumentIdsForRemovalCandidate>
+) {
+  return collectCandidateDocumentIdsForRemovalCandidate(...args);
+}
+
+export async function collectCandidateSourceDocumentsForRemoval(
+  ...args: Parameters<typeof collectCandidateSourceDocumentsForRemovalCandidate>
+) {
+  return collectCandidateSourceDocumentsForRemovalCandidate(...args);
+}
+
+export async function resolveSourceBindingCandidates(
+  ...args: Parameters<typeof resolveSourceBindingCandidatesCandidate>
+) {
+  return resolveSourceBindingCandidatesCandidate(...args);
+}
+
+export async function resolveSourceIdsForRemoval(
+  ...args: Parameters<typeof resolveSourceIdsForRemovalCandidate>
+) {
+  return resolveSourceIdsForRemovalCandidate(...args);
+}
 
 export async function loadCandidateDocumentsForRemoval(
   input: unknown,
@@ -589,13 +623,6 @@ export async function unlinkDocumentSource(
   });
 }
 
-export {
-  collectCandidateDocumentIdsForRemoval,
-  collectCandidateSourceDocumentsForRemoval,
-  loadCandidateDocumentsForRemovalForUser,
-  resolveSourceBindingCandidates,
-  resolveSourceIdsForRemoval,
-} from "./source-candidates";
 export type {
   CandidateDocument,
   CandidateDocumentsForRemoval,
