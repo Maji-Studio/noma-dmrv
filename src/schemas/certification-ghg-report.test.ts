@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSubmitGhgStatementDialogSchema,
   prepareGhgStatementReportSchema,
   submitGhgStatementDialogSchema,
 } from "./certification";
@@ -51,5 +52,16 @@ describe("GHG Statement report action schemas", () => {
         externalReportUrl: "https://vvb.example/report.pdf",
       }).success,
     ).toBe(false);
+  });
+
+  it("lets the UI validate confirmation fields before it generates the report", () => {
+    const uiSchema = buildSubmitGhgStatementDialogSchema({
+      isResubmit: false,
+      isProduction: false,
+      requireReportSource: false,
+    });
+
+    expect(uiSchema.safeParse({}).success).toBe(true);
+    expect(submitGhgStatementDialogSchema.safeParse({}).success).toBe(false);
   });
 });

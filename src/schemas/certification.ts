@@ -144,7 +144,7 @@ export type DiscardRemovalDraftInput = z.infer<
   typeof discardRemovalDraftSchema
 >;
 
-export const submitGhgStatementDialogSchema = z.object({
+const submitGhgStatementFieldsSchema = z.object({
   reportId: z.string().uuid().optional(),
   externalReportUrl: httpsUrlSchema.optional(),
   // Compatibility alias for existing callers. New UI uses externalReportUrl.
@@ -157,26 +157,29 @@ export const submitGhgStatementDialogSchema = z.object({
     )
     .optional(),
   confirmProduction: z.boolean().optional(),
-}).check((ctx) => {
-  const value = ctx.value;
-  const externalUrl = value.externalReportUrl ?? value.reportUrl;
-  if (!value.reportId && !externalUrl) {
-    ctx.issues.push({
-      code: "custom",
-      input: value,
-      path: ["reportId"],
-      message: "Approve a generated report or enter an external report URL",
-    });
-  }
-  if (value.reportId && externalUrl) {
-    ctx.issues.push({
-      code: "custom",
-      input: value,
-      path: ["reportId"],
-      message: "Choose either the generated report or the external fallback",
-    });
-  }
 });
+
+export const submitGhgStatementDialogSchema =
+  submitGhgStatementFieldsSchema.check((ctx) => {
+    const value = ctx.value;
+    const externalUrl = value.externalReportUrl ?? value.reportUrl;
+    if (!value.reportId && !externalUrl) {
+      ctx.issues.push({
+        code: "custom",
+        input: value,
+        path: ["reportId"],
+        message: "Approve a generated report or enter an external report URL",
+      });
+    }
+    if (value.reportId && externalUrl) {
+      ctx.issues.push({
+        code: "custom",
+        input: value,
+        path: ["reportId"],
+        message: "Choose either the generated report or the external fallback",
+      });
+    }
+  });
 
 export type SubmitGhgStatementDialogInput = z.infer<
   typeof submitGhgStatementDialogSchema
@@ -185,8 +188,17 @@ export type SubmitGhgStatementDialogInput = z.infer<
 export function buildSubmitGhgStatementDialogSchema(args: {
   isResubmit: boolean;
   isProduction: boolean;
+  /**
+   * The submit dialog generates its controlled report after client-side form
+   * validation. The server schema always requires a resolved report source.
+   */
+  requireReportSource?: boolean;
 }) {
-  return submitGhgStatementDialogSchema.check((ctx) => {
+  const schema =
+    args.requireReportSource === false
+      ? submitGhgStatementFieldsSchema
+      : submitGhgStatementDialogSchema;
+  return schema.check((ctx) => {
     const value = ctx.value;
     if (args.isResubmit && !value.summaryOfChanges?.trim()) {
       ctx.issues.push({

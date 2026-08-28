@@ -8,6 +8,8 @@ const state = vi.hoisted(() => ({
   create: vi.fn(),
   refresh: vi.fn(),
   submit: vi.fn(),
+  prepareReport: vi.fn(),
+  approveReport: vi.fn(),
   toastSuccess: vi.fn(),
 }));
 
@@ -34,6 +36,7 @@ vi.mock("react-hook-form", () => ({
         ),
     watch: () => "2026-07-31",
     trigger: () => Promise.resolve(true),
+    getValues: () => undefined,
     reset: vi.fn(),
     setError: vi.fn(),
     setValue: vi.fn(),
@@ -80,7 +83,18 @@ vi.mock("@/components/ui/status-badge", () => ({
 }));
 
 vi.mock("@/components/ui/step-flow", () => ({
-  StepFlow: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  StepFlow: ({
+    children,
+    footer,
+  }: {
+    children: ReactNode;
+    footer?: ReactNode;
+  }) => (
+    <div>
+      {children}
+      {footer}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/ui/toast", () => ({
@@ -122,13 +136,36 @@ vi.mock("@/hooks/use-certification", () => ({
     isLoading: false,
     refetch: vi.fn(),
   }),
+  useGhgStatementBreakdown: () => ({
+    data: {
+      status: "available",
+      value: {
+        netRemovedKg: 1000,
+        netBeforeDiscountKg: 1100,
+        standardDeviationKg: null,
+        riskOfReversalPercent: null,
+        bufferCreditsKg: null,
+        supplierCreditsKg: null,
+        registryStatementId: "statement-1",
+        registryStatementStatus: "DRAFT",
+        ghgStatementId: "statement-local-1",
+        externalId: "statement-1",
+        reportingPeriodStartOn: "2026-01-01",
+        reportingPeriodEndOn: "2026-01-31",
+        memberRemovalCount: 1,
+        isProduction: false,
+      },
+      message: "Exact registry roll-up available.",
+    },
+    isLoading: false,
+  }),
   usePrepareGhgStatementReport: () => ({
     isPending: false,
-    mutateAsync: vi.fn(),
+    mutateAsync: state.prepareReport,
   }),
   useApproveGhgStatementReport: () => ({
     isPending: false,
-    mutateAsync: vi.fn(),
+    mutateAsync: state.approveReport,
   }),
 }));
 
@@ -181,6 +218,16 @@ beforeEach(() => {
   state.refresh.mockReset();
   state.submit.mockReset();
   state.submit.mockResolvedValue({ remoteStatus: "SUBMITTED" });
+  state.prepareReport.mockReset();
+  state.prepareReport.mockResolvedValue({
+    id: "report-1",
+    version: 1,
+  });
+  state.approveReport.mockReset();
+  state.approveReport.mockResolvedValue({
+    id: "report-1",
+    version: 1,
+  });
   state.toastSuccess.mockReset();
 });
 
@@ -224,9 +271,25 @@ describe("GHG Statement route refreshes", () => {
       );
     });
 
+    expect(findButton(renderer!, "Generate report")).toBeUndefined();
+    expect(findButton(renderer!, "Approve report")).toBeUndefined();
+
+    await act(async () => findButton(renderer!, "Next")?.props.onClick());
+    expect(renderer!.root.findByProps({ id: "report-preview" })).toBeDefined();
+    expect(findButton(renderer!, "Submit")).toBeDefined();
     await act(async () => renderer?.root.findByType("form").props.onSubmit());
 
+    expect(state.prepareReport).toHaveBeenCalledOnce();
+    expect(state.approveReport).toHaveBeenCalledWith({
+      ghgStatementId: "statement-1",
+      reportId: "report-1",
+      version: 1,
+    });
     expect(state.submit).toHaveBeenCalledOnce();
+    expect(state.submit.mock.calls[0]?.[0]).toMatchObject({
+      ghgStatementId: "statement-1",
+      input: { reportId: "report-1" },
+    });
     expect(state.refresh).toHaveBeenCalledOnce();
     await act(async () => renderer?.unmount());
   });

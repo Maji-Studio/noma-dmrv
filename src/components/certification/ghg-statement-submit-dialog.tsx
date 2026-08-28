@@ -16,23 +16,30 @@ import {
   ServerError,
 } from "@/components/forms";
 import { Button, Modal } from "@/components/ui";
+import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
 import {
-  useGhgStatementReports,
+  useApproveGhgStatementReport,
+  useGhgStatementBreakdown,
+  usePrepareGhgStatementReport,
   useSubmitGhgStatementToVerifier,
 } from "@/hooks/use-certification";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
+import { formatCount } from "@/lib/copy-utils";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
 import {
   buildSubmitGhgStatementDialogSchema,
   type SubmitGhgStatementDialogInput,
 } from "@/schemas/certification";
 import { ProductionConfirmation } from "./production-confirmation";
-import {
-  findApprovedGhgStatementReport,
-  GhgStatementWorkflow,
-} from "./ghg-statement-workflow";
+import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import { SubmissionProgress } from "./submission-progress";
+
+const STEPS: StepFlowStep[] = [
+  { key: "report", label: "Report", description: "Choose the attachment" },
+  { key: "review", label: "Review", description: "Preview and submit" },
+];
 
 interface GhgStatementSubmitDialogProps {
   ghgStatementId: string;
@@ -55,18 +62,21 @@ export function GhgStatementSubmitDialog({
 }: GhgStatementSubmitDialogProps) {
   const router = useRouter();
   const mutation = useSubmitGhgStatementToVerifier();
-  const reportsQuery = useGhgStatementReports(ghgStatementId, isOpen);
-  const approvedReport = findApprovedGhgStatementReport(
-    reportsQuery.data ?? [],
-  );
-  const approvedReportId = approvedReport?.id ?? null;
+  const prepareReport = usePrepareGhgStatementReport();
+  const approveReport = useApproveGhgStatementReport();
+  const breakdownQuery = useGhgStatementBreakdown(ghgStatementId, isOpen);
   const toast = useToast();
   const schema = buildSubmitGhgStatementDialogSchema({
     isResubmit,
     isProduction,
+    requireReportSource: false,
   });
+  const [stepIndex, setStepIndex] = useState(0);
   const [reportSource, setReportSource] =
     useState<"generated" | "external">("generated");
+  const [preparationKey, setPreparationKey] = useState(() =>
+    crypto.randomUUID(),
+  );
   const [progressUpdates, setProgressUpdates] = useState<
     SubmissionProgressUpdate[]
   >([]);
@@ -78,7 +88,7 @@ export function GhgStatementSubmitDialog({
   // create-dialog pattern: reset both via the Modal's onOpen callback so the
   // form starts blank and any prior server error is cleared every open.
   const initialValues: SubmitGhgStatementDialogInput = {
-    reportId: approvedReportId ?? undefined,
+    reportId: undefined,
     externalReportUrl: undefined,
     summaryOfChanges: isResubmit ? "" : undefined,
     confirmProduction: false,
@@ -91,6 +101,8 @@ export function GhgStatementSubmitDialog({
     setError,
     setValue,
     clearErrors,
+    getValues,
+    trigger,
   } = useForm<SubmitGhgStatementDialogInput>({
     resolver: zodResolver(schema),
     defaultValues: initialValues,
@@ -101,7 +113,9 @@ export function GhgStatementSubmitDialog({
     mutation.reset();
     setProgressUpdates([]);
     setLastInput(null);
+    setStepIndex(0);
     setReportSource("generated");
+    setPreparationKey(crypto.randomUUID());
   };
 
   const runSubmission = async (input: SubmitGhgStatementDialogInput) => {
@@ -129,29 +143,70 @@ export function GhgStatementSubmitDialog({
     }
   };
 
-  const onSubmit = handleSubmit((data) => {
-    const input: SubmitGhgStatementDialogInput = {
-      reportId:
-        reportSource === "generated"
-          ? approvedReportId ?? undefined
-          : undefined,
-      externalReportUrl:
-        reportSource === "external" ? data.externalReportUrl : undefined,
-      summaryOfChanges: data.summaryOfChanges,
-      confirmProduction: data.confirmProduction,
-    };
-    setLastInput(input);
-    return runSubmission(input);
+  const onSubmit = handleSubmit(async (data) => {
+    try {
+      clearErrors("root.serverError");
+      let reportId: string | undefined;
+      if (reportSource === "generated") {
+        const prepared = await prepareReport.mutateAsync({
+          ghgStatementId,
+          preparationKey,
+        });
+        const approved = await approveReport.mutateAsync({
+          ghgStatementId,
+          reportId: prepared.id,
+          version: prepared.version,
+        });
+        reportId = approved.id;
+      }
+      const input: SubmitGhgStatementDialogInput = {
+        reportId,
+        externalReportUrl:
+          reportSource === "external" ? data.externalReportUrl : undefined,
+        summaryOfChanges: data.summaryOfChanges,
+        confirmProduction: data.confirmProduction,
+      };
+      setLastInput(input);
+      await runSubmission(input);
+    } catch (err) {
+      setError("root.serverError", {
+        message:
+          err instanceof Error
+            ? err.message
+            : "The report was not prepared. Check the preview and try again.",
+      });
+    }
   });
+
+  const advance = async () => {
+    clearErrors("root.serverError");
+    if (reportSource === "external") {
+      if (!getValues("externalReportUrl")) {
+        setError("externalReportUrl", {
+          message: "Enter an external report URL",
+        });
+        return;
+      }
+      if (!(await trigger("externalReportUrl"))) return;
+    }
+    setStepIndex(1);
+  };
 
   const serverError = errors.root?.serverError?.message ?? null;
   const showProgress =
     mutation.isPending || mutation.isSuccess || mutation.isError;
+  const reportPreparationPending =
+    prepareReport.isPending || approveReport.isPending;
+  const submissionPending = reportPreparationPending || mutation.isPending;
+  const generatedPreviewReady =
+    canGenerate && breakdownQuery.data?.status === "available";
   const submissionStalled = isSubmissionStreamStalledError(mutation.error);
   const idleTitle = isResubmit
     ? "Resubmit GHG Statement"
     : "Submit GHG Statement";
-  const dialogTitle = mutation.isPending
+  const dialogTitle = reportPreparationPending
+    ? "Preparing GHG Statement submission"
+    : mutation.isPending
     ? isResubmit
       ? "Resubmitting GHG Statement"
       : "Submitting GHG Statement"
@@ -172,10 +227,19 @@ export function GhgStatementSubmitDialog({
       onOpen={onModalOpen}
       ariaLabelledBy="ghg-submit-title"
       width="md"
-      dismissible={!mutation.isPending}
+      dismissible={!submissionPending}
       dismissOnClickOutside={false}
     >
-      <form onSubmit={onSubmit}>
+      <form
+        onSubmit={(event) => {
+          if (stepIndex === 0) {
+            event.preventDefault();
+            void advance();
+            return;
+          }
+          void onSubmit(event);
+        }}
+      >
         <div className="flex flex-col gap-20">
           <header>
             <h2 id="ghg-submit-title" className="title-heading-3">
@@ -211,14 +275,17 @@ export function GhgStatementSubmitDialog({
                     ) : (
                       <>
                         <Button
+                          type="button"
                           onClick={() => {
                             mutation.reset();
                             setProgressUpdates([]);
+                            setPreparationKey(crypto.randomUUID());
                           }}
                         >
                           Review submission
                         </Button>
                         <Button
+                          type="button"
                           variant="primary"
                           onClick={() => {
                             if (lastInput) void runSubmission(lastInput);
@@ -233,147 +300,244 @@ export function GhgStatementSubmitDialog({
               </div>
             </>
           ) : (
-            <>
-              <div className="flex flex-col gap-12">
-                <label className="flex items-start gap-8 body-small">
-                  <input
-                    type="radio"
-                    name="reportSource"
-                    checked={reportSource === "generated"}
-                    onChange={() => {
-                      setReportSource("generated");
-                      setValue("reportId", approvedReportId ?? undefined);
-                      setValue("externalReportUrl", undefined);
-                    }}
-                  />
-                  <span>
-                    <strong>Use a generated report</strong>
-                    <span className="mt-2 block text-[var(--color-text-tertiary)]">
-                      {approvedReportId
-                        ? "The current approved report is ready to submit."
-                        : "Generate, review, and approve the report before submitting."}
-                    </span>
-                  </span>
-                </label>
-
-                {reportSource === "generated" && (
-                  <GhgStatementWorkflow
-                    ghgStatementId={ghgStatementId}
-                    reportsQuery={reportsQuery}
-                    created
-                    canManageReports
-                    canGenerate={canGenerate}
-                    generationUnavailableReason={generationUnavailableReason}
-                    interactive
-                    verifierStep={
-                      approvedReportId
-                        ? {
-                            status: "active",
-                            detail: "Submit the approved report to the verifier.",
-                          }
-                        : {
-                            status: "skipped",
-                            detail: "Approve the report before submitting it.",
-                          }
-                    }
-                    onSubmit={
-                      approvedReportId ? () => void onSubmit() : undefined
-                    }
-                    submitLabel={isResubmit ? "Resubmit" : "Submit"}
-                  />
-                )}
-
-                <details className="border border-[var(--color-border-secondary)] p-12">
-                  <summary className="body-small cursor-pointer">
-                    Advanced: VVB or project-supplied controlled document
-                  </summary>
-                  <div className="mt-12 flex flex-col gap-12">
-                    <label className="flex items-start gap-8 body-small">
-                      <input
-                        type="radio"
-                        name="reportSource"
-                        checked={reportSource === "external"}
-                        onChange={() => {
-                          setReportSource("external");
-                          setValue("reportId", undefined);
-                        }}
-                      />
-                      Use an external HTTPS report URL
-                    </label>
-                    {reportSource === "external" && (
-                      <FormField
-                        id="externalReportUrl"
-                        label="External report URL"
-                        helperText="The verifier must be able to open this controlled document."
-                        required
-                        error={errors.externalReportUrl?.message}
-                      >
-                        <FormInput
-                          id="externalReportUrl"
-                          type="url"
-                          placeholder="https://example.com/report.pdf"
-                          error={!!errors.externalReportUrl}
-                          {...register("externalReportUrl")}
-                        />
-                      </FormField>
-                    )}
-                  </div>
-                </details>
-              </div>
-
-              {isResubmit && (
-                <FormField
-                  id="summaryOfChanges"
-                  label="Summary of changes"
-                  helperText="What you changed since the last submission, for the verifier."
-                  required
-                  error={errors.summaryOfChanges?.message}
-                >
-                  <FormTextarea
-                    id="summaryOfChanges"
-                    error={!!errors.summaryOfChanges}
-                    {...register("summaryOfChanges")}
-                  />
-                </FormField>
-              )}
-
-              {isProduction && (
-                <ProductionConfirmation
-                  actionLabel={
-                    isResubmit
-                      ? "resubmit this GHG Statement to the verifier on the production Isometric registry"
-                      : "submit this GHG Statement to the verifier on the production Isometric registry"
-                  }
-                  registerProps={register("confirmProduction")}
-                  errorMessage={errors.confirmProduction?.message}
-                />
-              )}
-
-              {serverError && <ServerError message={serverError} />}
-
-              <div className="flex justify-end gap-12">
-                <Button
-                  type="button"
-                  variant="default"
-                  onClick={onClose}
-                  disabled={mutation.isPending}
-                >
-                  Cancel
-                </Button>
-                {reportSource === "external" && (
+            <StepFlow
+              orientation="vertical"
+              steps={STEPS}
+              current={stepIndex}
+              furthest={stepIndex}
+              onNavigate={(index) => setStepIndex(index)}
+              footer={
+                <div className="flex flex-wrap justify-end gap-12">
                   <Button
-                    type="submit"
-                    variant="primary"
-                    busy={mutation.isPending}
+                    type="button"
+                    variant="default"
+                    onClick={onClose}
+                    disabled={submissionPending}
                   >
-                    {isResubmit ? "Resubmit" : "Submit"}
+                    Cancel
                   </Button>
-                )}
-              </div>
-            </>
+                  {stepIndex === 1 && (
+                    <Button
+                      type="button"
+                      variant="default"
+                      onClick={() => setStepIndex(0)}
+                      disabled={submissionPending}
+                    >
+                      Back
+                    </Button>
+                  )}
+                  {stepIndex === 0 ? (
+                    <Button type="button" variant="primary" onClick={advance}>
+                      Next
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      busy={submissionPending}
+                      disabled={
+                        reportSource === "generated" && !generatedPreviewReady
+                      }
+                    >
+                      {isResubmit ? "Resubmit" : "Submit"}
+                    </Button>
+                  )}
+                </div>
+              }
+            >
+              {stepIndex === 0 ? (
+                <div className="flex flex-col gap-12">
+                  <label className="flex items-start gap-8 body-small">
+                    <input
+                      type="radio"
+                      name="reportSource"
+                      checked={reportSource === "generated"}
+                      onChange={() => {
+                        setReportSource("generated");
+                        setValue("reportId", undefined);
+                        setValue("externalReportUrl", undefined);
+                        clearErrors("externalReportUrl");
+                      }}
+                    />
+                    <span>
+                      <strong>Generate and attach automatically</strong>
+                      <span className="mt-2 block text-[var(--color-text-tertiary)]">
+                        noma creates the controlled report from current
+                        Isometric data when you submit.
+                      </span>
+                    </span>
+                  </label>
+
+                  {reportSource === "generated" && !canGenerate && (
+                    <p
+                      className="body-caption text-[var(--color-text-secondary)]"
+                      role="status"
+                    >
+                      {generationUnavailableReason ??
+                        "The report cannot be prepared yet."}
+                    </p>
+                  )}
+
+                  <details className="border border-[var(--color-border-secondary)] p-12">
+                    <summary className="body-small cursor-pointer">
+                      Advanced: VVB or project-supplied controlled document
+                    </summary>
+                    <div className="mt-12 flex flex-col gap-12">
+                      <label className="flex items-start gap-8 body-small">
+                        <input
+                          type="radio"
+                          name="reportSource"
+                          checked={reportSource === "external"}
+                          onChange={() => {
+                            setReportSource("external");
+                            setValue("reportId", undefined);
+                          }}
+                        />
+                        Use an external HTTPS report URL
+                      </label>
+                      {reportSource === "external" && (
+                        <FormField
+                          id="externalReportUrl"
+                          label="External report URL"
+                          helperText="The verifier must be able to open this controlled document."
+                          required
+                          error={errors.externalReportUrl?.message}
+                        >
+                          <FormInput
+                            id="externalReportUrl"
+                            type="url"
+                            placeholder="https://example.com/report.pdf"
+                            error={!!errors.externalReportUrl}
+                            {...register("externalReportUrl")}
+                          />
+                        </FormField>
+                      )}
+                    </div>
+                  </details>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-16">
+                  {reportSource === "generated" ? (
+                    <GeneratedReportPreview query={breakdownQuery} />
+                  ) : (
+                    <ExternalReportPreview
+                      url={getValues("externalReportUrl") ?? ""}
+                    />
+                  )}
+
+                  {isResubmit && (
+                    <FormField
+                      id="summaryOfChanges"
+                      label="Summary of changes"
+                      helperText="What you changed since the last submission, for the verifier."
+                      required
+                      error={errors.summaryOfChanges?.message}
+                    >
+                      <FormTextarea
+                        id="summaryOfChanges"
+                        error={!!errors.summaryOfChanges}
+                        {...register("summaryOfChanges")}
+                      />
+                    </FormField>
+                  )}
+
+                  {isProduction && (
+                    <ProductionConfirmation
+                      actionLabel={
+                        isResubmit
+                          ? "resubmit this GHG Statement to the verifier on the production Isometric registry"
+                          : "submit this GHG Statement to the verifier on the production Isometric registry"
+                      }
+                      registerProps={register("confirmProduction")}
+                      errorMessage={errors.confirmProduction?.message}
+                    />
+                  )}
+
+                  {serverError && <ServerError message={serverError} />}
+                </div>
+              )}
+            </StepFlow>
           )}
         </div>
       </form>
     </Modal>
+  );
+}
+
+function GeneratedReportPreview({
+  query,
+}: {
+  query: ReturnType<typeof useGhgStatementBreakdown>;
+}) {
+  const data = query.data?.status === "available" ? query.data.value : null;
+  const period = data
+    ? data.reportingPeriodStartOn
+      ? formatDateRange(
+          data.reportingPeriodStartOn,
+          data.reportingPeriodEndOn,
+        )
+      : `Ends ${formatDate(data.reportingPeriodEndOn)}`
+    : null;
+
+  return (
+    <section className="flex flex-col gap-12" aria-labelledby="report-preview">
+      <div className="flex flex-col gap-4">
+        <h3 id="report-preview" className="body-large font-medium">
+          Submission preview
+        </h3>
+        <p className="body-small text-[var(--color-text-secondary)]">
+          Review the live figures below. noma generates the controlled report
+          and attaches it when you submit.
+        </p>
+      </div>
+
+      {data && (
+        <dl className="grid grid-cols-1 gap-12 border-y border-[var(--color-border-secondary)] py-12 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+              Reporting period
+            </dt>
+            <dd className="body-small text-[var(--color-text-primary)]">
+              {period}
+            </dd>
+          </div>
+          <div className="flex flex-col gap-2">
+            <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+              Contents
+            </dt>
+            <dd className="body-small text-[var(--color-text-primary)]">
+              {formatCount(data.memberRemovalCount, "Removal")}
+            </dd>
+          </div>
+        </dl>
+      )}
+
+      <GhgStatementCarbonBreakdown query={query} />
+    </section>
+  );
+}
+
+function ExternalReportPreview({ url }: { url: string }) {
+  return (
+    <section className="flex flex-col gap-8" aria-labelledby="report-preview">
+      <div className="flex flex-col gap-4">
+        <h3 id="report-preview" className="body-large font-medium">
+          Submission preview
+        </h3>
+        <p className="body-small text-[var(--color-text-secondary)]">
+          noma attaches this controlled document when you submit.
+        </p>
+      </div>
+      <dl className="border-y border-[var(--color-border-secondary)] py-12">
+        <div className="flex flex-col gap-2">
+          <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+            External report URL
+          </dt>
+          <dd className="body-small break-all font-mono text-[var(--color-text-primary)]">
+            {url}
+          </dd>
+        </div>
+      </dl>
+    </section>
   );
 }
