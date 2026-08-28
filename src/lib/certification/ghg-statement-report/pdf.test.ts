@@ -157,6 +157,7 @@ describe("renderGhgStatementReportPdf", () => {
       // Uppercase, letter-spaced headings extract as "D O C U M E N T", so
       // absence is asserted against the squashed lowercase text.
       const squashed = text.toLowerCase().replace(/\s+/g, "");
+      expect(squashed).toContain("ghgentryandactivitydates");
       expect(squashed).not.toContain("notconfigured");
       expect(squashed).not.toContain("reportmodel");
       expect(squashed).not.toContain("documentcontrol");
@@ -241,7 +242,7 @@ describe("renderGhgStatementReportPdf", () => {
     for (const page of pages.slice(1)) {
       const squashed = page.toLowerCase().replace(/\s+/g, "");
       const firstEntry = squashed.indexOf("rmv_");
-      const identityHeader = squashed.indexOf("ghgentryandreportingperiod");
+      const identityHeader = squashed.indexOf("ghgentryandactivitydates");
       const netHeader = squashed.indexOf("netremoved");
       const uncertaintyHeader = squashed.indexOf("beforeuncertainty");
       const deviationHeader = squashed.indexOf("standarddeviation");

@@ -258,7 +258,7 @@ function entryTableHeader(): ReactElement {
   // `fixed` repeats the header on every page the table wraps onto, so a
   // continuation page is never a column of unlabelled numbers.
   return v(styles.th, { fixed: true },
-    t([styles.thText, { flex: 1 }], "GHG Entry and reporting period"),
+    t([styles.thText, { flex: 1 }], "GHG Entry and activity dates"),
     numericHeader("Net\nremoved", ENTRY_COL.net),
     numericHeader("Before\nuncertainty", ENTRY_COL.beforeUncertainty),
     numericHeader("Standard\ndeviation", ENTRY_COL.standardDeviation),
