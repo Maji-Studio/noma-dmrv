@@ -204,8 +204,11 @@ function GhgStatementSubmitDialogContent({
   const reconciledStatus = mutation.data
     ? registryStatus(mutation.data.remoteStatus)
     : null;
-  const resultNeedsReview = needsSubmissionReview(reconciledStatus);
-  const showSubmissionProgress = !(mutation.isSuccess && resultNeedsReview);
+  const resultNeedsReview = reconciledStatus?.kind === "in-registry";
+  const verificationFailed =
+    reconciledStatus?.kind === "verification-failed";
+  const resultNeedsAction = needsSubmissionReview(reconciledStatus);
+  const showSubmissionProgress = !(mutation.isSuccess && resultNeedsAction);
   const idleTitle = isResubmit
     ? "Resubmit GHG Statement"
     : "Submit GHG Statement";
@@ -254,8 +257,10 @@ function GhgStatementSubmitDialogContent({
                   {isPending
                     ? "noma is submitting the GHG Statement to the verifier."
                     : mutation.isSuccess && reconciledStatus
-                      ? resultNeedsReview
-                        ? `Isometric status: ${reconciledStatus.label}. Review the submission before trying again.`
+                      ? verificationFailed
+                        ? "Isometric status: Verification failed. Update the Removals, close this dialog, then use Refresh on the GHG Statement before resubmitting."
+                        : resultNeedsReview
+                          ? `Isometric status: ${reconciledStatus.label}. Review the submission before trying again.`
                         : `Isometric status: ${reconciledStatus.label}. The reconciled status is saved in noma.`
                       : mutation.isSuccess
                         ? "The reconciled Isometric status is saved in noma."
@@ -280,7 +285,9 @@ function GhgStatementSubmitDialogContent({
                         variant="primary"
                         onClick={onClose}
                       >
-                        {submissionStalled ? "Close" : "Done"}
+                        {submissionStalled || verificationFailed
+                          ? "Close"
+                          : "Done"}
                       </Button>
                     ) : (
                       <>

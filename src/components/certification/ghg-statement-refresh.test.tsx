@@ -446,16 +446,23 @@ describe("GHG Statement route refreshes", () => {
   });
 
   it.each([
-    ["DRAFT", "GHG Statement not submitted", "In registry"],
+    [
+      "DRAFT",
+      "GHG Statement not submitted",
+      "Isometric status: In registry. Review the submission before trying again.",
+      "Review submission",
+    ],
     [
       "FAILED_VERIFICATION",
       "GHG Statement verification failed",
-      "Verification failed",
+      "Isometric status: Verification failed. Update the Removals, close this dialog, then use Refresh on the GHG Statement before resubmitting.",
+      "Close",
     ],
   ])(
     "keeps fulfilled %s results actionable",
-    async (remoteStatus, expectedTitle, expectedStatus) => {
+    async (remoteStatus, expectedTitle, expectedGuidance, expectedAction) => {
       state.submit.mockResolvedValue({ remoteStatus });
+      const onClose = vi.fn();
 
       let renderer: ReactTestRenderer | undefined;
       await act(async () => {
@@ -463,7 +470,7 @@ describe("GHG Statement route refreshes", () => {
           <GhgStatementSubmitDialog
             ghgStatementId="statement-1"
             isOpen
-            onClose={vi.fn()}
+            onClose={onClose}
             isProduction={false}
             isResubmit={false}
             canGenerate
@@ -477,7 +484,7 @@ describe("GHG Statement route refreshes", () => {
           <GhgStatementSubmitDialog
             ghgStatementId="statement-1"
             isOpen
-            onClose={vi.fn()}
+            onClose={onClose}
             isProduction={false}
             isResubmit={false}
             canGenerate
@@ -492,13 +499,18 @@ describe("GHG Statement route refreshes", () => {
       ).toBe(true);
       expect(
         renderer!.root.findAllByType("span").some((span) =>
-          String(span.props.children).includes(
-            `Isometric status: ${expectedStatus}. Review the submission before trying again.`,
-          ),
+          String(span.props.children).includes(expectedGuidance),
         ),
       ).toBe(true);
-      expect(findButton(renderer!, "Review submission")).toBeDefined();
+      expect(findButton(renderer!, expectedAction)).toBeDefined();
       expect(findButton(renderer!, "Done")).toBeUndefined();
+      if (remoteStatus === "FAILED_VERIFICATION") {
+        expect(findButton(renderer!, "Review submission")).toBeUndefined();
+        await act(async () =>
+          findButton(renderer!, expectedAction)?.props.onClick(),
+        );
+        expect(onClose).toHaveBeenCalledOnce();
+      }
       expect(
         renderer!.root.findAllByType("span").some((span) =>
           String(span.props.children).includes("Submission complete"),
