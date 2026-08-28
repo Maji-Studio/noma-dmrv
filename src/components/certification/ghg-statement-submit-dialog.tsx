@@ -48,12 +48,20 @@ interface GhgStatementSubmitDialogProps {
   generationUnavailableReason?: string | null;
 }
 
-function registryStatusLabel(status: RemoteGhgStatus): string {
+function registryStatus(status: RemoteGhgStatus) {
   return deriveStatementStatus({
     local: "submitted",
     lockInFlight: false,
     remoteStatus: status,
-  }).label;
+  });
+}
+
+function needsSubmissionReview(
+  status: ReturnType<typeof registryStatus> | null,
+): boolean {
+  return (
+    status?.kind === "in-registry" || status?.kind === "verification-failed"
+  );
 }
 
 export function GhgStatementSubmitDialog({
@@ -150,9 +158,7 @@ function GhgStatementSubmitDialogContent({
         },
       });
       router.refresh();
-      toast.success(
-        `GHG Statement: ${registryStatusLabel(result.remoteStatus)}.`,
-      );
+      toast.success(`GHG Statement: ${registryStatus(result.remoteStatus).label}.`);
     } catch (err) {
       setError("root.serverError", {
         message:
@@ -188,8 +194,9 @@ function GhgStatementSubmitDialogContent({
   const submissionStalled = isSubmissionStreamStalledError(mutation.error);
   const displayedServerError = submissionStalled ? null : serverError;
   const reconciledStatus = mutation.data
-    ? registryStatusLabel(mutation.data.remoteStatus)
+    ? registryStatus(mutation.data.remoteStatus)
     : null;
+  const resultNeedsReview = needsSubmissionReview(reconciledStatus);
   const idleTitle = isResubmit
     ? "Resubmit GHG Statement"
     : "Submit GHG Statement";
@@ -198,9 +205,13 @@ function GhgStatementSubmitDialogContent({
       ? "Resubmitting GHG Statement"
       : "Submitting GHG Statement"
     : mutation.isSuccess
-      ? isResubmit
-        ? "GHG Statement resubmitted"
-        : "GHG Statement submitted"
+      ? reconciledStatus?.kind === "in-registry"
+        ? "GHG Statement not submitted"
+        : reconciledStatus?.kind === "verification-failed"
+          ? "GHG Statement verification failed"
+          : isResubmit
+            ? "GHG Statement resubmitted"
+            : "GHG Statement submitted"
       : mutation.isError
         ? isResubmit
           ? "GHG Statement not resubmitted"
@@ -232,7 +243,9 @@ function GhgStatementSubmitDialogContent({
                   {isPending
                     ? "noma is submitting the GHG Statement to the verifier."
                     : mutation.isSuccess && reconciledStatus
-                      ? `Isometric status: ${reconciledStatus}. The reconciled status is saved in noma.`
+                      ? resultNeedsReview
+                        ? `Isometric status: ${reconciledStatus.label}. Review the submission before trying again.`
+                        : `Isometric status: ${reconciledStatus.label}. The reconciled status is saved in noma.`
                       : mutation.isSuccess
                         ? "The reconciled Isometric status is saved in noma."
                       : submissionStalled
@@ -241,7 +254,17 @@ function GhgStatementSubmitDialogContent({
                 </span>
                 {!isPending && (
                   <div className="flex items-center gap-12">
-                    {mutation.isSuccess || submissionStalled ? (
+                    {mutation.isSuccess && resultNeedsReview ? (
+                      <Button
+                        variant="primary"
+                        onClick={() => {
+                          mutation.reset();
+                          setProgressUpdates([]);
+                        }}
+                      >
+                        Review submission
+                      </Button>
+                    ) : mutation.isSuccess || submissionStalled ? (
                       <Button
                         variant="primary"
                         onClick={onClose}

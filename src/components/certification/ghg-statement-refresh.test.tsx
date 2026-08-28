@@ -421,6 +421,64 @@ describe("GHG Statement route refreshes", () => {
     await act(async () => renderer?.unmount());
   });
 
+  it.each([
+    ["DRAFT", "GHG Statement not submitted", "In registry"],
+    [
+      "FAILED_VERIFICATION",
+      "GHG Statement verification failed",
+      "Verification failed",
+    ],
+  ])(
+    "keeps fulfilled %s results actionable",
+    async (remoteStatus, expectedTitle, expectedStatus) => {
+      state.submit.mockResolvedValue({ remoteStatus });
+
+      let renderer: ReactTestRenderer | undefined;
+      await act(async () => {
+        renderer = create(
+          <GhgStatementSubmitDialog
+            ghgStatementId="statement-1"
+            isOpen
+            onClose={vi.fn()}
+            isProduction={false}
+            isResubmit={false}
+            canGenerate
+          />,
+        );
+      });
+
+      await act(async () => renderer?.root.findByType("form").props.onSubmit());
+      await act(async () => {
+        renderer?.update(
+          <GhgStatementSubmitDialog
+            ghgStatementId="statement-1"
+            isOpen
+            onClose={vi.fn()}
+            isProduction={false}
+            isResubmit={false}
+            canGenerate
+          />,
+        );
+      });
+
+      expect(
+        renderer!.root.findAllByType("h2").some((heading) =>
+          String(heading.props.children).includes(expectedTitle),
+        ),
+      ).toBe(true);
+      expect(
+        renderer!.root.findAllByType("span").some((span) =>
+          String(span.props.children).includes(
+            `Isometric status: ${expectedStatus}. Review the submission before trying again.`,
+          ),
+        ),
+      ).toBe(true);
+      expect(findButton(renderer!, "Review submission")).toBeDefined();
+      expect(findButton(renderer!, "Done")).toBeUndefined();
+      await act(async () => renderer?.unmount());
+    },
+  );
+
   it("shows only the statement Refresh guidance when progress stalls", async () => {
     const stalledError = new SubmissionStreamStalledError();
     state.submit.mockRejectedValue(stalledError);
