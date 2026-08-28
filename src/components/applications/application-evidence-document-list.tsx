@@ -5,6 +5,7 @@ import {
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui";
 import type { DocumentRow } from "@/data-access/documents";
 import {
   APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS,
@@ -36,9 +37,11 @@ export function ApplicationEvidenceDocumentList({
 }) {
   if (docs.length === 0) {
     return (
-      <p className="body-small text-[var(--color-text-secondary)]">
-        {emptyMessage}
-      </p>
+      <EmptyState
+        icon={<FileIcon size={32} weight="bold" />}
+        title={emptyMessage}
+        padding="sm"
+      />
     );
   }
 

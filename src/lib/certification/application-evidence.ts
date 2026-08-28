@@ -111,15 +111,14 @@ export const APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE = "photo" as const;
 
 /**
  * Application-owned files that become Isometric Sources for a Biochar
- * Application. GIS files stay in the evidence-method step in noma, while the
- * other types are managed in the general supporting-evidence step.
+ * Application. GIS files remain local until an active-boundary document
+ * identity exists, while these types are managed as supporting evidence.
  */
 export const APPLICATION_ISOMETRIC_SOURCE_DOCUMENT_TYPES = [
   APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
   "pdf",
   "weighbridge_ticket",
   "affidavit",
-  "gis_boundary",
 ] as const;
 
 export function isApplicationIsometricSourceDocumentType(
@@ -138,6 +137,22 @@ export function biocharApplicationIdForSource(
     isApplicationIsometricSourceDocumentType(documentType)
     ? lineage.entityId
     : null;
+}
+
+export function isApplicationSourceDocumentReady(
+  lineage: { entityType: string },
+  document: {
+    documentType: string;
+    uploadStatus: string | null;
+    fileUrl: string | null;
+  },
+): boolean {
+  return (
+    lineage.entityType !== APPLICATION_DOCUMENT_ENTITY_TYPE ||
+    !isApplicationIsometricSourceDocumentType(document.documentType) ||
+    document.uploadStatus === "uploaded" ||
+    document.fileUrl != null
+  );
 }
 
 /**

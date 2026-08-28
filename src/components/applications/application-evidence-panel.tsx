@@ -32,10 +32,16 @@ const METHOD_OPTIONS = [
     title: "GIS reference",
     description: "The field boundary as a GeoJSON file, drawn on a map.",
   },
+  {
+    key: "visual",
+    title: "Visual evidence",
+    description: "Geotagged photos of each application stage.",
+    disabled: true,
+    badge: "Available later",
+  },
 ] as const;
 
 interface ApplicationEvidencePanelProps {
-  applicationId?: string;
   mode: ApplicationEvidenceMethod;
   boundary: GisBoundary | null;
   disabled?: boolean;

@@ -93,6 +93,19 @@ describe("reviewPayloadHash", () => {
     );
   });
 
+  it("keeps unknown nested sourceIds fields hashed", () => {
+    const original = {
+      ...pendingPayload(),
+      futureRegistryContract: { sourceIds: ["reviewed-value"] },
+    };
+    const drifted = {
+      ...original,
+      futureRegistryContract: { sourceIds: ["changed-value"] },
+    };
+
+    expect(reviewPayloadHash(drifted)).not.toBe(reviewPayloadHash(original));
+  });
+
   it("keeps every non-Source-ID binding field hashed", () => {
     const reroled = {
       ...pendingPayload(),

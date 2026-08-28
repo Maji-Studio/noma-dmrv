@@ -40,6 +40,7 @@ import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 const SOURCE_ID_KEY = "sourceIds";
 const SOURCE_BINDING_PLAN_KEY = "sourceBindingPlan";
 const CANDIDATE_SOURCES_KEY = "candidateSources";
+const BIOCHAR_APPLICATION_INTENTS_KEY = "biocharApplicationIntents";
 const GENERATED_LEDGER_ROLES = new Set([
   "transport_evidence_ledger",
   "durability_evidence_ledger",
@@ -74,19 +75,22 @@ function stripSourceIds(
       );
       continue;
     }
-    out[key] = stripNestedSourceIds(value);
+    if (key === BIOCHAR_APPLICATION_INTENTS_KEY && Array.isArray(value)) {
+      out[key] = value.map(stripApplicationIntentSourceIds);
+      continue;
+    }
+    out[key] = value;
   }
   return out;
 }
 
-function stripNestedSourceIds(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stripNestedSourceIds);
-  if (value == null || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .filter(([key]) => key !== SOURCE_ID_KEY)
-      .map(([key, nestedValue]) => [key, stripNestedSourceIds(nestedValue)]),
-  );
+function stripApplicationIntentSourceIds(value: unknown): unknown {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const copy = { ...(value as Record<string, unknown>) };
+  delete copy[SOURCE_ID_KEY];
+  return copy;
 }
 
 function isGeneratedLedgerBinding(value: unknown): boolean {

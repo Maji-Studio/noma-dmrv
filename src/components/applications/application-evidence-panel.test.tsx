@@ -101,7 +101,6 @@ function renderPanel(
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
       <ApplicationEvidencePanel
-        applicationId={APPLICATION_ID}
         mode={mode}
         boundary={boundary}
         readOnly={readOnly}
@@ -136,12 +135,22 @@ describe("ApplicationEvidencePanel", () => {
     expect(html.indexOf("Customer location")).toBeLessThan(
       html.indexOf("GIS reference"),
     );
-    expect(html).not.toContain("Visual evidence");
+    expect(html).toContain("Visual evidence");
+    expect(html).toContain("Available later");
     const selectedCard = html.match(
       /<button[^>]*role="radio"[^>]*aria-checked="true"[^>]*>[\s\S]*?<\/button>/,
     )?.[0];
     expect(selectedCard).toContain("Customer location");
     expect(html).not.toContain("Add GIS reference");
+  });
+
+  it("preserves a saved visual evidence method as unavailable", () => {
+    const html = renderPanel([], "visual");
+    const visualCard = html.match(
+      /<div[^>]*role="radio"[^>]*aria-checked="true"[^>]*aria-disabled="true"[^>]*>[\s\S]*?<\/div>/,
+    )?.[0];
+
+    expect(visualCard).toContain("Visual evidence");
   });
 
   it("only shows the GIS editor for GIS reference evidence", () => {

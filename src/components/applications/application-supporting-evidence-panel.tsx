@@ -94,7 +94,6 @@ export function ApplicationSupportingEvidencePanel({
     <FormFileUpload
       id={`application-${applicationId}-supporting-evidence-upload`}
       accept={SUPPORTING_EVIDENCE_ACCEPT}
-      maxSizeMb={50}
       disabled={disabled}
       entityType={ENTITY_TYPE}
       entityId={applicationId}
@@ -109,7 +108,6 @@ export function ApplicationSupportingEvidencePanel({
     <FormFileUpload
       id="application-create-supporting-evidence-upload"
       accept={SUPPORTING_EVIDENCE_ACCEPT}
-      maxSizeMb={50}
       disabled={disabled}
       deferred
       deferredFiles={(deferredAttachments?.attachments ?? []).filter(

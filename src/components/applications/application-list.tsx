@@ -748,7 +748,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ],
             content: (
               <ApplicationEvidencePanel
-                applicationId={sideSheetEntity.id}
                 mode={(sideSheetEntity.evidenceMethod ?? "location") as ApplicationEvidenceMethod}
                 boundary={sideSheetEntity.gisBoundary ?? null}
                 readOnly

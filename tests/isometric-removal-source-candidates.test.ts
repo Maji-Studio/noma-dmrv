@@ -42,26 +42,36 @@ describe("Removal source candidate discovery", () => {
             {
               id: "inventory-document",
               documentType: "pdf",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: { logbookEvidenceType: "inventory" },
             },
             {
               id: "weighbridge-document",
               documentType: "pdf",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: { logbookEvidenceType: "weighbridge" },
             },
             {
               id: "affidavit-document",
               documentType: "affidavit",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: {},
             },
             {
               id: "application-photo",
               documentType: "photo",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: { evidenceRole: "spreading" },
             },
             {
               id: "application-gis-boundary",
               documentType: "gis_boundary",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: {},
             },
           ] as never;
@@ -106,7 +116,6 @@ describe("Removal source candidate discovery", () => {
 
     expect(candidates.map((candidate) => candidate.documentId)).toEqual([
       "affidavit-document",
-      "application-gis-boundary",
       "application-photo",
       "delivery-bol",
       "feedstock-bol",
@@ -126,7 +135,6 @@ describe("Removal source candidate discovery", () => {
         .map((candidate) => candidate.documentId),
     ).toEqual([
       "affidavit-document",
-      "application-gis-boundary",
       "application-photo",
       "inventory-document",
       "weighbridge-document",
@@ -141,6 +149,36 @@ describe("Removal source candidate discovery", () => {
       "production_run",
       "run-1",
     );
+  });
+
+  it("excludes unconfirmed application uploads from registry candidates", async () => {
+    vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
+      async (_ctx, entityType) =>
+        entityType === "application"
+          ? ([
+              {
+                id: "pending-photo",
+                documentType: "photo",
+                uploadStatus: "pending",
+                fileUrl: null,
+                metadata: {},
+              },
+              {
+                id: "legacy-photo",
+                documentType: "photo",
+                uploadStatus: "failed",
+                fileUrl: "https://example.test/photo.jpg",
+                metadata: {},
+              },
+            ] as never)
+          : ([] as never),
+    );
+
+    await expect(
+      collectCandidateSourceDocumentsForRemoval(orgCtx, { lineages }),
+    ).resolves.toEqual([
+      expect.objectContaining({ documentId: "legacy-photo" }),
+    ]);
   });
 
   it("resolves persisted Source IDs without losing their intended targets", async () => {

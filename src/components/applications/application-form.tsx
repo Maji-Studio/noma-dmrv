@@ -30,7 +30,6 @@ import {
   soilTemperatureSources,
   formatApplicationMethod,
   formatSoilTemperatureSource,
-  isSelectableApplicationEvidenceMethod,
   type ApplicationFormData,
   type ApplicationEvidenceMethod,
   type ApplicationMethod,
@@ -157,9 +156,6 @@ export function ApplicationForm({
   // removals derive durability from petrographic reflectance + TGA.
   const hideSoilTemperature = durabilityOption === "1000_year";
 
-  const storedEvidenceMethod =
-    (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ??
-    "location";
   const defaultValues = {
     applicationDate: application?.applicationDate
       ? formatLocalDate(new Date(application.applicationDate))
@@ -172,11 +168,11 @@ export function ApplicationForm({
     gpsLatitude: application?.gpsLatitude ?? undefined,
     gpsLongitude: application?.gpsLongitude ?? undefined,
     applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
-    // Visual evidence is now an independent attachment step. Normalize legacy
-    // records to the default selectable method when they are next edited.
-    evidenceMethod: isSelectableApplicationEvidenceMethod(storedEvidenceMethod)
-      ? storedEvidenceMethod
-      : "location",
+    // The visual path remains UI-locked, but existing records keep their
+    // declared evidence method when another field is edited.
+    evidenceMethod:
+      (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ??
+      "location",
     gisBoundary: application?.gisBoundary ?? null,
     soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
     soilTemperatureC: application?.soilTemperatureC ?? undefined,
@@ -585,7 +581,6 @@ export function ApplicationForm({
         fields={["evidenceMethod", "gisBoundary"]}
       >
         <ApplicationEvidencePanel
-          applicationId={application?.id}
           mode={evidenceMethod ?? "location"}
           boundary={gisBoundary ?? null}
           disabled={isSubmitting}

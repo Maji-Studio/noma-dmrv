@@ -328,8 +328,22 @@ export function classifyRemovalSourceCandidate(
 
 export function buildRemovalSourceDescription(
   binding: ClassifiedRemovalSource,
+): string;
+export function buildRemovalSourceDescription(
+  binding: null,
+  lineageEntityLabel: string,
+): string;
+export function buildRemovalSourceDescription(
+  binding: ClassifiedRemovalSource | null,
+  lineageEntityLabel: string,
+): string;
+export function buildRemovalSourceDescription(
+  binding: ClassifiedRemovalSource | null,
+  lineageEntityLabel?: string,
 ): string {
-  return `Noma role: ${binding.nomaRoleLabel}. Lineage: ${binding.lineage.entityLabel}.`;
+  return binding
+    ? `Noma role: ${binding.nomaRoleLabel}. Lineage: ${binding.lineage.entityLabel}.`
+    : `Supporting evidence for ${lineageEntityLabel}.`;
 }
 
 export interface SourceBindingCandidate {
