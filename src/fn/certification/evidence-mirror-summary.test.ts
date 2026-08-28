@@ -208,6 +208,42 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
     );
   });
 
+  it("counts application-only Biochar Application Source candidates", async () => {
+    vi.mocked(listDocumentsForEntityIds).mockImplementation(
+      async (_ctx, entityType) =>
+        entityType === "application"
+          ? ([
+              {
+                id: "application-photo",
+                entityType: "application",
+                entityId: "application-1",
+                documentType: "photo",
+                metadata: {},
+                storageKey: "managed/application-photo.jpg",
+                uploadStatus: "uploaded",
+                fileSizeBytes: 1_024,
+                mimeType: "image/jpeg",
+              },
+            ] as never)
+          : [],
+    );
+    vi.mocked(listDocumentUploadsForDocuments).mockResolvedValue([]);
+
+    await expect(
+      loadEvidenceMirrorSummaryForScope(orgCtx, {
+        removalId: "removal-1",
+        memberBatches: [{ id: "batch-1" }],
+        lineages: [lineage],
+      }),
+    ).resolves.toEqual({ total: 1, mirrored: 0 });
+
+    expect(listDocumentUploadsForDocuments).toHaveBeenCalledWith(
+      orgCtx,
+      "isometric",
+      ["application-photo"],
+    );
+  });
+
   it("excludes uploaded rows whose storage object is missing", async () => {
     storageMocks.headObject.mockResolvedValueOnce(null);
     vi.mocked(listDocumentsForEntityIds).mockImplementation(

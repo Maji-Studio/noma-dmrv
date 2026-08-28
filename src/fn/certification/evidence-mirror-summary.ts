@@ -8,8 +8,11 @@ import {
 import { getStorageProvider } from "@/lib/storage";
 import { SOURCES_MAX_BYTES } from "@/schemas/certification-sources";
 import type { DocumentEntityType } from "@/schemas/documents";
-import { classifyRemovalSourceCandidate } from "@/lib/certification/removal-source-bindings";
 import { ISOMETRIC_PROVIDER } from "./shared";
+import {
+  sourceCandidateEligibility,
+  type CandidateLineageEntityType,
+} from "./source-candidates";
 
 export interface EvidenceMirrorSummary {
   total: number;
@@ -90,18 +93,16 @@ export async function loadEvidenceMirrorSummaryForScope(
         const entityLabel = lineageLabels.get(
           `${document.entityType}:${document.entityId}`,
         );
-        return (
-          entityLabel !== undefined &&
-          classifyRemovalSourceCandidate({
-            documentType: document.documentType,
-            metadata: document.metadata,
-            lineage: {
-              entityType: document.entityType,
-              entityId: document.entityId,
-              entityLabel,
-            },
-          }) !== null
-        );
+        if (entityLabel === undefined) return false;
+        return sourceCandidateEligibility({
+          document,
+          lineage: {
+            entityType: document.entityType as CandidateLineageEntityType,
+            entityId: document.entityId,
+            entityLabel,
+          },
+          removalId: scope.removalId ?? undefined,
+        }) !== null;
       })
       .map((document) => [document.id, document]),
   );
