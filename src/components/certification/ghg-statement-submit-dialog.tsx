@@ -233,7 +233,7 @@ function GhgStatementSubmitDialogContent({
                       : mutation.isSuccess
                         ? "The reconciled Isometric status is saved in noma."
                       : submissionStalled
-                        ? "Registry work may still be continuing. Reconcile the status before trying again."
+                        ? "Registry work may still be continuing. Close this dialog, then use Refresh on the GHG Statement before trying again."
                         : "Completed registry operations are preserved for a safe retry."}
                 </span>
                 {!isPending && (
@@ -241,12 +241,9 @@ function GhgStatementSubmitDialogContent({
                     {mutation.isSuccess || submissionStalled ? (
                       <Button
                         variant="primary"
-                        onClick={() => {
-                          if (submissionStalled) router.refresh();
-                          onClose();
-                        }}
+                        onClick={onClose}
                       >
-                        {submissionStalled ? "Reconcile status" : "Done"}
+                        {submissionStalled ? "Close" : "Done"}
                       </Button>
                     ) : (
                       <>
