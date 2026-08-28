@@ -207,6 +207,23 @@ describe("renderGhgStatementReportPdf", () => {
     );
   });
 
+  it("shows when the project protocol setting is absent", async () => {
+    const base = buildModel();
+    const model = buildModel({
+      documentControl: {
+        ...base.documentControl,
+        configuredProtocolVersion: null,
+      },
+    });
+
+    const text = (await pageTexts(await renderGhgStatementReportPdf(model))).join(
+      " ",
+    );
+    const squashed = text.toLowerCase().replace(/\s+/g, "");
+
+    expect(squashed).toContain("projectnotset");
+  });
+
   it("repeats the entry table header when the entries spill onto a second page", async () => {
     const entries = Array.from({ length: MULTI_PAGE_ENTRY_COUNT }, (_, index) => ({
       // Zero-padded so the ids sort the same way the model sorts them.

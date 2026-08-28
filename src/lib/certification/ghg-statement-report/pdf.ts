@@ -370,9 +370,12 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
       legendRow("Report version", String(model.reportVersion)),
       legendRow("Standard", `Isometric ${control.standardVersion}`),
       legendRow("Protocol", `Biochar ${control.protocolVersion}`),
-      control.configuredProtocolVersion
-        ? legendRow("Project", `Protocol ${control.configuredProtocolVersion}`)
-        : null,
+      legendRow(
+        "Project",
+        control.configuredProtocolVersion
+          ? `Protocol ${control.configuredProtocolVersion}`
+          : MISSING_VALUE.notSet,
+      ),
     ),
   );
   const footer = v(styles.footer, { fixed: true },
