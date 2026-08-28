@@ -128,9 +128,7 @@ function GhgStatementSubmitDialogContent({
   const [stepIndex, setStepIndex] = useState(0);
   const [reportSource, setReportSource] =
     useState<"generated" | "external">("generated");
-  const [preparationKey, setPreparationKey] = useState(() =>
-    crypto.randomUUID(),
-  );
+  const [preparationKey] = useState(() => crypto.randomUUID());
   const [progressUpdates, setProgressUpdates] = useState<
     SubmissionProgressUpdate[]
   >([]);
@@ -210,11 +208,14 @@ function GhgStatementSubmitDialogContent({
           ghgStatementId,
           preparationKey,
         });
-        const approved = await approveReport.mutateAsync({
-          ghgStatementId,
-          reportId: prepared.id,
-          version: prepared.version,
-        });
+        const approved =
+          prepared.lifecycle === "prepared"
+            ? await approveReport.mutateAsync({
+                ghgStatementId,
+                reportId: prepared.id,
+                version: prepared.version,
+              })
+            : prepared;
         reportId = approved.id;
       }
       const input: SubmitGhgStatementDialogInput = {
@@ -376,7 +377,6 @@ function GhgStatementSubmitDialogContent({
                         onClick={() => {
                           mutation.reset();
                           setProgressUpdates([]);
-                          setPreparationKey(crypto.randomUUID());
                         }}
                       >
                         Review submission
