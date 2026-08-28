@@ -3,8 +3,8 @@
  *
  * Lists candidate noma documents discovered along the Removal's chain-of-
  * custody. Submission mirrors managed documents to Isometric Sources
- * automatically; each Source is then bound only to its code-owned intended
- * Datapoint target.
+ * automatically; each Source is then attached to its code-owned Datapoint or
+ * Biochar Application target.
  *
  * Mounted in `RemovalDetailSheet` (the Removals-tab quick view, opened via
  * `?removal=<id>`), the single place the candidate set is consumed. The
@@ -44,8 +44,8 @@ export function SourcesPanel({ removalId, isEditable }: SourcesPanelProps) {
           <PanelCounter removalId={removalId} isEditable={isEditable} />
         </header>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Files that support registry values are mirrored automatically when
-          you submit. GIS boundaries and photos remain on the Application.
+          Supporting files are mirrored automatically when you submit, then
+          attached to the relevant registry value or Biochar Application.
         </p>
         <PanelBody removalId={removalId} isEditable={isEditable} />
       </div>
@@ -133,7 +133,7 @@ function PanelBodyForRemoval({
       <EmptyState
         icon={<FileIcon size={32} />}
         title="No registry value sources found"
-        description="Add a logbook or bill of lading when it supports a registry mass or transport value. GIS boundaries remain on the Application and are not attached to those values."
+        description="Add application evidence, a logbook, or a bill of lading when it supports a registry record."
         padding="sm"
       />
     );
@@ -176,7 +176,7 @@ function CandidateRow({
   const isMirrorable = !!document.storageKey;
   const isPdf = isPdfCandidate(document.mimeType, document.fileName);
   const description = [
-    binding.nomaRoleLabel,
+    binding?.nomaRoleLabel ?? "Biochar Application evidence",
     lineageEntity.entityLabel,
   ].join(" · ");
 

@@ -42,26 +42,36 @@ describe("Removal source candidate discovery", () => {
             {
               id: "inventory-document",
               documentType: "pdf",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: { logbookEvidenceType: "inventory" },
             },
             {
               id: "weighbridge-document",
               documentType: "pdf",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: { logbookEvidenceType: "weighbridge" },
             },
             {
               id: "affidavit-document",
               documentType: "affidavit",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: {},
             },
             {
               id: "application-photo",
               documentType: "photo",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: { evidenceRole: "spreading" },
             },
             {
               id: "application-gis-boundary",
               documentType: "gis_boundary",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: {},
             },
           ] as never;
@@ -71,6 +81,8 @@ describe("Removal source candidate discovery", () => {
             {
               id: "feedstock-bol",
               documentType: "bill_of_lading",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: {},
             },
           ] as never;
@@ -80,6 +92,8 @@ describe("Removal source candidate discovery", () => {
             {
               id: "delivery-bol",
               documentType: "bill_of_lading",
+              uploadStatus: "uploaded",
+              fileUrl: null,
               metadata: {},
             },
           ] as never;
@@ -98,7 +112,7 @@ describe("Removal source candidate discovery", () => {
     );
   });
 
-  it("returns only the three code-owned role candidates", async () => {
+  it("includes application evidence without inventing Datapoint targets", async () => {
     const candidates = await collectCandidateSourceDocumentsForRemoval(
       orgCtx,
       { lineages },
@@ -106,12 +120,13 @@ describe("Removal source candidate discovery", () => {
 
     expect(candidates.map((candidate) => candidate.documentId)).toEqual([
       "affidavit-document",
+      "application-photo",
       "delivery-bol",
       "feedstock-bol",
       "inventory-document",
       "weighbridge-document",
     ]);
-    expect(candidates.map((candidate) => candidate.binding.nomaRole).sort()).toEqual([
+    expect(candidates.flatMap((candidate) => candidate.binding?.nomaRole ?? []).sort()).toEqual([
       "delivery_bill_of_lading",
       "feedstock_bill_of_lading",
       "inventory",
@@ -119,15 +134,75 @@ describe("Removal source candidate discovery", () => {
       "inventory",
     ]);
     expect(
+      candidates
+        .filter((candidate) => candidate.biocharApplicationId)
+        .map((candidate) => candidate.documentId),
+    ).toEqual([
+      "affidavit-document",
+      "application-photo",
+      "inventory-document",
+      "weighbridge-document",
+    ]);
+    expect(
       candidates.find(
-        (candidate) => candidate.documentId === "application-gis-boundary",
-      ),
-    ).toBeUndefined();
+        (candidate) => candidate.documentId === "application-photo",
+      )?.binding,
+    ).toBeNull();
     expect(documentsDA.listDocumentsForEntity).not.toHaveBeenCalledWith(
       orgCtx,
       "production_run",
       "run-1",
     );
+  });
+
+  it("excludes pending and failed uploads without losing legacy URL rows", async () => {
+    vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
+      async (_ctx, entityType) => {
+        if (entityType === "application") {
+          return [
+            {
+              id: "pending-photo",
+              documentType: "photo",
+              uploadStatus: "pending",
+              fileUrl: "https://example.test/pending-photo.jpg",
+              metadata: {},
+            },
+            {
+              id: "failed-photo",
+              documentType: "photo",
+              uploadStatus: "failed",
+              fileUrl: "https://example.test/failed-photo.jpg",
+              metadata: {},
+            },
+            {
+              id: "legacy-photo",
+              documentType: "photo",
+              uploadStatus: null,
+              fileUrl: "https://example.test/legacy-photo.jpg",
+              metadata: {},
+            },
+          ] as never;
+        }
+        if (entityType === "delivery") {
+          return [
+            {
+              id: "failed-delivery-bol",
+              documentType: "bill_of_lading",
+              uploadStatus: "failed",
+              fileUrl: "https://example.test/failed-delivery-bol.pdf",
+              metadata: {},
+            },
+          ] as never;
+        }
+        return [] as never;
+      },
+    );
+
+    await expect(
+      collectCandidateSourceDocumentsForRemoval(orgCtx, { lineages }),
+    ).resolves.toEqual([
+      expect.objectContaining({ documentId: "legacy-photo" }),
+    ]);
   });
 
   it("resolves persisted Source IDs without losing their intended targets", async () => {
@@ -180,6 +255,8 @@ describe("Removal source candidate discovery", () => {
           {
             id: "transport-ledger",
             documentType: "pdf",
+            uploadStatus: "uploaded",
+            fileUrl: null,
             metadata: {
               kind: "transport_evidence_ledger",
               removalId: "removal-1",
@@ -189,6 +266,8 @@ describe("Removal source candidate discovery", () => {
           {
             id: "durability-ledger",
             documentType: "pdf",
+            uploadStatus: "uploaded",
+            fileUrl: null,
             metadata: {
               kind: "durability_evidence_ledger",
               removalId: "removal-1",
@@ -199,6 +278,8 @@ describe("Removal source candidate discovery", () => {
           {
             id: "other-removal-ledger",
             documentType: "pdf",
+            uploadStatus: "uploaded",
+            fileUrl: null,
             metadata: {
               kind: "transport_evidence_ledger",
               removalId: "removal-2",
@@ -222,7 +303,7 @@ describe("Removal source candidate discovery", () => {
       "durability-ledger",
       "transport-ledger",
     ]);
-    expect(candidates.map((candidate) => candidate.binding.nomaRole)).toEqual([
+    expect(candidates.flatMap((candidate) => candidate.binding?.nomaRole ?? [])).toEqual([
       "durability_evidence_ledger",
       "transport_evidence_ledger",
     ]);

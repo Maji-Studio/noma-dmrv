@@ -258,10 +258,9 @@ export function classifyRemovalSourceCandidate(
 ): ClassifiedRemovalSource | null {
   const { lineage } = facts;
   // A GIS boundary supports the Application's storage-area evidence. The
-  // current Removal integration only binds Sources to GHG-entry Datapoints,
-  // so classifying this file here would falsely attach it to product mass.
-  // Keep it out of this binding plan until biochar Application source_ids (or
-  // an equivalent boundary target) are submitted.
+  // Classifying this file here would falsely attach it to product mass. Keep
+  // it out of registry Source candidates until the Application model can
+  // identify the one active boundary document and exclude replaced uploads.
   //
   // This is a FORWARD guard: it preserves today's behaviour rather than
   // changing it, because `src/schemas/documents.ts` currently refuses the
@@ -329,8 +328,22 @@ export function classifyRemovalSourceCandidate(
 
 export function buildRemovalSourceDescription(
   binding: ClassifiedRemovalSource,
+): string;
+export function buildRemovalSourceDescription(
+  binding: null,
+  lineageEntityLabel: string,
+): string;
+export function buildRemovalSourceDescription(
+  binding: ClassifiedRemovalSource | null,
+  lineageEntityLabel: string,
+): string;
+export function buildRemovalSourceDescription(
+  binding: ClassifiedRemovalSource | null,
+  lineageEntityLabel?: string,
 ): string {
-  return `Noma role: ${binding.nomaRoleLabel}. Lineage: ${binding.lineage.entityLabel}.`;
+  return binding
+    ? `Noma role: ${binding.nomaRoleLabel}. Lineage: ${binding.lineage.entityLabel}.`
+    : `Supporting evidence for ${lineageEntityLabel}.`;
 }
 
 export interface SourceBindingCandidate {
