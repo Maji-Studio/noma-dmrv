@@ -53,7 +53,8 @@ function isSummaryCandidate(candidate: CandidateSourceDocument): boolean {
   return (
     entityType === "application" ||
     entityType === "delivery" ||
-    entityType === "feedstock"
+    entityType === "feedstock" ||
+    entityType === "credit_batch"
   );
 }
 
@@ -92,6 +93,9 @@ export async function loadEvidenceMirrorSummaryForScope(
     for (const feedstock of lineage.feedstocks) {
       add("feedstock", feedstock.id, `Feedstock ${feedstock.code}`);
     }
+  }
+  for (const batch of scope.memberBatches) {
+    add("credit_batch", batch.id, `Credit batch ${batch.id}`);
   }
 
   const documentGroups = await Promise.all(
