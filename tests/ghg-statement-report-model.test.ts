@@ -79,12 +79,13 @@ describe("GHG Statement report model", () => {
     });
 
     expect(first).toEqual(second);
-    expect(first.modelVersion).toBe(2);
+    expect(first.modelVersion).toBe(3);
     expect(first.entries.map((entry) => entry.externalEntryId)).toEqual([
       "rmv_a",
       "rmv_b",
     ]);
     expect(first.totals).toEqual({
+      statementNetRemovedKg: 902.125,
       netRemovedKg: 902.125,
       netRemovedWithoutDiscountKg: 935,
       uncertaintyDiscountKg: 32.875,
@@ -181,6 +182,7 @@ describe("GHG Statement report model", () => {
     });
 
     expect(model.totals).toMatchObject({
+      statementNetRemovedKg: 1_500,
       netRemovedKg: 1_502.1608971810922,
       netRemovedWithoutDiscountKg: 1_527.153951802095,
       supplierCreditKg: 1_470,

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const GHG_STATEMENT_REPORT_MODEL_VERSION = 2;
+export const GHG_STATEMENT_REPORT_MODEL_VERSION = 3;
 
 export interface GhgStatementReportDocumentControl {
   organizationName: string;
@@ -62,6 +62,9 @@ export interface GhgStatementReportModel {
   documentControl: GhgStatementReportDocumentControl;
   entries: GhgStatementReportEntry[];
   totals: {
+    /** Isometric's authoritative statement-level total at issuance precision. */
+    statementNetRemovedKg: number;
+    /** Sum of the statement's higher-precision live GHG Entry net values. */
     netRemovedKg: number;
     netRemovedWithoutDiscountKg: number;
     uncertaintyDiscountKg: number;
@@ -236,6 +239,7 @@ export function buildGhgStatementReportModel(
     documentControl: input.documentControl,
     entries,
     totals: {
+      statementNetRemovedKg: statementTotal,
       netRemovedKg,
       netRemovedWithoutDiscountKg,
       uncertaintyDiscountKg:
