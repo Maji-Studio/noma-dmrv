@@ -4,6 +4,9 @@ import {
   type ApplicationEvidenceMethod,
 } from "@/schemas/applications";
 
+export const DEFAULT_APPLICATION_EVIDENCE_METHOD: ApplicationEvidenceMethod =
+  "location";
+
 export function resolveApplicationEvidenceMethodDefault(
   savedMethod: string | null | undefined,
   organizationDefault: string | null | undefined,
@@ -23,5 +26,5 @@ export function resolveApplicationEvidenceMethodDefault(
   return configuredMethod &&
     isSelectableApplicationEvidenceMethod(configuredMethod)
     ? configuredMethod
-    : "location";
+    : DEFAULT_APPLICATION_EVIDENCE_METHOD;
 }

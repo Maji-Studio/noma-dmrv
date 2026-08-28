@@ -128,10 +128,16 @@ import {
   loadCandidateDocumentsForRemovalForUser,
   mirrorCandidateSourcesForSubmission,
   mirrorDocumentToSource,
+  type CandidateSourceDocument,
 } from "@/fn/certification/sources";
 import { buildSourceSupplierRef } from "@/lib/isometric/utils/source-ref";
 
 const SUPPLIER_REF = buildSourceSupplierRef(DOCUMENT_ID);
+const SUBMISSION_CANDIDATE: CandidateSourceDocument = {
+  documentId: DOCUMENT_ID,
+  binding: null,
+  biocharApplicationId: "biochar-application-test",
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -335,7 +341,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       makeTestOrgContext(USER_ID),
       {
         removalId: REMOVAL_ID,
-        candidateDocumentIds: [DOCUMENT_ID],
+        candidateSourceDocuments: [SUBMISSION_CANDIDATE],
       },
     );
 
@@ -363,12 +369,16 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     vi.mocked(isometric.requestSignedUploadUrl).mockResolvedValue({
       kind: "already_uploaded",
     });
+    // The immutable snapshot candidate no longer passes live discovery. The
+    // submission seam must still mirror it without weakening org/document
+    // ownership or storage validation.
+    vi.mocked(documentsDA.listDocumentsForEntity).mockResolvedValue([]);
 
     await mirrorCandidateSourcesForSubmission(
       makeTestOrgContext(USER_ID),
       {
         removalId: REMOVAL_ID,
-        candidateDocumentIds: [DOCUMENT_ID],
+        candidateSourceDocuments: [SUBMISSION_CANDIDATE],
       },
     );
 
@@ -377,6 +387,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       expect.objectContaining({ documentId: DOCUMENT_ID }),
       expect.anything(),
     );
+    expect(documentsDA.listDocumentsForEntity).not.toHaveBeenCalled();
   });
 
   it("authorizes a Sample lab report discovered for the member batch", async () => {
@@ -409,11 +420,25 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       kind: "already_uploaded",
     });
 
+    const candidates = await loadCandidateDocumentsForRemovalForUser(
+      makeTestOrgContext(USER_ID),
+      REMOVAL_ID,
+    );
+    const sampleCandidate = candidates.candidates[0];
+    expect(sampleCandidate?.lineageEntity.entityLabel).toBe("Sample LAB-001");
+    if (!sampleCandidate) throw new Error("Expected Sample Source candidate.");
+
     await mirrorCandidateSourcesForSubmission(
       makeTestOrgContext(USER_ID),
       {
         removalId: REMOVAL_ID,
-        candidateDocumentIds: [DOCUMENT_ID],
+        candidateSourceDocuments: [
+          {
+            documentId: sampleCandidate.document.id,
+            binding: sampleCandidate.binding,
+            biocharApplicationId: sampleCandidate.biocharApplicationId,
+          },
+        ],
       },
     );
 
@@ -426,13 +451,6 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       makeTestOrgContext(USER_ID),
       expect.objectContaining({ documentId: DOCUMENT_ID }),
       expect.anything(),
-    );
-    const candidates = await loadCandidateDocumentsForRemovalForUser(
-      makeTestOrgContext(USER_ID),
-      REMOVAL_ID,
-    );
-    expect(candidates.candidates[0]?.lineageEntity.entityLabel).toBe(
-      "Sample LAB-001",
     );
   });
 

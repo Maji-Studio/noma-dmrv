@@ -9,6 +9,27 @@ const frozenOperatorCandidate: CandidateSourceDocument = {
   binding: null,
   biocharApplicationId: "frozen-biochar-application",
 };
+const currentTransportLedgerCandidate: CandidateSourceDocument = {
+  documentId: "current-transport-ledger",
+  binding: {
+    nomaRole: "transport_evidence_ledger",
+    nomaRoleLabel: "Transport evidence ledger",
+    lineage: {
+      entityType: "credit_batch",
+      entityId: "batch-1",
+      entityLabel: "Credit batch CB-1",
+    },
+    intendedTarget: {
+      kind: "ordinary",
+      groupKey: "biochar-transport",
+      componentBlueprintKey: "mass_distance_based_ci_emissions",
+      inputKey: "mass_distance",
+      optionalInTemplate: true,
+    },
+    mappingRevision: "source-bindings-v1",
+  },
+  biocharApplicationId: null,
+};
 const currentCandidates: CandidateSourceDocument[] = [
   {
     documentId: "frozen-document",
@@ -20,27 +41,7 @@ const currentCandidates: CandidateSourceDocument[] = [
     binding: null,
     biocharApplicationId: "new-biochar-application",
   },
-  {
-    documentId: "current-transport-ledger",
-    binding: {
-      nomaRole: "transport_evidence_ledger",
-      nomaRoleLabel: "Transport evidence ledger",
-      lineage: {
-        entityType: "credit_batch",
-        entityId: "batch-1",
-        entityLabel: "Credit batch CB-1",
-      },
-      intendedTarget: {
-        kind: "ordinary",
-        groupKey: "biochar-transport",
-        componentBlueprintKey: "mass_distance_based_ci_emissions",
-        inputKey: "mass_distance",
-        optionalInTemplate: true,
-      },
-      mappingRevision: "source-bindings-v1",
-    },
-    biocharApplicationId: null,
-  },
+  currentTransportLedgerCandidate,
 ];
 
 function submission(
@@ -89,7 +90,7 @@ describe("Removal Source freeze", () => {
           currentCandidates,
           submission({ status }),
         ),
-      ).toEqual([frozenOperatorCandidate, currentCandidates[2]]);
+      ).toEqual([frozenOperatorCandidate, currentTransportLedgerCandidate]);
     },
   );
 
@@ -99,7 +100,7 @@ describe("Removal Source freeze", () => {
         currentCandidates.slice(1),
         submission(),
       ),
-    ).toEqual([frozenOperatorCandidate, currentCandidates[2]]);
+    ).toEqual([frozenOperatorCandidate, currentTransportLedgerCandidate]);
   });
 
   it("fails closed when a frozen snapshot has no candidate evidence set", () => {

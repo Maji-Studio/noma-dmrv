@@ -5,9 +5,11 @@ describe("Application supporting-evidence classification", () => {
   it.each([
     ["application.jpg", "image/jpeg", "photo"],
     ["application.webp", "image/webp", "photo"],
-    ["application.png", "application/octet-stream", "pdf"],
+    ["application.png", "application/octet-stream", "photo"],
+    ["application.jpg", "", "photo"],
+    ["application.jpg", "IMAGE/JPEG; charset=binary", "photo"],
     ["application.pdf", "", "pdf"],
-  ])("classifies %s from its browser MIME type", (name, type, expected) => {
+  ])("classifies %s from MIME and extension", (name, type, expected) => {
     expect(resolveSupportingEvidenceDocumentType({ name, type })).toBe(
       expected,
     );

@@ -178,6 +178,61 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
     );
   });
 
+  it("keeps a frozen Application candidate after live eligibility changes", async () => {
+    vi.mocked(listDocumentsForEntityIds).mockImplementation(
+      async (_ctx, entityType) =>
+        entityType === "application"
+          ? ([
+              {
+                id: "frozen-application-photo",
+                entityType: "application",
+                entityId: "application-1",
+                documentType: "gis_boundary",
+                metadata: {},
+                storageKey: "managed/frozen-application-photo.png",
+                uploadStatus: "uploaded",
+                fileSizeBytes: 1_024,
+                mimeType: "image/png",
+              },
+            ] as never)
+          : [],
+    );
+    vi.mocked(listDocumentUploadsForDocuments).mockResolvedValue([
+      { documentId: "frozen-application-photo" },
+    ] as never);
+
+    await expect(
+      loadEvidenceMirrorSummaryForScope(
+        orgCtx,
+        {
+          removalId: "removal-1",
+          memberBatches: [{ id: "batch-1" }],
+          lineages: [lineage],
+        },
+        {
+          status: "submitted",
+          payloadSnapshot: {
+            semantic: {
+              candidateSources: [
+                {
+                  documentId: "frozen-application-photo",
+                  binding: null,
+                  biocharApplicationId: "biochar-application-1",
+                },
+              ],
+            },
+          },
+        } as never,
+      ),
+    ).resolves.toEqual({ total: 1, mirrored: 1 });
+
+    expect(listDocumentUploadsForDocuments).toHaveBeenCalledWith(
+      orgCtx,
+      "isometric",
+      ["frozen-application-photo"],
+    );
+  });
+
   it("counts only completed managed uploads in the mirror denominator", async () => {
     vi.mocked(listDocumentsForEntityIds).mockImplementation(
       async (_ctx, entityType) =>

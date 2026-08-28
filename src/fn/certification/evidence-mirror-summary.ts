@@ -47,6 +47,16 @@ function isMirrorCandidateDocument(
   );
 }
 
+function isSummaryCandidate(candidate: CandidateSourceDocument): boolean {
+  if (candidate.biocharApplicationId) return true;
+  const entityType = candidate.binding?.lineage.entityType;
+  return (
+    entityType === "application" ||
+    entityType === "delivery" ||
+    entityType === "feedstock"
+  );
+}
+
 /** Count source candidates from the submission scope without rebuilding it. */
 export async function loadEvidenceMirrorSummaryForScope(
   orgCtx: OrgContext,
@@ -89,11 +99,12 @@ export async function loadEvidenceMirrorSummaryForScope(
       listDocumentsForEntityIds(orgCtx, entityType, Array.from(ids)),
     ),
   );
-  const candidatesById = new Map<string, MirrorCandidateDocument>();
+  const documentsById = new Map<string, MirrorCandidateDocument>();
   const liveCandidates: CandidateSourceDocument[] = [];
   for (const document of documentGroups
     .flat()
     .filter(isMirrorCandidateDocument)) {
+    documentsById.set(document.id, document);
     const entityLabel = lineageLabels.get(
       `${document.entityType}:${document.entityId}`,
     );
@@ -108,29 +119,22 @@ export async function loadEvidenceMirrorSummaryForScope(
       removalId: scope.removalId ?? undefined,
     });
     if (!eligibility) continue;
-    candidatesById.set(document.id, document);
     liveCandidates.push({
       documentId: document.id,
       binding: eligibility.binding,
       biocharApplicationId: eligibility.biocharApplicationId,
     });
   }
-  const liveCandidateIds = new Set(
-    liveCandidates.map(({ documentId }) => documentId),
+  const documentIds = Array.from(
+    new Set(
+      filterCandidateSourcesForSubmissionLifecycle(
+        liveCandidates,
+        latestSubmission,
+      )
+        .filter(isSummaryCandidate)
+        .map(({ documentId }) => documentId),
+    ),
   );
-  const lifecycleDocumentIds = filterCandidateSourcesForSubmissionLifecycle(
-    liveCandidates,
-    latestSubmission,
-  )
-    .map(({ documentId }) => documentId)
-    .filter((documentId) => liveCandidateIds.has(documentId));
-  const lifecycleCandidatesById = new Map(
-    lifecycleDocumentIds.map((documentId) => [
-      documentId,
-      candidatesById.get(documentId)!,
-    ]),
-  );
-  const documentIds = Array.from(lifecycleCandidatesById.keys());
   const mirrorRows = await listDocumentUploadsForDocuments(
     orgCtx,
     ISOMETRIC_PROVIDER,
@@ -146,14 +150,18 @@ export async function loadEvidenceMirrorSummaryForScope(
   const availableDocumentIds = new Set(
     (
       await Promise.all(
-        Array.from(lifecycleCandidatesById.values(), async (document) => {
-          if (mirroredDocumentIds.has(document.id)) return document.id;
+        documentIds.map(async (documentId) => {
+          if (mirroredDocumentIds.has(documentId)) return documentId;
+          const document = documentsById.get(documentId);
+          // A frozen candidate that disappeared from live discovery must stay
+          // visible as pending; submission will fail closed while loading it.
+          if (!document) return documentId;
           try {
             const head = await provider.headObject(document.storageKey);
-            return head?.size === document.fileSizeBytes ? document.id : null;
+            return head?.size === document.fileSizeBytes ? documentId : null;
           } catch {
             // Keep the advisory warning conservative during a provider outage.
-            return document.id;
+            return documentId;
           }
         }),
       )
