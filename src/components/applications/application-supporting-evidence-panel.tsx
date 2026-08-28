@@ -65,7 +65,7 @@ export function ApplicationSupportingEvidencePanel({
     .filter(isUploadedDocument)
     .filter(
       (doc) =>
-        doc.documentType !== "gis_boundary" &&
+        doc.documentType === "gis_boundary" ||
         isApplicationIsometricSourceDocumentType(doc.documentType),
     );
 
