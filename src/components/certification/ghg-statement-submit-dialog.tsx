@@ -45,6 +45,7 @@ interface GhgStatementSubmitDialogProps {
   isProduction: boolean;
   isResubmit: boolean;
   canGenerate: boolean;
+  canSubmit?: boolean;
   generationUnavailableReason?: string | null;
 }
 
@@ -102,6 +103,7 @@ function GhgStatementSubmitDialogContent({
   isProduction,
   isResubmit,
   canGenerate,
+  canSubmit = true,
   generationUnavailableReason,
   onSubmissionPendingChange,
 }: GhgStatementSubmitDialogContentProps) {
@@ -315,6 +317,14 @@ function GhgStatementSubmitDialogContent({
           </>
         ) : (
           <>
+              {!canSubmit && generationUnavailableReason && (
+                <p
+                  className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8 body-small text-[var(--color-signal-orange-strong)]"
+                  role="status"
+                >
+                  {generationUnavailableReason}
+                </p>
+              )}
               <div className="flex flex-col gap-12">
                 <label className="flex items-start gap-8 body-small">
                   <input
@@ -358,7 +368,9 @@ function GhgStatementSubmitDialogContent({
                           }
                     }
                     onSubmit={
-                      approvedReportId ? () => void onSubmit() : undefined
+                      approvedReportId && canSubmit
+                        ? () => void onSubmit()
+                        : undefined
                     }
                     submitLabel={isResubmit ? "Resubmit" : "Submit"}
                   />
@@ -441,7 +453,7 @@ function GhgStatementSubmitDialogContent({
                 >
                   Cancel
                 </Button>
-                {reportSource === "external" && (
+                {reportSource === "external" && canSubmit && (
                   <Button type="submit" variant="primary">
                     {isResubmit ? "Resubmit" : "Submit"}
                   </Button>

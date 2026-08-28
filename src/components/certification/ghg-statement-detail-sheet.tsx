@@ -47,7 +47,8 @@ import {
 
 const ICON_SIZE = 14;
 const SHORT_ID = 8;
-
+const STALE_DETAIL_WARNING =
+  "Statement details could not be refreshed. Showing the last loaded details. Use Refresh before generating or submitting.";
 
 interface GhgStatementDetailSheetProps {
   item: GhgStatementListItem;
@@ -61,6 +62,12 @@ export function hasGhgStatementDetailData<T>(query: {
   data: T | undefined;
 }): query is { data: T } {
   return query.data !== undefined;
+}
+
+export function canUseGhgStatementRegistryActions(query: {
+  error: unknown;
+}): boolean {
+  return !query.error;
 }
 
 function statementPeriod(item: GhgStatementListItem): string {
@@ -186,6 +193,12 @@ function DetailState({
             }
           : { status: "loading" },
   });
+  const registryActionsAvailable = canUseGhgStatementRegistryActions(query);
+  const canGenerate = workflowState.canGenerate && registryActionsAvailable;
+  const canSubmit = workflowState.canSubmit && registryActionsAvailable;
+  const generationUnavailableReason = registryActionsAvailable
+    ? workflowState.generationUnavailableReason
+    : STALE_DETAIL_WARNING;
   const { mode } = workflowState;
   const isResubmit = mode === "resubmit";
 
@@ -206,6 +219,15 @@ function DetailState({
     <>
       <SlideOverPanel.Body className="flex flex-col gap-24">
         <EnvBanner isProduction={isProduction} variant="inline" />
+
+        {!registryActionsAvailable && (
+          <p
+            className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8 body-small text-[var(--color-signal-orange-strong)]"
+            role="status"
+          >
+            {STALE_DETAIL_WARNING}
+          </p>
+        )}
 
         <section
           aria-labelledby="ghg-statement-status"
@@ -244,13 +266,11 @@ function DetailState({
                 />
               ) : undefined
             }
-            canGenerate={workflowState.canGenerate}
-            generationUnavailableReason={
-              workflowState.generationUnavailableReason
-            }
+            canGenerate={canGenerate}
+            generationUnavailableReason={generationUnavailableReason}
             verifierStep={workflowState.verifierStep}
             onSubmit={
-              workflowState.canSubmit ? () => setSubmitOpen(true) : undefined
+              canSubmit ? () => setSubmitOpen(true) : undefined
             }
             submitLabel={isResubmit ? "Resubmit" : "Submit"}
           />
@@ -367,8 +387,9 @@ function DetailState({
         onClose={() => setSubmitOpen(false)}
         isProduction={isProduction}
         isResubmit={isResubmit}
-        canGenerate={workflowState.canGenerate}
-        generationUnavailableReason={workflowState.generationUnavailableReason}
+        canGenerate={canGenerate}
+        canSubmit={canSubmit}
+        generationUnavailableReason={generationUnavailableReason}
       />
 
       <SlideOverPanel.Footer className="justify-stretch">
