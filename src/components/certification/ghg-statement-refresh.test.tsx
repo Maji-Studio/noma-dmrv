@@ -419,6 +419,8 @@ describe("GHG Statement route refreshes", () => {
     });
     await act(async () => sourceOptions[1].props.onChange());
     expect(findButton(renderer!, "Submit")).toBeUndefined();
+    await act(async () => renderer?.root.findByType("form").props.onSubmit());
+    expect(state.submit).not.toHaveBeenCalled();
     await act(async () => renderer?.unmount());
   });
 

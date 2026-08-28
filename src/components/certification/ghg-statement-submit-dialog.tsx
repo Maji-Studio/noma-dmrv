@@ -146,7 +146,7 @@ function GhgStatementSubmitDialogContent({
   });
 
   const runSubmission = async (input: SubmitGhgStatementDialogInput) => {
-    if (submissionInFlight.current) return;
+    if (!canSubmit || submissionInFlight.current) return;
     submissionInFlight.current = true;
     onSubmissionPendingChange(true);
     try {
