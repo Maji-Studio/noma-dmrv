@@ -301,31 +301,69 @@ describe("ensureRemovalBiocharApplications", () => {
     expect(mocks.client.post).toHaveBeenCalledTimes(1);
   });
 
-  it("waits for the new Biochar Application to receive its GHG Entry association", async () => {
+  it("accepts a matching Biochar Application when Isometric leaves its optional GHG Entry association empty", async () => {
     const unlinkedRemote = canonicalRemote({
       ghg_entry_id: null,
       removal_id: null,
     });
-    mocks.client.get
-      .mockResolvedValueOnce(page([]))
-      .mockResolvedValueOnce(unlinkedRemote)
-      .mockResolvedValueOnce(canonicalRemote());
+    mocks.client.get.mockResolvedValue(page([]));
     mocks.client.post.mockResolvedValue(unlinkedRemote);
 
-    await ensure();
+    await expect(ensure()).resolves.toBeUndefined();
 
     expect(mocks.client.post).toHaveBeenCalledTimes(1);
-    expect(mocks.client.get).toHaveBeenNthCalledWith(
-      2,
-      "/biochar_applications/bca-test",
-    );
-    expect(mocks.client.get).toHaveBeenNthCalledWith(
-      3,
-      "/biochar_applications/bca-test",
-    );
     expect(mocks.confirm).toHaveBeenCalledWith(
       orgCtx,
-      expect.objectContaining({ observedGhgEntryId: EXTERNAL_REMOVAL_ID }),
+      expect.objectContaining({
+        externalApplicationId: "bca-test",
+        observedGhgEntryId: null,
+        observedRemovalId: null,
+      }),
+    );
+    expect(
+      mocks.client.get.mock.calls.every(
+        ([path]) => path === "/biochar_applications",
+      ),
+    ).toBe(true);
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationId: APPLICATION_ID,
+        creditBatchId: CREDIT_BATCH_ID,
+        removalId: "removal-1",
+        submissionId: "submission-1",
+        externalApplicationId: "bca-test",
+        externalRemovalId: EXTERNAL_REMOVAL_ID,
+      }),
+      "Biochar Application has no registry GHG Entry association; accepting the provider-null readback",
+    );
+  });
+
+  it("reconciles an existing matching Biochar Application with no GHG Entry association", async () => {
+    const unlinkedRemote = canonicalRemote({
+      ghg_entry_id: null,
+      removal_id: null,
+    });
+    mocks.client.get.mockResolvedValue(page([unlinkedRemote]));
+
+    await expect(ensure()).resolves.toBeUndefined();
+
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.markDrift).not.toHaveBeenCalled();
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        externalApplicationId: "bca-test",
+        observedGhgEntryId: null,
+        observedRemovalId: null,
+      }),
+    );
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationId: APPLICATION_ID,
+        submissionId: "submission-1",
+        externalApplicationId: "bca-test",
+      }),
+      "Biochar Application has no registry GHG Entry association; accepting the provider-null readback",
     );
   });
 
@@ -375,6 +413,53 @@ describe("ensureRemovalBiocharApplications", () => {
       orgCtx,
       expect.objectContaining({ observedGhgEntryId: EXTERNAL_REMOVAL_ID }),
     );
+  });
+
+  it("retains prior non-null association observations when confirmed readback is null", async () => {
+    mocks.registration = registration(submittedBody(), {
+      externalApplicationId: "bca-test",
+      lifecycleStatus: "confirmed",
+      observedGhgEntryId: EXTERNAL_REMOVAL_ID,
+      observedRemovalId: EXTERNAL_REMOVAL_ID,
+    });
+    mocks.client.get.mockResolvedValue(
+      canonicalRemote({ ghg_entry_id: null, removal_id: null }),
+    );
+
+    await expect(ensure()).resolves.toBeUndefined();
+
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      orgCtx,
+      expect.objectContaining({
+        observedGhgEntryId: EXTERNAL_REMOVAL_ID,
+        observedRemovalId: EXTERNAL_REMOVAL_ID,
+      }),
+    );
+    expect(mocks.registration).toMatchObject({
+      observedGhgEntryId: EXTERNAL_REMOVAL_ID,
+      observedRemovalId: EXTERNAL_REMOVAL_ID,
+    });
+  });
+
+  it("rejects a deprecated Removal association to a different GHG Entry when the current field is null", async () => {
+    mocks.client.get.mockResolvedValue(
+      page([
+        canonicalRemote({
+          ghg_entry_id: null,
+          removal_id: "ghg-previous",
+        }),
+      ]),
+    );
+
+    await expect(ensure()).rejects.toThrow(/different GHG Entry/i);
+
+    expect(mocks.markDrift).toHaveBeenCalledWith(
+      orgCtx,
+      "journal-1",
+      "remote_payload_or_identity_drift",
+    );
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    expect(log.warn).not.toHaveBeenCalled();
   });
 
   it("rejects a confirmed identity still associated with the superseded Removal", async () => {
