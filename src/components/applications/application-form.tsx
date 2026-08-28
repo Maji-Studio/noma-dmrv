@@ -27,7 +27,6 @@ import { ProductCompositionPreview } from "@/components/ui/product-composition-p
 import {
   applicationFormSchema,
   applicationMethods,
-  isSelectableApplicationEvidenceMethod,
   soilTemperatureSources,
   formatApplicationMethod,
   formatSoilTemperatureSource,
@@ -43,6 +42,7 @@ import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings"
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
+import { resolveApplicationEvidenceMethodDefault } from "./application-form-defaults";
 import {
   FieldPositionField,
   resetFieldPosition,
@@ -173,13 +173,10 @@ export function ApplicationForm({
     applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
     // The visual path remains UI-locked, but existing records keep their
     // declared evidence method when another field is edited.
-    evidenceMethod:
-      (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ??
-      (isSelectableApplicationEvidenceMethod(
-        organizationDefaults.defaultEvidenceMethod,
-      )
-        ? organizationDefaults.defaultEvidenceMethod
-        : "location"),
+    evidenceMethod: resolveApplicationEvidenceMethodDefault(
+      application?.evidenceMethod,
+      organizationDefaults.defaultEvidenceMethod,
+    ),
     gisBoundary: application?.gisBoundary ?? null,
     soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
     soilTemperatureC: application?.soilTemperatureC ?? undefined,

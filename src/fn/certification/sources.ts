@@ -59,6 +59,7 @@ import {
   resolveSourceIdsForRemoval as resolveSourceIdsForRemovalCandidate,
   type CandidateDocument,
   type CandidateDocumentsForRemoval,
+  type CandidateSourceDocument,
 } from "./source-candidates";
 
 const BYTES_PER_MEGABYTE = 1_000_000;
@@ -154,11 +155,18 @@ export interface MirrorResult {
  */
 export async function mirrorCandidateSourcesForSubmission(
   orgCtx: OrgContext,
-  args: { removalId: string; candidateDocumentIds: string[] },
+  args: {
+    removalId: string;
+    candidateSourceDocuments: CandidateSourceDocument[];
+  },
 ): Promise<void> {
-  const candidateDocumentIds = Array.from(
-    new Set(args.candidateDocumentIds),
-  ).sort();
+  const candidateByDocumentId = new Map(
+    args.candidateSourceDocuments.map((candidate) => [
+      candidate.documentId,
+      candidate,
+    ]),
+  );
+  const candidateDocumentIds = Array.from(candidateByDocumentId.keys()).sort();
   if (candidateDocumentIds.length === 0) return;
 
   const existing = await listDocumentUploadsForDocuments(
@@ -172,10 +180,15 @@ export async function mirrorCandidateSourcesForSubmission(
 
   for (const documentId of candidateDocumentIds) {
     if (mirroredDocumentIds.has(documentId)) continue;
+    const submissionCandidate = candidateByDocumentId.get(documentId);
+    if (!submissionCandidate) continue;
     await mirrorDocumentToSourceForUser(
       orgCtx,
       { removalId: args.removalId, documentId },
-      { enforceRemovalLifecycle: true },
+      // Submission already filtered candidates through the immutable snapshot.
+      // Keep this internal seam available for fresh post-supersede evidence and
+      // deterministic generated ledgers; the operator action remains guarded.
+      { enforceRemovalLifecycle: false, submissionCandidate },
     );
   }
 }
@@ -240,25 +253,39 @@ export async function mirrorDocumentToSource(
 export async function mirrorDocumentToSourceForUser(
   orgCtx: OrgContext,
   parsed: MirrorDocumentToSourceInput,
-  options: { enforceRemovalLifecycle?: boolean } = {},
+  options: {
+    enforceRemovalLifecycle?: boolean;
+    /** Compiler-validated immutable candidate; never accepted from an action. */
+    submissionCandidate?: CandidateSourceDocument;
+  } = {},
 ): Promise<MirrorResult> {
   requireOrgRole(orgCtx, "admin");
   const { removalId, documentId } = parsed;
+  if (
+    options.submissionCandidate &&
+    options.submissionCandidate.documentId !== documentId
+  ) {
+    throw new SafeError(
+      "The submission Source candidate does not match the document.",
+    );
+  }
 
   // Ownership + lineage scoping ───────────────────────────────────────
   // `assertDocumentIsCandidateForRemoval` walks the same lineage the panel
   // shows. Anchoring the mutation to the removal prevents an authenticated
   // caller from mirroring an arbitrary document UUID through this endpoint.
-  const { candidates, candidate } = await assertDocumentIsCandidateForRemoval(
-    orgCtx,
-    removalId,
-    documentId,
-  );
-  if (!candidates.hasMapping) {
-    throw new SafeError(
-      "This facility isn't linked to an Isometric project. Link it in facility settings before submitting.",
-    );
-  }
+  // Submission may carry a frozen snapshot candidate that no longer passes
+  // today's live eligibility rule. That tuple was derived server-side and is
+  // hash-covered; the public action still re-derives the candidate every time.
+  const liveCandidate = options.submissionCandidate
+    ? null
+    : (
+        await assertDocumentIsCandidateForRemoval(
+          orgCtx,
+          removalId,
+          documentId,
+        )
+      ).candidate;
   const removal = await getCertifierRemovalById(orgCtx, removalId);
   if (!removal) throw new SafeError("Removal not found.");
   const mapping = await getCertifierProjectByFacility(
@@ -267,7 +294,6 @@ export async function mirrorDocumentToSourceForUser(
     ISOMETRIC_PROVIDER,
   );
   if (!mapping) {
-    // Defensive: hasMapping was true above, so this is a TOCTOU edge.
     throw new SafeError(
       "This facility isn't linked to an Isometric project. Link it in facility settings before submitting.",
     );
@@ -333,6 +359,12 @@ export async function mirrorDocumentToSourceForUser(
       ISOMETRIC_PROVIDER,
     );
     const policyIsPublic = sourceVisibility === "public";
+    const sourceBinding =
+      options.submissionCandidate?.binding ?? liveCandidate?.binding ?? null;
+    const sourceLineageLabel =
+      options.submissionCandidate?.binding?.lineage.entityLabel ??
+      liveCandidate?.lineageEntity.entityLabel ??
+      `${document.entityType} ${document.entityId}`;
     // Serialize concurrent mirrors of the same document with a transaction-
     // scoped advisory lock. Two operators clicking "Mirror" simultaneously
     // would otherwise both POST /sources and one Source becomes an orphan
@@ -428,8 +460,8 @@ export async function mirrorDocumentToSourceForUser(
                 supplierRefId,
                 isPublic: policyIsPublic,
                 sourceDescription: buildRemovalSourceDescription(
-                  candidate.binding,
-                  candidate.lineageEntity.entityLabel,
+                  sourceBinding,
+                  sourceLineageLabel,
                 ),
               }),
             ),

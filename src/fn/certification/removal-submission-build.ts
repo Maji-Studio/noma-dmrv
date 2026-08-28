@@ -63,6 +63,7 @@ import {
   productionClaimContribution,
 } from "./production-claim-policy";
 import { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
+import { filterCandidateSourcesForSubmissionLifecycle } from "./removal-source-freeze";
 
 export { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
 
@@ -742,17 +743,20 @@ export async function buildRemovalSubmissionBuild(args: {
     args.candidateSourceDocuments ??
     (args.sourceIds || args.sourceBindingCandidates
       ? []
-      : await collectCandidateSourceDocumentsForRemoval(orgCtx, {
-          removalId,
-          lineages: ctx.lineages,
-          memberBatches: ctx.memberBatches,
-          memberSamples: ctx.batchesWithSamples.flatMap((batch) =>
-            batch.samples.map((sample) => ({
-              id: sample.id,
-              code: sample.sampleCode,
-            })),
-          ),
-        }));
+      : filterCandidateSourcesForSubmissionLifecycle(
+          await collectCandidateSourceDocumentsForRemoval(orgCtx, {
+            removalId,
+            lineages: ctx.lineages,
+            memberBatches: ctx.memberBatches,
+            memberSamples: ctx.batchesWithSamples.flatMap((batch) =>
+              batch.samples.map((sample) => ({
+                id: sample.id,
+                code: sample.sampleCode,
+              })),
+            ),
+          }),
+          ctx.latestSubmission,
+        ));
   const sourceBindingCandidates =
     args.sourceBindingCandidates ??
     (args.sourceIds

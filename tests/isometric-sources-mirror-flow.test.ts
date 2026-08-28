@@ -95,6 +95,8 @@ const DELIVERY_ID = "55555555-5555-4555-8555-555555555555";
 const CREDIT_BATCH_ID = "66666666-6666-4666-8666-666666666666";
 const PRODUCTION_RUN_ID = "77777777-7777-4777-8777-777777777777";
 const SAMPLE_ID = "88888888-8888-4888-8888-888888888888";
+const STALE_APPLICATION_ID = "99999999-9999-4999-8999-999999999999";
+const STALE_DOCUMENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PROJECT_ID = "prj_TEST";
 const EXISTING_SOURCE_ID = "src_recovered";
 
@@ -126,10 +128,16 @@ import {
   loadCandidateDocumentsForRemovalForUser,
   mirrorCandidateSourcesForSubmission,
   mirrorDocumentToSource,
+  type CandidateSourceDocument,
 } from "@/fn/certification/sources";
 import { buildSourceSupplierRef } from "@/lib/isometric/utils/source-ref";
 
 const SUPPLIER_REF = buildSourceSupplierRef(DOCUMENT_ID);
+const SUBMISSION_CANDIDATE: CandidateSourceDocument = {
+  documentId: DOCUMENT_ID,
+  binding: null,
+  biocharApplicationId: "biochar-application-test",
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -221,6 +229,75 @@ beforeEach(() => {
 });
 
 describe("mirrorDocumentToSource — orphan recovery", () => {
+  it("scopes panel lineage to the Removal-owned application slices", async () => {
+    const currentOrgCtx = makeTestOrgContext(USER_ID);
+
+    vi.mocked(creditBatchAccountingDA.loadCreditBatchRollups).mockImplementation(
+      async (_orgCtx, _creditBatchIds, options) => ({
+        [CREDIT_BATCH_ID]: {
+          batch: {
+            id: CREDIT_BATCH_ID,
+            code: "CB-001",
+          },
+          lineageFacts: {
+            applications: [
+              {
+                id: APPLICATION_ID,
+                code: "APP-001",
+                delivery: { id: DELIVERY_ID, code: "DEL-001" },
+              },
+              ...(options?.removalId === REMOVAL_ID
+                ? []
+                : [
+                    {
+                      id: STALE_APPLICATION_ID,
+                      code: "APP-STALE",
+                      delivery: { id: DELIVERY_ID, code: "DEL-001" },
+                    },
+                  ]),
+            ],
+            runs: [],
+          },
+        },
+      }) as never,
+    );
+    vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
+      async (_orgCtx, entityType, entityId) => {
+        if (entityType !== "application") return [] as never;
+        return [
+          {
+            ...DOCUMENT_FIXTURE,
+            id:
+              entityId === APPLICATION_ID ? DOCUMENT_ID : STALE_DOCUMENT_ID,
+            fileName:
+              entityId === APPLICATION_ID
+                ? DOCUMENT_FIXTURE.fileName
+                : "stale-application-inventory.pdf",
+          },
+        ] as never;
+      },
+    );
+
+    const result = await loadCandidateDocumentsForRemovalForUser(
+      currentOrgCtx,
+      REMOVAL_ID,
+    );
+
+    expect(creditBatchAccountingDA.loadCreditBatchRollups).toHaveBeenCalledWith(
+      currentOrgCtx,
+      [CREDIT_BATCH_ID],
+      { removalId: REMOVAL_ID },
+    );
+    expect(result.candidates.map((candidate) => candidate.document.id)).toEqual([
+      DOCUMENT_ID,
+    ]);
+    expect(documentsDA.listDocumentsForEntity).not.toHaveBeenCalledWith(
+      currentOrgCtx,
+      "application",
+      STALE_APPLICATION_ID,
+    );
+  });
+
   it("excludes unconfirmed documents and their old mappings from candidate readback", async () => {
     vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
       async (_userId, entityType, entityId) =>
@@ -264,7 +341,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       makeTestOrgContext(USER_ID),
       {
         removalId: REMOVAL_ID,
-        candidateDocumentIds: [DOCUMENT_ID],
+        candidateSourceDocuments: [SUBMISSION_CANDIDATE],
       },
     );
 
@@ -276,6 +353,41 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       }),
       expect.anything(),
     );
+  });
+
+  it("lets the submission-owned mirror seam rebuild live evidence after supersede", async () => {
+    vi.mocked(
+      submissionsDA.getLatestSubmissionWithExecutor,
+    ).mockResolvedValue({
+      status: "superseded",
+      lockedAt: null,
+    } as never);
+    vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue({
+      id: EXISTING_SOURCE_ID,
+      is_public: false,
+    } as never);
+    vi.mocked(isometric.requestSignedUploadUrl).mockResolvedValue({
+      kind: "already_uploaded",
+    });
+    // The immutable snapshot candidate no longer passes live discovery. The
+    // submission seam must still mirror it without weakening org/document
+    // ownership or storage validation.
+    vi.mocked(documentsDA.listDocumentsForEntity).mockResolvedValue([]);
+
+    await mirrorCandidateSourcesForSubmission(
+      makeTestOrgContext(USER_ID),
+      {
+        removalId: REMOVAL_ID,
+        candidateSourceDocuments: [SUBMISSION_CANDIDATE],
+      },
+    );
+
+    expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      expect.objectContaining({ documentId: DOCUMENT_ID }),
+      expect.anything(),
+    );
+    expect(documentsDA.listDocumentsForEntity).not.toHaveBeenCalled();
   });
 
   it("authorizes a Sample lab report discovered for the member batch", async () => {
@@ -308,11 +420,25 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       kind: "already_uploaded",
     });
 
+    const candidates = await loadCandidateDocumentsForRemovalForUser(
+      makeTestOrgContext(USER_ID),
+      REMOVAL_ID,
+    );
+    const sampleCandidate = candidates.candidates[0];
+    expect(sampleCandidate?.lineageEntity.entityLabel).toBe("Sample LAB-001");
+    if (!sampleCandidate) throw new Error("Expected Sample Source candidate.");
+
     await mirrorCandidateSourcesForSubmission(
       makeTestOrgContext(USER_ID),
       {
         removalId: REMOVAL_ID,
-        candidateDocumentIds: [DOCUMENT_ID],
+        candidateSourceDocuments: [
+          {
+            documentId: sampleCandidate.document.id,
+            binding: sampleCandidate.binding,
+            biocharApplicationId: sampleCandidate.biocharApplicationId,
+          },
+        ],
       },
     );
 
@@ -325,13 +451,6 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       makeTestOrgContext(USER_ID),
       expect.objectContaining({ documentId: DOCUMENT_ID }),
       expect.anything(),
-    );
-    const candidates = await loadCandidateDocumentsForRemovalForUser(
-      makeTestOrgContext(USER_ID),
-      REMOVAL_ID,
-    );
-    expect(candidates.candidates[0]?.lineageEntity.entityLabel).toBe(
-      "Sample LAB-001",
     );
   });
 

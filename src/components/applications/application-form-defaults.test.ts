@@ -1,16 +1,22 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { resolveApplicationEvidenceMethodDefault } from "./application-form-defaults";
 
 describe("Application form organization defaults", () => {
   it("uses the selectable organization evidence default for new records", () => {
-    const source = readFileSync(
-      join(process.cwd(), "src/components/applications/application-form.tsx"),
-      "utf8",
+    expect(resolveApplicationEvidenceMethodDefault(undefined, "boundary")).toBe(
+      "boundary",
     );
+  });
 
-    expect(source).toContain("useOrganizationDefaultValues");
-    expect(source).toContain("organizationDefaults.defaultEvidenceMethod");
-    expect(source).toContain("isSelectableApplicationEvidenceMethod");
+  it("falls back when an organization still stores the unavailable visual default", () => {
+    expect(resolveApplicationEvidenceMethodDefault(undefined, "visual")).toBe(
+      "location",
+    );
+  });
+
+  it("preserves a saved legacy visual method while editing", () => {
+    expect(resolveApplicationEvidenceMethodDefault("visual", "boundary")).toBe(
+      "visual",
+    );
   });
 });

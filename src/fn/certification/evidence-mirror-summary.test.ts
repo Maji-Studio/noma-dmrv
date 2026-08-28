@@ -25,6 +25,7 @@ import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import { listDocumentUploadsForDocuments } from "@/data-access/certifier-document-uploads";
 import { listDocumentsForEntityIds } from "@/data-access/documents";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
+import { TRANSPORT_EVIDENCE_LEDGER_KIND } from "@/lib/certification/evidence-ledger/types";
 import { loadEvidenceMirrorSummaryForScope } from "./evidence-mirror-summary";
 
 const orgCtx = {
@@ -134,14 +135,171 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
 
     expect(getSamplesByCreditBatchIds).not.toHaveBeenCalled();
     expect(getTransportLegsForEntities).not.toHaveBeenCalled();
-    expect(listDocumentsForEntityIds).toHaveBeenCalledTimes(3);
+    expect(listDocumentsForEntityIds).toHaveBeenCalledTimes(4);
     expect(
       vi.mocked(listDocumentsForEntityIds).mock.calls.map((call) => call[1]),
-    ).toEqual(expect.arrayContaining(["application", "delivery", "feedstock"]));
+    ).toEqual(
+      expect.arrayContaining([
+        "application",
+        "delivery",
+        "feedstock",
+        "credit_batch",
+      ]),
+    );
     expect(listDocumentUploadsForDocuments).toHaveBeenCalledWith(
       orgCtx,
       "isometric",
       ["document-1", "document-3", "document-2"],
+    );
+  });
+
+  it("includes only the current Removal's credit-batch ledger", async () => {
+    vi.mocked(listDocumentsForEntityIds).mockImplementation(
+      async (_ctx, entityType) =>
+        entityType === "credit_batch"
+          ? ([
+              {
+                id: "current-transport-ledger",
+                entityType: "credit_batch",
+                entityId: "batch-1",
+                documentType: "pdf",
+                metadata: {
+                  kind: TRANSPORT_EVIDENCE_LEDGER_KIND,
+                  removalId: "removal-1",
+                },
+                storageKey: "managed/current-transport-ledger.pdf",
+                uploadStatus: "uploaded",
+                fileSizeBytes: 1_024,
+                mimeType: "application/pdf",
+              },
+              {
+                id: "stale-transport-ledger",
+                entityType: "credit_batch",
+                entityId: "batch-1",
+                documentType: "pdf",
+                metadata: {
+                  kind: TRANSPORT_EVIDENCE_LEDGER_KIND,
+                  removalId: "removal-previous",
+                },
+                storageKey: "managed/stale-transport-ledger.pdf",
+                uploadStatus: "uploaded",
+                fileSizeBytes: 1_024,
+                mimeType: "application/pdf",
+              },
+            ] as never)
+          : [],
+    );
+    vi.mocked(listDocumentUploadsForDocuments).mockResolvedValue([]);
+
+    await expect(
+      loadEvidenceMirrorSummaryForScope(
+        orgCtx,
+        {
+          removalId: "removal-1",
+          memberBatches: [{ id: "batch-1" }],
+          lineages: [lineage],
+        },
+        {
+          status: "submitted",
+          payloadSnapshot: {
+            semantic: { candidateSources: [] },
+          },
+        } as never,
+      ),
+    ).resolves.toEqual({ total: 1, mirrored: 0 });
+
+    expect(listDocumentUploadsForDocuments).toHaveBeenCalledWith(
+      orgCtx,
+      "isometric",
+      ["current-transport-ledger"],
+    );
+  });
+
+  it("excludes evidence attached after a submitted Removal froze its set", async () => {
+    await expect(
+      loadEvidenceMirrorSummaryForScope(
+        orgCtx,
+        {
+          removalId: "removal-1",
+          memberBatches: [{ id: "batch-1" }],
+          lineages: [lineage],
+        },
+        {
+          status: "submitted",
+          payloadSnapshot: {
+            semantic: {
+              candidateSources: [
+                {
+                  documentId: "document-2",
+                  binding: null,
+                  biocharApplicationId: "biochar-application-1",
+                },
+              ],
+            },
+          },
+        } as never,
+      ),
+    ).resolves.toEqual({ total: 1, mirrored: 1 });
+
+    expect(listDocumentUploadsForDocuments).toHaveBeenCalledWith(
+      orgCtx,
+      "isometric",
+      ["document-2"],
+    );
+  });
+
+  it("keeps a frozen Application candidate after live eligibility changes", async () => {
+    vi.mocked(listDocumentsForEntityIds).mockImplementation(
+      async (_ctx, entityType) =>
+        entityType === "application"
+          ? ([
+              {
+                id: "frozen-application-photo",
+                entityType: "application",
+                entityId: "application-1",
+                documentType: "gis_boundary",
+                metadata: {},
+                storageKey: "managed/frozen-application-photo.png",
+                uploadStatus: "uploaded",
+                fileSizeBytes: 1_024,
+                mimeType: "image/png",
+              },
+            ] as never)
+          : [],
+    );
+    vi.mocked(listDocumentUploadsForDocuments).mockResolvedValue([
+      { documentId: "frozen-application-photo" },
+    ] as never);
+
+    await expect(
+      loadEvidenceMirrorSummaryForScope(
+        orgCtx,
+        {
+          removalId: "removal-1",
+          memberBatches: [{ id: "batch-1" }],
+          lineages: [lineage],
+        },
+        {
+          status: "submitted",
+          payloadSnapshot: {
+            semantic: {
+              candidateSources: [
+                {
+                  documentId: "frozen-application-photo",
+                  binding: null,
+                  biocharApplicationId: "biochar-application-1",
+                },
+              ],
+            },
+          },
+        } as never,
+      ),
+    ).resolves.toEqual({ total: 1, mirrored: 1 });
+
+    expect(listDocumentUploadsForDocuments).toHaveBeenCalledWith(
+      orgCtx,
+      "isometric",
+      ["frozen-application-photo"],
     );
   });
 
@@ -205,6 +363,42 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
       orgCtx,
       "isometric",
       ["managed"],
+    );
+  });
+
+  it("counts application-only Biochar Application Source candidates", async () => {
+    vi.mocked(listDocumentsForEntityIds).mockImplementation(
+      async (_ctx, entityType) =>
+        entityType === "application"
+          ? ([
+              {
+                id: "application-photo",
+                entityType: "application",
+                entityId: "application-1",
+                documentType: "photo",
+                metadata: {},
+                storageKey: "managed/application-photo.jpg",
+                uploadStatus: "uploaded",
+                fileSizeBytes: 1_024,
+                mimeType: "image/jpeg",
+              },
+            ] as never)
+          : [],
+    );
+    vi.mocked(listDocumentUploadsForDocuments).mockResolvedValue([]);
+
+    await expect(
+      loadEvidenceMirrorSummaryForScope(orgCtx, {
+        removalId: "removal-1",
+        memberBatches: [{ id: "batch-1" }],
+        lineages: [lineage],
+      }),
+    ).resolves.toEqual({ total: 1, mirrored: 0 });
+
+    expect(listDocumentUploadsForDocuments).toHaveBeenCalledWith(
+      orgCtx,
+      "isometric",
+      ["application-photo"],
     );
   });
 
