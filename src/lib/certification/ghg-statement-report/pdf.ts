@@ -188,7 +188,7 @@ const formatEntryCount = (count: number): string =>
   `${count} GHG ${count === 1 ? "Entry" : "Entries"}`;
 
 function basisNote(model: GhgStatementReportModel): string {
-  const entryTotal = formatKg(model.totals.netRemovedKg);
+  const entryTotal = formatKg(model.totals.entryNetRemovedKg);
   const statementTotal = formatKg(model.totals.statementNetRemovedKg);
   const reconciliation =
     entryTotal === statementTotal
@@ -332,13 +332,14 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
         ),
       ),
       v(styles.factCell, {},
+        fact("Entry net removed", formatKg(model.totals.entryNetRemovedKg)),
         fact(
-          "Before uncertainty",
-          formatKg(model.totals.netRemovedWithoutDiscountKg),
+          "Entry before uncertainty",
+          formatKg(model.totals.entryNetRemovedWithoutDiscountKg),
         ),
         fact(
-          "Uncertainty discount",
-          formatKg(model.totals.uncertaintyDiscountKg),
+          "Entry uncertainty discount",
+          formatKg(model.totals.entryUncertaintyDiscountKg),
           true,
         ),
       ),

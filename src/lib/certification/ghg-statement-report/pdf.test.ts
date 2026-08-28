@@ -81,6 +81,10 @@ function buildModel(
     authoritativeStatement: {
       externalEntryIds: ["rmv_1"],
       pendingTotalCo2eRemovedKg: 900,
+      creditAllocation: {
+        supplierCreditKg: 880,
+        bufferPoolKg: 20,
+      },
     },
     remoteEntries: [
       {
@@ -90,8 +94,6 @@ function buildModel(
         netRemovedKg: 900,
         netRemovedWithoutDiscountKg: 950,
         netRemovedStandardDeviationKg: 4,
-        supplierCreditKg: 880,
-        bufferPoolKg: 20,
         ghgStatementId: "ggs_1",
       },
     ],
@@ -161,7 +163,7 @@ describe("renderGhgStatementReportPdf", () => {
       expect(squashed).not.toContain("methodologyandreviewednarrative");
       expect(squashed).not.toContain("reviewacknowledgment");
       expect(squashed).not.toContain("humanreviewed");
-      expect(squashed).toContain("uncertaintydiscount50.000");
+      expect(squashed).toContain("entryuncertaintydiscount50.000");
       expect(squashed).toContain("projectprotocol1.1");
     }
   });
@@ -171,6 +173,10 @@ describe("renderGhgStatementReportPdf", () => {
       authoritativeStatement: {
         externalEntryIds: ["rmv_1"],
         pendingTotalCo2eRemovedKg: 1_500,
+        creditAllocation: {
+          supplierCreditKg: 1_450,
+          bufferPoolKg: 50,
+        },
       },
       remoteEntries: [
         {
@@ -180,8 +186,6 @@ describe("renderGhgStatementReportPdf", () => {
           netRemovedKg: 1_502.1608971810922,
           netRemovedWithoutDiscountKg: 1_527.153951802095,
           netRemovedStandardDeviationKg: 24.99305462100288,
-          supplierCreditKg: 1_470,
-          bufferPoolKg: 30,
           ghgStatementId: "ggs_1",
         },
       ],
@@ -193,6 +197,9 @@ describe("renderGhgStatementReportPdf", () => {
     const squashed = text.toLowerCase().replace(/\s+/g, "");
 
     expect(squashed).toContain("statementnetremoved1,500.000");
+    expect(squashed).toContain("entrynetremoved1,502.161");
+    expect(squashed).toContain("supplierallocation1,450.000");
+    expect(squashed).toContain("bufferpool50.000");
     expect(text).toContain("Their net values sum to 1,502.161 kg CO2e");
     expect(text).toContain(
       "Isometric reports 1,500.000 kg CO2e at statement precision",
@@ -216,6 +223,10 @@ describe("renderGhgStatementReportPdf", () => {
       authoritativeStatement: {
         externalEntryIds: entries.map((entry) => entry.id),
         pendingTotalCo2eRemovedKg: 900 * MULTI_PAGE_ENTRY_COUNT,
+        creditAllocation: {
+          supplierCreditKg: 880 * MULTI_PAGE_ENTRY_COUNT,
+          bufferPoolKg: 20 * MULTI_PAGE_ENTRY_COUNT,
+        },
       },
       remoteEntries: entries,
     });

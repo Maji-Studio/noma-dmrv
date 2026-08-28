@@ -14,8 +14,6 @@ const remoteEntries = [
     netRemovedKg: 202.125,
     netRemovedWithoutDiscountKg: 210,
     netRemovedStandardDeviationKg: 3,
-    supplierCreditKg: 198,
-    bufferPoolKg: 4.125,
     ghgStatementId: "ggs_1",
   },
   {
@@ -25,8 +23,6 @@ const remoteEntries = [
     netRemovedKg: 700,
     netRemovedWithoutDiscountKg: 725,
     netRemovedStandardDeviationKg: 5,
-    supplierCreditKg: 685,
-    bufferPoolKg: 15,
     ghgStatementId: "ggs_1",
   },
 ];
@@ -49,6 +45,10 @@ function build() {
     authoritativeStatement: {
       externalEntryIds: ["rmv_b", "rmv_a"],
       pendingTotalCo2eRemovedKg: 902.125,
+      creditAllocation: {
+        supplierCreditKg: 880,
+        bufferPoolKg: 22.125,
+      },
     },
     remoteEntries,
   });
@@ -79,18 +79,18 @@ describe("GHG Statement report model", () => {
     });
 
     expect(first).toEqual(second);
-    expect(first.modelVersion).toBe(3);
+    expect(first.modelVersion).toBe(4);
     expect(first.entries.map((entry) => entry.externalEntryId)).toEqual([
       "rmv_a",
       "rmv_b",
     ]);
     expect(first.totals).toEqual({
       statementNetRemovedKg: 902.125,
-      netRemovedKg: 902.125,
-      netRemovedWithoutDiscountKg: 935,
-      uncertaintyDiscountKg: 32.875,
-      supplierCreditKg: 883,
-      bufferPoolKg: 19.125,
+      entryNetRemovedKg: 902.125,
+      entryNetRemovedWithoutDiscountKg: 935,
+      entryUncertaintyDiscountKg: 32.875,
+      supplierCreditKg: 880,
+      bufferPoolKg: 22.125,
     });
     expect(first.sourceFingerprint).toMatch(/^[a-f0-9]{64}$/);
   });
@@ -102,6 +102,7 @@ describe("GHG Statement report model", () => {
         authoritativeStatement: {
           externalEntryIds: ["rmv_a", "rmv_missing"],
           pendingTotalCo2eRemovedKg: 700,
+          creditAllocation: null,
         },
         remoteEntries: [remoteEntries[1]],
       }),
@@ -115,6 +116,7 @@ describe("GHG Statement report model", () => {
         authoritativeStatement: {
           externalEntryIds: ["rmv_a", "rmv_a"],
           pendingTotalCo2eRemovedKg: 1_400,
+          creditAllocation: null,
         },
         remoteEntries: [remoteEntries[1], remoteEntries[1]],
       }),
@@ -165,6 +167,10 @@ describe("GHG Statement report model", () => {
       authoritativeStatement: {
         externalEntryIds: ["rmv_live"],
         pendingTotalCo2eRemovedKg: 1_500,
+        creditAllocation: {
+          supplierCreditKg: 1_450,
+          bufferPoolKg: 50,
+        },
       },
       remoteEntries: [
         {
@@ -174,8 +180,6 @@ describe("GHG Statement report model", () => {
           netRemovedKg: 1_502.1608971810922,
           netRemovedWithoutDiscountKg: 1_527.153951802095,
           netRemovedStandardDeviationKg: 24.99305462100288,
-          supplierCreditKg: 1_470,
-          bufferPoolKg: 30,
           ghgStatementId: "ggs_1",
         },
       ],
@@ -183,15 +187,28 @@ describe("GHG Statement report model", () => {
 
     expect(model.totals).toMatchObject({
       statementNetRemovedKg: 1_500,
-      netRemovedKg: 1_502.1608971810922,
-      netRemovedWithoutDiscountKg: 1_527.153951802095,
-      supplierCreditKg: 1_470,
-      bufferPoolKg: 30,
+      entryNetRemovedKg: 1_502.1608971810922,
+      entryNetRemovedWithoutDiscountKg: 1_527.153951802095,
+      supplierCreditKg: 1_450,
+      bufferPoolKg: 50,
     });
-    expect(model.totals.uncertaintyDiscountKg).toBeCloseTo(
+    expect(model.totals.entryUncertaintyDiscountKg).toBeCloseTo(
       24.99305462100288,
       10,
     );
+  });
+
+  it("preserves an unavailable statement credit allocation", () => {
+    const model = buildGhgStatementReportModel({
+      ...buildInput(),
+      authoritativeStatement: {
+        ...buildInput().authoritativeStatement,
+        creditAllocation: null,
+      },
+    });
+
+    expect(model.totals.supplierCreditKg).toBeNull();
+    expect(model.totals.bufferPoolKg).toBeNull();
   });
 });
 
@@ -213,6 +230,10 @@ function buildInput() {
     authoritativeStatement: {
       externalEntryIds: ["rmv_b", "rmv_a"],
       pendingTotalCo2eRemovedKg: 902.125,
+      creditAllocation: {
+        supplierCreditKg: 880,
+        bufferPoolKg: 22.125,
+      },
     },
     remoteEntries,
   };
