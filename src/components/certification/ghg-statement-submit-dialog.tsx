@@ -248,9 +248,13 @@ function GhgStatementSubmitDialogContent({
     }
   };
 
+  const generatedPreviewReady =
+    canGenerate && breakdownQuery.data?.status === "available";
+
   const advance = async () => {
     if (!canSubmit) return;
     clearErrors("root.serverError");
+    if (reportSource === "generated" && !generatedPreviewReady) return;
     if (reportSource === "external") {
       if (!getValues("externalReportUrl")) {
         setError("externalReportUrl", {
@@ -269,8 +273,6 @@ function GhgStatementSubmitDialogContent({
   const reportPreparationPending =
     prepareReport.isPending || approveReport.isPending;
   const submissionPending = reportPreparationPending || isPending;
-  const generatedPreviewReady =
-    canGenerate && breakdownQuery.data?.status === "available";
   const submissionStalled = isSubmissionStreamStalledError(mutation.error);
   const displayedServerError = submissionStalled ? null : serverError;
   const reconciledStatus = mutation.data
@@ -435,7 +437,11 @@ function GhgStatementSubmitDialogContent({
                       type="button"
                       variant="primary"
                       onClick={advance}
-                      disabled={!canSubmit}
+                      disabled={
+                        !canSubmit ||
+                        (reportSource === "generated" &&
+                          !generatedPreviewReady)
+                      }
                     >
                       Next
                     </Button>

@@ -531,6 +531,36 @@ describe("GHG Statement route refreshes", () => {
     await act(async () => renderer?.unmount());
   });
 
+  it("keeps generated submissions on the report step until generation is ready", async () => {
+    const warning = "The registry roll-up is still loading.";
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate={false}
+          generationUnavailableReason={warning}
+        />,
+      );
+    });
+
+    const next = findButton(renderer!, "Next");
+    expect(next?.props.disabled).toBe(true);
+    expect(
+      renderer!.root.findAllByType("p").some((node) =>
+        String(node.props.children).includes(warning),
+      ),
+    ).toBe(true);
+    expect(renderer!.root.findAllByProps({ id: "report-preview" })).toHaveLength(
+      0,
+    );
+    await act(async () => renderer?.unmount());
+  });
+
   it("blocks registry actions until stale statement details are refreshed", async () => {
     const warning =
       "Statement details could not be refreshed. Showing the last loaded details. Use Refresh before generating or submitting.";
