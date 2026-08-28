@@ -34,6 +34,7 @@ import { formatCount } from "@/lib/copy-utils";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import {
   buildSubmitGhgStatementDialogSchema,
+  type SubmitGhgStatementDialogFormInput,
   type SubmitGhgStatementDialogInput,
 } from "@/schemas/certification";
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
@@ -123,7 +124,6 @@ function GhgStatementSubmitDialogContent({
   const schema = buildSubmitGhgStatementDialogSchema({
     isResubmit,
     isProduction,
-    requireReportSource: false,
   });
   const [stepIndex, setStepIndex] = useState(0);
   const [reportSource, setReportSource] =
@@ -135,7 +135,8 @@ function GhgStatementSubmitDialogContent({
   const [lastInput, setLastInput] =
     useState<SubmitGhgStatementDialogInput | null>(null);
   const submissionInFlight = useRef(false);
-  const initialValues: SubmitGhgStatementDialogInput = {
+  const initialValues: SubmitGhgStatementDialogFormInput = {
+    reportSource: "generated",
     reportId: undefined,
     externalReportUrl: undefined,
     summaryOfChanges: isResubmit ? "" : undefined,
@@ -150,7 +151,7 @@ function GhgStatementSubmitDialogContent({
     clearErrors,
     getValues,
     trigger,
-  } = useForm<SubmitGhgStatementDialogInput>({
+  } = useForm<SubmitGhgStatementDialogFormInput>({
     resolver: zodResolver(schema),
     defaultValues: initialValues,
   });
@@ -256,12 +257,6 @@ function GhgStatementSubmitDialogContent({
     clearErrors("root.serverError");
     if (reportSource === "generated" && !generatedPreviewReady) return;
     if (reportSource === "external") {
-      if (!getValues("externalReportUrl")) {
-        setError("externalReportUrl", {
-          message: "Enter an external report URL",
-        });
-        return;
-      }
       if (!(await trigger("externalReportUrl"))) return;
     }
     setStepIndex(1);
@@ -470,6 +465,7 @@ function GhgStatementSubmitDialogContent({
                       checked={reportSource === "generated"}
                       onChange={() => {
                         setReportSource("generated");
+                        setValue("reportSource", "generated");
                         setValue("reportId", undefined);
                         setValue("externalReportUrl", undefined);
                         clearErrors("externalReportUrl");
@@ -508,6 +504,7 @@ function GhgStatementSubmitDialogContent({
                           checked={reportSource === "external"}
                           onChange={() => {
                             setReportSource("external");
+                            setValue("reportSource", "external");
                             setValue("reportId", undefined);
                           }}
                         />

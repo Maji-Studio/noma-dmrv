@@ -364,6 +364,36 @@ describe("GHG Statement route refreshes", () => {
     await act(async () => renderer?.unmount());
   });
 
+  it("submits an external report URL without preparing a report", async () => {
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    const sourceOptions = renderer!.root.findAllByProps({
+      name: "reportSource",
+    });
+    await act(async () => sourceOptions[1].props.onChange());
+    await act(async () => findButton(renderer!, "Next")?.props.onClick());
+    await act(async () => renderer?.root.findByType("form").props.onSubmit());
+
+    expect(state.prepareReport).not.toHaveBeenCalled();
+    expect(state.approveReport).not.toHaveBeenCalled();
+    expect(state.submit.mock.calls[0]?.[0]).toMatchObject({
+      input: { externalReportUrl: "https://example.com/report.pdf" },
+    });
+    await act(async () => renderer?.unmount());
+  });
+
   it("blocks duplicate submissions while the first request is pending", async () => {
     let resolveSubmission: ((value: { remoteStatus: string }) => void) | null =
       null;

@@ -185,21 +185,29 @@ export type SubmitGhgStatementDialogInput = z.infer<
   typeof submitGhgStatementDialogSchema
 >;
 
+const submitGhgStatementDialogFormFieldsSchema =
+  submitGhgStatementFieldsSchema.extend({
+    reportSource: z.enum(["generated", "external"]),
+  });
+
+export type SubmitGhgStatementDialogFormInput = z.infer<
+  typeof submitGhgStatementDialogFormFieldsSchema
+>;
+
 export function buildSubmitGhgStatementDialogSchema(args: {
   isResubmit: boolean;
   isProduction: boolean;
-  /**
-   * The submit dialog generates its controlled report after client-side form
-   * validation. The server schema always requires a resolved report source.
-   */
-  requireReportSource?: boolean;
 }) {
-  const schema =
-    args.requireReportSource === false
-      ? submitGhgStatementFieldsSchema
-      : submitGhgStatementDialogSchema;
-  return schema.check((ctx) => {
+  return submitGhgStatementDialogFormFieldsSchema.check((ctx) => {
     const value = ctx.value;
+    if (value.reportSource === "external" && !value.externalReportUrl) {
+      ctx.issues.push({
+        code: "custom",
+        input: value,
+        path: ["externalReportUrl"],
+        message: "Enter an external report URL",
+      });
+    }
     if (args.isResubmit && !value.summaryOfChanges?.trim()) {
       ctx.issues.push({
         code: "custom",

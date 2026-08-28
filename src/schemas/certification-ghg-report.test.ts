@@ -58,10 +58,20 @@ describe("GHG Statement report action schemas", () => {
     const uiSchema = buildSubmitGhgStatementDialogSchema({
       isResubmit: false,
       isProduction: false,
-      requireReportSource: false,
     });
 
-    expect(uiSchema.safeParse({}).success).toBe(true);
+    expect(
+      uiSchema.safeParse({ reportSource: "generated" }).success,
+    ).toBe(true);
+    expect(
+      uiSchema.safeParse({ reportSource: "external" }).success,
+    ).toBe(false);
+    expect(
+      uiSchema.safeParse({
+        reportSource: "external",
+        externalReportUrl: "https://vvb.example/report.pdf",
+      }).success,
+    ).toBe(true);
     expect(submitGhgStatementDialogSchema.safeParse({}).success).toBe(false);
   });
 });
