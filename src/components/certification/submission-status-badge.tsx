@@ -15,6 +15,7 @@ import {
   deriveSubmissionStatus,
   type CertificationArtifact,
 } from "@/lib/certification/from-submission";
+import type { RemovalReportingWindowDates } from "@/lib/certification/status";
 
 interface SubmissionStatusBadgeProps {
   latest: CertificationSubmissionRow | null;
@@ -24,13 +25,20 @@ interface SubmissionStatusBadgeProps {
    * verifier overlay. Defaults to "removal" for backward compatibility.
    */
   artifact?: CertificationArtifact;
+  reportingWindow: RemovalReportingWindowDates | "unknown";
 }
 
 export function SubmissionStatusBadge({
   latest,
   isLockedInFlight,
   artifact = "removal",
+  reportingWindow,
 }: SubmissionStatusBadgeProps) {
-  const derived = deriveSubmissionStatus(latest, isLockedInFlight, artifact);
+  const derived = deriveSubmissionStatus(
+    latest,
+    isLockedInFlight,
+    artifact,
+    reportingWindow,
+  );
   return <StatusBadge status={derived.value} label={derived.label} />;
 }

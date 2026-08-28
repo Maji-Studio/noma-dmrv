@@ -21,7 +21,11 @@ import {
   markSubmissionRejected,
   markSubmissionSubmitted,
 } from "@/data-access/certification";
-import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
+import {
+  findPreviousActiveSubmissionId,
+  markSubmissionInterrupted,
+  recordConfirmedSubmissionIdentity,
+} from "@/data-access/certification-submissions";
 import { db } from "@/db";
 import {
   certificationSubmissions,
@@ -191,7 +195,98 @@ async function readReservation(batchId: string): Promise<string | null> {
 
 beforeAll(() => ensureTestOrg());
 
+describe("findPreviousActiveSubmissionId", () => {
+  it("recovers the prior submitted version for a legacy resumed correction", async () => {
+    const { removalAId } = await createFixture();
+    const previousId = await insertDraftSubmission(removalAId, 1);
+    await markSubmissionSubmitted(
+      makeTestOrgContext(TEST_USER_ID),
+      previousId,
+      { externalId: "ext_previous_active" },
+    );
+    await insertDraftSubmission(removalAId, 2);
+
+    await expect(
+      findPreviousActiveSubmissionId(makeTestOrgContext(TEST_USER_ID), {
+        provider: "isometric",
+        submissionType: "removal",
+        localEntityType: "removal",
+        localEntityId: removalAId,
+        version: 2,
+      }),
+    ).resolves.toBe(previousId);
+  });
+});
+
 describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)", () => {
+  it("finalizes when the exact database lock is round-tripped", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt: new Date() })
+      .where(eq(certificationSubmissions.id, submissionId));
+    const [claimed] = await db
+      .select({ lockedAt: certificationSubmissions.lockedAt })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(claimed.lockedAt).not.toBeNull();
+
+    await markSubmissionSubmitted(
+      makeTestOrgContext(TEST_USER_ID),
+      submissionId,
+      {
+        externalId: "ext_exact_owner",
+        expectedLockedAt: claimed.lockedAt!,
+      },
+    );
+
+    const [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        externalId: certificationSubmissions.externalId,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toEqual({
+      status: "submitted",
+      externalId: "ext_exact_owner",
+    });
+  });
+
+  it("refuses finalization after the exact draft lock has changed", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    const staleLock = new Date("2026-08-27T10:00:00.000Z");
+    const successorLock = new Date("2026-08-27T10:01:00.000Z");
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt: successorLock })
+      .where(eq(certificationSubmissions.id, submissionId));
+
+    await expect(
+      markSubmissionSubmitted(
+        makeTestOrgContext(TEST_USER_ID),
+        submissionId,
+        {
+          externalId: "ext_stale_owner",
+          expectedLockedAt: staleLock,
+        },
+      ),
+    ).rejects.toThrow(/submission changed before it could be finalized/i);
+
+    const [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        externalId: certificationSubmissions.externalId,
+        lockedAt: certificationSubmissions.lockedAt,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toMatchObject({ status: "draft", externalId: null });
+    expect(row.lockedAt?.getTime()).toBe(successorLock.getTime());
+  });
+
   it("stamps an unclaimed batch, is idempotent on self re-claim, and fails loudly on a foreign claim", async () => {
     const { batchId, removalAId, removalBId } = await createFixture();
 
@@ -317,6 +412,40 @@ describe("markSubmissionRejected", () => {
     expect(
       (row.metadata as Record<string, unknown> | null)?.lastError,
     ).toBeUndefined();
+  });
+});
+
+describe("recordConfirmedSubmissionIdentity", () => {
+  it("journals a confirmed external mutation with its registry identity", async () => {
+    const { removalAId } = await createFixture();
+    const submissionId = await insertDraftSubmission(removalAId, 1);
+    const lockedAt = new Date();
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt })
+      .where(eq(certificationSubmissions.id, submissionId));
+
+    await expect(
+      recordConfirmedSubmissionIdentity(
+        makeTestOrgContext(TEST_USER_ID),
+        submissionId,
+        { externalId: "ext_confirmed_draft", expectedLockedAt: lockedAt },
+      ),
+    ).resolves.toBe(true);
+
+    const [row] = await db
+      .select({
+        status: certificationSubmissions.status,
+        externalId: certificationSubmissions.externalId,
+        metadata: certificationSubmissions.metadata,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, submissionId));
+    expect(row).toMatchObject({
+      status: "draft",
+      externalId: "ext_confirmed_draft",
+      metadata: { externalMutation: "confirmed" },
+    });
   });
 });
 

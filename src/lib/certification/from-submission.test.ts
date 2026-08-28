@@ -34,7 +34,12 @@ describe("overlayLiveRemoteStatus", () => {
       row({ remoteStatus: "DRAFT" }),
       "VERIFIED",
     );
-    const derived = deriveSubmissionStatus(overlaid, false, "ghgStatement");
+    const derived = deriveSubmissionStatus(
+      overlaid,
+      false,
+      "ghgStatement",
+      "unknown",
+    );
     expect(derived.kind).toBe("verified");
   });
 
@@ -54,5 +59,50 @@ describe("overlayLiveRemoteStatus", () => {
     expect(
       (overlaid.metadata as Record<string, unknown>).remoteStatus,
     ).toBe("DRAFT");
+  });
+});
+
+describe("deriveSubmissionStatus", () => {
+  it("surfaces a submitted Removal with no reporting window as interrupted", () => {
+    const derived = deriveSubmissionStatus(
+      row(null),
+      false,
+      "removal",
+      { startedOn: null, completedOn: null },
+    );
+    expect(derived).toMatchObject({
+      kind: "interrupted",
+      isActionable: true,
+      isTerminal: false,
+    });
+  });
+
+  it("keeps a submitted Removal terminal when both dates exist", () => {
+    const derived = deriveSubmissionStatus(
+      row(null),
+      false,
+      "removal",
+      { startedOn: "2026-01-01", completedOn: "2026-04-05" },
+    );
+    expect(derived.kind).toBe("submitted");
+  });
+
+  it("surfaces non-null dates that drifted from the submitted snapshot", () => {
+    const submitted = {
+      ...row(null),
+      payloadSnapshot: {
+        semantic: {
+          startedOn: "2026-01-01T00:00:00.000Z",
+          completedOn: "2026-04-05T00:00:00.000Z",
+        },
+      },
+    } as CertificationSubmissionRow;
+    const derived = deriveSubmissionStatus(
+      submitted,
+      false,
+      "removal",
+      { startedOn: "2025-01-01", completedOn: "2025-04-05" },
+    );
+    expect(derived.kind).toBe("interrupted");
   });
 });

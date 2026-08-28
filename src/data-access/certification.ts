@@ -677,18 +677,16 @@ export async function markSubmissionSubmitted(
   args: {
     externalId: string;
     supersedePreviousId?: string | null;
-    // §8.6.2 (issue #349): stamp the claiming removal onto its member credit
-    // batches in the SAME transaction that flips the ledger row to
-    // 'submitted'. Guarded (unclaimed-or-self) so a resubmit/supersede by the
-    // same removal is idempotent. Optional — telemetry / GHG-statement
-    // callers don't claim.
+    expectedLockedAt?: Date;
+    // §8.6.2: atomically stamp the claiming removal onto its member batches.
+    // Optional because telemetry and GHG-statement callers do not claim.
     productionEmissionsClaim?: { removalId: string; creditBatchIds: string[] };
   },
   callerTx?: Tx,
 ): Promise<void> {
   requireOrgScope(ctx);
   const run = async (tx: Tx): Promise<void> => {
-    await tx
+    const updated = await tx
       .update(certificationSubmissions)
       .set({
         status: "submitted",
@@ -698,7 +696,19 @@ export async function markSubmissionSubmitted(
         metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastError}::text - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text - ${SUBMISSION_METADATA_KEYS.externalMutation}::text`,
         updatedAt: sql`now()`,
       })
-      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+      .where(
+        and(
+          eq(certificationSubmissions.id, id),
+          eq(certificationSubmissions.organizationId, ctx.organizationId),
+          ...(args.expectedLockedAt
+            ? [eq(certificationSubmissions.status, "draft" as const), eq(certificationSubmissions.lockedAt, args.expectedLockedAt)]
+            : []),
+        ),
+      )
+      .returning({ id: certificationSubmissions.id });
+    if (updated.length === 0) {
+      throw new SafeError("The submission changed before it could be finalized. Refresh and try again.");
+    }
     if (args.supersedePreviousId) {
       await tx
         .update(certificationSubmissions)
@@ -709,10 +719,7 @@ export async function markSubmissionSubmitted(
         })
         .where(and(eq(certificationSubmissions.id, args.supersedePreviousId), eq(certificationSubmissions.organizationId, ctx.organizationId)));
     }
-    if (
-      args.productionEmissionsClaim &&
-      args.productionEmissionsClaim.creditBatchIds.length > 0
-    ) {
+    if (args.productionEmissionsClaim?.creditBatchIds.length) {
       // A throw here rolls back the ledger flip too: the row stays a locked
       // draft, the resume path reconciles the already-POSTed registry
       // artifacts by supplier ref, and the pre-flight claim gate re-fires

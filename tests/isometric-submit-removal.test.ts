@@ -36,6 +36,7 @@ import {
   makeBatchesWithSamples,
   makeContext,
   makeRun,
+  setStoredRemovalReportingWindow,
   storedRows,
 } from "./fixtures/submit-removal-orchestrator";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -359,7 +360,7 @@ describe("submitRemoval — happy path", () => {
     });
   });
 
-  it("keeps the ledger draft when Biochar Application persistence is incomplete", async () => {
+  it("keeps the ledger draft when the Biochar Application registry identity has drifted", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),
     );
@@ -371,8 +372,10 @@ describe("submitRemoval — happy path", () => {
     );
     vi.mocked(
       biocharApplications.ensureRemovalBiocharApplications,
-    ).mockRejectedValue(
-      new Error("Isometric Biochar Application could not be persisted."),
+    ).mockRejectedValueOnce(
+      new Error(
+        "Isometric Biochar Application bca-test is linked to a different GHG Entry. Resolve the registry identity before retrying.",
+      ),
     );
 
     await expect(
@@ -380,15 +383,36 @@ describe("submitRemoval — happy path", () => {
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/could not be persisted/i);
+    ).rejects.toThrow(/linked to a different GHG Entry/i);
 
     expect(storedRows[0]).toMatchObject({
       status: "draft",
-      externalId: null,
+      externalId: "rmv_1",
+      metadata: { externalMutation: "confirmed" },
     });
     expect(storedRows[0].lockedAt).not.toBeNull();
     expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
     expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
+
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).resolves.toMatchObject({ externalId: "rmv_1" });
+    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
+    expect(storedRows[0]).toMatchObject({
+      status: "submitted",
+      externalId: "rmv_1",
+    });
+    expect(removalsDA.updateRemovalDates).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      REMOVAL_ID,
+      { startedOn: "2026-01-01", completedOn: "2026-04-05" },
+    );
   });
 
   it("keeps the ledger draft when the reporting window cannot be persisted", async () => {
@@ -414,7 +438,7 @@ describe("submitRemoval — happy path", () => {
 
     expect(storedRows[0]).toMatchObject({
       status: "draft",
-      externalId: null,
+      externalId: "rmv_1",
     });
     expect(storedRows[0].lockedAt).not.toBeNull();
     expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
@@ -488,7 +512,7 @@ describe("submitRemoval — happy path", () => {
 
     expect(storedRows[0]).toMatchObject({
       status: "draft",
-      externalId: null,
+      externalId: "rmv_written",
     });
     expect(storedRows[0].lockedAt).not.toBeNull();
     expect(attemptSummaryEvents()[0]?.[1]).toMatchObject({
@@ -615,14 +639,10 @@ describe("submitRemoval — happy path", () => {
     expect(second.version).toBe(1);
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
     expect(isometric.createGhgEntry).not.toHaveBeenCalled();
-    // return-existing skips the ledger transition but reasserts the reporting
-    // window so rows affected by the former early-finalization bug recover.
+    // A healthy return-existing skips both the ledger transition and local
+    // date persistence.
     expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
-    expect(removalsDA.updateRemovalDates).toHaveBeenCalledWith(
-      makeTestOrgContext(USER_ID),
-      REMOVAL_ID,
-      { startedOn: "2026-01-01", completedOn: "2026-04-05" },
-    );
+    expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
     // No new ledger row.
     expect(storedRows).toHaveLength(1);
     expect(progress).toHaveBeenCalledWith({
@@ -637,6 +657,93 @@ describe("submitRemoval — happy path", () => {
       step: "removal.creating",
       state: "reused",
     });
+  });
+
+  it("repairs an existing reporting window only after registry associations reconcile", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+    await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+    });
+
+    setStoredRemovalReportingWindow("2025-01-01", "2025-04-05");
+    vi.mocked(removalsDA.updateRemovalDates).mockClear();
+    vi.mocked(biocharApplications.ensureRemovalBiocharApplications).mockClear();
+    vi.mocked(
+      biocharApplications.ensureRemovalBiocharApplications,
+    ).mockRejectedValueOnce(new Error("association still pending"));
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow("association still pending");
+    expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
+    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
+
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeChangedProductionContext(),
+    );
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).resolves.toMatchObject({ externalId: "rmv_1" });
+    expect(removalsDA.updateRemovalDates).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      REMOVAL_ID,
+      { startedOn: "2026-01-01", completedOn: "2026-04-05" },
+    );
+  });
+
+  it("names a missing default template before recovering a submitted Removal", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+    await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+    });
+
+    setStoredRemovalReportingWindow("2025-01-01", "2025-04-05");
+    vi.mocked(removalsDA.updateRemovalDates).mockClear();
+    const recoveryContext = makeContext();
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...recoveryContext,
+      mapping: {
+        ...recoveryContext.mapping!,
+        defaultRemovalTemplateId: null,
+      },
+      defaultTemplate: null,
+    });
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/set a default Removal template in facility settings/i);
+    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
+    expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
   });
 
   it("marks absent datapoint and durability work as skipped when reusing a Removal", async () => {
@@ -734,6 +841,55 @@ describe("submitRemoval — happy path", () => {
     expect(datapointCalls[1][1].quantity).toEqual({
       magnitude: CHANGED_BIOCHAR_MASS_KG,
       unit: "kg",
+    });
+  });
+
+  it("preserves the superseded version across an interrupted v=2 retry", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(ORIGINAL_BIOCHAR_MASS_KG),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+    await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+    });
+    const firstRowId = storedRows[0].id;
+
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeChangedProductionContext(),
+    );
+    vi.mocked(
+      biocharApplications.ensureRemovalBiocharApplications,
+    ).mockRejectedValueOnce(new Error("association pending"));
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow("association pending");
+    expect(storedRows[1]).toMatchObject({
+      status: "draft",
+      externalId: "rmv_2",
+    });
+
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeChangedProductionContext(),
+    );
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).resolves.toMatchObject({ version: 2, externalId: "rmv_2" });
+
+    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(2);
+    expect(storedRows.find((row) => row.id === firstRowId)).toMatchObject({
+      status: "superseded",
     });
   });
 });
