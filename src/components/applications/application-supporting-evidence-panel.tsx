@@ -19,12 +19,14 @@ import {
   isApplicationEvidenceDocumentReady,
   isApplicationIsometricSourceDocumentType,
 } from "@/lib/certification/application-evidence";
-import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
+import type { DocumentEntityType } from "@/schemas/documents";
 import { ApplicationEvidenceDocumentList } from "./application-evidence-document-list";
-import { resolveSupportingEvidenceDocumentType } from "./application-supporting-evidence";
+import {
+  APPLICATION_SUPPORTING_EVIDENCE_FALLBACK_DOCUMENT_TYPE,
+  resolveSupportingEvidenceDocumentType,
+} from "./application-supporting-evidence";
 
 const ENTITY_TYPE = "application" satisfies DocumentEntityType;
-const DOCUMENT_TYPE: DocumentType = "pdf";
 const SUPPORTING_EVIDENCE_ACCEPT = "image/*,application/pdf,.pdf";
 
 interface ApplicationSupportingEvidencePanelProps {
@@ -106,7 +108,8 @@ export function ApplicationSupportingEvidencePanel({
       deferred
       deferredFiles={(deferredAttachments?.attachments ?? []).filter(
         (attachment) =>
-          attachment.documentType === DOCUMENT_TYPE ||
+          attachment.documentType ===
+            APPLICATION_SUPPORTING_EVIDENCE_FALLBACK_DOCUMENT_TYPE ||
           attachment.documentType ===
             APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
       )}

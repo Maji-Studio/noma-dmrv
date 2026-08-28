@@ -1,4 +1,5 @@
 import type { OrgContext } from "@/lib/auth/server";
+import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { listDocumentUploadsForDocuments } from "@/data-access/certifier-document-uploads";
 import {
@@ -12,7 +13,9 @@ import { ISOMETRIC_PROVIDER } from "./shared";
 import {
   sourceCandidateEligibility,
   type CandidateLineageEntityType,
+  type CandidateSourceDocument,
 } from "./source-candidates";
+import { filterCandidateSourcesForSubmissionLifecycle } from "./removal-source-freeze";
 
 export interface EvidenceMirrorSummary {
   total: number;
@@ -48,6 +51,7 @@ function isMirrorCandidateDocument(
 export async function loadEvidenceMirrorSummaryForScope(
   orgCtx: OrgContext,
   scope: EvidenceRemovalScope,
+  latestSubmission: CertificationSubmissionRow | null = null,
 ): Promise<EvidenceMirrorSummary> {
   if (!scope.removalId) return { total: 0, mirrored: 0 };
 
@@ -85,41 +89,64 @@ export async function loadEvidenceMirrorSummaryForScope(
       listDocumentsForEntityIds(orgCtx, entityType, Array.from(ids)),
     ),
   );
-  const candidatesById = new Map(
-    documentGroups
-      .flat()
-      .filter(isMirrorCandidateDocument)
-      .filter((document) => {
-        const entityLabel = lineageLabels.get(
-          `${document.entityType}:${document.entityId}`,
-        );
-        if (entityLabel === undefined) return false;
-        return sourceCandidateEligibility({
-          document,
-          lineage: {
-            entityType: document.entityType as CandidateLineageEntityType,
-            entityId: document.entityId,
-            entityLabel,
-          },
-          removalId: scope.removalId ?? undefined,
-        }) !== null;
-      })
-      .map((document) => [document.id, document]),
+  const candidatesById = new Map<string, MirrorCandidateDocument>();
+  const liveCandidates: CandidateSourceDocument[] = [];
+  for (const document of documentGroups
+    .flat()
+    .filter(isMirrorCandidateDocument)) {
+    const entityLabel = lineageLabels.get(
+      `${document.entityType}:${document.entityId}`,
+    );
+    if (entityLabel === undefined) continue;
+    const eligibility = sourceCandidateEligibility({
+      document,
+      lineage: {
+        entityType: document.entityType as CandidateLineageEntityType,
+        entityId: document.entityId,
+        entityLabel,
+      },
+      removalId: scope.removalId ?? undefined,
+    });
+    if (!eligibility) continue;
+    candidatesById.set(document.id, document);
+    liveCandidates.push({
+      documentId: document.id,
+      binding: eligibility.binding,
+      biocharApplicationId: eligibility.biocharApplicationId,
+    });
+  }
+  const liveCandidateIds = new Set(
+    liveCandidates.map(({ documentId }) => documentId),
   );
-  const documentIds = Array.from(candidatesById.keys());
+  const lifecycleDocumentIds = filterCandidateSourcesForSubmissionLifecycle(
+    liveCandidates,
+    latestSubmission,
+  )
+    .map(({ documentId }) => documentId)
+    .filter((documentId) => liveCandidateIds.has(documentId));
+  const lifecycleCandidatesById = new Map(
+    lifecycleDocumentIds.map((documentId) => [
+      documentId,
+      candidatesById.get(documentId)!,
+    ]),
+  );
+  const documentIds = Array.from(lifecycleCandidatesById.keys());
   const mirrorRows = await listDocumentUploadsForDocuments(
     orgCtx,
     ISOMETRIC_PROVIDER,
     documentIds,
   );
+  const candidateDocumentIds = new Set(documentIds);
   const mirroredDocumentIds = new Set(
-    mirrorRows.map((row) => row.documentId),
+    mirrorRows
+      .map((row) => row.documentId)
+      .filter((documentId) => candidateDocumentIds.has(documentId)),
   );
   const provider = getStorageProvider();
   const availableDocumentIds = new Set(
     (
       await Promise.all(
-        Array.from(candidatesById.values(), async (document) => {
+        Array.from(lifecycleCandidatesById.values(), async (document) => {
           if (mirroredDocumentIds.has(document.id)) return document.id;
           try {
             const head = await provider.headObject(document.storageKey);

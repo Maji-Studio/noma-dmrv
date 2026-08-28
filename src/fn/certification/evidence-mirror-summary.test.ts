@@ -145,6 +145,39 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
     );
   });
 
+  it("excludes evidence attached after a submitted Removal froze its set", async () => {
+    await expect(
+      loadEvidenceMirrorSummaryForScope(
+        orgCtx,
+        {
+          removalId: "removal-1",
+          memberBatches: [{ id: "batch-1" }],
+          lineages: [lineage],
+        },
+        {
+          status: "submitted",
+          payloadSnapshot: {
+            semantic: {
+              candidateSources: [
+                {
+                  documentId: "document-2",
+                  binding: null,
+                  biocharApplicationId: "biochar-application-1",
+                },
+              ],
+            },
+          },
+        } as never,
+      ),
+    ).resolves.toEqual({ total: 1, mirrored: 1 });
+
+    expect(listDocumentUploadsForDocuments).toHaveBeenCalledWith(
+      orgCtx,
+      "isometric",
+      ["document-2"],
+    );
+  });
+
   it("counts only completed managed uploads in the mirror denominator", async () => {
     vi.mocked(listDocumentsForEntityIds).mockImplementation(
       async (_ctx, entityType) =>

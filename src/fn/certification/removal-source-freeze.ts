@@ -1,37 +1,32 @@
 import type { CertificationSubmissionRow } from "@/data-access/certification";
-import { isLockedInFlight } from "@/lib/isometric/utils/lock";
+import type { NomaEvidenceRole } from "@/lib/certification/removal-source-bindings";
+import {
+  BLOCKING_SUBMISSION_STATUSES,
+  type LocalSubmissionStatus,
+} from "@/lib/certification/status";
+import { readRemovalCandidateSources } from "./removal-snapshot-readers";
 import type { CandidateSourceDocument } from "./source-candidates";
 
-const SOURCE_FROZEN_SUBMISSION_STATUSES = new Set<
-  CertificationSubmissionRow["status"]
->(["submitted", "accepted", "superseded"]);
+const SOURCE_FROZEN_SUBMISSION_STATUSES = new Set<LocalSubmissionStatus>(
+  BLOCKING_SUBMISSION_STATUSES,
+);
+const GENERATED_EVIDENCE_ROLES = new Set<NomaEvidenceRole>([
+  "transport_evidence_ledger",
+  "durability_evidence_ledger",
+]);
 
-function record(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function frozenCandidateDocumentIds(
-  submission: CertificationSubmissionRow,
-): Set<string> {
-  const snapshot = record(submission.payloadSnapshot);
-  const semantic = record(snapshot?.semantic);
-  const candidates = semantic?.candidateSources;
-  if (!Array.isArray(candidates)) return new Set();
-
-  return new Set(
-    candidates.flatMap((candidate) => {
-      const documentId = record(candidate)?.documentId;
-      return typeof documentId === "string" ? [documentId] : [];
-    }),
+function isGeneratedEvidence(candidate: CandidateSourceDocument): boolean {
+  return (
+    candidate.binding !== null &&
+    GENERATED_EVIDENCE_ROLES.has(candidate.binding.nomaRole)
   );
 }
 
 /**
- * A claimed or terminal Removal submission freezes its evidence set. New files
- * attached to reachable entities belong to a later workflow; they must not
- * change an idempotent retry or supersede the already-reviewed registry claim.
+ * A blocking Removal submission freezes its operator evidence tuple, not just
+ * document IDs. Draft retries are exact. A terminal claim may be superseded
+ * with freshly generated deterministic ledgers, while operator uploads remain
+ * fixed to the reviewed snapshot. Superseded/rejected attempts rebuild live.
  */
 export function filterCandidateSourcesForSubmissionLifecycle(
   candidates: CandidateSourceDocument[],
@@ -39,14 +34,23 @@ export function filterCandidateSourcesForSubmissionLifecycle(
 ): CandidateSourceDocument[] {
   if (
     !latestSubmission ||
-    (!SOURCE_FROZEN_SUBMISSION_STATUSES.has(latestSubmission.status) &&
-      !isLockedInFlight(latestSubmission))
+    !SOURCE_FROZEN_SUBMISSION_STATUSES.has(latestSubmission.status)
   ) {
     return candidates;
   }
 
-  const frozenDocumentIds = frozenCandidateDocumentIds(latestSubmission);
-  return candidates.filter((candidate) =>
-    frozenDocumentIds.has(candidate.documentId),
+  const frozenCandidates = readRemovalCandidateSources(latestSubmission);
+  if (latestSubmission.status === "draft") return frozenCandidates;
+
+  const currentGeneratedCandidates = candidates.filter(isGeneratedEvidence);
+  const frozenOperatorCandidates = frozenCandidates.filter(
+    (candidate) => !isGeneratedEvidence(candidate),
+  );
+  return Array.from(
+    new Map(
+      [...frozenOperatorCandidates, ...currentGeneratedCandidates].map(
+        (candidate) => [candidate.documentId, candidate],
+      ),
+    ).values(),
   );
 }

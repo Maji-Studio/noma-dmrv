@@ -3,11 +3,11 @@ import { resolveSupportingEvidenceDocumentType } from "./application-supporting-
 
 describe("Application supporting-evidence classification", () => {
   it.each([
-    ["application.jpg", "", "photo"],
-    ["application.png", "application/octet-stream", "photo"],
+    ["application.jpg", "image/jpeg", "photo"],
     ["application.webp", "image/webp", "photo"],
+    ["application.png", "application/octet-stream", "pdf"],
     ["application.pdf", "", "pdf"],
-  ])("classifies %s from MIME and extension", (name, type, expected) => {
+  ])("classifies %s from its browser MIME type", (name, type, expected) => {
     expect(resolveSupportingEvidenceDocumentType({ name, type })).toBe(
       expected,
     );

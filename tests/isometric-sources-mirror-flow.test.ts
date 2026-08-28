@@ -349,6 +349,36 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     );
   });
 
+  it("lets the submission-owned mirror seam rebuild live evidence after supersede", async () => {
+    vi.mocked(
+      submissionsDA.getLatestSubmissionWithExecutor,
+    ).mockResolvedValue({
+      status: "superseded",
+      lockedAt: null,
+    } as never);
+    vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue({
+      id: EXISTING_SOURCE_ID,
+      is_public: false,
+    } as never);
+    vi.mocked(isometric.requestSignedUploadUrl).mockResolvedValue({
+      kind: "already_uploaded",
+    });
+
+    await mirrorCandidateSourcesForSubmission(
+      makeTestOrgContext(USER_ID),
+      {
+        removalId: REMOVAL_ID,
+        candidateDocumentIds: [DOCUMENT_ID],
+      },
+    );
+
+    expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      expect.objectContaining({ documentId: DOCUMENT_ID }),
+      expect.anything(),
+    );
+  });
+
   it("authorizes a Sample lab report discovered for the member batch", async () => {
     vi.mocked(creditBatchSamplesDA.getSamplesByCreditBatchIds).mockResolvedValue(
       [

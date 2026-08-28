@@ -175,7 +175,10 @@ export async function mirrorCandidateSourcesForSubmission(
     await mirrorDocumentToSourceForUser(
       orgCtx,
       { removalId: args.removalId, documentId },
-      { enforceRemovalLifecycle: true },
+      // Submission already filtered candidates through the immutable snapshot.
+      // Keep this internal seam available for fresh post-supersede evidence and
+      // deterministic generated ledgers; the operator action remains guarded.
+      { enforceRemovalLifecycle: false },
     );
   }
 }

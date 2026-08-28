@@ -250,6 +250,13 @@ Application through its `source_ids`. GIS boundary uploads remain local: noma
 does not mirror them until the Application stores an explicit active-boundary
 document identity, so replaced or historical boundaries cannot be submitted.
 
+A draft retry reuses the exact operator-evidence tuple stored in its immutable
+submission snapshot. Submitted and accepted Removals keep that frozen operator
+evidence on a superseding claim while current deterministic transport and
+durability ledgers are regenerated and attached. Evidence added later requires
+a new Removal or a future amendment workflow; a rejected or superseded attempt
+that has no live claim rebuilds from current evidence.
+
 The plan and mapping revision are hash-covered in the submission snapshot.
 After GHG-entry creation, noma follows component attributions to Components and
 Datapoints and verifies that every planned Source is attached to its intended
