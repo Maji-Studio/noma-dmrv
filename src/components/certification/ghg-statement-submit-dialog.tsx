@@ -7,7 +7,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   FormField,
@@ -23,6 +23,10 @@ import {
 } from "@/hooks/use-certification";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
+import {
+  deriveStatementStatus,
+  type RemoteGhgStatus,
+} from "@/lib/certification/status";
 import {
   buildSubmitGhgStatementDialogSchema,
   type SubmitGhgStatementDialogInput,
@@ -41,21 +45,71 @@ interface GhgStatementSubmitDialogProps {
   isProduction: boolean;
   isResubmit: boolean;
   canGenerate: boolean;
+  canSubmit?: boolean;
   generationUnavailableReason?: string | null;
 }
 
+function registryStatus(status: RemoteGhgStatus) {
+  return deriveStatementStatus({
+    local: "submitted",
+    lockInFlight: false,
+    remoteStatus: status,
+  });
+}
+
+function needsSubmissionReview(
+  status: ReturnType<typeof registryStatus> | null,
+): boolean {
+  return (
+    status?.kind === "in-registry" || status?.kind === "verification-failed"
+  );
+}
+
 export function GhgStatementSubmitDialog({
-  ghgStatementId,
   isOpen,
+  onClose,
+  ...props
+}: GhgStatementSubmitDialogProps) {
+  const [submissionPending, setSubmissionPending] = useState(false);
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="ghg-submit-title"
+      width="md"
+      dismissible={!submissionPending}
+      dismissOnClickOutside={false}
+    >
+      <GhgStatementSubmitDialogContent
+        {...props}
+        onClose={onClose}
+        onSubmissionPendingChange={setSubmissionPending}
+      />
+    </Modal>
+  );
+}
+
+type GhgStatementSubmitDialogContentProps = Omit<
+  GhgStatementSubmitDialogProps,
+  "isOpen"
+> & {
+  onSubmissionPendingChange: (pending: boolean) => void;
+};
+
+function GhgStatementSubmitDialogContent({
+  ghgStatementId,
   onClose,
   isProduction,
   isResubmit,
   canGenerate,
+  canSubmit = true,
   generationUnavailableReason,
-}: GhgStatementSubmitDialogProps) {
+  onSubmissionPendingChange,
+}: GhgStatementSubmitDialogContentProps) {
   const router = useRouter();
   const mutation = useSubmitGhgStatementToVerifier();
-  const reportsQuery = useGhgStatementReports(ghgStatementId, isOpen);
+  const reportsQuery = useGhgStatementReports(ghgStatementId);
   const approvedReport = findApprovedGhgStatementReport(
     reportsQuery.data ?? [],
   );
@@ -72,11 +126,7 @@ export function GhgStatementSubmitDialog({
   >([]);
   const [lastInput, setLastInput] =
     useState<SubmitGhgStatementDialogInput | null>(null);
-  // The dialog stays mounted across open/close (it's rendered unconditionally
-  // by the hub), so react-hook-form and react-query mutation state would
-  // persist between sessions without an explicit reset. Match the
-  // create-dialog pattern: reset both via the Modal's onOpen callback so the
-  // form starts blank and any prior server error is cleared every open.
+  const submissionInFlight = useRef(false);
   const initialValues: SubmitGhgStatementDialogInput = {
     reportId: approvedReportId ?? undefined,
     externalReportUrl: undefined,
@@ -86,7 +136,6 @@ export function GhgStatementSubmitDialog({
   const {
     register,
     handleSubmit,
-    reset,
     formState: { errors },
     setError,
     setValue,
@@ -96,15 +145,10 @@ export function GhgStatementSubmitDialog({
     defaultValues: initialValues,
   });
 
-  const onModalOpen = () => {
-    reset(initialValues);
-    mutation.reset();
-    setProgressUpdates([]);
-    setLastInput(null);
-    setReportSource("generated");
-  };
-
   const runSubmission = async (input: SubmitGhgStatementDialogInput) => {
+    if (!canSubmit || submissionInFlight.current) return;
+    submissionInFlight.current = true;
+    onSubmissionPendingChange(true);
     try {
       setProgressUpdates([]);
       clearErrors("root.serverError");
@@ -116,9 +160,15 @@ export function GhgStatementSubmitDialog({
         },
       });
       router.refresh();
-      toast.success(
-        `GHG Statement ${result.remoteStatus.replace(/_/g, " ").toLowerCase()}.`,
-      );
+      const resultStatus = registryStatus(result.remoteStatus);
+      const resultMessage = `GHG Statement: ${resultStatus.label}.`;
+      if (resultStatus.kind === "verification-failed") {
+        toast.error(resultMessage);
+      } else if (resultStatus.kind === "in-registry") {
+        toast.warning(resultMessage);
+      } else {
+        toast.success(resultMessage);
+      }
     } catch (err) {
       setError("root.serverError", {
         message:
@@ -126,6 +176,9 @@ export function GhgStatementSubmitDialog({
             ? err.message
             : "The GHG Statement was not submitted. Check the form and try again.",
       });
+    } finally {
+      submissionInFlight.current = false;
+      onSubmissionPendingChange(false);
     }
   };
 
@@ -145,20 +198,34 @@ export function GhgStatementSubmitDialog({
   });
 
   const serverError = errors.root?.serverError?.message ?? null;
+  const isPending = mutation.isPending;
   const showProgress =
-    mutation.isPending || mutation.isSuccess || mutation.isError;
+    isPending || mutation.isSuccess || mutation.isError;
   const submissionStalled = isSubmissionStreamStalledError(mutation.error);
+  const displayedServerError = submissionStalled ? null : serverError;
+  const reconciledStatus = mutation.data
+    ? registryStatus(mutation.data.remoteStatus)
+    : null;
+  const resultNeedsReview = reconciledStatus?.kind === "in-registry";
+  const verificationFailed =
+    reconciledStatus?.kind === "verification-failed";
+  const resultNeedsAction = needsSubmissionReview(reconciledStatus);
+  const showSubmissionProgress = !(mutation.isSuccess && resultNeedsAction);
   const idleTitle = isResubmit
     ? "Resubmit GHG Statement"
     : "Submit GHG Statement";
-  const dialogTitle = mutation.isPending
+  const dialogTitle = isPending
     ? isResubmit
       ? "Resubmitting GHG Statement"
       : "Submitting GHG Statement"
     : mutation.isSuccess
-      ? isResubmit
-        ? "GHG Statement resubmitted"
-        : "GHG Statement submitted"
+      ? reconciledStatus?.kind === "in-registry"
+        ? "GHG Statement not submitted"
+        : reconciledStatus?.kind === "verification-failed"
+          ? "GHG Statement verification failed"
+          : isResubmit
+            ? "GHG Statement resubmitted"
+            : "GHG Statement submitted"
       : mutation.isError
         ? isResubmit
           ? "GHG Statement not resubmitted"
@@ -166,47 +233,63 @@ export function GhgStatementSubmitDialog({
         : idleTitle;
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      onOpen={onModalOpen}
-      ariaLabelledBy="ghg-submit-title"
-      width="md"
-      dismissible={!mutation.isPending}
-      dismissOnClickOutside={false}
-    >
-      <form onSubmit={onSubmit}>
-        <div className="flex flex-col gap-20">
-          <header>
-            <h2 id="ghg-submit-title" className="title-heading-3">
-              {dialogTitle}
-            </h2>
-          </header>
+    <form onSubmit={onSubmit}>
+      <div className="flex flex-col gap-20">
+        <header>
+          <h2 id="ghg-submit-title" className="title-heading-3">
+            {dialogTitle}
+          </h2>
+        </header>
 
-          {showProgress ? (
-            <>
-              <SubmissionProgress
-                kind="ghg_statement"
-                updates={progressUpdates}
-                error={serverError}
-                stalled={submissionStalled}
-              />
-              {serverError && <ServerError message={serverError} />}
+        {showProgress ? (
+          <>
+              {showSubmissionProgress && (
+                <SubmissionProgress
+                  kind="ghg_statement"
+                  updates={progressUpdates}
+                  error={displayedServerError}
+                  stalled={submissionStalled}
+                />
+              )}
+              {displayedServerError && (
+                <ServerError message={displayedServerError} />
+              )}
               <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  {mutation.isPending
+                  {isPending
                     ? "noma is submitting the GHG Statement to the verifier."
-                    : mutation.isSuccess
-                      ? "The verifier status is saved in noma."
+                    : mutation.isSuccess && reconciledStatus
+                      ? verificationFailed
+                        ? "Isometric status: Verification failed. Update the Removals, close this dialog, then use Refresh on the GHG Statement before resubmitting."
+                        : resultNeedsReview
+                          ? `Isometric status: ${reconciledStatus.label}. Review the submission before trying again.`
+                        : `Isometric status: ${reconciledStatus.label}. The reconciled status is saved in noma.`
+                      : mutation.isSuccess
+                        ? "The reconciled Isometric status is saved in noma."
                       : submissionStalled
-                        ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
+                        ? "Registry work may still be continuing. Close this dialog, then use Refresh on the GHG Statement before trying again."
                         : "Completed registry operations are preserved for a safe retry."}
                 </span>
-                {!mutation.isPending && (
+                {!isPending && (
                   <div className="flex items-center gap-12">
-                    {mutation.isSuccess || submissionStalled ? (
-                      <Button variant="primary" onClick={onClose}>
-                        {submissionStalled ? "Close" : "Done"}
+                    {mutation.isSuccess && resultNeedsReview ? (
+                      <Button
+                        variant="primary"
+                        onClick={() => {
+                          mutation.reset();
+                          setProgressUpdates([]);
+                        }}
+                      >
+                        Review submission
+                      </Button>
+                    ) : mutation.isSuccess || submissionStalled ? (
+                      <Button
+                        variant="primary"
+                        onClick={onClose}
+                      >
+                        {submissionStalled || verificationFailed
+                          ? "Close"
+                          : "Done"}
                       </Button>
                     ) : (
                       <>
@@ -231,9 +314,17 @@ export function GhgStatementSubmitDialog({
                   </div>
                 )}
               </div>
-            </>
-          ) : (
-            <>
+          </>
+        ) : (
+          <>
+              {!canSubmit && generationUnavailableReason && (
+                <p
+                  className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8 body-small text-[var(--color-signal-orange-strong)]"
+                  role="status"
+                >
+                  {generationUnavailableReason}
+                </p>
+              )}
               <div className="flex flex-col gap-12">
                 <label className="flex items-start gap-8 body-small">
                   <input
@@ -277,7 +368,9 @@ export function GhgStatementSubmitDialog({
                           }
                     }
                     onSubmit={
-                      approvedReportId ? () => void onSubmit() : undefined
+                      approvedReportId && canSubmit
+                        ? () => void onSubmit()
+                        : undefined
                     }
                     submitLabel={isResubmit ? "Resubmit" : "Submit"}
                   />
@@ -356,24 +449,19 @@ export function GhgStatementSubmitDialog({
                   type="button"
                   variant="default"
                   onClick={onClose}
-                  disabled={mutation.isPending}
+                  disabled={isPending}
                 >
                   Cancel
                 </Button>
-                {reportSource === "external" && (
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    busy={mutation.isPending}
-                  >
+                {reportSource === "external" && canSubmit && (
+                  <Button type="submit" variant="primary">
                     {isResubmit ? "Resubmit" : "Submit"}
                   </Button>
                 )}
               </div>
-            </>
-          )}
-        </div>
-      </form>
-    </Modal>
+          </>
+        )}
+      </div>
+    </form>
   );
 }
