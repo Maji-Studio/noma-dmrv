@@ -45,6 +45,8 @@ const STEPS: StepFlowStep[] = [
   { key: "report", label: "Report", description: "Choose the attachment" },
   { key: "review", label: "Review", description: "Preview and submit" },
 ];
+const REPORT_STEP_INDEX = 0;
+const REVIEW_STEP_INDEX = 1;
 
 interface GhgStatementSubmitDialogProps {
   ghgStatementId: string;
@@ -125,7 +127,7 @@ function GhgStatementSubmitDialogContent({
     isResubmit,
     isProduction,
   });
-  const [stepIndex, setStepIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(REPORT_STEP_INDEX);
   const [reportSource, setReportSource] =
     useState<"generated" | "external">("generated");
   const [preparationKey] = useState(() => crypto.randomUUID());
@@ -259,7 +261,7 @@ function GhgStatementSubmitDialogContent({
     if (reportSource === "external") {
       if (!(await trigger("externalReportUrl"))) return;
     }
-    setStepIndex(1);
+    setStepIndex(REVIEW_STEP_INDEX);
   };
 
   const serverError = errors.root?.serverError?.message ?? null;
@@ -304,7 +306,7 @@ function GhgStatementSubmitDialogContent({
   return (
     <form
       onSubmit={(event) => {
-        if (stepIndex === 0) {
+        if (stepIndex === REPORT_STEP_INDEX) {
           event.preventDefault();
           void advance();
           return;
@@ -417,17 +419,17 @@ function GhgStatementSubmitDialogContent({
                   >
                     Cancel
                   </Button>
-                  {stepIndex === 1 && (
+                  {stepIndex === REVIEW_STEP_INDEX && (
                     <Button
                       type="button"
                       variant="default"
-                      onClick={() => setStepIndex(0)}
+                      onClick={() => setStepIndex(REPORT_STEP_INDEX)}
                       disabled={submissionPending}
                     >
                       Back
                     </Button>
                   )}
-                  {stepIndex === 0 ? (
+                  {stepIndex === REPORT_STEP_INDEX ? (
                     <Button
                       type="button"
                       variant="primary"
@@ -456,7 +458,7 @@ function GhgStatementSubmitDialogContent({
                 </div>
               }
             >
-              {stepIndex === 0 ? (
+              {stepIndex === REPORT_STEP_INDEX ? (
                 <div className="flex flex-col gap-12">
                   <label className="flex items-start gap-8 body-small">
                     <input
