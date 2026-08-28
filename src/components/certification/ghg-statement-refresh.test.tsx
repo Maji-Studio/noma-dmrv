@@ -8,8 +8,6 @@ const state = vi.hoisted(() => ({
   create: vi.fn(),
   refresh: vi.fn(),
   submit: vi.fn(),
-  mutationReset: vi.fn(),
-  modalOnOpen: undefined as (() => void) | undefined,
   submitPending: false,
   submitSuccess: false,
   submitError: null as Error | null,
@@ -69,14 +67,13 @@ vi.mock("@/components/ui", () => ({
   EmptyState: () => <div>Empty</div>,
   Modal: ({
     children,
-    onOpen,
+    isOpen,
   }: {
     children: ReactNode;
-    onOpen?: () => void;
-  }) => {
-    state.modalOnOpen = onOpen;
-    return <div>{children}</div>;
-  },
+    isOpen: boolean;
+  }) => (
+    <div data-modal-open={String(isOpen)}>{isOpen ? children : null}</div>
+  ),
 }));
 
 vi.mock("@/components/forms", () => ({
@@ -142,7 +139,7 @@ vi.mock("@/hooks/use-certification", () => ({
         state.submitPending = false;
       }
     },
-    reset: state.mutationReset,
+    reset: vi.fn(),
   }),
   useGhgStatementReports: () => ({
     data: [
@@ -217,14 +214,6 @@ beforeEach(() => {
   state.refresh.mockReset();
   state.submit.mockReset();
   state.submit.mockResolvedValue({ remoteStatus: "SUBMITTED" });
-  state.mutationReset.mockReset();
-  state.mutationReset.mockImplementation(() => {
-    state.submitPending = false;
-    state.submitSuccess = false;
-    state.submitError = null;
-    state.submitData = null;
-  });
-  state.modalOnOpen = undefined;
   state.submitPending = false;
   state.submitSuccess = false;
   state.submitError = null;
@@ -279,7 +268,7 @@ describe("GHG Statement route refreshes", () => {
     await act(async () => renderer?.unmount());
   });
 
-  it("keeps a fast submission pending when the modal open effect runs late", async () => {
+  it("blocks duplicate submissions while the first request is pending", async () => {
     let resolveSubmission: ((value: { remoteStatus: string }) => void) | null =
       null;
     state.submit.mockImplementation(
@@ -308,7 +297,6 @@ describe("GHG Statement route refreshes", () => {
       submission = renderer?.root.findByType("form").props.onSubmit();
       void renderer?.root.findByType("form").props.onSubmit();
     });
-    act(() => state.modalOnOpen?.());
     await act(async () => {
       renderer?.update(
         <GhgStatementSubmitDialog
@@ -322,7 +310,6 @@ describe("GHG Statement route refreshes", () => {
       );
     });
 
-    expect(state.mutationReset).not.toHaveBeenCalled();
     expect(state.submit).toHaveBeenCalledOnce();
     expect(findButton(renderer!, "Submit")).toBeUndefined();
     expect(
@@ -335,6 +322,41 @@ describe("GHG Statement route refreshes", () => {
       resolveSubmission?.({ remoteStatus: "AWAITING_VERIFICATION" });
       await submission;
     });
+    await act(async () => renderer?.unmount());
+  });
+
+  it("keeps the controlled modal mounted while closed", async () => {
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await act(async () => {
+      renderer?.update(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen={false}
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    expect(
+      renderer!.root.findByProps({ "data-modal-open": "false" }),
+    ).toBeDefined();
+    expect(renderer!.root.findAllByType("form")).toHaveLength(0);
     await act(async () => renderer?.unmount());
   });
 

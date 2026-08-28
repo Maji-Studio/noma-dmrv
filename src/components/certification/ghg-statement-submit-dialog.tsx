@@ -51,19 +51,35 @@ function formatRegistryStatus(status: string): string {
 
 export function GhgStatementSubmitDialog({
   isOpen,
+  onClose,
   ...props
 }: GhgStatementSubmitDialogProps) {
-  // Keep the mutation and form lifecycle scoped to one visible session. A
-  // delayed Modal `onOpen` effect used to reset the mutation after a fast
-  // Submit click, detaching the observer while the registry call continued.
-  if (!isOpen) return null;
-  return <GhgStatementSubmitDialogContent {...props} />;
+  const [submissionPending, setSubmissionPending] = useState(false);
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="ghg-submit-title"
+      width="md"
+      dismissible={!submissionPending}
+      dismissOnClickOutside={false}
+    >
+      <GhgStatementSubmitDialogContent
+        {...props}
+        onClose={onClose}
+        onSubmissionPendingChange={setSubmissionPending}
+      />
+    </Modal>
+  );
 }
 
 type GhgStatementSubmitDialogContentProps = Omit<
   GhgStatementSubmitDialogProps,
   "isOpen"
->;
+> & {
+  onSubmissionPendingChange: (pending: boolean) => void;
+};
 
 function GhgStatementSubmitDialogContent({
   ghgStatementId,
@@ -72,10 +88,11 @@ function GhgStatementSubmitDialogContent({
   isResubmit,
   canGenerate,
   generationUnavailableReason,
+  onSubmissionPendingChange,
 }: GhgStatementSubmitDialogContentProps) {
   const router = useRouter();
   const mutation = useSubmitGhgStatementToVerifier();
-  const reportsQuery = useGhgStatementReports(ghgStatementId, true);
+  const reportsQuery = useGhgStatementReports(ghgStatementId);
   const approvedReport = findApprovedGhgStatementReport(
     reportsQuery.data ?? [],
   );
@@ -92,7 +109,6 @@ function GhgStatementSubmitDialogContent({
   >([]);
   const [lastInput, setLastInput] =
     useState<SubmitGhgStatementDialogInput | null>(null);
-  const [submissionStarted, setSubmissionStarted] = useState(false);
   const submissionInFlight = useRef(false);
   const initialValues: SubmitGhgStatementDialogInput = {
     reportId: approvedReportId ?? undefined,
@@ -115,7 +131,7 @@ function GhgStatementSubmitDialogContent({
   const runSubmission = async (input: SubmitGhgStatementDialogInput) => {
     if (submissionInFlight.current) return;
     submissionInFlight.current = true;
-    setSubmissionStarted(true);
+    onSubmissionPendingChange(true);
     try {
       setProgressUpdates([]);
       clearErrors("root.serverError");
@@ -139,7 +155,7 @@ function GhgStatementSubmitDialogContent({
       });
     } finally {
       submissionInFlight.current = false;
-      setSubmissionStarted(false);
+      onSubmissionPendingChange(false);
     }
   };
 
@@ -159,7 +175,7 @@ function GhgStatementSubmitDialogContent({
   });
 
   const serverError = errors.root?.serverError?.message ?? null;
-  const isPending = submissionStarted || mutation.isPending;
+  const isPending = mutation.isPending;
   const showProgress =
     isPending || mutation.isSuccess || mutation.isError;
   const submissionStalled = isSubmissionStreamStalledError(mutation.error);
@@ -184,24 +200,16 @@ function GhgStatementSubmitDialogContent({
         : idleTitle;
 
   return (
-    <Modal
-      isOpen
-      onClose={onClose}
-      ariaLabelledBy="ghg-submit-title"
-      width="md"
-      dismissible={!isPending}
-      dismissOnClickOutside={false}
-    >
-      <form onSubmit={onSubmit}>
-        <div className="flex flex-col gap-20">
-          <header>
-            <h2 id="ghg-submit-title" className="title-heading-3">
-              {dialogTitle}
-            </h2>
-          </header>
+    <form onSubmit={onSubmit}>
+      <div className="flex flex-col gap-20">
+        <header>
+          <h2 id="ghg-submit-title" className="title-heading-3">
+            {dialogTitle}
+          </h2>
+        </header>
 
-          {showProgress ? (
-            <>
+        {showProgress ? (
+          <>
               <SubmissionProgress
                 kind="ghg_statement"
                 updates={progressUpdates}
@@ -254,9 +262,9 @@ function GhgStatementSubmitDialogContent({
                   </div>
                 )}
               </div>
-            </>
-          ) : (
-            <>
+          </>
+        ) : (
+          <>
               <div className="flex flex-col gap-12">
                 <label className="flex items-start gap-8 body-small">
                   <input
@@ -303,7 +311,6 @@ function GhgStatementSubmitDialogContent({
                       approvedReportId ? () => void onSubmit() : undefined
                     }
                     submitLabel={isResubmit ? "Resubmit" : "Submit"}
-                    submitting={isPending}
                   />
                 )}
 
@@ -385,19 +392,14 @@ function GhgStatementSubmitDialogContent({
                   Cancel
                 </Button>
                 {reportSource === "external" && (
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    busy={isPending}
-                  >
+                  <Button type="submit" variant="primary">
                     {isResubmit ? "Resubmit" : "Submit"}
                   </Button>
                 )}
               </div>
-            </>
-          )}
-        </div>
-      </form>
-    </Modal>
+          </>
+        )}
+      </div>
+    </form>
   );
 }
