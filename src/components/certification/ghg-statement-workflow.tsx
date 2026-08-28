@@ -53,6 +53,8 @@ interface GhgStatementWorkflowProps {
    */
   onSubmit?: () => void;
   submitLabel?: string;
+  /** Locks the verifier action as soon as its submission handler starts. */
+  submitting?: boolean;
 }
 
 export function findApprovedGhgStatementReport(
@@ -91,6 +93,7 @@ export function GhgStatementWorkflow({
   verifierStep,
   onSubmit,
   submitLabel = "Submit",
+  submitting = false,
 }: GhgStatementWorkflowProps) {
   const prepare = usePrepareGhgStatementReport();
   const approve = useApproveGhgStatementReport();
@@ -268,6 +271,7 @@ export function GhgStatementWorkflow({
               size="small"
               variant="primary"
               className="shrink-0 self-center"
+              busy={submitting}
               onClick={onSubmit}
             >
               {submitLabel}

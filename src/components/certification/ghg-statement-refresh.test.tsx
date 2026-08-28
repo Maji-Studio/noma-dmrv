@@ -8,6 +8,12 @@ const state = vi.hoisted(() => ({
   create: vi.fn(),
   refresh: vi.fn(),
   submit: vi.fn(),
+  mutationReset: vi.fn(),
+  modalOnOpen: undefined as (() => void) | undefined,
+  submitPending: false,
+  submitSuccess: false,
+  submitError: null as Error | null,
+  submitData: null as { remoteStatus: string } | null,
   toastSuccess: vi.fn(),
 }));
 
@@ -44,18 +50,33 @@ vi.mock("react-hook-form", () => ({
 
 vi.mock("@/components/ui", () => ({
   buttonVariants: () => "button",
-  Button: ({ children, onClick, type, disabled }: {
+  Button: ({ children, onClick, type, disabled, busy }: {
     children: ReactNode;
     onClick?: () => void;
     type?: "button" | "submit";
     disabled?: boolean;
+    busy?: boolean;
   }) => (
-    <button type={type ?? "button"} onClick={onClick} disabled={disabled}>
+    <button
+      type={type ?? "button"}
+      onClick={onClick}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
+    >
       {children}
     </button>
   ),
   EmptyState: () => <div>Empty</div>,
-  Modal: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  Modal: ({
+    children,
+    onOpen,
+  }: {
+    children: ReactNode;
+    onOpen?: () => void;
+  }) => {
+    state.modalOnOpen = onOpen;
+    return <div>{children}</div>;
+  },
 }));
 
 vi.mock("@/components/forms", () => ({
@@ -101,12 +122,27 @@ vi.mock("@/hooks/use-certification", () => ({
   useOpenRemovalsForFacility: () => ({ data: [{}] }),
   useRegistryGhgStatementsForFacility: () => ({ data: [] }),
   useSubmitGhgStatementToVerifier: () => ({
-    error: null,
-    isError: false,
-    isPending: false,
-    isSuccess: false,
-    mutateAsync: state.submit,
-    reset: vi.fn(),
+    error: state.submitError,
+    isError: state.submitError !== null,
+    isPending: state.submitPending,
+    isSuccess: state.submitSuccess,
+    data: state.submitData,
+    mutateAsync: async (args: unknown) => {
+      state.submitPending = true;
+      try {
+        const result = await state.submit(args);
+        state.submitData = result;
+        state.submitSuccess = true;
+        return result;
+      } catch (error) {
+        state.submitError =
+          error instanceof Error ? error : new Error("Submission failed.");
+        throw error;
+      } finally {
+        state.submitPending = false;
+      }
+    },
+    reset: state.mutationReset,
   }),
   useGhgStatementReports: () => ({
     data: [
@@ -181,6 +217,18 @@ beforeEach(() => {
   state.refresh.mockReset();
   state.submit.mockReset();
   state.submit.mockResolvedValue({ remoteStatus: "SUBMITTED" });
+  state.mutationReset.mockReset();
+  state.mutationReset.mockImplementation(() => {
+    state.submitPending = false;
+    state.submitSuccess = false;
+    state.submitError = null;
+    state.submitData = null;
+  });
+  state.modalOnOpen = undefined;
+  state.submitPending = false;
+  state.submitSuccess = false;
+  state.submitError = null;
+  state.submitData = null;
   state.toastSuccess.mockReset();
 });
 
@@ -228,6 +276,117 @@ describe("GHG Statement route refreshes", () => {
 
     expect(state.submit).toHaveBeenCalledOnce();
     expect(state.refresh).toHaveBeenCalledOnce();
+    await act(async () => renderer?.unmount());
+  });
+
+  it("keeps a fast submission pending when the modal open effect runs late", async () => {
+    let resolveSubmission: ((value: { remoteStatus: string }) => void) | null =
+      null;
+    state.submit.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSubmission = resolve;
+        }),
+    );
+
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    let submission: Promise<unknown> | undefined;
+    act(() => {
+      submission = renderer?.root.findByType("form").props.onSubmit();
+      void renderer?.root.findByType("form").props.onSubmit();
+    });
+    act(() => state.modalOnOpen?.());
+    await act(async () => {
+      renderer?.update(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    expect(state.mutationReset).not.toHaveBeenCalled();
+    expect(state.submit).toHaveBeenCalledOnce();
+    expect(findButton(renderer!, "Submit")).toBeUndefined();
+    expect(
+      renderer!.root.findAllByType("h2").some((heading) =>
+        String(heading.props.children).includes("Submitting GHG Statement"),
+      ),
+    ).toBe(true);
+
+    await act(async () => {
+      resolveSubmission?.({ remoteStatus: "AWAITING_VERIFICATION" });
+      await submission;
+    });
+    await act(async () => renderer?.unmount());
+  });
+
+  it("shows the reconciled verifier status as the terminal success", async () => {
+    state.submit.mockResolvedValue({
+      remoteStatus: "AWAITING_VERIFICATION",
+    });
+    const onClose = vi.fn();
+
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={onClose}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await act(async () => renderer?.root.findByType("form").props.onSubmit());
+    await act(async () => {
+      renderer?.update(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={onClose}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    expect(
+      renderer!.root.findAllByType("h2").some((heading) =>
+        String(heading.props.children).includes("GHG Statement submitted"),
+      ),
+    ).toBe(true);
+    expect(
+      renderer!.root.findAllByType("span").some((span) =>
+        String(span.props.children).includes(
+          "Isometric status: Awaiting verification. The reconciled status is saved in noma.",
+        ),
+      ),
+    ).toBe(true);
+
+    await act(async () => findButton(renderer!, "Done")?.props.onClick());
+    expect(onClose).toHaveBeenCalledOnce();
     await act(async () => renderer?.unmount());
   });
 });
