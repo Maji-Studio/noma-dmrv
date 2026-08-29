@@ -249,6 +249,7 @@ function GhgStatementSubmitDialogContent({
                   updates={progressUpdates}
                   error={displayedServerError}
                   stalled={submissionStalled}
+                  isResubmission={isResubmit}
                 />
               )}
               {displayedServerError && (
