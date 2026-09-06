@@ -1,13 +1,23 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { QueryClient, useQuery } from "@tanstack/react-query";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { GhgStatementsList } from "./ghg-statements-list";
+import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 
 const REPORT_STEP_INDEX = 0;
+const { GHG_LIST_QUERY_KEY } = vi.hoisted(() => ({
+  GHG_LIST_QUERY_KEY: ["ghg-list"] as const,
+}));
 
 const state = vi.hoisted(() => ({
+  client: null as QueryClient | null,
+  list: vi.fn(),
+  detail: vi.fn(),
+  summaryError: false,
   create: vi.fn(),
   refresh: vi.fn(),
   submit: vi.fn(),
@@ -24,6 +34,49 @@ const state = vi.hoisted(() => ({
   toastError: vi.fn(),
   toastWarning: vi.fn(),
 }));
+
+vi.mock("nuqs", () => ({
+  parseAsString: { withOptions: () => ({}) },
+  useQueryState: () => useState<string | null>(null),
+}));
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilityId: "facility-1" }),
+}));
+vi.mock("@/components/ui/data-table", () => {
+  const Wrapper = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
+  return {
+    DataTable: Object.assign(
+      ({ data, onRowClick }: {
+        data: { statement: { id: string } }[];
+        onRowClick: (row: { statement: { id: string } }) => void;
+      }) => (
+        <div data-testid="statement-list">
+          {data.map((row) => (
+            <button key={row.statement.id} onClick={() => onRowClick(row)}>
+              Open statement
+            </button>
+          ))}
+        </div>
+      ),
+      { Toolbar: Wrapper, Search: Wrapper, Controls: Wrapper,
+        ColumnVisibility: Wrapper, Pagination: Wrapper },
+    ),
+  };
+});
+vi.mock("@/components/ui/slide-over-panel", () => {
+  const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
+  return { SlideOverPanel: {
+    Root: Wrapper, Content: Wrapper, Header: Wrapper, Title: Wrapper,
+    Description: Wrapper, Body: Wrapper, Footer: Wrapper, Close: Wrapper,
+  } };
+});
+vi.mock("./ghg-statement-carbon-breakdown", () => ({
+  GhgStatementCarbonBreakdown: () => <div>Carbon breakdown</div>,
+}));
+vi.mock("./ghg-statement-technical-details", () => ({
+  GhgStatementTechnicalDetails: () => null,
+}));
+vi.mock("./registry-record-link", () => ({ RegistryRecordLink: () => null }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: state.refresh }),
@@ -64,6 +117,7 @@ vi.mock("react-hook-form", () => ({
 }));
 
 vi.mock("@/components/ui", () => ({
+  PageHeader: () => <h1>GHG Statements</h1>,
   buttonVariants: () => "button",
   Button: ({ children, onClick, type, disabled, busy }: {
     children: ReactNode;
@@ -156,7 +210,18 @@ vi.mock("@/hooks/use-certification", () => ({
     isPending: false,
     mutateAsync: state.create,
   }),
-  useGhgStatementsForFacility: () => ({ data: [], isSuccess: true }),
+  useGhgStatementsForFacility: () => useQuery({
+    queryKey: GHG_LIST_QUERY_KEY, queryFn: state.list,
+  }, state.client!),
+  useGhgStatementState: () => useQuery({
+    queryKey: ["ghg-detail"], queryFn: state.detail,
+  }, state.client!),
+  useFacilityCertifierSummary: () => ({
+    data: { mapping: {}, linkedFacilityCount: 1, viewerCanManage: true },
+    isError: state.summaryError, isLoading: false,
+  }),
+  useSyncGhgStatementsFromRegistry: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useRefreshGhgStatementStatus: () => ({ isPending: false, mutate: vi.fn() }),
   useOpenRemovalsForFacility: () => ({ data: [{}] }),
   useRegistryGhgStatementsForFacility: () => ({ data: [] }),
   useSubmitGhgStatementToVerifier: () => ({
@@ -300,6 +365,13 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  state.client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: 0 } },
+  });
+  state.client.setQueryData(GHG_LIST_QUERY_KEY, []);
+  state.list.mockReset().mockResolvedValue([]);
+  state.detail.mockReset();
+  state.summaryError = false;
   state.create.mockReset();
   state.create.mockResolvedValue({
     externalId: "statement-1",
@@ -992,5 +1064,109 @@ describe("GHG Statement route refreshes", () => {
     );
     expect(visibleCopy).not.toContain(stalledError.message);
     await act(async () => renderer?.unmount());
+  });
+});
+
+
+describe("GHG Statement parent list refreshes", () => {
+  const listItem = {
+    statement: {
+      id: "statement-1", facilityId: "facility-1",
+      reportingPeriodStartOn: "2026-07-01",
+    },
+    effectiveReportingPeriodEndOn: "2026-07-31",
+    latestSubmission: null, linkedRemovalCount: 1,
+  };
+  const detail = {
+    statementSubmission: { id: "submission-1", externalId: "registry-1", status: "submitted" },
+    statementSubmissionForStatus: null,
+    linkedRemovals: [], recentSyncEvents: [],
+    remote: { status: "DRAFT", ghg_entry_ids: ["entry-1"], pending_total_co2e_removed_kg: 100 },
+  };
+
+  it("retains the selected detail and completed submission after a failed list refetch", async () => {
+    state.submit.mockResolvedValue({ remoteStatus: "AWAITING_VERIFICATION" });
+    state.client!.setQueryData(GHG_LIST_QUERY_KEY, [listItem]);
+    state.list.mockResolvedValue([listItem]);
+    state.detail.mockResolvedValue(detail);
+    let renderer: ReactTestRenderer;
+    await act(async () => { renderer = create(<GhgStatementsList />); });
+    await act(async () => {
+      await vi.waitFor(() => expect(findButton(renderer!, "Open statement")).toBeDefined());
+    });
+    await act(async () => findButton(renderer!, "Open statement")!.props.onClick());
+    await act(async () => {
+      await vi.waitFor(() => expect(findButton(renderer!, "Submit")).toBeDefined());
+    });
+    await act(async () => findButton(renderer!, "Submit")!.props.onClick());
+    await prepareAndReview(renderer!);
+    await act(async () => renderer!.root.findByType("form").props.onSubmit());
+    await act(async () => renderer!.update(<GhgStatementsList />));
+    expect(state.submit).toHaveBeenCalledOnce();
+    expect(findButton(renderer!, "Done")).toBeDefined();
+
+    state.list.mockRejectedValue(new Error("List refresh failed"));
+    state.detail.mockRejectedValue(new Error("Detail refresh failed"));
+    state.summaryError = true;
+    await act(async () => {
+      await state.client!.invalidateQueries();
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(findButton(renderer!, "Retry")).toBeDefined());
+    });
+    expect(renderer!.root.findByType(GhgStatementDetailSheet).props.item.statement.id).toBe("statement-1");
+    expect(JSON.stringify(renderer!.toJSON())).toContain("GHG Statement submitted");
+    expect(JSON.stringify(renderer!.toJSON())).toContain("GHG Statements could not be refreshed.");
+    expect(JSON.stringify(renderer!.toJSON())).toContain("Statement details could not be refreshed.");
+    expect(JSON.stringify(renderer!.toJSON())).toContain("Isometric project link unavailable.");
+    expect(findButton(renderer!, "Done")).toBeDefined();
+    expect(findButton(renderer!, "Submit")).toBeUndefined();
+    expect(findButton(renderer!, "Generate new version")).toBeUndefined();
+    expect(renderer!.root.findByType(GhgStatementSubmitDialog).props.canSubmit).toBe(false);
+    expect(renderer!.root.findByType(GhgStatementSubmitDialog).props.canGenerate).toBe(false);
+    expect(renderer!.root.findAllByType("button").find((button) =>
+      button.children.includes("New GHG Statement"),
+    )?.props.disabled).toBe(true);
+
+    // Recovery updates the parent without remounting the open result dialog.
+    state.list.mockResolvedValue([listItem]);
+    await act(async () => findButton(renderer!, "Retry")!.props.onClick());
+    await act(async () => {
+      await vi.waitFor(() => expect(findButton(renderer!, "Retry")).toBeUndefined());
+    });
+    expect(findButton(renderer!, "Done")).toBeDefined();
+    expect(state.submit).toHaveBeenCalledOnce();
+    await act(async () => findButton(renderer!, "Done")!.props.onClick());
+    expect(renderer!.root.findAllByType("form")).toHaveLength(0);
+    expect(renderer!.root.findByType(GhgStatementDetailSheet)).toBeDefined();
+    await act(async () => renderer!.unmount());
+  });
+
+  it("shows the initial-load error when no cached list exists", async () => {
+    state.client!.removeQueries();
+    state.list.mockRejectedValue(new Error("Initial load failed"));
+    let renderer: ReactTestRenderer;
+    await act(async () => { renderer = create(<GhgStatementsList />); });
+    await act(async () => {
+      await vi.waitFor(() => expect(renderer!.root.findAllByProps({ role: "alert" })).toHaveLength(1));
+    });
+    expect(JSON.stringify(renderer!.toJSON())).toContain("GHG Statements could not be loaded.");
+    expect(renderer!.root.findAllByType(GhgStatementDetailSheet)).toHaveLength(0);
+    expect(findButton(renderer!, "Retry")).toBeUndefined();
+    await act(async () => renderer!.unmount());
+  });
+
+  it("retains an empty cached list after a failed background refetch", async () => {
+    state.client!.setQueryData(GHG_LIST_QUERY_KEY, []);
+    let renderer: ReactTestRenderer;
+    await act(async () => { renderer = create(<GhgStatementsList />); });
+    state.list.mockRejectedValue(new Error("List refresh failed"));
+    await act(async () => { await state.client!.invalidateQueries(); });
+    await act(async () => {
+      await vi.waitFor(() => expect(findButton(renderer!, "Retry")).toBeDefined());
+    });
+    expect(renderer!.root.findAllByProps({ role: "alert" })).toHaveLength(0);
+    expect(renderer!.root.findByProps({ "data-testid": "statement-list" })).toBeDefined();
+    await act(async () => renderer!.unmount());
   });
 });
