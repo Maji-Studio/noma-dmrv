@@ -389,6 +389,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
             <Button
               variant="noOutline"
               size="small"
+              className="min-h-44"
               onClick={() => void query.refetch()}
               busy={query.isFetching}
             >
