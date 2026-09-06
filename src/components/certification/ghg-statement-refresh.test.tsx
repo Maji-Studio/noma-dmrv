@@ -8,6 +8,10 @@ import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 
+const { GHG_LIST_QUERY_KEY } = vi.hoisted(() => ({
+  GHG_LIST_QUERY_KEY: ["ghg-list"] as const,
+}));
+
 const state = vi.hoisted(() => ({
   client: null as QueryClient | null,
   list: vi.fn(),
@@ -178,7 +182,7 @@ vi.mock("@/hooks/use-certification", () => ({
     mutateAsync: state.create,
   }),
   useGhgStatementsForFacility: () => useQuery({
-    queryKey: ["ghg-list"], queryFn: state.list,
+    queryKey: GHG_LIST_QUERY_KEY, queryFn: state.list,
   }, state.client!),
   useGhgStatementState: () => useQuery({
     queryKey: ["ghg-detail"], queryFn: state.detail,
@@ -296,7 +300,7 @@ beforeEach(() => {
   state.client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: 0 } },
   });
-  state.client.setQueryData(["ghg-list"], []);
+  state.client.setQueryData(GHG_LIST_QUERY_KEY, []);
   state.list.mockReset().mockResolvedValue([]);
   state.detail.mockReset();
   state.summaryError = false;
@@ -699,7 +703,7 @@ describe("GHG Statement parent list refreshes", () => {
 
   it("retains the selected detail and completed submission after a failed list refetch", async () => {
     state.submit.mockResolvedValue({ remoteStatus: "AWAITING_VERIFICATION" });
-    state.client!.setQueryData(["ghg-list"], [listItem]);
+    state.client!.setQueryData(GHG_LIST_QUERY_KEY, [listItem]);
     state.list.mockResolvedValue([listItem]);
     state.detail.mockResolvedValue(detail);
     let renderer: ReactTestRenderer;
@@ -769,7 +773,7 @@ describe("GHG Statement parent list refreshes", () => {
   });
 
   it("retains an empty cached list after a failed background refetch", async () => {
-    state.client!.setQueryData(["ghg-list"], []);
+    state.client!.setQueryData(GHG_LIST_QUERY_KEY, []);
     let renderer: ReactTestRenderer;
     await act(async () => { renderer = create(<GhgStatementsList />); });
     state.list.mockRejectedValue(new Error("List refresh failed"));
