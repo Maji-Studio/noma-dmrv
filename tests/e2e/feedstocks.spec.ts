@@ -125,6 +125,64 @@ test.describe("Feedstock UI CRUD", () => {
     ).toBeVisible({ timeout: 10000 });
   });
 
+  test("saves and reopens single-bin total mass edits (#707)", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    const id = crypto.randomUUID();
+    const code = `E2E-FS-MASS-${id}`;
+    const { db, pool } = createDbConnection();
+    try {
+      await db.insert(schema.feedstocks).values({
+        id,
+        code,
+        organizationId: DEC_ORG_ID,
+        facilityId: seededData.facility.id,
+        supplierId: seededData.supplier.id,
+        feedstockTypeId: seededData.feedstockType.id,
+        storageLocationId: seededData.feedstockStorageLocation.id,
+        deliveryDate: new Date("2026-01-15T12:00:00Z"),
+        massWetKg: 100,
+        massDryKg: 75,
+        moistureContentPercent: 25,
+        status: "complete",
+      });
+
+      for (const wetMass of [150, 80]) {
+        await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${id}`);
+        await expect(
+          page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+        ).toBeVisible();
+        await waitForSideSheet(page);
+        await page.getByRole("button", { name: "Edit Feedstock" }).click();
+        const dialog = page.getByRole("dialog");
+        await dialog.locator('input[name="totalWetMassKg"]').fill(String(wetMass));
+        await expect(dialog.locator('input[name="allocations.0.allocatedWetMassKg"]'))
+          .toHaveValue(String(wetMass));
+        await dialog.getByRole("button", { name: "Update Feedstock", exact: true }).click();
+        await waitForSideSheetClose(page);
+
+        const [saved] = await db.select().from(schema.feedstocks).where(eq(schema.feedstocks.id, id));
+        expect(saved.massWetKg).toBe(wetMass);
+        expect(saved.massDryKg).toBe(wetMass * 0.75);
+
+        // Reload from persistence so query-cache state cannot hide a lost edit.
+        await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${id}`);
+        await waitForSideSheet(page);
+        await page.getByRole("button", { name: "Edit Feedstock" }).click();
+        await expect(page.locator('input[name="totalWetMassKg"]')).toHaveValue(String(wetMass));
+        await expect(page.locator('input[name="allocations.0.allocatedWetMassKg"]')).toHaveValue(String(wetMass));
+      }
+    } finally {
+      try {
+        await db.delete(schema.transportLegs).where(eq(schema.transportLegs.entityId, id));
+        await db.delete(schema.feedstocks).where(eq(schema.feedstocks.id, id));
+      } finally {
+        await pool.end();
+      }
+    }
+  });
+
   test("does not silently pre-select a supplier on open (#379)", async ({
     adminPage: page,
     seededData,

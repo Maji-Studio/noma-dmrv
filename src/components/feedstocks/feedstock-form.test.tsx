@@ -1,6 +1,7 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
+import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { Control, FieldValues } from "react-hook-form";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 
@@ -55,7 +56,12 @@ vi.mock("@/components/forms", async (importOriginal) => {
     FormSection: Wrapper,
     FormSpine: Wrapper,
     FormTextarea: () => null,
-    MassMoistureFields: () => null,
+    MassMoistureFields: ({ wet, moisture }: ComponentProps<typeof actual.MassMoistureFields>) => (
+      <>
+        <input {...wet.registration} />
+        <input {...moisture.registration} />
+      </>
+    ),
     ResolvedErrorRevalidator: () => null,
     makeCertFieldStatus: () => () => "neutral",
     resolveCertFieldStatus: () => "neutral",
@@ -125,7 +131,9 @@ vi.mock("@/components/ui", () => ({ Button: () => null }));
 vi.mock("@/components/ui/actionable-focus-target", () => ({
   ActionableFocusTarget: ({ children }: { children: ReactNode }) => children,
 }));
-vi.mock("./bin-allocation-row", () => ({ BinAllocationRow: () => null }));
+vi.mock("./bin-allocation-row", () => ({
+  BinAllocationRow: ({ massRegister }: ComponentProps<typeof import("./bin-allocation-row").BinAllocationRow>) => <input {...massRegister} />,
+}));
 vi.mock("./feedstock-trailing-sections", () => ({
   FeedstockEvidenceSection: () => null,
 }));
@@ -181,5 +189,69 @@ describe("FeedstockForm supplier quick-add wiring", () => {
 
     expect(selectedSupplier()?.props["data-value"]).toBe("supplier-2");
     await act(async () => renderer?.unmount());
+  });
+});
+
+
+describe("FeedstockForm single-bin mass editing", () => {
+  const feedstock = {
+    id: "11111111-1111-4111-8111-111111111111",
+    facilityId: "22222222-2222-4222-8222-222222222222",
+    supplierId: "33333333-3333-4333-8333-333333333333",
+    feedstockTypeId: "44444444-4444-4444-8444-444444444444",
+    storageLocationId: "55555555-5555-4555-8555-555555555555",
+    massWetKg: 100,
+    moistureContentPercent: 25,
+  } as FeedstockWithRelations;
+
+  it.each([150, 80])("submits an edited total of %s kg as its bin allocation", async (mass) => {
+    const onSubmit = vi.fn();
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+    });
+    try {
+      // Drive the registered input and real resolver/submit path. The list's
+      // update mutation reads this allocation, so a stale value loses the edit.
+      await act(async () => {
+        await renderer.root.findByProps({ name: "totalWetMassKg" }).props.onChange({
+          target: { name: "totalWetMassKg", value: mass },
+        });
+      });
+      await act(async () => {
+        await renderer.root.findByType("form").props.onSubmit();
+      });
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        totalWetMassKg: mass,
+        moisturePercent: 25,
+        allocations: [{ storageLocationId: feedstock.storageLocationId, allocatedWetMassKg: mass }],
+      }));
+    } finally {
+      await act(async () => renderer.unmount());
+    }
+  });
+
+  it("keeps an intentional allocation override when the total changes", async () => {
+    const onSubmit = vi.fn();
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+    });
+    try {
+      for (const [name, value] of [["allocations.0.allocatedWetMassKg", 90], ["totalWetMassKg", 150]] as const) {
+        await act(async () => {
+          await renderer.root.findByProps({ name }).props.onChange({ target: { name, value } });
+        });
+      }
+      await act(async () => {
+        await renderer.root.findByType("form").props.onSubmit();
+      });
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        totalWetMassKg: 150,
+        allocations: [{ storageLocationId: feedstock.storageLocationId, allocatedWetMassKg: 90 }],
+      }));
+    } finally {
+      await act(async () => renderer.unmount());
+    }
   });
 });
