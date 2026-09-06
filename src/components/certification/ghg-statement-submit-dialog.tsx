@@ -18,6 +18,7 @@ import {
 import { Button, Modal } from "@/components/ui";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
+import type { GhgStatementReportView } from "@/fn/certification/ghg-statement-reports";
 import {
   useApproveGhgStatementReport,
   useGhgStatementBreakdown,
@@ -130,7 +131,15 @@ function GhgStatementSubmitDialogContent({
   const [stepIndex, setStepIndex] = useState(REPORT_STEP_INDEX);
   const [reportSource, setReportSource] =
     useState<"generated" | "external">("generated");
-  const [preparationKey] = useState(() => crypto.randomUUID());
+  const [preparationKey, setPreparationKey] = useState(() =>
+    crypto.randomUUID(),
+  );
+  const [preparedReport, setPreparedReport] =
+    useState<GhgStatementReportView | null>(null);
+  const [preparedReportKey, setPreparedReportKey] = useState<string | null>(
+    null,
+  );
+  const [reviewedReportId, setReviewedReportId] = useState<string | null>(null);
   const [progressUpdates, setProgressUpdates] = useState<
     SubmissionProgressUpdate[]
   >([]);
@@ -202,23 +211,50 @@ function GhgStatementSubmitDialogContent({
   };
 
   const onSubmit = handleSubmit(async (data) => {
+    if (
+      reportSource === "generated" &&
+      (!preparedReport ||
+        !preparedReportKey ||
+        reviewedReportId !== preparedReport.id)
+    ) {
+      setError("root.serverError", {
+        message: "Open the prepared report and review it before approval.",
+      });
+      return;
+    }
     if (!beginSubmission()) return;
     try {
       clearErrors("root.serverError");
       let reportId: string | undefined;
-      if (reportSource === "generated") {
-        const prepared = await prepareReport.mutateAsync({
-          ghgStatementId,
-          preparationKey,
-        });
-        const approved =
-          prepared.lifecycle === "prepared"
-            ? await approveReport.mutateAsync({
-                ghgStatementId,
-                reportId: prepared.id,
-                version: prepared.version,
-              })
-            : prepared;
+      if (
+        reportSource === "generated" &&
+        preparedReport &&
+        preparedReportKey
+      ) {
+        let approved = preparedReport;
+        if (preparedReport.lifecycle === "prepared") {
+          try {
+            approved = await approveReport.mutateAsync({
+              ghgStatementId,
+              reportId: preparedReport.id,
+              version: preparedReport.version,
+            });
+          } catch (approvalError) {
+            const reconciled = await prepareReport.mutateAsync({
+              ghgStatementId,
+              preparationKey: preparedReportKey,
+            });
+            if (
+              reconciled.id !== preparedReport.id ||
+              reconciled.version !== preparedReport.version ||
+              reconciled.lifecycle === "prepared"
+            ) {
+              throw approvalError;
+            }
+            approved = reconciled;
+          }
+        }
+        setPreparedReport(approved);
         reportId = approved.id;
       }
       const input: SubmitGhgStatementDialogInput = {
@@ -253,15 +289,55 @@ function GhgStatementSubmitDialogContent({
 
   const generatedPreviewReady =
     canGenerate && breakdownQuery.data?.status === "available";
+  const generatedUnavailableMessage = !canGenerate
+    ? (generationUnavailableReason ?? "The report cannot be prepared yet.")
+    : breakdownQuery.data?.status === "unavailable"
+      ? breakdownQuery.data.message
+      : breakdownQuery.isLoading
+        ? "The report preview is still loading."
+        : "The report preview is unavailable. Refresh the statement and try again.";
 
   const advance = async () => {
     if (!canSubmit) return;
     clearErrors("root.serverError");
     if (reportSource === "generated" && !generatedPreviewReady) return;
+    const submissionFields: ("summaryOfChanges" | "confirmProduction")[] = [];
+    if (isResubmit) submissionFields.push("summaryOfChanges");
+    if (isProduction) submissionFields.push("confirmProduction");
+    if (submissionFields.length > 0 && !(await trigger(submissionFields))) return;
     if (reportSource === "external") {
       if (!(await trigger("externalReportUrl"))) return;
+      setStepIndex(REVIEW_STEP_INDEX);
+      return;
     }
-    setStepIndex(REVIEW_STEP_INDEX);
+    if (!beginSubmission()) return;
+    try {
+      const report = await prepareReport.mutateAsync({
+        ghgStatementId,
+        preparationKey,
+      });
+      setPreparedReport(report);
+      setPreparedReportKey(preparationKey);
+      setReviewedReportId(null);
+      setStepIndex(REVIEW_STEP_INDEX);
+    } catch (err) {
+      setError("root.serverError", {
+        message:
+          err instanceof Error
+            ? err.message
+            : "The report was not prepared. Check the preview and try again.",
+      });
+    } finally {
+      finishSubmission();
+    }
+  };
+
+  const returnToReportStep = () => {
+    setPreparedReport(null);
+    setPreparedReportKey(null);
+    setReviewedReportId(null);
+    setPreparationKey(crypto.randomUUID());
+    setStepIndex(REPORT_STEP_INDEX);
   };
 
   const serverError = errors.root?.serverError?.message ?? null;
@@ -423,7 +499,7 @@ function GhgStatementSubmitDialogContent({
                     <Button
                       type="button"
                       variant="default"
-                      onClick={() => setStepIndex(REPORT_STEP_INDEX)}
+                      onClick={returnToReportStep}
                       disabled={submissionPending}
                     >
                       Back
@@ -449,10 +525,18 @@ function GhgStatementSubmitDialogContent({
                       busy={submissionPending}
                       disabled={
                         !canSubmit ||
-                        (reportSource === "generated" && !generatedPreviewReady)
+                        (reportSource === "generated" &&
+                          (!preparedReport ||
+                            reviewedReportId !== preparedReport.id))
                       }
                     >
-                      {isResubmit ? "Resubmit" : "Submit"}
+                      {reportSource === "generated"
+                        ? isResubmit
+                          ? "Approve and resubmit"
+                          : "Approve and submit"
+                        : isResubmit
+                          ? "Resubmit"
+                          : "Submit"}
                     </Button>
                   )}
                 </div>
@@ -484,13 +568,12 @@ function GhgStatementSubmitDialogContent({
 
                   {reportSource === "generated" &&
                     canSubmit &&
-                    !canGenerate && (
+                    !generatedPreviewReady && (
                       <p
                         className="body-caption text-[var(--color-text-secondary)]"
                         role="status"
                       >
-                        {generationUnavailableReason ??
-                          "The report cannot be prepared yet."}
+                        {generatedUnavailableMessage}
                       </p>
                     )}
 
@@ -531,16 +614,6 @@ function GhgStatementSubmitDialogContent({
                       )}
                     </div>
                   </details>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-16">
-                  {reportSource === "generated" ? (
-                    <GeneratedReportPreview query={breakdownQuery} />
-                  ) : (
-                    <ExternalReportPreview
-                      url={getValues("externalReportUrl") ?? ""}
-                    />
-                  )}
 
                   {isResubmit && (
                     <FormField
@@ -569,11 +642,26 @@ function GhgStatementSubmitDialogContent({
                       errorMessage={errors.confirmProduction?.message}
                     />
                   )}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-16">
+                  {reportSource === "generated" && preparedReport ? (
+                    <GeneratedReportPreview
+                      query={breakdownQuery}
+                      report={preparedReport}
+                      reviewed={reviewedReportId === preparedReport.id}
+                      onReview={() => setReviewedReportId(preparedReport.id)}
+                    />
+                  ) : (
+                    <ExternalReportPreview
+                      url={getValues("externalReportUrl") ?? ""}
+                    />
+                  )}
 
-                  {serverError && <ServerError message={serverError} />}
                 </div>
               )}
             </StepFlow>
+            {serverError && <ServerError message={serverError} />}
           </>
         )}
       </div>
@@ -583,8 +671,14 @@ function GhgStatementSubmitDialogContent({
 
 function GeneratedReportPreview({
   query,
+  report,
+  reviewed,
+  onReview,
 }: {
   query: ReturnType<typeof useGhgStatementBreakdown>;
+  report: GhgStatementReportView;
+  reviewed: boolean;
+  onReview: () => void;
 }) {
   const data = query.data?.status === "available" ? query.data.value : null;
   const period = data
@@ -603,13 +697,30 @@ function GeneratedReportPreview({
           Submission preview
         </h3>
         <p className="body-small text-[var(--color-text-secondary)]">
-          Review the live figures below. noma generates the controlled report
-          and attaches it when you submit.
+          Open and review the exact frozen PDF before approving version{" "}
+          {report.version} for submission.
         </p>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-12 border-y border-[var(--color-border-secondary)] py-12">
+        <span className="body-small text-[var(--color-text-secondary)]">
+          {reviewed
+            ? `Version ${report.version} opened for review.`
+            : `Version ${report.version} must be reviewed before approval.`}
+        </span>
+        <a
+          href={report.reviewUrl}
+          target="_blank"
+          rel="noreferrer"
+          onClick={onReview}
+          className="body-small font-medium text-[var(--color-interaction)] underline underline-offset-2"
+        >
+          Review report
+        </a>
+      </div>
+
       {data && (
-        <dl className="grid grid-cols-1 gap-12 border-y border-[var(--color-border-secondary)] py-12 sm:grid-cols-2">
+        <dl className="grid grid-cols-1 gap-12 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
             <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
               Reporting period
