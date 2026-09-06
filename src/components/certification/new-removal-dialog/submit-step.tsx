@@ -81,7 +81,7 @@ export function SubmitStep({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastConfirmProduction, setLastConfirmProduction] = useState(false);
   const [attemptIsResubmission, setAttemptIsResubmission] = useState(
-    () => Boolean(ctx.latestSubmission?.externalId),
+    () => Boolean(ctx.latestSubmission),
   );
   const hasStartedSubmission = useRef(false);
   const [progressUpdates, setProgressUpdates] = useState<
@@ -153,9 +153,9 @@ export function SubmitStep({
     setSubmitError(null);
     setLastConfirmProduction(confirmProduction);
     // Freeze presentation mode before the attempt starts. A retry can resume
-    // local journal work before the registry has assigned an external ID.
+    // persisted journal work before the registry has assigned an external ID.
     setAttemptIsResubmission(
-      externalId !== null || hasStartedSubmission.current,
+      Boolean(ctx.latestSubmission) || hasStartedSubmission.current,
     );
     hasStartedSubmission.current = true;
     setProgressUpdates([]);

@@ -595,6 +595,68 @@ describe("SubmitStep", () => {
     },
   );
 
+  it("preserves retry progress after remounting an interrupted attempt without an external ID", async () => {
+    const mutate = vi.fn();
+    const mutation = {
+      mutate,
+      isPending: false,
+      isSuccess: false,
+      isError: false,
+      data: undefined,
+      error: null as Error | null,
+      reset: vi.fn(),
+    };
+    const render = (ctx: RemovalCertifyContext) => (
+      <SubmitStep
+        removalId="removal-1"
+        facilityId="facility-1"
+        facilityName="Tanzania facility"
+        ctx={ctx}
+        onDone={vi.fn()}
+        submitMutation={mutation as never}
+      />
+    );
+    let renderer: ReactTestRenderer;
+
+    await act(async () => {
+      renderer = create(render(CONTEXT));
+    });
+    await act(async () => {
+      findButton(renderer!, "Submit Removal")?.props.onClick();
+      mutate.mock.calls[0][0].onProgress({
+        step: "removal.checking_data",
+        state: "complete",
+      });
+      mutate.mock.calls[0][1].onError(new Error("Registry request failed"));
+    });
+    await act(async () => renderer!.unmount());
+
+    mutation.isError = true;
+    mutation.error = new Error("Registry request failed");
+    const interruptedContext = {
+      ...CONTEXT,
+      latestSubmission: { status: "draft", externalId: null },
+    } as unknown as RemovalCertifyContext;
+    await act(async () => {
+      renderer = create(render(interruptedContext));
+    });
+
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain(
+      "Creating Removal in Isometric",
+    );
+    await act(async () => {
+      findButton(renderer!, "Try again")?.props.onClick();
+      mutate.mock.calls[1][0].onProgress({
+        step: "removal.sending_durability",
+        state: "skipped",
+      });
+    });
+
+    expect(mutate).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain("Not required");
+    await act(async () => renderer!.unmount());
+  });
+
   it("keeps a possibly-live stalled request close-only", async () => {
     const mutate = vi.fn();
     const onDone = vi.fn();
