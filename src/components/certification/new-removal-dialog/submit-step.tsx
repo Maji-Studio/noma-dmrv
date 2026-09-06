@@ -80,6 +80,9 @@ export function SubmitStep({
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastConfirmProduction, setLastConfirmProduction] = useState(false);
+  const [attemptIsResubmission, setAttemptIsResubmission] = useState(
+    () => Boolean(ctx.latestSubmission?.externalId),
+  );
   const [progressUpdates, setProgressUpdates] = useState<
     SubmissionProgressUpdate[]
   >([]);
@@ -148,6 +151,8 @@ export function SubmitStep({
     }
     setSubmitError(null);
     setLastConfirmProduction(confirmProduction);
+    // Refetching registry context must not reclassify the attempt in progress.
+    setAttemptIsResubmission(externalId !== null);
     setProgressUpdates([]);
     submitMutation.mutate(
       {
@@ -237,7 +242,7 @@ export function SubmitStep({
         <SubmissionProgress
           kind="removal"
           updates={progressUpdates}
-          isResubmission={externalId !== null}
+          isResubmission={attemptIsResubmission}
         />
         <div className="flex flex-wrap items-center justify-end gap-12">
           {viewUrl && (
@@ -281,10 +286,7 @@ export function SubmitStep({
           updates={progressUpdates}
           error={terminalError}
           stalled={submissionStalled}
-          isResubmission={
-            externalId !== null ||
-            progressUpdates.some((update) => update.state === "reused")
-          }
+          isResubmission={attemptIsResubmission}
         />
         {terminalError && <ServerError message={terminalError} />}
         <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">

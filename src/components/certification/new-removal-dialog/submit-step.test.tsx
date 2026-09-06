@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
+import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { SubmitStep } from "./submit-step";
 
 const state = vi.hoisted(() => ({
@@ -108,10 +109,6 @@ vi.mock("../submit-confirm-dialog", () => ({
   SubmitConfirmDialog: () => null,
 }));
 
-vi.mock("../submission-progress", () => ({
-  SubmissionProgress: () => <div>Submission progress</div>,
-}));
-
 const CONTEXT = {
   isProduction: false,
   latestSubmission: null,
@@ -155,6 +152,70 @@ beforeEach(() => {
 });
 
 describe("SubmitStep", () => {
+  it.each(["success", "error"] as const)(
+    "preserves first-submission skipped rows after %s context refresh",
+    async (outcome) => {
+      const mutate = vi.fn();
+      const mutation = {
+        mutate,
+        isPending: false,
+        isSuccess: false,
+        isError: false,
+        data: undefined as { externalId: string; version: number } | undefined,
+        error: null as Error | null,
+        reset: vi.fn(),
+      };
+      let renderer: ReactTestRenderer;
+      const render = (ctx: RemovalCertifyContext) => (
+        <SubmitStep
+          removalId="removal-1"
+          facilityId="facility-1"
+          facilityName="Tanzania facility"
+          ctx={ctx}
+          onDone={vi.fn()}
+          submitMutation={mutation as never}
+        />
+      );
+      await act(async () => { renderer = create(render(CONTEXT)); });
+      await act(async () => {
+        findButton(renderer!, "Submit Removal")!.props.onClick();
+      });
+      const { onProgress } = mutate.mock.calls[0][0] as {
+        onProgress: (update: SubmissionProgressUpdate) => void;
+      };
+      await act(async () => {
+        onProgress({ step: "removal.sending_durability", state: "skipped" });
+      });
+      expect(JSON.stringify(renderer!.toJSON())).toContain("Not required");
+
+      const refreshedContext = {
+        ...CONTEXT,
+        latestSubmission: { externalId: "rmv-created", status: "draft" },
+      } as RemovalCertifyContext;
+      mutation.isSuccess = outcome === "success";
+      mutation.isError = outcome === "error";
+      mutation.data = mutation.isSuccess
+        ? { externalId: "rmv-created", version: 1 }
+        : undefined;
+      mutation.error = mutation.isError ? new Error("Registry check failed") : null;
+      await act(async () => { renderer!.update(render(refreshedContext)); });
+      expect(JSON.stringify(renderer!.toJSON())).toContain("Not required");
+
+      if (outcome === "error") {
+        await act(async () => {
+          findButton(renderer!, "Try again")!.props.onClick();
+          mutate.mock.calls[1][0].onProgress({
+            step: "removal.sending_durability",
+            state: "skipped",
+          });
+        });
+        expect(mutate).toHaveBeenCalledTimes(2);
+        expect(JSON.stringify(renderer!.toJSON())).not.toContain("Not required");
+      }
+      await act(async () => { renderer!.unmount(); });
+    },
+  );
+
   it("discards a local draft only after confirmation", async () => {
     const onDone = vi.fn();
     let renderer: ReactTestRenderer | undefined;
