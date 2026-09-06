@@ -534,6 +534,67 @@ describe("SubmitStep", () => {
     });
   });
 
+  it.each(["Try again", "Review submission"] as const)(
+    "treats %s after a first-attempt failure as a retry without reused events",
+    async (retryPath) => {
+      const mutate = vi.fn();
+      const mutation = {
+        mutate,
+        isPending: false,
+        isSuccess: false,
+        isError: false,
+        data: undefined,
+        error: null,
+        reset: vi.fn(),
+      };
+      let renderer: ReactTestRenderer | undefined;
+
+      await act(async () => {
+        renderer = create(
+          <SubmitStep
+            removalId="removal-1"
+            facilityId="facility-1"
+            facilityName="Tanzania facility"
+            ctx={CONTEXT}
+            onDone={vi.fn()}
+            submitMutation={mutation as never}
+          />,
+        );
+      });
+      await act(async () => {
+        findButton(renderer!, "Submit Removal")?.props.onClick();
+        mutate.mock.calls[0][0].onProgress({
+          step: "removal.checking_data",
+          state: "complete",
+        });
+        mutate.mock.calls[0][1].onError(new Error("Registry request failed"));
+      });
+
+      if (retryPath === "Review submission") {
+        await act(async () => {
+          findButton(renderer!, retryPath)?.props.onClick();
+        });
+        await act(async () => {
+          findButton(renderer!, "Submit Removal")?.props.onClick();
+        });
+      } else {
+        await act(async () => {
+          findButton(renderer!, retryPath)?.props.onClick();
+        });
+      }
+      await act(async () => {
+        mutate.mock.calls[1][0].onProgress({
+          step: "removal.sending_durability",
+          state: "skipped",
+        });
+      });
+
+      expect(mutate).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(renderer!.toJSON())).not.toContain("Not required");
+      await act(async () => renderer?.unmount());
+    },
+  );
+
   it("keeps a possibly-live stalled request close-only", async () => {
     const mutate = vi.fn();
     const onDone = vi.fn();

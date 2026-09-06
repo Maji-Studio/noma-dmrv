@@ -16,7 +16,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowSquareOutIcon,
@@ -83,6 +83,7 @@ export function SubmitStep({
   const [attemptIsResubmission, setAttemptIsResubmission] = useState(
     () => Boolean(ctx.latestSubmission?.externalId),
   );
+  const hasStartedSubmission = useRef(false);
   const [progressUpdates, setProgressUpdates] = useState<
     SubmissionProgressUpdate[]
   >([]);
@@ -151,8 +152,12 @@ export function SubmitStep({
     }
     setSubmitError(null);
     setLastConfirmProduction(confirmProduction);
-    // Refetching registry context must not reclassify the attempt in progress.
-    setAttemptIsResubmission(externalId !== null);
+    // Freeze presentation mode before the attempt starts. A retry can resume
+    // local journal work before the registry has assigned an external ID.
+    setAttemptIsResubmission(
+      externalId !== null || hasStartedSubmission.current,
+    );
+    hasStartedSubmission.current = true;
     setProgressUpdates([]);
     submitMutation.mutate(
       {
