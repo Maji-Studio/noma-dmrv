@@ -231,14 +231,14 @@ describe("FeedstockForm single-bin mass editing", () => {
     }
   });
 
-  it("keeps an intentional allocation override when the total changes", async () => {
+  it.each([90, 100])("keeps an intentional %s kg allocation override when the total changes", async (allocatedWetMassKg) => {
     const onSubmit = vi.fn();
     let renderer: ReactTestRenderer;
     await act(async () => {
       renderer = create(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
     });
     try {
-      for (const [name, value] of [["allocations.0.allocatedWetMassKg", 90], ["totalWetMassKg", 150]] as const) {
+      for (const [name, value] of [["totalWetMassKg", 150], ["allocations.0.allocatedWetMassKg", allocatedWetMassKg], ["totalWetMassKg", 160]] as const) {
         await act(async () => {
           await renderer.root.findByProps({ name }).props.onChange({ target: { name, value } });
         });
@@ -247,8 +247,8 @@ describe("FeedstockForm single-bin mass editing", () => {
         await renderer.root.findByType("form").props.onSubmit();
       });
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-        totalWetMassKg: 150,
-        allocations: [{ storageLocationId: feedstock.storageLocationId, allocatedWetMassKg: 90 }],
+        totalWetMassKg: 160,
+        allocations: [{ storageLocationId: feedstock.storageLocationId, allocatedWetMassKg }],
       }));
     } finally {
       await act(async () => renderer.unmount());
