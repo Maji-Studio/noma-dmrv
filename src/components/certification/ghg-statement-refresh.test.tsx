@@ -116,11 +116,20 @@ vi.mock("@/components/ui/step-flow", () => ({
   StepFlow: ({
     children,
     footer,
+    current,
+    onNavigate,
   }: {
     children: ReactNode;
     footer?: ReactNode;
+    current: number;
+    onNavigate?: (index: number) => void;
   }) => (
     <div>
+      {current > 0 && (
+        <button type="button" onClick={() => onNavigate?.(0)}>
+          Report step
+        </button>
+      )}
       {children}
       {footer}
     </div>
@@ -585,7 +594,9 @@ describe("GHG Statement route refreshes", () => {
     await act(async () => renderer?.unmount());
   });
 
-  it("uses a new preparation key after returning from review", async () => {
+  it.each(["Back", "Report step"])(
+    "uses a new preparation key after returning with %s",
+    async (returnAction) => {
     let renderer: ReactTestRenderer | undefined;
     await act(async () => {
       renderer = create(
@@ -601,7 +612,9 @@ describe("GHG Statement route refreshes", () => {
     });
 
     await prepareAndReview(renderer!);
-    await act(async () => findButton(renderer!, "Back")?.props.onClick());
+    await act(async () =>
+      findButton(renderer!, returnAction)?.props.onClick(),
+    );
     await act(async () => findButton(renderer!, "Next")?.props.onClick());
 
     expect(state.prepareReport).toHaveBeenCalledTimes(2);
@@ -609,7 +622,8 @@ describe("GHG Statement route refreshes", () => {
       state.prepareReport.mock.calls[0]?.[0].preparationKey,
     );
     await act(async () => renderer?.unmount());
-  });
+    },
+  );
 
   it("keeps the controlled modal mounted while closed", async () => {
     let renderer: ReactTestRenderer | undefined;

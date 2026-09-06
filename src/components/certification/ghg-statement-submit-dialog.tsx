@@ -484,7 +484,15 @@ function GhgStatementSubmitDialogContent({
               steps={STEPS}
               current={stepIndex}
               furthest={stepIndex}
-              onNavigate={(index) => setStepIndex(index)}
+              onNavigate={(index) => {
+                if (submissionPending) return;
+                if (
+                  index === REPORT_STEP_INDEX &&
+                  stepIndex !== REPORT_STEP_INDEX
+                ) {
+                  returnToReportStep();
+                }
+              }}
               footer={
                 <div className="flex flex-wrap justify-end gap-12">
                   <Button
