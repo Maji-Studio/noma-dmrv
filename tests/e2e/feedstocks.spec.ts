@@ -14,6 +14,11 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { createDbConnection } from "./fixtures/db";
 
+const MASS_EDIT_INITIAL_WET_KG = 100;
+const MASS_EDIT_MOISTURE_PERCENT = 25;
+// At 25% moisture, three quarters of the measured wet mass is dry matter.
+const MASS_EDIT_DRY_MASS_FACTOR = 0.75;
+
 test.describe("Feedstock UI CRUD", () => {
   test("offers blend-usage feedstock types for incoming feedstock", async ({
     adminPage: page,
@@ -123,6 +128,64 @@ test.describe("Feedstock UI CRUD", () => {
     await expect(
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("saves and reopens single-bin total mass edits (#707)", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    const id = crypto.randomUUID();
+    const code = `E2E-FS-MASS-${id}`;
+    const { db, pool } = createDbConnection();
+    try {
+      await db.insert(schema.feedstocks).values({
+        id,
+        code,
+        organizationId: DEC_ORG_ID,
+        facilityId: seededData.facility.id,
+        supplierId: seededData.supplier.id,
+        feedstockTypeId: seededData.feedstockType.id,
+        storageLocationId: seededData.feedstockStorageLocation.id,
+        deliveryDate: new Date("2026-01-15T12:00:00Z"),
+        massWetKg: MASS_EDIT_INITIAL_WET_KG,
+        massDryKg: MASS_EDIT_INITIAL_WET_KG * MASS_EDIT_DRY_MASS_FACTOR,
+        moistureContentPercent: MASS_EDIT_MOISTURE_PERCENT,
+        status: "complete",
+      });
+
+      for (const wetMass of [150, 80]) {
+        await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${id}`);
+        await expect(
+          page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+        ).toBeVisible();
+        await waitForSideSheet(page);
+        await page.getByRole("button", { name: "Edit Feedstock" }).click();
+        const dialog = page.getByRole("dialog");
+        await dialog.locator('input[name="totalWetMassKg"]').fill(String(wetMass));
+        await expect(dialog.locator('input[name="allocations.0.allocatedWetMassKg"]'))
+          .toHaveValue(String(wetMass));
+        await dialog.getByRole("button", { name: "Save Changes", exact: true }).click();
+        await waitForSideSheetClose(page);
+
+        const [saved] = await db.select().from(schema.feedstocks).where(eq(schema.feedstocks.id, id));
+        expect(saved.massWetKg).toBe(wetMass);
+        expect(saved.massDryKg).toBe(wetMass * MASS_EDIT_DRY_MASS_FACTOR);
+
+        // Reload from persistence so query-cache state cannot hide a lost edit.
+        await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${id}`);
+        await waitForSideSheet(page);
+        await page.getByRole("button", { name: "Edit Feedstock" }).click();
+        await expect(page.locator('input[name="totalWetMassKg"]')).toHaveValue(String(wetMass));
+        await expect(page.locator('input[name="allocations.0.allocatedWetMassKg"]')).toHaveValue(String(wetMass));
+      }
+    } finally {
+      try {
+        await db.delete(schema.transportLegs).where(eq(schema.transportLegs.entityId, id));
+        await db.delete(schema.feedstocks).where(eq(schema.feedstocks.id, id));
+      } finally {
+        await pool.end();
+      }
+    }
   });
 
   test("does not silently pre-select a supplier on open (#379)", async ({

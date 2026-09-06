@@ -94,6 +94,8 @@ export function FeedstockForm({
   focusTarget,
 }: FeedstockFormProps) {
   const isEditMode = !!feedstock;
+  // Returning to the saved mass clears RHF dirtiness, but is still an override.
+  const [hasEditedAllocationMass, setHasEditedAllocationMass] = useState(false);
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
 
@@ -371,19 +373,20 @@ export function FeedstockForm({
   const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";
 
   // A single bin holds the whole delivery, so its allocated wet mass mirrors the
-  // total automatically — the operator never has to retype it. Mirroring stops
+  // total automatically in create and edit mode. Mirroring stops
   // once they split across bins (fields.length > 1) or hand-edit the amount.
   useEffect(() => {
-    if (isEditMode || fields.length !== 1 || typeof watchWetMass !== "number") {
+    if (fields.length !== 1 || typeof watchWetMass !== "number") {
       return;
     }
     if (dirtyFields.allocations?.[0]?.allocatedWetMassKg) return;
+    if (isEditMode && hasEditedAllocationMass) return;
     if (getValues("allocations.0.allocatedWetMassKg") !== watchWetMass) {
       setValue("allocations.0.allocatedWetMassKg", watchWetMass, {
         shouldValidate: true,
       });
     }
-  }, [fields.length, getValues, isEditMode, setValue, watchWetMass, dirtyFields.allocations]);
+  }, [fields.length, getValues, hasEditedAllocationMass, isEditMode, setValue, watchWetMass, dirtyFields.allocations]);
 
   const handleFormSubmit = handleSubmit((data) => {
     onSubmit(data as FeedstockFormData);
@@ -711,7 +714,12 @@ export function FeedstockForm({
                   key={field.id}
                   index={index}
                   control={formControl}
-                  massRegister={register(`allocations.${index}.allocatedWetMassKg`, { setValueAs: numericValue })}
+                  massRegister={register(`allocations.${index}.allocatedWetMassKg`, {
+                    setValueAs: numericValue,
+                    onChange: () => {
+                      if (isEditMode) setHasEditedAllocationMass(true);
+                    },
+                  })}
                   massError={errors.allocations?.[index]?.allocatedWetMassKg as FieldError | undefined}
                   canRemove={fields.length > 1}
                   onRemove={() => remove(index)}
