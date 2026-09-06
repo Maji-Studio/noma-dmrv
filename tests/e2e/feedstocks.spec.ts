@@ -14,6 +14,11 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { createDbConnection } from "./fixtures/db";
 
+const MASS_EDIT_INITIAL_WET_KG = 100;
+const MASS_EDIT_MOISTURE_PERCENT = 25;
+// At 25% moisture, three quarters of the measured wet mass is dry matter.
+const MASS_EDIT_DRY_MASS_FACTOR = 0.75;
+
 test.describe("Feedstock UI CRUD", () => {
   test("offers blend-usage feedstock types for incoming feedstock", async ({
     adminPage: page,
@@ -142,9 +147,9 @@ test.describe("Feedstock UI CRUD", () => {
         feedstockTypeId: seededData.feedstockType.id,
         storageLocationId: seededData.feedstockStorageLocation.id,
         deliveryDate: new Date("2026-01-15T12:00:00Z"),
-        massWetKg: 100,
-        massDryKg: 75,
-        moistureContentPercent: 25,
+        massWetKg: MASS_EDIT_INITIAL_WET_KG,
+        massDryKg: MASS_EDIT_INITIAL_WET_KG * MASS_EDIT_DRY_MASS_FACTOR,
+        moistureContentPercent: MASS_EDIT_MOISTURE_PERCENT,
         status: "complete",
       });
 
@@ -164,7 +169,7 @@ test.describe("Feedstock UI CRUD", () => {
 
         const [saved] = await db.select().from(schema.feedstocks).where(eq(schema.feedstocks.id, id));
         expect(saved.massWetKg).toBe(wetMass);
-        expect(saved.massDryKg).toBe(wetMass * 0.75);
+        expect(saved.massDryKg).toBe(wetMass * MASS_EDIT_DRY_MASS_FACTOR);
 
         // Reload from persistence so query-cache state cannot hide a lost edit.
         await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${id}`);
