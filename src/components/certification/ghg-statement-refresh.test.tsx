@@ -5,6 +5,8 @@ import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 
+const REPORT_STEP_INDEX = 0;
+
 const state = vi.hoisted(() => ({
   create: vi.fn(),
   refresh: vi.fn(),
@@ -125,8 +127,11 @@ vi.mock("@/components/ui/step-flow", () => ({
     onNavigate?: (index: number) => void;
   }) => (
     <div>
-      {current > 0 && (
-        <button type="button" onClick={() => onNavigate?.(0)}>
+      {current > REPORT_STEP_INDEX && (
+        <button
+          type="button"
+          onClick={() => onNavigate?.(REPORT_STEP_INDEX)}
+        >
           Report step
         </button>
       )}
