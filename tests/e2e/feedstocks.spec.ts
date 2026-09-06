@@ -159,7 +159,7 @@ test.describe("Feedstock UI CRUD", () => {
         await dialog.locator('input[name="totalWetMassKg"]').fill(String(wetMass));
         await expect(dialog.locator('input[name="allocations.0.allocatedWetMassKg"]'))
           .toHaveValue(String(wetMass));
-        await dialog.getByRole("button", { name: "Update Feedstock", exact: true }).click();
+        await dialog.getByRole("button", { name: "Save Changes", exact: true }).click();
         await waitForSideSheetClose(page);
 
         const [saved] = await db.select().from(schema.feedstocks).where(eq(schema.feedstocks.id, id));
