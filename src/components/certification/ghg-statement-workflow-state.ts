@@ -29,7 +29,6 @@ export function deriveVerifierStep(
   remote: GhgStatement | null,
   remoteUnavailable: boolean,
   hasMembership: boolean,
-  hasApprovedReport: boolean,
 ): WorkflowStepModel {
   if (!remote) {
     return remoteUnavailable
@@ -65,15 +64,11 @@ export function deriveVerifierStep(
           detail: "No GHG Entries are available to submit.",
         };
       }
-      return hasApprovedReport
-        ? {
-            status: "active",
-            detail: "Submit the approved report to the verifier.",
-          }
-        : {
-            status: "active",
-            detail: "Open Submit to generate, review, and approve a report.",
-          };
+      return {
+        status: "active",
+        detail:
+          "Review the statement and submit it. noma attaches the report automatically.",
+      };
   }
 }
 
@@ -82,14 +77,12 @@ export function deriveGhgStatementWorkflowState({
   canManageReports,
   remote,
   linkedRemovalCount,
-  hasApprovedReport,
   rollup,
 }: {
   created: boolean;
   canManageReports: boolean;
   remote: GhgStatement | null;
   linkedRemovalCount: number;
-  hasApprovedReport: boolean;
   rollup: RollupQueryState;
 }): GhgStatementWorkflowState {
   const remoteUnavailable = created && remote === null;
@@ -142,7 +135,6 @@ export function deriveGhgStatementWorkflowState({
       remote,
       remoteUnavailable,
       hasMembership,
-      hasApprovedReport,
     ),
   };
 }
