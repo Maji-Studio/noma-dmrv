@@ -145,7 +145,10 @@ function GhgStatementSubmitDialogContent({
   >([]);
   const [lastInput, setLastInput] =
     useState<SubmitGhgStatementDialogInput | null>(null);
+  const [attemptIsResubmission, setAttemptIsResubmission] =
+    useState(isResubmit);
   const submissionInFlight = useRef(false);
+  const hasStartedSubmission = useRef(false);
   const initialValues: SubmitGhgStatementDialogFormInput = {
     reportSource: "generated",
     reportId: undefined,
@@ -210,6 +213,13 @@ function GhgStatementSubmitDialogContent({
     }
   };
 
+  const markSubmissionAttempt = () => {
+    // Freeze the presentation before this attempt. A local retry can start
+    // before either the refreshed context or an external ID records it.
+    setAttemptIsResubmission(isResubmit || hasStartedSubmission.current);
+    hasStartedSubmission.current = true;
+  };
+
   const onSubmit = handleSubmit(async (data) => {
     if (
       reportSource === "generated" &&
@@ -265,6 +275,7 @@ function GhgStatementSubmitDialogContent({
         confirmProduction: data.confirmProduction,
       };
       setLastInput(input);
+      markSubmissionAttempt();
       await runSubmission(input);
     } catch (err) {
       setError("root.serverError", {
@@ -281,6 +292,7 @@ function GhgStatementSubmitDialogContent({
   const retrySubmission = async () => {
     if (!lastInput || !beginSubmission()) return;
     try {
+      markSubmissionAttempt();
       await runSubmission(lastInput);
     } finally {
       finishSubmission();
@@ -405,6 +417,7 @@ function GhgStatementSubmitDialogContent({
                 updates={progressUpdates}
                 error={displayedServerError}
                 stalled={submissionStalled}
+                isResubmission={attemptIsResubmission}
               />
             )}
             {displayedServerError && (
