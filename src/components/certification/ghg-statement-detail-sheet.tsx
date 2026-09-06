@@ -28,10 +28,7 @@ import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
-import {
-  findApprovedGhgStatementReport,
-  GhgStatementWorkflow,
-} from "./ghg-statement-workflow";
+import { GhgStatementWorkflow } from "./ghg-statement-workflow";
 import { deriveGhgStatementWorkflowState } from "./ghg-statement-workflow-state";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { GhgStatementTechnicalDetails } from "./ghg-statement-technical-details";
@@ -173,15 +170,11 @@ function DetailState({
     "unknown",
   );
   const created = Boolean(statementSubmission?.externalId);
-  const approvedReport = findApprovedGhgStatementReport(
-    reportsQuery.data ?? [],
-  );
   const workflowState = deriveGhgStatementWorkflowState({
     created,
     canManageReports,
     remote,
     linkedRemovalCount: linkedRemovals.length,
-    hasApprovedReport: Boolean(approvedReport),
     rollup: breakdownQuery.isLoading
       ? { status: "loading" }
       : breakdownQuery.error
@@ -251,10 +244,8 @@ function DetailState({
             Workflow
           </h3>
           <GhgStatementWorkflow
-            ghgStatementId={statement.id}
             reportsQuery={reportsQuery}
             created={created}
-            canManageReports={canManageReports}
             registryRecord={
               statementSubmission?.externalId ? (
                 <RegistryRecordLink

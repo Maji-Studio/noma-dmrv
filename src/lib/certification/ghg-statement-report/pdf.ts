@@ -1,3 +1,27 @@
+/**
+ * GHG Statement Data Summary — react-pdf renderer.
+ *
+ * One result. The verifier's first question is "how much did this
+ * GHG Statement remove, net", so the net removal is the only large number on
+ * the page; the uncertainty operands and the credit split sit beside it as
+ * subordinate facts, and the registry coordinates identifying the document
+ * sit in the masthead. Everything the operator cannot check against the
+ * figures on this page (how the document was prepared, the pinned Standard
+ * and Protocol versions the totals were computed under) drops to the
+ * apparatus at the foot.
+ *
+ * This is noma's generated GHG Statement report, scoped to registry data
+ * reconciliation. It does not replace separate methodology, evidence, or
+ * verification records. The scope line under the title says so and must not
+ * be softened.
+ *
+ * Design tokens and the shared chrome (page frame, masthead, claim band
+ * frame, section heads, table frame, apparatus, footer) come from
+ * ../evidence-ledger/pdf-theme, so this document and the evidence ledgers
+ * cannot drift apart. `createElement` is used instead of JSX so the module
+ * renders identically under Next's server bundle and a plain Node/tsx
+ * verifier.
+ */
 import { createElement as h, type ReactElement } from "react";
 import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
 import {
@@ -15,15 +39,18 @@ import type {
 } from "./model";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
-// Column widths in points (A4 content ≈ 527pt; the GHG Entry column flexes).
-const COL = {
-  net: 58,
-  beforeUncertainty: 76,
-  stdDeviation: 58,
-  supplier: 58,
-  buffer: 58,
+// The identity column flexes; these widths preserve complete uncertainty
+// labels without returning to the original five-number ledger.
+const ENTRY_COL = {
+  net: 76,
+  beforeUncertainty: 92,
+  standardDeviation: 92,
 } as const;
 const CELL_GAP = 6;
+/** Widest apparatus key ("REPORT VERSION") at 7pt DM Mono. */
+const LEGEND_KEY_WIDTH = 66;
+/** Keeps the scope line under the title clear of the masthead meta column. */
+const SCOPE_MAX_WIDTH = 300;
 
 /**
  * Document metadata must be a pure function of the frozen report model.
@@ -45,58 +72,92 @@ const PDF_CREATOR = "noma dMRV";
 const PDF_PRODUCER = "noma dMRV GHG statement report";
 const PDF_SUBJECT = "Automatically generated GHG Statement data reconciliation";
 
+/**
+ * The one sentence that keeps this document honest about what it is. A
+ * verifier reading only the totals must not take it for the methodology
+ * report the Isometric Standard requires alongside a GHG Statement.
+ */
+const SCOPE_NOTE =
+  "Registry data reconciliation only. This summary restates the figures Isometric already holds for this GHG Statement, and does not cover methodology or verification.";
+
 const styles = {
   ...theme,
   ...StyleSheet.create({
-    summary: {
-      marginTop: 14,
-      borderWidth: 1.5,
-      borderColor: C.ink,
-      flexDirection: "row",
+    // No eyebrow above the title, so the title carries the masthead's own
+    // top margin instead of inheriting the eyebrow's.
+    title: { ...theme.title, marginTop: 12 },
+
+    scope: {
+      fontSize: 8,
+      color: C.ink70,
+      lineHeight: 1.45,
+      marginTop: 8,
+      maxWidth: SCOPE_MAX_WIDTH,
     },
-    summaryCell: {
-      flex: 1,
-      paddingVertical: 10,
-      paddingHorizontal: 10,
-      borderRightWidth: 1,
-      borderRightColor: C.ink12,
+
+    // Totals band body. The net cell is inverted and wider than the two fact
+    // cells beside it: one result, then the operands behind it.
+    bandRow: { flexDirection: "row" },
+    netCell: {
+      flexBasis: 0,
+      flexGrow: 1.5,
+      backgroundColor: C.ink,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
     },
-    summaryLast: { borderRightWidth: 0 },
-    summaryLabel: {
+    netLabel: {
+      fontFamily: MONO,
+      fontSize: 8,
+      color: C.ink25,
+      letterSpacing: 1.1,
+      textTransform: "uppercase",
+    },
+    netValue: {
+      fontFamily: MONO,
+      fontWeight: 500,
+      fontSize: 22,
+      color: C.paper,
+      marginTop: 4,
+      letterSpacing: -0.4,
+    },
+    netUnit: { fontFamily: MONO, fontSize: 8, color: C.plumSoft, marginTop: 3 },
+    factCell: {
+      flexBasis: 0,
+      flexGrow: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderLeftWidth: 1,
+      borderLeftColor: C.ink12,
+    },
+    fact: { marginBottom: 9 },
+    factLast: { marginBottom: 0 },
+    factLabel: {
       fontFamily: MONO,
       fontSize: 7,
       color: C.ink55,
+      letterSpacing: 0.7,
       textTransform: "uppercase",
     },
-    summaryValue: {
-      fontFamily: MONO,
-      fontSize: 14,
-      fontWeight: 500,
-      marginTop: 4,
-    },
-    summaryUnit: {
-      fontFamily: MONO,
-      fontSize: 7,
-      color: C.ink40,
-      marginTop: 2,
-    },
-    controlGrid: { flexDirection: "row", flexWrap: "wrap" },
-    controlPair: { width: "50%", paddingRight: 12, marginBottom: 6 },
-    controlPairWide: { width: "100%" },
-    compactMetaValue: { fontSize: 7 },
-    entryHeader: {
+    factValue: { fontFamily: MONO, fontWeight: 500, fontSize: 11, marginTop: 2 },
+
+    // Entry table body. Allocation remains summarized above; the ledger keeps
+    // the uncertainty inputs a verifier needs beside each entry result.
+    entryId: {
       fontFamily: MONO,
       fontSize: 8,
       color: C.plum,
       marginBottom: 3,
     },
-    entryMeta: {
+    entryPeriod: {
       fontFamily: MONO,
       fontSize: 7,
       color: C.ink55,
       lineHeight: 1.45,
     },
     entryQty: { ...theme.qty, fontSize: 8 },
+    // Apparatus keys are one word plus one ("REPORT VERSION").
+    legendKey: { ...theme.legendKey, width: LEGEND_KEY_WIDTH },
+
     footerHash: {
       fontFamily: MONO,
       fontSize: 6.2,
@@ -123,6 +184,19 @@ const formatKg = (value: number | null): string => {
 const formatPreparedAt = (preparedAt: Date): string =>
   `${preparedAt.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 
+const formatEntryCount = (count: number): string =>
+  `${count} GHG ${count === 1 ? "Entry" : "Entries"}`;
+
+function basisNote(model: GhgStatementReportModel): string {
+  const entryTotal = formatKg(model.totals.entryNetRemovedKg);
+  const statementTotal = formatKg(model.totals.statementNetRemovedKg);
+  const reconciliation =
+    entryTotal === statementTotal
+      ? "Their net values sum to the Isometric statement total shown above."
+      : `Their net values sum to ${entryTotal} kg CO2e. Isometric reports ${statementTotal} kg CO2e at statement precision.`;
+  return `Every GHG Entry on this GHG Statement is listed above, and nothing else. ${reconciliation} The uncertainty discount is the before uncertainty total less the entry net total.`;
+}
+
 /**
  * The one timestamp the renderer may stamp: frozen on the model, never the
  * clock. `buildGhgStatementReportModel` rejects an unparseable `preparedAt`,
@@ -138,15 +212,10 @@ const pinnedTimestamp = (preparedAt: string): Date => {
   return parsed;
 };
 
-function sectionHeading(
-  title: string,
-  tag?: string,
-  note?: string,
-): ReactElement {
+function sectionHeading(title: string, note?: string): ReactElement {
   return v(styles.sectionHead, { minPresenceAhead: 55 },
     v([styles.rule, { backgroundColor: C.plum }], {}),
     t(styles.sectionName, title),
-    tag ? t(styles.sectionTag, tag) : null,
     note ? t(styles.sectionEqn, note) : null,
   );
 }
@@ -154,26 +223,9 @@ function sectionHeading(
 function section(
   title: string,
   children: ReactElement | ReactElement[],
-  tag?: string,
   note?: string,
 ): ReactElement {
-  return v(styles.section, {}, sectionHeading(title, tag, note), ...(Array.isArray(children) ? children : [children]));
-}
-
-function controlPair(
-  label: string,
-  value: string,
-  options: { wide?: boolean; compact?: boolean } = {},
-): ReactElement {
-  return v(
-    [styles.controlPair, options.wide && styles.controlPairWide],
-    {},
-    t(styles.metaLabel, label),
-    t(
-      [styles.metaVal, options.compact && styles.compactMetaValue],
-      value,
-    ),
-  );
+  return v(styles.section, {}, sectionHeading(title, note), ...(Array.isArray(children) ? children : [children]));
 }
 
 function mastheadPair(label: string, value: string): ReactElement {
@@ -183,88 +235,62 @@ function mastheadPair(label: string, value: string): ReactElement {
   );
 }
 
-function summaryCell(
-  label: string,
-  value: string,
-  isLast = false,
-): ReactElement {
-  return v([styles.summaryCell, isLast && styles.summaryLast], {},
-    t(styles.summaryLabel, label),
-    t(styles.summaryValue, value),
-    t(styles.summaryUnit, "kg CO2e"),
+function fact(label: string, value: string, isLast = false): ReactElement {
+  return v([styles.fact, isLast && styles.factLast], {},
+    t(styles.factLabel, label),
+    t(styles.factValue, value),
   );
 }
 
-const formatCell = (value: number | null): string =>
-  value === null ? "n/a" : formatKg(value);
+function legendRow(key: string, description: string): ReactElement {
+  return v(styles.legendRow, {},
+    t(styles.legendKey, key),
+    t(styles.legendDesc, description),
+  );
+}
 
 function entryTableHeader(): ReactElement {
-  return v(styles.th, {},
-    t([styles.thText, { flex: 1 }], "GHG Entry"),
-    t([styles.thText, { width: COL.net, textAlign: "right" }], "Net"),
+  const numericHeader = (label: string, width: number) =>
     t(
-      [
-        styles.thText,
-        {
-          width: COL.beforeUncertainty,
-          textAlign: "right",
-          paddingLeft: CELL_GAP,
-        },
-      ],
-      "Before uncert.",
-    ),
-    t(
-      [
-        styles.thText,
-        { width: COL.stdDeviation, textAlign: "right", paddingLeft: CELL_GAP },
-      ],
-      "Std dev",
-    ),
-    t(
-      [
-        styles.thText,
-        { width: COL.supplier, textAlign: "right", paddingLeft: CELL_GAP },
-      ],
-      "Supplier",
-    ),
-    t(
-      [
-        styles.thText,
-        { width: COL.buffer, textAlign: "right", paddingLeft: CELL_GAP },
-      ],
-      "Buffer",
-    ),
+      [styles.thText, { width, textAlign: "right", paddingLeft: CELL_GAP }],
+      label,
+    );
+  // `fixed` repeats the header on every page the table wraps onto, so a
+  // continuation page is never a column of unlabelled numbers.
+  return v(styles.th, { fixed: true },
+    t([styles.thText, { flex: 1 }], "GHG Entry and activity dates"),
+    numericHeader("Net\nremoved", ENTRY_COL.net),
+    numericHeader("Before\nuncertainty", ENTRY_COL.beforeUncertainty),
+    numericHeader("Standard\ndeviation", ENTRY_COL.standardDeviation),
   );
 }
 
-function entryRow(entry: GhgStatementReportEntry): ReactElement {
-  return v(styles.tr, { wrap: false },
+function entryRow(
+  entry: GhgStatementReportEntry,
+  isLast: boolean,
+): ReactElement {
+  return v([styles.tr, isLast && styles.trLast], { wrap: false },
     v({ flex: 1, paddingRight: 8 }, {},
-      t(styles.entryHeader, entry.externalEntryId),
-      t(
-        styles.entryMeta,
-        `${entry.startedOn} to ${entry.completedOn}`,
-      ),
+      t(styles.entryId, entry.externalEntryId),
+      t(styles.entryPeriod, `${entry.startedOn} to ${entry.completedOn}`),
     ),
-    t([styles.entryQty, { width: COL.net }], formatCell(entry.netRemovedKg)),
+    t(
+      [styles.entryQty, { width: ENTRY_COL.net, paddingLeft: CELL_GAP }],
+      formatKg(entry.netRemovedKg),
+    ),
     t(
       [
         styles.entryQty,
-        { width: COL.beforeUncertainty, paddingLeft: CELL_GAP },
+        { width: ENTRY_COL.beforeUncertainty, paddingLeft: CELL_GAP },
       ],
-      formatCell(entry.netRemovedWithoutDiscountKg),
+      formatKg(entry.netRemovedWithoutDiscountKg),
     ),
     t(
-      [styles.entryQty, { width: COL.stdDeviation, paddingLeft: CELL_GAP }],
-      formatCell(entry.netRemovedStandardDeviationKg),
-    ),
-    t(
-      [styles.entryQty, { width: COL.supplier, paddingLeft: CELL_GAP }],
-      formatCell(entry.supplierCreditKg),
-    ),
-    t(
-      [styles.entryQty, { width: COL.buffer, paddingLeft: CELL_GAP }],
-      formatCell(entry.bufferPoolKg),
+      [
+        styles.entryQty,
+        { width: ENTRY_COL.standardDeviation, paddingLeft: CELL_GAP },
+      ],
+      formatKg(entry.netRemovedStandardDeviationKg),
     ),
   );
 }
@@ -273,76 +299,89 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
   const control = model.documentControl;
   const preparedAt = pinnedTimestamp(model.preparedAt);
   const masthead = v(styles.masthead, {},
-    v({}, {},
+    v({ flex: 1, paddingRight: 16 }, {},
       v(styles.wordmarkRow, {},
         t(styles.wordmark, "noma"),
         t(styles.wordmarkSub, "DMRV | GHG STATEMENT"),
       ),
-      t(styles.eyebrow, "AUTOMATIC DATA RECONCILIATION"),
       h(Text, { style: styles.title }, "GHG Statement Data Summary"),
+      t(styles.scope, SCOPE_NOTE),
     ),
     v(styles.metaCol, {},
-      mastheadPair("Report version", String(model.reportVersion)),
-      mastheadPair("Prepared", formatPreparedAt(preparedAt)),
+      mastheadPair("Supplier", control.organizationName),
       mastheadPair("Facility", control.facilityCode),
+      mastheadPair("Registry project", control.externalProjectId),
+      mastheadPair("GHG Statement", control.externalGhgStatementId),
     ),
   );
-  const totals = v(styles.summary, {},
-    summaryCell("Live net removed", formatKg(model.totals.netRemovedKg)),
-    summaryCell(
-      "Before uncertainty",
-      formatKg(model.totals.netRemovedWithoutDiscountKg),
+  const totals = v(styles.claim, {},
+    v(styles.claimHead, {},
+      t(styles.claimHeadLabel, "GHG Statement summary"),
+      t(
+        styles.claimHeadEq,
+        `All values kg CO2e | Reporting period ${control.reportingPeriodStartOn} to ${control.reportingPeriodEndOn}`,
+      ),
     ),
-    summaryCell(
-      "Uncertainty discount",
-      formatKg(model.totals.uncertaintyDiscountKg),
-    ),
-    summaryCell("Supplier allocation", formatKg(model.totals.supplierCreditKg)),
-    summaryCell("Buffer pool", formatKg(model.totals.bufferPoolKg), true),
-  );
-  const documentControl = section(
-    "Document control",
-    v(styles.controlGrid, {},
-      controlPair("Supplier organization", control.organizationName),
-      controlPair("Facility code", control.facilityCode),
-      controlPair("Registry project", control.externalProjectId),
-      controlPair("GHG Statement", control.externalGhgStatementId),
-      controlPair(
-        "Reporting period",
-        `${control.reportingPeriodStartOn} to ${control.reportingPeriodEndOn}`,
+    v(styles.bandRow, {},
+      v(styles.netCell, {},
+        t(styles.netLabel, "Statement net removed"),
+        t(styles.netValue, formatKg(model.totals.statementNetRemovedKg)),
+        t(
+          styles.netUnit,
+          `kg CO2e across ${formatEntryCount(model.entries.length)}`,
+        ),
       ),
-      controlPair(
-        "Pinned versions",
-        `Isometric Standard ${control.standardVersion}; Biochar Protocol ${control.protocolVersion}`,
+      v(styles.factCell, {},
+        fact("Entry net removed", formatKg(model.totals.entryNetRemovedKg)),
+        fact(
+          "Entry before uncertainty",
+          formatKg(model.totals.entryNetRemovedWithoutDiscountKg),
+        ),
+        fact(
+          "Entry uncertainty discount",
+          formatKg(model.totals.entryUncertaintyDiscountKg),
+          true,
+        ),
       ),
-      controlPair(
-        "Project protocol version",
-        control.configuredProtocolVersion ?? "Not configured",
+      v(styles.factCell, {},
+        fact("Supplier allocation", formatKg(model.totals.supplierCreditKg)),
+        fact("Buffer pool", formatKg(model.totals.bufferPoolKg), true),
       ),
-      controlPair("Source fingerprint", model.sourceFingerprint, {
-        wide: true,
-        compact: true,
-      }),
-      controlPair(
-        "Scope",
-        "Registry data reconciliation only; qualitative VVB and project documentation is not included.",
-        { wide: true },
-      ),
-      controlPair("Report model", String(model.modelVersion)),
     ),
   );
+  const lastEntryIndex = model.entries.length - 1;
   const membership = section(
-    "GHG Entry index",
-    v(styles.table, {}, entryTableHeader(), ...model.entries.map(entryRow)),
-    `${model.entries.length} exact ${
-      model.entries.length === 1 ? "member" : "members"
-    }`,
+    "GHG Entries",
+    v(styles.table, {},
+      entryTableHeader(),
+      ...model.entries.map((entry, index) =>
+        entryRow(entry, index === lastEntryIndex),
+      ),
+    ),
     "All values kg CO2e",
+  );
+  const apparatus = v(styles.apparatus, { wrap: false },
+    v(styles.noteCol, {},
+      t(styles.noteH, "Basis"),
+      t(styles.noteBody, basisNote(model)),
+    ),
+    v(styles.legendCol, {},
+      legendRow("Prepared", formatPreparedAt(preparedAt)),
+      legendRow("Report version", String(model.reportVersion)),
+      legendRow("Standard", `Isometric ${control.standardVersion}`),
+      legendRow("Protocol", `Biochar ${control.protocolVersion}`),
+      legendRow(
+        "Project",
+        control.configuredProtocolVersion
+          ? `Protocol ${control.configuredProtocolVersion}`
+          : MISSING_VALUE.notSet,
+      ),
+    ),
   );
   const footer = v(styles.footer, { fixed: true },
     t(
       styles.footerHash,
-      `NOMA DMRV | IMMUTABLE REPORT V${model.reportVersion} | ${model.sourceFingerprint}`,
+      `NOMA DMRV | REPORT V${model.reportVersion} | SOURCE FINGERPRINT ${model.sourceFingerprint}`,
     ),
     h(Text, {
       style: styles.footerText,
@@ -372,8 +411,8 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
       { size: "A4", style: styles.page },
       masthead,
       totals,
-      documentControl,
       membership,
+      apparatus,
       footer,
     ),
   );
