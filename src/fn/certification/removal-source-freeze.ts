@@ -43,7 +43,12 @@ export function filterCandidateSourcesForSubmissionLifecycle(
   const frozenCandidates = readRemovalCandidateSources(latestSubmission);
   if (latestSubmission.status === "draft") {
     const refreshed = getMetadataValue(latestSubmission.metadata, SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates);
-    return refreshed ? readRemovalCandidateSources({ ...latestSubmission, payloadSnapshot: { semantic: { candidateSources: refreshed } } }) : frozenCandidates;
+    if (!refreshed) return frozenCandidates;
+    const reviewed = readRemovalCandidateSources({ ...latestSubmission, payloadSnapshot: { semantic: { candidateSources: refreshed } } });
+    return [
+      ...reviewed.filter((candidate) => !isGeneratedEvidence(candidate)),
+      ...candidates.filter(isGeneratedEvidence),
+    ];
   }
 
   const currentGeneratedCandidates = candidates.filter(isGeneratedEvidence);
