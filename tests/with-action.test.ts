@@ -212,21 +212,24 @@ describe("withAction", () => {
   });
 
   it("answers with the mapped result and skips logging when mapError claims the error", async () => {
-    class StockOverdrawError extends Error {}
+    class StockOverdrawError extends SafeError {}
     vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
     vi.mocked(logger.error).mockClear();
 
-    const result = await withAction<{ id: string }>(
+    const result = await withAction(
       async () => {
         throw new StockOverdrawError("Not enough biochar in the bin.");
       },
       {
         mapError: (error) =>
           error instanceof StockOverdrawError
-            ? { success: false, error: error.message, field: "lossMassKg" }
+            ? { success: false as const, error: error.message, field: "lossMassKg" as const }
             : undefined,
       },
     );
+    // The mapped shape survives the action's result type.
+    const failure = result as { success: false; error: string; field: "lossMassKg" };
+    expect(failure.field).toBe("lossMassKg");
 
     expect(result).toEqual({
       success: false,

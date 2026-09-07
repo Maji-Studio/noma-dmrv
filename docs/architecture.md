@@ -71,9 +71,12 @@ Two more options exist for migrating the legacy wrappers without changing what
 they log or return. `log: { message, context }` replaces the generic
 "server action failed" log line, so an entity module keeps its own message and
 `op` context. `mapError(error)` runs after the Zod and conflict branches and
-before the logged fallback: return an `ActionResult` for a domain error the
-action answers itself (a field error, a conflict of its own), or `undefined`
-to fall through. Errors that `mapError` claims are not logged.
+before the logged fallback: return a failure result for a domain error the
+action answers itself (a field error, a conflict of its own; the returned
+shape is preserved in the action's result type), or `undefined` to fall
+through. A mapped result bypasses `toActionError` and is not logged, so map
+only error classes that extend `SafeError`, whose messages are written for
+the operator; anything else must fall through to the logged fallback.
 
 ### `SafeError` vs `Error`
 
