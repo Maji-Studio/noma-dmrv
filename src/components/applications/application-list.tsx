@@ -761,11 +761,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           },
           {
             title: "Supporting evidence",
-            fields: applicationLock.data ? [{ label: "Certification", value: "Application fields are locked by certification. Supporting uploads are saved separately; including new evidence requires a Removal evidence review." }] : [],
+            fields: applicationLock.data ? [{ label: "Certification", value: "Application fields are locked by certification. Supporting uploads are saved separately; including new evidence requires a Removal evidence review." }] : applicationLock.isPending ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
             content: (
-              <ApplicationSupportingEvidencePanel
-                applicationId={sideSheetEntity.id}
-              />
+              <>
+                {applicationLock.error && (
+                  <div className="flex flex-col gap-8">
+                    <ServerError message="The certification lock could not be checked. Fields remain view-only until the check succeeds." />
+                    <Button type="button" variant="weak" disabled={applicationLock.isFetching} onClick={() => void applicationLock.refetch()}>Retry certification check</Button>
+                  </div>
+                )}
+                <ApplicationSupportingEvidencePanel applicationId={sideSheetEntity.id} />
+              </>
             ),
           },
           {
