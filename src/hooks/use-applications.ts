@@ -1,3 +1,4 @@
+import { loadApplicationCertificationLock } from "@/fn/application-certification-lock";
 import {
   useMutation,
   useQueries,
@@ -186,6 +187,18 @@ export function useDeleteApplication() {
       // the whole credit-batch scope rather than guessing.
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
       invalidateCertificationReadiness(queryClient);
+    },
+  });
+}
+
+export function useApplicationCertificationLock(applicationId?: string) {
+  return useQuery({
+    queryKey: [...applicationKeys.detail(applicationId ?? ""), "certification-lock"],
+    enabled: !!applicationId,
+    queryFn: async () => {
+      const result = await loadApplicationCertificationLock(applicationId!);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
     },
   });
 }

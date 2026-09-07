@@ -112,3 +112,10 @@ describe("Removal Source freeze", () => {
     ).toThrow(SafeError);
   });
 });
+
+it("selects explicitly reviewed additions for a new version without changing old evidence", () => {
+  const row = submission({status: "draft", metadata: { evidenceRefreshCandidates: [frozenOperatorCandidate, currentCandidates[1]] }});
+  const before = JSON.stringify(row.payloadSnapshot);
+  expect(filterCandidateSourcesForSubmissionLifecycle(currentCandidates, row)).toEqual([frozenOperatorCandidate, currentCandidates[1]]);
+  expect(JSON.stringify(row.payloadSnapshot)).toBe(before);
+});

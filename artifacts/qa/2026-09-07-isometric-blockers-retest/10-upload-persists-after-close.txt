@@ -1,0 +1,66 @@
+Browser tab: 1, Title: "Maji dMRV", URL: "http://localhost:3101/applications?facility=2c6ee717-d238-4e2f-bf09-269de6e0c6ef".
+0 AXWebArea Maji dMRV, URL: localhost:3101/applications?facility=2c6ee717-d238-4e2f-bf09-269de6e0c6ef
+	1 container
+		2 pop up button (collapsed) Description: Open Next.js Dev Tools, ID: next-logo, Secondary Actions: Expand
+			3 image
+		4 container AP-26-001
+			5 heading AP-26-001, Value: 2, ID: base-ui-_r_er_
+				6 text AP-26-001
+			7 text Aug 28, 2026
+			8 button Close panel
+				9 image
+			10 container
+				11 heading APPLICATION DETAILS, Value: 3
+					12 text APPLICATION DETAILS
+				13 text Application date Aug 28, 2026 Delivery source E2E JanFeb Product Bin · Aug 28, 2026 Biochar product applied (kg)
+				14 container base-ui-_r_eu_
+					15 text CERT Required for certification. Provided.
+				16 text 60 kg Dry biochar applied (kg)
+				17 container base-ui-_r_f0_
+					18 text CERT Required for certification. Provided.
+				19 text 54 kg
+				20 heading FIELD DETAILS, Value: 3
+					21 text FIELD DETAILS
+				22 text Field size 1.00 ha Field identifier E2E JanFeb Plot 1 Crop type Not recorded Application method Manual Field position -8.4, 35.4
+				23 heading EVIDENCE METHOD, Value: 3
+					24 text EVIDENCE METHOD
+				25 text Evidence method Customer location
+				26 heading SUPPORTING EVIDENCE, Value: 3
+					27 text SUPPORTING EVIDENCE
+				28 text Certification Application fields are locked by certification. Supporting uploads are saved separately; including new evidence requires a Removal evidence review.
+				29 content list
+					30 container
+						31 image
+						32 text sandbox-qa-upload-persistence-AP-26-001.pdf 1.9 KB
+						33 link Description: Open sandbox-qa-upload-persistence-AP-26-001.pdf, Value: localhost:3101/api/documents/f514e7bf-54f3-4e81-963a-bed08a85cd07
+						34 button Delete sandbox-qa-upload-persistence-AP-26-001.pdf
+							35 image
+					36 container
+						37 image
+						38 text sandbox-qa-application-AP-26-001.pdf 1.9 KB
+						39 link Description: Open sandbox-qa-application-AP-26-001.pdf, Value: localhost:3101/api/documents/64940a42-4a83-4962-919c-a50c236f59fc
+						40 button Delete sandbox-qa-application-AP-26-001.pdf
+							41 image
+				42 image
+				43 heading Images and PDFs, Value: 4
+					44 text Images and PDFs
+				45 text Uploads are saved immediately. Closing this panel does not discard them. Evidence added after submission is excluded from the saved attempt until a new evidence review.
+				46 button Drop files here or click to upload Max 10 MB per file
+					47 image
+					48 text Drop files here or click to upload
+					49 text Max
+					50 text 10
+					51 text  MB per file
+				52 button Choose Files, ID: application-19be7d1f-6fd0-426c-aab3-3affc34a3431-supporting-evidence-upload
+				53 heading APPLICATION SITE, Value: 3
+					54 text APPLICATION SITE
+				55 text Synced
+				56 button CHECK FOR DRIFT
+					57 image
+					58 text CHECK FOR DRIFT
+				59 text REGISTRY ID slc_1M1X64TW5SBXCTG1
+				60 container
+					61 text Last checked  Sep 7, 2026, 13:23
+			62 button CLOSE
+
+The focused UI element is 8 button Close panel

@@ -3,10 +3,11 @@
  * Competing Removal submissions must serialize on the credit-batch row, while
  * an interrupted attempt with a possible registry mutation remains fail-closed.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { markSubmissionSubmitted } from "@/data-access/certification";
 import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
+import { requestRemovalEvidenceRefresh } from "@/data-access/removal-evidence-refresh";
 import {
   rejectSubmissionAndReleaseProductionClaims,
   reserveProductionEmissionsClaims,
@@ -193,6 +194,30 @@ async function readClaim(batchId: string): Promise<string | null> {
 }
 
 describe("production-emissions claim reservations", () => {
+  it("reviews only the current interrupted draft and preserves its snapshot", async () => {
+    const fixture = await createFixture();
+    const draft = await insertDraft(fixture.removalAId, 1);
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const args = { removalId: fixture.removalAId, submissionId: draft.id };
+    const reconcile = vi.fn(async () => [{ documentId: "reviewed-document" }]);
+    await expect(requestRemovalEvidenceRefresh(ctx, args, reconcile)).rejects.toThrow("Only an interrupted attempt");
+    expect(reconcile).not.toHaveBeenCalled();
+    await db.update(certificationSubmissions).set({
+      metadata: { lastAttemptOutcome: "interrupted" },
+    }).where(eq(certificationSubmissions.id, draft.id));
+    await expect(requestRemovalEvidenceRefresh({ ...ctx, orgRole: "member" }, args, reconcile)).rejects.toThrow();
+    await expect(requestRemovalEvidenceRefresh({ ...ctx, organizationId: "other-org" }, args, reconcile)).rejects.toThrow();
+    expect(reconcile).not.toHaveBeenCalled();
+    await requestRemovalEvidenceRefresh(ctx, args, reconcile);
+    const [saved] = await db.select().from(certificationSubmissions).where(eq(certificationSubmissions.id, draft.id));
+    expect(saved.payloadSnapshot).toEqual({ fixture: "production-claim-reservation" });
+    expect(saved.status).toBe("draft");
+    expect(saved.metadata).toMatchObject({ evidenceRefreshCandidates: [{ documentId: "reviewed-document" }] });
+    await db.update(certificationSubmissions).set({ externalId: "rmv-already-created" }).where(eq(certificationSubmissions.id, draft.id));
+    await expect(requestRemovalEvidenceRefresh(ctx, args, reconcile)).rejects.toThrow("Only an interrupted attempt");
+    expect(reconcile).toHaveBeenCalledTimes(1);
+  });
+
   it("serializes competing drafts before POST and releases a definitive failure", async () => {
     const fixture = await createFixture();
     const draftA = await insertDraft(fixture.removalAId, 1);
@@ -355,4 +380,23 @@ describe("production-emissions claim reservations", () => {
     ).rejects.toThrow(/already sending production inputs/);
     expect(await readReservation(fixture.batchId)).toBe(draftA.id);
   });
+});
+
+it("transfers a reviewed evidence predecessor only to its linked version of the same Removal", async () => {
+  const fixture = await createFixture();
+  const previous = await insertDraft(fixture.removalAId, 1);
+  const next = await insertDraft(fixture.removalAId, 2);
+  const foreign = await insertDraft(fixture.removalBId, 1);
+  const ctx = makeTestOrgContext(TEST_USER_ID);
+  await reserveProductionEmissionsClaims(ctx, {removalId: fixture.removalAId, submissionId: previous.id, creditBatchIds: [fixture.batchId]});
+  await db.update(certificationSubmissions).set({metadata: {externalMutation: "confirmed", lastAttemptOutcome: "interrupted", evidenceRefreshCandidates: [{documentId: "proof"}]}}).where(eq(certificationSubmissions.id, previous.id));
+  for (const id of [next.id, foreign.id]) {
+    await db.update(certificationSubmissions).set({metadata: {supersedePreviousId: previous.id}}).where(eq(certificationSubmissions.id, id));
+  }
+  await expect(reserveProductionEmissionsClaims(ctx, {removalId: fixture.removalBId, submissionId: foreign.id, creditBatchIds: [fixture.batchId]})).rejects.toThrow("already sending");
+  await reserveProductionEmissionsClaims(ctx, {removalId: fixture.removalAId, submissionId: next.id, creditBatchIds: [fixture.batchId]});
+  expect(await readReservation(fixture.batchId)).toBe(next.id);
+  const [prior] = await db.select().from(certificationSubmissions).where(eq(certificationSubmissions.id, previous.id));
+  expect(prior.payloadSnapshot).toEqual({fixture: "production-claim-reservation"});
+  expect(prior.status).toBe("draft");
 });

@@ -73,7 +73,7 @@ export function buildProductionBatchReference(args: {
 }
 
 export interface BuildProductionBatchRequestArgs {
-  /** Credit-batch code — becomes the registry display name. */
+  /** Credit-batch code, displayed alongside its stable registry reference. */
   creditBatchCode: string;
   /** The operator-pasted Isometric facility id (`fcl_…`). */
   externalFacilityId: string;
@@ -134,7 +134,11 @@ export function buildCreateProductionBatchRequest(
   // `display_name` is 1..100 chars when present, so a blank credit-batch code
   // omits it and lets the registry auto-generate one rather than earning a
   // generic 4xx for an empty string.
-  const displayName = args.creditBatchCode.trim().slice(0, DISPLAY_NAME_MAX_LEN);
+  const suffix = ` (${args.supplierReferenceId})`;
+  const code = args.creditBatchCode.trim();
+  const displayName = code
+    ? `${code.slice(0, DISPLAY_NAME_MAX_LEN - suffix.length)}${suffix}`
+    : "";
 
   return {
     ...(displayName ? { display_name: displayName } : {}),

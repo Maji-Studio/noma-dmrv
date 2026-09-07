@@ -15,7 +15,7 @@ import {
   listDocumentUploadsForDocuments,
   type DocumentUploadMetadata,
 } from "@/data-access/certifier-document-uploads";
-import { getLatestSubmissionWithExecutor } from "@/data-access/certification-submissions";
+import { getLatestSubmission, getLatestSubmissionWithExecutor } from "@/data-access/certification-submissions";
 import { getRegistrySourceVisibility } from "@/data-access/certifier-organization-settings";
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { getDocumentById } from "@/data-access/documents";
@@ -62,6 +62,10 @@ import {
   type CandidateSourceDocument,
 } from "./source-candidates";
 
+import { payloadHash } from "@/lib/isometric/utils/payload-hash";
+import { filterCandidateSourcesForSubmissionLifecycle } from "./removal-source-freeze";
+import { isSubmissionAttemptInterrupted, getMetadataValue, SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
+
 const BYTES_PER_MEGABYTE = 1_000_000;
 
 export async function loadCandidateDocumentsForRemovalForUser(
@@ -99,7 +103,37 @@ export async function loadCandidateDocumentsForRemoval(
 ): Promise<ActionResult<CandidateDocumentsForRemoval>> {
   return withAction(async (orgCtx) => {
     const parsed = loadCandidateDocumentsForRemovalSchema.parse(input);
-    return loadCandidateDocumentsForRemovalForUser(orgCtx, parsed.removalId);
+    const [data, latest] = await Promise.all([
+      loadCandidateDocumentsForRemovalForUser(orgCtx, parsed.removalId),
+      getLatestSubmission(orgCtx, { provider: ISOMETRIC_PROVIDER, submissionType: REMOVAL_SUBMISSION_TYPE, localEntityType: REMOVAL_ENTITY_TYPE, localEntityId: parsed.removalId }),
+    ]);
+    const selected = filterCandidateSourcesForSubmissionLifecycle(
+      data.candidates.map((candidate) => ({
+        documentId: candidate.document.id,
+        binding: candidate.binding,
+        biocharApplicationId: candidate.biocharApplicationId,
+      })),
+      latest,
+    );
+    const selectedById = new Map(selected.map((candidate) => [candidate.documentId, candidate]));
+    const canReviewEvidence = latest?.status === "draft" &&
+      !latest.externalId && isSubmissionAttemptInterrupted(latest.metadata) &&
+      !getMetadataValue(latest.metadata, SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates);
+    return {
+      ...data,
+      evidenceRefreshSubmissionId: canReviewEvidence ? latest.id : null,
+      candidates: data.candidates.map((candidate) => {
+        const frozen = selectedById.get(candidate.document.id);
+        const includedInSubmission = !!frozen && payloadHash({
+          binding: frozen.binding,
+          application: frozen.biocharApplicationId ?? null,
+        }) === payloadHash({
+          binding: candidate.binding,
+          application: candidate.biocharApplicationId ?? null,
+        });
+        return { ...candidate, includedInSubmission };
+      }),
+    };
   });
 }
 

@@ -1,0 +1,116 @@
+Browser tab: 3, Title: "GHG entry rmv_1M1XSPT85SBXNSTN — Certify — Isometric", URL: "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/ghg-entry/rmv_1M1XSPT85SBXNSTN?tab=sources".
+0 AXWebArea GHG entry rmv_1M1XSPT85SBXNSTN — Certify — Isometric, URL: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/ghg-entry/rmv_1M1XSPT85SBXNSTN?tab=sources
+	1 container
+		34 text GHG entry rmv_1M1XSPT85SBXNSTN — Certify — Isometric
+		2 container 0 notifications.
+		3 link Description: Isometric Registry, Value: registry.sandbox.isometric.com/
+		4 link Description: Registry, Value: registry.sandbox.isometric.com/
+		5 link Description: Projects, Value: registry.sandbox.isometric.com/projects
+		6 link Description: Protocols, Value: registry.sandbox.isometric.com/protocols
+		7 link Description: Account, Value: registry.sandbox.isometric.com/account
+		8 link Description: Certify, Value: registry.sandbox.isometric.com/account/certify
+		9 text |
+		10 pop up button (collapsed) Description: Current user menu, ID: react-aria642357135-_r_g_, Secondary Actions: Expand
+		11 container
+			12 button Description: Collapse sidebar, ID: react-aria642357135-_r_e_
+			13 container Breadcrumbs
+				14 content list breadcrumbs
+					15 link Description: All projects, Value: registry.sandbox.isometric.com/account/certify
+					16 link Description: Tanzania biochar, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF
+					35 link Description: All GHG statements, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/ghg-statements
+					36 link Description: ggs_1M14F95JZSBXJEZJ, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/ghg-statement/ggs_1M14F95JZSBXJEZJ
+					37 text rmv_1M1XSPT85SBXNSTN
+		18 container
+			19 link Description: Overview, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/overview
+			20 link Description: Log of issues, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/log-of-issues
+			21 link Description: Evidence, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/evidence
+			22 text PROJECT SETUP
+			23 link Description: General, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/general
+			24 link Description: Project design, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/project-design
+			25 link Description: Feedstocks, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/feedstocks
+			26 link Description: Facilities, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities
+			27 link Description: Storage sites, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites
+			28 text CARBON ACCOUNTING
+			29 link Description: LCA, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/lca
+			30 link Description: Project emissions, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/project-emissions
+			31 link Description: GHG statements, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/ghg-statements
+			32 link Description: GHG entry data, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/ghg-entries
+			33 link Description: Templates, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/templates
+		38 container
+			39 heading GHG entry, Value: 1
+				40 text GHG entry
+			41 text REMOVAL 0.34 tCO₂e 10 Jan 2026 to 28 Aug 2026 rmv_1M1XSPT85SBXNSTN
+			42 button (collapsed) Description: Projected credit allocation, ID: react-aria642357135-_r_5t_, Secondary Actions: Expand
+			43 button Description: Toggle issues sidebar, ID: react-aria642357135-_r_62_
+			44 button Description: Toggle timeline sidebar, ID: react-aria642357135-_r_65_
+		45 tab group react-aria642357135-_r_69_
+			46 tab (selectable, settable, boolean) Components, Value: 0, ID: react-aria642357135-_r_69_-tab-components
+			47 tab (selectable, settable, boolean) Calculation view, Value: 0, ID: react-aria642357135-_r_69_-tab-calculation-view
+			48 tab (selectable, settable, boolean) Datapoints, Value: 0, ID: react-aria642357135-_r_69_-tab-data-points
+			49 tab (selected, settable, boolean) Sources, Value: 1, ID: react-aria642357135-_r_69_-tab-sources
+		50 text Changes will require resubmission for review
+		51 link Description: Edit, Value: registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/ghg-entry/rmv_1M1XSPT85SBXNSTN/edit
+		52 container Description: Sources, ID: react-aria642357135-_r_69_-tabpanel-sources
+			53 heading Sources (4), Value: 2
+				54 text Sources ( 4 )
+			55 table Description: Sources, ID: react-aria642357135-_r_f9_
+				56 row Name Data points Type Public visibility
+					57 cell react-aria642357135-_r_f9_-sources-table-name
+						58 text Name
+					59 cell react-aria642357135-_r_f9_-dataPointNames
+						60 text Data points
+					61 cell react-aria642357135-_r_f9_-source_sourceType
+						62 text Type
+					63 cell react-aria642357135-_r_f9_-source_isContentPublic
+						64 text Public visibility
+				65 container
+					66 row durability-evidence-ledger-CB-26-001.pdf, ID: react-aria642357135-_r_fg_
+						67 cell react-aria642357135-_r_f9_-ref_1M1XSPNYPSBX5ZJP-sources-table-name
+							68 button durability-evidence-ledger-CB-26-001.pdf, ID: react-aria642357135-_r_fl_
+						69 cell react-aria642357135-_r_fn_
+							70 text product_mass
+						71 cell react-aria642357135-_r_fo_
+							72 text Document
+						73 cell react-aria642357135-_r_fp_
+							74 text PRIVATE
+					75 row transport-evidence-ledger-CB-26-001.pdf, ID: react-aria642357135-_r_fq_
+						76 cell react-aria642357135-_r_f9_-ref_1M1XSPNFYSBXQC42-sources-table-name
+							77 button transport-evidence-ledger-CB-26-001.pdf, ID: react-aria642357135-_r_fv_
+						78 cell react-aria642357135-_r_g1_
+							79 text mass_distance
+							80 button (collapsed) + 1 more, ID: react-aria642357135-_r_g3_, Secondary Actions: Expand
+								81 text +
+								82 text 1
+								83 text  more
+						84 cell react-aria642357135-_r_g6_
+							85 text Document
+						86 cell react-aria642357135-_r_g7_
+							87 text PRIVATE
+					88 row GLEC V3.2, ID: react-aria642357135-_r_g8_
+						89 cell react-aria642357135-_r_f9_-ref_1KS4PXG5PSBXMC7W-sources-table-name
+							90 button GLEC V3.2, ID: react-aria642357135-_r_gd_
+						91 cell react-aria642357135-_r_gf_
+							92 text Articulated truck, up to 34 t GVW, Container load, Diesel, Africa, Asia, WTW
+							93 button (collapsed) + 2 more, ID: react-aria642357135-_r_gh_, Secondary Actions: Expand
+								94 text +
+								95 text 2
+								96 text  more
+						97 cell react-aria642357135-_r_gk_
+							98 text Website
+						99 cell react-aria642357135-_r_gl_
+							100 text PUBLIC
+					101 row ICE Database V4.0 - Dec 2024, ID: react-aria642357135-_r_gm_
+						102 cell react-aria642357135-_r_f9_-ref_1KS4RYNEESBXT7YY-sources-table-name
+							103 button ICE Database V4.0 - Dec 2024, ID: react-aria642357135-_r_gr_
+						104 cell react-aria642357135-_r_gt_
+							105 text Steel, Welded pipe, GB, cradle-to-gate
+							106 button (collapsed) + 1 more, ID: react-aria642357135-_r_gv_, Secondary Actions: Expand
+								107 text +
+								108 text 1
+								109 text  more
+						110 cell react-aria642357135-_r_h2_
+							111 text Website
+						112 cell react-aria642357135-_r_h3_
+							113 text PUBLIC
+
+The focused UI element is 49 tab (selected, settable, boolean) Sources, Value: 1, ID: react-aria642357135-_r_69_-tab-sources

@@ -21,8 +21,8 @@ import {
   FileIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { EmptyState } from "@/components/ui";
-import { useCandidateDocumentsForRemoval } from "@/hooks/use-certification-sources";
+import { Button, EmptyState } from "@/components/ui";
+import { useCandidateDocumentsForRemoval, useRefreshInterruptedRemovalEvidence } from "@/hooks/use-certification-sources";
 import { Section } from "./panel-layout";
 
 const STATE_ICON_SIZE = 16;
@@ -44,8 +44,8 @@ export function SourcesPanel({ removalId, isEditable }: SourcesPanelProps) {
           <PanelCounter removalId={removalId} isEditable={isEditable} />
         </header>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Supporting files are mirrored automatically when you submit, then
-          attached to the relevant registry value or Biochar Application.
+          Included files are copied when you submit. A saved attempt keeps its
+          reviewed evidence. Files added later require a new evidence review.
         </p>
         <PanelBody removalId={removalId} isEditable={isEditable} />
       </div>
@@ -63,12 +63,12 @@ function PanelCounter({
   const query = useCandidateDocumentsForRemoval(removalId);
   if (!removalId || !query.data) return null;
   const total = query.data.candidates.length;
-  const ready = query.data.candidates.filter((c) => c.mirror).length;
+  const ready = query.data.candidates.filter((c) => c.mirror && c.includedInSubmission !== false).length;
   return (
     <span className="body-caption text-[var(--color-text-tertiary)]">
       {isEditable
         ? `${total} ${total === 1 ? "file" : "files"} linked`
-        : `${ready} of ${total} ${total === 1 ? "file" : "files"} attached`}
+        : `${ready} of ${total} ${total === 1 ? "file" : "files"} copied`}
     </span>
   );
 }
@@ -104,6 +104,7 @@ function PanelBodyForRemoval({
   isEditable: boolean;
 }) {
   const query = useCandidateDocumentsForRemoval(removalId);
+  const refresh = useRefreshInterruptedRemovalEvidence(removalId);
 
   if (query.isLoading) {
     return (
@@ -140,6 +141,22 @@ function PanelBodyForRemoval({
   }
 
   return (
+    <div className="flex flex-col gap-12">
+      {query.data.candidates.some((candidate) => candidate.includedInSubmission === false) && (
+        <div className="flex flex-col gap-8" role="status">
+          <p className="body-small">New files are excluded from the saved attempt. Retrying uses its original evidence.</p>
+          {query.data.evidenceRefreshSubmissionId ? (
+            <>
+              <p className="body-caption">Review new evidence checks for an existing registry Entry, then prepares a new submission version. The original evidence and registry records are preserved.</p>
+              <Button type="button" variant="weak" disabled={refresh.isPending} onClick={() => refresh.mutate(query.data!.evidenceRefreshSubmissionId!)}>
+                {refresh.isPending ? "Checking registry…" : "Review new evidence"}
+              </Button>
+            </>
+          ) : <p className="body-caption">A registry-backed attempt requires a reviewed amendment before these files can be included.</p>}
+        </div>
+      )}
+      {refresh.error && <p role="alert" className="body-small text-[var(--clr-red)]">{refresh.error.message}</p>}
+      {refresh.isSuccess && <p role="status" className="body-small">New evidence is selected. Open Submit and review the new version before sending it.</p>}
     <ul className="flex flex-col border border-[var(--color-border-secondary)]">
       {query.data.candidates.map((candidate, idx) => (
         <li
@@ -157,6 +174,7 @@ function PanelBodyForRemoval({
         </li>
       ))}
     </ul>
+    </div>
   );
 }
 
@@ -211,14 +229,16 @@ function CandidateRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-8">
-        {isMirrored ? (
+        {candidate.includedInSubmission === false ? (
+          <span className="body-caption text-[var(--color-text-tertiary)]">Excluded from saved attempt</span>
+        ) : isMirrored ? (
           <div className="flex flex-col items-end gap-2">
             <span
               className="flex items-center gap-4 body-caption text-[var(--st-ok)]"
-              title="Ready in Isometric"
+              title="Source copied to Isometric. Submission verifies its registry attachment."
             >
               <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
-              Ready
+              Copied
             </span>
             <span
               className="body-caption max-w-[180px] truncate font-mono text-[var(--color-text-tertiary)]"

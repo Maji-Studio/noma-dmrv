@@ -70,6 +70,7 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "./shared";
 
+const LEGACY_DISPLAY_NAME_MAX_LENGTH = 100;
 const LEGACY_DAY_START_SUFFIX = "T00:00:00.000Z";
 const LEGACY_DAY_END_SUFFIX = "T23:59:59.999Z";
 
@@ -400,9 +401,12 @@ function matchesLegacyDateBoundPayloadHash(
   const legacyEndMs = Date.parse(legacyBody.ended_at);
   const physicalWindowFitsLegacyBounds =
     physicalStartMs >= legacyStartMs && physicalEndMs <= legacyEndMs;
-  return (
-    physicalWindowFitsLegacyBounds && payloadHash(legacyBody) === storedHash
-  );
+  // Display-name namespacing changes presentation, not a registered batch's identity.
+  const legacyDisplayName = input.creditBatchCode.trim().slice(0, LEGACY_DISPLAY_NAME_MAX_LENGTH);
+  const previousNameBody = { ...current.body, display_name: legacyDisplayName || undefined };
+  const previousWindowBody = { ...legacyBody, display_name: legacyDisplayName || undefined };
+  return payloadHash(previousNameBody) === storedHash || (physicalWindowFitsLegacyBounds &&
+    (payloadHash(legacyBody) === storedHash || payloadHash(previousWindowBody) === storedHash));
 }
 
 type LegacyProductionBatchWindow = Pick<

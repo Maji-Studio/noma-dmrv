@@ -1,0 +1,8 @@
+
+ RUN  v4.1.0 /Users/kenji/.codex/worktrees/48db/noma-dmrv
+
+
+ Test Files  4 passed (4)
+      Tests  31 passed (31)
+   Start at  13:43:04
+   Duration  1.42s (transform 402ms, setup 115ms, import 1.19s, tests 246ms, environment 0ms)

@@ -43,7 +43,7 @@ describe("GHG Statement workflow state", () => {
     });
     expect(
       deriveVerifierStep(
-        statement({ status: "AWAITING_VERIFICATION" }),
+        statement({ status: "AWAITING_VERIFICATION", pending_total_co2e_removed_kg: null }),
         false,
         true,
         true,
@@ -81,7 +81,7 @@ describe("GHG Statement workflow state", () => {
     );
   });
 
-  it("reports the specific roll-up blocker", () => {
+  it("lets report preparation validate remote members independently of local roll-up", () => {
     const pending = deriveGhgStatementWorkflowState({
       created: true,
       canManageReports: true,
@@ -93,9 +93,8 @@ describe("GHG Statement workflow state", () => {
         message: "Registry totals are waiting for linked GHG Entries.",
       },
     });
-    expect(pending.generationUnavailableReason).toBe(
-      "Registry totals are waiting for linked GHG Entries.",
-    );
+    expect(pending.generationUnavailableReason).toBeNull();
+    expect(pending.canGenerate).toBe(true);
 
     const failed = deriveGhgStatementWorkflowState({
       created: true,
@@ -105,9 +104,8 @@ describe("GHG Statement workflow state", () => {
       hasApprovedReport: false,
       rollup: { status: "error" },
     });
-    expect(failed.generationUnavailableReason).toBe(
-      "The registry roll-up could not be loaded. Refresh and try again.",
-    );
+    expect(failed.generationUnavailableReason).toBeNull();
+    expect(failed.canGenerate).toBe(true);
   });
 
   it("offers Submit for a live statement with a generated or external report", () => {
@@ -139,4 +137,15 @@ describe("GHG Statement workflow state", () => {
       }).canSubmit,
     ).toBe(false);
   });
+});
+
+it("offers resubmission for pending changes while awaiting verification", () => {
+  const state = deriveGhgStatementWorkflowState({
+    created: true, canManageReports: true, remote: statement({status: "AWAITING_VERIFICATION", pending_total_co2e_removed_kg: 4170}),
+    linkedRemovalCount: 0, hasApprovedReport: false, rollup: availableRollup,
+  });
+  expect(state.mode).toBe("resubmit");
+  expect(state.canSubmit).toBe(true);
+  expect(state.verifierStep.status).toBe("warning");
+  expect(state.verifierStep.detail).toContain("pending changes");
 });

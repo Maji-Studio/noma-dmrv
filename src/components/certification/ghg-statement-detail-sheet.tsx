@@ -244,7 +244,9 @@ function DetailState({
           </div>
         </section>
 
-        <GhgStatementCarbonBreakdown query={breakdownQuery} />
+        {linkedRemovals.length > 0 && (
+          <GhgStatementCarbonBreakdown query={breakdownQuery} />
+        )}
 
         <section className="flex flex-col gap-8">
           <h3 className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
@@ -276,6 +278,14 @@ function DetailState({
           />
         </section>
 
+        {remote && (
+          <p className="body-small text-[var(--color-text-secondary)]">
+            {remote.ghg_entry_ids.length} registry GHG Entries. {linkedRemovals.length} locally linked Removals.
+            {remote.ghg_entry_ids.length > linkedRemovals.length &&
+              " Some registry Entries have no local Removal history in this database. Generated reports use and reconcile every registry Entry; local lineage totals remain unavailable."}
+          </p>
+        )}
+
         <Accordion.Root className="gap-8" multiple>
           <Accordion.Item
             value="linked-removals"
@@ -297,7 +307,7 @@ function DetailState({
             <Accordion.Panel className="[&>div]:p-12">
               {linkedRemovals.length === 0 ? (
                 <p className="body-small text-[var(--color-text-tertiary)]">
-                  No Removals linked yet.
+                  No local Removal history is linked to this Statement.
                 </p>
               ) : (
                 <RemovalBatchesAccordion

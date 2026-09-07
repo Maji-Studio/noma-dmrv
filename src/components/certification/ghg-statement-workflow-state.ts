@@ -40,6 +40,9 @@ export function deriveVerifierStep(
         }
       : { status: "skipped" };
   }
+  if (chooseGhgSubmitMode(remote) === "resubmit" && remote.status !== "FAILED_VERIFICATION") {
+    return { status: "warning", detail: "This GHG Statement has pending changes. Generate and approve an updated report, then resubmit." };
+  }
   switch (remote.status) {
     case "AWAITING_VERIFICATION":
       return { status: "met", detail: "In verification. No action is needed." };
@@ -101,6 +104,9 @@ export function deriveGhgStatementWorkflowState({
     remote?.pending_total_co2e_removed_kg != null &&
     Number.isFinite(remote.pending_total_co2e_removed_kg);
   const rollupReady = rollup.status === "available" && remoteTotalReady;
+  // Report preparation independently loads and validates every remote member.
+  // Missing local provenance must not prevent a registry data summary.
+  const reportReady = created && remote !== null && hasMembership && remoteTotalReady;
 
   let generationUnavailableReason: string | null = null;
   if (remoteUnavailable) {
@@ -128,7 +134,7 @@ export function deriveGhgStatementWorkflowState({
     mode,
     hasMembership,
     rollupReady,
-    canGenerate: canManageReports && rollupReady,
+    canGenerate: canManageReports && reportReady,
     canSubmit:
       canManageReports &&
       created &&
@@ -136,7 +142,7 @@ export function deriveGhgStatementWorkflowState({
       (mode === "submit" || mode === "resubmit") &&
       hasMembership,
     generationUnavailableReason: canManageReports
-      ? generationUnavailableReason
+      ? reportReady ? null : generationUnavailableReason
       : "An Owner or Admin generates and approves reports.",
     verifierStep: deriveVerifierStep(
       remote,

@@ -1,4 +1,5 @@
 export const SUBMISSION_METADATA_KEYS = {
+  evidenceRefreshCandidates: "evidenceRefreshCandidates",
   remoteStatus: "remoteStatus",
   pendingTotalCo2eRemovedKg: "pendingTotalCo2eRemovedKg",
   removalIds: "removalIds",

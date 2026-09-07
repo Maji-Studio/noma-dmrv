@@ -13,14 +13,14 @@ export type GhgSubmitMode =
 
 export function chooseGhgSubmitMode(remote: GhgStatement): GhgSubmitMode {
   if (remote.status === "DRAFT") return "submit";
-  if (remote.status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   if (
     remote.status === "FAILED_VERIFICATION" ||
-    (remote.pending_total_co2e_removed_kg !== null &&
-      remote.pending_total_co2e_removed_kg > 0)
+    (remote.pending_total_co2e_removed_kg != null &&
+      Number.isFinite(remote.pending_total_co2e_removed_kg))
   ) {
     return "resubmit";
   }
+  if (remote.status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   return "blocked-verified";
 }
 
@@ -56,13 +56,13 @@ export function chooseGhgSubmitModeFromKnownState(
     SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg,
   );
   if (status === "DRAFT") return "submit";
-  if (status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   if (
     status === "FAILED_VERIFICATION" ||
-    (typeof pendingTotal === "number" && pendingTotal > 0)
+    (typeof pendingTotal === "number" && Number.isFinite(pendingTotal))
   ) {
     return "resubmit";
   }
+  if (status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   if (typeof status === "string") return "blocked-verified";
 
   throw new SafeError(

@@ -22,6 +22,7 @@ type SubmissionRow = Pick<
   | "localEntityType"
   | "localEntityId"
   | "status"
+  | "externalId"
   | "lockedAt"
   | "metadata"
 >;
@@ -118,6 +119,7 @@ export async function reserveProductionEmissionsClaims(
             localEntityType: certificationSubmissions.localEntityType,
             localEntityId: certificationSubmissions.localEntityId,
             status: certificationSubmissions.status,
+            externalId: certificationSubmissions.externalId,
             lockedAt: certificationSubmissions.lockedAt,
             metadata: certificationSubmissions.metadata,
           })
@@ -144,6 +146,22 @@ export async function reserveProductionEmissionsClaims(
       );
     }
     const nowMs = (args.now ?? new Date()).getTime();
+    const refreshedPredecessorId = getMetadataValue(current.metadata, "supersedePreviousId");
+    // The reviewed successor represents the same Removal and production claim.
+    // Preserve the interrupted predecessor's ledger and transfer only its reservation.
+    const isReviewedEvidencePredecessor = (owner: SubmissionRow | undefined) =>
+      owner != null &&
+      owner.id === refreshedPredecessorId &&
+      owner.localEntityId === args.removalId &&
+      owner.provider === "isometric" &&
+      owner.submissionType === "removal" &&
+      owner.localEntityType === "removal" &&
+      owner.status === "draft" &&
+      !owner.externalId &&
+      Array.isArray(getMetadataValue(
+        owner.metadata,
+        SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates,
+      ));
     const blocked = batches.filter((batch) => {
       if (
         batch.claimedByRemovalId != null &&
@@ -154,7 +172,8 @@ export async function reserveProductionEmissionsClaims(
       const ownerId = batch.reservedBySubmissionId;
       return ownerId != null &&
         ownerId !== args.submissionId &&
-        !canTransferReservation(ownerById.get(ownerId), nowMs);
+        !canTransferReservation(ownerById.get(ownerId), nowMs) &&
+        !isReviewedEvidencePredecessor(ownerById.get(ownerId));
     });
     if (blocked.length > 0) {
       throw new SafeError(
@@ -202,6 +221,7 @@ export async function rejectSubmissionAndReleaseProductionClaims(
         localEntityType: certificationSubmissions.localEntityType,
         localEntityId: certificationSubmissions.localEntityId,
         status: certificationSubmissions.status,
+        externalId: certificationSubmissions.externalId,
         lockedAt: certificationSubmissions.lockedAt,
         metadata: certificationSubmissions.metadata,
       })

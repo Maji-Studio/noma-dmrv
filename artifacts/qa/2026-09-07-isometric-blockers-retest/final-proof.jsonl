@@ -1,0 +1,3 @@
+{"check":"original_snapshot_preserved","samePayloadHash":true,"samePayloadSnapshot":true,"snapshotSha256":"fec9415d6cedae7dc2d0ad020b229ac28913426c4b4bab62c21b0e603b920140"}
+{"check":"namespaced_batch","id":"ptb_1M1XSPPEESBX0Y5N","displayName":"CB-26-001 (nm-ptb-e9063b545fc3)","supplierReferenceId":"nm-ptb-e9063b545fc3"}
+{"check":"submitted_report_local_capability","status":200,"origin":"http://localhost:3101","path":"/api/ghg-statement-reports/29415193-ae02-4dad-a71f-b3cf2e129d38","contentType":"application/pdf","bytes":21527,"sha256":"709f921d05e2dfe5ba5dfca968ca96469a8f9a46f35a5a922a310f6e8c904842","matchesReviewedPdf":true,"externallyReachable":false,"statementStatus":"AWAITING_VERIFICATION","pendingTotal":null,"remoteEntryCount":9}

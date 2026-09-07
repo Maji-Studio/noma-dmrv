@@ -228,3 +228,14 @@ describe("Biochar Application reconciliation", () => {
     ).rejects.toThrow(/Multiple Isometric Biochar Applications/i);
   });
 });
+
+ it("refuses a Biochar Application that lost a requested Source", () => {
+  const expected = buildCreateBiocharApplicationRequest({...BASE, sourceIds: ["src-proof"]});
+  expect(biocharApplicationMismatchMessage(remote(), expected)).toContain("Source");
+});
+
+it("verifies all requested Sources independent of order", () => {
+  const expected = buildCreateBiocharApplicationRequest({...BASE, sourceIds: ["src-a", "src-b"]});
+  expect(biocharApplicationMismatchMessage(remote({ source_ids: ["src-b", "src-a"] }), expected)).toBeNull();
+  expect(biocharApplicationMismatchMessage(remote({ source_ids: ["src-a"] }), expected)).toContain("Source");
+});

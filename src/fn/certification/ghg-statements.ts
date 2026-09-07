@@ -761,7 +761,7 @@ export async function loadGhgStatementState(
     // reconciliation remains an explicit operator action.
     const statementSubmissionForStatus =
       statementSubmission && remote
-        ? overlayLiveRemoteStatus(statementSubmission, remote.status)
+        ? overlayLiveRemoteStatus(statementSubmission, remote.status, remote.pending_total_co2e_removed_kg)
         : statementSubmission;
 
     return {

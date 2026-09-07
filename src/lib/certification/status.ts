@@ -75,6 +75,7 @@ export type DerivedStatusKind =
   | "draft"
   | "in-registry"
   | "in-verification"
+  | "pending-changes"
   | "verified"
   | "issued"
   | "rejected"
@@ -126,6 +127,7 @@ const REMOVAL_LOCK_BY_KIND: Record<DerivedStatusKind, boolean> = {
   draft: false,
   "in-registry": true,
   "in-verification": true,
+  "pending-changes": true,
   verified: true,
   issued: true,
   rejected: false,
@@ -452,6 +454,7 @@ export interface StatementStatusInput {
   lockInFlight: boolean;
   /** Persisted `metadata.remoteStatus`, or `null` before the first sync. */
   remoteStatus: RemoteGhgStatus | null;
+  pendingTotalCo2eRemovedKg?: number | null;
 }
 
 /**
@@ -463,6 +466,7 @@ export function deriveStatementStatus({
   local,
   lockInFlight,
   remoteStatus,
+  pendingTotalCo2eRemovedKg,
 }: StatementStatusInput): DerivedStatus {
   if (lockInFlight) return IN_PROGRESS;
   if (local === null) {
@@ -473,6 +477,10 @@ export function deriveStatementStatus({
       isActionable: true,
       isTerminal: false,
     };
+  }
+
+  if (remoteStatus && remoteStatus !== "DRAFT" && pendingTotalCo2eRemovedKg != null && Number.isFinite(pendingTotalCo2eRemovedKg)) {
+    return { kind: "pending-changes", value: "pending", label: "Pending changes", isActionable: true, isTerminal: false };
   }
 
   // Remote overlay — the verifier lifecycle, the part operators care about.

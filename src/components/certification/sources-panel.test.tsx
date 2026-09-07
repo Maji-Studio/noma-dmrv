@@ -10,6 +10,7 @@ const queryState = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/use-certification-sources", () => ({
+  useRefreshInterruptedRemovalEvidence: () => ({ isPending: false, mutate: vi.fn(), error: null }),
   useCandidateDocumentsForRemoval: () => ({
     data: {
       hasMapping: true,
@@ -175,13 +176,13 @@ describe("SourcesPanel supporting document affordances", () => {
     expect(html).not.toContain("<button");
   });
 
-  it("shows persisted mappings as ready", () => {
+  it("shows persisted mappings as copied", () => {
     rowMutationState.confirmed = true;
     const html = renderToStaticMarkup(
       <SourcesPanel removalId="removal-id" isEditable />,
     );
 
-    expect(html.match(/>Ready<\/span>/g)).toHaveLength(3);
+    expect(html.match(/>Copied<\/span>/g)).toHaveLength(3);
     expect(html).not.toContain("On submit");
   });
 
