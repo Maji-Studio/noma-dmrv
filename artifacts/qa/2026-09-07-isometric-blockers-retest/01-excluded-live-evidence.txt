@@ -1,3 +1,0 @@
-Browser tab: 1, Title: "Maji dMRV", URL: "http://localhost:3101/certification/removals?facility=2c6ee717-d238-4e2f-bf09-269de6e0c6ef&removal=34757148-d092-4e66-bc22-4497db2fac81".
-There has been no change in the accessibility tree.
-The focused UI element is 8 button Close panel

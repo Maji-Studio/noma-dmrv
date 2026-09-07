@@ -45,6 +45,7 @@ import { SafeError } from "@/lib/errors";
 import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import {
   buildCreateProductionBatchRequest,
+  buildLegacyProductionBatchDisplayName,
   buildProductionBatchReference,
   createProductionBatch,
   findProductionBatchBySupplierRef,
@@ -70,7 +71,6 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "./shared";
 
-const LEGACY_DISPLAY_NAME_MAX_LENGTH = 100;
 const LEGACY_DAY_START_SUFFIX = "T00:00:00.000Z";
 const LEGACY_DAY_END_SUFFIX = "T23:59:59.999Z";
 
@@ -402,7 +402,7 @@ function matchesLegacyDateBoundPayloadHash(
   const physicalWindowFitsLegacyBounds =
     physicalStartMs >= legacyStartMs && physicalEndMs <= legacyEndMs;
   // Display-name namespacing changes presentation, not a registered batch's identity.
-  const legacyDisplayName = input.creditBatchCode.trim().slice(0, LEGACY_DISPLAY_NAME_MAX_LENGTH);
+  const legacyDisplayName = buildLegacyProductionBatchDisplayName(input.creditBatchCode);
   const previousNameBody = { ...current.body, display_name: legacyDisplayName || undefined };
   const previousWindowBody = { ...legacyBody, display_name: legacyDisplayName || undefined };
   return payloadHash(previousNameBody) === storedHash || (physicalWindowFitsLegacyBounds &&

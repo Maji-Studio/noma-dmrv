@@ -21,6 +21,8 @@ import {
   FileIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { ServerError } from "@/components/forms/server-error";
+import { useToast } from "@/components/ui/toast";
 import { Button, EmptyState } from "@/components/ui";
 import { useCandidateDocumentsForRemoval, useRefreshInterruptedRemovalEvidence } from "@/hooks/use-certification-sources";
 import { Section } from "./panel-layout";
@@ -105,6 +107,7 @@ function PanelBodyForRemoval({
 }) {
   const query = useCandidateDocumentsForRemoval(removalId);
   const refresh = useRefreshInterruptedRemovalEvidence(removalId);
+  const toast = useToast();
 
   if (query.isLoading) {
     return (
@@ -148,14 +151,14 @@ function PanelBodyForRemoval({
           {query.data.evidenceRefreshSubmissionId ? (
             <>
               <p className="body-caption">Review new evidence checks for an existing registry Entry, then prepares a new submission version. The original evidence and registry records are preserved.</p>
-              <Button type="button" variant="weak" disabled={refresh.isPending} onClick={() => refresh.mutate(query.data!.evidenceRefreshSubmissionId!)}>
+              <Button type="button" variant="weak" disabled={refresh.isPending} onClick={() => refresh.mutate(query.data!.evidenceRefreshSubmissionId!, { onSuccess: () => toast.success("New evidence selected. Review the new version before submitting.") })}>
                 {refresh.isPending ? "Checking registry…" : "Review new evidence"}
               </Button>
             </>
           ) : <p className="body-caption">A registry-backed attempt requires a reviewed amendment before these files can be included.</p>}
         </div>
       )}
-      {refresh.error && <p role="alert" className="body-small text-[var(--clr-red)]">{refresh.error.message}</p>}
+      {refresh.error && <ServerError message={refresh.error.message} />}
       {refresh.isSuccess && <p role="status" className="body-small">New evidence is selected. Open Submit and review the new version before sending it.</p>}
     <ul className="flex flex-col border border-[var(--color-border-secondary)]">
       {query.data.candidates.map((candidate, idx) => (

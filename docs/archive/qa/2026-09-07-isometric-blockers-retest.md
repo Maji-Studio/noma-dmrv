@@ -88,12 +88,23 @@ Required next evidence: Isometric must expose a supported, authoritative readbac
 
 ## Evidence
 
-Artifacts are in [the retest evidence directory](../../../artifacts/qa/2026-09-07-isometric-blockers-retest/).
+The curated observations above are the committed evidence record. Raw browser trees,
+registry/database dumps, local test logs, screenshots, and generated report copies
+remain local; they are not retained in the repository.
 
-- `01-excluded-live-evidence.*`, `02-evidence-review-selected.txt`, `03-january-reviewed-four-files.txt`: explicit recovery review.
-- `04-recovery-reservation-gate.txt`, `06-january-source-readback-blocked.*`: observed failures and final safe stop.
-- `recovery-readback.jsonl`, `after-statement-submit.jsonl`, `final-proof.jsonl`: sanitized identity, snapshot, report, and registry checks.
-- `ghg-report-v1.pdf`, `ghg-report-v1.txt`, `ghg-report-v1-1.png`: reviewed report and render.
-- `07-statement-resubmit-result.*`, `08-statement-completion-dismissed.txt`: normal submission completion.
-- `09-application-fields-locked.txt`, `10-upload-persists-after-close.*`, `13-new-upload-excluded-from-registry-backed-attempt.*`: locked fields and independent upload lifecycle.
-- `11-registry-statement-after-submit.txt`, `12-registry-january-sources.txt`: registry UI confirmation. Report token redacted.
+## PR review follow-up
+
+The observations above describe the original retest, not the revised branch's acceptance.
+Review found that rebuilding version-specific registry inputs after a possible or
+confirmed external mutation could duplicate those inputs. The branch now refuses
+that evidence refresh and preserves exact retries. Current failure handling rejects
+mutation-free attempts and marks only possible/confirmed mutations interrupted, so
+there is presently no operator-reachable safe evidence-refresh path. Reconciliation
+of prior registry inputs is required before this recovery feature can be accepted.
+Synthetic guard tests cover the refusal and document-lock boundaries only; they do
+not establish a successful operator recovery flow.
+
+The public provider contract still omits Application Source readback. The PR remains
+blocked on that capability, safe interrupted-input reconciliation, the uncompleted
+first-submission/January/February acceptance scenarios, and external report delivery.
+The new recovery interaction also still needs an automated end-to-end scenario.

@@ -39,6 +39,10 @@ export type CreateProductionBatchRequest =
 const CREDIT_BATCH_REF_PREFIX_LEN = 12;
 const DISPLAY_NAME_MAX_LEN = 100;
 
+export function buildLegacyProductionBatchDisplayName(code: string): string {
+  return code.trim().slice(0, DISPLAY_NAME_MAX_LEN);
+}
+
 /** Unit submitted for `M_biochar (DM)` — kilograms, per the approved mapping. */
 export const PRODUCTION_BATCH_MASS_UNIT = ISOMETRIC_KILOGRAM_UNIT;
 

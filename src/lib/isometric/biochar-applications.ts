@@ -259,8 +259,11 @@ export function biocharApplicationMismatchMessage(
   if (expectedSources.length > 0 && !Array.isArray(remote.source_ids)) {
     return `Isometric does not expose Source links for Biochar Application ${remote.id}. Its requested evidence cannot be verified. Ask Isometric to expose the Source IDs before retrying.`;
   }
-  if (expectedSources.some((id) => !remote.source_ids?.includes(id))) {
-    return `Isometric Biochar Application ${remote.id} does not confirm every requested Source. Refresh and reconcile its supporting evidence before retrying.`;
+  const remoteSources = new Set(remote.source_ids ?? []);
+  const expectedSourceSet = new Set(expectedSources);
+  if (remoteSources.size !== expectedSourceSet.size ||
+    expectedSources.some((id) => !remoteSources.has(id))) {
+    return `Isometric Biochar Application ${remote.id} does not match the reviewed Source set. Refresh and reconcile its supporting evidence before retrying.`;
   }
   const matches =
     remote.supplier_reference_id === expected.supplier_reference_id &&

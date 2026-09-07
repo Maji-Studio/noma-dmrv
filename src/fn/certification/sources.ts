@@ -1,5 +1,7 @@
 "use server";
 
+import { canRefreshSubmissionEvidence } from "@/lib/certification/submission-metadata";
+
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
@@ -62,7 +64,6 @@ import {
   type CandidateSourceDocument,
 } from "./source-candidates";
 
-import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import { filterCandidateSourcesForSubmissionLifecycle } from "./removal-source-freeze";
 import { isSubmissionAttemptInterrupted, getMetadataValue, SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 
@@ -117,20 +118,16 @@ export async function loadCandidateDocumentsForRemoval(
     );
     const selectedById = new Map(selected.map((candidate) => [candidate.documentId, candidate]));
     const canReviewEvidence = latest?.status === "draft" &&
-      !latest.externalId && isSubmissionAttemptInterrupted(latest.metadata) &&
-      !getMetadataValue(latest.metadata, SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates);
+      !latest.externalId && isSubmissionAttemptInterrupted(latest.metadata) && canRefreshSubmissionEvidence(latest.metadata) &&
+      !getMetadataValue(latest.metadata, SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates) &&
+      data.candidates.some((candidate) => candidate.biocharApplicationId && !candidate.binding && !selectedById.has(candidate.document.id));
     return {
       ...data,
       evidenceRefreshSubmissionId: canReviewEvidence ? latest.id : null,
       candidates: data.candidates.map((candidate) => {
         const frozen = selectedById.get(candidate.document.id);
-        const includedInSubmission = !!frozen && payloadHash({
-          binding: frozen.binding,
-          application: frozen.biocharApplicationId ?? null,
-        }) === payloadHash({
-          binding: candidate.binding,
-          application: candidate.biocharApplicationId ?? null,
-        });
+        const includedInSubmission = !!frozen &&
+          (frozen.biocharApplicationId ?? null) === (candidate.biocharApplicationId ?? null);
         return { ...candidate, includedInSubmission };
       }),
     };

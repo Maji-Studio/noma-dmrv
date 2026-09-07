@@ -229,6 +229,7 @@ describe("Biochar Application reconciliation", () => {
   });
 });
 
+describe("Biochar Application evidence reconciliation", () => {
  it("refuses a Biochar Application that lost a requested Source", () => {
   const expected = buildCreateBiocharApplicationRequest({...BASE, sourceIds: ["src-proof"]});
   expect(biocharApplicationMismatchMessage(remote(), expected)).toContain("Source");
@@ -238,4 +239,11 @@ it("verifies all requested Sources independent of order", () => {
   const expected = buildCreateBiocharApplicationRequest({...BASE, sourceIds: ["src-a", "src-b"]});
   expect(biocharApplicationMismatchMessage(remote({ source_ids: ["src-b", "src-a"] }), expected)).toBeNull();
   expect(biocharApplicationMismatchMessage(remote({ source_ids: ["src-a"] }), expected)).toContain("Source");
+});
+
+  it("rejects unexpected remote Sources even when every expected Source exists", () => {
+    const expected = buildCreateBiocharApplicationRequest({ ...BASE, sourceIds: ["src-a"] });
+    expect(biocharApplicationMismatchMessage(remote({ source_ids: ["src-a", "src-extra"] }), expected)).toContain("Source");
+    expect(biocharApplicationMismatchMessage(remote({ source_ids: ["src-extra"] }), buildCreateBiocharApplicationRequest(BASE))).toContain("Source");
+  });
 });
