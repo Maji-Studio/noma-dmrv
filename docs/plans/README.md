@@ -19,4 +19,7 @@ or audit snapshot. Preserve the record through a rename; do not delete it.
 Unresolved product or design decisions belong in
 [`docs/open-questions.md`](../open-questions.md), not in an archived plan.
 
-There are currently no active dated plans.
+Active plans:
+
+- [2026-09-07 Simplification and optimization analysis](./2026-09-07-simplification-analysis.md), proposed, owner Kenji Nguyen.
+- [2026-09-07 Simplification rollout plan](./2026-09-07-simplification-rollout-plan.md), proposed, owner Kenji Nguyen. Review of the analysis plus the Phase A / Phase B split.
