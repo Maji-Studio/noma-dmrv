@@ -1,7 +1,7 @@
 # Simplification rollout plan (2026-09-07)
 
 - **Owner:** Kenji Nguyen
-- **Status:** in progress. Approved 2026-09-07. A1 (dead-code sweep) is implemented on `refactor/simplify-a1-dead-code`; A2 to A6 not started. Phase B is a decision list for the owner.
+- **Status:** in progress. Approved 2026-09-07. A1 (dead-code sweep) is PR #740; A2 to A6 not started. Phase B is a decision list for the owner.
 - **Last reviewed:** 2026-09-07 (against `origin/staging` at `ecbfb16a`)
 
 This plan is the review of, and the execution plan for, the [simplification analysis](./2026-09-07-simplification-analysis.md). Two reviewers re-checked that analysis against the code: Claude Fable 5.1 (spot checks of every phase-1 item) and gpt-6-astra at very high reasoning (all 56 findings, read-only). Where the two agreed with each other and with the code, the item is listed below without comment. Where they corrected the analysis, the correction is stated and was verified by hand before it was adopted.
