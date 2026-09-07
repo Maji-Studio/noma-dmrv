@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PackageIcon, PlusIcon, XIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Order } from "@/db/schema";
@@ -159,7 +159,7 @@ export function OrderList() {
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const filters: Partial<OrderFilterData> = useMemo(() => ({
+  const filters: Partial<OrderFilterData> = {
     search: debouncedSearch || undefined,
     facilityId: facilityId || undefined,
     status: statusFilter || undefined,
@@ -168,7 +168,7 @@ export function OrderList() {
     pageSize,
     sortBy: "orderDate",
     sortOrder: "desc",
-  }), [debouncedSearch, facilityId, statusFilter, customerFilter, currentPage, pageSize]);
+  };
 
   const { data: ordersData, isLoading, error: fetchError } = useOrders(
     filters,
@@ -263,7 +263,7 @@ export function OrderList() {
   };
   const hasActiveFilters = !!searchQuery || !!statusFilter || !!customerFilter;
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   if (!facilityId) {
     return (

@@ -14,7 +14,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Button } from "@/components/ui";
+import { Button, QueryState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import {
   useDeleteFacilityCertifierMapping,
@@ -228,41 +228,33 @@ function FacilityCertifierReadOnly({
 }) {
   const { data, isLoading, error } = useFacilityCertifierSummary(facilityId);
 
-  if (isLoading) {
-    return (
-      <Shell embedded={embedded}>
-        <p className="body-small text-[var(--color-text-tertiary)]">
-          Loading certifier mapping…
-        </p>
-      </Shell>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <Shell embedded={embedded}>
-        <p className="body-small text-[var(--color-signal-red)]">
-          The certifier mapping could not be loaded. Refresh the page and try
-          again.
-        </p>
-      </Shell>
-    );
-  }
-
-  const { mapping, isProduction } = data;
-
   return (
-    <Shell embedded={embedded}>
-      <CertifierHeader isProduction={isProduction} embedded={embedded} />
-      {mapping ? (
-        <CertifierMappingFields mapping={mapping} isProduction={isProduction} />
-      ) : (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          This facility has no Isometric project link. Ask an Admin to link one
-          before submitting from this facility.
-        </p>
-      )}
-    </Shell>
+    <QueryState
+      isLoading={isLoading}
+      error={error}
+      data={data}
+      loadingMessage="Loading certifier mapping…"
+      errorMessage="The certifier mapping could not be loaded. Refresh the page and try again."
+      wrap={(c) => <Shell embedded={embedded}>{c}</Shell>}
+    >
+      {(data) => {
+        const { mapping, isProduction } = data;
+
+        return (
+          <Shell embedded={embedded}>
+            <CertifierHeader isProduction={isProduction} embedded={embedded} />
+            {mapping ? (
+              <CertifierMappingFields mapping={mapping} isProduction={isProduction} />
+            ) : (
+              <p className="body-small text-[var(--color-text-secondary)]">
+                This facility has no Isometric project link. Ask an Admin to link one
+                before submitting from this facility.
+              </p>
+            )}
+          </Shell>
+        );
+      }}
+    </QueryState>
   );
 }
 
@@ -311,122 +303,114 @@ function FacilityCertifierManage({
     }
   };
 
-  if (isLoading) {
-    return (
-      <Shell embedded={embedded}>
-        <p className="body-small text-[var(--color-text-tertiary)]">
-          Loading certifier mapping…
-        </p>
-      </Shell>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <Shell embedded={embedded}>
-        <p className="body-small text-[var(--color-signal-red)]">
-          The certifier mapping could not be loaded. Refresh the page and try
-          again.
-        </p>
-      </Shell>
-    );
-  }
-
-  const { mapping, isProduction } = data;
-  const canOpenEdit =
-    linkPresentation === "dialog" || data.isConfigured;
-
-  const actions = mapping ? (
-    <>
-      {canOpenEdit && (
-        <Button variant="default" size="small" onClick={() => setEditOpen(true)}>
-          Edit
-        </Button>
-      )}
-      {linkPresentation === "dialog" && (
-        <Button
-          variant="default"
-          size="small"
-          onClick={() => setUnlinkOpen(true)}
-        >
-          Unlink
-        </Button>
-      )}
-    </>
-  ) : linkPresentation === "dialog" ? (
-    <Button variant="primary" size="small" onClick={() => setEditOpen(true)}>
-      Link Isometric project
-    </Button>
-  ) : null;
-
-  const showInlineForm =
-    linkPresentation === "inline" &&
-    data.isConfigured &&
-    (!mapping || editOpen);
-
   return (
-    <>
-      <Shell embedded={embedded}>
-        <CertifierHeader
-          isProduction={isProduction}
-          embedded={embedded}
-          actions={
-            embedded ? undefined : (
-              <div className="flex gap-12">{actions}</div>
-            )
-          }
-        />
+    <QueryState
+      isLoading={isLoading}
+      error={error}
+      data={data}
+      loadingMessage="Loading certifier mapping…"
+      errorMessage="The certifier mapping could not be loaded. Refresh the page and try again."
+      wrap={(c) => <Shell embedded={embedded}>{c}</Shell>}
+    >
+      {(data) => {
+        const { mapping, isProduction } = data;
+        const canOpenEdit =
+          linkPresentation === "dialog" || data.isConfigured;
 
-        {showInlineForm ? (
-          <FacilityCertifierForm
-            facilityId={facilityId}
-            loaderData={data}
-            onSaved={() => setEditOpen(false)}
-            onCancel={mapping ? () => setEditOpen(false) : undefined}
-            presentation="inline"
-          />
-        ) : mapping ? (
-          <CertifierMappingFields
-            mapping={mapping}
-            isProduction={isProduction}
-            projectName={projectName}
-            templateName={templateName}
-          />
-        ) : data.isConfigured ? (
-          <p className="body-small text-[var(--color-text-secondary)]">
-            This facility has no Isometric project link yet. Submissions from
-            this facility will be blocked until you link one.
-          </p>
-        ) : (
-          <p className="body-small text-[var(--color-text-secondary)]">
-            Save valid Isometric keys above to load projects.
-          </p>
-        )}
+        const actions = mapping ? (
+          <>
+            {canOpenEdit && (
+              <Button variant="default" size="small" onClick={() => setEditOpen(true)}>
+                Edit
+              </Button>
+            )}
+            {linkPresentation === "dialog" && (
+              <Button
+                variant="default"
+                size="small"
+                onClick={() => setUnlinkOpen(true)}
+              >
+                Unlink
+              </Button>
+            )}
+          </>
+        ) : linkPresentation === "dialog" ? (
+          <Button variant="primary" size="small" onClick={() => setEditOpen(true)}>
+            Link Isometric project
+          </Button>
+        ) : null;
 
-        {!showInlineForm && embedded && actions && (
-          <CertifierActions>{actions}</CertifierActions>
-        )}
-      </Shell>
+        const showInlineForm =
+          linkPresentation === "inline" &&
+          data.isConfigured &&
+          (!mapping || editOpen);
 
-      {linkPresentation === "dialog" && editOpen && (
-        <FacilityCertifierDialog
-          isOpen={editOpen}
-          onClose={() => setEditOpen(false)}
-          facilityId={facilityId}
-          loaderData={data}
-        />
-      )}
+        return (
+          <>
+            <Shell embedded={embedded}>
+              <CertifierHeader
+                isProduction={isProduction}
+                embedded={embedded}
+                actions={
+                  embedded ? undefined : (
+                    <div className="flex gap-12">{actions}</div>
+                  )
+                }
+              />
 
-      <UnlinkConfirmDialog
-        isOpen={unlinkOpen}
-        onClose={() => {
-          setUnlinkOpen(false);
-          setUnlinkError(undefined);
-        }}
-        onConfirm={handleUnlinkConfirm}
-        isPending={deleteMutation.isPending}
-        errorMessage={unlinkError}
-      />
-    </>
+              {showInlineForm ? (
+                <FacilityCertifierForm
+                  facilityId={facilityId}
+                  loaderData={data}
+                  onSaved={() => setEditOpen(false)}
+                  onCancel={mapping ? () => setEditOpen(false) : undefined}
+                  presentation="inline"
+                />
+              ) : mapping ? (
+                <CertifierMappingFields
+                  mapping={mapping}
+                  isProduction={isProduction}
+                  projectName={projectName}
+                  templateName={templateName}
+                />
+              ) : data.isConfigured ? (
+                <p className="body-small text-[var(--color-text-secondary)]">
+                  This facility has no Isometric project link yet. Submissions from
+                  this facility will be blocked until you link one.
+                </p>
+              ) : (
+                <p className="body-small text-[var(--color-text-secondary)]">
+                  Save valid Isometric keys above to load projects.
+                </p>
+              )}
+
+              {!showInlineForm && embedded && actions && (
+                <CertifierActions>{actions}</CertifierActions>
+              )}
+            </Shell>
+
+            {linkPresentation === "dialog" && editOpen && (
+              <FacilityCertifierDialog
+                isOpen={editOpen}
+                onClose={() => setEditOpen(false)}
+                facilityId={facilityId}
+                loaderData={data}
+              />
+            )}
+
+            <UnlinkConfirmDialog
+              isOpen={unlinkOpen}
+              onClose={() => {
+                setUnlinkOpen(false);
+                setUnlinkError(undefined);
+              }}
+              onConfirm={handleUnlinkConfirm}
+              isPending={deleteMutation.isPending}
+              errorMessage={unlinkError}
+            />
+          </>
+        );
+      }}
+    </QueryState>
   );
 }

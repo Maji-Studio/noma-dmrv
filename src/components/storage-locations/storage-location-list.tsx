@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ArrowsClockwiseIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import type { StorageLocation } from "@/db/schema";
 import {
@@ -196,28 +196,16 @@ export function StorageLocationList() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const sort = parseBinSortValue(sortValue);
-  const filters: Partial<StorageLocationFilterData> = useMemo(
-    () => ({
-      search: debouncedSearch || undefined,
-      facilityId: facilityId || undefined,
-      type: typeFilter !== "all" ? typeFilter : undefined,
-      archived: showArchived,
-      page: currentPage,
-      pageSize,
-      sortBy: sort.sortBy,
-      sortOrder: sort.sortOrder,
-    }),
-    [
-      debouncedSearch,
-      facilityId,
-      typeFilter,
-      showArchived,
-      currentPage,
-      pageSize,
-      sort.sortBy,
-      sort.sortOrder,
-    ]
-  );
+  const filters: Partial<StorageLocationFilterData> = {
+    search: debouncedSearch || undefined,
+    facilityId: facilityId || undefined,
+    type: typeFilter !== "all" ? typeFilter : undefined,
+    archived: showArchived,
+    page: currentPage,
+    pageSize,
+    sortBy: sort.sortBy,
+    sortOrder: sort.sortOrder,
+  };
 
   const {
     data: storageLocationsData,

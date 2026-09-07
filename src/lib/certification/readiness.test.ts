@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildRemovalPreflightChecklist,
   buildRemovalRequirementsChecklist,
   canRegroupRemoval,
   deriveRemovalReadiness,
-  type PreflightCheck,
   type RemovalRequirementCheck,
   type RemovalRequirementKey,
   type RemovalReadinessFacts,
@@ -13,9 +11,9 @@ import {
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
 
 function checkFor(
-  checks: PreflightCheck[],
-  key: PreflightCheck["key"],
-): PreflightCheck {
+  checks: RemovalRequirementCheck[],
+  key: RemovalRequirementKey,
+): RemovalRequirementCheck {
   const found = checks.find((c) => c.key === key);
   if (!found) throw new Error(`no preflight check for ${key}`);
   return found;
@@ -309,7 +307,7 @@ describe("evidence mirroring advisory", () => {
     expect(readiness.advisories).toEqual([
       "4 files are sent automatically when you submit",
     ]);
-    expect(checkFor(buildRemovalPreflightChecklist(facts), "evidence")).toMatchObject({
+    expect(checkFor(buildRemovalRequirementsChecklist(facts), "evidence")).toMatchObject({
       status: "warning",
       detail: "4 files are sent automatically when you submit",
     });
@@ -341,7 +339,7 @@ describe("evidence mirroring advisory", () => {
     });
 
     expect(deriveRemovalReadiness(facts).advisories).toEqual([]);
-    expect(checkFor(buildRemovalPreflightChecklist(facts), "evidence")).toMatchObject({
+    expect(checkFor(buildRemovalRequirementsChecklist(facts), "evidence")).toMatchObject({
       status: "met",
       detail: "3 of 3 files ready",
     });
@@ -357,11 +355,6 @@ describe("evidence mirroring advisory", () => {
       state: "ready",
       advisories: [],
     });
-    expect(
-      buildRemovalPreflightChecklist(facts).some(
-        (check) => check.key === "evidence",
-      ),
-    ).toBe(false);
     expect(
       buildRemovalRequirementsChecklist(facts).some(
         (check) => check.key === "evidence",
@@ -388,30 +381,15 @@ describe("evidence mirroring advisory", () => {
   });
 });
 
-describe("buildRemovalPreflightChecklist", () => {
-  it("returns the checks in a stable order", () => {
-    const checks = buildRemovalPreflightChecklist(ready());
-    expect(checks.map((c) => c.key)).toEqual([
-      "mapping",
-      "credentials",
-      "template",
-      "transport",
-      "production",
-      "measurementDates",
-      "feedstockTypeMapping",
-      "entityReadiness",
-      "durability",
-    ]);
-  });
-
+describe("buildRemovalRequirementsChecklist additional coverage", () => {
   it("marks every check met for a fully-ready removal", () => {
-    const checks = buildRemovalPreflightChecklist(ready());
+    const checks = buildRemovalRequirementsChecklist(ready());
     expect(checks.every((c) => c.status === "met")).toBe(true);
     expect(checkFor(checks, "mapping").detail).toBeUndefined();
   });
 
   it("skips downstream checks when the facility is not linked", () => {
-    const checks = buildRemovalPreflightChecklist(
+    const checks = buildRemovalRequirementsChecklist(
       ready({ hasMapping: false, hasDefaultTemplate: false }),
     );
     expect(checkFor(checks, "mapping").status).toBe("unmet");
@@ -421,13 +399,14 @@ describe("buildRemovalPreflightChecklist", () => {
     // Template/transport are not yet evaluable without a link.
     expect(checkFor(checks, "template").status).toBe("skipped");
     expect(checkFor(checks, "transport").status).toBe("skipped");
+    expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
     expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
     // Production data is independent of the link, so it is still judged.
     expect(checkFor(checks, "production").status).toBe("met");
   });
 
   it("skips transport while the template is unresolved", () => {
-    const checks = buildRemovalPreflightChecklist(
+    const checks = buildRemovalRequirementsChecklist(
       ready({
         hasDefaultTemplate: false,
         requiredTransport: [
@@ -437,36 +416,49 @@ describe("buildRemovalPreflightChecklist", () => {
     );
     expect(checkFor(checks, "template").status).toBe("unmet");
     expect(checkFor(checks, "transport").status).toBe("skipped");
+    expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
     expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
   });
 
   it("flags missing organization credentials and skips registry-dependent checks", () => {
-    const checks = buildRemovalPreflightChecklist(
+    const checks = buildRemovalRequirementsChecklist(
       ready({ hasOrgCredentials: false }),
     );
-    expect(checkFor(checks, "credentials").status).toBe("unmet");
+    expect(checkFor(checks, "credentials")).toMatchObject({
+      key: "credentials",
+      status: "unmet",
+      detail: "Organization Isometric credentials are not configured",
+    });
     expect(checkFor(checks, "template").status).toBe("skipped");
     expect(checkFor(checks, "transport").status).toBe("skipped");
+    expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
   });
 
   it("surfaces the missing-template detail using the shared phrasing", () => {
-    const checks = buildRemovalPreflightChecklist(
+    const checks = buildRemovalRequirementsChecklist(
       ready({ hasDefaultTemplate: false, missingDefaultTemplateId: "tmpl_9" }),
     );
-    expect(checkFor(checks, "template").detail).toBe(
-      "Default removal template tmpl_9 is no longer available",
-    );
+    expect(checkFor(checks, "template")).toMatchObject({
+      key: "template",
+      status: "unmet",
+      detail: "Default removal template tmpl_9 is no longer available",
+    });
   });
 
-  it("marks transport met-with-context when the template needs no legs", () => {
-    const checks = buildRemovalPreflightChecklist(ready({ requiredTransport: [] }));
+  it("marks transport presence and uniformity met when the template needs no legs", () => {
+    const checks = buildRemovalRequirementsChecklist(ready({ requiredTransport: [] }));
     const transport = checkFor(checks, "transport");
     expect(transport.status).toBe("met");
-    expect(transport.detail).toBe("This template requires no transport legs.");
+    expect(transport.detail).toBeUndefined();
+    expect(checkFor(checks, "transportUniformity")).toMatchObject({
+      key: "transportUniformity",
+      status: "met",
+    });
+    expect(checkFor(checks, "transportUniformity").detail).toBeUndefined();
   });
 
-  it("joins missing + incomplete transport gaps into one detail", () => {
-    const checks = buildRemovalPreflightChecklist(
+  it("separates missing transport presence from mixed transport uniformity", () => {
+    const checks = buildRemovalRequirementsChecklist(
       ready({
         requiredTransport: [
           { category: "feedstock", count: 0, hasAggregationWarning: false },
@@ -477,12 +469,17 @@ describe("buildRemovalPreflightChecklist", () => {
     const transport = checkFor(checks, "transport");
     expect(transport.status).toBe("unmet");
     expect(transport.detail).toBe(
-      "Missing feedstock transport legs · Incomplete biochar transport legs",
+      "Missing feedstock transport legs",
     );
+    expect(checkFor(checks, "transportUniformity")).toMatchObject({
+      key: "transportUniformity",
+      status: "unmet",
+      detail: "Mixed method or factor across biochar transport legs",
+    });
   });
 
   it("flags missing production data", () => {
-    const checks = buildRemovalPreflightChecklist(
+    const checks = buildRemovalRequirementsChecklist(
       ready({ hasSubmittableRuns: false }),
     );
     expect(checkFor(checks, "production").status).toBe("unmet");
@@ -491,8 +488,8 @@ describe("buildRemovalPreflightChecklist", () => {
     );
   });
 
-  it("shows the specific production-lineage blocker in preflight", () => {
-    const checks = buildRemovalPreflightChecklist(
+  it("shows the specific production-lineage blocker", () => {
+    const checks = buildRemovalRequirementsChecklist(
       ready({
         hasSubmittableRuns: false,
         productionReadinessGap: {
@@ -502,49 +499,32 @@ describe("buildRemovalPreflightChecklist", () => {
         },
       }),
     );
-    expect(checkFor(checks, "production").detail).toBe(
-      "Biochar product BP-1 is not linked to a production run",
-    );
+    expect(checkFor(checks, "production")).toMatchObject({
+      key: "production",
+      status: "unmet",
+      detail: "Biochar product BP-1 is not linked to a production run",
+    });
   });
 
-  it("flags entity-level certifier gaps", () => {
-    const checks = buildRemovalPreflightChecklist(
-      ready({ entityReadinessGaps: ["Production run PR-1: Electricity"] }),
-    );
-    expect(checkFor(checks, "entityReadiness").status).toBe("unmet");
-    expect(checkFor(checks, "entityReadiness").detail).toContain("Electricity");
-  });
-
-  it("skips entity readiness when there is nothing to submit", () => {
-    // No runs ⇒ no entities to evaluate ⇒ empty gaps means "not evaluated",
-    // not "complete", so the check is skipped rather than met.
-    const checks = buildRemovalPreflightChecklist(
-      ready({ hasSubmittableRuns: false, entityReadinessGaps: [] }),
-    );
-    expect(checkFor(checks, "entityReadiness").status).toBe("skipped");
-  });
 
   it("flags durability sampling/eligibility blockers", () => {
-    const checks = buildRemovalPreflightChecklist(
+    const checks = buildRemovalRequirementsChecklist(
       ready({ durabilityGateBlockers: ["Run PR-1 has 2 replicates. Record at least 3."] }),
     );
     expect(checkFor(checks, "durability").status).toBe("unmet");
-    expect(checkFor(checks, "durability").detail).toContain(
-      "Record at least 3",
+    expect(checkFor(checks, "durability").detail).toBe(
+      "Run PR-1 has 2 replicates. Record at least 3.",
     );
   });
 
   it("skips durability when there is nothing to submit", () => {
-    const checks = buildRemovalPreflightChecklist(
+    const checks = buildRemovalRequirementsChecklist(
       ready({ hasSubmittableRuns: false }),
     );
     expect(checkFor(checks, "durability").status).toBe("skipped");
+    expect(checkFor(checks, "durability").detail).toBeUndefined();
   });
 
-  it("marks durability met for a fully-sampled, eligible removal", () => {
-    const checks = buildRemovalPreflightChecklist(ready());
-    expect(checkFor(checks, "durability").status).toBe("met");
-  });
 });
 
 describe("buildRemovalRequirementsChecklist — wizard facility-level subset", () => {
@@ -742,15 +722,6 @@ describe("future-dated measurement dates", () => {
     expect(applicationAndSample?.fixTarget).toBe("applicationsAndLabSamples");
   });
 
-  it("renders red in the pre-flight checklist too", () => {
-    const checks = buildRemovalPreflightChecklist(
-      ready({ futureDatedMeasurements: [FUTURE_APPLICATION] }),
-    );
-    expect(checkFor(checks, "measurementDates")).toMatchObject({
-      status: "unmet",
-    });
-  });
-
   it("is met — and never a blocker — once every date has happened", () => {
     const facts = ready();
     expect(deriveRemovalReadiness(facts).state).toBe("ready");
@@ -780,15 +751,6 @@ describe("future-dated measurement dates", () => {
 });
 
 describe("shared requirement metadata (Phase 0)", () => {
-  it("attaches requirementLabel + why to every pre-flight check from the shared source", () => {
-    for (const check of buildRemovalPreflightChecklist(ready())) {
-      expect(check.requirementLabel).toBe(
-        CERT_REQUIREMENT_META[check.key].requirementLabel,
-      );
-      expect(check.whyDetail).toBe(CERT_REQUIREMENT_META[check.key].whyDetail);
-    }
-  });
-
   it("attaches requirementLabel + why to every requirements check from the shared source", () => {
     for (const check of buildRemovalRequirementsChecklist(ready())) {
       expect(check.requirementLabel).toBe(

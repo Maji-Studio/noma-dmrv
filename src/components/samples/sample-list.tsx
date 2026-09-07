@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FlaskIcon, LeafIcon, PlusIcon, XIcon, FireIcon, CertificateIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
@@ -459,10 +459,7 @@ export function SampleList({
     }
   };
 
-  const handleDelete = useCallback(
-    (sampleId: string) => setDeletingSampleId(sampleId),
-    [],
-  );
+  const handleDelete = (sampleId: string) => setDeletingSampleId(sampleId);
   const handleDeleteConfirm = async () => {
     if (!deletingSampleId) return;
     setDeleteError(null);
