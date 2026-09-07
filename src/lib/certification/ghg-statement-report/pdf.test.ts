@@ -76,11 +76,15 @@ function buildModel(
       reportingPeriodEndOn: "2026-07-31",
       standardVersion: "1.7",
       protocolVersion: "1.1.1",
-      configuredProtocolVersion: null,
+      configuredProtocolVersion: "1.1",
     },
     authoritativeStatement: {
       externalEntryIds: ["rmv_1"],
       pendingTotalCo2eRemovedKg: 900,
+      creditAllocation: {
+        supplierCreditKg: 880,
+        bufferPoolKg: 20,
+      },
     },
     remoteEntries: [
       {
@@ -90,8 +94,6 @@ function buildModel(
         netRemovedKg: 900,
         netRemovedWithoutDiscountKg: 950,
         netRemovedStandardDeviationKg: 4,
-        supplierCreditKg: 880,
-        bufferPoolKg: 20,
         ghgStatementId: "ggs_1",
       },
     ],
@@ -136,11 +138,10 @@ describe("renderGhgStatementReportPdf", () => {
       expect(text).toContain("ggs_1");
       expect(text).toContain("rmv_1");
       expect(text).toContain("2026-07-01 to 2026-07-31");
-      // Registry-calculated facts: the headline net removal, both uncertainty
-      // operands, and the credit split.
+      // Registry-calculated facts: the authoritative statement total, both
+      // uncertainty operands, and the credit split.
       expect(text).toContain("900.000");
       expect(text).toContain("950.000");
-      expect(text).toContain("50.000");
       expect(text).toContain("880.000");
       expect(text).toContain("20.000");
       expect(text).toContain("across 1 GHG Entry");
@@ -149,21 +150,78 @@ describe("renderGhgStatementReportPdf", () => {
       // The pinned versions moved out of the body and into the apparatus.
       expect(text).toContain("Isometric 1.7");
       expect(text).toContain("Biochar 1.1.1");
-      // The scope note is what stops this being read as the Standard's own
-      // GHG Statement Report. It must survive every layout change.
+      // The scope note defines what this generated GHG Statement report covers.
       expect(text).toContain("Registry data reconciliation only");
       expect(text).toContain("does not cover methodology or verification");
       // Internal report plumbing the verifier cannot act on stays off the page.
       // Uppercase, letter-spaced headings extract as "D O C U M E N T", so
       // absence is asserted against the squashed lowercase text.
       const squashed = text.toLowerCase().replace(/\s+/g, "");
+      expect(squashed).toContain("ghgentryandactivitydates");
       expect(squashed).not.toContain("notconfigured");
       expect(squashed).not.toContain("reportmodel");
       expect(squashed).not.toContain("documentcontrol");
       expect(squashed).not.toContain("methodologyandreviewednarrative");
       expect(squashed).not.toContain("reviewacknowledgment");
       expect(squashed).not.toContain("humanreviewed");
+      expect(squashed).toContain("entryuncertaintydiscount50.000");
+      expect(squashed).toContain("projectprotocol1.1");
     }
+  });
+
+  it("uses the authoritative statement total and explains entry precision", async () => {
+    const model = buildModel({
+      authoritativeStatement: {
+        externalEntryIds: ["rmv_1"],
+        pendingTotalCo2eRemovedKg: 1_500,
+        creditAllocation: {
+          supplierCreditKg: 1_450,
+          bufferPoolKg: 50,
+        },
+      },
+      remoteEntries: [
+        {
+          id: "rmv_1",
+          startedOn: "2026-07-01",
+          completedOn: "2026-07-31",
+          netRemovedKg: 1_502.1608971810922,
+          netRemovedWithoutDiscountKg: 1_527.153951802095,
+          netRemovedStandardDeviationKg: 24.99305462100288,
+          ghgStatementId: "ggs_1",
+        },
+      ],
+    });
+
+    const text = (await pageTexts(await renderGhgStatementReportPdf(model))).join(
+      " ",
+    );
+    const squashed = text.toLowerCase().replace(/\s+/g, "");
+
+    expect(squashed).toContain("statementnetremoved1,500.000");
+    expect(squashed).toContain("entrynetremoved1,502.161");
+    expect(squashed).toContain("supplierallocation1,450.000");
+    expect(squashed).toContain("bufferpool50.000");
+    expect(text).toContain("Their net values sum to 1,502.161 kg CO2e");
+    expect(text).toContain(
+      "Isometric reports 1,500.000 kg CO2e at statement precision",
+    );
+  });
+
+  it("shows when the project protocol setting is absent", async () => {
+    const base = buildModel();
+    const model = buildModel({
+      documentControl: {
+        ...base.documentControl,
+        configuredProtocolVersion: null,
+      },
+    });
+
+    const text = (await pageTexts(await renderGhgStatementReportPdf(model))).join(
+      " ",
+    );
+    const squashed = text.toLowerCase().replace(/\s+/g, "");
+
+    expect(squashed).toContain("projectnotset");
   });
 
   it("repeats the entry table header when the entries spill onto a second page", async () => {
@@ -183,6 +241,10 @@ describe("renderGhgStatementReportPdf", () => {
       authoritativeStatement: {
         externalEntryIds: entries.map((entry) => entry.id),
         pendingTotalCo2eRemovedKg: 900 * MULTI_PAGE_ENTRY_COUNT,
+        creditAllocation: {
+          supplierCreditKg: 880 * MULTI_PAGE_ENTRY_COUNT,
+          bufferPoolKg: 20 * MULTI_PAGE_ENTRY_COUNT,
+        },
       },
       remoteEntries: entries,
     });
@@ -193,10 +255,25 @@ describe("renderGhgStatementReportPdf", () => {
     // Every entry keeps its row, wherever it lands.
     const all = pages.join(" ");
     for (const entry of entries) expect(all).toContain(entry.id);
-    // A continuation page must not be a column of unlabelled numbers, so the
-    // `fixed` header repeats. Headings extract letter-spaced.
+    // A continuation page must carry the complete header before its first row.
     for (const page of pages.slice(1)) {
-      expect(page.toLowerCase().replace(/\s+/g, "")).toContain("ghgentry");
+      const squashed = page.toLowerCase().replace(/\s+/g, "");
+      const firstEntry = squashed.indexOf("rmv_");
+      const identityHeader = squashed.indexOf("ghgentryandactivitydates");
+      const netHeader = squashed.indexOf("netremoved");
+      const uncertaintyHeader = squashed.indexOf("beforeuncertainty");
+      const deviationHeader = squashed.indexOf("standarddeviation");
+
+      expect(firstEntry).toBeGreaterThanOrEqual(0);
+      for (const header of [
+        identityHeader,
+        netHeader,
+        uncertaintyHeader,
+        deviationHeader,
+      ]) {
+        expect(header).toBeGreaterThanOrEqual(0);
+        expect(header).toBeLessThan(firstEntry);
+      }
     }
   });
 });

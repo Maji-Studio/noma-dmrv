@@ -16,7 +16,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowSquareOutIcon,
@@ -80,6 +80,10 @@ export function SubmitStep({
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastConfirmProduction, setLastConfirmProduction] = useState(false);
+  const [attemptIsResubmission, setAttemptIsResubmission] = useState(
+    () => Boolean(ctx.latestSubmission),
+  );
+  const hasStartedSubmission = useRef(false);
   const [progressUpdates, setProgressUpdates] = useState<
     SubmissionProgressUpdate[]
   >([]);
@@ -148,6 +152,12 @@ export function SubmitStep({
     }
     setSubmitError(null);
     setLastConfirmProduction(confirmProduction);
+    // Freeze presentation mode before the attempt starts. A retry can resume
+    // persisted journal work before the registry has assigned an external ID.
+    setAttemptIsResubmission(
+      Boolean(ctx.latestSubmission) || hasStartedSubmission.current,
+    );
+    hasStartedSubmission.current = true;
     setProgressUpdates([]);
     submitMutation.mutate(
       {
@@ -237,7 +247,7 @@ export function SubmitStep({
         <SubmissionProgress
           kind="removal"
           updates={progressUpdates}
-          isResubmission={externalId !== null}
+          isResubmission={attemptIsResubmission}
         />
         <div className="flex flex-wrap items-center justify-end gap-12">
           {viewUrl && (
@@ -281,10 +291,7 @@ export function SubmitStep({
           updates={progressUpdates}
           error={terminalError}
           stalled={submissionStalled}
-          isResubmission={
-            externalId !== null ||
-            progressUpdates.some((update) => update.state === "reused")
-          }
+          isResubmission={attemptIsResubmission}
         />
         {terminalError && <ServerError message={terminalError} />}
         <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">

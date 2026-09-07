@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const GHG_STATEMENT_REPORT_MODEL_VERSION = 2;
+export const GHG_STATEMENT_REPORT_MODEL_VERSION = 4;
 
 export interface GhgStatementReportDocumentControl {
   organizationName: string;
@@ -28,8 +28,6 @@ export interface LiveGhgEntry {
   netRemovedKg: number;
   netRemovedWithoutDiscountKg: number;
   netRemovedStandardDeviationKg: number | null;
-  supplierCreditKg: number | null;
-  bufferPoolKg: number | null;
   ghgStatementId?: string | null;
 }
 
@@ -40,6 +38,10 @@ export interface BuildGhgStatementReportModelInput {
   authoritativeStatement: {
     externalEntryIds: string[];
     pendingTotalCo2eRemovedKg: number;
+    creditAllocation: {
+      supplierCreditKg: number;
+      bufferPoolKg: number;
+    } | null;
   };
   remoteEntries: LiveGhgEntry[];
 }
@@ -51,8 +53,6 @@ export interface GhgStatementReportEntry {
   netRemovedKg: number;
   netRemovedWithoutDiscountKg: number;
   netRemovedStandardDeviationKg: number | null;
-  supplierCreditKg: number | null;
-  bufferPoolKg: number | null;
 }
 
 export interface GhgStatementReportModel {
@@ -62,9 +62,13 @@ export interface GhgStatementReportModel {
   documentControl: GhgStatementReportDocumentControl;
   entries: GhgStatementReportEntry[];
   totals: {
-    netRemovedKg: number;
-    netRemovedWithoutDiscountKg: number;
-    uncertaintyDiscountKg: number;
+    /** Isometric's authoritative statement-level total at issuance precision. */
+    statementNetRemovedKg: number;
+    /** Sum of the statement's higher-precision live GHG Entry net values. */
+    entryNetRemovedKg: number;
+    entryNetRemovedWithoutDiscountKg: number;
+    entryUncertaintyDiscountKg: number;
+    /** Isometric's authoritative statement-level credit allocation. */
     supplierCreditKg: number | null;
     bufferPoolKg: number | null;
   };
@@ -126,19 +130,6 @@ function finite(label: string, value: number): number {
   return value;
 }
 
-function optionalSum(
-  entries: GhgStatementReportEntry[],
-  select: (entry: GhgStatementReportEntry) => number | null,
-): number | null {
-  let total = 0;
-  for (const entry of entries) {
-    const value = select(entry);
-    if (value === null || !Number.isFinite(value)) return null;
-    total += value;
-  }
-  return total;
-}
-
 export function buildGhgStatementReportModel(
   input: BuildGhgStatementReportModelInput,
 ): GhgStatementReportModel {
@@ -162,8 +153,6 @@ export function buildGhgStatementReportModel(
     .map((entry): GhgStatementReportEntry => {
       for (const [label, value] of [
         ["standard deviation", entry.netRemovedStandardDeviationKg],
-        ["supplier allocation", entry.supplierCreditKg],
-        ["buffer pool", entry.bufferPoolKg],
       ] as const) {
         if (value !== null && !Number.isFinite(value)) {
           throw new GhgStatementReportReconciliationError(
@@ -192,12 +181,10 @@ export function buildGhgStatementReportModel(
         ),
         netRemovedStandardDeviationKg:
           entry.netRemovedStandardDeviationKg,
-        supplierCreditKg: entry.supplierCreditKg,
-        bufferPoolKg: entry.bufferPoolKg,
       };
     });
 
-  const netRemovedKg = entries.reduce(
+  const entryNetRemovedKg = entries.reduce(
     (total, entry) => total + entry.netRemovedKg,
     0,
   );
@@ -208,10 +195,15 @@ export function buildGhgStatementReportModel(
   // Isometric can quantize the statement total to issuable-credit precision
   // while its GHG Entries retain a higher-precision net-removal result. Keep
   // both registry facts in the report fingerprint without requiring equality.
-  const netRemovedWithoutDiscountKg = entries.reduce(
+  const entryNetRemovedWithoutDiscountKg = entries.reduce(
     (total, entry) => total + entry.netRemovedWithoutDiscountKg,
     0,
   );
+  const creditAllocation = input.authoritativeStatement.creditAllocation;
+  if (creditAllocation !== null) {
+    finite("GHG Statement supplier allocation", creditAllocation.supplierCreditKg);
+    finite("GHG Statement buffer pool", creditAllocation.bufferPoolKg);
+  }
   // Operator-editable and display-only: neutralized in the hash so a
   // Certification Settings edit cannot masquerade as live registry drift.
   const fingerprintedControl = {
@@ -224,6 +216,7 @@ export function buildGhgStatementReportModel(
       statement: {
         externalEntryIds: [...statementEntryIds].sort(compareCodeUnits),
         pendingTotalCo2eRemovedKg: statementTotal,
+        creditAllocation,
       },
       remoteEntries: entries,
     }),
@@ -236,15 +229,13 @@ export function buildGhgStatementReportModel(
     documentControl: input.documentControl,
     entries,
     totals: {
-      netRemovedKg,
-      netRemovedWithoutDiscountKg,
-      uncertaintyDiscountKg:
-        netRemovedWithoutDiscountKg - netRemovedKg,
-      supplierCreditKg: optionalSum(
-        entries,
-        (entry) => entry.supplierCreditKg,
-      ),
-      bufferPoolKg: optionalSum(entries, (entry) => entry.bufferPoolKg),
+      statementNetRemovedKg: statementTotal,
+      entryNetRemovedKg,
+      entryNetRemovedWithoutDiscountKg,
+      entryUncertaintyDiscountKg:
+        entryNetRemovedWithoutDiscountKg - entryNetRemovedKg,
+      supplierCreditKg: creditAllocation?.supplierCreditKg ?? null,
+      bufferPoolKg: creditAllocation?.bufferPoolKg ?? null,
     },
     sourceFingerprint,
   };
