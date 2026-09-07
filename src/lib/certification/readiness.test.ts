@@ -15,7 +15,7 @@ function checkFor(
   key: RemovalRequirementKey,
 ): RemovalRequirementCheck {
   const found = checks.find((c) => c.key === key);
-  if (!found) throw new Error(`no preflight check for ${key}`);
+  if (!found) throw new Error(`no requirement check for ${key}`);
   return found;
 }
 
@@ -381,45 +381,7 @@ describe("evidence mirroring advisory", () => {
   });
 });
 
-describe("buildRemovalRequirementsChecklist additional coverage", () => {
-  it("marks every check met for a fully-ready removal", () => {
-    const checks = buildRemovalRequirementsChecklist(ready());
-    expect(checks.every((c) => c.status === "met")).toBe(true);
-    expect(checkFor(checks, "mapping").detail).toBeUndefined();
-  });
-
-  it("skips downstream checks when the facility is not linked", () => {
-    const checks = buildRemovalRequirementsChecklist(
-      ready({ hasMapping: false, hasDefaultTemplate: false }),
-    );
-    expect(checkFor(checks, "mapping").status).toBe("unmet");
-    expect(checkFor(checks, "mapping").detail).toBe(
-      "Facility not linked to an Isometric project",
-    );
-    // Template/transport are not yet evaluable without a link.
-    expect(checkFor(checks, "template").status).toBe("skipped");
-    expect(checkFor(checks, "transport").status).toBe("skipped");
-    expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
-    expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
-    // Production data is independent of the link, so it is still judged.
-    expect(checkFor(checks, "production").status).toBe("met");
-  });
-
-  it("skips transport while the template is unresolved", () => {
-    const checks = buildRemovalRequirementsChecklist(
-      ready({
-        hasDefaultTemplate: false,
-        requiredTransport: [
-          { category: "feedstock", count: 0, hasAggregationWarning: false },
-        ],
-      }),
-    );
-    expect(checkFor(checks, "template").status).toBe("unmet");
-    expect(checkFor(checks, "transport").status).toBe("skipped");
-    expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
-    expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
-  });
-
+describe("buildRemovalRequirementsChecklist — row semantics", () => {
   it("flags missing organization credentials and skips registry-dependent checks", () => {
     const checks = buildRemovalRequirementsChecklist(
       ready({ hasOrgCredentials: false }),
@@ -528,15 +490,6 @@ describe("buildRemovalRequirementsChecklist additional coverage", () => {
 });
 
 describe("buildRemovalRequirementsChecklist — wizard facility-level subset", () => {
-  function reqFor(
-    checks: RemovalRequirementCheck[],
-    key: RemovalRequirementKey,
-  ): RemovalRequirementCheck {
-    const found = checks.find((c) => c.key === key);
-    if (!found) throw new Error(`no requirement check for ${key}`);
-    return found;
-  }
-
   it("surfaces wizard-level keys (incl. run-level durability not in batch health)", () => {
     const checks = buildRemovalRequirementsChecklist(ready());
     expect(checks.map((c) => c.key)).toEqual([
@@ -562,19 +515,19 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     const checks = buildRemovalRequirementsChecklist(
       ready({ hasMapping: false }),
     );
-    expect(reqFor(checks, "mapping").status).toBe("unmet");
-    expect(reqFor(checks, "template").status).toBe("skipped");
-    expect(reqFor(checks, "transportUniformity").status).toBe("skipped");
-    expect(reqFor(checks, "feedstockTypeMapping").status).toBe("skipped");
+    expect(checkFor(checks, "mapping").status).toBe("unmet");
+    expect(checkFor(checks, "template").status).toBe("skipped");
+    expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
+    expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
   });
 
   it("flags an unresolved template and skips transport uniformity", () => {
     const checks = buildRemovalRequirementsChecklist(
       ready({ hasDefaultTemplate: false }),
     );
-    expect(reqFor(checks, "template").status).toBe("unmet");
-    expect(reqFor(checks, "transportUniformity").status).toBe("skipped");
-    expect(reqFor(checks, "feedstockTypeMapping").status).toBe("skipped");
+    expect(checkFor(checks, "template").status).toBe("unmet");
+    expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
+    expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
   });
 
   it("flags cross-batch transport non-uniformity (present but mixed)", () => {
@@ -585,7 +538,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
         ],
       }),
     );
-    const uniformity = reqFor(checks, "transportUniformity");
+    const uniformity = checkFor(checks, "transportUniformity");
     expect(uniformity.status).toBe("unmet");
     expect(uniformity.detail).toContain("biochar");
   });
@@ -600,8 +553,8 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
         ],
       }),
     );
-    expect(reqFor(checks, "transportUniformity").status).toBe("met");
-    expect(reqFor(checks, "transport").status).toBe("unmet");
+    expect(checkFor(checks, "transportUniformity").status).toBe("met");
+    expect(checkFor(checks, "transport").status).toBe("unmet");
   });
 
   it("flags entity-readiness gaps so submit is never disabled without a visible reason", () => {
@@ -610,7 +563,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
         entityReadinessGaps: ["Production run PR-1: Electricity reading"],
       }),
     );
-    const entityReadiness = reqFor(checks, "entityReadiness");
+    const entityReadiness = checkFor(checks, "entityReadiness");
     expect(entityReadiness.status).toBe("unmet");
     expect(entityReadiness.detail).toContain("Electricity reading");
   });
@@ -626,7 +579,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
         },
       }),
     );
-    const production = reqFor(checks, "production");
+    const production = checkFor(checks, "production");
     expect(production.status).toBe("unmet");
     expect(production.detail).toContain("No applications");
   });

@@ -1,18 +1,18 @@
 import type { ReactNode } from "react";
 
 /** Renders loading before errors or missing data, wrapping only status paragraphs. */
-interface QueryStateProps<T> {
+interface QueryResultStateProps<T> {
   isLoading: boolean;
   error: unknown;
   data: T | undefined;
   loadingMessage: string;
   errorMessage: string;
-  /** Wraps the loading and error paragraphs; the caller's own shell. */
-  wrap?: (children: ReactNode) => ReactNode;
+  /** Required caller-provided shell for the loading and error paragraphs. */
+  wrap: (children: ReactNode) => ReactNode;
   children: (data: T) => ReactNode;
 }
 
-export function QueryState<T>({
+export function QueryResultState<T>({
   isLoading,
   error,
   data,
@@ -20,14 +20,14 @@ export function QueryState<T>({
   errorMessage,
   wrap,
   children,
-}: QueryStateProps<T>) {
+}: QueryResultStateProps<T>) {
   if (isLoading) {
     const message = (
       <p className="body-small text-[var(--color-text-tertiary)]">
         {loadingMessage}
       </p>
     );
-    return wrap ? wrap(message) : message;
+    return wrap(message);
   }
 
   if (error || !data) {
@@ -36,7 +36,7 @@ export function QueryState<T>({
         {errorMessage}
       </p>
     );
-    return wrap ? wrap(message) : message;
+    return wrap(message);
   }
 
   return children(data);

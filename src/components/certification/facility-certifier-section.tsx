@@ -14,7 +14,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Button, QueryState } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import {
   useDeleteFacilityCertifierMapping,
@@ -31,6 +31,7 @@ import {
   UnlinkConfirmDialog,
 } from "./facility-certifier-dialog";
 import { Field, Section } from "./panel-layout";
+import { QueryResultState } from "./query-result-state";
 
 interface FacilityCertifierSectionProps {
   facilityId: string;
@@ -228,20 +229,22 @@ function FacilityCertifierReadOnly({
 }) {
   const { data, isLoading, error } = useFacilityCertifierSummary(facilityId);
 
+  const shell = (children: ReactNode) => <Shell embedded={embedded}>{children}</Shell>;
+
   return (
-    <QueryState
+    <QueryResultState
       isLoading={isLoading}
       error={error}
       data={data}
       loadingMessage="Loading certifier mapping…"
       errorMessage="The certifier mapping could not be loaded. Refresh the page and try again."
-      wrap={(c) => <Shell embedded={embedded}>{c}</Shell>}
+      wrap={shell}
     >
       {(data) => {
         const { mapping, isProduction } = data;
 
-        return (
-          <Shell embedded={embedded}>
+        return shell(
+          <>
             <CertifierHeader isProduction={isProduction} embedded={embedded} />
             {mapping ? (
               <CertifierMappingFields mapping={mapping} isProduction={isProduction} />
@@ -251,10 +254,10 @@ function FacilityCertifierReadOnly({
                 before submitting from this facility.
               </p>
             )}
-          </Shell>
+          </>,
         );
       }}
-    </QueryState>
+    </QueryResultState>
   );
 }
 
@@ -303,14 +306,16 @@ function FacilityCertifierManage({
     }
   };
 
+  const shell = (children: ReactNode) => <Shell embedded={embedded}>{children}</Shell>;
+
   return (
-    <QueryState
+    <QueryResultState
       isLoading={isLoading}
       error={error}
       data={data}
       loadingMessage="Loading certifier mapping…"
       errorMessage="The certifier mapping could not be loaded. Refresh the page and try again."
-      wrap={(c) => <Shell embedded={embedded}>{c}</Shell>}
+      wrap={shell}
     >
       {(data) => {
         const { mapping, isProduction } = data;
@@ -347,47 +352,49 @@ function FacilityCertifierManage({
 
         return (
           <>
-            <Shell embedded={embedded}>
-              <CertifierHeader
-                isProduction={isProduction}
-                embedded={embedded}
-                actions={
-                  embedded ? undefined : (
-                    <div className="flex gap-12">{actions}</div>
-                  )
-                }
-              />
-
-              {showInlineForm ? (
-                <FacilityCertifierForm
-                  facilityId={facilityId}
-                  loaderData={data}
-                  onSaved={() => setEditOpen(false)}
-                  onCancel={mapping ? () => setEditOpen(false) : undefined}
-                  presentation="inline"
-                />
-              ) : mapping ? (
-                <CertifierMappingFields
-                  mapping={mapping}
+            {shell(
+              <>
+                <CertifierHeader
                   isProduction={isProduction}
-                  projectName={projectName}
-                  templateName={templateName}
+                  embedded={embedded}
+                  actions={
+                    embedded ? undefined : (
+                      <div className="flex gap-12">{actions}</div>
+                    )
+                  }
                 />
-              ) : data.isConfigured ? (
-                <p className="body-small text-[var(--color-text-secondary)]">
-                  This facility has no Isometric project link yet. Submissions from
-                  this facility will be blocked until you link one.
-                </p>
-              ) : (
-                <p className="body-small text-[var(--color-text-secondary)]">
-                  Save valid Isometric keys above to load projects.
-                </p>
-              )}
 
-              {!showInlineForm && embedded && actions && (
-                <CertifierActions>{actions}</CertifierActions>
-              )}
-            </Shell>
+                {showInlineForm ? (
+                  <FacilityCertifierForm
+                    facilityId={facilityId}
+                    loaderData={data}
+                    onSaved={() => setEditOpen(false)}
+                    onCancel={mapping ? () => setEditOpen(false) : undefined}
+                    presentation="inline"
+                  />
+                ) : mapping ? (
+                  <CertifierMappingFields
+                    mapping={mapping}
+                    isProduction={isProduction}
+                    projectName={projectName}
+                    templateName={templateName}
+                  />
+                ) : data.isConfigured ? (
+                  <p className="body-small text-[var(--color-text-secondary)]">
+                    This facility has no Isometric project link yet. Submissions from
+                    this facility will be blocked until you link one.
+                  </p>
+                ) : (
+                  <p className="body-small text-[var(--color-text-secondary)]">
+                    Save valid Isometric keys above to load projects.
+                  </p>
+                )}
+
+                {!showInlineForm && embedded && actions && (
+                  <CertifierActions>{actions}</CertifierActions>
+                )}
+              </>,
+            )}
 
             {linkPresentation === "dialog" && editOpen && (
               <FacilityCertifierDialog
@@ -411,6 +418,6 @@ function FacilityCertifierManage({
           </>
         );
       }}
-    </QueryState>
+    </QueryResultState>
   );
 }

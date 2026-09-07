@@ -104,7 +104,7 @@ const ORG_CREDENTIALS_LABEL = "Organization Isometric credentials present";
 const TRANSPORT_COVERAGE_LABEL = "Transport coverage complete";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
-const ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT = 5;
+const ENTITY_READINESS_CHECK_DISPLAY_LIMIT = 5;
 const DURABILITY_LABEL = "Sampling & durability eligibility met";
 const EVIDENCE_LABEL = "Registry value sources linked";
 const MEASUREMENT_DATES_LABEL = "Production and application dates";
@@ -113,7 +113,7 @@ const FUTURE_DATE_CHECK_DISPLAY_LIMIT = 3;
 // Keep the blocker list readable: show the first few full blocker lines as
 // reasons, then a "+N more" rollup rather than flooding the verdict.
 const DURABILITY_BLOCKER_REASON_PREVIEW_LIMIT = 3;
-const DURABILITY_BLOCKER_PREFLIGHT_DISPLAY_LIMIT = 3;
+const DURABILITY_BLOCKER_CHECK_DISPLAY_LIMIT = 3;
 
 // Durability sampling/eligibility gaps, phrased as the classifier's blocker
 // reasons. Each blocker is already a full protocol-cited sentence (see
@@ -319,7 +319,7 @@ export type RemovalFixTarget =
   | RemovalMeasurementDateFixTarget
   | "feedstockTypes";
 
-function evidencePreflightCheck(facts: RemovalReadinessFacts) {
+function evidenceRequirementCheck(facts: RemovalReadinessFacts) {
   const detail = evidenceMirrorDetail(facts);
   if (!detail) return null;
   const status: RemovalRequirementCheck["status"] =
@@ -577,7 +577,7 @@ export function buildRemovalRequirementsChecklist(
           label: ENTITY_READINESS_LABEL,
           status: "unmet",
           detail: gaps
-            .slice(0, ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT)
+            .slice(0, ENTITY_READINESS_CHECK_DISPLAY_LIMIT)
             .join(" · "),
         };
   })();
@@ -608,7 +608,7 @@ export function buildRemovalRequirementsChecklist(
           label: DURABILITY_LABEL,
           status: "unmet",
           detail: blockers
-            .slice(0, DURABILITY_BLOCKER_PREFLIGHT_DISPLAY_LIMIT)
+            .slice(0, DURABILITY_BLOCKER_CHECK_DISPLAY_LIMIT)
             .join(" · "),
         };
   })();
@@ -653,7 +653,7 @@ export function buildRemovalRequirementsChecklist(
     measurementDatesCheck(facts),
     feedstockTypeMapping,
     entityReadiness,
-    evidencePreflightCheck(facts),
+    evidenceRequirementCheck(facts),
     durability,
   ];
   return checks

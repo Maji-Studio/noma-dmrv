@@ -1,11 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { QueryState } from "./query-state";
+import { QueryResultState } from "./query-result-state";
 
-describe("QueryState", () => {
+describe("QueryResultState", () => {
   it("wraps loading and prioritizes it over an error and existing data", () => {
     const html = renderToStaticMarkup(
-      <QueryState
+      <QueryResultState
         isLoading
         error={new Error("Failed")}
         data={{ label: "Ready" }}
@@ -14,7 +14,7 @@ describe("QueryState", () => {
         wrap={(children) => <section>{children}</section>}
       >
         {(data) => <span>{data.label}</span>}
-      </QueryState>,
+      </QueryResultState>,
     );
     expect(html).toBe(
       '<section><p class="body-small text-[var(--color-text-tertiary)]">Loading mapping…</p></section>',
@@ -26,7 +26,7 @@ describe("QueryState", () => {
     { error: null, data: undefined },
   ])("renders an error for failed or missing data: %j", ({ error, data }) => {
     const html = renderToStaticMarkup(
-      <QueryState
+      <QueryResultState
         isLoading={false}
         error={error}
         data={data}
@@ -35,7 +35,7 @@ describe("QueryState", () => {
         wrap={(children) => <section>{children}</section>}
       >
         {(loaded) => <span>{loaded.label}</span>}
-      </QueryState>,
+      </QueryResultState>,
     );
     expect(html).toBe(
       '<section><p class="body-small text-[var(--color-signal-red)]">Mapping unavailable.</p></section>',
@@ -44,7 +44,7 @@ describe("QueryState", () => {
 
   it("passes loaded data to children without the status wrapper", () => {
     const html = renderToStaticMarkup(
-      <QueryState
+      <QueryResultState
         isLoading={false}
         error={null}
         data={{ label: "Ready" }}
@@ -53,7 +53,7 @@ describe("QueryState", () => {
         wrap={(children) => <section>{children}</section>}
       >
         {(data) => <span>{data.label}</span>}
-      </QueryState>,
+      </QueryResultState>,
     );
     expect(html).toBe("<span>Ready</span>");
   });
