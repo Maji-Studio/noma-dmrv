@@ -67,6 +67,14 @@ windowMs } })`, checked after auth so it keys on the resolved `userId`. It
 applies to expensive or abuse-prone actions: certification submits and geo
 geocode/route are the current users.
 
+Two more options exist for migrating the legacy wrappers without changing what
+they log or return. `log: { message, context }` replaces the generic
+"server action failed" log line, so an entity module keeps its own message and
+`op` context. `mapError(error)` runs after the Zod and conflict branches and
+before the logged fallback: return an `ActionResult` for a domain error the
+action answers itself (a field error, a conflict of its own), or `undefined`
+to fall through. Errors that `mapError` claims are not logged.
+
 ### `SafeError` vs `Error`
 
 `src/lib/errors.ts`. Only `SafeError` messages reach the operator verbatim;

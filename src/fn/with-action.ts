@@ -8,7 +8,7 @@ import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import type { ActionResult } from "@/types/actions";
 import { formatZodActionError, logActionError } from "./action-errors";
 
-interface WithActionOptions {
+interface WithActionOptions<T> {
   /** Optional task-specific context for ZodError messages. */
   zodErrorPrefix?: string;
   /** Fallback message when error is not an Error instance. */
@@ -19,7 +19,22 @@ interface WithActionOptions {
    * Checked after auth so the limiter keys on the resolved user id.
    */
   rateLimit?: { key: string; max: number; windowMs: number };
+  /**
+   * Structured log line for unexpected errors (not Zod, not conflict, not
+   * mapped). Per-entity actions pass their existing message and `op` context
+   * so the log output is unchanged when they migrate onto this helper.
+   */
+  log?: { message: string; context?: Record<string, unknown> };
+  /**
+   * Consulted after the Zod and conflict branches and before the generic
+   * fallback. Return an `ActionResult` to answer the caller with it (domain
+   * errors that carry a field or a conflict of their own); return `undefined`
+   * to fall through to logging and the fallback message.
+   */
+  mapError?: (error: unknown) => ActionResult<T> | undefined;
 }
+
+const DEFAULT_LOG = { message: "server action failed" } as const;
 
 /**
  * Wrap a server action with auth, try/catch, and ActionResult formatting.
@@ -27,12 +42,14 @@ interface WithActionOptions {
  */
 export async function withAction<T>(
   fn: (ctx: OrgContext) => Promise<T>,
-  options?: WithActionOptions
+  options?: WithActionOptions<T>
 ): Promise<ActionResult<T>> {
   const {
     zodErrorPrefix,
     fallbackMessage = "The action could not be completed. Try again.",
     rateLimit,
+    log = DEFAULT_LOG,
+    mapError,
   } = options ?? {};
 
   try {
@@ -66,9 +83,9 @@ export async function withAction<T>(
         conflict: error.conflict,
       };
     }
-    logActionError(error, {
-      message: "server action failed",
-    });
+    const mapped = mapError?.(error);
+    if (mapped) return mapped;
+    logActionError(error, log);
     return {
       success: false,
       error: toActionError(error, fallbackMessage),
