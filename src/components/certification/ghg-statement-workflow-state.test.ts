@@ -119,6 +119,7 @@ describe("GHG Statement workflow state", () => {
   });
 });
 
+describe("pending registry changes", () => {
 it("offers resubmission for pending changes while awaiting verification", () => {
   const state = deriveGhgStatementWorkflowState({
     created: true, canManageReports: true, remote: statement({status: "AWAITING_VERIFICATION", pending_total_co2e_removed_kg: 4170}),
@@ -128,4 +129,6 @@ it("offers resubmission for pending changes while awaiting verification", () => 
   expect(state.canSubmit).toBe(true);
   expect(state.verifierStep.status).toBe("warning");
   expect(state.verifierStep.detail).toContain("pending changes");
+});
+
 });

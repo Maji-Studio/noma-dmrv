@@ -1,3 +1,4 @@
+import { hasPendingStatementTotal } from "@/lib/certification/pending-statement-total";
 import type { RegistryObservationStatus } from "@/lib/certification/registry-observation";
 import type { GhgStatement } from "@/lib/isometric";
 import {
@@ -94,8 +95,7 @@ export function deriveGhgStatementWorkflowState({
     : linkedRemovalCount > 0;
   const mode = remote ? chooseGhgSubmitMode(remote) : "submit";
   const remoteTotalReady =
-    remote?.pending_total_co2e_removed_kg != null &&
-    Number.isFinite(remote.pending_total_co2e_removed_kg);
+    hasPendingStatementTotal(remote?.pending_total_co2e_removed_kg);
   const rollupReady = rollup.status === "available" && remoteTotalReady;
   // Report preparation independently loads and validates every remote member.
   // Missing local provenance must not prevent a registry data summary.
