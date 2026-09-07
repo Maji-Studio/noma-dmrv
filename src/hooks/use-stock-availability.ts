@@ -6,7 +6,7 @@ import type { StockAvailabilityRequest } from "@/schemas/stock-availability";
 
 const STOCK_AVAILABILITY_STALE_TIME_MS = 0;
 
-export const stockAvailabilityKeys = {
+const stockAvailabilityKeys = {
   all: ["stock-availability"] as const,
   detail: (request: StockAvailabilityRequest | null) =>
     [...stockAvailabilityKeys.all, request] as const,

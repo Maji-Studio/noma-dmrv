@@ -10,10 +10,6 @@ import type { ReactorFilterData, CreateReactorData, UpdateReactorData } from "@/
 import type { PaginatedReactors, ReactorWithRelations } from "@/data-access/reactors";
 import {
   getReactorsFn,
-  getReactorByIdFn,
-  getReactorsByFacilityFn,
-  getReactorTypesFn,
-  checkReactorCodeFn,
   createReactorFn,
   updateReactorFn,
   deleteReactorFn,
@@ -63,81 +59,6 @@ export function useReactors(
     },
     staleTime: 30000, // 30 seconds
     enabled: options?.enabled,
-  });
-}
-
-/**
- * Hook to fetch a single reactor by ID
- */
-export function useReactor(reactorId: string, enabled = true) {
-  return useQuery({
-    queryKey: reactorKeys.detail(reactorId),
-    queryFn: async () => {
-      const result = await getReactorByIdFn(reactorId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!reactorId,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch reactors for a specific facility
- */
-export function useReactorsByFacility(facilityId: string, enabled = true) {
-  return useQuery({
-    queryKey: reactorKeys.byFacility(facilityId),
-    queryFn: async () => {
-      const result = await getReactorsByFacilityFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!facilityId,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch unique reactor types from all reactors
- */
-export function useReactorTypes() {
-  return useQuery({
-    queryKey: reactorKeys.types(),
-    queryFn: async () => {
-      const result = await getReactorTypesFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: 60000, // 1 minute - types don't change often
-  });
-}
-
-/**
- * Hook to check if a reactor code is available
- */
-export function useReactorCodeCheck(
-  code: string,
-  excludeReactorId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: reactorKeys.codeCheck(code, excludeReactorId),
-    queryFn: async () => {
-      const result = await checkReactorCodeFn(code, excludeReactorId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
   });
 }
 
@@ -446,95 +367,6 @@ export function useDeleteReactor(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch reactors list for faster initial load
- */
-export function usePrefetchReactors() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<ReactorFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: reactorKeys.list(filters),
-      queryFn: async () => {
-        const result = await getReactorsFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single reactor
- */
-export function usePrefetchReactor() {
-  const queryClient = useQueryClient();
-
-  return (reactorId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: reactorKeys.detail(reactorId),
-      queryFn: async () => {
-        const result = await getReactorByIdFn(reactorId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access reactor cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useReactorCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all reactor data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: reactorKeys.all }),
-
-    /** Invalidate all reactor lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: reactorKeys.lists() }),
-
-    /** Invalidate a specific reactor detail */
-    invalidateDetail: (reactorId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: reactorKeys.detail(reactorId),
-      }),
-
-    /** Invalidate reactors for a specific facility */
-    invalidateByFacility: (facilityId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: reactorKeys.byFacility(facilityId),
-      }),
-
-    /** Invalidate reactor types */
-    invalidateTypes: () =>
-      queryClient.invalidateQueries({ queryKey: reactorKeys.types() }),
-
-    /** Remove a specific reactor from cache (use after deletion) */
-    removeFromCache: (reactorId: string) => {
-      queryClient.removeQueries({ queryKey: reactorKeys.detail(reactorId) });
-    },
-
-    /** Set reactor data in cache (useful for optimistic updates) */
-    setReactorData: (reactorId: string, data: ReactorWithRelations) =>
-      queryClient.setQueryData(reactorKeys.detail(reactorId), data),
-
-    /** Get cached reactor data */
-    getCachedReactor: (reactorId: string) =>
-      queryClient.getQueryData<ReactorWithRelations>(reactorKeys.detail(reactorId)),
-  };
-}

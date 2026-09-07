@@ -16,11 +16,8 @@ import type {
 } from "@/data-access/deliveries";
 import {
   getDeliveriesFn,
-  getDeliveryByIdFn,
   getDeliveryWithRelationsFn,
-  getDeliveriesForSelectFn,
   getDeliveryStatsFn,
-  checkDeliveryCodeFn,
   createDeliveryFn,
   updateDeliveryFn,
   deleteDeliveryFn,
@@ -86,24 +83,6 @@ export function useDeliveries(
 }
 
 /**
- * Hook to fetch a single delivery by ID
- */
-export function useDelivery(deliveryId: string, enabled = true) {
-  return useQuery({
-    queryKey: deliveryKeys.detail(deliveryId),
-    queryFn: async () => {
-      const result = await getDeliveryByIdFn(deliveryId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!deliveryId,
-    staleTime: 30000,
-  });
-}
-
-/**
  * Hook to fetch a delivery with all its relations
  */
 export function useDeliveryWithRelations(deliveryId: string, enabled = true) {
@@ -144,45 +123,6 @@ export function useDeliveryStats(
     },
     staleTime: 30000,
     enabled: options?.enabled,
-  });
-}
-
-/**
- * Hook to fetch deliveries for dropdown selection
- */
-export function useDeliveriesForSelect(orderId?: string) {
-  return useQuery({
-    queryKey: deliveryKeys.select(orderId),
-    queryFn: async () => {
-      const result = await getDeliveriesForSelectFn(orderId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to check if a delivery code is available
- */
-export function useDeliveryCodeCheck(
-  code: string,
-  excludeDeliveryId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: deliveryKeys.codeCheck(code, excludeDeliveryId),
-    queryFn: async () => {
-      const result = await checkDeliveryCodeFn(code, excludeDeliveryId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds
   });
 }
 
@@ -454,44 +394,3 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access delivery cache invalidation functions
- */
-export function useDeliveryCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all delivery data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: deliveryKeys.all }),
-
-    /** Invalidate all delivery lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() }),
-
-    /** Invalidate delivery statistics */
-    invalidateStats: () =>
-      queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() }),
-
-    /** Invalidate a specific delivery detail */
-    invalidateDetail: (deliveryId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: deliveryKeys.detail(deliveryId),
-      }),
-
-    /** Invalidate a delivery with its relations */
-    invalidateDetailWithRelations: (deliveryId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: deliveryKeys.detailWithRelations(deliveryId),
-      }),
-
-    /** Remove a specific delivery from cache (use after deletion) */
-    removeFromCache: (deliveryId: string) => {
-      queryClient.removeQueries({ queryKey: deliveryKeys.detail(deliveryId) });
-      queryClient.removeQueries({
-        queryKey: deliveryKeys.detailWithRelations(deliveryId),
-      });
-    },
-  };
-}

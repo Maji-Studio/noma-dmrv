@@ -959,32 +959,3 @@ export async function generateNextSampleCode(ctx: OrgContext): Promise<string> {
 
   return `${prefix}${nextNumber.toString().padStart(3, "0")}`;
 }
-
-/**
- * Get sample options for dropdowns
- * Returns minimal data needed for select inputs
- */
-export async function getSampleOptions(
-  ctx: OrgContext,
-  creditBatchId?: string
-): Promise<Array<{ id: string; sampleCode: string; samplingTime: Date }>> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [eq(samples.organizationId, ctx.organizationId)];
-  if (creditBatchId) {
-    conditions.push(eq(samples.creditBatchId, creditBatchId));
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-  // org-scope-ok: whereClause includes the active organization predicate.
-  return db
-    .select({
-      id: samples.id,
-      sampleCode: samples.sampleCode,
-      samplingTime: samples.samplingTime,
-    })
-    .from(samples)
-    .where(whereClause)
-    .orderBy(desc(samples.samplingTime));
-}

@@ -601,26 +601,6 @@ export async function getSupplierLocations(ctx: OrgContext): Promise<string[]> {
   return results.map((r) => r.location!).filter(Boolean);
 }
 
-/**
- * Get supplier options for dropdowns
- * Returns minimal data needed for select inputs
- */
-export async function getSupplierOptions(
-  ctx: OrgContext
-): Promise<Array<{ id: string; code: string; name: string }>> {
-  requireOrgScope(ctx);
-
-  return db
-    .select({
-      id: suppliers.id,
-      code: suppliers.code,
-      name: suppliers.name,
-    })
-    .from(suppliers)
-    .where(eq(suppliers.organizationId, ctx.organizationId))
-    .orderBy(asc(suppliers.name));
-}
-
 // ============================================
 // Supplier Location Operations
 // ============================================

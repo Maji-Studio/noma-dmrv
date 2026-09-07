@@ -23,7 +23,6 @@ vi.mock("@/fn/suppliers", () => ({
   getSupplierByIdFn: vi.fn(),
   getSupplierLocationsBySupplierFn: vi.fn(),
   getSupplierLocationsFn: vi.fn(),
-  getSupplierOptionsFn: vi.fn(),
   getSuppliersFn: vi.fn(),
   updateSupplierFn: vi.fn(),
   updateSupplierLocationFn: vi.fn(),

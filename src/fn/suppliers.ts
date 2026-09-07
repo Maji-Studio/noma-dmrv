@@ -19,7 +19,6 @@ import {
   getSupplierById as getSupplierByIdData,
   getSupplierLocations as getSupplierLocationsData,
   isSupplierCodeAvailable as isSupplierCodeAvailableData,
-  getSupplierOptions as getSupplierOptionsData,
   updateSupplier,
   getSupplierLocationsBySupplier as getSupplierLocationsBySupplierData,
   createSupplierLocation,
@@ -134,29 +133,6 @@ export async function getSupplierLocationsFn(): Promise<
         error,
         "Failed to load locations",
         "supplier:locations",
-      ),
-    };
-  }
-}
-
-/**
- * Get supplier options for dropdowns
- */
-export async function getSupplierOptionsFn(): Promise<
-  ActionResult<Array<{ id: string; code: string; name: string }>>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const options = await getSupplierOptionsData(ctx);
-    return { success: true, data: options };
-  } catch (error) {
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to load supplier options",
-        "supplier:options",
       ),
     };
   }

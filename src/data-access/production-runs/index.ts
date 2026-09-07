@@ -25,7 +25,6 @@ export {
   getFacilityEnergyTotals,
   isProductionRunCodeAvailable,
   getProductionRunsWithSamples,
-  getProductionRunOptions,
 } from "./queries";
 
 export {

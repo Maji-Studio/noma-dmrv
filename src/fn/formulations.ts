@@ -17,7 +17,6 @@ import {
   getFormulations as getFormulationsData,
   getFormulationById as getFormulationByIdData,
   isFormulationCodeAvailable as isFormulationCodeAvailableData,
-  getFormulationOptions as getFormulationOptionsData,
   updateFormulation,
   type FormulationWithIngredients,
   type PaginatedFormulations,
@@ -101,29 +100,6 @@ export async function getFormulationByIdFn(
         error,
         "Failed to load formulation",
         "formulation:get",
-      ),
-    };
-  }
-}
-
-/**
- * Get formulation options for dropdowns
- */
-export async function getFormulationOptionsFn(): Promise<
-  ActionResult<Array<{ id: string; code: string; name: string }>>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const options = await getFormulationOptionsData(ctx);
-    return { success: true, data: options };
-  } catch (error) {
-    return {
-      success: false,
-      error: formulationActionError(
-        error,
-        "Failed to load formulation options",
-        "formulation:options",
       ),
     };
   }

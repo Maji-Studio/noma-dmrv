@@ -3,7 +3,7 @@
  * Split from `biochar-products.ts` to keep that file under the line cap.
  */
 
-import { and, desc, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { biocharProducts } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -32,23 +32,4 @@ export async function isBiocharProductCodeAvailable(
     .where(and(...conditions));
 
   return !existing;
-}
-
-/**
- * Get biochar product options for dropdowns
- * Returns minimal data needed for select inputs
- */
-export async function getBiocharProductOptions(
-  ctx: OrgContext
-): Promise<Array<{ id: string; code: string }>> {
-  requireOrgScope(ctx);
-
-  return db
-    .select({
-      id: biocharProducts.id,
-      code: biocharProducts.code,
-    })
-    .from(biocharProducts)
-    .where(and(eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
-    .orderBy(desc(biocharProducts.productionDate));
 }

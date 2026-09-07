@@ -681,24 +681,3 @@ export async function getProductionRunsWithSamples(
     samples: samplesByRun.get(r.id) ?? [],
   }));
 }
-
-/**
- * Get production run options for dropdowns
- * Returns minimal data needed for select inputs
- */
-export async function getProductionRunOptions(
-  ctx: OrgContext
-): Promise<Array<{ id: string; code: string; date: string; status: string }>> {
-  requireOrgScope(ctx);
-
-  return db
-    .select({
-      id: productionRuns.id,
-      code: productionRuns.code,
-      date: productionRunDateExpr(),
-      status: productionRuns.status,
-    })
-    .from(productionRuns)
-    .where(and(isNull(productionRuns.archivedAt), eq(productionRuns.organizationId, ctx.organizationId)))
-    .orderBy(desc(productionRuns.startTime));
-}

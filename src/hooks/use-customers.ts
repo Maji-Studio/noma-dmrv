@@ -19,15 +19,11 @@ import type {
 } from "@/data-access/customers";
 import {
   getCustomersFn,
-  getCustomerByIdFn,
   getCustomerWithRelationsFn,
   getCustomerLocationsFn,
-  getCustomerCropTypesFn,
-  checkCustomerCodeFn,
   createCustomerFn,
   updateCustomerFn,
   deleteCustomerFn,
-  getCustomerLocationByIdFn,
   createCustomerLocationFn,
   updateCustomerLocationFn,
   deleteCustomerLocationFn,
@@ -39,7 +35,7 @@ import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 // Query Keys
 // ============================================
 
-export const customerKeys = {
+const customerKeys = {
   all: ["customers"] as const,
   lists: () => [...customerKeys.all, "list"] as const,
   list: (filters?: Partial<CustomerFilterData>) =>
@@ -54,7 +50,7 @@ export const customerKeys = {
     [...customerKeys.all, "codeCheck", code, excludeId] as const,
 };
 
-export const customerLocationKeys = {
+const customerLocationKeys = {
   all: ["customerLocations"] as const,
   detail: (id: string) => [...customerLocationKeys.all, "detail", id] as const,
 };
@@ -77,24 +73,6 @@ export function useCustomers(filters?: Partial<CustomerFilterData>) {
       return result.data;
     },
     staleTime: 30000, // 30 seconds
-  });
-}
-
-/**
- * Hook to fetch a single customer by ID
- */
-export function useCustomer(customerId: string, enabled = true) {
-  return useQuery({
-    queryKey: customerKeys.detail(customerId),
-    queryFn: async () => {
-      const result = await getCustomerByIdFn(customerId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!customerId,
-    staleTime: 30000,
   });
 }
 
@@ -131,45 +109,6 @@ export function useCustomerLocations(customerId: string, enabled = true) {
     },
     enabled: enabled && !!customerId,
     staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch unique crop types from all customers
- */
-export function useCustomerCropTypes() {
-  return useQuery({
-    queryKey: customerKeys.cropTypes(),
-    queryFn: async () => {
-      const result = await getCustomerCropTypesFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: 60000, // 1 minute - crop types don't change often
-  });
-}
-
-/**
- * Hook to check if a customer code is available
- */
-export function useCustomerCodeCheck(
-  code: string,
-  excludeCustomerId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: customerKeys.codeCheck(code, excludeCustomerId),
-    queryFn: async () => {
-      const result = await checkCustomerCodeFn(code, excludeCustomerId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
   });
 }
 
@@ -453,24 +392,6 @@ export function useDeleteCustomer(
 // Customer Location Query Hooks
 // ============================================
 
-/**
- * Hook to fetch a single customer location by ID
- */
-export function useCustomerLocation(locationId: string, enabled = true) {
-  return useQuery({
-    queryKey: customerLocationKeys.detail(locationId),
-    queryFn: async () => {
-      const result = await getCustomerLocationByIdFn(locationId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!locationId,
-    staleTime: 30000,
-  });
-}
-
 // ============================================
 // Customer Location Mutation Hooks
 // ============================================
@@ -614,107 +535,6 @@ export function useDeleteCustomerLocation(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch customers list for faster initial load
- */
-export function usePrefetchCustomers() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<CustomerFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: customerKeys.list(filters),
-      queryFn: async () => {
-        const result = await getCustomersFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single customer
- */
-export function usePrefetchCustomer() {
-  const queryClient = useQueryClient();
-
-  return (customerId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: customerKeys.detail(customerId),
-      queryFn: async () => {
-        const result = await getCustomerByIdFn(customerId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access customer cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useCustomerCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all customer data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: customerKeys.all }),
-
-    /** Invalidate all customer lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: customerKeys.lists() }),
-
-    /** Invalidate a specific customer detail */
-    invalidateDetail: (customerId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: customerKeys.detail(customerId),
-      }),
-
-    /** Invalidate a customer with its relations */
-    invalidateDetailWithRelations: (customerId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: customerKeys.detailWithRelations(customerId),
-      }),
-
-    /** Invalidate customer locations */
-    invalidateLocations: (customerId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: customerKeys.locations(customerId),
-      }),
-
-    /** Invalidate crop types list */
-    invalidateCropTypes: () =>
-      queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() }),
-
-    /** Remove a specific customer from cache (use after deletion) */
-    removeFromCache: (customerId: string) => {
-      queryClient.removeQueries({ queryKey: customerKeys.detail(customerId) });
-      queryClient.removeQueries({
-        queryKey: customerKeys.detailWithRelations(customerId),
-      });
-      queryClient.removeQueries({
-        queryKey: customerKeys.locations(customerId),
-      });
-    },
-
-    /** Set customer data in cache (useful for optimistic updates) */
-    setCustomerData: (customerId: string, data: Customer) =>
-      queryClient.setQueryData(customerKeys.detail(customerId), data),
-
-    /** Get cached customer data */
-    getCachedCustomer: (customerId: string) =>
-      queryClient.getQueryData<Customer>(customerKeys.detail(customerId)),
-  };
-}

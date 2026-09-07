@@ -18,8 +18,6 @@ import type {
 import {
   getBiocharProductsFn,
   getBiocharProductByIdFn,
-  getBiocharProductOptionsFn,
-  checkBiocharProductCodeFn,
   createBiocharProductFn,
   updateBiocharProductFn,
   deleteBiocharProductFn,
@@ -32,7 +30,7 @@ import { invalidateStockEntityQueries } from "./entity-query-keys";
 // Query Keys
 // ============================================
 
-export const biocharProductKeys = {
+const biocharProductKeys = {
   all: ["biocharProducts"] as const,
   lists: () => [...biocharProductKeys.all, "list"] as const,
   list: (filters?: Partial<BiocharProductFilterData>) =>
@@ -84,45 +82,6 @@ export function useBiocharProduct(productId: string, enabled = true) {
     },
     enabled: enabled && !!productId,
     staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch biochar product options for dropdowns
- */
-export function useBiocharProductOptions() {
-  return useQuery({
-    queryKey: biocharProductKeys.options(),
-    queryFn: async () => {
-      const result = await getBiocharProductOptionsFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: 60000, // 1 minute
-  });
-}
-
-/**
- * Hook to check if a biochar product code is available
- */
-export function useBiocharProductCodeCheck(
-  code: string,
-  excludeProductId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: biocharProductKeys.codeCheck(code, excludeProductId),
-    queryFn: async () => {
-      const result = await checkBiocharProductCodeFn(code, excludeProductId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
   });
 }
 
@@ -397,89 +356,6 @@ export function useDeleteBiocharProduct(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch biochar products list for faster initial load
- */
-export function usePrefetchBiocharProducts() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<BiocharProductFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: biocharProductKeys.list(filters),
-      queryFn: async () => {
-        const result = await getBiocharProductsFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single biochar product
- */
-export function usePrefetchBiocharProduct() {
-  const queryClient = useQueryClient();
-
-  return (productId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: biocharProductKeys.detail(productId),
-      queryFn: async () => {
-        const result = await getBiocharProductByIdFn(productId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access biochar product cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useBiocharProductCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all biochar product data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: biocharProductKeys.all }),
-
-    /** Invalidate all biochar product lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() }),
-
-    /** Invalidate a specific biochar product detail */
-    invalidateDetail: (productId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: biocharProductKeys.detail(productId),
-      }),
-
-    /** Invalidate biochar product options */
-    invalidateOptions: () =>
-      queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() }),
-
-    /** Remove a specific biochar product from cache (use after deletion) */
-    removeFromCache: (productId: string) => {
-      queryClient.removeQueries({ queryKey: biocharProductKeys.detail(productId) });
-    },
-
-    /** Set biochar product data in cache (useful for optimistic updates) */
-    setBiocharProductData: (productId: string, data: BiocharProductWithRelations) =>
-      queryClient.setQueryData(biocharProductKeys.detail(productId), data),
-
-    /** Get cached biochar product data */
-    getCachedBiocharProduct: (productId: string) =>
-      queryClient.getQueryData<BiocharProductWithRelations>(biocharProductKeys.detail(productId)),
-  };
-}

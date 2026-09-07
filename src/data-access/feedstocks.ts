@@ -782,27 +782,6 @@ export async function isFeedstockCodeAvailable(
   return !existing;
 }
 
-/**
- * Get feedstock options for dropdowns (e.g., production run feedstock selection)
- */
-export async function getFeedstockOptions(
-  ctx: OrgContext
-): Promise<Array<{ id: string; code: string; massDryKg: number; feedstockTypeName: string | null }>> {
-  requireOrgScope(ctx);
-
-  return db
-    .select({
-      id: feedstocks.id,
-      code: feedstocks.code,
-      massDryKg: feedstocks.massDryKg,
-      feedstockTypeName: feedstockTypes.name,
-    })
-    .from(feedstocks)
-    .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-    .where(and(isNull(feedstocks.archivedAt), eq(feedstocks.organizationId, ctx.organizationId)))
-    .orderBy(desc(feedstocks.createdAt));
-}
-
 // ============================================
 // Helpers
 // ============================================

@@ -567,22 +567,3 @@ export async function isFormulationCodeAvailable(
 
   return !existing;
 }
-
-/**
- * Get formulation options for dropdowns
- */
-export async function getFormulationOptions(
-  ctx: OrgContext
-): Promise<Array<{ id: string; code: string; name: string }>> {
-  requireOrgScope(ctx);
-
-  return db
-    .select({
-      id: formulations.id,
-      code: formulations.code,
-      name: formulations.name,
-    })
-    .from(formulations)
-    .where(eq(formulations.organizationId, ctx.organizationId))
-    .orderBy(asc(formulations.name));
-}
