@@ -1,6 +1,6 @@
 ---
 name: pr-review-suite
-description: Submit or review a GitHub pull request through independent Standards, Spec, and Deep Correctness practices using subscription-authenticated Codex gpt-5.6-sol and Claude Opus CLI sessions, then publish one updateable practice-first PR comment. Use when asked to publish changes with follow-up reviews, after opening or updating a PR, before marking a draft ready, or for a multi-model PR review without API-key billing.
+description: Submit or review a GitHub pull request through independent Standards, Spec, and Deep Correctness practices using subscription-authenticated Codex gpt-6-astra and Claude Opus CLI sessions, then publish one updateable practice-first PR comment. Use when asked to publish changes with follow-up reviews, after opening or updating a PR, before marking a draft ready, or for a multi-model PR review without API-key billing.
 ---
 
 # PR Review Suite
