@@ -78,8 +78,7 @@
     "resend": "^6.9.1",
     "tailwind-merge": "^3.4.0",
     "ulid": "^3.0.2",
-    "zod": "^4.3.6",
-    "zustand": "^5.0.11"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
@@ -92,7 +91,6 @@
     "@types/react-test-renderer": "^19.1.0",
     "@vitest/ui": "^4.0.18",
     "babel-plugin-react-compiler": "^1.0.0",
-    "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.4",
     "drizzle-kit": "^0.31.9",
     "eslint": "^9.39.2",

@@ -8,7 +8,7 @@
 
 import { Button } from "@/components/ui";
 import { useRemovalBreakdown } from "@/hooks/use-certification";
-import { CarbonBreakdownSkeleton } from "./carbon-breakdown";
+import { CarbonBreakdownSkeleton } from "./carbon-breakdown-skeleton";
 import { RegistryCarbonResultCard } from "./registry-carbon-result-card";
 
 interface RemovalCarbonBreakdownProps {

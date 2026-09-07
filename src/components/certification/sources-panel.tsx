@@ -8,7 +8,7 @@
  *
  * Mounted in `RemovalDetailSheet` (the Removals-tab quick view, opened via
  * `?removal=<id>`), the single place the candidate set is consumed. The
- * earlier mounts — the credit-batch `CertifyPanel` and the standalone
+ * earlier mounts — a credit-batch certify panel and the standalone
  * `/certification/removals/[removalId]` detail page — were removed when the
  * 2026-06-04 certify redesign deleted `evidence-step.tsx`; the panel was
  * re-homed here so per-leg evidence can reach Isometric again.
