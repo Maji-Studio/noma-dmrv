@@ -17,14 +17,9 @@ import {
   createStorageLocation,
   deleteStorageLocation,
   getStorageLocations as getStorageLocationsData,
-  getStorageLocationById as getStorageLocationByIdData,
-  getStorageLocationWithFacility as getStorageLocationWithFacilityData,
-  getStorageLocationsByFacility as getStorageLocationsByFacilityData,
-  isStorageLocationCodeAvailable as isStorageLocationCodeAvailableData,
   restoreStorageLocation,
   updateStorageLocation,
   type PaginatedStorageLocations,
-  type StorageLocationWithFacility,
 } from "@/data-access/storage-locations";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
@@ -91,113 +86,6 @@ export async function getStorageLocationsFn(
         error,
         "Failed to load storage bins",
         "storage-location:list",
-      ),
-    };
-  }
-}
-
-/**
- * Get a single storage bin by ID
- */
-export async function getStorageLocationByIdFn(
-  storageLocationId: string
-): Promise<ActionResult<StorageLocation>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const storageLocation = await getStorageLocationByIdData(
-      ctx,
-      storageLocationId
-    );
-    return { success: true, data: storageLocation };
-  } catch (error) {
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to load storage bin",
-        "storage-location:get",
-      ),
-    };
-  }
-}
-
-/**
- * Get a storage bin with its facility info
- */
-export async function getStorageLocationWithFacilityFn(
-  storageLocationId: string
-): Promise<ActionResult<StorageLocationWithFacility>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const storageLocation = await getStorageLocationWithFacilityData(
-      ctx,
-      storageLocationId
-    );
-    return { success: true, data: storageLocation };
-  } catch (error) {
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to load storage bin details",
-        "storage-location:detail",
-      ),
-    };
-  }
-}
-
-/**
- * Get storage bins by facility ID
- */
-export async function getStorageLocationsByFacilityFn(
-  facilityId: string
-): Promise<ActionResult<StorageLocation[]>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    await requireOrgFacility(ctx, facilityId);
-    const storageLocations = await getStorageLocationsByFacilityData(
-      ctx,
-      facilityId
-    );
-    return { success: true, data: storageLocations };
-  } catch (error) {
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to load storage bins for facility",
-        "storage-location:by-facility",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a storage bin code is available
- */
-export async function checkStorageLocationCodeFn(
-  code: string,
-  excludeStorageLocationId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isStorageLocationCodeAvailableData(
-      ctx,
-      code,
-      excludeStorageLocationId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to check storage bin code",
-        "storage-location:check-code",
       ),
     };
   }

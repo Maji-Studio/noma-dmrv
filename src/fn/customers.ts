@@ -15,16 +15,12 @@ import {
   createCustomer,
   deleteCustomer,
   getCustomers as getCustomersData,
-  getCustomerById as getCustomerByIdData,
   getCustomerWithRelations as getCustomerWithRelationsData,
   getCustomerLocations as getCustomerLocationsData,
-  getCustomerCropTypes as getCustomerCropTypesData,
-  isCustomerCodeAvailable as isCustomerCodeAvailableData,
   updateCustomer,
   createCustomerLocation,
   updateCustomerLocation,
   deleteCustomerLocation,
-  getCustomerLocationById as getCustomerLocationByIdData,
   type PaginatedCustomers,
   type CustomerDetail,
 } from "@/data-access/customers";
@@ -95,29 +91,6 @@ export async function getCustomersFn(
 }
 
 /**
- * Get a single customer by ID
- */
-export async function getCustomerByIdFn(
-  customerId: string
-): Promise<ActionResult<Customer>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const customer = await getCustomerByIdData(ctx, customerId);
-    return { success: true, data: customer };
-  } catch (error) {
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to load customer",
-        "customer:get",
-      ),
-    };
-  }
-}
-
-/**
  * Get a customer with all its relations (locations)
  */
 export async function getCustomerWithRelationsFn(
@@ -177,57 +150,6 @@ export async function getCustomerLocationsFn(
         error,
         "Failed to load customer locations",
         "customer:locations",
-      ),
-    };
-  }
-}
-
-/**
- * Get unique crop types from all customers
- */
-export async function getCustomerCropTypesFn(): Promise<
-  ActionResult<string[]>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const cropTypes = await getCustomerCropTypesData(ctx);
-    return { success: true, data: cropTypes };
-  } catch (error) {
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to load crop types",
-        "customer:crop-types",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a customer code is available
- */
-export async function checkCustomerCodeFn(
-  code: string,
-  excludeCustomerId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isCustomerCodeAvailableData(
-      ctx,
-      code,
-      excludeCustomerId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to check customer code",
-        "customer:check-code",
       ),
     };
   }
@@ -366,29 +288,6 @@ export async function deleteCustomerFn(
 // ============================================
 // Customer Location Operations
 // ============================================
-
-/**
- * Get a single customer location by ID
- */
-export async function getCustomerLocationByIdFn(
-  locationId: string
-): Promise<ActionResult<CustomerLocation>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const location = await getCustomerLocationByIdData(ctx, locationId);
-    return { success: true, data: location };
-  } catch (error) {
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to load customer location",
-        "customer-location:get",
-      ),
-    };
-  }
-}
 
 /**
  * Create a new customer location

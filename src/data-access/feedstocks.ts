@@ -758,30 +758,6 @@ export async function deleteFeedstock(
 // Utility Operations
 // ============================================
 
-export async function isFeedstockCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [
-    eq(feedstocks.organizationId, ctx.organizationId),
-    eq(feedstocks.code, code),
-  ];
-  if (excludeId) {
-    conditions.push(sql`${feedstocks.id} != ${excludeId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: feedstocks.id })
-    .from(feedstocks)
-    .where(and(...conditions));
-
-  return !existing;
-}
-
 // ============================================
 // Helpers
 // ============================================

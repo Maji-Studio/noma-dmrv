@@ -23,7 +23,6 @@ export {
   getProductionRunById,
   getProductionRunStats,
   getFacilityEnergyTotals,
-  isProductionRunCodeAvailable,
   getProductionRunsWithSamples,
 } from "./queries";
 

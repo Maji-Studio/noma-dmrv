@@ -3,7 +3,7 @@
  * CRUD operations for suppliers with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { suppliers, supplierLocations, feedstocks, type Supplier, type SupplierLocation } from "@/db/schema";
@@ -552,55 +552,6 @@ export async function deleteSupplier(
 // Utility Operations
 // ============================================
 
-/**
- * Check if a supplier code is available
- */
-export async function isSupplierCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeSupplierId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [
-    eq(suppliers.code, code),
-    eq(suppliers.organizationId, ctx.organizationId),
-  ];
-
-  if (excludeSupplierId) {
-    conditions.push(sql`${suppliers.id} != ${excludeSupplierId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: suppliers.id })
-    .from(suppliers)
-    .where(and(...conditions));
-
-  return !existing;
-}
-
-/**
- * Get unique locations from all suppliers
- * Useful for filter dropdowns
- */
-export async function getSupplierLocations(ctx: OrgContext): Promise<string[]> {
-  requireOrgScope(ctx);
-
-  const results = await db
-    .selectDistinct({ location: suppliers.location })
-    .from(suppliers)
-    .where(
-      and(
-        eq(suppliers.organizationId, ctx.organizationId),
-        sql`${suppliers.location} IS NOT NULL AND ${suppliers.location} != ''`,
-      ),
-    )
-    .orderBy(asc(suppliers.location));
-
-  return results.map((r) => r.location!).filter(Boolean);
-}
-
 // ============================================
 // Supplier Location Operations
 // ============================================
@@ -622,30 +573,6 @@ export async function getSupplierLocationsBySupplier(
       ),
     )
     .orderBy(desc(supplierLocations.isDefault), asc(supplierLocations.createdAt));
-}
-
-export async function getSupplierLocationById(
-  ctx: OrgContext,
-  locationId: string
-): Promise<SupplierLocation> {
-  requireOrgScope(ctx);
-  await ensureSupplierLocationExists(ctx, locationId);
-
-  const [location] = await db
-    .select()
-    .from(supplierLocations)
-    .where(
-      and(
-        eq(supplierLocations.id, locationId),
-        eq(supplierLocations.organizationId, ctx.organizationId),
-      ),
-    );
-
-  if (!location) {
-    throw new SafeError("Supplier location not found");
-  }
-
-  return location;
 }
 
 export async function createSupplierLocation(

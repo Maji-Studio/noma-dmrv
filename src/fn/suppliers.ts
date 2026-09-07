@@ -17,8 +17,6 @@ import {
   deleteSupplier,
   getSuppliers as getSuppliersData,
   getSupplierById as getSupplierByIdData,
-  getSupplierLocations as getSupplierLocationsData,
-  isSupplierCodeAvailable as isSupplierCodeAvailableData,
   updateSupplier,
   getSupplierLocationsBySupplier as getSupplierLocationsBySupplierData,
   createSupplierLocation,
@@ -110,57 +108,6 @@ export async function getSupplierByIdFn(
         error,
         "Failed to load supplier",
         "supplier:get",
-      ),
-    };
-  }
-}
-
-/**
- * Get unique locations from all suppliers
- */
-export async function getSupplierLocationsFn(): Promise<
-  ActionResult<string[]>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const locations = await getSupplierLocationsData(ctx);
-    return { success: true, data: locations };
-  } catch (error) {
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to load locations",
-        "supplier:locations",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a supplier code is available
- */
-export async function checkSupplierCodeFn(
-  code: string,
-  excludeSupplierId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isSupplierCodeAvailableData(
-      ctx,
-      code,
-      excludeSupplierId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to check supplier code",
-        "supplier:check-code",
       ),
     };
   }

@@ -82,7 +82,6 @@ const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
 
 export {
   getCo2eStoredPreviews,
-  getFacilityCertifier,
 } from "./credit-batch-accounting";
 export type {
   ApplicationCo2eStoredPreview,
@@ -866,21 +865,6 @@ export async function creditBatchCodeExists(
   if (!existing) return false;
   if (excludeId && existing.id === excludeId) return false;
   return true;
-}
-
-/**
- * Get credit batches by facility ID
- */
-export async function getCreditBatchesByFacilityId(
-  ctx: OrgContext,
-  facilityId: string
-): Promise<CreditBatch[]> {
-  requireOrgScope(ctx);
-  return db
-    .select()
-    .from(creditBatches)
-    .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId), isNull(creditBatches.archivedAt)))
-    .orderBy(desc(creditBatches.createdAt));
 }
 
 export async function getCreditBatchProductionRunOptions(

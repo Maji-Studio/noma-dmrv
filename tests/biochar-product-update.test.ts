@@ -16,7 +16,6 @@ vi.mock("@/data-access/biochar-products", () => ({
   deleteBiocharProduct: vi.fn(),
   getBiocharProducts: vi.fn(),
   getBiocharProductById: vi.fn(),
-  isBiocharProductCodeAvailable: vi.fn(),
   updateBiocharProduct: (...args: unknown[]) => mockUpdateBiocharProduct(...args),
 }));
 

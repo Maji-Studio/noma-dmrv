@@ -730,14 +730,6 @@ export async function getFacilityCertifierWithExecutor(
   );
 }
 
-export async function getFacilityCertifier(
-  ctx: OrgContext,
-  facilityId: string,
-): Promise<CertifierProvider | null> {
-  requireOrgScope(ctx);
-  return getFacilityCertifierWithExecutor(ctx, db, facilityId);
-}
-
 async function loadCreditBatchRollupsWithExecutor(
   ctx: OrgContext,
   batchIds: string[],

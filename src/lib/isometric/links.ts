@@ -1,7 +1,6 @@
 import type { IsometricEnvironment } from "./client";
 
 const REGISTRY = "https://registry.isometric.com";
-const DOCS = "https://docs.isometric.com";
 
 // The supplier's PRIVATE Certify workspace is environment-specific: a sandbox
 // submission lives on the sandbox registry host, a production one on the public
@@ -108,13 +107,4 @@ export const isometricRegistry = {
     `${CERTIFY_HOSTS[args.environment]}/account/certify/project/${encodeURIComponent(
       args.externalProjectId,
     )}/ghg-statement/${encodeURIComponent(args.externalStatementId)}`,
-};
-
-export const isometricDocs = {
-  base: DOCS,
-  keyConcepts: `${DOCS}/user-guides/certify/key-certify-concepts`,
-  componentBlueprints: `${DOCS}/user-guides/certify/component-blueprint-library`,
-  removals: `${DOCS}/user-guides/certify/removal`,
-  ghgStatements: `${DOCS}/user-guides/certify/ghg-statement`,
-  protocolVersioning: `${DOCS}/user-guides/registry/protocol-versioning`,
 };

@@ -8,7 +8,7 @@
  *
  * Server-internal core (no "use server" — it takes an explicit `orgCtx` and is
  * called from the submit pipeline, which already resolved the caller). On every
- * Submit/Resubmit, `ensureTransportEvidenceLedgerSource` regenerates the ledger
+ * Submit/Resubmit, the core regenerates the ledger
  * from the removal's live transport legs, stores it, attaches it as a private
  * document on a member credit batch, and mirrors it to an Isometric Source so it
  * rides into the removal's `source_ids`.
@@ -24,7 +24,6 @@ import {
 } from "@/lib/certification/evidence-ledger/types";
 import { logger } from "@/lib/log";
 import {
-  loadRemovalSubmissionContext,
   type RemovalSubmissionContext,
 } from "./certify-context-core";
 import {
@@ -34,21 +33,6 @@ import {
 } from "./evidence-ledger-core";
 
 export type { EnsureLedgerResult } from "./evidence-ledger-core";
-
-/**
- * Generate (or reuse) the transport evidence ledger for a removal, store it, and
- * mirror it to an Isometric Source. Loads the submission context, then delegates
- * to the from-context variant. Use this for standalone callers (e.g. a manual
- * regenerate); the submit pipeline already holds a context and should call
- * `ensureTransportEvidenceLedgerSourceFromContext` to avoid a second load.
- */
-export async function ensureTransportEvidenceLedgerSource(
-  orgCtx: OrgContext,
-  removalId: string,
-): Promise<EnsureLedgerResult> {
-  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
-  return ensureTransportEvidenceLedgerSourceFromContext(orgCtx, removalId, ctx);
-}
 
 /**
  * As above, but against an already-loaded submission context. Idempotent on

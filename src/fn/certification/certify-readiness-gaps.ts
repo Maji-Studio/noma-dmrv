@@ -14,26 +14,6 @@ import type { TransportLegsByCategory } from "./shared";
 // build the compact gap labels the Review / pre-flight surfaces show; the raw
 // entity rows stay server-side.
 
-/**
- * Compact per-entity readiness-gap labels for the removal's production runs,
- * the member batches' pooled lab samples (issue #309: samples anchor on the
- * credit batch, whose declared durability tier they inherit), and the required
- * transport legs.
- */
-export function buildEntityReadinessGaps(
-  runs: ProductionRunWithSamples[],
-  batchesWithSamples: CreditBatchWithSamples[],
-  transportLegs: TransportLegsByCategory,
-  requiredTransportCategories: readonly TransportCategory[],
-): string[] {
-  return buildEntityReadinessResult(
-    runs,
-    batchesWithSamples,
-    transportLegs,
-    requiredTransportCategories,
-  ).gaps;
-}
-
 export interface EntityReadinessResult {
   gaps: string[];
   warnings: string[];

@@ -15,7 +15,6 @@ import {
   getFeedstocks as getFeedstocksData,
   getFeedstockById as getFeedstockByIdData,
   getFeedstockStats as getFeedstockStatsData,
-  isFeedstockCodeAvailable as isFeedstockCodeAvailableData,
   updateFeedstock,
   type PaginatedFeedstocks,
   type FeedstockWithRelations,
@@ -132,27 +131,6 @@ export async function getFeedstockStatsFn(
         error,
         "Failed to load feedstock stats",
         "feedstock:stats",
-      ),
-    };
-  }
-}
-
-export async function checkFeedstockCodeFn(
-  code: string,
-  excludeId?: string
-): Promise<ActionResult<boolean>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isFeedstockCodeAvailableData(ctx, code, excludeId);
-    return { success: true, data: available };
-  } catch (error) {
-    return {
-      success: false,
-      error: feedstockActionError(
-        error,
-        "Failed to check code",
-        "feedstock:check-code",
       ),
     };
   }

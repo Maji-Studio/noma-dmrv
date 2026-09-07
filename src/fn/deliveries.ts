@@ -15,10 +15,7 @@ import {
   createDelivery,
   deleteDelivery,
   getDeliveries as getDeliveriesData,
-  getDeliveryById as getDeliveryByIdData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
-  getDeliveriesForSelect as getDeliveriesForSelectData,
-  isDeliveryCodeAvailable as isDeliveryCodeAvailableData,
   updateDelivery,
   type PaginatedDeliveries,
   type DeliveryDetail,
@@ -101,29 +98,6 @@ export async function getDeliveriesFn(
 }
 
 /**
- * Get a single delivery by ID
- */
-export async function getDeliveryByIdFn(
-  deliveryId: string
-): Promise<ActionResult<Delivery>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const delivery = await getDeliveryByIdData(ctx, deliveryId);
-    return { success: true, data: delivery };
-  } catch (error) {
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to load delivery",
-        "delivery:get",
-      ),
-    };
-  }
-}
-
-/**
  * Get a delivery with all its relations
  */
 export async function getDeliveryWithRelationsFn(
@@ -173,67 +147,6 @@ export async function getDeliveryStatsFn(
         error,
         "Failed to load delivery stats",
         "delivery:stats",
-      ),
-    };
-  }
-}
-
-/**
- * Get deliveries for dropdown selection
- */
-export async function getDeliveriesForSelectFn(
-  orderId?: string
-): Promise<
-  ActionResult<
-    Array<{
-      id: string;
-      code: string;
-      deliveryDate: Date;
-      status: string;
-      orderCode: string | null;
-    }>
-  >
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const deliveries = await getDeliveriesForSelectData(ctx, orderId);
-    return { success: true, data: deliveries };
-  } catch (error) {
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to load deliveries for select",
-        "delivery:select-options",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a delivery code is available
- */
-export async function checkDeliveryCodeFn(
-  code: string,
-  excludeDeliveryId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isDeliveryCodeAvailableData(
-      ctx,
-      code,
-      excludeDeliveryId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to check delivery code",
-        "delivery:check-code",
       ),
     };
   }

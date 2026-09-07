@@ -15,7 +15,7 @@ import {
   DURABILITY_TIER_FALLBACK,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
-import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import type { StoredSourceBindingVerification } from "@/lib/certification/removal-evidence-health";
 import { SafeError } from "@/lib/errors";
@@ -50,30 +50,6 @@ function removalMayHaveExternalMutation(metadata: unknown): boolean {
       REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY
     ] === true
   );
-}
-
-// A removal ledger row is keyed (provider, 'removal', 'removal', removalId).
-export async function removalHasBlockingSubmission(
-  ctx: OrgContext,
-  executor: Tx | typeof db,
-  removalId: string,
-): Promise<boolean> {
-  requireOrgScope(ctx);
-  const [row] = await executor
-    .select({ id: certificationSubmissions.id })
-    .from(certificationSubmissions)
-    .where(
-      and(
-        eq(certificationSubmissions.provider, ISOMETRIC),
-        eq(certificationSubmissions.submissionType, "removal"),
-        eq(certificationSubmissions.localEntityType, "removal"),
-        eq(certificationSubmissions.localEntityId, removalId),
-        inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
 }
 
 export interface ProductionClaimDraftContender {
