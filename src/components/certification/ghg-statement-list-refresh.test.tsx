@@ -298,7 +298,7 @@ vi.mock("@/hooks/use-certification", () => ({
               externalId: "statement-1",
               reportingPeriodStartOn: "2026-01-01",
               reportingPeriodEndOn: "2026-01-31",
-              memberRemovalCount: 1,
+              memberGhgEntryCount: 1,
               isProduction: false,
             },
             message: state.breakdownMessage,

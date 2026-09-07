@@ -482,7 +482,7 @@ async function submitRemovalCore(
       localEntityId: removalId,
     },
     guard: mappingGuard,
-    policy: { onSubmittedHashChanged: "supersede" },
+    policy: { onSubmittedHashChanged: "supersede", allowEvidenceRefresh: true },
     tentativeInputs: initialBuild,
     hashOf: (inputs) => payloadHash(inputs.semanticPayload),
     mirrorDocumentIds: candidateDocumentIds,

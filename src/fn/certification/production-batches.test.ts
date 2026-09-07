@@ -294,7 +294,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       mocks.client.post.mock.calls.map(
         (call) => (call[1] as { display_name: string }).display_name,
       ),
-    ).toEqual(["CB-2026-001", "CB-2026-002"]);
+    ).toEqual([expect.stringContaining("CB-2026-001 (nm-ptb-"), expect.stringContaining("CB-2026-002 (nm-ptb-")]);
   });
 
   it("reuses a persisted registration without touching the registry", async () => {

@@ -194,7 +194,7 @@ function basisNote(model: GhgStatementReportModel): string {
     entryTotal === statementTotal
       ? "Their net values sum to the Isometric statement total shown above."
       : `Their net values sum to ${entryTotal} kg CO2e. Isometric reports ${statementTotal} kg CO2e at statement precision.`;
-  return `Every GHG Entry on this GHG Statement is listed above, and nothing else. ${reconciliation} The uncertainty discount is the before uncertainty total less the entry net total.`;
+  return `Every GHG Entry on this GHG Statement is listed above, and nothing else. ${reconciliation} Entry totals use full precision before individual displayed values are rounded. The uncertainty discount is the before uncertainty total less the entry net total.`;
 }
 
 /**

@@ -1,11 +1,9 @@
 "use server";
 
 import { env } from "@/config/env";
-import { getLatestSubmissionsForEntities } from "@/data-access/certification";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import {
   getCertifierGhgStatementById,
-  getRemovalsByGhgStatementId,
 } from "@/data-access/certifier-ghg-statements";
 import {
   hasExactGhgEntryMembership,
@@ -22,8 +20,6 @@ import {
   GHG_STATEMENT_ENTITY_TYPE,
   GHG_STATEMENT_SUBMISSION_TYPE,
   ISOMETRIC_PROVIDER,
-  REMOVAL_ENTITY_TYPE,
-  REMOVAL_SUBMISSION_TYPE,
 } from "@/lib/isometric/utils/constants";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
@@ -36,14 +32,14 @@ export interface GhgStatementBreakdownData extends RegistryCarbonResult {
   externalId: string | null;
   reportingPeriodStartOn: string | null;
   reportingPeriodEndOn: string;
-  memberRemovalCount: number;
+  memberGhgEntryCount: number;
   isProduction: boolean;
 }
 
 /**
  * Read-only exact registry roll-up. A carbon total is exposed only when every
- * local member has a readable GHG Entry and the registry statement membership
- * is exactly the same set. There is no local or partial fallback.
+ * registry member has a readable GHG Entry and those returned identities match
+ * the statement membership. Local history is independent; there is no partial fallback.
  */
 export async function loadGhgStatementBreakdown(
   ghgStatementId: string,
@@ -55,50 +51,23 @@ export async function loadGhgStatementBreakdown(
     );
     if (!statement) throw new SafeError("GHG Statement not found.");
 
-    const removals = await getRemovalsByGhgStatementId(orgCtx, ghgStatementId);
-    const removalIds = removals.map((removal) => removal.id);
-
-    const [removalSubmissions, statementSubmission] =
-      await Promise.all([
-        getLatestSubmissionsForEntities(orgCtx, {
-          provider: ISOMETRIC_PROVIDER,
-          submissionType: REMOVAL_SUBMISSION_TYPE,
-          localEntityType: REMOVAL_ENTITY_TYPE,
-          localEntityIds: removalIds,
-        }),
-        getLatestSubmission(orgCtx, {
-          provider: ISOMETRIC_PROVIDER,
-          submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-          localEntityType: GHG_STATEMENT_ENTITY_TYPE,
-          localEntityId: ghgStatementId,
-        }),
-      ]);
-
-    const entryExternalIds = removalIds
-      .map((id) => removalSubmissions.get(id)?.externalId)
-      .filter((value): value is string => Boolean(value));
+    const statementSubmission = await getLatestSubmission(orgCtx, {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+      localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+      localEntityId: ghgStatementId,
+    });
     const externalId = statementSubmission?.externalId ?? null;
-    if (
-      !externalId ||
-      removalIds.length === 0 ||
-      entryExternalIds.length !== removalIds.length
-    ) {
-      return {
-        status: "pending",
-        value: null,
-        message:
-          "Registry totals appear after every linked Removal has a submitted GHG Entry.",
-      };
+    if (!externalId) {
+      return { status: "pending", value: null, message: "Registry totals appear after the GHG Statement is created." };
     }
 
     const client = await getIsometricClientForOrg(orgCtx.organizationId);
     let fetchedEntries: Array<Awaited<ReturnType<typeof getGhgEntry>>>;
     let remote: Awaited<ReturnType<typeof getGhgStatement>>;
     try {
-      [fetchedEntries, remote] = await Promise.all([
-        Promise.all(entryExternalIds.map((id) => getGhgEntry(client, id))),
-        getGhgStatement(client, externalId),
-      ]);
+      remote = await getGhgStatement(client, externalId);
+      fetchedEntries = await Promise.all((remote?.ghg_entry_ids ?? []).map((id) => getGhgEntry(client, id)));
     } catch {
       return {
         status: "unavailable",
@@ -109,10 +78,11 @@ export async function loadGhgStatementBreakdown(
     const presentEntries = fetchedEntries.filter(
       (entry): entry is NonNullable<typeof entry> => entry !== null,
     );
+    if (presentEntries.some((entry) => entry.credit_type !== "REMOVAL")) {
+      return { status: "unavailable", value: null, message: "This GHG Statement contains unsupported credit types. Registry removal totals require only removal entries." };
+    }
     const allEntriesPresent =
-      entryExternalIds.length === removalIds.length &&
       remote !== null &&
-      hasExactGhgEntryMembership(entryExternalIds, remote.ghg_entry_ids) &&
       hasExactGhgEntryMembership(
         presentEntries.map((entry) => entry.id),
         remote.ghg_entry_ids,
@@ -159,7 +129,7 @@ export async function loadGhgStatementBreakdown(
         externalId,
         reportingPeriodStartOn: statement.reportingPeriodStartOn ?? null,
         reportingPeriodEndOn: statement.reportingPeriodEndOn,
-        memberRemovalCount: removals.length,
+        memberGhgEntryCount: remote.ghg_entry_ids.length,
         isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
       },
       message: "Exact registry roll-up available.",

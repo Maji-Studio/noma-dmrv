@@ -136,8 +136,11 @@ association must match the current GHG Entry. The journal row and supplier
 reference are versioned by immutable Removal submission: supersession creates a
 fresh Biochar Application for the new GHG Entry and leaves the prior registry
 artifact intact. The current provider response type does not expose
-`source_ids`, so readback cannot verify that field; the immutable local intent
-and submission snapshot retain the exact Source IDs sent. Registry failure
+`source_ids`. Requests with Sources therefore fail closed at reconciliation until
+Isometric provides authoritative attachment readback; local intent alone does not
+prove remote membership. Returned Source IDs, when available, must match the exact
+reviewed set. The immutable local intent and submission snapshot retain the IDs
+sent. Registry failure
 blocks Removal submission and leaves the claim safely retryable. There is no
 gate or placeholder lifecycle.
 

@@ -32,7 +32,7 @@ describe("GHG statement submit state", () => {
           pending_total_co2e_removed_kg: 0,
         }),
       ),
-    ).toBe("blocked-verified");
+    ).toBe("resubmit");
     expect(
       chooseGhgSubmitMode(
         statement({
@@ -40,7 +40,7 @@ describe("GHG statement submit state", () => {
           pending_total_co2e_removed_kg: 42,
         }),
       ),
-    ).toBe("blocked-awaiting");
+    ).toBe("resubmit");
   });
 
   it("detects ambiguous submit success by remote fingerprint", () => {

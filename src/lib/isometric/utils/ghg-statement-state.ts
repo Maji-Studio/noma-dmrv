@@ -1,3 +1,4 @@
+import { hasPendingStatementTotal } from "@/lib/certification/pending-statement-total";
 import { SafeError } from "@/lib/errors";
 import {
   getMetadataValue,
@@ -13,14 +14,13 @@ export type GhgSubmitMode =
 
 export function chooseGhgSubmitMode(remote: GhgStatement): GhgSubmitMode {
   if (remote.status === "DRAFT") return "submit";
-  if (remote.status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   if (
     remote.status === "FAILED_VERIFICATION" ||
-    (remote.pending_total_co2e_removed_kg !== null &&
-      remote.pending_total_co2e_removed_kg > 0)
+    hasPendingStatementTotal(remote.pending_total_co2e_removed_kg)
   ) {
     return "resubmit";
   }
+  if (remote.status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   return "blocked-verified";
 }
 
@@ -55,14 +55,17 @@ export function chooseGhgSubmitModeFromKnownState(
     submissionMetadata,
     SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg,
   );
+  if (typeof status !== "string" || !["DRAFT", "FAILED_VERIFICATION", "AWAITING_VERIFICATION", "VERIFIED", "CREDITS_ISSUED"].includes(status)) {
+    throw new SafeError("The GHG Statement status is missing. Refresh it from Isometric, then try again.");
+  }
   if (status === "DRAFT") return "submit";
-  if (status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   if (
     status === "FAILED_VERIFICATION" ||
-    (typeof pendingTotal === "number" && pendingTotal > 0)
+    hasPendingStatementTotal(pendingTotal)
   ) {
     return "resubmit";
   }
+  if (status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   if (typeof status === "string") return "blocked-verified";
 
   throw new SafeError(

@@ -41,6 +41,7 @@ export interface CandidateLineageEntity {
 }
 
 export interface CandidateDocument {
+  includedInSubmission?: boolean;
   document: DocumentRow;
   lineageEntity: CandidateLineageEntity;
   binding: ClassifiedRemovalSource | null;
@@ -53,6 +54,7 @@ export interface CandidateDocument {
 }
 
 export interface CandidateDocumentsForRemoval {
+  evidenceRefreshSubmissionId?: string | null;
   removalId: string;
   facilityId: string;
   candidates: CandidateDocument[];

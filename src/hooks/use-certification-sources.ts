@@ -1,3 +1,4 @@
+import { refreshInterruptedRemovalEvidence } from "@/fn/certification/removal-evidence-refresh";
 /**
  * Phase 3.5 — Isometric Sources hooks.
  *
@@ -100,5 +101,17 @@ export function useUnlinkDocumentSource(removalId: string) {
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
+  });
+}
+
+export function useRefreshInterruptedRemovalEvidence(removalId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (submissionId: string) => {
+      const result = await refreshInterruptedRemovalEvidence({ removalId, submissionId });
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
   });
 }

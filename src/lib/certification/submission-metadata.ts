@@ -1,4 +1,5 @@
 export const SUBMISSION_METADATA_KEYS = {
+  evidenceRefreshCandidates: "evidenceRefreshCandidates",
   remoteStatus: "remoteStatus",
   pendingTotalCo2eRemovedKg: "pendingTotalCo2eRemovedKg",
   removalIds: "removalIds",
@@ -39,4 +40,10 @@ export function canReclaimInterruptedSubmission(metadata: unknown): boolean {
     getMetadataValue(metadata, SUBMISSION_METADATA_KEYS.externalMutation) ===
       SUBMISSION_EXTERNAL_MUTATIONS.confirmed
   );
+}
+
+/** Only a proven mutation-free attempt can rebuild version-specific registry inputs. */
+export function canRefreshSubmissionEvidence(metadata: unknown): boolean {
+  return getMetadataValue(metadata, SUBMISSION_METADATA_KEYS.externalMutation) ===
+    SUBMISSION_EXTERNAL_MUTATIONS.none;
 }

@@ -13,6 +13,15 @@ const row = (metadata: Record<string, unknown> | null) =>
   }) as CertificationSubmissionRow;
 
 describe("overlayLiveRemoteStatus", () => {
+  it("updates pending changes even when the verifier status is unchanged", () => {
+    const original = row({ remoteStatus: "AWAITING_VERIFICATION", pendingTotalCo2eRemovedKg: null });
+    const pending = overlayLiveRemoteStatus(original, "AWAITING_VERIFICATION", 0);
+    expect(deriveSubmissionStatus(pending, false, "ghgStatement", "unknown").kind).toBe("pending-changes");
+    const reconciled = overlayLiveRemoteStatus(pending, "AWAITING_VERIFICATION", null);
+    expect(deriveSubmissionStatus(reconciled, false, "ghgStatement", "unknown").kind).toBe("in-verification");
+    expect(original.metadata).toEqual({ remoteStatus: "AWAITING_VERIFICATION", pendingTotalCo2eRemovedKg: null });
+  });
+
   // DR-002 / #685 regression: the badge derived from a stale persisted
   // remoteStatus while the technical pane showed the live fetch, so one sheet
   // said "In registry" and "AWAITING_VERIFICATION" at once. One response,

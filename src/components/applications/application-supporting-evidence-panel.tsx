@@ -158,6 +158,7 @@ export function ApplicationSupportingEvidencePanel({
             <FileIcon size={18} weight="bold" />
             <h4 className="body-medium font-medium">Images and PDFs</h4>
           </div>
+          {applicationId && <p className="body-caption text-[var(--color-text-secondary)]">Uploads are saved immediately. Closing this panel does not discard them. Evidence added after submission is excluded from the saved attempt until a new evidence review.</p>}
           {upload}
         </div>
       )}

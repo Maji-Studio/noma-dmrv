@@ -250,7 +250,7 @@ const columns: ColumnDef<GhgStatementListItem>[] = [
   },
   {
     id: "linkedRemovals",
-    header: "Linked Removals",
+    header: "Local Removals",
     accessorFn: (item) => String(item.linkedRemovalCount),
     cell: ({ row }) => <LinkedRemovalsCell item={row.original} />,
   },

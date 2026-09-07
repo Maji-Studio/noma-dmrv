@@ -5,6 +5,7 @@ import {
   applications,
   biocharProducts,
   certifierDocumentUploads,
+  certificationSubmissions,
   certifierRemovals,
   creditBatches,
   deliveries,
@@ -466,6 +467,16 @@ export async function deleteDocumentWithCertificationSafety(
       )
       .for("update");
     if (!row) return { deleted: null, queued: false };
+
+    const [reviewedEvidence] = await tx.select({ id: certificationSubmissions.id })
+      .from(certificationSubmissions)
+      .where(and(
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+        sql`jsonb_path_exists(${certificationSubmissions.metadata}, '$.evidenceRefreshCandidates[*].documentId ? (@ == $id)', jsonb_build_object('id', ${id}::text))`,
+      )).limit(1);
+    if (reviewedEvidence) {
+      throw new SafeError("This document belongs to reviewed certification evidence and cannot be deleted or replaced.");
+    }
 
     const isometricMapping = await getDocumentUploadByDocument(
       ctx,

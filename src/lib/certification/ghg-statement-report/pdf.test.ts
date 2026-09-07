@@ -134,6 +134,7 @@ describe("renderGhgStatementReportPdf", () => {
       const text = (await pageTexts(bytes)).join(" ");
 
       expect(text).toContain("GHG Statement Data Summary");
+      expect(text).toContain("Entry totals use full precision");
       expect(text).toContain("prj_1");
       expect(text).toContain("ggs_1");
       expect(text).toContain("rmv_1");

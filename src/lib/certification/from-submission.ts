@@ -104,7 +104,7 @@ export function readRemoteStatus(
  */
 export function overlayLiveRemoteStatus<
   T extends CertificationSubmissionRow,
->(latest: T, liveRemoteStatus: string | null | undefined): T {
+>(latest: T, liveRemoteStatus: string | null | undefined, pendingTotalCo2eRemovedKg?: number | null): T {
   if (
     !liveRemoteStatus ||
     !REMOTE_GHG_STATUSES.includes(liveRemoteStatus as RemoteGhgStatus)
@@ -115,7 +115,8 @@ export function overlayLiveRemoteStatus<
     latest.metadata && typeof latest.metadata === "object"
       ? (latest.metadata as Record<string, unknown>)
       : {};
-  if (metadata[SUBMISSION_METADATA_KEYS.remoteStatus] === liveRemoteStatus) {
+  if (metadata[SUBMISSION_METADATA_KEYS.remoteStatus] === liveRemoteStatus &&
+    (pendingTotalCo2eRemovedKg === undefined || metadata[SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg] === pendingTotalCo2eRemovedKg)) {
     return latest;
   }
   return {
@@ -123,6 +124,7 @@ export function overlayLiveRemoteStatus<
     metadata: {
       ...metadata,
       [SUBMISSION_METADATA_KEYS.remoteStatus]: liveRemoteStatus,
+      ...(pendingTotalCo2eRemovedKg !== undefined ? { [SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg]: pendingTotalCo2eRemovedKg } : {}),
     },
   };
 }
@@ -143,6 +145,10 @@ export function deriveSubmissionStatus(
       local,
       lockInFlight: isLockedInFlight,
       remoteStatus: latest ? readRemoteStatus(latest) : null,
+      pendingTotalCo2eRemovedKg: (() => {
+        const value = getMetadataValue(latest?.metadata, SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg);
+        return typeof value === "number" ? value : null;
+      })(),
     });
   }
   return deriveRemovalStatus({

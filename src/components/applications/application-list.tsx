@@ -42,6 +42,7 @@ import type { ApplicationListItem } from "@/data-access/applications";
 import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import {
+  useApplicationCertificationLock,
   useApplications,
   useApplicationDeliveryOptions,
   useCreateApplication,
@@ -251,6 +252,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     mode: SideSheetMode;
   } | null>(null);
   const [deletingApplicationId, setDeletingApplicationId] = useState<string | null>(null);
+
+  const applicationLock = useApplicationCertificationLock(sideSheet?.entity?.id);
 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
@@ -479,7 +482,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
   // Derived values for the side sheet
   const sideSheetOpen = !!sideSheet;
-  const sideSheetMode = sideSheet?.mode ?? "create";
+  const fieldsEditable = !sideSheet?.entity || applicationLock.data === false;
+  const sideSheetMode = sideSheet?.mode === "edit" && !fieldsEditable ? "view" : sideSheet?.mode ?? "create";
   // The stored entity is a snapshot from when the sheet opened; prefer the
   // refreshed row from the list query so evidence-driven readiness changes
   // show while the sheet stays open. Fall back to the snapshot for rows the
@@ -682,6 +686,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        canEdit={fieldsEditable}
         editLabel="Edit Application"
         size="wide"
         sections={sideSheetEntity ? [
@@ -756,12 +761,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           },
           {
             title: "Supporting evidence",
-            fields: [],
+            fields: applicationLock.data ? [{ label: "Certification", value: "Application fields are locked by certification. Supporting uploads are saved separately; including new evidence requires a Removal evidence review." }] : applicationLock.isPending ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
             content: (
-              <ApplicationSupportingEvidencePanel
-                applicationId={sideSheetEntity.id}
-                readOnly
-              />
+              <>
+                {applicationLock.error && (
+                  <div className="flex flex-col gap-8">
+                    <ServerError message="The certification lock could not be checked. Fields remain view-only until the check succeeds." />
+                    <Button type="button" variant="weak" disabled={applicationLock.isFetching} onClick={() => void applicationLock.refetch()}>Retry certification check</Button>
+                  </div>
+                )}
+                <ApplicationSupportingEvidencePanel applicationId={sideSheetEntity.id} />
+              </>
             ),
           },
           {
