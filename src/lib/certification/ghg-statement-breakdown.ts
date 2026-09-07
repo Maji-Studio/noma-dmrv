@@ -1,3 +1,9 @@
+/**
+ * GHG statement membership check: true only when the statement's local GHG
+ * entry set and the registry's are the same set (no duplicates, no extras on
+ * either side). The registry's own carbon figures are read through
+ * `fn/certification/ghg-statement-breakdown.ts`; nothing is recomputed here.
+ */
 export function hasExactGhgEntryMembership(
   localEntryIds: string[],
   remoteEntryIds: string[],

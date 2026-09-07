@@ -69,21 +69,6 @@ export interface PaginatedFacilities {
   totalPages: number;
 }
 
-export interface FacilityDetail extends Facility {
-  reactors: Array<{
-    id: string;
-    code: string;
-    identifier: string;
-    reactorType: string;
-  }>;
-  storageLocations: Array<{
-    id: string;
-    code: string;
-    name: string;
-    type: string;
-  }>;
-}
-
 // ============================================
 // Auth Guards
 // ============================================

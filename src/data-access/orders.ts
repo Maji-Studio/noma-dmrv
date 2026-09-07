@@ -50,35 +50,6 @@ export interface PaginatedOrders {
   totalPages: number;
 }
 
-export interface OrderDetail extends Order {
-  facility: {
-    id: string;
-    code: string;
-    name: string;
-  } | null;
-  customer: {
-    id: string;
-    code: string;
-    name: string;
-  } | null;
-  customerLocation: {
-    id: string;
-    name: string;
-  } | null;
-  biocharProduct: {
-    id: string;
-    code: string;
-  } | null;
-  deliveries: Array<{
-    id: string;
-    code: string;
-    deliveryDate: Date;
-    status: string;
-    deliveredWetMassKg: number | null;
-    massDryKg: number | null;
-  }>;
-}
-
 // ============================================
 // Auth Guards
 // ============================================

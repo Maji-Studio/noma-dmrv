@@ -10,7 +10,7 @@ import type { CertifierSyncEventRow } from "@/data-access/certification";
 import { formatDateTime } from "@/lib/format-utils";
 import { DisclosureSummary } from "./disclosure-summary";
 
-const COMPACT_DEFAULT_LIMIT = 5;
+const DEFAULT_LIMIT = 5;
 
 interface SyncEventLogProps {
   events: CertifierSyncEventRow[];
@@ -33,7 +33,7 @@ export function SyncEventLog({
     );
   }
 
-  const visible = events.slice(0, limit ?? COMPACT_DEFAULT_LIMIT);
+  const visible = events.slice(0, limit ?? DEFAULT_LIMIT);
   const triggerLabel = label ?? `View attempt history (${events.length})`;
 
   return (
@@ -47,7 +47,7 @@ export function SyncEventLog({
 }
 
 /**
- * The bare compact event list, for surfaces that already provide their own
+ * The bare event list, for surfaces that already provide their own
  * disclosure (the GHG statement sheet's history accordion). `SyncEventLog`
  * wraps this in a `<details>`.
  */

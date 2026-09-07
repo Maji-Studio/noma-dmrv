@@ -328,8 +328,8 @@ import { Button, EmptyState, MassPair, Modal, PageHeader, StatCard } from "@/com
 ```
 
 The barrel is **incomplete** — `Accordion`, `CertificationFieldTag`,
-`DetailPanel`, `LoadingSkeleton`, `Toast`, `ViewRelatedLink` and
-`DeleteConfirmDialog` are not exported. Import those from their own path. A
+`DetailPanel`, `LoadingSkeleton`, `Toast` and `DeleteConfirmDialog` are not
+exported. Import those from their own path. A
 failed barrel import means the component exists elsewhere, not that it's
 missing — don't rebuild it.
 

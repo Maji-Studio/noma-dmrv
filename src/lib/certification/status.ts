@@ -55,7 +55,7 @@ export type LocalSubmissionStatus =
  * The single client-safe source for this list: the server guards in
  * `data-access/certification.ts` (`hasBlockingFacilitySubmission`) and
  * `data-access/credit-batch-certification-lock.ts`
- * (`assertCreditBatchNotCertificationLocked`) and the client gate in
+ * (`assertRemovalAllowsCreditBatchMutation`) and the client gate in
  * `lib/certification/readiness.ts` (`canRegroupRemoval`) both import it from
  * here, so the UI never offers a control the server will refuse.
  */
