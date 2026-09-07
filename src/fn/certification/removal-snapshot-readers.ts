@@ -9,8 +9,13 @@ import type { CertificationSubmissionRow } from "@/data-access/certification";
 import { SafeError } from "@/lib/errors";
 import type { CreateDatapointRequest } from "@/lib/isometric";
 import { FIRST_REMOVAL_SUBMISSION_VERSION } from "@/lib/isometric/biochar-applications";
-import type { RemovalSourceBindingPlanEntry } from "@/lib/certification/removal-source-bindings";
+import type {
+  ClassifiedRemovalSource,
+  NomaEvidenceRole,
+  RemovalSourceBindingPlanEntry,
+} from "@/lib/certification/removal-source-bindings";
 import type { BiocharApplicationIntent } from "./biochar-application-intents";
+import type { CandidateSourceDocument } from "./source-candidates";
 import { z } from "zod";
 
 export interface ResolvedFixedInput {
@@ -29,6 +34,44 @@ export interface RemovalTransportSnapshot {
   removalSupplierRef: string;
   datapointBodies: DatapointTransport[];
   omittedTemplateComponentIds: string[];
+}
+
+export function assertRemovalSnapshotConfigurationCurrent(
+  row: CertificationSubmissionRow,
+  expected: { externalProjectId: string; templateId: string },
+): void {
+  const snapshot = row.payloadSnapshot as {
+    semantic?: { externalProjectId?: unknown; templateId?: unknown };
+  } | null;
+  const parsed = z
+    .object({ externalProjectId: z.string().min(1), templateId: z.string().min(1) })
+    .safeParse(snapshot?.semantic);
+  if (
+    !parsed.success ||
+    parsed.data.externalProjectId !== expected.externalProjectId ||
+    parsed.data.templateId !== expected.templateId
+  ) {
+    throw new SafeError(
+      "The facility's registry mapping changed after this Removal was submitted. Ask support to reconcile it before retrying.",
+    );
+  }
+}
+
+export function readRemovalSupersedePreviousId(
+  row: CertificationSubmissionRow,
+): string | null {
+  const metadata = row.metadata as {
+    supersedePreviousId?: unknown;
+  } | null;
+  const stored = metadata?.supersedePreviousId;
+  if (stored === undefined || stored === null) return null;
+  const parsed = z.string().min(1).safeParse(stored);
+  if (!parsed.success) {
+    throw new SafeError(
+      "This saved submission has an invalid superseded-version link and cannot resume. Select Refresh review, then submit again.",
+    );
+  }
+  return parsed.data;
 }
 
 const datapointTransportSchema = z.object({
@@ -76,6 +119,75 @@ const removalSourceBindingPlanSchema = z.array(
       creditBatchIds: z.array(z.string().min(1)),
     }),
     mappingRevision: z.string().min(1),
+  }),
+);
+
+const nomaEvidenceRoleSchema = z.enum([
+  "inventory",
+  "feedstock_bill_of_lading",
+  "delivery_bill_of_lading",
+  "transport_evidence_ledger",
+  "durability_evidence_ledger",
+  "lab_report",
+] satisfies [NomaEvidenceRole, ...NomaEvidenceRole[]]);
+const removalSourceLineageSchema = z.object({
+  entityType: z.string().min(1),
+  entityId: z.string().min(1),
+  entityLabel: z.string().min(1),
+});
+const sequestrationSourceTargetSchema = z.object({
+  kind: z.literal("sequestration"),
+  groupKey: z.literal("co2-stored"),
+  inputKey: z.enum([
+    "product_mass",
+    "carbon_contents",
+    "s_fraction",
+    "h_c_molar_ratios",
+    "total_carbon_contents",
+    "inorganic_carbon_contents",
+  ]),
+  optionalInTemplate: z.boolean().optional(),
+});
+const ordinarySourceTargetSchema = z.object({
+  kind: z.literal("ordinary"),
+  groupKey: z.enum([
+    "biomass-feedstock-transport",
+    "biochar-transport",
+    "sampling-required-for-mrv",
+    "miscellaneous",
+  ]),
+  componentBlueprintKey: z.enum([
+    "mass_distance_based_ci_emissions",
+    "mass_based_ci_emissions",
+  ]),
+  componentDisplayName: z.string().optional(),
+  inputKey: z.enum(["mass_distance", "mass"]),
+  optionalInTemplate: z.boolean().optional(),
+});
+const classifiedRemovalSourceSchema: z.ZodType<ClassifiedRemovalSource> =
+  z.object({
+    nomaRole: nomaEvidenceRoleSchema,
+    nomaRoleLabel: z.string().min(1),
+    lineage: removalSourceLineageSchema,
+    intendedTarget: z.discriminatedUnion("kind", [
+      sequestrationSourceTargetSchema,
+      ordinarySourceTargetSchema,
+    ]),
+    additionalIntendedTargets: z
+      .array(
+        z.discriminatedUnion("kind", [
+          sequestrationSourceTargetSchema,
+          ordinarySourceTargetSchema,
+        ]),
+      )
+      .optional(),
+    mappingRevision: z.string().min(1),
+  });
+const removalCandidateSourcesSchema = z.array(
+  z.object({
+    documentId: z.string().min(1),
+    binding: classifiedRemovalSourceSchema.nullable(),
+    biocharApplicationId: z.string().min(1).nullable().optional(),
   }),
 );
 
@@ -195,6 +307,23 @@ export function readRemovalSourceBindingPlan(
     );
   }
   return parsed.data as RemovalSourceBindingPlanEntry[];
+}
+
+export function readRemovalCandidateSources(
+  row: CertificationSubmissionRow,
+): CandidateSourceDocument[] {
+  const snapshot = row.payloadSnapshot as {
+    semantic?: { candidateSources?: unknown } | null;
+  } | null;
+  const parsed = removalCandidateSourcesSchema.safeParse(
+    snapshot?.semantic?.candidateSources,
+  );
+  if (!parsed.success) {
+    throw new SafeError(
+      "This saved submission uses an older supporting-file candidate format and cannot resume. Select Refresh review, then submit again.",
+    );
+  }
+  return parsed.data;
 }
 
 export function readRemovalBiocharApplicationIntents(

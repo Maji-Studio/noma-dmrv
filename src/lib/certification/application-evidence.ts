@@ -110,6 +110,36 @@ export const APPLICATION_DOCUMENT_ENTITY_TYPE = "application" as const;
 export const APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE = "photo" as const;
 
 /**
+ * Application-owned files that become Isometric Sources for a Biochar
+ * Application. GIS files remain local until an active-boundary document
+ * identity exists, while these types are managed as supporting evidence.
+ */
+export const APPLICATION_ISOMETRIC_SOURCE_DOCUMENT_TYPES = [
+  APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
+  "pdf",
+  "weighbridge_ticket",
+  "affidavit",
+] as const;
+
+export function isApplicationIsometricSourceDocumentType(
+  value: string,
+): boolean {
+  return APPLICATION_ISOMETRIC_SOURCE_DOCUMENT_TYPES.some(
+    (documentType) => documentType === value,
+  );
+}
+
+export function biocharApplicationIdForSource(
+  lineage: { entityType: string; entityId: string },
+  documentType: string,
+): string | null {
+  return lineage.entityType === "application" &&
+    isApplicationIsometricSourceDocumentType(documentType)
+    ? lineage.entityId
+    : null;
+}
+
+/**
  * Document types that, when uploaded, attest application-boundary logbook
  * quantities (§8.5.2) on their own — a dedicated weighbridge ticket or affidavit.
  */
@@ -132,6 +162,25 @@ export interface ApplicationEvidenceDocument {
   uploadStatus: string | null;
   fileUrl: string | null;
   metadata: unknown;
+}
+
+/** Minimal persisted upload state used by Application evidence consumers. */
+export interface ApplicationEvidenceUploadReadiness {
+  uploadStatus?: string | null;
+  fileUrl?: string | null;
+}
+
+/**
+ * Application evidence is ready after upload confirmation. The URL fallback
+ * is only for legacy rows that predate persisted upload statuses.
+ */
+export function isApplicationEvidenceDocumentReady(
+  document: ApplicationEvidenceUploadReadiness,
+): boolean {
+  return (
+    document.uploadStatus === "uploaded" ||
+    (document.uploadStatus == null && document.fileUrl != null)
+  );
 }
 
 /** Minimal application surface required by the application-evidence rule. */
@@ -273,11 +322,13 @@ function isUploadedDocument(
   document: ApplicationEvidenceDocument,
   predicate: ApplicationEvidenceUploadedDocumentPredicate,
 ): boolean {
-  return (
-    document[predicate.uploadStatusField] === predicate.uploadStatus ||
-    (predicate.fileUrlOperator === "not-null" &&
-      document[predicate.fileUrlField] !== null)
-  );
+  return isApplicationEvidenceDocumentReady({
+    uploadStatus: document[predicate.uploadStatusField],
+    fileUrl:
+      predicate.fileUrlOperator === "not-null"
+        ? document[predicate.fileUrlField]
+        : null,
+  });
 }
 
 /** Evaluate one declarative document matcher against a structural document. */

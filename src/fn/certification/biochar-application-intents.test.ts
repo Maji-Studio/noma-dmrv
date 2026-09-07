@@ -8,7 +8,10 @@ vi.mock("@/data-access/certifier-biochar-applications", () => ({
   getBiocharApplicationRegistryInputs: mocks.getInputs,
 }));
 
-import { compileBiocharApplicationIntents } from "./biochar-application-intents";
+import {
+  attachSourcesToBiocharApplicationIntents,
+  compileBiocharApplicationIntents,
+} from "./biochar-application-intents";
 
 const APPLICATION_ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_APPLICATION_ID = "44444444-4444-4444-8444-444444444444";
@@ -86,6 +89,37 @@ describe("compileBiocharApplicationIntents", () => {
           project_id: "prj-test",
           name: "North Field",
         }),
+      }),
+    ]);
+  });
+
+  it("attaches only the Sources owned by each Biochar Application", async () => {
+    const intents = await compile();
+
+    expect(
+      attachSourcesToBiocharApplicationIntents(intents, [
+        {
+          sourceId: "src-photo",
+          biocharApplicationId: APPLICATION_ID,
+        },
+        {
+          sourceId: "src-logbook",
+          biocharApplicationId: APPLICATION_ID,
+        },
+        {
+          sourceId: "src-photo",
+          biocharApplicationId: APPLICATION_ID,
+        },
+        {
+          sourceId: "src-other-application",
+          biocharApplicationId: SECOND_APPLICATION_ID,
+        },
+        { sourceId: "src-datapoint-only", biocharApplicationId: null },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        applicationId: APPLICATION_ID,
+        sourceIds: ["src-logbook", "src-photo"],
       }),
     ]);
   });

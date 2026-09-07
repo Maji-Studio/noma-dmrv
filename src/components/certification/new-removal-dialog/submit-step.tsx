@@ -234,7 +234,11 @@ export function SubmitStep({
             </span>
           </div>
         </div>
-        <SubmissionProgress kind="removal" updates={progressUpdates} />
+        <SubmissionProgress
+          kind="removal"
+          updates={progressUpdates}
+          isResubmission={externalId !== null}
+        />
         <div className="flex flex-wrap items-center justify-end gap-12">
           {viewUrl && (
             <a
@@ -277,6 +281,10 @@ export function SubmitStep({
           updates={progressUpdates}
           error={terminalError}
           stalled={submissionStalled}
+          isResubmission={
+            externalId !== null ||
+            progressUpdates.some((update) => update.state === "reused")
+          }
         />
         {terminalError && <ServerError message={terminalError} />}
         <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">

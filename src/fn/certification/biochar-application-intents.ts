@@ -38,6 +38,30 @@ interface BiocharApplicationIntentBase {
 
 export type BiocharApplicationIntent = BiocharApplicationIntentBase;
 
+export function attachSourcesToBiocharApplicationIntents(
+  intents: BiocharApplicationIntent[],
+  sources: Array<{
+    sourceId: string;
+    biocharApplicationId?: string | null;
+  }>,
+): BiocharApplicationIntent[] {
+  const sourceIdsByApplicationId = new Map<string, Set<string>>();
+  for (const source of sources) {
+    if (!source.biocharApplicationId) continue;
+    const sourceIds =
+      sourceIdsByApplicationId.get(source.biocharApplicationId) ??
+      new Set<string>();
+    sourceIds.add(source.sourceId);
+    sourceIdsByApplicationId.set(source.biocharApplicationId, sourceIds);
+  }
+  return intents.map((intent) => ({
+    ...intent,
+    sourceIds: Array.from(
+      sourceIdsByApplicationId.get(intent.applicationId) ?? [],
+    ).sort(),
+  }));
+}
+
 export async function compileBiocharApplicationIntents(args: {
   orgCtx: OrgContext;
   memberBatches: Array<{

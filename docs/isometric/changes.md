@@ -6,16 +6,18 @@
   `metric_ton / hectare` and submitted `kg` to `kilogram` on readback.
 - Reconciliation accepts only those semantically identical spelling pairs.
   Quantity magnitudes, application and dependency identities, dates, supplier
-  references, and GHG Entry associations remain strict; unrelated units still
-  fail closed as registry drift.
+  references, and any present GHG Entry association remain strict; unrelated
+  units and an association to a different GHG Entry still fail closed as
+  registry drift. Both provider-managed association fields may remain null on
+  a fully persisted Application, which is accepted and retained in the journal.
 - Confirmed Biochar Application retries read the persisted external identity
-  directly and require its association to match the current GHG Entry. Bounded
-  supplier-reference scans remain only for unconfirmed orphan recovery.
+  directly. A present association must match the current GHG Entry; null
+  provider-managed associations are accepted. Bounded supplier-reference scans
+  remain only for unconfirmed orphan recovery.
 - Biochar Application journal identity and supplier references are versioned by
   immutable Removal submission. A superseding GHG Entry creates one new
-  associated Biochar Application while the prior registry application remains
-  linked to the prior GHG Entry; retries reuse the current version without a
-  duplicate write.
+  Biochar Application for that submission while the prior registry application
+  remains intact; retries reuse the current version without a duplicate write.
 - Kilogram request/readback comparison is shared with Production Batch
   reconciliation so both endpoints retain the same verified alias contract.
 - Application field size is required and positive at form, create, update,

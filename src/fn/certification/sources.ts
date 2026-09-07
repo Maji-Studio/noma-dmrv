@@ -6,7 +6,6 @@ import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
 import {
   getCertifierProjectByFacility,
   type CertificationSubmissionRow,
-  type DocumentRow,
 } from "@/data-access/certification";
 import {
   deleteDocumentUploadByDocument,
@@ -14,21 +13,12 @@ import {
   insertOrGetDocumentUpload,
   isExternalSourceReferencedInSnapshots,
   listDocumentUploadsForDocuments,
-  type CertifierDocumentUploadRow,
   type DocumentUploadMetadata,
 } from "@/data-access/certifier-document-uploads";
 import { getLatestSubmissionWithExecutor } from "@/data-access/certification-submissions";
 import { getRegistrySourceVisibility } from "@/data-access/certifier-organization-settings";
-import {
-  getCertifierRemovalById,
-  getCreditBatchesByRemovalId,
-} from "@/data-access/certifier-removals";
-import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
-import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
-import {
-  getDocumentById,
-  listDocumentsForEntity,
-} from "@/data-access/documents";
+import { getCertifierRemovalById } from "@/data-access/certifier-removals";
+import { getDocumentById } from "@/data-access/documents";
 import { SafeError } from "@/lib/errors";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import {
@@ -59,221 +49,49 @@ import {
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
 } from "./shared";
+import { withSourceSyncEventOnFailure } from "./source-sync-events";
+import { buildRemovalSourceDescription } from "@/lib/certification/removal-source-bindings";
+import {
+  collectCandidateDocumentIdsForRemoval as collectCandidateDocumentIdsForRemovalCandidate,
+  collectCandidateSourceDocumentsForRemoval as collectCandidateSourceDocumentsForRemovalCandidate,
+  loadCandidateDocumentsForRemovalForUser as loadCandidateDocumentsForRemovalForUserCandidate,
+  resolveSourceBindingCandidates as resolveSourceBindingCandidatesCandidate,
+  resolveSourceIdsForRemoval as resolveSourceIdsForRemovalCandidate,
+  type CandidateDocument,
+  type CandidateDocumentsForRemoval,
+  type CandidateSourceDocument,
+} from "./source-candidates";
 
 const BYTES_PER_MEGABYTE = 1_000_000;
-import { withSourceSyncEventOnFailure } from "./source-sync-events";
-import {
-  buildRemovalSourceDescription,
-  classifyRemovalSourceCandidate,
-  type ClassifiedRemovalSource,
-} from "@/lib/certification/removal-source-bindings";
-
-// ───────────────────────────────────────────────────────────────────────────
-// Candidate-document discovery
-// ───────────────────────────────────────────────────────────────────────────
-
-// Code-owned Removal evidence roles live on the three operational lineage
-// entities plus generated evidence ledgers attached to member credit batches.
-// Production-run readings remain telemetry, and transport-leg documents are
-// not inferred as substitutes for the direct BoL roles.
-type LineageEntityType =
-  | "application"
-  | "delivery"
-  | "feedstock"
-  | "credit_batch"
-  | "sample";
-
-export interface CandidateLineageEntity {
-  entityType: LineageEntityType;
-  entityId: string;
-  entityLabel: string;
-}
-
-export interface CandidateDocument {
-  document: DocumentRow;
-  lineageEntity: CandidateLineageEntity;
-  binding: ClassifiedRemovalSource;
-  mirror: {
-    externalDocumentId: string;
-    isPublic: boolean;
-    mirroredAt: Date;
-  } | null;
-}
-
-export interface CandidateDocumentsForRemoval {
-  removalId: string;
-  facilityId: string;
-  candidates: CandidateDocument[];
-  // Distinct external Source IDs reachable for this removal — used by submit
-  // and by the panel's files-ready counter.
-  mirroredExternalIds: string[];
-  // True when the facility has an Isometric mapping. Without one, the panel
-  // renders an empty state with a pointer to facility settings.
-  hasMapping: boolean;
-}
-
-// Walks every member credit batch's allocation-aware lineage and collects only
-// the operational entities that can own an MVP Removal Source role.
-async function collectLineageEntities(
-  orgCtx: OrgContext,
-  memberBatchIds: string[],
-): Promise<CandidateLineageEntity[]> {
-  if (memberBatchIds.length === 0) return [];
-
-  const accountingByBatch = await loadCreditBatchRollups(
-    orgCtx,
-    memberBatchIds,
-  );
-  const memberSamples = await getSamplesByCreditBatchIds(
-    orgCtx,
-    memberBatchIds,
-  );
-  const seen = new Map<string, CandidateLineageEntity>();
-  const add = (e: CandidateLineageEntity) => {
-    const k = `${e.entityType}:${e.entityId}`;
-    if (!seen.has(k)) seen.set(k, e);
-  };
-
-  for (const memberBatchId of memberBatchIds) {
-    const accounting = accountingByBatch[memberBatchId];
-    if (!accounting) {
-      throw new SafeError(`Credit batch ${memberBatchId} could not be loaded.`);
-    }
-    const { batch, lineageFacts } = accounting;
-    add({
-      entityType: "credit_batch",
-      entityId: batch.id,
-      entityLabel: `Credit batch ${batch.code}`,
-    });
-
-    for (const application of lineageFacts.applications) {
-      add({
-        entityType: "application",
-        entityId: application.id,
-        entityLabel: `Application ${application.code}`,
-      });
-      add({
-        entityType: "delivery",
-        entityId: application.delivery.id,
-        entityLabel: `Delivery ${application.delivery.code}`,
-      });
-    }
-
-    for (const run of lineageFacts.runs) {
-      for (const feedstock of run.feedstocks) {
-        add({
-          entityType: "feedstock",
-          entityId: feedstock.id,
-          entityLabel: `Feedstock ${feedstock.code}`,
-        });
-      }
-    }
-  }
-
-  for (const sample of memberSamples) {
-    add({
-      entityType: "sample",
-      entityId: sample.id,
-      entityLabel: `Sample ${sample.sampleCode || sample.id}`,
-    });
-  }
-
-  return Array.from(seen.values());
-}
 
 export async function loadCandidateDocumentsForRemovalForUser(
-  orgCtx: OrgContext,
-  removalId: string,
-): Promise<CandidateDocumentsForRemoval> {
-  const removal = await getCertifierRemovalById(orgCtx, removalId);
-  if (!removal) throw new SafeError("Removal not found.");
+  ...args: Parameters<typeof loadCandidateDocumentsForRemovalForUserCandidate>
+) {
+  return loadCandidateDocumentsForRemovalForUserCandidate(...args);
+}
 
-  const mapping = await getCertifierProjectByFacility(
-    orgCtx,
-    removal.facilityId,
-    ISOMETRIC_PROVIDER,
-  );
+export async function collectCandidateDocumentIdsForRemoval(
+  ...args: Parameters<typeof collectCandidateDocumentIdsForRemovalCandidate>
+) {
+  return collectCandidateDocumentIdsForRemovalCandidate(...args);
+}
 
-  const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
-  const lineageEntities = await collectLineageEntities(
-    orgCtx,
-    batches.map((b) => b.id),
-  );
+export async function collectCandidateSourceDocumentsForRemoval(
+  ...args: Parameters<typeof collectCandidateSourceDocumentsForRemovalCandidate>
+) {
+  return collectCandidateSourceDocumentsForRemovalCandidate(...args);
+}
 
-  const docsLists = await Promise.all(
-    lineageEntities.map((e) =>
-      listDocumentsForEntity(orgCtx, e.entityType, e.entityId).then((rows) => ({
-        entity: e,
-        rows,
-      })),
-    ),
-  );
+export async function resolveSourceBindingCandidates(
+  ...args: Parameters<typeof resolveSourceBindingCandidatesCandidate>
+) {
+  return resolveSourceBindingCandidatesCandidate(...args);
+}
 
-  // Dedup documents by id — a single document is rare across entities but the
-  // map keeps display deterministic.
-  const seenDocs = new Map<string, { doc: DocumentRow; entity: CandidateLineageEntity }>();
-  for (const { entity, rows } of docsLists) {
-    for (const doc of rows) {
-      if (!seenDocs.has(doc.id)) seenDocs.set(doc.id, { doc, entity });
-    }
-  }
-
-  const documentIds = Array.from(seenDocs.keys());
-  const mirrorRows = await listDocumentUploadsForDocuments(
-    orgCtx,
-    ISOMETRIC_PROVIDER,
-    documentIds,
-  );
-  const mirrorByDocumentId = new Map<string, CertifierDocumentUploadRow>(
-    mirrorRows.map((r) => [r.documentId, r]),
-  );
-
-  const candidates: CandidateDocument[] = Array.from(seenDocs.values()).flatMap(
-    ({ doc, entity }) => {
-      const binding = classifyRemovalSourceCandidate({
-        documentType: doc.documentType,
-        metadata: doc.metadata,
-        lineage: entity,
-        removalId,
-      });
-      if (!binding) return [];
-      const mirror = mirrorByDocumentId.get(doc.id);
-      const meta = (mirror?.metadata ?? null) as
-        | (DocumentUploadMetadata & { [k: string]: unknown })
-        | null;
-      return [{
-        document: doc,
-        lineageEntity: entity,
-        binding,
-        mirror: mirror
-          ? {
-              externalDocumentId: mirror.externalDocumentId,
-              isPublic: meta?.isPublic ?? false,
-              mirroredAt: mirror.createdAt,
-            }
-          : null,
-      }];
-    },
-  );
-
-  // Deterministic UI order: unmirrored first (most actionable), then by file
-  // name. Stable across React Query refetches.
-  candidates.sort((a, b) => {
-    const aMirrored = a.mirror ? 1 : 0;
-    const bMirrored = b.mirror ? 1 : 0;
-    if (aMirrored !== bMirrored) return aMirrored - bMirrored;
-    return a.document.fileName.localeCompare(b.document.fileName);
-  });
-
-  return {
-    removalId,
-    facilityId: removal.facilityId,
-    candidates,
-    mirroredExternalIds: Array.from(
-      new Set(mirrorRows.map((r) => r.externalDocumentId)),
-    ).sort(),
-    hasMapping: !!mapping,
-  };
+export async function resolveSourceIdsForRemoval(
+  ...args: Parameters<typeof resolveSourceIdsForRemovalCandidate>
+) {
+  return resolveSourceIdsForRemovalCandidate(...args);
 }
 
 export async function loadCandidateDocumentsForRemoval(
@@ -337,11 +155,18 @@ export interface MirrorResult {
  */
 export async function mirrorCandidateSourcesForSubmission(
   orgCtx: OrgContext,
-  args: { removalId: string; candidateDocumentIds: string[] },
+  args: {
+    removalId: string;
+    candidateSourceDocuments: CandidateSourceDocument[];
+  },
 ): Promise<void> {
-  const candidateDocumentIds = Array.from(
-    new Set(args.candidateDocumentIds),
-  ).sort();
+  const candidateByDocumentId = new Map(
+    args.candidateSourceDocuments.map((candidate) => [
+      candidate.documentId,
+      candidate,
+    ]),
+  );
+  const candidateDocumentIds = Array.from(candidateByDocumentId.keys()).sort();
   if (candidateDocumentIds.length === 0) return;
 
   const existing = await listDocumentUploadsForDocuments(
@@ -355,10 +180,15 @@ export async function mirrorCandidateSourcesForSubmission(
 
   for (const documentId of candidateDocumentIds) {
     if (mirroredDocumentIds.has(documentId)) continue;
+    const submissionCandidate = candidateByDocumentId.get(documentId);
+    if (!submissionCandidate) continue;
     await mirrorDocumentToSourceForUser(
       orgCtx,
       { removalId: args.removalId, documentId },
-      { enforceRemovalLifecycle: true },
+      // Submission already filtered candidates through the immutable snapshot.
+      // Keep this internal seam available for fresh post-supersede evidence and
+      // deterministic generated ledgers; the operator action remains guarded.
+      { enforceRemovalLifecycle: false, submissionCandidate },
     );
   }
 }
@@ -423,25 +253,39 @@ export async function mirrorDocumentToSource(
 export async function mirrorDocumentToSourceForUser(
   orgCtx: OrgContext,
   parsed: MirrorDocumentToSourceInput,
-  options: { enforceRemovalLifecycle?: boolean } = {},
+  options: {
+    enforceRemovalLifecycle?: boolean;
+    /** Compiler-validated immutable candidate; never accepted from an action. */
+    submissionCandidate?: CandidateSourceDocument;
+  } = {},
 ): Promise<MirrorResult> {
   requireOrgRole(orgCtx, "admin");
   const { removalId, documentId } = parsed;
+  if (
+    options.submissionCandidate &&
+    options.submissionCandidate.documentId !== documentId
+  ) {
+    throw new SafeError(
+      "The submission Source candidate does not match the document.",
+    );
+  }
 
   // Ownership + lineage scoping ───────────────────────────────────────
   // `assertDocumentIsCandidateForRemoval` walks the same lineage the panel
   // shows. Anchoring the mutation to the removal prevents an authenticated
   // caller from mirroring an arbitrary document UUID through this endpoint.
-  const { candidates, candidate } = await assertDocumentIsCandidateForRemoval(
-    orgCtx,
-    removalId,
-    documentId,
-  );
-  if (!candidates.hasMapping) {
-    throw new SafeError(
-      "This facility isn't linked to an Isometric project. Link it in facility settings before submitting.",
-    );
-  }
+  // Submission may carry a frozen snapshot candidate that no longer passes
+  // today's live eligibility rule. That tuple was derived server-side and is
+  // hash-covered; the public action still re-derives the candidate every time.
+  const liveCandidate = options.submissionCandidate
+    ? null
+    : (
+        await assertDocumentIsCandidateForRemoval(
+          orgCtx,
+          removalId,
+          documentId,
+        )
+      ).candidate;
   const removal = await getCertifierRemovalById(orgCtx, removalId);
   if (!removal) throw new SafeError("Removal not found.");
   const mapping = await getCertifierProjectByFacility(
@@ -450,7 +294,6 @@ export async function mirrorDocumentToSourceForUser(
     ISOMETRIC_PROVIDER,
   );
   if (!mapping) {
-    // Defensive: hasMapping was true above, so this is a TOCTOU edge.
     throw new SafeError(
       "This facility isn't linked to an Isometric project. Link it in facility settings before submitting.",
     );
@@ -463,11 +306,14 @@ export async function mirrorDocumentToSourceForUser(
       db,
     );
   }
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
-
     // Pre-flight: document loadable + safe to upload ────────────────────
     const document = await getDocumentById(orgCtx, documentId);
     if (!document) throw new SafeError("Document not found.");
+    if (document.uploadStatus !== "uploaded") {
+      throw new SafeError(
+        "This document upload has not been confirmed. Finish or retry the upload, then submit again.",
+      );
+    }
     if (!document.storageKey) {
       throw new SafeError(
         "This document has no managed storage (legacy URL-only). Re-upload it through noma, then submit again.",
@@ -500,6 +346,7 @@ export async function mirrorDocumentToSourceForUser(
         "The stored file does not match this document's record. Re-upload it, then submit again.",
       );
     }
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
     // After the pre-flight, these are guaranteed non-null. Lift them into
     // typed locals so the closure passed to db.transaction below carries
@@ -512,6 +359,12 @@ export async function mirrorDocumentToSourceForUser(
       ISOMETRIC_PROVIDER,
     );
     const policyIsPublic = sourceVisibility === "public";
+    const sourceBinding =
+      options.submissionCandidate?.binding ?? liveCandidate?.binding ?? null;
+    const sourceLineageLabel =
+      options.submissionCandidate?.binding?.lineage.entityLabel ??
+      liveCandidate?.lineageEntity.entityLabel ??
+      `${document.entityType} ${document.entityId}`;
     // Serialize concurrent mirrors of the same document with a transaction-
     // scoped advisory lock. Two operators clicking "Mirror" simultaneously
     // would otherwise both POST /sources and one Source becomes an orphan
@@ -607,7 +460,8 @@ export async function mirrorDocumentToSourceForUser(
                 supplierRefId,
                 isPublic: policyIsPublic,
                 sourceDescription: buildRemovalSourceDescription(
-                  candidate.binding,
+                  sourceBinding,
+                  sourceLineageLabel,
                 ),
               }),
             ),
@@ -801,180 +655,13 @@ export async function unlinkDocumentSource(
   });
 }
 
-// ───────────────────────────────────────────────────────────────────────────
-// Internal helpers
-// ───────────────────────────────────────────────────────────────────────────
-
-// Walks the lineage and returns the deduped, sorted set of candidate
-// noma documentIds — the IDs every submit-path needs to acquire per-document
-// mirror locks on before resolving Isometric source IDs. Sorting prevents
-// two concurrent submits from acquiring locks in different orders and
-// deadlocking each other.
-export async function collectCandidateDocumentIdsForRemoval(
-  orgCtx: OrgContext,
-  args: {
-    removalId: string;
-    lineages: Array<{
-      application: { id: string; code?: string | null };
-      delivery: { id: string; code?: string | null };
-      order: { id: string } | null;
-      biocharProduct: { id: string } | null;
-      productionRun: { id: string } | null;
-      reactor: { id: string } | null;
-      feedstocks: Array<{ id: string; code?: string | null }>;
-    }>;
-    memberBatches: Array<{ id: string; code?: string | null }>;
-  },
-): Promise<string[]> {
-  const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, {
-    removalId: args.removalId,
-    lineages: args.lineages,
-    memberBatches: args.memberBatches,
-  });
-  return Array.from(
-    new Set(candidates.map((candidate) => candidate.documentId)),
-  ).sort();
-}
-
-export interface CandidateSourceDocument {
-  documentId: string;
-  binding: ClassifiedRemovalSource;
-}
-
-interface SourceCandidateLineage {
-  application: { id: string; code?: string | null };
-  delivery: { id: string; code?: string | null };
-  feedstocks: Array<{ id: string; code?: string | null }>;
-}
-
-/**
- * Discovers the three operator evidence roles and current generated ledgers.
- * Telemetry and every other lineage document stay outside both Removal Source
- * candidates and the submission requirement denominator.
- */
-export async function collectCandidateSourceDocumentsForRemoval(
-  orgCtx: OrgContext,
-  args: {
-    removalId?: string;
-    lineages: SourceCandidateLineage[];
-    memberBatches?: Array<{ id: string; code?: string | null }>;
-    memberSamples?: Array<{ id: string; code?: string | null }>;
-  },
-): Promise<CandidateSourceDocument[]> {
-  const entities = new Map<string, CandidateLineageEntity>();
-  const add = (entity: CandidateLineageEntity) => {
-    const key = `${entity.entityType}:${entity.entityId}`;
-    if (!entities.has(key)) entities.set(key, entity);
-  };
-  for (const lineage of args.lineages) {
-    add({
-      entityType: "application",
-      entityId: lineage.application.id,
-      entityLabel: `Application ${lineage.application.code ?? lineage.application.id}`,
-    });
-    add({
-      entityType: "delivery",
-      entityId: lineage.delivery.id,
-      entityLabel: `Delivery ${lineage.delivery.code ?? lineage.delivery.id}`,
-    });
-    for (const feedstock of lineage.feedstocks) {
-      add({
-        entityType: "feedstock",
-        entityId: feedstock.id,
-        entityLabel: `Feedstock ${feedstock.code ?? feedstock.id}`,
-      });
-    }
-  }
-  for (const batch of args.memberBatches ?? []) {
-    add({
-      entityType: "credit_batch",
-      entityId: batch.id,
-      entityLabel: `Credit batch ${batch.code ?? batch.id}`,
-    });
-  }
-  for (const sample of args.memberSamples ?? []) {
-    add({
-      entityType: "sample",
-      entityId: sample.id,
-      entityLabel: `Sample ${sample.code ?? sample.id}`,
-    });
-  }
-
-  const documentsByEntity = await Promise.all(
-    Array.from(entities.values(), async (lineage) => ({
-      lineage,
-      documents: await listDocumentsForEntity(
-        orgCtx,
-        lineage.entityType,
-        lineage.entityId,
-      ),
-    })),
-  );
-  const candidates = new Map<string, CandidateSourceDocument>();
-  for (const { lineage, documents } of documentsByEntity) {
-    for (const document of documents) {
-      const binding = classifyRemovalSourceCandidate({
-        documentType: document.documentType,
-        metadata: document.metadata,
-        lineage,
-        removalId: args.removalId,
-      });
-      if (binding && !candidates.has(document.id)) {
-        candidates.set(document.id, { documentId: document.id, binding });
-      }
-    }
-  }
-  return Array.from(candidates.values()).sort((left, right) =>
-    left.documentId.localeCompare(right.documentId),
-  );
-}
-
-export interface ResolvedSourceBindingCandidate extends CandidateSourceDocument {
-  sourceId: string;
-}
-
-export async function resolveSourceBindingCandidates(
-  orgCtx: OrgContext,
-  args: { candidates: CandidateSourceDocument[] },
-  txOrDb?: DbTransaction,
-): Promise<ResolvedSourceBindingCandidate[]> {
-  if (args.candidates.length === 0) return [];
-  const uploads = await listDocumentUploadsForDocuments(
-    orgCtx,
-    ISOMETRIC_PROVIDER,
-    args.candidates.map((candidate) => candidate.documentId),
-    txOrDb,
-  );
-  const sourceIdByDocumentId = new Map(
-    uploads.map((upload) => [upload.documentId, upload.externalDocumentId]),
-  );
-  return args.candidates.flatMap((candidate) => {
-    const sourceId = sourceIdByDocumentId.get(candidate.documentId);
-    return sourceId ? [{ ...candidate, sourceId }] : [];
-  });
-}
-
-// Resolves the deduped, sorted Source ID list for a removal given the set of
-// candidate documentIds (from `collectCandidateDocumentIdsForRemoval`). When
-// called inside a submit transaction that holds per-document mirror locks,
-// the result is stable through the snapshot insert — unlink and mirror both
-// block on those locks, so a concurrent unlink cannot delete a mapping after
-// we read it but before we persist the reference. Pass a `tx` from the
-// caller's transaction; defaults to `db` for non-locked callers.
-export async function resolveSourceIdsForRemoval(
-  orgCtx: OrgContext,
-  args: { candidateDocumentIds: string[] },
-  txOrDb?: DbTransaction,
-): Promise<string[]> {
-  if (args.candidateDocumentIds.length === 0) return [];
-  const uploads = await listDocumentUploadsForDocuments(
-    orgCtx,
-    ISOMETRIC_PROVIDER,
-    args.candidateDocumentIds,
-    txOrDb,
-  );
-  return Array.from(new Set(uploads.map((u) => u.externalDocumentId))).sort();
-}
+export type {
+  CandidateDocument,
+  CandidateDocumentsForRemoval,
+  CandidateLineageEntity,
+  CandidateSourceDocument,
+  ResolvedSourceBindingCandidate,
+} from "./source-candidates";
 
 // Re-export the input types for caller convenience.
 export type {

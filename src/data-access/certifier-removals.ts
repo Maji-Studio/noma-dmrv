@@ -783,14 +783,16 @@ export async function updateRemovalDates(
   args: { startedOn: string; completedOn: string },
 ): Promise<void> {
   requireOrgScope(ctx);
-  await db
+  const [updated] = await db
     .update(certifierRemovals)
     .set({
       startedOn: args.startedOn,
       completedOn: args.completedOn,
       updatedAt: sql`now()`,
     })
-    .where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)));
+    .where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)))
+    .returning({ id: certifierRemovals.id });
+  if (!updated) throw new SafeError("Removal not found.");
 }
 
 export async function updateRemovalSourceBindingVerification(

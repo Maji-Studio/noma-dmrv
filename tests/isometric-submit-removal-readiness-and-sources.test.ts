@@ -478,7 +478,7 @@ describe("submitRemoval — Source binding gate", () => {
       expect.any(Object),
       {
         removalId: REMOVAL_ID,
-        candidateDocumentIds: ["doc-1", "doc-2"],
+        candidateSourceDocuments: candidates,
       },
     );
     const submittedSemantic = (

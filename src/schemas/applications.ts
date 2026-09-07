@@ -53,6 +53,20 @@ export const applicationEvidenceMethods = [
 ] as const;
 export type ApplicationEvidenceMethod = (typeof applicationEvidenceMethods)[number];
 
+/** Methods offered for new operator selections. `visual` remains for legacy records. */
+export const selectableApplicationEvidenceMethods = [
+  "location",
+  "boundary",
+] as const satisfies readonly ApplicationEvidenceMethod[];
+
+export function isSelectableApplicationEvidenceMethod(
+  value: ApplicationEvidenceMethod,
+): value is (typeof selectableApplicationEvidenceMethods)[number] {
+  return selectableApplicationEvidenceMethods.includes(
+    value as (typeof selectableApplicationEvidenceMethods)[number],
+  );
+}
+
 const CUSTOMER_LOCATION_REQUIRED_MESSAGE =
   "Customer location coordinates are required.";
 const positiveFieldSizeHaSchema = requiredNumber(

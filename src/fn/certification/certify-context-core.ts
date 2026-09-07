@@ -119,6 +119,9 @@ export interface RemovalCertifyContext {
   // Null when the credit batch is not yet grouped into a removal (a 1:1
   // removal is created lazily on first submit).
   removalId: string | null;
+  // Persisted §8.6.2 registry reporting window for this Removal.
+  reportingWindowStartedOn: string | null;
+  reportingWindowCompletedOn: string | null;
   mapping: CertifierProjectRow | null;
   project: IsometricProject | null;
   defaultTemplate: IsometricGhgEntryTemplate | null;
@@ -533,8 +536,7 @@ export async function buildRemovalContext(
   }));
 
   // Load removal-owned facts up-front so every short-circuit carries them.
-  const [latestSubmission, linkedGhgStatement, supportingDocuments] =
-    await Promise.all([
+  const [latestSubmission, linkedGhgStatement] = await Promise.all([
       scope.removalId
         ? getLatestSubmission(orgCtx, {
             provider: ISOMETRIC_PROVIDER,
@@ -544,8 +546,12 @@ export async function buildRemovalContext(
           })
         : Promise.resolve(null),
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
-      loadEvidenceMirrorSummaryForScope(orgCtx, scope),
     ]);
+  const supportingDocuments = await loadEvidenceMirrorSummaryForScope(
+    orgCtx,
+    scope,
+    latestSubmission,
+  );
 
   // Walk every member batch's production-run applications into one deduped run union.
   const applicationIds = Array.from(
@@ -622,6 +628,8 @@ export async function buildRemovalContext(
     return {
       facilityId: scope.facilityId,
       removalId: scope.removalId,
+      reportingWindowStartedOn: scope.removal?.startedOn ?? null,
+      reportingWindowCompletedOn: scope.removal?.completedOn ?? null,
       ...facilityFacts,
       memberBatches: memberBatchesWithSubmissionGates,
       feedstockTypeMappingGaps,
@@ -714,6 +722,8 @@ export async function buildRemovalContext(
   return {
     facilityId: scope.facilityId,
     removalId: scope.removalId,
+    reportingWindowStartedOn: scope.removal?.startedOn ?? null,
+    reportingWindowCompletedOn: scope.removal?.completedOn ?? null,
     ...facilityFacts,
     requiredTransportCategories,
     memberBatches: memberBatchesWithSubmissionGates,
@@ -768,6 +778,8 @@ function projectUiContext(
     facilityId: ctx.facilityId,
     hasOrgCredentials: ctx.hasOrgCredentials,
     removalId: ctx.removalId,
+    reportingWindowStartedOn: ctx.reportingWindowStartedOn,
+    reportingWindowCompletedOn: ctx.reportingWindowCompletedOn,
     mapping: ctx.mapping,
     project: ctx.project,
     defaultTemplate: ctx.defaultTemplate,

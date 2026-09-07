@@ -16,7 +16,7 @@
  *
  * Plan: docs/archive/plans/2026-06-10-certification-reliability-track.md (Phase 1).
  */
-import { and, desc, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import {
@@ -47,6 +47,7 @@ import {
   type CertificationSubmissionRow,
 } from "./certification";
 import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
+import { acquireFacilityCertificationBoundaryLock } from "./facility-certification-boundary-lock";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
@@ -60,6 +61,8 @@ export interface SubmissionKey {
 
 export interface MappingClaimGuard {
   facilityId: string;
+  /** Caller holds the matching certification-boundary session lock. */
+  facilityCertificationBoundaryLockHeldBySession?: true;
   provider: CertifierProvider;
   expectedExternalProjectId: string;
   expectedExternalFacilityId?: string | null;
@@ -126,7 +129,14 @@ export async function recordConfirmedSubmissionIdentity(
   requireOrgScope(ctx);
   const updated = await db
     .update(certificationSubmissions)
-    .set({ externalId: args.externalId, updatedAt: sql`now()` })
+    .set({
+      externalId: args.externalId,
+      updatedAt: sql`now()`,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object(
+        ${SUBMISSION_METADATA_KEYS.externalMutation}::text,
+        ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}::text
+      )`,
+    })
     .where(
       and(
         eq(certificationSubmissions.id, id),
@@ -137,6 +147,37 @@ export async function recordConfirmedSubmissionIdentity(
     )
     .returning({ id: certificationSubmissions.id });
   return updated.length > 0;
+}
+
+export async function findPreviousActiveSubmissionId(
+  ctx: OrgContext,
+  row: Pick<
+    CertificationSubmissionRow,
+    | "provider"
+    | "submissionType"
+    | "localEntityType"
+    | "localEntityId"
+    | "version"
+  >,
+): Promise<string | null> {
+  requireOrgScope(ctx);
+  const [previous] = await db
+    .select({ id: certificationSubmissions.id })
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.provider, row.provider),
+        eq(certificationSubmissions.submissionType, row.submissionType),
+        eq(certificationSubmissions.localEntityType, row.localEntityType),
+        eq(certificationSubmissions.localEntityId, row.localEntityId),
+        lt(certificationSubmissions.version, row.version),
+        inArray(certificationSubmissions.status, ["submitted", "accepted"]),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    )
+    .orderBy(desc(certificationSubmissions.version))
+    .limit(1);
+  return previous?.id ?? null;
 }
 
 /** Update a terminal poll result only while this remains the current version. */
@@ -540,15 +581,22 @@ async function readLatestSubmission(
 // are checked by presence: a GHG Statement has no template, so it simply
 // omits `expectedDefaultRemovalTemplateId`.
 //
-// The facility durability lock is always acquired first, followed by the
-// mapping lock, so every submit path shares one order
-// (`facility → mapping → artifact → mirror`). This serializes the first
+// The certification-boundary and facility-durability locks are acquired first,
+// followed by the mapping lock, so every submit path shares one order
+// (`boundary → facility → mapping → artifact → mirror`). This serializes the first
 // blocking ledger write with facility tier edits and prevents ABBA deadlocks.
 async function lockAndVerifyMapping(
   ctx: OrgContext,
   executor: DbTransaction,
   guard: MappingClaimGuard,
 ): Promise<void> {
+  if (!guard.facilityCertificationBoundaryLockHeldBySession) {
+    await acquireFacilityCertificationBoundaryLock(
+      ctx,
+      executor,
+      guard.facilityId,
+    );
+  }
   await acquireFacilityDurabilityLock(ctx, executor, guard.facilityId);
 
   if (guard.expectedDurabilityOption !== undefined) {

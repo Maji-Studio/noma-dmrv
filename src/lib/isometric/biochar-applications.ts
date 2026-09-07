@@ -73,7 +73,7 @@ export function buildBiocharApplicationReference(
   // Preserve the already-deployed v1 reference so an interrupted first
   // submission can still reconcile its remote artifact. Superseding Removal
   // submissions receive a distinct reference and therefore a distinct remote
-  // Biochar Application associated with that new GHG Entry.
+  // Biochar Application for that Removal submission version.
   const submissionVersionSuffix =
     removalSubmissionVersion === FIRST_REMOVAL_SUBMISSION_VERSION
       ? ""

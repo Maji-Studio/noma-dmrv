@@ -40,6 +40,46 @@ describe("reviewPayloadHash", () => {
     );
   });
 
+  it("is stable when Biochar Application Source IDs materialize", () => {
+    const pending = {
+      ...pendingPayload(),
+      biocharApplicationIntents: [
+        { applicationId: "app-1", sourceIds: [] },
+      ],
+    };
+    const materialized = {
+      ...pending,
+      biocharApplicationIntents: [
+        { applicationId: "app-1", sourceIds: ["src-photo"] },
+      ],
+    };
+
+    expect(reviewPayloadHash(materialized)).toBe(reviewPayloadHash(pending));
+    expect(payloadHash(materialized)).not.toBe(payloadHash(pending));
+  });
+
+  it("strips Biochar Application Source IDs from the transport snapshot path", () => {
+    const pending = {
+      ...pendingPayload(),
+      transport: {
+        biocharApplicationIntents: [
+          { applicationId: "app-1", sourceIds: [] },
+        ],
+      },
+    };
+    const materialized = {
+      ...pending,
+      transport: {
+        biocharApplicationIntents: [
+          { applicationId: "app-1", sourceIds: ["src-photo"] },
+        ],
+      },
+    };
+
+    expect(reviewPayloadHash(materialized)).toBe(reviewPayloadHash(pending));
+    expect(payloadHash(materialized)).not.toBe(payloadHash(pending));
+  });
+
   it("differs from the full payload hash, which must still track Source IDs", () => {
     expect(payloadHash(materializedPayload())).not.toBe(
       payloadHash(pendingPayload()),
@@ -73,6 +113,19 @@ describe("reviewPayloadHash", () => {
     expect(reviewPayloadHash(drifted)).not.toBe(
       reviewPayloadHash(pendingPayload()),
     );
+  });
+
+  it("keeps unknown nested sourceIds fields hashed", () => {
+    const original = {
+      ...pendingPayload(),
+      futureRegistryContract: { sourceIds: ["reviewed-value"] },
+    };
+    const drifted = {
+      ...original,
+      futureRegistryContract: { sourceIds: ["changed-value"] },
+    };
+
+    expect(reviewPayloadHash(drifted)).not.toBe(reviewPayloadHash(original));
   });
 
   it("keeps every non-Source-ID binding field hashed", () => {

@@ -129,10 +129,15 @@ Commingled slices partition and sum to the physical Application total.
 Each slice uses the ordinary local idempotency journal. Noma claims the exact
 payload and stable supplier reference before POST, reconciles unconfirmed
 orphans across bounded list pages, reads confirmed retries by their persisted
-external identity, and fails closed on payload, current-GHG-Entry, or identity
-drift. The journal row and supplier reference are versioned by immutable
-Removal submission: supersession creates a fresh Biochar Application associated
-with the new GHG Entry and leaves the prior association intact. Registry failure
+external identity, and fails closed on payload or identity drift. Isometric's
+provider-managed `ghg_entry_id` and `removal_id` may both remain null on a fully
+persisted Biochar Application; null is accepted and recorded, while any present
+association must match the current GHG Entry. The journal row and supplier
+reference are versioned by immutable Removal submission: supersession creates a
+fresh Biochar Application for the new GHG Entry and leaves the prior registry
+artifact intact. The current provider response type does not expose
+`source_ids`, so readback cannot verify that field; the immutable local intent
+and submission snapshot retain the exact Source IDs sent. Registry failure
 blocks Removal submission and leaves the claim safely retryable. There is no
 gate or placeholder lifecycle.
 
@@ -224,7 +229,7 @@ is not confirmed, so no production-live Method-B submission is claimed.
 
 ## Sources and evidence
 
-Source attribution is per input, not Removal-wide.
+Source attribution is target-specific, not Removal-wide.
 
 `src/lib/certification/removal-source-bindings.ts` classifies operator
 documents and generated evidence ledgers into an immutable plan of exact
@@ -238,6 +243,19 @@ component/input targets:
   `product_mass` and, when present, safety-margin `mass`;
 - generated transport ledger to the transport inputs present in the template;
 - generated durability ledger to the tier-specific durability inputs.
+
+Confirmed Application-owned photos, PDFs, weighbridge tickets, and affidavits
+are also mirrored as Sources and attached to each corresponding Biochar
+Application through its `source_ids`. GIS boundary uploads remain local: noma
+does not mirror them until the Application stores an explicit active-boundary
+document identity, so replaced or historical boundaries cannot be submitted.
+
+A draft retry reuses the exact operator-evidence tuple stored in its immutable
+submission snapshot. Submitted and accepted Removals keep that frozen operator
+evidence on a superseding claim while current deterministic transport and
+durability ledgers are regenerated and attached. Evidence added later requires
+a new Removal or a future amendment workflow; a rejected or superseded attempt
+that has no live claim rebuilds from current evidence.
 
 The plan and mapping revision are hash-covered in the submission snapshot.
 After GHG-entry creation, noma follows component attributions to Components and

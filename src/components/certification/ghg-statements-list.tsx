@@ -232,7 +232,12 @@ function RegistryRecordCell({ item }: { item: GhgStatementListItem }) {
 function StatusCell({ item }: { item: GhgStatementListItem }) {
   const { latestSubmission } = item;
   const locked = latestSubmission ? isLockedInFlight(latestSubmission) : false;
-  const derived = deriveSubmissionStatus(latestSubmission, locked, "ghgStatement");
+  const derived = deriveSubmissionStatus(
+    latestSubmission,
+    locked,
+    "ghgStatement",
+    "unknown",
+  );
   return <StatusBadge status={derived.value} label={derived.label} />;
 }
 
@@ -264,6 +269,7 @@ const columns: ColumnDef<GhgStatementListItem>[] = [
         submission,
         submission ? isLockedInFlight(submission) : false,
         "ghgStatement",
+        "unknown",
       ).label;
     },
     cell: ({ row }) => <StatusCell item={row.original} />,

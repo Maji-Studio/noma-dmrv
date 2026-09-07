@@ -95,6 +95,26 @@ describe("buildRemovalListRows", () => {
     expect(row.submissionInterrupted).toBe(true);
   });
 
+  it("flags a submitted Removal with no reporting window for recovery", () => {
+    const incomplete = identity("removal-incomplete", "CB-INCOMPLETE");
+    incomplete.latestSubmission = {
+      status: "submitted",
+      externalId: "rmv-existing",
+      lockedAt: null,
+    } as NonNullable<RemovalHubEntry["latestSubmission"]>;
+
+    const [row] = buildRemovalListRows([incomplete], {
+      "removal-incomplete": { status: "unavailable", data: null },
+    });
+
+    expect(row).toMatchObject({
+      local: "submitted",
+      startedOn: null,
+      completedOn: null,
+      submissionInterrupted: true,
+    });
+  });
+
   it("ignores stale lifecycle enrichment when a refresh is unavailable", () => {
     const interrupted = identity("removal-stale", "CB-STALE");
     interrupted.latestSubmission = {

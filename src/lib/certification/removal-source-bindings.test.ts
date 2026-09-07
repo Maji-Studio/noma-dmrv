@@ -241,6 +241,9 @@ describe("buildRemovalSourceDescription", () => {
     expect(buildRemovalSourceDescription(binding!)).toBe(
       "Noma role: Inventory. Lineage: Application APP-001.",
     );
+    expect(buildRemovalSourceDescription(null, "Application APP-001")).toBe(
+      "Supporting evidence for Application APP-001.",
+    );
   });
 });
 
