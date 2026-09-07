@@ -1,3 +1,4 @@
+import { canRefreshSubmissionEvidence } from "@/lib/certification/submission-metadata";
 /**
  * Pure submission-claim policy.
  *
@@ -156,7 +157,7 @@ export function decideSubmissionClaim(
       if (!canReclaimInterrupted && now - lockedAtMs < lockTtlMs) {
         return { kind: "blocked-in-flight" };
       }
-      if (policy.allowEvidenceRefresh && !latest.externalId &&
+      if (policy.allowEvidenceRefresh && !latest.externalId && canRefreshSubmissionEvidence(latest.metadata) &&
         Array.isArray(getMetadataValue(latest.metadata, SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates))) {
         return { kind: "create-new-version", nextVersion: latest.version + 1, supersedePreviousId: latest.id, reason: "evidence-refresh" };
       }

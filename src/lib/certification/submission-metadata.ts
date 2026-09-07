@@ -41,3 +41,9 @@ export function canReclaimInterruptedSubmission(metadata: unknown): boolean {
       SUBMISSION_EXTERNAL_MUTATIONS.confirmed
   );
 }
+
+/** Only a proven mutation-free attempt can rebuild version-specific registry inputs. */
+export function canRefreshSubmissionEvidence(metadata: unknown): boolean {
+  return getMetadataValue(metadata, SUBMISSION_METADATA_KEYS.externalMutation) ===
+    SUBMISSION_EXTERNAL_MUTATIONS.none;
+}

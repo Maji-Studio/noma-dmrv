@@ -158,6 +158,7 @@ export async function reserveProductionEmissionsClaims(
       owner.localEntityType === "removal" &&
       owner.status === "draft" &&
       !owner.externalId &&
+      getMetadataValue(owner.metadata, SUBMISSION_METADATA_KEYS.externalMutation) === SUBMISSION_EXTERNAL_MUTATIONS.none &&
       Array.isArray(getMetadataValue(
         owner.metadata,
         SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates,

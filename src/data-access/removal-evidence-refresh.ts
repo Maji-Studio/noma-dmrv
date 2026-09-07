@@ -1,12 +1,14 @@
+import { canRefreshSubmissionEvidence } from "@/lib/certification/submission-metadata";
 import { and, eq, isNull } from "drizzle-orm";
 import { withDedicatedLockConnection } from "@/db";
-import { certificationSubmissions } from "@/db/schema";
+import { certificationSubmissions, documents } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { isSubmissionAttemptInterrupted, SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
-import { requireOrgScope } from "./utils";
+import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
+import { assertSameOrg, requireOrgScope } from "./utils";
 import { getLatestSubmissionWithExecutor } from "./certification-submissions";
 import type { CertificationSubmissionRow } from "./certification";
 
@@ -14,7 +16,7 @@ import type { CertificationSubmissionRow } from "./certification";
 export async function requestRemovalEvidenceRefresh(
   ctx: OrgContext,
   args: { removalId: string; submissionId: string },
-  reconcile: (row: CertificationSubmissionRow) => Promise<unknown[]>,
+  reconcile: (row: CertificationSubmissionRow) => Promise<Array<{ documentId: string }>>,
 ) {
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");
@@ -33,7 +35,15 @@ export async function requestRemovalEvidenceRefresh(
     ) {
       throw new SafeError("Only an interrupted attempt without a registry GHG Entry can include new evidence. Refresh the Removal and retry its saved attempt.");
     }
+    if (!canRefreshSubmissionEvidence(row.metadata)) {
+      throw new SafeError("This attempt may already have registry inputs. Retry its saved evidence; a new evidence version requires reconciliation of those inputs first.");
+    }
     const candidates = await reconcile(row);
+    const documentIds = [...new Set(candidates.map((candidate) => candidate.documentId))];
+    await acquireMirrorLocksSorted(tx, documentIds);
+    for (const documentId of documentIds) {
+      await assertSameOrg(ctx, documents, documentId, tx);
+    }
     await tx.update(certificationSubmissions).set({
       metadata: {
         ...(row.metadata as Record<string, unknown> ?? {}),
