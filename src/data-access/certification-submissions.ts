@@ -216,6 +216,7 @@ export async function recordTerminalStatusIfCurrent(
 
 export type NewVersionReason =
   | "first"
+  | "evidence-refresh"
   | "submitted-hash-changed"
   | "rejected-hash-changed"
   | "after-superseded";

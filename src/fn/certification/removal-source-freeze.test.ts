@@ -112,3 +112,19 @@ describe("Removal Source freeze", () => {
     ).toThrow(SafeError);
   });
 });
+
+describe("reviewed evidence versions", () => {
+it("selects explicitly reviewed additions for a new version without changing old evidence", () => {
+  const row = submission({status: "draft", metadata: { evidenceRefreshCandidates: [frozenOperatorCandidate, currentCandidates[1]] }});
+  const before = JSON.stringify(row.payloadSnapshot);
+  expect(filterCandidateSourcesForSubmissionLifecycle(currentCandidates, row)).toEqual([frozenOperatorCandidate, currentCandidates[1], currentTransportLedgerCandidate]);
+  expect(JSON.stringify(row.payloadSnapshot)).toBe(before);
+});
+
+  it("replaces both superseded generated ledger roles in a reviewed version", () => {
+    const durability: CandidateSourceDocument = { ...currentTransportLedgerCandidate, documentId: "current-durability-ledger", binding: { ...currentTransportLedgerCandidate.binding!, nomaRole: "durability_evidence_ledger" } };
+    const previousLedger = { ...currentTransportLedgerCandidate, documentId: "superseded-ledger" };
+    const row = submission({ status: "draft", metadata: { evidenceRefreshCandidates: [frozenOperatorCandidate, previousLedger] } });
+    expect(filterCandidateSourcesForSubmissionLifecycle([...currentCandidates, durability], row)).toEqual([frozenOperatorCandidate, currentTransportLedgerCandidate, durability]);
+  });
+});

@@ -45,6 +45,7 @@ import { SafeError } from "@/lib/errors";
 import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import {
   buildCreateProductionBatchRequest,
+  buildLegacyProductionBatchDisplayName,
   buildProductionBatchReference,
   createProductionBatch,
   findProductionBatchBySupplierRef,
@@ -400,9 +401,12 @@ function matchesLegacyDateBoundPayloadHash(
   const legacyEndMs = Date.parse(legacyBody.ended_at);
   const physicalWindowFitsLegacyBounds =
     physicalStartMs >= legacyStartMs && physicalEndMs <= legacyEndMs;
-  return (
-    physicalWindowFitsLegacyBounds && payloadHash(legacyBody) === storedHash
-  );
+  // Display-name namespacing changes presentation, not a registered batch's identity.
+  const legacyDisplayName = buildLegacyProductionBatchDisplayName(input.creditBatchCode);
+  const previousNameBody = { ...current.body, display_name: legacyDisplayName || undefined };
+  const previousWindowBody = { ...legacyBody, display_name: legacyDisplayName || undefined };
+  return payloadHash(previousNameBody) === storedHash || (physicalWindowFitsLegacyBounds &&
+    (payloadHash(legacyBody) === storedHash || payloadHash(previousWindowBody) === storedHash));
 }
 
 type LegacyProductionBatchWindow = Pick<

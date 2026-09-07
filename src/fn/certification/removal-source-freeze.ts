@@ -1,3 +1,4 @@
+import { getMetadataValue, SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { NomaEvidenceRole } from "@/lib/certification/removal-source-bindings";
 import {
@@ -40,7 +41,15 @@ export function filterCandidateSourcesForSubmissionLifecycle(
   }
 
   const frozenCandidates = readRemovalCandidateSources(latestSubmission);
-  if (latestSubmission.status === "draft") return frozenCandidates;
+  if (latestSubmission.status === "draft") {
+    const refreshed = getMetadataValue(latestSubmission.metadata, SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates);
+    if (!refreshed) return frozenCandidates;
+    const reviewed = readRemovalCandidateSources({ ...latestSubmission, payloadSnapshot: { semantic: { candidateSources: refreshed } } });
+    return [
+      ...reviewed.filter((candidate) => !isGeneratedEvidence(candidate)),
+      ...candidates.filter(isGeneratedEvidence),
+    ];
+  }
 
   const currentGeneratedCandidates = candidates.filter(isGeneratedEvidence);
   const frozenOperatorCandidates = frozenCandidates.filter(

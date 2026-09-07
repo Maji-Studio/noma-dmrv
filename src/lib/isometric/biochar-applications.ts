@@ -10,7 +10,11 @@ import {
 } from "./quantity-units";
 
 export type IsometricBiocharApplication =
-  components["schemas"]["BiocharApplication"];
+  components["schemas"]["BiocharApplication"] & {
+    // Certify may omit this field on older responses. Requested evidence must
+    // be observable before we can claim it is attached.
+    source_ids?: string[];
+  };
 export type CreateBiocharApplicationRequest =
   components["schemas"]["CreateBiocharApplicationRequest"];
 
@@ -251,6 +255,16 @@ export function biocharApplicationMismatchMessage(
   remote: IsometricBiocharApplication,
   expected: CreateBiocharApplicationRequest,
 ): string | null {
+  const expectedSources = expected.source_ids ?? [];
+  if (expectedSources.length > 0 && !Array.isArray(remote.source_ids)) {
+    return `Isometric does not expose Source links for Biochar Application ${remote.id}. Its requested evidence cannot be verified. Ask Isometric to expose the Source IDs before retrying.`;
+  }
+  const remoteSources = new Set(remote.source_ids ?? []);
+  const expectedSourceSet = new Set(expectedSources);
+  if (remoteSources.size !== expectedSourceSet.size ||
+    expectedSources.some((id) => !remoteSources.has(id))) {
+    return `Isometric Biochar Application ${remote.id} does not match the reviewed Source set. Refresh and reconcile its supporting evidence before retrying.`;
+  }
   const matches =
     remote.supplier_reference_id === expected.supplier_reference_id &&
     remote.production_batch_id === expected.production_batch_id &&

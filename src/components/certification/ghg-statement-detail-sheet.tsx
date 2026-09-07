@@ -24,6 +24,7 @@ import {
 } from "@/hooks/use-certification";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
+import { hasExactGhgEntryMembership } from "@/lib/certification/ghg-statement-breakdown";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
@@ -237,7 +238,9 @@ function DetailState({
           </div>
         </section>
 
-        <GhgStatementCarbonBreakdown query={breakdownQuery} />
+        {remote && remote.ghg_entry_ids.length > 0 && (
+          <GhgStatementCarbonBreakdown query={breakdownQuery} />
+        )}
 
         <section className="flex flex-col gap-8">
           <h3 className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
@@ -267,6 +270,14 @@ function DetailState({
           />
         </section>
 
+        {remote && (
+          <p className="body-small text-[var(--color-text-secondary)]">
+            {remote.ghg_entry_ids.length} registry GHG {remote.ghg_entry_ids.length === 1 ? "Entry" : "Entries"}. {linkedRemovals.length} local {linkedRemovals.length === 1 ? "Removal" : "Removals"}.
+            {!hasExactGhgEntryMembership(linkedRemovals.map(({ submission }) => submission?.externalId ?? ""), remote.ghg_entry_ids) &&
+              " Registry GHG Entries differ from local Removal history. Generated reports reconcile every registry GHG Entry."}
+          </p>
+        )}
+
         <Accordion.Root className="gap-8" multiple>
           <Accordion.Item
             value="linked-removals"
@@ -278,7 +289,7 @@ function DetailState({
                 labelClassName={CERTIFICATION_ACCORDION_LABEL}
               >
                 <span className="flex w-full items-center justify-between gap-12">
-                  <span>Linked Removals</span>
+                  <span>Local Removals</span>
                   <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
                     {linkedRemovals.length}
                   </span>
@@ -288,7 +299,7 @@ function DetailState({
             <Accordion.Panel className="[&>div]:p-12">
               {linkedRemovals.length === 0 ? (
                 <p className="body-small text-[var(--color-text-tertiary)]">
-                  No Removals linked yet.
+                  No local Removal history is linked to this Statement.
                 </p>
               ) : (
                 <RemovalBatchesAccordion

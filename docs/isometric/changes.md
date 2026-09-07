@@ -1,5 +1,12 @@
 # Isometric Docs Change Log
 
+## 2026-09-07: fail-closed Application evidence and safe recovery
+
+- The public [Certify OpenAPI schema](https://docs.isometric.com/api-reference/certify/mrv.openapi.json), checked on this date, accepts `source_ids` in `CreateBiocharApplicationRequest` but omits it from `BiocharApplication`. Evidence-bearing Removal finalization remains blocked until an authoritative attachment readback exists. When Source IDs are returned, reconciliation requires the exact reviewed set.
+- Evidence refresh preserves the prior snapshot and locks reviewed documents against deletion. Only an explicitly mutation-free interrupted attempt may rebuild versioned inputs; possible or confirmed registry mutations require exact retry/reconciliation first.
+- A finite pending GHG Statement total, including zero, represents pending changes under the provider's documented null-versus-number contract. Failed verification retains its own status.
+- The incomplete sandbox scenarios and external verifier report delivery remain acceptance blockers documented in the [retest record](../archive/qa/2026-09-07-isometric-blockers-retest.md).
+
 ## 2026-08-27 (Biochar Application canonical readback units)
 
 - Live Certify Biochar Application responses canonicalize submitted `t/ha` to

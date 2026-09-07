@@ -68,6 +68,7 @@ const EXTERNAL_STATEMENT_ID = "external-statement-1";
 function registryEntry(id = ENTRY_ID) {
   return {
     id,
+    credit_type: "REMOVAL",
     co2e_net_removed_kg: 900,
     co2e_net_removed_without_discount_kg: 1000,
     co2e_net_removed_standard_deviation_kg: 12,
@@ -152,11 +153,9 @@ describe("Removal RegistryObservation", () => {
 });
 
 describe("GHG Statement RegistryObservation", () => {
-  it("returns pending without every exact submitted member and makes no registry request", async () => {
+  it("returns pending without a registry Statement identity and makes no registry request", async () => {
     vi.mocked(getLatestSubmissionsForEntities).mockResolvedValue(new Map());
-    vi.mocked(getLatestSubmission).mockResolvedValue({
-      externalId: EXTERNAL_STATEMENT_ID,
-    } as never);
+    vi.mocked(getLatestSubmission).mockResolvedValue(null);
 
     const result = await loadGhgStatementBreakdown(STATEMENT_ID);
 
@@ -195,6 +194,23 @@ describe("GHG Statement RegistryObservation", () => {
     });
   });
 
+  it("loads all remote members even with no local Removal history", async () => {
+    vi.mocked(getRemovalsByGhgStatementId).mockResolvedValue([]);
+    vi.mocked(getLatestSubmission).mockResolvedValue({ externalId: EXTERNAL_STATEMENT_ID } as never);
+    vi.mocked(getGhgStatement).mockResolvedValue({ id: EXTERNAL_STATEMENT_ID, status: "DRAFT", ghg_entry_ids: [ENTRY_ID], credit_allocation: null } as never);
+    vi.mocked(getGhgEntry).mockResolvedValue(registryEntry() as never);
+    await expect(loadGhgStatementBreakdown(STATEMENT_ID)).resolves.toMatchObject({ success: true, data: { status: "available", value: { netRemovedKg: 900, memberGhgEntryCount: 1 } } });
+    expect(getGhgEntry).toHaveBeenCalledWith({}, ENTRY_ID);
+  });
+
+  it("refuses a remote-only REDUCTION entry without presenting removal totals", async () => {
+    vi.mocked(getRemovalsByGhgStatementId).mockResolvedValue([]);
+    vi.mocked(getLatestSubmission).mockResolvedValue({ externalId: EXTERNAL_STATEMENT_ID } as never);
+    vi.mocked(getGhgStatement).mockResolvedValue({ id: EXTERNAL_STATEMENT_ID, status: "DRAFT", ghg_entry_ids: [ENTRY_ID], credit_allocation: null } as never);
+    vi.mocked(getGhgEntry).mockResolvedValue({ ...registryEntry(), credit_type: "REDUCTION" } as never);
+    await expect(loadGhgStatementBreakdown(STATEMENT_ID)).resolves.toMatchObject({ success: true, data: { status: "unavailable", value: null } });
+  });
+
   it("returns an available roll-up only for readable exact members", async () => {
     vi.mocked(getLatestSubmissionsForEntities).mockResolvedValue(
       new Map([[REMOVAL_ID, { externalId: ENTRY_ID }]]) as never,
@@ -216,7 +232,7 @@ describe("GHG Statement RegistryObservation", () => {
         status: "available",
         value: {
           netRemovedKg: 900,
-          memberRemovalCount: 1,
+          memberGhgEntryCount: 1,
         },
       },
     });

@@ -205,6 +205,16 @@ function lineageQuery(
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), targetCondition(target)));
 }
 
+/** Advisory UI read; mutations must use getLockedCertifiedLineage instead. */
+export async function getCertifiedLineage(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  target: CertifiedLineageTarget,
+) {
+  requireOrgScope(ctx);
+  return lineageQuery(ctx, tx, target);
+}
+
 export type LockedCertifiedLineageRow = Awaited<
   ReturnType<ReturnType<typeof lineageQuery>["execute"]>
 >[number];
