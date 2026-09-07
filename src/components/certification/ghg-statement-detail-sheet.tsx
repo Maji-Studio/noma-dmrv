@@ -237,7 +237,7 @@ function DetailState({
           </div>
         </section>
 
-        {linkedRemovals.length > 0 && (
+        {remote && remote.ghg_entry_ids.length > 0 && (
           <GhgStatementCarbonBreakdown query={breakdownQuery} />
         )}
 

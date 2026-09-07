@@ -755,7 +755,7 @@ function GeneratedReportPreview({
               Contents
             </dt>
             <dd className="body-small text-[var(--color-text-primary)]">
-              {formatCount(data.memberRemovalCount, "Removal")}
+              {formatCount(data.memberGhgEntryCount, "GHG Entry", "GHG Entries")}
             </dd>
           </div>
         </dl>

@@ -123,7 +123,7 @@ vi.mock("@/hooks/use-certification", () => ({
       value: {
         reportingPeriodStartOn: "2026-01-01",
         reportingPeriodEndOn: "2026-01-31",
-        memberRemovalCount: 1,
+        memberGhgEntryCount: 1,
       },
     },
     isLoading: false,
