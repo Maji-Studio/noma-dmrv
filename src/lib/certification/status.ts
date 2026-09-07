@@ -1,3 +1,4 @@
+import { hasPendingStatementTotal } from "@/lib/certification/pending-statement-total";
 /**
  * Certification status model — the single source of truth every surface
  * (badge, work queue, side-sheet, DataTable column) derives an operator-facing
@@ -479,7 +480,7 @@ export function deriveStatementStatus({
     };
   }
 
-  if (remoteStatus && remoteStatus !== "DRAFT" && pendingTotalCo2eRemovedKg != null && Number.isFinite(pendingTotalCo2eRemovedKg)) {
+  if (remoteStatus && remoteStatus !== "DRAFT" && remoteStatus !== "FAILED_VERIFICATION" && hasPendingStatementTotal(pendingTotalCo2eRemovedKg)) {
     return { kind: "pending-changes", value: "pending", label: "Pending changes", isActionable: true, isTerminal: false };
   }
 

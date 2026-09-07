@@ -341,6 +341,10 @@ describe("deriveStatementStatus", () => {
     expect(s.value).toBe("verified");
   });
 
+  it("preserves failed verification with pending changes", () => {
+    expect(deriveStatementStatus({ ...base, remoteStatus: "FAILED_VERIFICATION", pendingTotalCo2eRemovedKg: 0 })).toMatchObject({ kind: "verification-failed", value: "rejected" });
+  });
+
   it("makes a failed verification actionable for resubmit", () => {
     const s = deriveStatementStatus({
       ...base,
