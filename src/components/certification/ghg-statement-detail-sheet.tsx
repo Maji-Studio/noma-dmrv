@@ -24,6 +24,7 @@ import {
 } from "@/hooks/use-certification";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
+import { hasExactGhgEntryMembership } from "@/lib/certification/ghg-statement-breakdown";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
@@ -271,9 +272,9 @@ function DetailState({
 
         {remote && (
           <p className="body-small text-[var(--color-text-secondary)]">
-            {remote.ghg_entry_ids.length} registry GHG Entries. {linkedRemovals.length} locally linked Removals.
-            {remote.ghg_entry_ids.length > linkedRemovals.length &&
-              " Some registry Entries have no local Removal history in this database. Generated reports use and reconcile every registry Entry; local lineage totals remain unavailable."}
+            {remote.ghg_entry_ids.length} registry GHG {remote.ghg_entry_ids.length === 1 ? "Entry" : "Entries"}. {linkedRemovals.length} local {linkedRemovals.length === 1 ? "Removal" : "Removals"}.
+            {!hasExactGhgEntryMembership(linkedRemovals.map(({ submission }) => submission?.externalId ?? ""), remote.ghg_entry_ids) &&
+              " Registry GHG Entries differ from local Removal history. Generated reports reconcile every registry GHG Entry."}
           </p>
         )}
 
@@ -288,7 +289,7 @@ function DetailState({
                 labelClassName={CERTIFICATION_ACCORDION_LABEL}
               >
                 <span className="flex w-full items-center justify-between gap-12">
-                  <span>Linked Removals</span>
+                  <span>Local Removals</span>
                   <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
                     {linkedRemovals.length}
                   </span>
