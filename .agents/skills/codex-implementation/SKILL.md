@@ -1,10 +1,9 @@
 ---
 name: codex-implementation
-description: Ask Codex CLI (gpt-5.6-sol at high reasoning effort — the flat-rate OpenAI model slot, formerly gpt-5.5) to implement scoped code changes in the current repository, then have Claude inspect the resulting diff and verification. This is how the Codex model is invoked for implementation work. Use when the user asks to delegate implementation to Codex/gpt-5.5/gpt-5.6, when the model-selection rubric routes bulk/mechanical work to the Codex model, or when a bounded task would benefit from another coding agent producing a patch.
+description: Ask Codex CLI (gpt-6-astra at low reasoning effort) to implement scoped code changes in the current repository, then have Claude inspect the resulting diff and verification. This is how the Codex model is invoked for implementation work. Use when the user asks to delegate implementation to Codex/gpt-6-astra, when the model-selection rubric routes bulk/mechanical work to the Codex model, or when a bounded task would benefit from another coding agent producing a patch.
 ---
 
-Delegate a **bounded** implementation task to the Codex CLI (gpt-5.6-sol, high reasoning —
-set as the default in `~/.codex/config.toml`), then bring the diff
+Delegate a **bounded** implementation task to the Codex CLI (gpt-6-astra, low reasoning, explicitly selected below), then bring the diff
 back for Claude to review and verify. Claude remains responsible for scoping the task,
 reviewing the diff, running or checking verification, and explaining the final result. Do not
 let Codex commit, push, deploy, or edit global config. Codex output is **evidence, not
@@ -18,9 +17,8 @@ authority**.
   ```
   Last resort: the ChatGPT.app bundle at `/Applications/ChatGPT.app/Contents/Resources/codex`.
   (The old `/Applications/Codex.app/Contents/Resources/codex` path no longer exists.)
-- **gpt-5.6-sol requires codex-cli ≥ 0.144** — older CLIs fail with a 400
-  `"requires a newer version of Codex"`. If that error appears, upgrade with
-  `pnpm add -g @openai/codex@latest` (verified working on 0.144.1, 2026-07-10).
+- If the CLI reports `"requires a newer version of Codex"`, upgrade with
+  `pnpm add -g @openai/codex@latest` and retry.
 - Codex runs can exceed the Bash tool's 10-minute timeout. Either pass an explicit longer
   `timeout` to the Bash tool, or run the command in the background and poll for `$REPORT`.
 - If `codex` is not installed or the command fails, report the error and offer to do the
@@ -43,6 +41,7 @@ authority**.
 4. **Run with repo write access:**
    ```bash
    "$CODEX" exec \
+     -m gpt-6-astra -c 'model_reasoning_effort="low"' \
      -C "$PWD" \
      --add-dir "$ARTIFACT_DIR" \
      -s workspace-write \
