@@ -86,7 +86,7 @@ export function createPrompt({
   spec,
   practiceDefinition,
 }) {
-  const modelLabel = model === "codex" ? "Codex gpt-5.6-sol" : "Claude Opus";
+  const modelLabel = model === "codex" ? "Codex gpt-6-astra" : "Claude Opus";
   const specText =
     practice !== "spec"
       ? "Spec content is intentionally excluded from this independent practice."

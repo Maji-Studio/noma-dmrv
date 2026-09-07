@@ -1,7 +1,7 @@
 export const meta = {
   name: 'pr-review-panel',
   description:
-    'Multi-model review panel for one PR: gpt-5.6-sol (codex) + a fresh Claude reviewer in parallel, then one adversarial verifier that dedupes and confirms findings',
+    'Multi-model review panel for one PR: gpt-6-astra (codex) + a fresh Claude reviewer in parallel, then one adversarial verifier that dedupes and confirms findings',
   whenToUse:
     'Called per-PR by the resolve-open-prs skill; standalone with args {pr, head, base?, context?} after the PR branch is checked out locally',
   phases: [
@@ -86,7 +86,7 @@ const [codexReview, claudeReview] = await parallel([
 ${target}
 ${context ? `Task context to include in the codex prompt: ${context}` : ''}
 Codex can run long: pass an explicit 600000ms timeout to Bash, and if it still times out, re-run in the background and poll for the report file. When the report arrives, translate its findings into the structured output verbatim — raw and UNVERIFIED, do not filter or confirm them. If codex is unavailable or errors after one retry, return findings: [] and explain in summary.`,
-      { label: `gpt-5.6:review-pr-${pr}`, model: 'sonnet', effort: 'low', schema: FINDINGS_SCHEMA, phase: 'Review' },
+      { label: `gpt-6:review-pr-${pr}`, model: 'sonnet', effort: 'low', schema: FINDINGS_SCHEMA, phase: 'Review' },
     ),
   () =>
     agent(
@@ -101,7 +101,7 @@ Report findings only — no praise, no summary padding. Every finding needs a co
 
 const raw = []
 for (const [source, review] of [
-  ['gpt-5.6-sol', codexReview],
+  ['gpt-6-astra', codexReview],
   ['claude-opus', claudeReview],
 ]) {
   for (const f of review?.findings ?? []) raw.push({ ...f, source })
