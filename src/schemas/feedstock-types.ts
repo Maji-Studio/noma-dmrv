@@ -147,7 +147,6 @@ export const importIsometricFeedstockTypeSchema = z.object({
 export type FeedstockTypeFormData = z.infer<typeof feedstockTypeFormSchema>;
 export type CreateFeedstockTypeData = z.infer<typeof createFeedstockTypeSchema>;
 export type UpdateFeedstockTypeData = z.infer<typeof updateFeedstockTypeSchema>;
-export type DeleteFeedstockTypeData = z.infer<typeof deleteFeedstockTypeSchema>;
 export type ImportIsometricFeedstockTypeData = z.infer<
   typeof importIsometricFeedstockTypeSchema
 >;

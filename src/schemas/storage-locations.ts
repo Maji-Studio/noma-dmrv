@@ -236,9 +236,6 @@ export type CreateStorageLocationData = z.infer<
 export type UpdateStorageLocationData = z.infer<
   typeof updateStorageLocationSchema
 >;
-export type DeleteStorageLocationData = z.infer<
-  typeof deleteStorageLocationSchema
->;
 export type ArchiveStorageLocationData = z.infer<
   typeof archiveStorageLocationSchema
 >;
