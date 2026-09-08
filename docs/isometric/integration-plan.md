@@ -146,6 +146,32 @@ issue #737. Registry failure
 blocks Removal submission and leaves the claim safely retryable. There is no
 gate or placeholder lifecycle.
 
+## Deleting a never-finalized Removal
+
+Deletion removes draft GHG Entries first (a registry refusal stops all cleanup),
+then Biochar Applications, exact version-owned MeasurementSamples, and unshared
+Production Batches. Measurement ownership comes from immutable durability
+submissions and their journal, with exact supplier-reference reconciliation for
+interrupted POSTs. Legacy snapshots without measurements remain deletable;
+inconsistent identities fail closed. This never deletes local credit batches,
+production lineage or lab samples.
+
+Batch candidates come from the Removal's application-by-credit-batch membership,
+including failures before Biochar Application creation. Other memberships,
+registrations, immutable submission references and production-claim reservations
+retain shared batches and their journal. Membership creation checks durable
+deletion markers under the credit-batch locks. Sharing is checked again after
+registry readback and during finalization. Registry child-reference enforcement
+remains the final guard against an already-running concurrent child POST;
+production-batch recovery handles disappearance before that POST on retry.
+
+Only confirmed remote deletion or absence permits exact, organization-scoped
+journal removal, after the owning Biochar Application journal rows are removed.
+The retained ledger records deleted, absent and retained artifacts. A partial
+failure releases the claim and keeps local state retryable; it never reports
+completed cleanup. Auth/network errors and generic 400s fail. A 404 or the exact
+provider missing-resource 400 for the addressed batch or measurement is absence.
+
 ## Template and input contract
 
 The live template is read at compilation time. Every monitored ordinary input

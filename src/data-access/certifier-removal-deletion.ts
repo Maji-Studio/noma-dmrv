@@ -1,3 +1,5 @@
+import { removalOwnedMeasurements, type RemovalOwnedMeasurement } from "@/lib/certification/removal-deletion-artifacts";
+import { removalProductionBatchTargets, clearDeletedRemovalProductionBatches, type RemovalProductionBatch, type ProductionBatchDeletionOutcome } from "./removal-production-batch-deletion";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -83,6 +85,8 @@ export const REMOVAL_DELETE_CHANGED_ERROR =
 export interface RemovalDeletionClaim {
   removalId: string;
   facilityId: string;
+  productionBatches?: RemovalProductionBatch[];
+  measurementSamples?: RemovalOwnedMeasurement[];
   /** Every ledger row for this Removal; all are draft or rejected. */
   submissionIds: string[];
   /** The lock timestamp stamped on every ledger row for the deletion window. */
@@ -115,6 +119,8 @@ export interface RemovalDeletionClaim {
 }
 
 export interface RemovalDeletionRegistryOutcome {
+  productionBatches?: ProductionBatchDeletionOutcome[];
+  measurementSamples?: Array<RemovalOwnedMeasurement & { outcome: "deleted" | "absent" }>;
   deletedGhgEntryIds: string[];
   deletedBiocharApplicationIds: string[];
   /** Records the registry reported as already gone (404), kept for the audit trail. */
@@ -193,6 +199,7 @@ export async function claimRemovalDeletion(
         id: certificationSubmissions.id,
         status: certificationSubmissions.status,
         version: certificationSubmissions.version,
+        payloadSnapshot: certificationSubmissions.payloadSnapshot,
         externalId: certificationSubmissions.externalId,
         lockedAt: certificationSubmissions.lockedAt,
         metadata: certificationSubmissions.metadata,
@@ -236,6 +243,13 @@ export async function claimRemovalDeletion(
       throw new SafeError(REMOVAL_DELETE_ALREADY_DELETING_ERROR);
     }
 
+    const measurementSamples = removalOwnedMeasurements(removalId, rows);
+    const productionBatches = (await removalProductionBatchTargets(ctx, removalId, tx))
+      .filter((batch) => rows.length > 0 || batch.registrationId !== null);
+    // Serialize with createRemoval membership decisions before publishing deleting markers.
+    if (productionBatches.length) await tx.select({ id: creditBatches.id }).from(creditBatches)
+      .where(and(inArray(creditBatches.id, productionBatches.map((batch) => batch.creditBatchId)), eq(creditBatches.organizationId, ctx.organizationId)))
+      .orderBy(creditBatches.id).for("update");
     const submissionIds = rows.map((row) => row.id);
     const externalRemovalIds = [
       ...new Set(
@@ -332,6 +346,8 @@ export async function claimRemovalDeletion(
       externalRemovalIds,
       unconfirmedRemovalSupplierRefs,
       biocharApplications,
+      productionBatches,
+      measurementSamples,
     };
   });
 }
@@ -459,6 +475,8 @@ export async function finalizeRemovalDeletion(
           ),
         );
 
+      await clearDeletedRemovalProductionBatches(ctx, claim, registry.productionBatches ?? [], tx);
+
       // The evidence these submissions mirrored keeps its local mapping only
       // while a live snapshot still references it; otherwise the mapping
       // would block deleting the Application or Delivery that owns the file.
@@ -474,6 +492,8 @@ export async function finalizeRemovalDeletion(
       const deletionPatch = JSON.stringify({
         [DELETION_METADATA_KEY]: {
           deletedAt: new Date().toISOString(),
+          productionBatches: registry.productionBatches ?? [],
+          measurementSamples: registry.measurementSamples ?? [],
           deletedGhgEntryIds: registry.deletedGhgEntryIds,
           deletedBiocharApplicationIds: registry.deletedBiocharApplicationIds,
           absentGhgEntryIds: registry.absentGhgEntryIds,
@@ -514,6 +534,8 @@ export async function finalizeRemovalDeletion(
           ),
         );
     }
+
+    if (!claim.submissionIds.length) await clearDeletedRemovalProductionBatches(ctx, claim, registry.productionBatches ?? [], tx);
 
     await tx
       .update(creditBatches)

@@ -34,7 +34,10 @@ import {
   certifierSyncEvents,
 } from "@/db/schema/certification";
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
-import { creditBatches } from "@/db/schema/credits";
+import { creditBatches, creditBatchApplications } from "@/db/schema/credits";
+import { certifierProductionBatches } from "@/db/schema/certifier-production-batches";
+import { buildProductionBatchReference } from "@/lib/isometric/production-batches";
+import { buildMeasurementSampleReference } from "@/lib/isometric/measurement-samples";
 import { applications } from "@/db/schema/application";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
@@ -99,6 +102,9 @@ afterAll(async () => {
       .where(inArray(documents.id, createdDocumentIds));
   }
   for (const chain of createdChains.reverse()) {
+    await db
+      .delete(creditBatchApplications)
+      .where(eq(creditBatchApplications.applicationId, chain.applicationId));
     await db
       .delete(certifierBiocharApplications)
       .where(eq(certifierBiocharApplications.applicationId, chain.applicationId));
@@ -437,7 +443,7 @@ describe("deleteRemoval", () => {
     );
   });
 
-  it("deletes confirmed Biochar Applications and removes every registration row", async () => {
+  it.each([false, true])("cleans up owned uploads and retains a shared batch: %s", async (shared) => {
     const fixture = await createFixture();
     const chain = await createBiocharApplicationChain({
       tag: `DEL-${fixture.runId}`,
@@ -447,11 +453,68 @@ describe("deleteRemoval", () => {
       externalProjectId: fixture.externalProjectId,
     });
     createdChains.push(chain);
+    const batchReference = buildProductionBatchReference({
+      creditBatchId: fixture.creditBatchId,
+    });
+    const externalFacilityId = `fcl_${fixture.runId}`;
+    await db
+      .update(certifierProductionBatches)
+      .set({ supplierReference: batchReference, externalFacilityId })
+      .where(eq(certifierProductionBatches.id, chain.productionBatchRegistrationId));
+    await db.insert(creditBatchApplications).values({
+      organizationId: TEST_ORG_ID,
+      creditBatchId: fixture.creditBatchId,
+      applicationId: chain.applicationId,
+      removalId: fixture.removalId,
+      allocatedWetMassKg: 12_000,
+      allocatedDryMassKg: 10_800,
+    });
+    registry.productionBatches.push({
+      id: chain.externalProductionBatchId,
+      supplier_reference_id: batchReference,
+      facility_id: externalFacilityId,
+    });
+    if (shared) {
+      const otherRemoval = await createFixture();
+      await insertLedgerRow(otherRemoval, {
+        status: "draft",
+        externalId: null,
+        payloadSnapshot: { creditBatchIds: [fixture.creditBatchId] },
+      });
+    }
     const entry = registry.seedGhgEntry({ status: "DRAFT" });
     const submissionId = await insertLedgerRow(fixture, {
       status: "draft",
       externalId: entry.id,
       metadata: interruptedMetadata(),
+    });
+    const sampleId = `sample-${fixture.runId}`;
+    const measurementReference = buildMeasurementSampleReference({
+      removalId: fixture.removalId,
+      version: SUBMISSION_VERSION,
+      role: "production-batch",
+      creditBatchId: fixture.creditBatchId,
+      sampleId,
+    });
+    const measurementId = `mts_${fixture.runId}`;
+    await db.update(certificationSubmissions).set({
+      payloadSnapshot: {
+        durabilityMeasurementSamples: { submissions: [{
+          creditBatchId: fixture.creditBatchId,
+          sampleId,
+          supplierRefId: measurementReference,
+          body: { supplier_reference_id: measurementReference },
+        }] },
+        journaled: { measurementSamples: [{
+          supplierReferenceId: measurementReference,
+          measurementSampleId: measurementId,
+        }] },
+      },
+    }).where(eq(certificationSubmissions.id, submissionId));
+    registry.measurementSamples.push({
+      id: measurementId,
+      supplier_reference_id: measurementReference,
+      production_batch_id: chain.externalProductionBatchId,
     });
     const remoteApplication = registry.seedBiocharApplication({
       ghg_entry_id: entry.id,
@@ -496,7 +559,17 @@ describe("deleteRemoval", () => {
     expect(deletes).toEqual([
       `/ghg_entries/${entry.id}`,
       `/biochar_applications/${remoteApplication.id}`,
+      `/measurement_samples/${measurementId}`,
+      ...(shared ? [] : [`/production_batches/${chain.externalProductionBatchId}`]),
     ]);
+    expect(registry.measurementSamples).toHaveLength(0);
+    expect(registry.productionBatches).toHaveLength(shared ? 1 : 0);
+    expect(await db.select().from(certifierProductionBatches)
+      .where(eq(certifierProductionBatches.id, chain.productionBatchRegistrationId)))
+      .toHaveLength(shared ? 1 : 0);
+    expect(await db.select({ id: creditBatches.id }).from(creditBatches)
+      .where(eq(creditBatches.id, fixture.creditBatchId)))
+      .toEqual([{ id: fixture.creditBatchId }]);
     // Rows are removed, not tombstoned, so the supplier reference is free.
     expect(await registrationRowsFor(submissionId)).toEqual([]);
     expect(await registrationRowsFor(priorSubmissionId)).toEqual([]);

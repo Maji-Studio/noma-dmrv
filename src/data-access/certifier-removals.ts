@@ -1,3 +1,4 @@
+import { assertNoRemovalBatchDeletion } from "./removal-production-batch-deletion";
 import { and, asc, desc, eq, exists, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
@@ -431,6 +432,8 @@ export async function createRemovalWithCreditBatches(
       .where(and(inArray(creditBatches.id, uniqueIds), eq(creditBatches.organizationId, ctx.organizationId)))
       .orderBy(creditBatches.id)
       .for("update");
+
+    await assertNoRemovalBatchDeletion(ctx, uniqueIds, tx);
 
     if (batches.length !== uniqueIds.length) {
       throw new SafeError("One or more selected credit batches no longer exist.");

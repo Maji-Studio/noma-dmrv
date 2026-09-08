@@ -25,7 +25,7 @@
 
 import { createHash } from "node:crypto";
 import { SafeError } from "@/lib/errors";
-import type { IsometricClient } from "./client";
+import { IsometricApiError, type IsometricClient } from "./client";
 import type { components } from "./generated/certify";
 import {
   ISOMETRIC_KILOGRAM_UNIT,
@@ -166,20 +166,66 @@ export async function createProductionBatch(
   return client.post<IsometricProductionBatch>("/production_batches", body);
 }
 
+/** Read the exact journal identity; only a definitive absence permits recovery. */
+export async function getProductionBatch(
+  client: IsometricClient,
+  id: string,
+): Promise<IsometricProductionBatch | null> {
+  try {
+    const batch = await client.get<IsometricProductionBatch>(
+      `/production_batches/${encodeURIComponent(id)}`,
+    );
+    if (!batch || typeof batch.id !== "string") {
+      throw new SafeError(
+        "Isometric returned an invalid production batch response. Try again before submitting.",
+      );
+    }
+    return batch;
+  } catch (error) {
+    if (error instanceof IsometricApiError && error.code !== "network") {
+      const detail =
+        error.body && typeof error.body === "object" && "detail" in error.body
+          ? error.body.detail
+          : undefined;
+      if (
+        error.status === 404 ||
+        (error.status === 400 &&
+          detail === `Could not find 'ProductionBatch' with IDs '${id}'`)
+      ) {
+        return null;
+      }
+    }
+    throw error;
+  }
+}
+
 /**
  * Looks up a production batch by its noma-controlled supplier reference for the
  * reconcile path. `GET /production_batches` has no server-side reference filter,
  * so this paginates and filters client-side (same shape as
- * `findMeasurementSampleBySupplierRef`). Returns the match or null.
+ * `findMeasurementSampleBySupplierRef`). Returns the unique match or null;
+ * duplicate references fail closed.
  */
 export async function findProductionBatchBySupplierRef(
   client: IsometricClient,
   supplierReferenceId: string,
 ): Promise<IsometricProductionBatch | null> {
+  let match: IsometricProductionBatch | null = null;
   for await (const batch of client.paginate<IsometricProductionBatch>(
     "/production_batches",
   )) {
-    if (batch.supplier_reference_id === supplierReferenceId) return batch;
+    if (batch.supplier_reference_id !== supplierReferenceId) continue;
+    if (match && match.id !== batch.id) {
+      throw new SafeError(
+        "Multiple production batches have this supplier reference in Isometric. Resolve the duplicates before submitting again.",
+      );
+    }
+    match = batch;
   }
-  return null;
+  return match;
+}
+
+/** Deletes only the addressed registry artifact. Missing-resource handling belongs to the caller. */
+export async function deleteProductionBatch(client: IsometricClient, id: string): Promise<void> {
+  await client.delete(`/production_batches/${encodeURIComponent(id)}`);
 }
