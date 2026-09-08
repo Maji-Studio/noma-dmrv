@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db, withDedicatedSessionAdvisoryLock } from "@/db";
+import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { applications } from "@/db/schema/application";
 import { certifierProjects } from "@/db/schema/certification";
 import {
@@ -322,4 +323,56 @@ export async function setStorageLocationDrift(
         eq(certifierStorageLocations.organizationId, ctx.organizationId),
       ),
     );
+}
+
+/**
+ * Called only after a locked GET confirmed absence and reference reconciliation
+ * confirmed a replacement. Keep the site snapshot and dependent claim history.
+ */
+export async function replaceMissingStorageLocationRegistration(
+  ctx: OrgContext,
+  expected: CertifierStorageLocation,
+  externalStorageLocationId: string,
+): Promise<CertifierStorageLocation | null> {
+  requireOrgScope(ctx);
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(certifierStorageLocations)
+      .set({
+        externalStorageLocationId,
+        driftStatus: "in_sync",
+        driftDetails: null,
+        driftDetectedAt: null,
+        updatedAt: sql`now()`,
+      })
+      .where(and(
+        eq(certifierStorageLocations.organizationId, ctx.organizationId),
+        eq(certifierStorageLocations.id, expected.id),
+        eq(certifierStorageLocations.provider, expected.provider),
+        eq(certifierStorageLocations.customerLocationId, expected.customerLocationId),
+        eq(certifierStorageLocations.certifierProjectId, expected.certifierProjectId),
+        eq(certifierStorageLocations.externalProjectId, expected.externalProjectId),
+        eq(certifierStorageLocations.externalStorageLocationId, expected.externalStorageLocationId),
+        eq(certifierStorageLocations.supplierReference, expected.supplierReference),
+        eq(certifierStorageLocations.payloadHash, expected.payloadHash),
+      ))
+      .returning();
+    if (!row) return null;
+    // Never rewrite a confirmed or ambiguous in-flight Biochar Application's
+    // payload/IDs. It may already exist remotely with the old dependency.
+    await tx
+      .update(certifierBiocharApplications)
+      .set({
+        correctionStatus: "review_required",
+        driftReason: "storage_location_replaced",
+        updatedAt: sql`now()`,
+      })
+      .where(and(
+        eq(certifierBiocharApplications.organizationId, ctx.organizationId),
+        eq(certifierBiocharApplications.provider, expected.provider),
+        eq(certifierBiocharApplications.storageLocationRegistrationId, expected.id),
+        eq(certifierBiocharApplications.externalStorageLocationId, expected.externalStorageLocationId),
+      ));
+    return row;
+  });
 }

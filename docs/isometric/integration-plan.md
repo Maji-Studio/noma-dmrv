@@ -121,6 +121,24 @@ Location, then creates or reconciles the Biochar Applications in the configured
 Isometric environment. Multiple Applications may share a Delivery subject to
 the existing allocation and capacity rules.
 
+When a registered Storage Location GET returns 404, explicit **Check again**
+and Removal submission recheck under the site/project locks, reconcile the
+unchanged stable supplier reference, and adopt an exact replacement or create
+one if absent. Recovery replaces only the external ID; the local Application,
+customer location, and submitted site snapshot remain. Changed local facts,
+live remote mismatches, duplicate matches, and inconclusive reads fail closed
+or retain the existing drift review. Authentication and transient errors never
+establish absence. Lost POST responses and persistence failures reconcile by
+reference before retrying creation.
+
+Biochar Application journals retain their original dependency IDs and payloads.
+Replacing a Storage Location marks dependent claims for review atomically,
+including unconfirmed claims whose POST may already have reached Isometric.
+Those stale claims block Removal submission with a dependency-specific error;
+recovery does not silently repoint confirmed history. New, unclaimed Biochar
+Applications use the replacement. Biochar Application creation holds the same
+external-project lock and rechecks the storage registration before using it.
+
 For the provider request, `truck_mass_on_arrival` is exactly the slice's
 allocated wet kg and `truck_mass_on_departure` is zero kg. These fields encode
 the applied slice mass convention, not Delivery weighing observations.
