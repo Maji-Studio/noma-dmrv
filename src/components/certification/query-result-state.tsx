@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 interface QueryResultStateProps<T> {
   isLoading: boolean;
   error: unknown;
+  /** Only undefined represents missing data; null may be a valid result. */
   data: T | undefined;
   loadingMessage: string;
   errorMessage: string;
@@ -30,7 +31,7 @@ export function QueryResultState<T>({
     return wrap(message);
   }
 
-  if (error || !data) {
+  if (error || data === undefined) {
     const message = (
       <p className="body-small text-[var(--color-signal-red)]">
         {errorMessage}

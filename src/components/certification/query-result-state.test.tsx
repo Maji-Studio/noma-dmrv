@@ -57,4 +57,26 @@ describe("QueryResultState", () => {
     );
     expect(html).toBe("<span>Ready</span>");
   });
+
+  it.each([false, 0, "", null])(
+    "passes a valid falsy result to children: %j",
+    (data) => {
+      const html = renderToStaticMarkup(
+        <QueryResultState
+          isLoading={false}
+          error={null}
+          data={data}
+          loadingMessage="Loading mapping…"
+          errorMessage="Mapping unavailable."
+          wrap={(children) => <section>{children}</section>}
+        >
+          {(loaded) => {
+            expect(loaded).toBe(data);
+            return <span>Loaded</span>;
+          }}
+        </QueryResultState>,
+      );
+      expect(html).toBe("<span>Loaded</span>");
+    },
+  );
 });
