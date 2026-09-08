@@ -502,6 +502,8 @@ export function SampleForm({
                   label="Total carbon (%)"
                   error={errors.totalCarbonPercent?.message}
                   required
+                  certifyRequired={is1000Year && isSampleCertifyField("totalCarbonPercent")}
+                  certifyStatus={certStatus("totalCarbonPercent")}
                 >
                   <FormInput
                     id="totalCarbonPercent"
@@ -543,6 +545,8 @@ export function SampleForm({
                 id="inorganicCarbonPercent"
                 label="Inorganic carbon (%)"
                 error={inorganicCarbonError}
+                certifyRequired={is1000Year && isSampleCertifyField("inorganicCarbonPercent")}
+                certifyStatus={certStatus("inorganicCarbonPercent")}
               >
                 <FormInput
                   id="inorganicCarbonPercent"
