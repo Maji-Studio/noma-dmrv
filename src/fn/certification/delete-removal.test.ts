@@ -120,6 +120,42 @@ beforeEach(() => {
 });
 
 describe("deleteRemoval", () => {
+  it.each([new Error("database connection failed"), new SafeError("The deletion claim changed")])("does not invent a provider attempt for a local fence error", async (error) => {
+    state.claim.mockResolvedValue(claim());
+    state.mutation.mockRejectedValue(error);
+    const deletion = deleteRemoval(ORG_CTX, INPUT);
+    await expect(deletion).rejects.toThrow(error instanceof SafeError ? error.message : "could not be removed locally");
+    expect(state.deleteGhgEntry).not.toHaveBeenCalled();
+    expect(state.appendSyncEvent).not.toHaveBeenCalled();
+    expect(state.finalize).not.toHaveBeenCalled();
+    expect(state.release).toHaveBeenCalledOnce();
+  });
+
+  it("audits a real delete before propagating a subsequent local commit failure", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.mutation.mockImplementation(async (_ctx, _claim, run) => {
+      await run({ guarded: true });
+      throw new Error("database commit failed");
+    });
+    await expect(deleteRemoval(ORG_CTX, INPUT)).rejects.toThrow("could not be removed locally");
+    expect(state.deleteGhgEntry).toHaveBeenCalledOnce();
+    expect(state.appendSyncEvent).toHaveBeenCalledOnce();
+    expect(state.appendSyncEvent.mock.calls[0][1]).toMatchObject({
+      operation: "removal:delete:ghg-entry", status: "succeeded",
+      responsePayload: { id: "gge_1", outcome: "deleted" },
+    });
+    expect(state.finalize).not.toHaveBeenCalled();
+  });
+
+  it("audits a generic failure thrown during the actual provider request", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.deleteGhgEntry.mockRejectedValue(new Error("request failed"));
+    await expect(deleteRemoval(ORG_CTX, INPUT)).rejects.toThrow("Isometric did not delete");
+    expect(state.appendSyncEvent).toHaveBeenCalledOnce();
+    expect(state.appendSyncEvent.mock.calls[0][1]).toMatchObject({ operation: "removal:delete:ghg-entry", status: "failed" });
+    expect(state.finalize).not.toHaveBeenCalled();
+  });
+
   it.each(["absent", "retained"] as const)("audits %s artifacts for a Removal without ledger history", async (outcome) => {
     state.claim.mockResolvedValue(claim({ submissionIds: [], lockedSubmissions: [],
       externalRemovalIds: [], biocharApplications: [], productionBatches: [{

@@ -64,6 +64,7 @@ export interface RemovalDeletionResult {
 }
 
 type RegistryDeleteOutcome = "deleted" | "absent";
+type RegistryDeleteRequest = (send: () => Promise<void>) => Promise<RegistryDeleteOutcome>;
 
 interface RegistryDeleteTarget {
   removalId: string;
@@ -223,10 +224,8 @@ async function deleteRegistryRecords(
         kind: "GHG Entry",
         externalId: ghgEntryId,
       },
-      () => withRemovalDeletionMutation(orgCtx, claim, async () => {
-        await deleteGhgEntry(client, ghgEntryId);
-        return "deleted" as const;
-      }),
+      (request) => withRemovalDeletionMutation(orgCtx, claim,
+        () => request(() => deleteGhgEntry(client, ghgEntryId))),
     );
     if (outcome === "deleted") out.deletedGhgEntryIds.push(ghgEntryId);
     else out.absentGhgEntryIds.push(ghgEntryId);
@@ -261,10 +260,8 @@ async function deleteRegistryRecords(
         kind: "Biochar Application",
         externalId: externalApplicationId,
       },
-      () => withRemovalDeletionMutation(orgCtx, claim, async () => {
-        await deleteBiocharApplication(client, externalApplicationId);
-        return "deleted" as const;
-      }),
+      (request) => withRemovalDeletionMutation(orgCtx, claim,
+        () => request(() => deleteBiocharApplication(client, externalApplicationId))),
     );
     if (outcome === "deleted") {
       out.deletedBiocharApplicationIds.push(externalApplicationId);
@@ -286,10 +283,8 @@ async function deleteRegistryRecords(
     const outcome = remote && externalId ? await deleteRegistryRecord(orgCtx, {
       removalId: claim.removalId, operation: "removal:delete:measurement-sample",
       kind: "MeasurementSample", externalId,
-    }, () => withRemovalDeletionMutation(orgCtx, claim, async () => {
-      await deleteMeasurementSample(client, externalId);
-      return "deleted" as const;
-    })) : "absent";
+    }, (request) => withRemovalDeletionMutation(orgCtx, claim,
+      () => request(() => deleteMeasurementSample(client, externalId)))) : "absent";
     out.measurementSamples!.push({ ...measurement, externalId, outcome });
   }
   for (const batch of claim.productionBatches ?? []) {
@@ -308,16 +303,15 @@ async function deleteRegistryRecords(
     const externalId = remote?.id ?? batch.externalProductionBatchId;
     // Lock through the final sharing decision and DELETE. Membership and
     // submission cannot take over if the lease expires during the request.
-    const mutate = () => withRemovalDeletionMutation(orgCtx, claim, async (tx) => {
+    const mutate = (request: RegistryDeleteRequest) => withRemovalDeletionMutation(orgCtx, claim, async (tx) => {
       if (await isRemovalProductionBatchShared(orgCtx, claim, batch, tx)) return "retained" as const;
       if (!remote) return "absent" as const;
-      await deleteProductionBatch(client, remote.id);
-      return "deleted" as const;
+      return request(() => deleteProductionBatch(client, remote.id));
     });
     const outcome = remote ? await deleteRegistryRecord(orgCtx, {
       removalId: claim.removalId, operation: "removal:delete:production-batch",
       kind: "ProductionBatch", externalId: remote.id,
-    }, mutate) : await mutate();
+    }, mutate) : await mutate(async () => "absent");
     out.productionBatches!.push({ creditBatchId: batch.creditBatchId, externalId, outcome });
   }
 }
@@ -371,44 +365,64 @@ async function resolveUnconfirmedBiocharApplication(
 async function deleteRegistryRecord<T extends RegistryDeleteOutcome | "retained">(
   orgCtx: OrgContext,
   target: RegistryDeleteTarget,
-  run: () => Promise<T>,
+  run: (request: RegistryDeleteRequest) => Promise<T>,
 ): Promise<T | "absent"> {
   const { removalId, operation, externalId } = target;
-  let outcome: T | "absent";
+  const captured: { attempt?: { outcome: RegistryDeleteOutcome } | { error: unknown } } = {};
+  let outcome!: T;
+  let fenceFailed = false;
+  let fenceError: unknown;
   try {
-    outcome = await run();
+    outcome = await run(async (send) => {
+      try {
+        await send();
+        captured.attempt = { outcome: "deleted" };
+        return "deleted";
+      } catch (error) {
+        if (isMissingIsometricResource(error,
+          target.kind === "ProductionBatch" || target.kind === "MeasurementSample" ? target.kind : null,
+          externalId)) {
+          captured.attempt = { outcome: "absent" };
+          return "absent";
+        }
+        captured.attempt = { error };
+        throw error;
+      }
+    });
   } catch (error) {
-    if (isMissingIsometricResource(error,
-      target.kind === "ProductionBatch" || target.kind === "MeasurementSample" ? target.kind : null,
-      externalId)) {
-      outcome = "absent";
-    } else {
-      const message = error instanceof SafeError ? error.message : registryDeleteRefusalMessage(error, target);
-      await appendSyncEventBestEffort(
-        orgCtx,
-        {
-          provider: ISOMETRIC_PROVIDER,
-          entityType: REMOVAL_ENTITY_TYPE,
-          entityId: removalId,
-          operation,
-          status: "failed",
-          requestPayload: { id: externalId },
-          responsePayload:
-            error instanceof IsometricApiError
-              ? (sanitizeIsometricErrorBody(error.body) ?? null)
-              : null,
-          errorMessage: message,
-        },
-        { removalId },
-      );
-      throw new SafeError(message);
-    }
+    fenceFailed = true;
+    fenceError = error;
+  }
+  // Capture only the provider request inside the lock; connection, validation,
+  // SQL, commit, and unlock failures remain local errors. Audit after release.
+  const attempt = captured.attempt;
+  if (attempt && "error" in attempt) {
+    const error = attempt.error;
+    const message = error instanceof SafeError ? error.message : registryDeleteRefusalMessage(error, target);
+    await appendSyncEventBestEffort(
+      orgCtx,
+      {
+        provider: ISOMETRIC_PROVIDER,
+        entityType: REMOVAL_ENTITY_TYPE,
+        entityId: removalId,
+        operation,
+        status: "failed",
+        requestPayload: { id: externalId },
+        responsePayload:
+          error instanceof IsometricApiError
+            ? (sanitizeIsometricErrorBody(error.body) ?? null)
+            : null,
+        errorMessage: message,
+      },
+      { removalId },
+    );
+    if (fenceFailed && fenceError !== error) throw fenceError;
+    throw new SafeError(message);
   }
   // The protected callback has finished and released its dedicated locks.
   // Pooled audit writes must not wait behind a membership writer holding the
   // pool connection while that writer waits for those same locks.
-  if (outcome === "retained") return outcome;
-  await appendSyncEventBestEffort(
+  if (attempt && "outcome" in attempt) await appendSyncEventBestEffort(
     orgCtx,
     {
       provider: ISOMETRIC_PROVIDER,
@@ -417,10 +431,11 @@ async function deleteRegistryRecord<T extends RegistryDeleteOutcome | "retained"
       operation,
       status: "succeeded",
       requestPayload: { id: externalId },
-      responsePayload: { id: externalId, outcome },
+      responsePayload: { id: externalId, outcome: attempt.outcome },
     },
     { removalId },
   );
+  if (fenceFailed) throw fenceError;
   return outcome;
 }
 
