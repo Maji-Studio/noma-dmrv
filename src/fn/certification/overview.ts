@@ -96,6 +96,10 @@ export interface RemovalPreflightSummary {
   local: LocalSubmissionStatus | null;
   lockInFlight: boolean;
   submissionInterrupted: boolean;
+  /** Any ledger version finalized; the delete gate refuses when true. */
+  hasFinalizedSubmission: boolean;
+  /** A submit attempt opened the registry boundary before any ledger row. */
+  registryBoundaryOpened: boolean;
   readiness: RemovalReadiness;
   /** Post-submit verification of Sources on their intended registry targets. */
   evidenceHealth: RemovalEvidenceHealth | null;
@@ -153,6 +157,8 @@ async function buildRemovalPreflightSummary(
     local: facts.local,
     lockInFlight: facts.lockInFlight,
     submissionInterrupted,
+    hasFinalizedSubmission: ctx.hasFinalizedSubmission,
+    registryBoundaryOpened: ctx.registryBoundaryOpened,
     readiness: deriveRemovalReadiness(facts),
     evidenceHealth: deriveRemovalEvidenceHealth({
       submissionId: ctx.latestSubmission?.id ?? null,

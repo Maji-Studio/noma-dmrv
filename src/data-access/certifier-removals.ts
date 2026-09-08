@@ -1,5 +1,9 @@
 import { and, asc, desc, eq, exists, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import {
+  REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY,
+  removalMayHaveExternalMutation,
+} from "@/lib/certification/removal-external-mutation";
 import { db } from "@/db";
 import { applications } from "@/db/schema/application";
 import {
@@ -35,22 +39,9 @@ const THOUSAND_YEAR_REMOVAL_ERROR =
   "A 1000-year Removal can contain one credit batch. Create a separate Removal for each credit batch.";
 const DISCARD_REMOVAL_ERROR =
   "This Removal cannot be discarded because it may have registry history. Refresh the page and review its status.";
-const REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY =
-  "submissionExternalMutationPossible";
 const REMOVAL_EXTERNAL_MUTATION_POSSIBLE_PATCH = JSON.stringify({
   [REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY]: true,
 });
-
-function removalMayHaveExternalMutation(metadata: unknown): boolean {
-  return (
-    metadata !== null &&
-    typeof metadata === "object" &&
-    !Array.isArray(metadata) &&
-    (metadata as Record<string, unknown>)[
-      REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY
-    ] === true
-  );
-}
 
 // A removal ledger row is keyed (provider, 'removal', 'removal', removalId).
 export async function removalHasBlockingSubmission(
@@ -570,6 +561,9 @@ export async function createRemovalWithCreditBatches(
 // have crossed the registry boundary makes recovery ineligible. The row lock
 // serializes this decision against submission and GHG Statement membership,
 // while the single transaction prevents partially released slice ownership.
+// No production caller since Removal deletion replaced the discard control
+// (`certification/discard-draft-retirement` in docs/open-questions.md). Kept
+// as the lock-protocol fixture for three DB-backed specs until retired.
 export async function discardLocalRemovalDraft(
   ctx: OrgContext,
   facilityId: string,

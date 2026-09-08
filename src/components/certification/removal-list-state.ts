@@ -24,6 +24,8 @@ export interface RemovalListRow {
   local: RemovalPreflightSummary["local"];
   lockInFlight: boolean;
   submissionInterrupted: boolean;
+  hasFinalizedSubmission: boolean;
+  registryBoundaryOpened: boolean;
   readiness: RemovalPreflightSummary["readiness"] | null;
   evidenceHealth: RemovalPreflightSummary["evidenceHealth"];
   submissionWarnings: string[];
@@ -70,6 +72,12 @@ export function buildRemovalListRows(
           identity.latestSubmission,
           { startedOn, completedOn },
         ),
+      hasFinalizedSubmission:
+        lifecycleData?.hasFinalizedSubmission ??
+        identity.hasFinalizedSubmission,
+      registryBoundaryOpened:
+        lifecycleData?.registryBoundaryOpened ??
+        identity.registryBoundaryOpened,
       readiness: lifecycleData?.readiness ?? null,
       evidenceHealth: data?.evidenceHealth ?? null,
       submissionWarnings: data?.submissionWarnings ?? [],
@@ -79,3 +87,41 @@ export function buildRemovalListRows(
     };
   });
 }
+
+/**
+ * Whether deleting this Removal may touch the registry: true as soon as a
+ * ledger row exists (a submission attempt may have created records before it
+ * recorded their IDs) or a submit attempt opened the registry boundary before
+ * any ledger row. Drives the confirmation copy on both delete surfaces. No
+ * role gate for now (issue #746).
+ */
+export function removalDeletionTouchesRegistry(
+  row: Pick<RemovalListRow, "local" | "registryBoundaryOpened">,
+): boolean {
+  return row.local !== null || row.registryBoundaryOpened;
+}
+
+type RemovalDeleteFacts = Pick<
+  RemovalListRow,
+  | "local"
+  | "lockInFlight"
+  | "submissionInterrupted"
+  | "hasFinalizedSubmission"
+  | "registryBoundaryOpened"
+>;
+
+/**
+ * A Removal may be deleted until a submission finalizes. `null` means no
+ * ledger row; `draft` and `rejected` never reached "Submission complete", but
+ * an earlier version may have, which `hasFinalizedSubmission` carries. An
+ * attempt still holding its lock is left alone unless it is known to be
+ * interrupted. The server re-checks every rule under its own locks.
+ */
+export function canDeleteRemovalRow(row: RemovalDeleteFacts): boolean {
+  const neverFinalized =
+    !row.hasFinalizedSubmission &&
+    (row.local === null || row.local === "draft" || row.local === "rejected");
+  const attemptRunning = row.lockInFlight && !row.submissionInterrupted;
+  return neverFinalized && !attemptRunning;
+}
+

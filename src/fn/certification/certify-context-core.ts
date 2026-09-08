@@ -7,14 +7,15 @@ import {
   type CertifierProjectRow,
 } from "@/data-access/certification";
 import { requireOrgFacility } from "@/data-access/utils";
-import { getLatestSubmission } from "@/data-access/certification-submissions";
+import {
+  getLatestSubmission,
+  hasFinalizedSubmission,
+} from "@/data-access/certification-submissions";
+import { removalMayHaveExternalMutation } from "@/lib/certification/removal-external-mutation";
 import {
   getCertifierRemovalById,
   getCreditBatchesByRemovalId,
-  listRemovalsForFacility,
-  listUngroupedCreditBatches,
   type CertifierRemovalRow,
-  type UngroupedCreditBatchRow,
 } from "@/data-access/certifier-removals";
 import {
   projectChainOfCustodyFromBatchFacts,
@@ -167,6 +168,13 @@ export interface RemovalCertifyContext {
   // submitted without shipping the heavy `runs` array.
   runSummary: RemovalRunSummary;
   latestSubmission: CertificationSubmissionRow | null;
+  // Any ledger version reached submitted/accepted/superseded. The latest row
+  // alone cannot say (a superseding draft sits above a submitted prior); the
+  // delete gate needs it because the server refuses on any finalized row.
+  hasFinalizedSubmission: boolean;
+  // A submit attempt opened the registry boundary (Source mirroring) before
+  // any ledger row existed. Deletion treats it as registry exposure.
+  registryBoundaryOpened: boolean;
   // The GHG Statement this removal rolls into + its verifier status, or null
   // when the removal isn't linked to one. See `LinkedGhgStatementStatus`.
   linkedGhgStatement: LinkedGhgStatementStatus | null;
@@ -536,7 +544,8 @@ export async function buildRemovalContext(
   }));
 
   // Load removal-owned facts up-front so every short-circuit carries them.
-  const [latestSubmission, linkedGhgStatement] = await Promise.all([
+  const [latestSubmission, hasFinalized, linkedGhgStatement] =
+    await Promise.all([
       scope.removalId
         ? getLatestSubmission(orgCtx, {
             provider: ISOMETRIC_PROVIDER,
@@ -545,8 +554,19 @@ export async function buildRemovalContext(
             localEntityId: scope.removalId,
           })
         : Promise.resolve(null),
+      scope.removalId
+        ? hasFinalizedSubmission(orgCtx, {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityId: scope.removalId,
+          })
+        : Promise.resolve(false),
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
     ]);
+  const registryBoundaryOpened = removalMayHaveExternalMutation(
+    scope.removal?.metadata ?? null,
+  );
   const supportingDocuments = await loadEvidenceMirrorSummaryForScope(
     orgCtx,
     scope,
@@ -647,6 +667,8 @@ export async function buildRemovalContext(
       supportingDocuments,
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
+      hasFinalizedSubmission: hasFinalized,
+      registryBoundaryOpened,
       linkedGhgStatement,
       isProduction,
       lineages: [],
@@ -743,6 +765,8 @@ export async function buildRemovalContext(
     supportingDocuments,
     runSummary,
     latestSubmission,
+    hasFinalizedSubmission: hasFinalized,
+    registryBoundaryOpened,
     linkedGhgStatement,
     isProduction,
     lineages,
@@ -801,6 +825,8 @@ function projectUiContext(
     supportingDocuments: ctx.supportingDocuments,
     runSummary: ctx.runSummary,
     latestSubmission: ctx.latestSubmission,
+    hasFinalizedSubmission: ctx.hasFinalizedSubmission,
+    registryBoundaryOpened: ctx.registryBoundaryOpened,
     linkedGhgStatement: ctx.linkedGhgStatement,
     isProduction: ctx.isProduction,
   };
@@ -896,62 +922,6 @@ export async function buildCreditBatchContexts(
     accountingByBatch,
     contextsByBatch: Object.fromEntries(contextEntries),
   };
-}
-
-export interface RemovalHubEntry {
-  removal: CertifierRemovalRow;
-  memberBatches: Pick<MemberCreditBatch, "id" | "code">[];
-  latestSubmission: CertificationSubmissionRow | null;
-}
-
-export interface RemovalsHubData {
-  removals: RemovalHubEntry[];
-  ungroupedBatches: UngroupedCreditBatchRow[];
-  // Whether submits from the hub write to the production Isometric registry —
-  // drives the confirmation gate on the hub's Submit button.
-  isProduction: boolean;
-}
-
-// Removals hub payload for a facility: every Removal with its member credit
-// batches and latest submission, plus newly applied mass not yet grouped.
-export async function loadRemovalsForFacility(
-  facilityId: string,
-): Promise<ActionResult<RemovalsHubData>> {
-  return withAction(async (orgCtx) => {
-    await requireOrgFacility(orgCtx, facilityId);
-    const [removalRows, ungroupedBatches] = await Promise.all([
-      listRemovalsForFacility(orgCtx, facilityId),
-      listUngroupedCreditBatches(orgCtx, facilityId),
-    ]);
-    // Bounded chunks preserve order without bursting the connection pool.
-    const removals: RemovalHubEntry[] = [];
-    for (let i = 0; i < removalRows.length; i += FANOUT_CONCURRENCY) {
-      const chunk = await Promise.all(
-        removalRows.slice(i, i + FANOUT_CONCURRENCY).map(async (removal) => {
-          const [batches, latestSubmission] = await Promise.all([
-            getCreditBatchesByRemovalId(orgCtx, removal.id),
-            getLatestSubmission(orgCtx, {
-              provider: ISOMETRIC_PROVIDER,
-              submissionType: REMOVAL_SUBMISSION_TYPE,
-              localEntityType: REMOVAL_ENTITY_TYPE,
-              localEntityId: removal.id,
-            }),
-          ]);
-          return {
-            removal,
-            memberBatches: batches.map((b) => ({ id: b.id, code: b.code })),
-            latestSubmission,
-          };
-        }),
-      );
-      removals.push(...chunk);
-    }
-    return {
-      removals,
-      ungroupedBatches,
-      isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
-    };
-  });
 }
 
 // New-Removal selection payload. Each ungrouped batch carries the same health

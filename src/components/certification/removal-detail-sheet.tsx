@@ -14,10 +14,16 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import {
+  useDeleteRemoval,
+  useFacilityCertifierSummary,
+} from "@/hooks/use-certification";
 import {
   deriveRemovalWorkflowStatus,
   type RemovalWorkflowStatus,
@@ -34,7 +40,12 @@ import { SourcesPanel } from "./sources-panel";
 import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SyncEventLog } from "./sync-event-log";
-import type { RemovalListRow } from "./removal-list-state";
+import {
+  canDeleteRemovalRow,
+  removalDeletionTouchesRegistry,
+  type RemovalListRow,
+} from "./removal-list-state";
+import { removalDeletionCopy } from "./removal-deletion-copy";
 
 interface RemovalDetailSheetProps {
   summary: RemovalListRow;
@@ -183,6 +194,16 @@ export function RemovalDetailSheet({
   // anyway; this just stops offering a dead-end control).
   const isActionable = workflowStatus.isActionable;
 
+  // Deletion mirrors the server rule: never-finalized only. With registry
+  // history the draft GHG Entry and Biochar Applications are removed from
+  // Isometric before the local record goes. No role gate yet (issue #746).
+  const touchesRegistry = removalDeletionTouchesRegistry(summary);
+  const canDelete = canDeleteRemovalRow(summary);
+  const deleteCopy = removalDeletionCopy(touchesRegistry);
+  const deleteMutation = useDeleteRemoval();
+  const toast = useToast();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
   // "Review & submit" resumes the New-Removal wizard directly on this removal.
   // The legacy `/removals/[id]/review` route only redirects here (dropping any
   // `?step=`), so we skip the hop and build the resume URL it resolves to.
@@ -197,117 +218,160 @@ export function RemovalDetailSheet({
       : "Set when submitted";
 
   return (
-    <SlideOverPanel.Root open={open} onOpenChange={(o) => !o && onClose()}>
-      <SlideOverPanel.Content size="default">
-        <SlideOverPanel.Header showClose>
-          <SlideOverPanel.Title>
-            Removal {summary.removalId.slice(0, 8)}…
-          </SlideOverPanel.Title>
-          {hasReportingWindow && (
-            <SlideOverPanel.Description>{window}</SlideOverPanel.Description>
-          )}
-        </SlideOverPanel.Header>
+    <>
+      <SlideOverPanel.Root open={open} onOpenChange={(o) => !o && onClose()}>
+        <SlideOverPanel.Content size="default">
+          <SlideOverPanel.Header showClose>
+            <SlideOverPanel.Title>
+              Removal {summary.removalId.slice(0, 8)}…
+            </SlideOverPanel.Title>
+            {hasReportingWindow && (
+              <SlideOverPanel.Description>{window}</SlideOverPanel.Description>
+            )}
+          </SlideOverPanel.Header>
 
-        <SlideOverPanel.Body className="flex flex-col gap-24">
-          <EnvBanner isProduction={isProduction} variant="inline" />
+          <SlideOverPanel.Body className="flex flex-col gap-24">
+            <EnvBanner isProduction={isProduction} variant="inline" />
 
-          <SubmissionStatusPanel summary={summary} status={workflowStatus} />
-
-          {summary.externalId && (
-            <RemovalCarbonBreakdown
-              removalId={summary.removalId}
-              enabled={open}
-            />
-          )}
-
-          <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
-            <Field label="Reporting window">{window}</Field>
-            <Field label={`Credit batches (${summary.memberBatchCodes.length})`}>
-              <span className="font-mono">
-                {summary.memberBatchCodes.join(", ") || MISSING_VALUE.none}
-              </span>
-            </Field>
+            <SubmissionStatusPanel summary={summary} status={workflowStatus} />
 
             {summary.externalId && (
-              <Field label="Registry record">
-                <RegistryRecordLink
-                  facilityId={facilityId}
-                  externalId={summary.externalId}
-                  version={summary.version}
-                  isProduction={isProduction}
-                  kind="removal"
-                />
-              </Field>
+              <RemovalCarbonBreakdown
+                removalId={summary.removalId}
+                enabled={open}
+              />
             )}
 
-            <ProductionBatchLinks
-              removalId={summary.removalId}
-              isProduction={isProduction}
-              enabled={open}
-            />
-
-            <RemovalStorageSitesField
-              externalProjectId={externalProjectId}
-              isProduction={isProduction}
-            />
-
-            {summary.evidenceHealth && (
-              <Field label="Evidence attachments">
-                <span>
-                  {summary.evidenceHealth.label}
-                  {summary.evidenceHealth.totalCount > 0
-                    ? `: ${summary.evidenceHealth.verifiedCount} of ${summary.evidenceHealth.totalCount} intended ${pluralize(summary.evidenceHealth.totalCount, "target")} verified`
-                    : ""}
+            <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
+              <Field label="Reporting window">{window}</Field>
+              <Field label={`Credit batches (${summary.memberBatchCodes.length})`}>
+                <span className="font-mono">
+                  {summary.memberBatchCodes.join(", ") || MISSING_VALUE.none}
                 </span>
               </Field>
-            )}
-          </div>
 
-          {/*
-            Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
-            diesel the active template cannot carry. Distinct from readiness
-            blockers above: the removal still submits.
-          */}
-          <SubmissionNotes notes={submissionWarningNotes} />
+              {summary.externalId && (
+                <Field label="Registry record">
+                  <RegistryRecordLink
+                    facilityId={facilityId}
+                    externalId={summary.externalId}
+                    version={summary.version}
+                    isProduction={isProduction}
+                    kind="removal"
+                  />
+                </Field>
+              )}
 
-          {/*
-            Registry value sources prepare mapped evidence for its intended
-            registry Datapoint targets. Application evidence stays on its
-            owning Application until the Biochar Application integration can
-            submit source_ids. This is the only place the candidate set is
-            consumed: submit is resolve-only and never auto-mirrors.
-            (Restores the mount lost when evidence-step.tsx was deleted in the
-            2026-06-04 certify redesign.)
-          */}
-          <SourcesPanel
-            removalId={summary.removalId}
-            isEditable={isActionable}
-          />
+              <ProductionBatchLinks
+                removalId={summary.removalId}
+                isProduction={isProduction}
+                enabled={open}
+              />
 
-          {summary.recentSyncEvents.length > 0 && (
-            <SyncEventLog
-              events={summary.recentSyncEvents}
-              compact
-              label={`Submission history (${summary.recentSyncEvents.length})`}
+              <RemovalStorageSitesField
+                externalProjectId={externalProjectId}
+                isProduction={isProduction}
+              />
+
+              {summary.evidenceHealth && (
+                <Field label="Evidence attachments">
+                  <span>
+                    {summary.evidenceHealth.label}
+                    {summary.evidenceHealth.totalCount > 0
+                      ? `: ${summary.evidenceHealth.verifiedCount} of ${summary.evidenceHealth.totalCount} intended ${pluralize(summary.evidenceHealth.totalCount, "target")} verified`
+                      : ""}
+                  </span>
+                </Field>
+              )}
+            </div>
+
+            {/*
+              Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
+              diesel the active template cannot carry. Distinct from readiness
+              blockers above: the removal still submits.
+            */}
+            <SubmissionNotes notes={submissionWarningNotes} />
+
+            {/*
+              Registry value sources prepare mapped evidence for its intended
+              registry Datapoint targets. Application evidence stays on its
+              owning Application until the Biochar Application integration can
+              submit source_ids. This is the only place the candidate set is
+              consumed: submit is resolve-only and never auto-mirrors.
+              (Restores the mount lost when evidence-step.tsx was deleted in the
+              2026-06-04 certify redesign.)
+            */}
+            <SourcesPanel
+              removalId={summary.removalId}
+              isEditable={isActionable}
             />
-          )}
-        </SlideOverPanel.Body>
 
-        <SlideOverPanel.Footer className="justify-stretch">
-          <RemovalReviewAction
-            isActionable={isActionable}
-            reviewHref={reviewHref}
-          />
-          <SlideOverPanel.Close>
-            <Button
-              variant={isActionable ? "default" : "primary"}
-              className="flex-1"
-            >
-              Close
-            </Button>
-          </SlideOverPanel.Close>
-        </SlideOverPanel.Footer>
-      </SlideOverPanel.Content>
-    </SlideOverPanel.Root>
+            {summary.recentSyncEvents.length > 0 && (
+              <SyncEventLog
+                events={summary.recentSyncEvents}
+                compact
+                label={`Submission history (${summary.recentSyncEvents.length})`}
+              />
+            )}
+          </SlideOverPanel.Body>
+
+          <SlideOverPanel.Footer className="justify-stretch">
+            {canDelete && (
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteCopy.actionLabel}
+              </Button>
+            )}
+            <RemovalReviewAction
+              isActionable={isActionable}
+              reviewHref={reviewHref}
+            />
+            <SlideOverPanel.Close>
+              <Button
+                variant={isActionable ? "default" : "primary"}
+                className="flex-1"
+              >
+                Close
+              </Button>
+            </SlideOverPanel.Close>
+          </SlideOverPanel.Footer>
+        </SlideOverPanel.Content>
+      </SlideOverPanel.Root>
+      {/* Sibling of the sheet, not a child, so Base UI does not treat the
+          confirmation as a nested dialog of the sheet. */}
+      <DeleteConfirmDialog
+        isOpen={deleteConfirmOpen}
+        title={deleteCopy.title}
+        message={deleteCopy.message}
+        onCancel={() => {
+          setDeleteConfirmOpen(false);
+          deleteMutation.reset();
+        }}
+        onConfirm={() => {
+          deleteMutation.mutate(
+            { facilityId, removalId: summary.removalId },
+            {
+              onSuccess: () => {
+                setDeleteConfirmOpen(false);
+                toast.success(deleteCopy.successToast);
+                onClose();
+              },
+            },
+          );
+        }}
+        isPending={deleteMutation.isPending}
+        errorMessage={
+          deleteMutation.error instanceof Error
+            ? deleteMutation.error.message
+            : undefined
+        }
+        confirmLabel={deleteCopy.actionLabel}
+        pendingLabel={deleteCopy.pendingLabel}
+      />
+    </>
   );
 }
