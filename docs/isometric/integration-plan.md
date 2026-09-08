@@ -173,6 +173,9 @@ after lease expiry. Registry lookups remain outside these locks; per-artifact
 audit writes use the application pool after the protected mutation releases its
 locks. Finalization also locks the batches and rechecks retained outcomes; if the other owner has
 gone, it keeps the Removal available for a cleanup retry.
+Pooled contenders use the application's bounded database lock wait, so a request
+waiting for cleanup cannot hold a pool slot indefinitely. The dedicated mutation
+connection keeps its locks through the remote call and is not subject to that timeout.
 
 Only confirmed remote deletion or absence permits exact, organization-scoped
 journal removal, after the owning Biochar Application journal rows are removed.

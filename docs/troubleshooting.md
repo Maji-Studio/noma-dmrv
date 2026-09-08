@@ -50,10 +50,12 @@ Check no firewall blocks `localhost:3100`; try `WATCHPACK_POLLING=true pnpm dev:
 - `max: env.DB_POOL_MAX ?? 1` — the default is **1**, not a library default of 10. Advice about "reducing the pool" is backwards here; local pool starvation is usually fixed by *raising* `DB_POOL_MAX`.
 - `idleTimeoutMillis: env.DB_POOL_IDLE_TIMEOUT_MS ?? 10_000`
 - `connectionTimeoutMillis: env.DB_POOL_CONNECTION_TIMEOUT_MS ?? 10_000` — so exhaustion surfaces as a **10-second hang**, not an immediate error.
+- `lock_timeout: env.DB_POOL_LOCK_TIMEOUT_MS ?? DEFAULT_POOL_LOCK_TIMEOUT_MS` — defaults to **1 second** while a pooled statement waits for a conflicting database lock. A timeout raises `55P03` and releases the waiting transaction's pool slot after rollback; retry after the conflicting operation completes. Keep this timeout below the connection-acquisition timeout.
 
-All three are env-driven (`src/config/env.ts`). Never hard-code them in `src/db/index.ts`.
+All four are env-driven (`src/config/env.ts`). Tune their environment overrides rather than editing the defaults in `src/db/index.ts`.
 
 `withDedicatedLockConnection()` (same file) deliberately opens its own `pg.Client` **outside** the shared pool: lock-backed certification work holds the advisory lock while doing heavyweight nested work through the shared pool, so it must not consume a pooled connection. It is a second, invisible connection source when counting `pg_stat_activity` — and "cleaning up" the duplicate connection logic will deadlock certification.
+The dedicated connection does not inherit the pooled lock timeout. Do not add a transaction or statement timeout that could release an active registry DELETE's locks while the remote operation still runs.
 
 ### Connection Pool Exhaustion / "too many clients already"
 
