@@ -141,13 +141,6 @@ export const incidentSeverity = pgEnum('incident_severity', [
   'high',
 ]);
 
-export const userRole = pgEnum('user_role', [
-  'admin',
-  'operator',
-  'lab_technician',
-  'viewer',
-]);
-
 // ============================================
 // Isometric Protocol Enums
 // ============================================
@@ -249,22 +242,6 @@ export const feedstockEligibilityStatus = pgEnum('feedstock_eligibility_status',
   'eligible',
   'ineligible',
   'conditional',
-]);
-
-export const lossEntityType = pgEnum('loss_entity_type', [
-  'production_run',
-  'delivery',
-  'application',
-  'storage',
-]);
-
-export const lossTypeCode = pgEnum('loss_type_code', [
-  'residue',
-  'spillage',
-  'runoff',
-  'volatilization',
-  'transport_loss',
-  'other',
 ]);
 
 export const certifierProvider = pgEnum('certifier_provider', [
