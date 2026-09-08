@@ -55,6 +55,7 @@ export interface RemovalDeletionResult {
   deletedGhgEntryIds: string[];
   deletedBiocharApplicationIds: string[];
   releasedSliceCount: number;
+  releasedDocumentMirrorCount: number;
 }
 
 type RegistryDeleteOutcome = "deleted" | "absent";
@@ -96,16 +97,15 @@ export async function deleteRemoval(
   };
 
   let releasedSliceCount: number;
+  let releasedDocumentMirrorCount: number;
   try {
     if (claimNeedsRegistryCleanup(claim)) {
       const client = await getIsometricClientForOrg(orgCtx.organizationId);
       await deleteRegistryRecords(orgCtx, client, claim, registry);
     }
-    ({ releasedSliceCount } = await finalizeRemovalDeletion(
-      orgCtx,
-      claim,
-      registry,
-    ));
+    const finalized = await finalizeRemovalDeletion(orgCtx, claim, registry);
+    releasedSliceCount = finalized.releasedSliceCount;
+    releasedDocumentMirrorCount = finalized.releasedDocumentMirrors.length;
   } catch (error) {
     // The release is TTL-bounded, so a failure here must not hide the
     // original error behind a raw database error.
@@ -147,6 +147,7 @@ export async function deleteRemoval(
         deleted_ghg_entry_ids: deletedGhgEntryIds,
         deleted_biochar_application_ids: deletedBiocharApplicationIds,
         released_slice_count: releasedSliceCount,
+        released_document_mirror_count: releasedDocumentMirrorCount,
       },
     },
     { removalId },
@@ -156,6 +157,7 @@ export async function deleteRemoval(
       deletedGhgEntryCount: deletedGhgEntryIds.length,
       deletedBiocharApplicationCount: deletedBiocharApplicationIds.length,
       releasedSliceCount,
+      releasedDocumentMirrorCount,
     },
     "removal deleted",
   );
@@ -164,6 +166,7 @@ export async function deleteRemoval(
     deletedGhgEntryIds,
     deletedBiocharApplicationIds,
     releasedSliceCount,
+    releasedDocumentMirrorCount,
   };
 }
 
