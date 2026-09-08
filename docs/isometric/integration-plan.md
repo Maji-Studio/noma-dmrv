@@ -164,14 +164,20 @@ the Removal, including Removals without submission ledger rows. Membership
 creation checks that lease under the credit-batch locks; submission creation and
 resume check it under the artifact lock. Abandoned leases expire with the shared
 submission lock TTL. Release and finalization compare the claim timestamp so an
-older caller cannot release or finalize a replacement claim. Sharing is checked again after
-registry readback and during finalization. Registry child-reference enforcement
-remains the final guard against an already-running concurrent child POST;
-production-batch recovery handles disappearance before that POST on retry.
+older caller cannot release or finalize a replacement claim. Each destructive
+registry call revalidates exact claim ownership and the ledger while holding
+the Removal row, artifact lock, and ordered credit-batch row locks on a dedicated
+connection. The final batch sharing check uses that same transaction before
+DELETE, preventing membership or submission takeover during the request even
+after lease expiry. Registry lookups remain outside these locks; per-artifact
+audit writes use the application pool after the protected mutation releases its
+locks. Finalization also locks the batches and rechecks retained outcomes; if the other owner has
+gone, it keeps the Removal available for a cleanup retry.
 
 Only confirmed remote deletion or absence permits exact, organization-scoped
 journal removal, after the owning Biochar Application journal rows are removed.
-The retained ledger records deleted, absent and retained artifacts. A partial
+The retained ledger records deleted, absent and retained artifacts. The final
+deletion sync event includes these outcomes even without submission ledger rows. A partial
 failure releases the claim and keeps local state retryable; it never reports
 completed cleanup. Auth/network errors and generic 400s fail. A 404 or the exact
 provider missing-resource 400 for the addressed batch or measurement is absence.

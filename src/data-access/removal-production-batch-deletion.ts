@@ -6,6 +6,7 @@ import { certifierProductionBatches } from "@/db/schema/certifier-production-bat
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { creditBatchApplications, creditBatches } from "@/db/schema/credits";
 import type { OrgContext } from "@/lib/auth/server";
+import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import { SafeError } from "@/lib/errors";
 import { buildProductionBatchReference } from "@/lib/isometric/production-batches";
 import { requireOrgScope } from "./utils";
@@ -39,7 +40,7 @@ export async function removalProductionBatchTargets(ctx: OrgContext, removalId: 
   }).from(creditBatchApplications)
     .innerJoin(creditBatches, and(eq(creditBatches.id, creditBatchApplications.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)))
     .leftJoin(certifierProductionBatches, and(eq(certifierProductionBatches.creditBatchId, creditBatches.id), eq(certifierProductionBatches.organizationId, ctx.organizationId)))
-    .leftJoin(certifierProjects, and(eq(certifierProjects.facilityId, creditBatches.facilityId), eq(certifierProjects.provider, "isometric"), eq(certifierProjects.organizationId, ctx.organizationId)))
+    .leftJoin(certifierProjects, and(eq(certifierProjects.facilityId, creditBatches.facilityId), eq(certifierProjects.provider, ISOMETRIC_PROVIDER), eq(certifierProjects.organizationId, ctx.organizationId)))
     .where(and(eq(creditBatchApplications.removalId, removalId), eq(creditBatchApplications.organizationId, ctx.organizationId)));
   return [...new Map(rows.map((row) => {
     const supplierReference = buildProductionBatchReference({ creditBatchId: row.creditBatchId });
@@ -65,7 +66,7 @@ export async function isRemovalProductionBatchShared(ctx: OrgContext, claim: Rem
   if (!batch) throw new SafeError("The credit batch changed during deletion. Try again.");
   if ((batch.reservation && !claim.submissionIds.includes(batch.reservation)) || (batch.owner && batch.owner !== claim.removalId)) return true;
   const submissions = await tx.select({ id: certificationSubmissions.id, payloadSnapshot: certificationSubmissions.payloadSnapshot, metadata: certificationSubmissions.metadata })
-    .from(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.provider, "isometric")));
+    .from(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.provider, ISOMETRIC_PROVIDER)));
   return submissions.some((row) => {
     if (claim.submissionIds.includes(row.id)) return false;
     const metadata = row.metadata as { deletion?: unknown } | null;
@@ -88,7 +89,12 @@ export async function clearDeletedRemovalProductionBatches(ctx: OrgContext, clai
     if (!outcome || (target.externalProductionBatchId && outcome.externalId !== target.externalProductionBatchId)) {
       throw new SafeError("Production batch cleanup is not confirmed. Run Delete Removal again.");
     }
-    if (outcome.outcome === "retained") continue;
+    if (outcome.outcome === "retained") {
+      if (!await isRemovalProductionBatchShared(ctx, claim, target, tx)) {
+        throw new SafeError("The retained production batch is no longer shared. Run Delete Removal again to finish registry cleanup.");
+      }
+      continue;
+    }
     if (await isRemovalProductionBatchShared(ctx, claim, target, tx)) {
       throw new SafeError("The production batch became shared during registry cleanup. Its saved registration is kept. Try again so the shared Removal can recover the registry batch.");
     }
@@ -96,7 +102,7 @@ export async function clearDeletedRemovalProductionBatches(ctx: OrgContext, clai
       const registrations = await tx.select({ id: certifierProductionBatches.id })
         .from(certifierProductionBatches).where(and(
           eq(certifierProductionBatches.organizationId, ctx.organizationId),
-          eq(certifierProductionBatches.provider, "isometric"),
+          eq(certifierProductionBatches.provider, ISOMETRIC_PROVIDER),
           eq(certifierProductionBatches.creditBatchId, target.creditBatchId),
         )).limit(1);
       if (registrations.length) throw new SafeError("A production batch registration appeared during cleanup. Run Delete Removal again.");
@@ -104,7 +110,7 @@ export async function clearDeletedRemovalProductionBatches(ctx: OrgContext, clai
     }
     const removed = await tx.delete(certifierProductionBatches).where(and(
       eq(certifierProductionBatches.organizationId, ctx.organizationId),
-      eq(certifierProductionBatches.provider, "isometric"),
+      eq(certifierProductionBatches.provider, ISOMETRIC_PROVIDER),
       eq(certifierProductionBatches.id, target.registrationId),
       target.registrationUpdatedAt ? sql`date_trunc('milliseconds', ${certifierProductionBatches.updatedAt}) = ${target.registrationUpdatedAt.toISOString()}::timestamp` : undefined,
       target.registrationPayloadHash ? eq(certifierProductionBatches.payloadHash, target.registrationPayloadHash) : undefined,

@@ -5,6 +5,7 @@ import {
   claimRemovalDeletion,
   finalizeRemovalDeletion,
   releaseRemovalDeletionClaim,
+  withRemovalDeletionMutation,
   type RemovalDeletionClaim,
   type RemovalDeletionRegistryOutcome,
 } from "@/data-access/certifier-removal-deletion";
@@ -152,6 +153,12 @@ export async function deleteRemoval(
       responsePayload: {
         deleted_ghg_entry_ids: deletedGhgEntryIds,
         deleted_biochar_application_ids: deletedBiocharApplicationIds,
+        absent_ghg_entry_ids: registry.absentGhgEntryIds,
+        absent_biochar_application_ids: registry.absentBiocharApplicationIds,
+        unresolved_biochar_application_references:
+          registry.unresolvedBiocharApplicationReferences,
+        production_batches: registry.productionBatches ?? [],
+        measurement_samples: registry.measurementSamples ?? [],
         released_slice_count: releasedSliceCount,
         released_document_mirror_count: releasedDocumentMirrorCount,
       },
@@ -216,7 +223,10 @@ async function deleteRegistryRecords(
         kind: "GHG Entry",
         externalId: ghgEntryId,
       },
-      () => deleteGhgEntry(client, ghgEntryId),
+      () => withRemovalDeletionMutation(orgCtx, claim, async () => {
+        await deleteGhgEntry(client, ghgEntryId);
+        return "deleted" as const;
+      }),
     );
     if (outcome === "deleted") out.deletedGhgEntryIds.push(ghgEntryId);
     else out.absentGhgEntryIds.push(ghgEntryId);
@@ -251,7 +261,10 @@ async function deleteRegistryRecords(
         kind: "Biochar Application",
         externalId: externalApplicationId,
       },
-      () => deleteBiocharApplication(client, externalApplicationId),
+      () => withRemovalDeletionMutation(orgCtx, claim, async () => {
+        await deleteBiocharApplication(client, externalApplicationId);
+        return "deleted" as const;
+      }),
     );
     if (outcome === "deleted") {
       out.deletedBiocharApplicationIds.push(externalApplicationId);
@@ -273,7 +286,10 @@ async function deleteRegistryRecords(
     const outcome = remote && externalId ? await deleteRegistryRecord(orgCtx, {
       removalId: claim.removalId, operation: "removal:delete:measurement-sample",
       kind: "MeasurementSample", externalId,
-    }, () => deleteMeasurementSample(client, externalId)) : "absent";
+    }, () => withRemovalDeletionMutation(orgCtx, claim, async () => {
+      await deleteMeasurementSample(client, externalId);
+      return "deleted" as const;
+    })) : "absent";
     out.measurementSamples!.push({ ...measurement, externalId, outcome });
   }
   for (const batch of claim.productionBatches ?? []) {
@@ -289,16 +305,19 @@ async function deleteRegistryRecords(
       (batch.externalProductionBatchId && remote.id !== batch.externalProductionBatchId))) {
       throw new SafeError("The registry production batch does not match its saved identity. Ask support to check it before deleting.");
     }
-    // Membership may have changed during the network read. Retain it if so.
-    if (await isRemovalProductionBatchShared(orgCtx, claim, batch)) {
-      out.productionBatches!.push({ creditBatchId: batch.creditBatchId, externalId: remote?.id ?? batch.externalProductionBatchId, outcome: "retained" });
-      continue;
-    }
     const externalId = remote?.id ?? batch.externalProductionBatchId;
+    // Lock through the final sharing decision and DELETE. Membership and
+    // submission cannot take over if the lease expires during the request.
+    const mutate = () => withRemovalDeletionMutation(orgCtx, claim, async (tx) => {
+      if (await isRemovalProductionBatchShared(orgCtx, claim, batch, tx)) return "retained" as const;
+      if (!remote) return "absent" as const;
+      await deleteProductionBatch(client, remote.id);
+      return "deleted" as const;
+    });
     const outcome = remote ? await deleteRegistryRecord(orgCtx, {
       removalId: claim.removalId, operation: "removal:delete:production-batch",
       kind: "ProductionBatch", externalId: remote.id,
-    }, () => deleteProductionBatch(client, remote.id)) : "absent";
+    }, mutate) : await mutate();
     out.productionBatches!.push({ creditBatchId: batch.creditBatchId, externalId, outcome });
   }
 }
@@ -349,23 +368,22 @@ async function resolveUnconfirmedBiocharApplication(
   return remote?.id ?? null;
 }
 
-async function deleteRegistryRecord(
+async function deleteRegistryRecord<T extends RegistryDeleteOutcome | "retained">(
   orgCtx: OrgContext,
   target: RegistryDeleteTarget,
-  run: () => Promise<void>,
-): Promise<RegistryDeleteOutcome> {
+  run: () => Promise<T>,
+): Promise<T | "absent"> {
   const { removalId, operation, externalId } = target;
-  let outcome: RegistryDeleteOutcome;
+  let outcome: T | "absent";
   try {
-    await run();
-    outcome = "deleted";
+    outcome = await run();
   } catch (error) {
     if (isMissingIsometricResource(error,
       target.kind === "ProductionBatch" || target.kind === "MeasurementSample" ? target.kind : null,
       externalId)) {
       outcome = "absent";
     } else {
-      const message = registryDeleteRefusalMessage(error, target);
+      const message = error instanceof SafeError ? error.message : registryDeleteRefusalMessage(error, target);
       await appendSyncEventBestEffort(
         orgCtx,
         {
@@ -386,6 +404,10 @@ async function deleteRegistryRecord(
       throw new SafeError(message);
     }
   }
+  // The protected callback has finished and released its dedicated locks.
+  // Pooled audit writes must not wait behind a membership writer holding the
+  // pool connection while that writer waits for those same locks.
+  if (outcome === "retained") return outcome;
   await appendSyncEventBestEffort(
     orgCtx,
     {
