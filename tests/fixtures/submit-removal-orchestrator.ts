@@ -155,28 +155,13 @@ import * as biocharApplicationsDA from "@/data-access/certifier-biochar-applicat
 import * as productionClaimReservations from "@/data-access/production-claim-reservations";
 import * as biocharApplications from "@/fn/certification/biochar-applications";
 import * as certifyContext from "@/fn/certification/certify-context-core";
-import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import * as sources from "@/fn/certification/sources";
 import * as isometric from "@/lib/isometric";
-import { submitRemoval } from "@/fn/certification/submit-removal";
 import { makeClaimSubmissionDraftFake } from "./fake-claim";
 
 export {
   isometricClientFake,
-  ledger,
-  ledgerClaim,
-  removalsDA,
-  productionBatchesDA,
-  biocharApplicationsDA,
-  productionClaimReservations,
-  biocharApplications,
-  certifyContext,
-  durabilitySamples,
-  evidenceLedgers,
-  sources,
-  isometric,
-  submitRemoval,
 };
 
 // ---------------------------------------------------------------------------

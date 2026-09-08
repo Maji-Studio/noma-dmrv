@@ -14,14 +14,9 @@ import {
   restoreFacility,
   getFacilities as getFacilitiesData,
   getFacilityById as getFacilityByIdData,
-  getFacilityWithRelations as getFacilityWithRelationsData,
-  getFacilityReactors as getFacilityReactorsData,
-  getFacilityStorageLocations as getFacilityStorageLocationsData,
   getFacilityCountries as getFacilityCountriesData,
-  isFacilityCodeAvailable as isFacilityCodeAvailableData,
   updateFacility,
   type PaginatedFacilities,
-  type FacilityDetail,
   type FacilityArchiveImpact,
 } from "@/data-access/facilities";
 import { requireOrgContext } from "@/lib/auth/server";
@@ -115,103 +110,6 @@ export async function getFacilityByIdFn(
 }
 
 /**
- * Get a facility with all its relations (reactors, storage locations)
- */
-export async function getFacilityWithRelationsFn(
-  facilityId: string
-): Promise<ActionResult<FacilityDetail>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const facility = await getFacilityWithRelationsData(ctx, facilityId);
-    return { success: true, data: facility };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load facility details",
-        "facility:detail",
-      ),
-    };
-  }
-}
-
-/**
- * Get reactors associated with a facility
- */
-export async function getFacilityReactorsFn(
-  facilityId: string
-): Promise<
-  ActionResult<
-    Array<{
-      id: string;
-      code: string;
-      identifier: string;
-      reactorType: string;
-      nominalThroughputTph: number | null;
-      createdAt: Date;
-      updatedAt: Date;
-    }>
-  >
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const reactors = await getFacilityReactorsData(ctx, facilityId);
-    return { success: true, data: reactors };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load facility reactors",
-        "facility:reactors",
-      ),
-    };
-  }
-}
-
-/**
- * Get storage locations associated with a facility
- */
-export async function getFacilityStorageLocationsFn(
-  facilityId: string
-): Promise<
-  ActionResult<
-    Array<{
-      id: string;
-      code: string;
-      name: string;
-      type: string;
-      capacityKg: number | null;
-      storageMethod: string | null;
-      createdAt: Date;
-      updatedAt: Date;
-    }>
-  >
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const storageLocations = await getFacilityStorageLocationsData(
-      ctx,
-      facilityId
-    );
-    return { success: true, data: storageLocations };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load facility storage bins",
-        "facility:storage-locations",
-      ),
-    };
-  }
-}
-
-/**
  * Get unique countries for the facility filter — active facilities by
  * default, archived when requested (the filter must match the visible list).
  */
@@ -232,34 +130,6 @@ export async function getFacilityCountriesFn(
         error,
         "Failed to load countries",
         "facility:countries",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a facility code is available
- */
-export async function checkFacilityCodeFn(
-  code: string,
-  excludeFacilityId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isFacilityCodeAvailableData(
-      ctx,
-      code,
-      excludeFacilityId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to check facility code",
-        "facility:check-code",
       ),
     };
   }

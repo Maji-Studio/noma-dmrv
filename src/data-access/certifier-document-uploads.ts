@@ -123,27 +123,6 @@ export async function listDocumentUploadsForDocuments(
     );
 }
 
-export async function updateDocumentUploadMetadata(
-  ctx: OrgContext,
-  rowId: string,
-  metadata: DocumentUploadMetadata,
-  txOrDb: DbClient = db,
-): Promise<CertifierDocumentUploadRow> {
-  requireOrgScope(ctx);
-  const [row] = await txOrDb
-    .update(certifierDocumentUploads)
-    .set({
-      metadata: metadata as unknown as Record<string, unknown>,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(certifierDocumentUploads.id, rowId), eq(certifierDocumentUploads.organizationId, ctx.organizationId)))
-    .returning();
-  if (!row) {
-    throw new Error(`Document upload ${rowId} not found`);
-  }
-  return row;
-}
-
 export async function deleteDocumentUploadByDocument(
   ctx: OrgContext,
   provider: CertifierProvider,

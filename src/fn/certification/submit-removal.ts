@@ -470,7 +470,7 @@ async function submitRemovalCore(
   // Claim a ledger draft through the submission-ledger module. The module
   // holds the mapping lock plus the per-document mirror locks while it
   // re-resolves source IDs and re-decides the claim — the interlock with
-  // unlinkDocumentSource and mirrorDocumentToSource (which acquire the same
+  // mirrorDocumentToSource (which acquires the same
   // per-(provider, documentId) advisory locks). Without it, a concurrent
   // unlink could delete a mapping between the unlocked source-id read above
   // and the snapshot insert, orphaning the audit-trail reference.

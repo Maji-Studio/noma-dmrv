@@ -25,7 +25,6 @@ import {
   getProductionRunStatsFn,
   getFacilityEnergyTotalsFn,
   getProductionRunReadingsFn,
-  checkProductionRunCodeFn,
   createProductionRunFn,
   updateProductionRunFn,
   deleteProductionRunFn,
@@ -206,28 +205,6 @@ export function useProductionRunReadings(
     },
     enabled: enabled && !!productionRunId,
     staleTime: 30000,
-  });
-}
-
-/**
- * Hook to check if a production run code is available
- */
-export function useProductionRunCodeCheck(
-  code: string,
-  excludeRunId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: productionRunKeys.codeCheck(code, excludeRunId),
-    queryFn: async () => {
-      const result = await checkProductionRunCodeFn(code, excludeRunId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
   });
 }
 
@@ -553,106 +530,6 @@ export function useDeleteProductionRun(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch production runs list for faster initial load
- */
-export function usePrefetchProductionRuns() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<ProductionRunFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: productionRunKeys.list(filters),
-      queryFn: async () => {
-        const result = await getProductionRunsFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single production run
- */
-export function usePrefetchProductionRun() {
-  const queryClient = useQueryClient();
-
-  return (productionRunId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: productionRunKeys.detail(productionRunId),
-      queryFn: async () => {
-        const result = await getProductionRunByIdFn(productionRunId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access production run cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useProductionRunCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all production run data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: productionRunKeys.all }),
-
-    /** Invalidate all production run lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() }),
-
-    /** Invalidate a specific production run detail */
-    invalidateDetail: (productionRunId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.detail(productionRunId),
-      }),
-
-    /** Invalidate production run stats (all facility variants) */
-    invalidateStats: () =>
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.statsPrefix(),
-      }),
-
-    /** Invalidate readings for a production run */
-    invalidateReadings: (productionRunId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.readings(productionRunId),
-      }),
-
-    /** Remove a specific production run from cache (use after deletion) */
-    removeFromCache: (productionRunId: string) => {
-      queryClient.removeQueries({
-        queryKey: productionRunKeys.detail(productionRunId),
-      });
-      queryClient.removeQueries({
-        queryKey: productionRunKeys.readings(productionRunId),
-      });
-    },
-
-    /** Set production run data in cache (useful for optimistic updates) */
-    setProductionRunData: (
-      productionRunId: string,
-      data: ProductionRunWithRelations
-    ) => queryClient.setQueryData(productionRunKeys.detail(productionRunId), data),
-
-    /** Get cached production run data */
-    getCachedProductionRun: (productionRunId: string) =>
-      queryClient.getQueryData<ProductionRunWithRelations>(
-        productionRunKeys.detail(productionRunId)
-      ),
-  };
-}

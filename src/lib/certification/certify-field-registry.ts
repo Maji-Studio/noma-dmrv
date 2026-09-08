@@ -391,7 +391,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     {
       // The biochar product wet mass is the submitted value. It becomes the
       // auto-derived biochar distribution leg's load mass
-      // (data-access/transport-legs.ts → syncBiocharProductTransportLeg).
+      // (data-access/transport-legs.ts → syncLockedBiocharProductTransportLeg).
       key: "deliveredWetMassKg",
       label: "Biochar product wet mass",
       kind: "entered",

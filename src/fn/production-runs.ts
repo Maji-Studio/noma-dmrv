@@ -6,13 +6,13 @@
  */
 
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
-import { productionRuns, storageLocations } from "@/db/schema";
+
+import { productionRuns } from "@/db/schema";
 import {
   CODE_CONFLICT_MESSAGES,
   withAutoCode,
 } from "@/data-access/code-generator";
-import { db } from "@/db";
+
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   createProductionRun,
@@ -23,10 +23,8 @@ import {
   getFacilityEnergyTotals as getFacilityEnergyTotalsData,
   getProductionRunReadings as getProductionRunReadingsData,
   updateProductionRun,
-  isProductionRunCodeAvailable as isProductionRunCodeAvailableData,
   ProductionRunOverlapError,
   ProductionRunDependencyError,
-  productionRunDateExpr,
   type PaginatedProductionRuns,
   type ProductionRunWithRelations,
   type ProductionRunStats,
@@ -120,46 +118,6 @@ export async function getProductionRunByIdFn(
   }
 }
 
-export async function getProductionRunBiocharPreviewFn(
-  productionRunId: string
-): Promise<
-  ActionResult<{
-    date: string;
-    biocharOutputKg: number | null;
-    biocharStorageLocationCode: string | null;
-  }>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const [run] = await db
-      .select({
-        date: productionRunDateExpr(),
-        biocharOutputKg: productionRuns.biocharOutputKg,
-        biocharStorageLocationCode: storageLocations.code,
-      })
-      .from(productionRuns)
-      .leftJoin(storageLocations, and(eq(productionRuns.biocharStorageLocationId, storageLocations.id), eq(storageLocations.organizationId, ctx.organizationId)))
-      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
-      .limit(1);
-
-    if (!run) {
-      return { success: false, error: "Production run not found" };
-    }
-
-    return { success: true, data: run };
-  } catch (error) {
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to load production run preview",
-        "production-run:preview",
-      ),
-    };
-  }
-}
-
 /**
  * Get production run statistics
  */
@@ -228,34 +186,6 @@ export async function getProductionRunReadingsFn(
         error,
         "Failed to load production run readings",
         "production-run:readings",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a production run code is available
- */
-export async function checkProductionRunCodeFn(
-  code: string,
-  excludeRunId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isProductionRunCodeAvailableData(
-      ctx,
-      code,
-      excludeRunId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to check production run code",
-        "production-run:check-code",
       ),
     };
   }

@@ -227,16 +227,6 @@ export const customerFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
 
-/**
- * Schema for selecting a customer (e.g., in dropdowns)
- */
-export const customerSelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-  name: z.string(),
-  cropType: z.string().optional().nullable(),
-});
-
 // ============================================
 // Type Inference
 // ============================================
@@ -246,9 +236,6 @@ export type CustomerLocationFormInput = z.input<typeof customerLocationFormSchem
 export type CustomerLocationFormData = z.infer<typeof customerLocationFormSchema>;
 export type CreateCustomerData = z.infer<typeof createCustomerSchema>;
 export type UpdateCustomerData = z.infer<typeof updateCustomerSchema>;
-export type DeleteCustomerData = z.infer<typeof deleteCustomerSchema>;
 export type CreateCustomerLocationData = z.infer<typeof createCustomerLocationSchema>;
 export type UpdateCustomerLocationData = z.infer<typeof updateCustomerLocationSchema>;
-export type DeleteCustomerLocationData = z.infer<typeof deleteCustomerLocationSchema>;
 export type CustomerFilterData = z.infer<typeof customerFilterSchema>;
-export type CustomerSelectData = z.infer<typeof customerSelectSchema>;

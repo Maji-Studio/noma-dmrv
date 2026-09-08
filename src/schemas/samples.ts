@@ -449,7 +449,6 @@ export const sampleFilterSchema = z.object({
 export type SampleFormData = z.infer<typeof sampleFormSchema>;
 export type CreateSampleData = z.infer<typeof createSampleSchema>;
 export type UpdateSampleData = z.infer<typeof updateSampleSchema>;
-export type DeleteSampleData = z.infer<typeof deleteSampleSchema>;
 export type SampleFilterData = z.infer<typeof sampleFilterSchema>;
 
 // ============================================

@@ -1,10 +1,8 @@
 /**
  * SyncEventLog
- * Append-only log of recent HTTP attempts against Certify. Two variants:
- *
- * - default ("relaxed"): full table view used at the bottom of a section.
- * - "compact": inline timeline used directly under a single submission row,
- *   so the failure context lives next to the thing that failed.
+ * Append-only log of recent HTTP attempts against Certify: an inline timeline
+ * used directly under a single submission row, so the failure context lives
+ * next to the thing that failed.
  *
  * Terminal events only (no `pending` rows are written).
  */
@@ -12,13 +10,11 @@ import type { CertifierSyncEventRow } from "@/data-access/certification";
 import { formatDateTime } from "@/lib/format-utils";
 import { DisclosureSummary } from "./disclosure-summary";
 
-const COMPACT_DEFAULT_LIMIT = 5;
+const DEFAULT_LIMIT = 5;
 
 interface SyncEventLogProps {
   events: CertifierSyncEventRow[];
-  /** Compact variant for inline per-submission display. */
-  compact?: boolean;
-  /** Cap rows when compact. */
+  /** Cap rows. */
   limit?: number;
   /** Override the disclosure label. */
   label?: string;
@@ -26,7 +22,6 @@ interface SyncEventLogProps {
 
 export function SyncEventLog({
   events,
-  compact = false,
   limit,
   label,
 }: SyncEventLogProps) {
@@ -38,83 +33,23 @@ export function SyncEventLog({
     );
   }
 
-  const visible = compact
-    ? events.slice(0, limit ?? COMPACT_DEFAULT_LIMIT)
-    : events;
-  const triggerLabel =
-    label ??
-    (compact
-      ? `View attempt history (${events.length})`
-      : `Recent attempts (${events.length})`);
-
-  if (compact) {
-    return (
-      <details className="group">
-        <DisclosureSummary>{triggerLabel}</DisclosureSummary>
-        <div className="mt-8">
-          <SyncEventList events={visible} />
-        </div>
-      </details>
-    );
-  }
+  const visible = events.slice(0, limit ?? DEFAULT_LIMIT);
+  const triggerLabel = label ?? `View attempt history (${events.length})`;
 
   return (
     <details className="group">
-      <DisclosureSummary
-        className="gap-8 uppercase tracking-wide"
-        underline={false}
-      >
-        {triggerLabel}
-      </DisclosureSummary>
-      <div className="mt-12 overflow-x-auto">
-      <table className="w-full min-w-[520px] border-collapse text-left">
-        <thead>
-          <tr className="border-b border-[var(--color-border-secondary)]">
-            <Th>Time</Th>
-            <Th>Operation</Th>
-            <Th>Status</Th>
-            <Th>Detail</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {visible.map((event) => (
-            <tr
-              key={event.id}
-              className="border-b border-[var(--color-border-secondary)] last:border-b-0"
-            >
-              <Td className="font-mono text-[11px]">
-                {formatDateTime(event.attemptedAt)}
-              </Td>
-              <Td className="font-mono text-[11px]">{event.operation}</Td>
-              <Td>
-                <span
-                  className={
-                    event.status === "succeeded"
-                      ? "text-[var(--color-status-success)]"
-                      : event.status === "failed"
-                        ? "text-[var(--clr-red)]"
-                        : "text-[var(--color-text-tertiary)]"
-                  }
-                >
-                  {event.status}
-                </span>
-              </Td>
-              <Td className="text-[var(--color-text-secondary)]">
-                {event.errorMessage ?? ""}
-              </Td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <DisclosureSummary>{triggerLabel}</DisclosureSummary>
+      <div className="mt-8">
+        <SyncEventList events={visible} />
       </div>
     </details>
   );
 }
 
 /**
- * The bare compact event list, for surfaces that already provide their own
+ * The bare event list, for surfaces that already provide their own
  * disclosure (the GHG statement sheet's history accordion). `SyncEventLog`
- * compact wraps this in a `<details>`.
+ * wraps this in a `<details>`.
  */
 export function SyncEventList({ events }: { events: CertifierSyncEventRow[] }) {
   return (
@@ -148,28 +83,5 @@ export function SyncEventList({ events }: { events: CertifierSyncEventRow[] }) {
         </li>
       ))}
     </ol>
-  );
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)] py-8 pr-12 font-normal">
-      {children}
-    </th>
-  );
-}
-function Td({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <td
-      className={`body-small py-8 pr-12 align-top ${className ?? ""}`.trim()}
-    >
-      {children}
-    </td>
   );
 }

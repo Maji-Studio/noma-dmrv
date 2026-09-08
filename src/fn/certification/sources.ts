@@ -10,10 +10,8 @@ import {
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
 import {
-  deleteDocumentUploadByDocument,
   getDocumentUploadByDocument,
   insertOrGetDocumentUpload,
-  isExternalSourceReferencedInSnapshots,
   listDocumentUploadsForDocuments,
   type DocumentUploadMetadata,
 } from "@/data-access/certifier-document-uploads";
@@ -41,7 +39,6 @@ import {
   mirrorDocumentToSourceSchema,
   type MirrorDocumentToSourceInput,
   SOURCES_MAX_BYTES,
-  unlinkDocumentSourceSchema,
 } from "@/schemas/certification-sources";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
@@ -593,99 +590,6 @@ export async function mirrorDocumentToSourceForUser(
 // Unlink (local-only)
 // ───────────────────────────────────────────────────────────────────────────
 
-export async function unlinkDocumentSource(
-  input: unknown,
-): Promise<ActionResult<{ unlinked: boolean }>> {
-  return withAction(async (orgCtx) => {
-    requireOrgRole(orgCtx, "admin");
-    const parsed = unlinkDocumentSourceSchema.parse(input);
-
-    // Anchor the mutation to a specific removal so the document must belong
-    // to that removal's lineage. Schema-level removalId is intent; this
-    // check is the enforcement.
-    await assertDocumentIsCandidateForRemoval(
-      orgCtx,
-      parsed.removalId,
-      parsed.documentId,
-    );
-    const removal = await getCertifierRemovalById(orgCtx, parsed.removalId);
-    if (!removal) throw new SafeError("Removal not found.");
-
-    // Wrap the snapshot-reference check + DELETE in a single transaction.
-    // The advisory lock is keyed on (provider, documentId) — the same key
-    // mirror uses and submit acquires per-document — so unlink, mirror, and
-    // submit all interlock on the same key. This closes the window where
-    // submit could read the externalDocumentId, unlink could delete the
-    // mapping, and submit would then write a snapshot referencing an
-    // orphaned source id.
-    return db.transaction(async (tx) => {
-      await acquireMirrorLock(tx, parsed.documentId);
-      await assertRemovalSourcesEditable(
-        orgCtx,
-        parsed.removalId,
-        removal.facilityId,
-        tx,
-      );
-
-      const existing = await getDocumentUploadByDocument(
-        orgCtx,
-        ISOMETRIC_PROVIDER,
-        parsed.documentId,
-        tx,
-      );
-      if (!existing) return { unlinked: false };
-
-      const referenced = await isExternalSourceReferencedInSnapshots(
-        orgCtx,
-        ISOMETRIC_PROVIDER,
-        existing.externalDocumentId,
-        tx,
-      );
-      if (referenced) {
-        throw new SafeError(
-          "This file is referenced by a submitted Removal. Unlinking it would break the audit trail. The file stays on Isometric and a later submission can attach it again.",
-        );
-      }
-
-      await deleteDocumentUploadByDocument(
-        orgCtx,
-        ISOMETRIC_PROVIDER,
-        parsed.documentId,
-        tx,
-      );
-
-      // Defence-in-depth recheck inside the transaction. With submit now
-      // acquiring the same (provider, documentId) lock before resolving
-      // source IDs, this recheck should never fire — but a recheck that
-      // never aborts is cheap, and it guards against future submission
-      // entry points that forget to take the lock.
-      const stillReferenced = await isExternalSourceReferencedInSnapshots(
-        orgCtx,
-        ISOMETRIC_PROVIDER,
-        existing.externalDocumentId,
-        tx,
-      );
-      if (stillReferenced) {
-        throw new SafeError(
-          "A Removal submission committed concurrently and now references this source. Unlink aborted; retry once the submission completes.",
-        );
-      }
-
-      await appendSyncEventBestEffort(orgCtx, {
-        provider: ISOMETRIC_PROVIDER,
-        entityType: "document",
-        entityId: parsed.documentId,
-        operation: "source:unlink:local",
-        status: "succeeded",
-        responsePayload: {
-          externalDocumentId: existing.externalDocumentId,
-        },
-      });
-      return { unlinked: true };
-    });
-  });
-}
-
 export type {
   CandidateDocument,
   CandidateDocumentsForRemoval,
@@ -697,6 +601,5 @@ export type {
 // Re-export the input types for caller convenience.
 export type {
   MirrorDocumentToSourceInput,
-  UnlinkDocumentSourceInput,
   LoadCandidateDocumentsForRemovalInput,
 } from "@/schemas/certification-sources";

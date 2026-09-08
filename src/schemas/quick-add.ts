@@ -14,7 +14,6 @@ import {
 import {
   storageLocationTypes,
   type StorageLocationType,
-  formatStorageLocationType,
   isFeedstockBinType,
 } from "./storage-locations";
 
@@ -145,8 +144,3 @@ export const storageLocationQuickAddSchema = z.object({
 export type StorageLocationQuickAddData = z.infer<typeof storageLocationQuickAddSchema>;
 
 export { storageLocationTypes, type StorageLocationType as StorageLocationTypeOption };
-
-export const STORAGE_LOCATION_TYPE_OPTIONS = storageLocationTypes.map((type) => ({
-  value: type,
-  label: formatStorageLocationType(type),
-}));

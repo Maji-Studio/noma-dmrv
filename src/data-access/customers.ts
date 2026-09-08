@@ -474,27 +474,6 @@ export async function deleteCustomer(
 // ============================================
 
 /**
- * Get a single customer location by ID
- */
-export async function getCustomerLocationById(
-  ctx: OrgContext,
-  locationId: string
-): Promise<CustomerLocation> {
-  requireOrgScope(ctx);
-
-  const [location] = await db
-    .select()
-    .from(customerLocations)
-    .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
-
-  if (!location) {
-    throw new SafeError("Customer location not found");
-  }
-
-  return location;
-}
-
-/**
  * Create a new customer location
  */
 export async function createCustomerLocation(
@@ -695,44 +674,3 @@ export async function deleteCustomerLocation(
 // ============================================
 // Utility Operations
 // ============================================
-
-/**
- * Check if a customer code is available
- */
-export async function isCustomerCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeCustomerId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [eq(customers.code, code), eq(customers.organizationId, ctx.organizationId)];
-
-  if (excludeCustomerId) {
-    conditions.push(sql`${customers.id} != ${excludeCustomerId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: customers.id })
-    .from(customers)
-    .where(and(...conditions));
-
-  return !existing;
-}
-
-/**
- * Get unique crop types from all customers
- * Useful for filter dropdowns
- */
-export async function getCustomerCropTypes(ctx: OrgContext): Promise<string[]> {
-  requireOrgScope(ctx);
-
-  const results = await db
-    .selectDistinct({ cropType: customers.cropType })
-    .from(customers)
-    .where(and(eq(customers.organizationId, ctx.organizationId), sql`${customers.cropType} IS NOT NULL AND ${customers.cropType} != ''`))
-    .orderBy(asc(customers.cropType));
-
-  return results.map((r) => r.cropType!).filter(Boolean);
-}

@@ -12,19 +12,17 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   loadCandidateDocumentsForRemoval,
   mirrorDocumentToSource,
-  unlinkDocumentSource,
   type CandidateDocumentsForRemoval,
   type MirrorResult,
 } from "@/fn/certification";
 import type {
   MirrorDocumentToSourceInput,
-  UnlinkDocumentSourceInput,
 } from "@/schemas/certification-sources";
 import { certificationKeys } from "./use-certification";
 
 const SOURCES_STALE_MS = 30_000;
 
-export const certificationSourcesKeys = {
+const certificationSourcesKeys = {
   candidatesForRemoval: (removalId: string) =>
     [...certificationKeys.all, "sources", "candidates", removalId] as const,
 };
@@ -83,23 +81,6 @@ export function useCandidateDocumentsForRemoval(
       const result = await loadCandidateDocumentsForRemoval({ removalId });
       if (!result.success) throw new Error(result.error);
       return result.data;
-    },
-  });
-}
-
-export function useUnlinkDocumentSource(removalId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: Omit<UnlinkDocumentSourceInput, "removalId">) => {
-      const result = await unlinkDocumentSource({ ...input, removalId });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: certificationSourcesKeys.candidatesForRemoval(removalId),
-      });
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });
 }

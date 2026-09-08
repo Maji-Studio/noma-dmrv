@@ -304,32 +304,6 @@ export async function getStorageLocationWithFacility(
   return enriched;
 }
 
-/**
- * Get storage bins by facility ID
- */
-export async function getStorageLocationsByFacility(
-  ctx: OrgContext,
-  facilityId: string
-): Promise<StorageLocation[]> {
-  requireOrgScope(ctx);
-
-  // Verify facility exists
-  const [facility] = await db
-    .select({ id: facilities.id })
-    .from(facilities)
-    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
-
-  if (!facility) {
-    throw new SafeError("Facility not found");
-  }
-
-  return db
-    .select()
-    .from(storageLocations)
-    .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)))
-    .orderBy(asc(storageLocations.code));
-}
-
 // ============================================
 // Create Operations
 // ============================================
@@ -833,47 +807,3 @@ export async function deleteStorageLocation(
 // ============================================
 // Utility Operations
 // ============================================
-
-/**
- * Check if a storage bin code is available
- */
-export async function isStorageLocationCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeStorageLocationId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [eq(storageLocations.code, code), eq(storageLocations.organizationId, ctx.organizationId)];
-
-  if (excludeStorageLocationId) {
-    conditions.push(
-      sql`${storageLocations.id} != ${excludeStorageLocationId}`
-    );
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: storageLocations.id })
-    .from(storageLocations)
-    .where(and(...conditions));
-
-  return !existing;
-}
-
-/**
- * Get unique storage types used across all storage locations
- */
-export async function getStorageLocationTypes(
-  ctx: OrgContext
-): Promise<string[]> {
-  requireOrgScope(ctx);
-
-  const results = await db
-    .selectDistinct({ type: storageLocations.type })
-    .from(storageLocations)
-    .where(and(eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)))
-    .orderBy(asc(storageLocations.type));
-
-  return results.map((r) => r.type);
-}

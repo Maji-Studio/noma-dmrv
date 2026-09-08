@@ -255,17 +255,9 @@ export type ApplicationEvidenceState = z.infer<
 >;
 export type CreateApplicationData = z.infer<typeof createApplicationSchema>;
 export type UpdateApplicationData = z.infer<typeof updateApplicationSchema>;
-export type DeleteApplicationData = z.infer<typeof deleteApplicationSchema>;
-
 // ============================================
 // Validation Helpers
 // ============================================
-
-/**
- * Extended application form schema with GPS validation
- * Both latitude and longitude must be provided together
- */
-export const applicationFormSchemaWithGpsValidation = applicationFormSchema;
 
 /**
  * Formatting helpers for display

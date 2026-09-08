@@ -13,7 +13,7 @@ import {
 
 const STALE_TIME_MS = 30_000;
 
-export const chainOfCustodyKeys = {
+const chainOfCustodyKeys = {
   all: ["chain-of-custody"] as const,
   detail: (applicationId: string) =>
     [...chainOfCustodyKeys.all, applicationId] as const,

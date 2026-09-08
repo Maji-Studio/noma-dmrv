@@ -22,7 +22,7 @@ import type { MutationCallbacks } from "./types";
 // Query Keys
 // ============================================
 
-export const productionSampleKeys = {
+const productionSampleKeys = {
   all: ["productionSamples"] as const,
   lists: () => [...productionSampleKeys.all, "list"] as const,
   list: (productionRunId: string) =>

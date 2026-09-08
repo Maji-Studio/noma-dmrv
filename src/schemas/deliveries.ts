@@ -254,17 +254,6 @@ export const deliveryFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
-/**
- * Schema for selecting a delivery (e.g., in dropdowns)
- */
-export const deliverySelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-  deliveryDate: z.date(),
-  status: z.enum(deliveryStatuses),
-  orderCode: z.string().optional(),
-});
-
 // ============================================
 // Type Inference
 // ============================================
@@ -272,9 +261,6 @@ export const deliverySelectSchema = z.object({
 export type DeliveryFormData = z.infer<typeof deliveryFormSchema>;
 export type CreateDeliveryData = z.infer<typeof createDeliverySchema>;
 export type UpdateDeliveryData = z.infer<typeof updateDeliverySchema>;
-export type DeleteDeliveryData = z.infer<typeof deleteDeliverySchema>;
 export type DeliveryFilterData = z.infer<typeof deliveryFilterSchema>;
-export type DeliverySelectData = z.infer<typeof deliverySelectSchema>;
-
 // Re-export the delivery dry mass schema for use in forms
 export { deliveryDryMassSchema };

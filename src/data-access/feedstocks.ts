@@ -758,51 +758,6 @@ export async function deleteFeedstock(
 // Utility Operations
 // ============================================
 
-export async function isFeedstockCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [
-    eq(feedstocks.organizationId, ctx.organizationId),
-    eq(feedstocks.code, code),
-  ];
-  if (excludeId) {
-    conditions.push(sql`${feedstocks.id} != ${excludeId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: feedstocks.id })
-    .from(feedstocks)
-    .where(and(...conditions));
-
-  return !existing;
-}
-
-/**
- * Get feedstock options for dropdowns (e.g., production run feedstock selection)
- */
-export async function getFeedstockOptions(
-  ctx: OrgContext
-): Promise<Array<{ id: string; code: string; massDryKg: number; feedstockTypeName: string | null }>> {
-  requireOrgScope(ctx);
-
-  return db
-    .select({
-      id: feedstocks.id,
-      code: feedstocks.code,
-      massDryKg: feedstocks.massDryKg,
-      feedstockTypeName: feedstockTypes.name,
-    })
-    .from(feedstocks)
-    .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-    .where(and(isNull(feedstocks.archivedAt), eq(feedstocks.organizationId, ctx.organizationId)))
-    .orderBy(desc(feedstocks.createdAt));
-}
-
 // ============================================
 // Helpers
 // ============================================

@@ -920,31 +920,6 @@ export async function clearTerminalStatusForResubmit(
     .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
 }
 
-export async function getSubmissionWithLatestSyncEvent(
-  ctx: OrgContext,
-  id: string,
-): Promise<{
-  submission: CertificationSubmissionRow;
-  latestSyncEvent: CertifierSyncEventRow | null;
-} | null> {
-  requireOrgScope(ctx);
-  const submission = await getSubmissionById(ctx, id);
-  if (!submission) return null;
-  const [latestSyncEvent] = await db
-    .select()
-    .from(certifierSyncEvents)
-    .where(
-      and(
-        eq(certifierSyncEvents.entityType, submission.localEntityType),
-        eq(certifierSyncEvents.entityId, submission.localEntityId),
-        eq(certifierSyncEvents.organizationId, ctx.organizationId),
-      ),
-    )
-    .orderBy(desc(certifierSyncEvents.attemptedAt))
-    .limit(1);
-  return { submission, latestSyncEvent: latestSyncEvent ?? null };
-}
-
 export async function attachReportDocument(
   ctx: OrgContext,
   args: {

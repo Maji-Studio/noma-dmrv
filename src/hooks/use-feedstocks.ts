@@ -18,8 +18,6 @@ import {
   getFeedstocksFn,
   getFeedstockByIdFn,
   getFeedstockStatsFn,
-  getFeedstockOptionsFn,
-  checkFeedstockCodeFn,
   createFeedstockFn,
   updateFeedstockFn,
   deleteFeedstockFn,
@@ -95,31 +93,6 @@ export function useFeedstockStats(
     },
     staleTime: 30000,
     enabled: options?.enabled,
-  });
-}
-
-export function useFeedstockOptions() {
-  return useQuery({
-    queryKey: feedstockKeys.options(),
-    queryFn: async () => {
-      const result = await getFeedstockOptionsFn();
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    staleTime: 300000, // 5 min
-  });
-}
-
-export function useFeedstockCodeCheck(code: string, excludeId?: string) {
-  return useQuery({
-    queryKey: feedstockKeys.codeCheck(code, excludeId),
-    queryFn: async () => {
-      const result = await checkFeedstockCodeFn(code, excludeId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    enabled: code.length >= 3,
-    staleTime: 10000,
   });
 }
 

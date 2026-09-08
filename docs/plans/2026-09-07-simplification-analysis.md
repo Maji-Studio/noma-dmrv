@@ -1,7 +1,7 @@
 # Simplification and optimization analysis (2026-09-07)
 
 - **Owner:** Kenji Nguyen
-- **Status:** proposed. No finding has been implemented; phase 1 is ready for a bulk implementation agent once the owner approves it.
+- **Status:** in progress. Phase A1 of the [rollout plan](./2026-09-07-simplification-rollout-plan.md) (findings 1, 13, 15, 16, 17, 20, 27, the rendering half of 4, appendix A2 and A18) is implemented in PR #740 (`refactor/simplify-a1-dead-code`); file paths below describe the tree as it was when the analysis was written, and paths that no longer exist are marked "deleted in A1".
 - **Last reviewed:** 2026-09-07 (against branch `codex/fix-submission-progress`)
 
 ## Summary
@@ -108,11 +108,11 @@ All LOC figures are estimates. Where I re-measured, the corrected number is give
 
 ### 4. dead-carbon-breakdown-card
 
-**Files:** `src/components/certification/carbon-breakdown.tsx` (669 lines), `carbon-breakdown.test.tsx`, `src/lib/certification/removal-breakdown.ts` (270), `src/lib/certification/ghg-statement-breakdown.ts` (196), plus `removal-breakdown.test.ts`, `ghg-statement-breakdown.test.ts` and `tests/removal-breakdown.test.ts`.
+**Files:** src/components/certification/carbon-breakdown.tsx (669 lines, deleted in A1), `carbon-breakdown.test.tsx`, src/lib/certification/removal-breakdown.ts (270, deleted in A1), `src/lib/certification/ghg-statement-breakdown.ts` (196), plus `removal-breakdown.test.ts`, `ghg-statement-breakdown.test.ts` and tests/removal-breakdown.test.ts (deleted in A1).
 
 **Evidence and verification result: confirmed.** `CarbonBreakdownCard` (`carbon-breakdown.tsx:661`) is referenced only by its own test file. The two live surfaces, `src/components/certification/removal-carbon-breakdown.tsx:11` and `ghg-statement-carbon-breakdown.tsx:9`, import only `CarbonBreakdownSkeleton` from that file and render `RegistryCarbonResultCard` instead; `removal-carbon-breakdown.tsx`'s own docstring says "No local carbon calculation or reconciliation enters this workflow." `computeGhgStatementBreakdown` (`ghg-statement-breakdown.ts:165`) is referenced only by its own test. I checked what the fn layer actually consumes: `src/fn/certification/ghg-statement-breakdown.ts:11-12` imports exactly one symbol, `hasExactGhgEntryMembership`. `computeRemovalBreakdown` reaches app code only through the dead card and through the dead `computeGhgStatementBreakdown`.
 
-**Proposal.** Keep `Shell` and `CarbonBreakdownSkeleton` (about 35 lines) and rename the file `carbon-breakdown-skeleton.tsx`. Delete the rest of `carbon-breakdown.tsx` and its test, `src/lib/certification/removal-breakdown.ts`, `computeGhgStatementBreakdown` and its input types from `ghg-statement-breakdown.ts` (keep `hasExactGhgEntryMembership`), and the three compute-only test files.
+**Proposal.** Keep `Shell` and `CarbonBreakdownSkeleton` (about 35 lines) and rename the file `carbon-breakdown-skeleton.tsx`. Delete the rest of `carbon-breakdown.tsx` and its test, src/lib/certification/removal-breakdown.ts, `computeGhgStatementBreakdown` and its input types from `ghg-statement-breakdown.ts` (keep `hasExactGhgEntryMembership`), and the three compute-only test files.
 
 **Rollout note.** This is the cleanest large deletion in the report. Nothing in the app reaches it, so it can go in phase 1.
 
@@ -256,11 +256,11 @@ All LOC figures are estimates. Where I re-measured, the corrected number is give
 
 ### 20. dead-files-and-primitives
 
-**Files:** `src/components/ui/view-related-link/index.tsx` (214), `src/components/forms/entity-select/quick-add-dialog.tsx` (the 148-line generic component; keep `useQuickAddDialog`), `src/components/ui/loading-skeleton/index.tsx` (4 of the skeletons, ~115 lines), `src/stores/ui-store.ts` (15), `src/utils/cn.ts`, `src/components/chain-of-custody/map/viewer-constants.ts` (two constants), `package.json`.
+**Files:** src/components/ui/view-related-link/index.tsx (214, deleted in A1), `src/components/forms/entity-select/quick-add-dialog.tsx` (the 148-line generic component; keep `useQuickAddDialog`), `src/components/ui/loading-skeleton/index.tsx` (4 of the skeletons, ~115 lines), src/stores/ui-store.ts (15, deleted in A1), src/utils/cn.ts (deleted in A1), `src/components/chain-of-custody/map/viewer-constants.ts` (two constants), `package.json`.
 
-**Evidence and verification result: confirmed.** `view-related-link` has no external reference of any kind and is not even re-exported from `src/components/ui/index.ts`. `zustand` appears exactly once in the tree, at `src/stores/ui-store.ts:5`, and `useUIStore` has no importer, so both the store and the dependency go. `bcryptjs` appears only in `package.json` (Better Auth does the hashing). `src/utils` has no importers at all, so `src/utils/cn.ts` is a byte-duplicate of `src/lib/utils.ts` with zero consumers. This merges the client analyst's dead-files item with the tooling analyst's unused-deps item.
+**Evidence and verification result: confirmed.** `view-related-link` has no external reference of any kind and is not even re-exported from `src/components/ui/index.ts`. `zustand` appeared exactly once in the tree, at src/stores/ui-store.ts:5, and `useUIStore` had no importer, so both the store and the dependency go. `bcryptjs` appears only in `package.json` (Better Auth does the hashing). src/utils had no importers at all, so src/utils/cn.ts was a byte-duplicate of `src/lib/utils.ts` with zero consumers. This merges the client analyst's dead-files item with the tooling analyst's unused-deps item.
 
-**Proposal.** Delete the files, drop `zustand` and `bcryptjs` from `package.json`, and delete the `src/stores/` and `src/utils/` directories. Move `useQuickAddDialog` out of `quick-add-dialog.tsx` before deleting the generic component around it.
+**Proposal.** Delete the files, drop `zustand` and `bcryptjs` from `package.json`, and delete the src/stores/ and src/utils/ directories. Move `useQuickAddDialog` out of `quick-add-dialog.tsx` before deleting the generic component around it.
 
 ### 21. entity-select-storage-location-cost
 
@@ -471,7 +471,7 @@ Five phases in dependency order. Each phase should leave the app working with `p
 
 From `scratchpad/metrics.md`, branch `codex/fix-submission-progress`, 2026-09-07. Use these to measure progress.
 
-Source LOC by directory (non-test): `src/components/` 71,073; `src/data-access/` 40,191; `src/lib/` 35,554; `src/fn/` 24,099; `src/hooks/` 11,251; `src/db/` 8,248; `src/schemas/` 7,049; `src/app/` 3,341; `src/config/` 592; `src/stores/` 15; `src/utils/` 10. Total roughly 201,000.
+Source LOC by directory (non-test): `src/components/` 71,073; `src/data-access/` 40,191; `src/lib/` 35,554; `src/fn/` 24,099; `src/hooks/` 11,251; `src/db/` 8,248; `src/schemas/` 7,049; `src/app/` 3,341; `src/config/` 592; src/stores/ 15; src/utils/ 10 (both directories deleted in A1). Total roughly 201,000.
 
 Largest component areas: `certification/` 13,083; `chain-of-custody/` 6,757; `ui/` 6,155; `forms/` 4,922; `production-runs/` 3,830; `credit-batches/` 3,602; `applications/` 3,400.
 

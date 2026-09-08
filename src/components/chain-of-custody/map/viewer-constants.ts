@@ -7,7 +7,7 @@
 
 // Direct module import (not the barrel) keeps this file free of React
 // component imports — viewer-utils + unit tests stay pure.
-import { OWN_LAYER_PREFIX, type MapAccent } from "@/components/map/map-theme";
+import { OWN_LAYER_PREFIX } from "@/components/map/map-theme";
 import type { ChainGeoNodeKind } from "@/data-access/chain-of-custody-geo";
 
 // ---------------------------------------------------------------------------
@@ -29,12 +29,6 @@ export const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}cv-sat-layer`;
 /** Marker family per plotted node kind. */
 export type ViewerMarkerKind = "supplier" | "facility" | "field";
 
-export const MARKER_ACCENT: Record<ViewerMarkerKind, MapAccent> = {
-  supplier: "orange", // feedstock origin
-  facility: "purple", // pyrolysis hub
-  field: "pink", // application field
-};
-
 /**
  * Rail/chip accent per chain node kind. On the map, distribution uses PINK
  * (not the DAG's rose — rose fails contrast on white; see plan token mapping).
@@ -49,16 +43,6 @@ export const NODE_ACCENT_VAR: Record<ChainGeoNodeKind, string> = {
   delivery: "var(--clr-pink)",
   application: "var(--clr-pink)",
 };
-
-/** Supplier square / field diamond size (px). */
-export const SITE_MARKER_SIZE_PX = 12;
-/** Facility square size (px) — larger, with a punched-out center. */
-export const FACILITY_MARKER_SIZE_PX = 18;
-/** Punched-out center inset on the facility marker (px). */
-export const FACILITY_MARKER_INSET_PX = 5;
-/** Hover/highlight outline ring size (px). */
-export const MARKER_RING_SIZE_PX = 26;
-export const FACILITY_RING_SIZE_PX = 32;
 
 // ---------------------------------------------------------------------------
 // Route lines ("carbon in transit")

@@ -107,33 +107,6 @@ export async function getApplicationDeliveryOptionsFn(
 }
 
 /**
- * Get application by ID
- */
-export async function getApplicationByIdFn(
-  id: string
-): Promise<ActionResult<Application>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const application = await getApplicationById(ctx, id);
-    if (!application) {
-      return { success: false, error: "Application not found" };
-    }
-
-    return { success: true, data: application };
-  } catch (error) {
-    return {
-      success: false,
-      error: applicationActionError(
-        error,
-        "Failed to get application",
-        "application:get",
-      ),
-    };
-  }
-}
-
-/**
  * Create a new application
  */
 export async function createApplicationFn(

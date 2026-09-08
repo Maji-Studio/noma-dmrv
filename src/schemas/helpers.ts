@@ -58,18 +58,6 @@ export const gpsCoordinatesSchema = z.object({
 
 export type GpsCoordinates = z.infer<typeof gpsCoordinatesSchema>;
 
-export const GPS_PAIR_MESSAGE =
-  "Both latitude and longitude must be provided together";
-
-export function hasCompleteGpsPair(data: {
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
-}): boolean {
-  const hasLat = data.gpsLatitude != null;
-  const hasLng = data.gpsLongitude != null;
-  return hasLat === hasLng;
-}
-
 /**
  * Both-or-neither GPS validation that points the error at the coordinate the
  * operator still needs to enter — not the one they already filled, which the
@@ -194,17 +182,6 @@ export const optionalStoredPercent = optionalPercent.pipe(
   storedPercentSchema().nullable().optional(),
 );
 
-/**
- * Bounded stored percent for callers that already coerce form input before
- * schema validation (for example React Hook Form's `setValueAs`).
- */
-export const optionalStoredPercentValue = storedPercentSchema()
-  .finite()
-  .min(0, "Moisture content must be 0% or more")
-  .max(100, "Moisture content must be 100% or less")
-  .optional()
-  .nullable();
-
 // ============================================
 // Mass Input Caps
 // ============================================
@@ -279,10 +256,6 @@ export function requiredPositiveMassKgSchema(
 
 export function optionalMassKgSchema(message = "Must be 0 or greater") {
   return massKgSchema(message).optional().nullable();
-}
-
-export function optionalMassKgInputSchema(message = "Must be 0 or greater") {
-  return z.preprocess(toNumberOrNull, optionalMassKgSchema(message));
 }
 
 /**

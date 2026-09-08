@@ -232,10 +232,9 @@ this is not a detached background-job guarantee: the serverless runtime may end
 execution after the response is gone. Refreshing or retrying relies on the
 submission ledger's idempotent reconciliation.
 
-`submitRemovalAction` and `submitGhgStatementToVerifier` remain as
-non-streaming compatibility/fallback wrappers for direct server consumers and
-backend tests. They delegate to the same cores. Their Admin guards and submit
-rate-limit keys must stay synchronized with the streaming route; new UI callers
+`submitGhgStatementToVerifier` remains as a non-streaming compatibility/fallback wrapper
+for direct server consumers and backend tests. It delegates to the same core.
+Its Admin guard and submit rate-limit key must stay synchronized with the streaming route; new UI callers
 use the streaming route.
 
 The one non-obvious rule: **`lib/isometric/` is pure** — no DB, no auth, no

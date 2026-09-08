@@ -41,7 +41,7 @@ export class RecordStockTakeFieldError extends Error {
   }
 }
 
-export const binMovementKeys = {
+const binMovementKeys = {
   all: ["binMovements"] as const,
   byLocation: (storageLocationId: string) =>
     [...binMovementKeys.all, storageLocationId] as const,

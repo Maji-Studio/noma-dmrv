@@ -309,7 +309,6 @@ export function RemovalDetailSheet({
             {summary.recentSyncEvents.length > 0 && (
               <SyncEventLog
                 events={summary.recentSyncEvents}
-                compact
                 label={`Submission history (${summary.recentSyncEvents.length})`}
               />
             )}

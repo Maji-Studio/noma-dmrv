@@ -92,7 +92,7 @@ repeats.
 
 ### Mass and integer caps
 
-Masses are backed by `numeric(14,3)` columns. A hand-rolled `z.number().positive()` lets a fat-fingered entry reach Postgres as a raw `numeric field overflow`. Use the capped family instead — `massKgSchema` · `positiveMassKgSchema` · `requiredMassKgSchema` · `requiredPositiveMassKgSchema` · `optionalMassKgSchema` · `optionalMassKgInputSchema` (the last preprocesses form strings). They enforce `MASS_INPUT_MAX_KG` (100,000,000 kg) / `MASS_INPUT_MAX_TONNES` with a friendly message.
+Masses are backed by `numeric(14,3)` columns. A hand-rolled `z.number().positive()` lets a fat-fingered entry reach Postgres as a raw `numeric field overflow`. Use the capped family instead — `massKgSchema` · `positiveMassKgSchema` · `requiredMassKgSchema` · `requiredPositiveMassKgSchema` · `optionalMassKgSchema`. They enforce `MASS_INPUT_MAX_KG` (100,000,000 kg) / `MASS_INPUT_MAX_TONNES` with a friendly message.
 
 Same reasoning for `PG_INTEGER_MAX` on integer columns, and `RATIO_INPUT_MAX` (9.999999) for ratio fields backed by `numeric(7,6)` whose domain exceeds `[0, 1]` (H:C org, O:C org). True 0–1 fractions keep their own `.max(1)`.
 
@@ -105,7 +105,7 @@ gpsLatitude: z.preprocess(toNumberOrNull, latitudeSchema),
 gpsLongitude: z.preprocess(toNumberOrNull, longitudeSchema),
 ```
 
-Range checks alone are not enough: a half-filled pair otherwise validates. Attach `.superRefine(gpsPairSuperRefine)` to any schema carrying `gpsLatitude` / `gpsLongitude` — it points the error at the coordinate still missing. `hasCompleteGpsPair()` and `GPS_PAIR_MESSAGE` are exported for non-schema call sites. Reference usage: `src/schemas/customers.ts`.
+Range checks alone are not enough: a half-filled pair otherwise validates. Attach `.superRefine(gpsPairSuperRefine)` to any schema carrying `gpsLatitude` / `gpsLongitude` — it points the error at the coordinate still missing. Reference usage: `src/schemas/customers.ts`.
 
 ### Cross-field error revalidation
 

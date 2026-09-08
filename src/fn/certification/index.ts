@@ -47,7 +47,6 @@ export {
   type CreditBatchHealthSummary,
   type RemovalPreflightSummary,
 } from "./overview";
-export { submitRemovalAction } from "./removal-grouping";
 export {
   loadRemovalCompilation,
   type RemovalCompilationView,
@@ -117,7 +116,6 @@ export {
 export {
   loadCandidateDocumentsForRemoval,
   mirrorDocumentToSource,
-  unlinkDocumentSource,
   type CandidateDocument,
   type CandidateDocumentsForRemoval,
   type CandidateLineageEntity,

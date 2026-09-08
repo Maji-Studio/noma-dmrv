@@ -142,7 +142,3 @@ export const deliveryDryMassSchema = z
       });
     }
   });
-
-export const documentMetadataSchema = z.object({
-  metadata: z.record(z.string(), z.unknown()),
-});
