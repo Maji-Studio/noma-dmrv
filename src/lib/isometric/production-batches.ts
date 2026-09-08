@@ -25,7 +25,8 @@
 
 import { createHash } from "node:crypto";
 import { SafeError } from "@/lib/errors";
-import { IsometricApiError, type IsometricClient } from "./client";
+import { type IsometricClient } from "./client";
+import { isMissingIsometricResource } from "./error-utils";
 import type { components } from "./generated/certify";
 import {
   ISOMETRIC_KILOGRAM_UNIT,
@@ -182,19 +183,7 @@ export async function getProductionBatch(
     }
     return batch;
   } catch (error) {
-    if (error instanceof IsometricApiError && error.code !== "network") {
-      const detail =
-        error.body && typeof error.body === "object" && "detail" in error.body
-          ? error.body.detail
-          : undefined;
-      if (
-        error.status === 404 ||
-        (error.status === 400 &&
-          detail === `Could not find 'ProductionBatch' with IDs '${id}'`)
-      ) {
-        return null;
-      }
-    }
+    if (isMissingIsometricResource(error, "ProductionBatch", id)) return null;
     throw error;
   }
 }

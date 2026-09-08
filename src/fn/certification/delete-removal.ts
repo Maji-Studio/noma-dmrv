@@ -23,6 +23,7 @@ import {
 } from "@/lib/isometric/client";
 import {
   describeIsometricApiError,
+  isMissingIsometricResource,
   sanitizeIsometricErrorBody,
 } from "@/lib/isometric/error-utils";
 import {
@@ -359,10 +360,9 @@ async function deleteRegistryRecord(
     await run();
     outcome = "deleted";
   } catch (error) {
-    if (error instanceof IsometricApiError && error.code !== "network" && (error.status === 404 ||
-      (error.status === 400 && (target.kind === "ProductionBatch" || target.kind === "MeasurementSample") &&
-        error.body !== null && typeof error.body === "object" && "detail" in error.body &&
-        error.body.detail === `Could not find '${target.kind}' with IDs '${externalId}'`))) {
+    if (isMissingIsometricResource(error,
+      target.kind === "ProductionBatch" || target.kind === "MeasurementSample" ? target.kind : null,
+      externalId)) {
       outcome = "absent";
     } else {
       const message = registryDeleteRefusalMessage(error, target);

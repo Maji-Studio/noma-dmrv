@@ -7,6 +7,20 @@ const MAX_ARRAY_ITEMS = 20;
 const MAX_DEPTH = 6;
 const REDACTED = "[REDACTED]";
 
+/** Exact provider absence evidence; transport and unrelated request errors propagate. */
+export function isMissingIsometricResource(
+  error: unknown,
+  kind: "ProductionBatch" | "MeasurementSample" | null,
+  id: string,
+): boolean {
+  if (!(error instanceof IsometricApiError) || error.code === "network") return false;
+  if (error.status === 404) return true;
+  return error.status === 400 && kind !== null &&
+    error.body !== null && typeof error.body === "object" &&
+    "detail" in error.body &&
+    error.body.detail === `Could not find '${kind}' with IDs '${id}'`;
+}
+
 const REDACT_KEYS = new Set([
   "accesstoken",
   "authorization",
