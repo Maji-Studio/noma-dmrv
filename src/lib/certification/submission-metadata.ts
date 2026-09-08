@@ -11,6 +11,10 @@ export const SUBMISSION_METADATA_KEYS = {
 
 export const SUBMISSION_ATTEMPT_OUTCOMES = {
   interrupted: "interrupted",
+  // Registry cleanup is running for a Removal deletion. Not "interrupted", so
+  // the reclaim bypass stays closed and a concurrent submit waits for the
+  // lock TTL instead of racing the DELETE calls.
+  deleting: "deleting",
 } as const;
 
 export const SUBMISSION_EXTERNAL_MUTATIONS = {

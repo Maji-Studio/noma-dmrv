@@ -215,6 +215,26 @@ Pure starter residue; org scoping came later via ADR 0010.
   existing invitation-accept URLs, which embed the invitation id rather than the
   slug — so probably none, but confirm before assuming.
 
+### Discard-draft data access has no caller since Removal deletion (`certification/discard-draft-retirement`, opened 2026-09-08)
+
+- Removal deletion (`src/fn/certification/delete-removal.ts:deleteRemoval`)
+  replaced the wizard's discard control, and the discard hook and server
+  action were removed with it. The data-access seam
+  `src/data-access/certifier-removals.ts:discardLocalRemovalDraft` remains
+  with no production caller, exercised only by
+  `tests/registry-boundary-removal.test.ts`,
+  `tests/removal-application-slice-assignment.test.ts`, and
+  `tests/certification-submissions.test.ts` as the lock-protocol fixture.
+  The `submissionExternalMutationPossible` Removal marker it used to consult
+  is **not** dead: both delete surfaces read it as `registryBoundaryOpened`
+  for the confirmation copy (`src/lib/certification/removal-external-mutation.ts`,
+  consumed by `src/fn/certification/removals-hub.ts` and the certify
+  context); issue #746 decides whether it also becomes a role gate.
+- **To resolve:** retire `discardLocalRemovalDraft` and port the three
+  fixtures onto `claimRemovalDeletion` (which takes the same Removal row and
+  artifact locks), or record why the discard seam stays. The marker and its
+  writer stay either way.
+
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 
 - The certifier settings pane replaces keys by typing over a masked field, and

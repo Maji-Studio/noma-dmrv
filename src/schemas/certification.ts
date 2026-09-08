@@ -135,14 +135,14 @@ export type CreateRemovalWithBatchesInput = z.infer<
   typeof createRemovalWithBatchesSchema
 >;
 
-export const discardRemovalDraftSchema = z.object({
+// The server decides whether registry cleanup is needed from the ledger, not
+// from the caller, so the input is only the Removal identity.
+export const deleteRemovalSchema = z.object({
   facilityId: z.uuid(),
   removalId: z.uuid(),
 });
 
-export type DiscardRemovalDraftInput = z.infer<
-  typeof discardRemovalDraftSchema
->;
+export type DeleteRemovalInput = z.infer<typeof deleteRemovalSchema>;
 
 const submitGhgStatementFieldsSchema = z.object({
   reportId: z.string().uuid().optional(),
