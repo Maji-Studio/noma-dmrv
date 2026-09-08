@@ -1,3 +1,5 @@
+import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
+import { assertNoRemovalBatchDeletion } from "./removal-production-batch-deletion";
 import { and, asc, desc, eq, exists, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
@@ -432,6 +434,8 @@ export async function createRemovalWithCreditBatches(
       .orderBy(creditBatches.id)
       .for("update");
 
+    await assertNoRemovalBatchDeletion(ctx, uniqueIds, tx);
+
     if (batches.length !== uniqueIds.length) {
       throw new SafeError("One or more selected credit batches no longer exist.");
     }
@@ -596,7 +600,8 @@ export async function discardLocalRemovalDraft(
       removal.ghgStatementId !== null ||
       removal.startedOn !== null ||
       removal.completedOn !== null ||
-      removalMayHaveExternalMutation(removal.metadata)
+      removalMayHaveExternalMutation(removal.metadata) ||
+      hasFreshRemovalDeletionLease(removal.metadata)
     ) {
       throw new SafeError(DISCARD_REMOVAL_ERROR);
     }

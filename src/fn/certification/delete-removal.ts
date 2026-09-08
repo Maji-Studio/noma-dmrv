@@ -1,3 +1,6 @@
+import { isRemovalProductionBatchShared } from "@/data-access/removal-production-batch-deletion";
+import { deleteProductionBatch, getProductionBatch, findProductionBatchBySupplierRef } from "@/lib/isometric/production-batches";
+import { deleteMeasurementSample, getMeasurementSample, findMeasurementSampleBySupplierRef } from "@/lib/isometric/measurement-samples";
 import {
   claimRemovalDeletion,
   finalizeRemovalDeletion,
@@ -20,6 +23,7 @@ import {
 } from "@/lib/isometric/client";
 import {
   describeIsometricApiError,
+  isMissingIsometricResource,
   sanitizeIsometricErrorBody,
 } from "@/lib/isometric/error-utils";
 import {
@@ -63,7 +67,7 @@ type RegistryDeleteOutcome = "deleted" | "absent";
 interface RegistryDeleteTarget {
   removalId: string;
   operation: string;
-  kind: "GHG Entry" | "Biochar Application";
+  kind: "GHG Entry" | "Biochar Application" | "MeasurementSample" | "ProductionBatch";
   externalId: string;
 }
 
@@ -94,6 +98,8 @@ export async function deleteRemoval(
     absentGhgEntryIds: [],
     absentBiocharApplicationIds: [],
     unresolvedBiocharApplicationReferences: [],
+    productionBatches: [],
+    measurementSamples: [],
   };
 
   let releasedSliceCount: number;
@@ -174,7 +180,9 @@ function claimNeedsRegistryCleanup(claim: RemovalDeletionClaim): boolean {
   return (
     claim.externalRemovalIds.length > 0 ||
     claim.unconfirmedRemovalSupplierRefs.length > 0 ||
-    claim.biocharApplications.length > 0
+    claim.biocharApplications.length > 0 ||
+    (claim.productionBatches?.length ?? 0) > 0 ||
+    (claim.measurementSamples?.length ?? 0) > 0
   );
 }
 
@@ -251,6 +259,48 @@ async function deleteRegistryRecords(
       out.absentBiocharApplicationIds.push(externalApplicationId);
     }
   }
+  for (const measurement of claim.measurementSamples ?? []) {
+    let remote = await auditedLookup(orgCtx, {
+      removalId: claim.removalId, operation: "removal:delete:measurement-sample",
+      supplierReference: measurement.supplierReference,
+    }, () => findMeasurementSampleBySupplierRef(client, measurement.supplierReference, { requireUnique: true }));
+    if (!remote && measurement.externalId) remote = await getMeasurementSample(client, measurement.externalId);
+    if (remote && (remote.supplier_reference_id !== measurement.supplierReference ||
+      (measurement.externalId && remote.id !== measurement.externalId))) {
+      throw new SafeError("The registry measurement does not match this Removal version. Ask support to check it before deleting.");
+    }
+    const externalId = remote?.id ?? measurement.externalId;
+    const outcome = remote && externalId ? await deleteRegistryRecord(orgCtx, {
+      removalId: claim.removalId, operation: "removal:delete:measurement-sample",
+      kind: "MeasurementSample", externalId,
+    }, () => deleteMeasurementSample(client, externalId)) : "absent";
+    out.measurementSamples!.push({ ...measurement, externalId, outcome });
+  }
+  for (const batch of claim.productionBatches ?? []) {
+    if (await isRemovalProductionBatchShared(orgCtx, claim, batch)) {
+      out.productionBatches!.push({ creditBatchId: batch.creditBatchId, externalId: batch.externalProductionBatchId, outcome: "retained" });
+      continue;
+    }
+    let remote = batch.externalProductionBatchId
+      ? await getProductionBatch(client, batch.externalProductionBatchId) : null;
+    // A lost journal or a previously deleted identity can still hide a POST.
+    if (!remote) remote = await findProductionBatchBySupplierRef(client, batch.supplierReference);
+    if (remote && (!batch.externalFacilityId || remote.facility_id !== batch.externalFacilityId || remote.supplier_reference_id !== batch.supplierReference ||
+      (batch.externalProductionBatchId && remote.id !== batch.externalProductionBatchId))) {
+      throw new SafeError("The registry production batch does not match its saved identity. Ask support to check it before deleting.");
+    }
+    // Membership may have changed during the network read. Retain it if so.
+    if (await isRemovalProductionBatchShared(orgCtx, claim, batch)) {
+      out.productionBatches!.push({ creditBatchId: batch.creditBatchId, externalId: remote?.id ?? batch.externalProductionBatchId, outcome: "retained" });
+      continue;
+    }
+    const externalId = remote?.id ?? batch.externalProductionBatchId;
+    const outcome = remote ? await deleteRegistryRecord(orgCtx, {
+      removalId: claim.removalId, operation: "removal:delete:production-batch",
+      kind: "ProductionBatch", externalId: remote.id,
+    }, () => deleteProductionBatch(client, remote.id)) : "absent";
+    out.productionBatches!.push({ creditBatchId: batch.creditBatchId, externalId, outcome });
+  }
 }
 
 // A supplier-reference lookup can be refused deterministically (duplicate
@@ -310,7 +360,9 @@ async function deleteRegistryRecord(
     await run();
     outcome = "deleted";
   } catch (error) {
-    if (error instanceof IsometricApiError && error.status === 404) {
+    if (isMissingIsometricResource(error,
+      target.kind === "ProductionBatch" || target.kind === "MeasurementSample" ? target.kind : null,
+      externalId)) {
       outcome = "absent";
     } else {
       const message = registryDeleteRefusalMessage(error, target);
@@ -354,13 +406,14 @@ function registryDeleteRefusalMessage(
   error: unknown,
   target?: RegistryDeleteTarget,
 ): string {
+  const kindLabel = target?.kind === "ProductionBatch" ? "Production Batch" : target?.kind === "MeasurementSample" ? "Measurement sample" : target?.kind;
   const label = target
-    ? `${target.kind} ${target.externalId}`
+    ? `${kindLabel} ${target.externalId}`
     : "the registry records";
   if (error instanceof IsometricApiError) {
     if (error.code === "not_configured") return error.message;
     const detail = describeIsometricApiError(error);
-    if (isRegistryStateRefusal(error)) {
+    if (isRegistryStateRefusal(error) && target?.kind !== "ProductionBatch" && target?.kind !== "MeasurementSample") {
       return `Isometric did not delete ${label}. ${detail} Only draft registry records can be deleted. Nothing was removed locally.`;
     }
     return `Isometric did not delete ${label}. ${detail} Nothing was removed locally. Try again.`;
@@ -391,7 +444,9 @@ function toDeletionError(
         : LOCAL_FAILURE_MESSAGE;
   const partial =
     registry.deletedGhgEntryIds.length > 0 ||
-    registry.deletedBiocharApplicationIds.length > 0;
+    registry.deletedBiocharApplicationIds.length > 0 ||
+    registry.productionBatches?.some((item) => item.outcome === "deleted") ||
+    registry.measurementSamples?.some((item) => item.outcome === "deleted");
   if (!partial) return new SafeError(base);
   // One next action only: the partial note replaces a generic retry prompt.
   const withoutRetry = base.endsWith(RETRY_SUFFIX)

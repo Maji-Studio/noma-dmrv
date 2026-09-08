@@ -1,3 +1,4 @@
+import { isRemovalDeletionLeased } from "./removal-deletion-lease";
 /**
  * Submission ledger — claim choreography.
  *
@@ -358,6 +359,7 @@ async function resumeDraft<H>(
   const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
     await lockAndVerifyMapping(ctx, tx, args.guard);
     await lockSubmissionArtifact(tx, args.key);
+    if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };
 
     const latest = await getLatestSubmissionWithExecutor(ctx, tx, args.key);
     const decided = decideSubmissionClaim({
@@ -424,6 +426,7 @@ async function createDraft<H>(
     const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
       await lockAndVerifyMapping(ctx, tx, args.guard);
       await lockSubmissionArtifact(tx, args.key);
+      if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };
       // Recovery may delete a purely local Removal after the optimistic
       // anchor read above but before this authoritative claim lock. Re-check
       // under the shared artifact lock so a concurrent discard cannot leave
