@@ -71,4 +71,3 @@ export const deleteProductionIncidentSchema = z.object({
 export type ProductionIncidentFormData = z.infer<typeof productionIncidentFormSchema>;
 export type CreateProductionIncidentData = z.infer<typeof createProductionIncidentSchema>;
 export type UpdateProductionIncidentData = z.infer<typeof updateProductionIncidentSchema>;
-export type DeleteProductionIncidentData = z.infer<typeof deleteProductionIncidentSchema>;

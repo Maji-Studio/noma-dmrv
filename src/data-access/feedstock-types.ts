@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   creditBatches,
@@ -259,19 +259,4 @@ export async function importIsometricFeedstockType(
     }
     throw error;
   }
-}
-
-export async function listActiveFeedstockTypes(
-  ctx: OrgContext,
-): Promise<FeedstockType[]> {
-  requireOrgScope(ctx);
-  return db
-    .select()
-    .from(feedstockTypes)
-    .where(
-      and(
-        eq(feedstockTypes.organizationId, ctx.organizationId),
-        isNull(feedstockTypes.archivedAt),
-      ),
-    );
 }

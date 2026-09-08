@@ -36,30 +36,15 @@ const STORAGE_TYPE_TO_LANE: Record<StorageLocationType, BinMovementLane> = {
   product_bin: "product",
 };
 
-const LANE_TO_STORAGE_TYPE: Record<BinMovementLane, StorageLocationType> = {
-  feedstock: "feedstock_bin",
-  biochar: "biochar_bin",
-  product: "product_bin",
-};
-
 /** The single material lane a bin reconciles, derived from its type. */
 export function laneForStorageType(type: StorageLocationType): BinMovementLane {
   return STORAGE_TYPE_TO_LANE[type];
-}
-
-export function storageTypeForLane(lane: BinMovementLane): StorageLocationType {
-  return LANE_TO_STORAGE_TYPE[lane];
 }
 
 export const BIN_MOVEMENT_LANE_LABELS: Record<BinMovementLane, string> = {
   feedstock: "Feedstock",
   biochar: "Biochar",
   product: "Product",
-};
-
-export const BIN_MOVEMENT_TYPE_LABELS: Record<BinMovementType, string> = {
-  adjustment: "Stock-take adjustment",
-  loss: "Loss / write-off",
 };
 
 const REASON_MAX = 1000;

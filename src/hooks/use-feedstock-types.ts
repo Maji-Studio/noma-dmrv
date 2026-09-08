@@ -18,7 +18,7 @@ import type {
 } from "@/schemas/feedstock-types";
 import { certificationKeys } from "./use-certification";
 
-export const feedstockTypeKeys = {
+const feedstockTypeKeys = {
   all: ["feedstock-types"] as const,
   list: () => ["feedstock-types", "list"] as const,
 };

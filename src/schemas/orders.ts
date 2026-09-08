@@ -133,16 +133,6 @@ export const orderFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
-/**
- * Schema for selecting an order (e.g., in dropdowns)
- */
-export const orderSelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-  orderDate: z.date(),
-  customerName: z.string().optional(),
-});
-
 // ============================================
 // Type Inference
 // ============================================
@@ -150,6 +140,4 @@ export const orderSelectSchema = z.object({
 export type OrderFormData = z.infer<typeof orderFormSchema>;
 export type CreateOrderData = z.infer<typeof createOrderSchema>;
 export type UpdateOrderData = z.infer<typeof updateOrderSchema>;
-export type DeleteOrderData = z.infer<typeof deleteOrderSchema>;
 export type OrderFilterData = z.infer<typeof orderFilterSchema>;
-export type OrderSelectData = z.infer<typeof orderSelectSchema>;

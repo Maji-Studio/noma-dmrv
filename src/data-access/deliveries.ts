@@ -354,28 +354,6 @@ export async function getDeliveries(
 }
 
 /**
- * Get a single delivery by ID
- */
-export async function getDeliveryById(
-  ctx: OrgContext,
-  deliveryId: string
-): Promise<Delivery> {
-  requireOrgScope(ctx);
-  const deliveryColumns = await getDeliveryColumnAvailability();
-
-  const [delivery] = await db
-    .select(getDeliveryBaseSelection(deliveryColumns))
-    .from(deliveries)
-    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
-
-  if (!delivery) {
-    throw new SafeError("Delivery not found");
-  }
-
-  return delivery;
-}
-
-/**
  * Get a single delivery with all its relationships
  */
 export async function getDeliveryWithRelations(
@@ -494,37 +472,6 @@ export async function getDeliveryWithRelations(
         }
       : null,
   };
-}
-
-/**
- * Get deliveries for dropdown selection
- */
-export async function getDeliveriesForSelect(
-  ctx: OrgContext,
-  orderId?: string
-): Promise<Array<{ id: string; code: string; deliveryDate: Date; status: string; orderCode: string | null }>> {
-  requireOrgScope(ctx);
-  const deliveryColumns = await getDeliveryColumnAvailability();
-
-  const conditions: SQL[] = [eq(deliveries.organizationId, ctx.organizationId), ...activeDeliveriesCondition(deliveryColumns)];
-  if (orderId) {
-    conditions.push(eq(deliveries.orderId, orderId));
-  }
-
-  const whereClause = and(...conditions);
-
-  return db
-    .select({
-      id: deliveries.id,
-      code: deliveries.code,
-      deliveryDate: deliveries.deliveryDate,
-      status: deliveries.status,
-      orderCode: orders.code,
-    })
-    .from(deliveries)
-    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
-    .where(whereClause)
-    .orderBy(desc(deliveries.deliveryDate));
 }
 
 // ============================================
@@ -970,28 +917,3 @@ export async function deleteDelivery(
 // ============================================
 // Utility Operations
 // ============================================
-
-/**
- * Check if a delivery code is available
- */
-export async function isDeliveryCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeDeliveryId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.code, code)];
-
-  if (excludeDeliveryId) {
-    conditions.push(sql`${deliveries.id} != ${excludeDeliveryId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: deliveries.id })
-    .from(deliveries)
-    .where(and(...conditions));
-
-  return !existing;
-}

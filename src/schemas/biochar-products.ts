@@ -270,14 +270,6 @@ export const biocharProductFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
-/**
- * Schema for selecting a biochar product (e.g., in dropdowns)
- */
-export const biocharProductSelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-});
-
 // ============================================
 // Type Inference
 // ============================================
@@ -285,6 +277,4 @@ export const biocharProductSelectSchema = z.object({
 export type BiocharProductFormData = z.infer<typeof biocharProductFormSchema>;
 export type CreateBiocharProductData = z.infer<typeof createBiocharProductSchema>;
 export type UpdateBiocharProductData = z.infer<typeof updateBiocharProductSchema>;
-export type DeleteBiocharProductData = z.infer<typeof deleteBiocharProductSchema>;
 export type BiocharProductFilterData = z.infer<typeof biocharProductFilterSchema>;
-export type BiocharProductSelectData = z.infer<typeof biocharProductSelectSchema>;

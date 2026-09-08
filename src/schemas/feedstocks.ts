@@ -231,7 +231,6 @@ export const feedstockStatsFilterSchema = feedstockFilterSchema.pick({
 export type FeedstockFormData = z.infer<typeof feedstockFormSchema>;
 export type CreateFeedstockData = z.infer<typeof createFeedstockSchema>;
 export type UpdateFeedstockData = z.infer<typeof updateFeedstockSchema>;
-export type DeleteFeedstockData = z.infer<typeof deleteFeedstockSchema>;
 export type FeedstockFilterData = z.infer<typeof feedstockFilterSchema>;
 export type FeedstockStatsFilterData = z.infer<
   typeof feedstockStatsFilterSchema

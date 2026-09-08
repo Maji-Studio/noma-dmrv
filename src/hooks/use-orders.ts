@@ -13,10 +13,7 @@ import type {
 import type { PaginatedOrders, OrderWithRelations } from "@/data-access/orders";
 import {
   getOrdersFn,
-  getOrderByIdFn,
-  getOrderWithRelationsFn,
   getOrdersForSelectFn,
-  checkOrderCodeFn,
   createOrderFn,
   updateOrderFn,
   deleteOrderFn,
@@ -29,7 +26,7 @@ import { invalidateStockEntityQueries } from "./entity-query-keys";
 // Query Keys
 // ============================================
 
-export const orderKeys = {
+const orderKeys = {
   all: ["orders"] as const,
   lists: () => [...orderKeys.all, "list"] as const,
   list: (filters?: Partial<OrderFilterData>) =>
@@ -70,42 +67,6 @@ export function useOrders(
 }
 
 /**
- * Hook to fetch a single order by ID
- */
-export function useOrder(orderId: string, enabled = true) {
-  return useQuery({
-    queryKey: orderKeys.detail(orderId),
-    queryFn: async () => {
-      const result = await getOrderByIdFn(orderId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!orderId,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch an order with all its relations
- */
-export function useOrderWithRelations(orderId: string, enabled = true) {
-  return useQuery({
-    queryKey: orderKeys.detailWithRelations(orderId),
-    queryFn: async () => {
-      const result = await getOrderWithRelationsFn(orderId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!orderId,
-    staleTime: 30000,
-  });
-}
-
-/**
  * Hook to fetch orders for dropdown selection
  */
 export function useOrdersForSelect(
@@ -123,28 +84,6 @@ export function useOrdersForSelect(
     },
     staleTime: 30000,
     enabled: options?.enabled,
-  });
-}
-
-/**
- * Hook to check if an order code is available
- */
-export function useOrderCodeCheck(
-  code: string,
-  excludeOrderId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: orderKeys.codeCheck(code, excludeOrderId),
-    queryFn: async () => {
-      const result = await checkOrderCodeFn(code, excludeOrderId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
   });
 }
 
@@ -395,40 +334,3 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, string>) {
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access order cache invalidation functions
- */
-export function useOrderCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all order data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: orderKeys.all }),
-
-    /** Invalidate all order lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: orderKeys.lists() }),
-
-    /** Invalidate a specific order detail */
-    invalidateDetail: (orderId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: orderKeys.detail(orderId),
-      }),
-
-    /** Invalidate an order with its relations */
-    invalidateDetailWithRelations: (orderId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: orderKeys.detailWithRelations(orderId),
-      }),
-
-    /** Remove a specific order from cache (use after deletion) */
-    removeFromCache: (orderId: string) => {
-      queryClient.removeQueries({ queryKey: orderKeys.detail(orderId) });
-      queryClient.removeQueries({
-        queryKey: orderKeys.detailWithRelations(orderId),
-      });
-    },
-  };
-}

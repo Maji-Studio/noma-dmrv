@@ -7,7 +7,6 @@ import {
 } from "@tanstack/react-query";
 import {
   getApplicationsFn,
-  getApplicationByIdFn,
   getApplicationDeliveryOptionsFn,
   createApplicationFn,
   updateApplicationFn,
@@ -99,24 +98,6 @@ export function useApplicationDeliveryOptions(
     },
     staleTime: 30000,
     enabled: options?.enabled,
-  });
-}
-
-/**
- * Query hook for fetching a single application
- */
-export function useApplication(id: string) {
-  return useQuery({
-    queryKey: applicationKeys.detail(id),
-    queryFn: async () => {
-      const result = await getApplicationByIdFn(id);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: !!id,
-    staleTime: 30000,
   });
 }
 

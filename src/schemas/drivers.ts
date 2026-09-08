@@ -30,27 +30,8 @@ export const driverFormSchema = z.object({
 });
 
 // ============================================
-// Server Action Schemas
-// ============================================
-
-export const createDriverSchema = driverFormSchema;
-
-export const updateDriverSchema = z.object({
-  driverId: z.string().uuid("Choose a valid driver."),
-  name: z.string().trim().min(1).max(255).optional(),
-  licenseNumber: z.string().max(50).optional().nullable(),
-  contactPhone: z.string().max(30).optional().nullable(),
-});
-
-export const deleteDriverSchema = z.object({
-  driverId: z.string().uuid("Choose a valid driver."),
-});
-
-// ============================================
 // Type Inference
 // ============================================
 
 export type DriverFormData = z.infer<typeof driverFormSchema>;
-export type CreateDriverData = z.infer<typeof createDriverSchema>;
-export type UpdateDriverData = z.infer<typeof updateDriverSchema>;
-export type DeleteDriverData = z.infer<typeof deleteDriverSchema>;
+export type CreateDriverData = z.infer<typeof driverFormSchema>;

@@ -30,7 +30,6 @@ import type { StatusValue } from "@/components/ui/status-badge";
 import type { components } from "@/lib/isometric/generated/certify";
 import {
   isSubmissionAttemptInterrupted,
-  SUBMISSION_ATTEMPT_OUTCOMES,
 } from "@/lib/certification/submission-metadata";
 import type { RemovalReadiness } from "./readiness";
 
@@ -54,8 +53,9 @@ export type LocalSubmissionStatus =
  * excluded — they have no live remote resource a change could orphan.
  *
  * The single client-safe source for this list: the server guards in
- * `data-access/certification.ts` (`hasBlockingFacilitySubmission`,
- * `removalHasBlockingSubmission`) and the client gate in
+ * `data-access/certification.ts` (`hasBlockingFacilitySubmission`) and
+ * `data-access/credit-batch-certification-lock.ts`
+ * (`assertRemovalAllowsCreditBatchMutation`) and the client gate in
  * `lib/certification/readiness.ts` (`canRegroupRemoval`) both import it from
  * here, so the UI never offers a control the server will refuse.
  */
@@ -166,8 +166,6 @@ export type RemovalWorkflowStatusKind =
   | "submitted"
   | "superseded";
 
-export const REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME =
-  SUBMISSION_ATTEMPT_OUTCOMES.interrupted;
 export const REMOVAL_SUBMISSION_INTERRUPTED_LABEL =
   "Submission interrupted";
 

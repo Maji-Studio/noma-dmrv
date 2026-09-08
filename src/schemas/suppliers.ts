@@ -150,16 +150,6 @@ export const supplierFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
 
-/**
- * Schema for selecting a supplier (e.g., in dropdowns)
- */
-export const supplierSelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-  name: z.string(),
-  location: z.string().optional().nullable(),
-});
-
 // ============================================
 // Supplier Location Schemas
 // ============================================
@@ -238,9 +228,7 @@ export const deleteSupplierLocationSchema = z.object({
 export type SupplierFormData = z.infer<typeof supplierFormSchema>;
 export type CreateSupplierData = z.infer<typeof createSupplierSchema>;
 export type UpdateSupplierData = z.infer<typeof updateSupplierSchema>;
-export type DeleteSupplierData = z.infer<typeof deleteSupplierSchema>;
 export type SupplierFilterData = z.infer<typeof supplierFilterSchema>;
-export type SupplierSelectData = z.infer<typeof supplierSelectSchema>;
 export type SupplierLocationFormData = z.infer<typeof supplierLocationFormSchema>;
 export type SupplierQuickAddData = z.infer<typeof supplierQuickAddSchema>;
 export type SupplierQuickAddInput = z.input<typeof supplierQuickAddSchema>;
@@ -249,4 +237,3 @@ export type CreateSupplierWithLocationsData = z.infer<
   typeof createSupplierWithLocationsSchema
 >;
 export type UpdateSupplierLocationData = z.infer<typeof updateSupplierLocationSchema>;
-export type DeleteSupplierLocationData = z.infer<typeof deleteSupplierLocationSchema>;

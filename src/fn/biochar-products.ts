@@ -16,10 +16,7 @@ import {
   type PaginatedBiocharProducts,
   type BiocharProductWithRelations,
 } from "@/data-access/biochar-products";
-import {
-  isBiocharProductCodeAvailable as isBiocharProductCodeAvailableData,
-  getBiocharProductOptions as getBiocharProductOptionsData,
-} from "@/data-access/biochar-product-lookups";
+
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   createBiocharProductSchema,
@@ -109,57 +106,6 @@ export async function getBiocharProductByIdFn(
         error,
         "Failed to load biochar product",
         "biochar-product:get",
-      ),
-    };
-  }
-}
-
-/**
- * Get biochar product options for dropdowns
- */
-export async function getBiocharProductOptionsFn(): Promise<
-  ActionResult<Array<{ id: string; code: string }>>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const options = await getBiocharProductOptionsData(ctx);
-    return { success: true, data: options };
-  } catch (error) {
-    return {
-      success: false,
-      error: biocharProductActionError(
-        error,
-        "Failed to load biochar product options",
-        "biochar-product:options",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a biochar product code is available
- */
-export async function checkBiocharProductCodeFn(
-  code: string,
-  excludeProductId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isBiocharProductCodeAvailableData(
-      ctx,
-      code,
-      excludeProductId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: biocharProductActionError(
-        error,
-        "Failed to check biochar product code",
-        "biochar-product:check-code",
       ),
     };
   }

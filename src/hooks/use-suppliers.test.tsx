@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/fn/suppliers", () => ({
-  checkSupplierCodeFn: vi.fn(),
   createSupplierFn: mocks.createSupplierFn,
   createSupplierLocationFn: vi.fn(),
   createSupplierWithLocationsFn: mocks.createSupplierWithLocationsFn,
@@ -22,8 +21,6 @@ vi.mock("@/fn/suppliers", () => ({
   deleteSupplierLocationFn: vi.fn(),
   getSupplierByIdFn: vi.fn(),
   getSupplierLocationsBySupplierFn: vi.fn(),
-  getSupplierLocationsFn: vi.fn(),
-  getSupplierOptionsFn: vi.fn(),
   getSuppliersFn: vi.fn(),
   updateSupplierFn: vi.fn(),
   updateSupplierLocationFn: vi.fn(),

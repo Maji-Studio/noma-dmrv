@@ -663,7 +663,7 @@ export function buildRemovalRequirementsChecklist(
 
 /**
  * Whether a removal's credit-batch membership can still be changed. Mirrors the
- * server guard (`assignCreditBatchToRemoval` → `removalHasBlockingSubmission`):
+ * server guard (`assertRemovalAllowsCreditBatchMutation`):
  * a removal with a live (`draft`/`submitted`/`accepted`) or in-flight ledger
  * row is frozen — regrouping it would change what an existing Isometric Removal
  * represents (ADR 0003). The server is authoritative; this only gates the UI so

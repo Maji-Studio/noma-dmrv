@@ -600,41 +600,6 @@ export async function getApplicationDeliveryOptions(
   });
 }
 
-export interface CreditBatchApplicationOption {
-  id: string;
-  code: string;
-  applicationDate: Date | null;
-  biocharAppliedDryTons: number | null;
-  fieldIdentifier: string | null;
-  facilityId: string;
-}
-
-/**
- * The application options the credit-batch auto-match selector pairs against,
- * each tagged with its facility (via the delivery join). Scoped to `facilityId`
- * scoped to `facilityId` — callers must resolve the facility first so this
- * never returns every application in the system.
- */
-export async function getCreditBatchApplicationOptions(
-  ctx: OrgContext,
-  facilityId: string,
-): Promise<CreditBatchApplicationOption[]> {
-  requireOrgScope(ctx);
-  return db
-    .select({
-      id: applications.id,
-      code: applications.code,
-      applicationDate: applications.applicationDate,
-      biocharAppliedDryTons: applications.biocharAppliedDryTons,
-      fieldIdentifier: applications.fieldIdentifier,
-      facilityId: deliveries.facilityId,
-    })
-    .from(applications)
-    .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
-    .where(and(eq(applications.organizationId, ctx.organizationId), eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
-    .orderBy(desc(applications.applicationDate));
-}
-
 /**
  * Get application by ID
  */
@@ -657,21 +622,6 @@ export async function getApplicationByCode(ctx: OrgContext, code: string): Promi
     .from(applications)
     .where(and(eq(applications.code, code), eq(applications.organizationId, ctx.organizationId)));
   return application ?? null;
-}
-
-/**
- * Get applications by delivery ID
- */
-export async function getApplicationsByDeliveryId(
-  ctx: OrgContext,
-  deliveryId: string
-): Promise<Application[]> {
-  requireOrgScope(ctx);
-  return db
-    .select()
-    .from(applications)
-    .where(and(eq(applications.deliveryId, deliveryId), eq(applications.organizationId, ctx.organizationId)))
-    .orderBy(desc(applications.applicationDate));
 }
 
 /**

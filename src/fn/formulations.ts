@@ -16,8 +16,6 @@ import {
   deleteFormulation,
   getFormulations as getFormulationsData,
   getFormulationById as getFormulationByIdData,
-  isFormulationCodeAvailable as isFormulationCodeAvailableData,
-  getFormulationOptions as getFormulationOptionsData,
   updateFormulation,
   type FormulationWithIngredients,
   type PaginatedFormulations,
@@ -101,57 +99,6 @@ export async function getFormulationByIdFn(
         error,
         "Failed to load formulation",
         "formulation:get",
-      ),
-    };
-  }
-}
-
-/**
- * Get formulation options for dropdowns
- */
-export async function getFormulationOptionsFn(): Promise<
-  ActionResult<Array<{ id: string; code: string; name: string }>>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const options = await getFormulationOptionsData(ctx);
-    return { success: true, data: options };
-  } catch (error) {
-    return {
-      success: false,
-      error: formulationActionError(
-        error,
-        "Failed to load formulation options",
-        "formulation:options",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a formulation code is available
- */
-export async function checkFormulationCodeFn(
-  code: string,
-  excludeFormulationId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isFormulationCodeAvailableData(
-      ctx,
-      code,
-      excludeFormulationId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: formulationActionError(
-        error,
-        "Failed to check formulation code",
-        "formulation:check-code",
       ),
     };
   }

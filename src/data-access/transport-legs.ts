@@ -228,22 +228,6 @@ export async function getTransportLegsWithEvidenceForEntities(
     .orderBy(asc(transportLegs.createdAt));
 }
 
-export async function getTransportLegById(
-  ctx: OrgContext,
-  id: string,
-): Promise<TransportLeg | null> {
-  requireOrgScope(ctx);
-
-  const [row] = await db
-    .select()
-    .from(transportLegs)
-    .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)));
-
-  if (!row) return null;
-  await resolveEntityFacility(ctx, row.entityType, row.entityId);
-  return row;
-}
-
 // ============================================
 // Write Operations
 // ============================================
@@ -814,16 +798,6 @@ export async function syncBiocharProductTransportLegs(
       deferredRetirements,
     );
   }
-}
-
-/** Recompute one product through the same lock-ordering entry point. */
-export async function syncBiocharProductTransportLeg(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  biocharProductId: string,
-): Promise<void> {
-  requireOrgScope(ctx);
-  await syncBiocharProductTransportLegs(ctx, tx, [biocharProductId]);
 }
 
 /**

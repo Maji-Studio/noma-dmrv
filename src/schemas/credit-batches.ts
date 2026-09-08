@@ -227,8 +227,6 @@ export const deleteCreditBatchSchema = z.object({
 export type CreditBatchFormData = z.infer<typeof creditBatchFormSchema>;
 export type CreateCreditBatchData = z.infer<typeof createCreditBatchSchema>;
 export type UpdateCreditBatchData = z.infer<typeof updateCreditBatchSchema>;
-export type DeleteCreditBatchData = z.infer<typeof deleteCreditBatchSchema>;
-
 // ============================================
 // Formatting Helpers
 // ============================================
@@ -245,27 +243,6 @@ export function formatCreditBatchStatus(status: CreditBatchStatus): string {
     rejected: "Rejected",
   };
   return labels[status];
-}
-
-/**
- * Format certifier provider for display
- */
-export function formatCertifierProvider(
-  provider: string | null | undefined
-): string {
-  if (provider === "isometric" || !provider) {
-    return "Isometric";
-  }
-
-  if (provider === "puro_earth") {
-    return "Puro.earth";
-  }
-
-  if (provider === "verra") {
-    return "Verra";
-  }
-
-  return provider;
 }
 
 /**

@@ -17,8 +17,6 @@ import type {
 import {
   getFormulationsFn,
   getFormulationByIdFn,
-  getFormulationOptionsFn,
-  checkFormulationCodeFn,
   createFormulationFn,
   updateFormulationFn,
   deleteFormulationFn,
@@ -30,7 +28,7 @@ import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 // Query Keys
 // ============================================
 
-export const formulationKeys = {
+const formulationKeys = {
   all: ["formulations"] as const,
   lists: () => [...formulationKeys.all, "list"] as const,
   list: (filters?: Partial<FormulationFilterData>) =>
@@ -78,45 +76,6 @@ export function useFormulation(formulationId: string, enabled = true) {
     },
     enabled: enabled && !!formulationId,
     staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch formulation options for dropdowns
- */
-export function useFormulationOptions() {
-  return useQuery({
-    queryKey: formulationKeys.options(),
-    queryFn: async () => {
-      const result = await getFormulationOptionsFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: 60000, // 1 minute
-  });
-}
-
-/**
- * Hook to check if a formulation code is available
- */
-export function useFormulationCodeCheck(
-  code: string,
-  excludeFormulationId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: formulationKeys.codeCheck(code, excludeFormulationId),
-    queryFn: async () => {
-      const result = await checkFormulationCodeFn(code, excludeFormulationId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
   });
 }
 
@@ -393,89 +352,6 @@ export function useDeleteFormulation(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch formulations list for faster initial load
- */
-export function usePrefetchFormulations() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<FormulationFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: formulationKeys.list(filters),
-      queryFn: async () => {
-        const result = await getFormulationsFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single formulation
- */
-export function usePrefetchFormulation() {
-  const queryClient = useQueryClient();
-
-  return (formulationId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: formulationKeys.detail(formulationId),
-      queryFn: async () => {
-        const result = await getFormulationByIdFn(formulationId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access formulation cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useFormulationCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all formulation data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: formulationKeys.all }),
-
-    /** Invalidate all formulation lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: formulationKeys.lists() }),
-
-    /** Invalidate a specific formulation detail */
-    invalidateDetail: (formulationId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: formulationKeys.detail(formulationId),
-      }),
-
-    /** Invalidate formulation options */
-    invalidateOptions: () =>
-      queryClient.invalidateQueries({ queryKey: formulationKeys.options() }),
-
-    /** Remove a specific formulation from cache (use after deletion) */
-    removeFromCache: (formulationId: string) => {
-      queryClient.removeQueries({ queryKey: formulationKeys.detail(formulationId) });
-    },
-
-    /** Set formulation data in cache (useful for optimistic updates) */
-    setFormulationData: (formulationId: string, data: FormulationWithIngredients) =>
-      queryClient.setQueryData(formulationKeys.detail(formulationId), data),
-
-    /** Get cached formulation data */
-    getCachedFormulation: (formulationId: string) =>
-      queryClient.getQueryData<FormulationWithIngredients>(formulationKeys.detail(formulationId)),
-  };
-}

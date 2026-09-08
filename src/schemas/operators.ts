@@ -30,27 +30,8 @@ export const operatorFormSchema = z.object({
 });
 
 // ============================================
-// Server Action Schemas
-// ============================================
-
-export const createOperatorSchema = operatorFormSchema;
-
-export const updateOperatorSchema = z.object({
-  operatorId: z.string().uuid("Choose a valid operator."),
-  name: z.string().trim().min(1).max(255).optional(),
-  credentials: z.string().max(255).optional().nullable(),
-  contactPhone: z.string().max(30).optional().nullable(),
-});
-
-export const deleteOperatorSchema = z.object({
-  operatorId: z.string().uuid("Choose a valid operator."),
-});
-
-// ============================================
 // Type Inference
 // ============================================
 
 export type OperatorFormData = z.infer<typeof operatorFormSchema>;
-export type CreateOperatorData = z.infer<typeof createOperatorSchema>;
-export type UpdateOperatorData = z.infer<typeof updateOperatorSchema>;
-export type DeleteOperatorData = z.infer<typeof deleteOperatorSchema>;
+export type CreateOperatorData = z.infer<typeof operatorFormSchema>;

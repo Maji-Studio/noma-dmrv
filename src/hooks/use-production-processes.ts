@@ -11,7 +11,7 @@ import type {
   StartNewProcessInput,
 } from "@/schemas/production-process";
 
-export const productionProcessKeys = {
+const productionProcessKeys = {
   all: ["production-processes"] as const,
   eligibility: (facilityId?: string, feedstockTypeId?: string) =>
     ["production-processes", "eligibility", facilityId, feedstockTypeId] as const,

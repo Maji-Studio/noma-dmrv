@@ -30,9 +30,6 @@ import type {
 import {
   getSuppliersFn,
   getSupplierByIdFn,
-  getSupplierLocationsFn,
-  getSupplierOptionsFn,
-  checkSupplierCodeFn,
   createSupplierFn,
   createSupplierWithLocationsFn,
   updateSupplierFn,
@@ -50,7 +47,7 @@ import { invalidateOnboardingProgress } from "./use-onboarding";
 // Query Keys
 // ============================================
 
-export const supplierKeys = {
+const supplierKeys = {
   all: ["suppliers"] as const,
   lists: () => [...supplierKeys.all, "list"] as const,
   list: (filters?: Partial<SupplierFilterData>) =>
@@ -115,62 +112,6 @@ export function useSupplier(supplierId: string, enabled = true) {
     },
     enabled: enabled && !!supplierId,
     staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch unique locations from all suppliers
- */
-export function useSupplierLocations() {
-  return useQuery({
-    queryKey: supplierKeys.locations(),
-    queryFn: async () => {
-      const result = await getSupplierLocationsFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: SUPPLIERS_STALE_TIME_MS, // 1 minute - locations don't change often
-  });
-}
-
-/**
- * Hook to fetch supplier options for dropdowns
- */
-export function useSupplierOptions() {
-  return useQuery({
-    queryKey: supplierKeys.options(),
-    queryFn: async () => {
-      const result = await getSupplierOptionsFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: SUPPLIERS_STALE_TIME_MS, // 1 minute
-  });
-}
-
-/**
- * Hook to check if a supplier code is available
- */
-export function useSupplierCodeCheck(
-  code: string,
-  excludeSupplierId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: supplierKeys.codeCheck(code, excludeSupplierId),
-    queryFn: async () => {
-      const result = await checkSupplierCodeFn(code, excludeSupplierId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
   });
 }
 
@@ -482,96 +423,9 @@ export function useDeleteSupplier(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch suppliers list for faster initial load
- */
-export function usePrefetchSuppliers() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<SupplierFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: supplierKeys.list(filters),
-      queryFn: async () => {
-        const result = await getSuppliersFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single supplier
- */
-export function usePrefetchSupplier() {
-  const queryClient = useQueryClient();
-
-  return (supplierId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: supplierKeys.detail(supplierId),
-      queryFn: async () => {
-        const result = await getSupplierByIdFn(supplierId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access supplier cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useSupplierCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all supplier data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: supplierKeys.all }),
-
-    /** Invalidate all supplier lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: supplierKeys.lists() }),
-
-    /** Invalidate a specific supplier detail */
-    invalidateDetail: (supplierId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: supplierKeys.detail(supplierId),
-      }),
-
-    /** Invalidate supplier locations list */
-    invalidateLocations: () =>
-      queryClient.invalidateQueries({ queryKey: supplierKeys.locations() }),
-
-    /** Invalidate supplier options */
-    invalidateOptions: () =>
-      queryClient.invalidateQueries({ queryKey: supplierKeys.options() }),
-
-    /** Remove a specific supplier from cache (use after deletion) */
-    removeFromCache: (supplierId: string) => {
-      queryClient.removeQueries({ queryKey: supplierKeys.detail(supplierId) });
-    },
-
-    /** Set supplier data in cache (useful for optimistic updates) */
-    setSupplierData: (supplierId: string, data: Supplier) =>
-      queryClient.setQueryData(supplierKeys.detail(supplierId), data),
-
-    /** Get cached supplier data */
-    getCachedSupplier: (supplierId: string) =>
-      queryClient.getQueryData<Supplier>(supplierKeys.detail(supplierId)),
-  };
-}
 
 // ============================================
 // Supplier Location Hooks

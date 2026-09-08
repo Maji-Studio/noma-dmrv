@@ -5,7 +5,7 @@
  *
  * Usage:
  * ```typescript
- * import { test, expect, TestDataBuilder } from './fixtures';
+ * import { test, expect } from './fixtures';
  *
  * test('admin can access dashboard', async ({ adminPage }) => {
  *   await adminPage.goto('/dashboard');
@@ -27,8 +27,6 @@ export {
   cleanupTestData,
   authenticatePage,
   createAuthenticatedContext,
-  createDirectSession,
-  setAuthCookies,
 } from "./auth-fixtures";
 
 export {
@@ -52,20 +50,15 @@ export {
   type TestFormulation,
   type TestStorageLocation,
   type TestBiocharProduct,
-  type TestApplication,
   generateTestId,
   createTestFacility,
   createTestSupplier,
   createTestFormulation,
   createTestStorageLocation,
   createTestBiocharProduct,
-  createTestApplication,
   deleteTestFacility,
   deleteTestSupplier,
   deleteTestFormulation,
   deleteTestStorageLocation,
   deleteTestBiocharProduct,
-  deleteTestApplication,
-  bulkCleanup,
-  TestDataBuilder,
 } from "./test-data-helpers";
