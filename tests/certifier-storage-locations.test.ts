@@ -13,6 +13,7 @@ import {
   getStorageLocationRegistration,
   getStorageLocationRegistryInput,
   persistStorageLocationRegistration,
+  replaceMissingStorageLocationRegistration,
 } from "@/data-access/certifier-storage-locations";
 import {
   appendSyncEvent,
@@ -202,6 +203,58 @@ afterAll(async () => {
 });
 
 describe("certifier Storage Location data access", () => {
+  it("recovers only the expected org-scoped identity and preserves its site snapshot", async () => {
+    const fixture = await createFixture();
+    const ctx = makeTestOrgContext();
+    try {
+      const input = await getStorageLocationRegistryInput(ctx, fixture.applicationId);
+      if (!input?.externalProjectId || !input.name) throw new Error("Missing fixture site");
+      const reference = `nm-slc-recovery-${fixture.customerLocationId}`;
+      const body = buildCreateStorageLocationRequest({
+        externalProjectId: input.externalProjectId,
+        name: input.name,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        supplierReferenceId: reference,
+      });
+      const original = await persistStorageLocationRegistration(ctx, {
+        customerLocationId: fixture.customerLocationId,
+        certifierProjectId: fixture.certifierProjectId,
+        externalProjectId: input.externalProjectId,
+        externalStorageLocationId: `slc-old-${fixture.customerLocationId}`,
+        supplierReference: reference,
+        submittedPayload: body,
+        payloadHash: "original-site-hash",
+      });
+      const replacementId = `slc-new-${fixture.customerLocationId}`;
+      await expect(replaceMissingStorageLocationRegistration(
+        FOREIGN_CONTEXT, original, replacementId,
+      )).resolves.toBeNull();
+      await expect(replaceMissingStorageLocationRegistration(
+        ctx, { ...original, payloadHash: "stale-site-hash" }, replacementId,
+      )).resolves.toBeNull();
+
+      await expect(replaceMissingStorageLocationRegistration(
+        ctx, original, replacementId,
+      )).resolves.toMatchObject({
+        id: original.id,
+        externalStorageLocationId: replacementId,
+        submittedPayload: original.submittedPayload,
+        payloadHash: original.payloadHash,
+        supplierReference: original.supplierReference,
+        driftStatus: "in_sync",
+      });
+      await expect(replaceMissingStorageLocationRegistration(
+        ctx, original, `slc-stale-${fixture.customerLocationId}`,
+      )).resolves.toBeNull();
+      await expect(getStorageLocationRegistration(
+        ctx, fixture.customerLocationId, input.externalProjectId,
+      )).resolves.toMatchObject({ externalStorageLocationId: replacementId });
+    } finally {
+      await cleanupFixture(fixture);
+    }
+  });
+
   it("resolves only the active organization's application path and project mapping", async () => {
     const fixture = await createFixture();
     try {

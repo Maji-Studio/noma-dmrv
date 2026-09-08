@@ -1,4 +1,8 @@
 import {
+  getStorageLocationRegistration,
+  withCertifierExternalProjectLocks,
+} from "@/data-access/certifier-storage-locations";
+import {
   claimBiocharApplicationRegistration,
   confirmBiocharApplicationRegistration,
   getBiocharApplicationRegistration,
@@ -34,6 +38,7 @@ import {
   type RegistryExternalMutationReporter,
 } from "./registry-create";
 import { ensureStorageLocation } from "./storage-locations";
+import { ISOMETRIC_PROVIDER } from "./shared";
 
 export async function ensureRemovalBiocharApplications(args: {
   orgCtx: OrgContext;
@@ -78,6 +83,7 @@ export async function ensureRemovalBiocharApplications(args: {
     const storage = await ensureStorageLocation({
       orgCtx: args.orgCtx,
       applicationId: intent.applicationId,
+      onExternalMutation: args.onExternalMutation,
       expected: {
         customerLocationId: intent.customerLocationId,
         certifierProjectId: intent.certifierProjectId,
@@ -144,14 +150,22 @@ async function ensureBiocharApplication(args: {
     externalStorageLocationId: args.externalStorageLocationId,
   });
   const bodyHash = payloadHash(body);
-  await withBiocharApplicationRegistrationLock(
-    args.orgCtx,
-    {
-      applicationId: args.intent.applicationId,
-      creditBatchId: args.intent.creditBatchId,
-      removalSubmissionId: args.submissionRow.id,
-    },
+  await withBiocharApplicationDependencyLocks(
+    args,
     async () => {
+      const currentStorage = await getStorageLocationRegistration(
+        args.orgCtx,
+        args.intent.customerLocationId,
+        args.intent.externalProjectId,
+      );
+      if (
+        currentStorage?.id !== args.storageLocationRegistrationId ||
+        currentStorage.externalStorageLocationId !== args.externalStorageLocationId
+      ) {
+        throw new SafeError(
+          "The Storage Location changed while the Biochar Application was being prepared. Retry the Removal submission.",
+        );
+      }
       let registration = await getBiocharApplicationRegistration(
         args.orgCtx,
         args.intent.applicationId,
@@ -174,6 +188,14 @@ async function ensureBiocharApplication(args: {
           observedGhgEntryId: null,
           observedRemovalId: null,
         });
+      }
+      if (registration.externalStorageLocationId !== args.externalStorageLocationId) {
+        await markBiocharApplicationDrift(
+          args.orgCtx, registration.id, "storage_location_replaced",
+        );
+        throw new SafeError(
+          `Application ${args.intent.applicationCode}'s Storage Location was replaced. Its Biochar Application still references the previous registry site. Ask support to resolve that dependency before retrying this Removal.`,
+        );
       }
       const identityMatches =
         registration.payloadHash === bodyHash &&
@@ -339,6 +361,32 @@ async function ensureBiocharApplication(args: {
         log: args.log,
       });
     },
+  );
+}
+
+/** Use the same project lock as Storage Location replacement through POST/confirmation. */
+async function withBiocharApplicationDependencyLocks<T>(
+  args: {
+    orgCtx: OrgContext;
+    intent: BiocharApplicationIntent;
+    submissionRow: Pick<CertificationSubmissionRow, "id">;
+  },
+  fn: () => Promise<T>,
+): Promise<T> {
+  return withBiocharApplicationRegistrationLock(
+    args.orgCtx,
+    {
+      applicationId: args.intent.applicationId,
+      creditBatchId: args.intent.creditBatchId,
+      removalSubmissionId: args.submissionRow.id,
+    },
+    () =>
+      withCertifierExternalProjectLocks(
+        args.orgCtx,
+        ISOMETRIC_PROVIDER,
+        [args.intent.externalProjectId],
+        fn,
+      ),
   );
 }
 

@@ -3,13 +3,13 @@ import type { StorageLocationRegistryInput } from "@/data-access/certifier-stora
 import type { CertifierStorageLocation } from "@/db/schema/certifier-storage-locations";
 import type { OrgContext } from "@/lib/auth/server";
 import type { Logger } from "@/lib/log";
-import type { PerformRegistryCreateArgs } from "./registry-create";
 
 const mocks = vi.hoisted(() => ({
   env: { ISOMETRIC_ENVIRONMENT: "sandbox" as "sandbox" | "production" },
   getInput: vi.fn(),
   getRegistration: vi.fn(),
   persistRegistration: vi.fn(),
+  replaceRegistration: vi.fn(),
   setDrift: vi.fn(),
   appendEvent: vi.fn(),
   requireOrgRole: vi.fn(),
@@ -28,6 +28,7 @@ vi.mock("@/data-access/certifier-storage-locations", async (importOriginal) => (
   getStorageLocationRegistryInput: mocks.getInput,
   getStorageLocationRegistration: mocks.getRegistration,
   persistStorageLocationRegistration: mocks.persistRegistration,
+  replaceMissingStorageLocationRegistration: mocks.replaceRegistration,
   setStorageLocationDrift: mocks.setDrift,
 }));
 vi.mock("@/lib/isometric/client", async (importOriginal) => ({
@@ -44,25 +45,11 @@ vi.mock("./shared", () => ({
   appendSyncEventBestEffort: mocks.appendEvent,
   ISOMETRIC_PROVIDER: "isometric",
 }));
-vi.mock("./registry-create", () => ({
-  supplierRefLookup: (
-    result: { found: true; externalId: string } | { found: false },
-  ) =>
-    result.found
-      ? { found: "single" as const, externalId: result.externalId }
-      : { found: "none" as const },
-  performRegistryCreate: vi.fn(async (args: PerformRegistryCreateArgs) => {
-    const reconciled = await args.reconcile();
-    if (reconciled.found === "single") {
-      await args.onConfirmed?.(reconciled.externalId);
-      return { externalId: reconciled.externalId, source: "reconciliation" as const };
-    }
-    if (reconciled.found === "refused") throw new Error(reconciled.message);
-    const externalId = await args.create();
-    await args.onConfirmed?.(externalId);
-    return { externalId, source: "create" as const };
-  }),
-}));
+vi.mock("@/data-access/certification", () => ({ markSubmissionRejected: vi.fn() }));
+vi.mock("./registry-create", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./registry-create")>();
+  return { ...actual, performRegistryCreate: vi.fn(actual.performRegistryCreate) };
+});
 
 import { ensureStorageLocation } from "./storage-locations";
 import { performRegistryCreate } from "./registry-create";
@@ -158,6 +145,7 @@ beforeEach(() => {
   mocks.requireOrgRole.mockReturnValue(undefined);
   mocks.getInput.mockResolvedValue(input());
   mocks.getRegistration.mockResolvedValue(null);
+  mocks.replaceRegistration.mockImplementation(async (_ctx, old, externalStorageLocationId) => ({ ...old, externalStorageLocationId }));
   mocks.setDrift.mockResolvedValue(undefined);
   mocks.appendEvent.mockResolvedValue(undefined);
   mocks.client.get.mockImplementation(async (path: string) =>
@@ -544,6 +532,30 @@ describe("ensureStorageLocation", () => {
     expect(mocks.client.patch).not.toHaveBeenCalled();
   });
 
+  it("recovers a deleted remote registration using the unchanged stable site reference", async () => {
+    const { IsometricApiError } = await import("@/lib/isometric/client");
+    const { buildStorageLocationReference } = await import("@/lib/isometric/storage-locations");
+    const { payloadHash } = await import("@/lib/isometric/utils/payload-hash");
+    const supplierReference = buildStorageLocationReference({
+      customerLocationId: CUSTOMER_LOCATION_ID, externalProjectId: "prj-test",
+    });
+    const submittedPayload = { ...registration().submittedPayload, supplier_reference_id: supplierReference };
+    mocks.getRegistration.mockResolvedValue(registration({
+      externalStorageLocationId: "slc-deleted", supplierReference,
+      submittedPayload, payloadHash: payloadHash(submittedPayload),
+    }));
+    const originalGet = mocks.client.get.getMockImplementation()!;
+    mocks.client.get.mockImplementation(async (path: string) => {
+      if (path.endsWith("/slc-deleted")) throw new IsometricApiError("missing", 404);
+      return originalGet(path);
+    });
+
+    await expect(ensure()).resolves.toMatchObject({
+      externalStorageLocationId: "slc-test", source: "create", drifted: false,
+    });
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
+  });
+
   it("marks a deleted remote registration as drift without creating a replacement", async () => {
     const { IsometricApiError } = await import("@/lib/isometric/client");
     mocks.getRegistration.mockResolvedValue(registration());
@@ -593,5 +605,238 @@ describe("ensureStorageLocation", () => {
     await expect(ensure()).rejects.toThrow(/latitude/);
     expect(mocks.client.get).not.toHaveBeenCalled();
     expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+});
+
+
+async function missingRegistration() {
+  const { IsometricApiError } = await import("@/lib/isometric/client");
+  const { buildStorageLocationReference } = await import("@/lib/isometric/storage-locations");
+  const { payloadHash } = await import("@/lib/isometric/utils/payload-hash");
+  const supplierReference = buildStorageLocationReference({
+    customerLocationId: CUSTOMER_LOCATION_ID, externalProjectId: "prj-test",
+  });
+  const submittedPayload = { ...registration().submittedPayload, supplier_reference_id: supplierReference };
+  let current = registration({
+    externalStorageLocationId: "slc-deleted", supplierReference,
+    submittedPayload, payloadHash: payloadHash(submittedPayload),
+  });
+  const old = current;
+  mocks.getRegistration.mockImplementation(async () => current);
+  mocks.replaceRegistration.mockImplementation(async (_ctx, expected, externalStorageLocationId) => {
+    expect(expected.externalStorageLocationId).toBe(current.externalStorageLocationId);
+    current = { ...current, externalStorageLocationId };
+    return current;
+  });
+  const candidates: ReturnType<typeof remote>[] = [];
+  mocks.client.get.mockImplementation(async (path: string) => {
+    if (path.endsWith("/slc-deleted")) throw new IsometricApiError("missing", 404);
+    if (path.endsWith("/storage_locations")) return {
+      nodes: candidates, page_info: { has_next_page: false },
+    };
+    return candidates.find((candidate) => path.endsWith(`/${candidate.id}`));
+  });
+  mocks.client.post.mockImplementation(async () => {
+    const created = remote(supplierReference, "slc-replacement");
+    candidates.push(created);
+    return created;
+  });
+  return { old, candidates, supplierReference };
+}
+
+function serializeLocks() {
+  const tails = new Map<string, Promise<void>>();
+  mocks.withLock.mockImplementation(async (key: string, fn: () => Promise<unknown>) => {
+    const previous = tails.get(key) ?? Promise.resolve();
+    let release = () => {};
+    const tail = new Promise<void>((resolve) => { release = resolve; });
+    tails.set(key, tail);
+    await previous;
+    try { return await fn(); } finally { release(); }
+  });
+}
+
+describe("missing Storage Location recovery", () => {
+  it("adopts an existing replacement without POST and preserves the submitted snapshot", async () => {
+    const { old, candidates, supplierReference } = await missingRegistration();
+    candidates.push(remote(supplierReference, "slc-replacement"));
+    const result = await ensure();
+    expect(result).toMatchObject({ source: "reconciliation", drifted: false,
+      externalStorageLocationId: "slc-replacement", registration: {
+        id: old.id, submittedPayload: old.submittedPayload, payloadHash: old.payloadHash,
+      },
+    });
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.persistRegistration).not.toHaveBeenCalled();
+    expect(mocks.appendEvent).toHaveBeenCalledWith(orgCtx, expect.objectContaining({
+      operation: "storage-location:recovered",
+      responsePayload: { oldId: "slc-deleted", newId: "slc-replacement" },
+    }));
+  });
+
+  it("refuses duplicate supplier references before POST or persistence", async () => {
+    const { candidates, supplierReference } = await missingRegistration();
+    candidates.push(remote(supplierReference, "slc-a"), remote(supplierReference, "slc-b"));
+    await expect(ensure()).rejects.toThrow(/Multiple Isometric Storage Locations/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+  });
+
+  it("refuses a stale reference lookup that returns the same missing identity", async () => {
+    const { old, candidates, supplierReference } = await missingRegistration();
+    candidates.push(remote(supplierReference, old.externalStorageLocationId));
+    await expect(ensure()).rejects.toThrow(/lists the Storage Location but cannot load it/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+    expect(mocks.appendEvent).not.toHaveBeenCalledWith(orgCtx, expect.objectContaining({
+      operation: "storage-location:recovered",
+    }));
+  });
+
+  it.each([{ project_id: "prj-other" }, { latitude: -4 }, { name: "Different field" }])(
+    "refuses a replacement with mismatched facts: %s", async (patch) => {
+      const { candidates, supplierReference } = await missingRegistration();
+      candidates.push({ ...remote(supplierReference, "slc-replacement"), ...patch });
+      await expect(ensure()).rejects.toThrow(/conflicts/);
+      expect(mocks.client.post).not.toHaveBeenCalled();
+      expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses an inconsistent saved supplier reference", async () => {
+    const { old } = await missingRegistration();
+    mocks.getRegistration.mockResolvedValue({ ...old, supplierReference: "nm-slc-other" });
+    await expect(ensure()).rejects.toThrow(/saved Storage Location identity is inconsistent/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+  });
+
+  it.each([400, 401, 403, 429, 500, undefined])("fails closed on GET status %s", async (status) => {
+    await missingRegistration();
+    const { IsometricApiError } = await import("@/lib/isometric/client");
+    const error = new IsometricApiError("unavailable", status);
+    mocks.client.get.mockRejectedValue(error);
+    await expect(ensure()).rejects.toBe(error);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+    expect(mocks.setDrift).not.toHaveBeenCalled();
+  });
+
+  it("does not treat a failed reference lookup as permission to POST", async () => {
+    await missingRegistration();
+    const { IsometricApiError } = await import("@/lib/isometric/client");
+    mocks.client.get.mockRejectedValue(new IsometricApiError("missing", 404));
+    await expect(ensure()).rejects.toThrow();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+  });
+
+  it("keeps confirmed absence visible when replacement lookup fails", async () => {
+    const { old } = await missingRegistration();
+    const originalGet = mocks.client.get.getMockImplementation()!;
+    mocks.client.get.mockImplementation(async (path: string) => {
+      if (path.endsWith("/storage_locations")) throw new Error("lookup unavailable");
+      return originalGet(path);
+    });
+    await expect(ensure()).rejects.toThrow("lookup unavailable");
+    expect(mocks.setDrift).toHaveBeenCalledWith(orgCtx, old.id, {
+      status: "drifted",
+      details: expect.objectContaining({
+        registeredPayloadHash: old.payloadHash,
+        registeredExternalProjectId: old.externalProjectId,
+        remoteDriftReason: expect.stringContaining("no longer exists"),
+      }),
+    });
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+  });
+
+  it("rechecks absence after acquiring locks and stops on an inconclusive GET", async () => {
+    await missingRegistration();
+    const { IsometricApiError } = await import("@/lib/isometric/client");
+    mocks.client.get.mockRejectedValueOnce(new IsometricApiError("missing", 404))
+      .mockRejectedValueOnce(new IsometricApiError("unavailable", 503));
+    await expect(ensure()).rejects.toThrow();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+  });
+
+  it("serializes concurrent recoveries and reuses the winning replacement", async () => {
+    await missingRegistration();
+    serializeLocks();
+    const results = await Promise.all([ensure(), ensure()]);
+    expect(results.map((result) => result.externalStorageLocationId)).toEqual([
+      "slc-replacement", "slc-replacement",
+    ]);
+    expect(results.every((result) => !result.drifted)).toBe(true);
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
+    expect(mocks.replaceRegistration).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconciles an ambiguous POST response without a second POST", async () => {
+    const { candidates, supplierReference } = await missingRegistration();
+    mocks.client.post.mockImplementation(async () => {
+      candidates.push(remote(supplierReference, "slc-replacement"));
+      throw new Error("response lost");
+    });
+    await expect(ensure()).resolves.toMatchObject({ source: "reconciliation", externalStorageLocationId: "slc-replacement" });
+    await expect(ensure()).resolves.toMatchObject({ source: "journal", externalStorageLocationId: "slc-replacement" });
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconciles after persistence fails without duplicating the successful POST", async () => {
+    await missingRegistration();
+    mocks.replaceRegistration.mockRejectedValueOnce(new Error("database unavailable"));
+    await expect(ensure()).rejects.toThrow(/database unavailable/);
+    await expect(ensure()).resolves.toMatchObject({ source: "reconciliation", externalStorageLocationId: "slc-replacement" });
+    expect(mocks.client.post).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a failed recovery retryable through persistent provider errors", async () => {
+    const { old } = await missingRegistration();
+    const { IsometricApiError } = await import("@/lib/isometric/client");
+    const post = mocks.client.post.getMockImplementation()!;
+    mocks.client.post.mockRejectedValue(new IsometricApiError("unavailable", 503));
+    await expect(ensure()).rejects.toThrow();
+    await expect(ensure()).rejects.toThrow();
+    expect(await mocks.getRegistration()).toEqual(old);
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+    mocks.client.post.mockImplementation(post);
+    await expect(ensure()).resolves.toMatchObject({ externalStorageLocationId: "slc-replacement" });
+  });
+
+  it("preserves real local drift even when the old registry record is missing", async () => {
+    await missingRegistration();
+    mocks.getInput.mockResolvedValue(input({ latitude: -4 }));
+    await expect(ensure()).resolves.toMatchObject({ drifted: true, externalStorageLocationId: "slc-deleted" });
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+  });
+
+  it("revalidates reviewed inputs before recovering", async () => {
+    const { old } = await missingRegistration();
+    mocks.getInput.mockResolvedValue(input({ name: "Changed field" }));
+    await expect(ensureStorageLocation({ orgCtx, applicationId: "app-1", log, expected: {
+      customerLocationId: CUSTOMER_LOCATION_ID, certifierProjectId: "mapping-1",
+      externalProjectId: "prj-test", supplierReference: old.supplierReference,
+      payload: old.submittedPayload,
+    } })).rejects.toThrow(/changed after this Removal was reviewed/);
+    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
+  it("refuses site changes while acquiring recovery locks", async () => {
+    await missingRegistration();
+    mocks.getInput.mockResolvedValueOnce(input()).mockResolvedValueOnce(input({ latitude: -4 }));
+    await expect(ensure()).rejects.toThrow(/site changed while/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
+  it("does not recover a live record with a mismatched identity", async () => {
+    const { supplierReference } = await missingRegistration();
+    mocks.client.get.mockResolvedValue(remote(supplierReference, "slc-wrong"));
+    await expect(ensure()).resolves.toMatchObject({ drifted: true, source: "journal" });
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
   });
 });

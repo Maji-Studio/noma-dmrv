@@ -8,6 +8,7 @@ import {
   getStorageLocationRegistration,
   getStorageLocationRegistryInput,
   persistStorageLocationRegistration,
+  replaceMissingStorageLocationRegistration,
   setStorageLocationDrift,
   withStorageLocationRegistrationLocks,
   type StorageLocationRegistryInput,
@@ -30,7 +31,11 @@ import {
 } from "@/lib/isometric/storage-locations";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { Logger } from "@/lib/log";
-import { performRegistryCreate, supplierRefLookup } from "./registry-create";
+import {
+  performRegistryCreate,
+  supplierRefLookup,
+  type RegistryExternalMutationReporter,
+} from "./registry-create";
 import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
@@ -46,6 +51,7 @@ const STORAGE_LOCATION_COORDINATE_TOLERANCE = 0.000001;
 export interface EnsureStorageLocationArgs {
   orgCtx: OrgContext;
   applicationId: string;
+  onExternalMutation?: RegistryExternalMutationReporter;
   expected?: {
     customerLocationId: string;
     certifierProjectId: string;
@@ -138,6 +144,27 @@ export async function ensureStorageLocation(
       currentPayloadHash: current.body ? payloadHash(current.body) : null,
       currentExternalProjectId: input.externalProjectId,
       missingFacts: current.missingFacts,
+      onMissing: () =>
+        withStorageLocationRegistrationLocks(
+          args.orgCtx,
+          {
+            facilityId: input.facilityId,
+            externalProjectId,
+            customerLocationId,
+            provider: ISOMETRIC_PROVIDER,
+          },
+          () => createStorageLocationUnderLocks({
+            args,
+            input,
+            customerLocationId,
+            certifierProjectId,
+            externalProjectId,
+            supplierReference: existing.supplierReference,
+            // reuse invokes recovery only with complete, unchanged site facts.
+            body: current.body!,
+            currentPayloadHash: payloadHash(current.body!),
+          }),
+        ),
     });
   }
   const supplierReference = buildStorageLocationReference({
@@ -174,7 +201,7 @@ export async function ensureStorageLocation(
   );
 }
 
-async function createStorageLocationUnderLocks(input: {
+type StorageLocationCreationInput = {
   args: EnsureStorageLocationArgs;
   input: StorageLocationRegistryInput;
   customerLocationId: string;
@@ -183,7 +210,11 @@ async function createStorageLocationUnderLocks(input: {
   supplierReference: string;
   body: CreateStorageLocationRequest;
   currentPayloadHash: string;
-}): Promise<EnsureStorageLocationResult> {
+};
+
+async function createStorageLocationUnderLocks(
+  input: StorageLocationCreationInput,
+): Promise<EnsureStorageLocationResult> {
   const lockedInput = await getStorageLocationRegistryInput(
     input.args.orgCtx,
     input.args.applicationId,
@@ -223,9 +254,32 @@ async function createStorageLocationUnderLocks(input: {
       currentPayloadHash: input.currentPayloadHash,
       currentExternalProjectId: input.externalProjectId,
       missingFacts: [],
+      onMissing: () => registerStorageLocation(input, concurrentWinner),
     });
   }
+  return registerStorageLocation(input);
+}
 
+async function registerStorageLocation(
+  input: StorageLocationCreationInput,
+  missingRegistration?: CertifierStorageLocation,
+): Promise<EnsureStorageLocationResult> {
+  if (missingRegistration) {
+    // The locked GET confirmed absence. Keep that fact visible if reference
+    // lookup or creation fails before the replacement can be persisted.
+    await setStorageLocationDrift(input.args.orgCtx, missingRegistration.id, {
+      status: "drifted",
+      details: {
+        registeredPayloadHash: missingRegistration.payloadHash,
+        currentPayloadHash: input.currentPayloadHash,
+        registeredExternalProjectId: missingRegistration.externalProjectId,
+        currentExternalProjectId: input.externalProjectId,
+        missingFacts: [],
+        remoteDriftReason:
+          "The registered Isometric Storage Location no longer exists. Recovery has not completed.",
+      },
+    });
+  }
   const client = await getIsometricClientForOrg(
     input.args.orgCtx.organizationId,
   );
@@ -239,6 +293,7 @@ async function createStorageLocationUnderLocks(input: {
     requestPayload: input.body,
     supplierRefId: input.supplierReference,
     resumed: true,
+    onExternalMutation: input.args.onExternalMutation,
     create: async () => {
       const remote = await createStorageLocation(
         client,
@@ -261,14 +316,22 @@ async function createStorageLocationUnderLocks(input: {
         input.supplierReference,
       );
       if (remote) {
+        if (remote.id === missingRegistration?.externalStorageLocationId) {
+          return {
+            found: "refused" as const,
+            message:
+              "Isometric lists the Storage Location but cannot load it. Check again before retrying.",
+          };
+        }
         const mismatch = storageLocationMismatchMessage(remote, input.body);
         if (
+          (missingRegistration && mismatch !== null) ||
           remote.project_id !== input.body.project_id ||
           remote.supplier_reference_id !== input.body.supplier_reference_id
         ) {
           return {
             found: "refused" as const,
-            message:
+            message: mismatch ??
               "The matching Isometric Storage Location conflicts with this application's project-scoped identity. Resolve the remote identity before retrying.",
           };
         }
@@ -282,19 +345,27 @@ async function createStorageLocationUnderLocks(input: {
       );
     },
     onConfirmed: async (externalStorageLocationId) => {
-      const winner = await persistStorageLocationRegistration(
-        input.args.orgCtx,
-        {
-          customerLocationId: input.customerLocationId,
-          certifierProjectId: input.certifierProjectId,
-          externalProjectId: input.externalProjectId,
-          externalStorageLocationId,
-          supplierReference: input.supplierReference,
-          submittedPayload: input.body,
-          payloadHash: input.currentPayloadHash,
-        },
-      );
+      const registrationInput = {
+        customerLocationId: input.customerLocationId,
+        certifierProjectId: input.certifierProjectId,
+        externalProjectId: input.externalProjectId,
+        externalStorageLocationId,
+        supplierReference: input.supplierReference,
+        submittedPayload: input.body,
+        payloadHash: input.currentPayloadHash,
+      };
+      const winner = missingRegistration
+        ? await replaceMissingStorageLocationRegistration(
+            input.args.orgCtx,
+            missingRegistration,
+            externalStorageLocationId,
+          )
+        : await persistStorageLocationRegistration(
+            input.args.orgCtx,
+            registrationInput,
+          );
       if (
+        !winner ||
         winner.externalStorageLocationId !== externalStorageLocationId ||
         winner.supplierReference !== input.supplierReference ||
         winner.externalProjectId !== input.externalProjectId ||
@@ -305,6 +376,19 @@ async function createStorageLocationUnderLocks(input: {
         );
       }
       registration = winner;
+      if (missingRegistration) {
+        await appendSyncEventBestEffort(input.args.orgCtx, {
+          provider: ISOMETRIC_PROVIDER,
+          entityType: STORAGE_LOCATION_ENTITY_TYPE,
+          entityId: input.supplierReference,
+          operation: `${STORAGE_LOCATION_OPERATION_PREFIX}recovered`,
+          status: "succeeded",
+          responsePayload: {
+            oldId: missingRegistration.externalStorageLocationId,
+            newId: externalStorageLocationId,
+          },
+        });
+      }
     },
     failureMessagePrefix: "The Isometric Storage Location could not be created",
     log: input.args.log,
@@ -375,6 +459,7 @@ async function reuseStorageLocationRegistration(
     currentPayloadHash: string | null;
     currentExternalProjectId: string | null;
     missingFacts: string[];
+    onMissing: () => Promise<EnsureStorageLocationResult>;
   },
 ): Promise<EnsureStorageLocationResult> {
   const localDrifted =
@@ -388,13 +473,24 @@ async function reuseStorageLocationRegistration(
       args.existing.externalProjectId,
       args.existing.externalStorageLocationId,
     );
-    remoteDriftReason = storageLocationMismatchMessage(
-      remote,
-      args.existing.submittedPayload,
-    );
+    remoteDriftReason = remote.id !== args.existing.externalStorageLocationId
+      ? "The registered Isometric Storage Location returned a different identity. Resolve the remote identity before retrying."
+      : storageLocationMismatchMessage(remote, args.existing.submittedPayload);
   } catch (error) {
     if (error instanceof IsometricApiError && error.status === 404) {
-      remoteDriftReason = "The registered Isometric Storage Location no longer exists.";
+      if (!localDrifted && args.body) {
+        if (
+          args.existing.supplierReference !== args.body.supplier_reference_id ||
+          args.existing.externalProjectId !== args.body.project_id ||
+          payloadHash(args.existing.submittedPayload) !== args.currentPayloadHash
+        ) {
+          throw new SafeError(
+            "The saved Storage Location identity is inconsistent. Resolve the registration before retrying.",
+          );
+        }
+        return args.onMissing();
+      }
+      remoteDriftReason = "The registered Isometric Storage Location no longer exists, and the local site facts have changed. Resolve the site drift before retrying.";
     } else {
       throw error;
     }
