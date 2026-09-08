@@ -76,7 +76,7 @@ const REGISTRY_STATE_REFUSAL_STATUSES: ReadonlySet<number> = new Set([
 const PARTIAL_CLEANUP_NOTE =
   "Some registry records were already deleted. Run Delete Removal again to finish the cleanup.";
 const LOCAL_FAILURE_MESSAGE =
-  "The Removal could not be removed locally. Nothing changed. Try again.";
+  "The Removal could not be removed locally. Try again.";
 const RETRY_SUFFIX = " Try again.";
 
 export async function deleteRemoval(

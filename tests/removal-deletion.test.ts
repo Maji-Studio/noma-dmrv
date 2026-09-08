@@ -41,6 +41,7 @@ import {
   claimRemovalDeletion,
   finalizeRemovalDeletion,
   releaseRemovalDeletionClaim,
+  REMOVAL_DELETE_ALREADY_DELETING_ERROR,
   REMOVAL_DELETE_CHANGED_ERROR,
   REMOVAL_DELETE_IN_FLIGHT_ERROR,
   REMOVAL_DELETE_SUBMITTED_ERROR,
@@ -559,7 +560,7 @@ describe("deleteRemoval", () => {
     );
     expect(claim.submissionIds).toEqual([rejectedId]);
     expect(claim.lockedSubmissions).toEqual([
-      { id: rejectedId, priorAttemptOutcome: null },
+      { id: rejectedId, priorLockedAt: null, priorAttemptOutcome: null },
     ]);
     // The rejected row now carries the deletion lock so a submit cannot
     // resume it while the registry cleanup runs.
@@ -607,7 +608,7 @@ describe("deleteRemoval", () => {
 
     await expect(
       claimRemovalDeletion(ctx, fixture.facilityId, fixture.removalId),
-    ).rejects.toThrow(REMOVAL_DELETE_IN_FLIGHT_ERROR);
+    ).rejects.toThrow(REMOVAL_DELETE_ALREADY_DELETING_ERROR);
     expect((await ledgerRow(rejectedId)).lockedAt?.getTime()).toBe(
       first.lockedAt.getTime(),
     );

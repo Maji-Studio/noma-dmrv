@@ -66,7 +66,9 @@ function claim(overrides: Partial<RemovalDeletionClaim> = {}): RemovalDeletionCl
     facilityId: INPUT.facilityId,
     submissionIds: ["sub-1"],
     lockedAt: new Date("2026-09-08T00:00:00Z"),
-    lockedSubmissions: [{ id: "sub-1", priorAttemptOutcome: "interrupted" }],
+    lockedSubmissions: [
+      { id: "sub-1", priorLockedAt: null, priorAttemptOutcome: "interrupted" },
+    ],
     externalRemovalIds: ["gge_1"],
     unconfirmedRemovalSupplierRefs: [],
     biocharApplications: [

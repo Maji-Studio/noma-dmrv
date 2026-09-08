@@ -22,7 +22,6 @@ import {
 import { LOCK_TTL_MS, isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { buildRemovalSupplierRef } from "@/lib/isometric/utils/supplier-ref";
 import { logger } from "@/lib/log";
-import { removalMayHaveExternalMutation } from "@/lib/certification/removal-external-mutation";
 import { FINALIZED_SUBMISSION_STATUSES } from "./certification-submissions";
 import { requireOrgScope } from "./utils";
 
@@ -53,9 +52,7 @@ import { requireOrgScope } from "./utils";
  * it too.
  *
  * No role floor for now: any organization member may delete, registry
- * cleanup included (decision of 2026-09-08, tracked in issue #746). The claim
- * still reports whether the Removal may have touched the registry so the
- * surfaces can word the confirmation accurately.
+ * cleanup included (decision of 2026-09-08, tracked in issue #746).
  */
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -72,6 +69,8 @@ export const REMOVAL_DELETE_STATEMENT_ERROR =
   "This Removal belongs to a GHG Statement and cannot be deleted.";
 export const REMOVAL_DELETE_IN_FLIGHT_ERROR =
   "A submission attempt is still running for this Removal. Wait for it to finish, then try again.";
+export const REMOVAL_DELETE_ALREADY_DELETING_ERROR =
+  "This Removal is already being deleted. Wait for that to finish, then refresh the page.";
 const REMOVAL_DELETE_MISSING_ERROR =
   "This Removal no longer exists. Refresh the page.";
 export const REMOVAL_DELETE_CHANGED_ERROR =
@@ -84,9 +83,10 @@ export interface RemovalDeletionClaim {
   submissionIds: string[];
   /** The lock timestamp stamped on every ledger row for the deletion window. */
   lockedAt: Date;
-  /** Each ledger row's prior attempt outcome, restored when the claim is released. */
+  /** Each ledger row's prior lock and attempt outcome, restored when the claim is released. */
   lockedSubmissions: Array<{
     id: string;
+    priorLockedAt: Date | null;
     priorAttemptOutcome: string | null;
   }>;
   /** Registry GHG Entry IDs recorded on the ledger rows. */
@@ -129,16 +129,11 @@ async function lockRemovalRow(
   tx: Tx,
   facilityId: string,
   removalId: string,
-): Promise<{
-  id: string;
-  ghgStatementId: string | null;
-  registryBoundaryOpened: boolean;
-}> {
+): Promise<{ id: string; ghgStatementId: string | null }> {
   const [removal] = await tx
     .select({
       id: certifierRemovals.id,
       ghgStatementId: certifierRemovals.ghgStatementId,
-      metadata: certifierRemovals.metadata,
     })
     .from(certifierRemovals)
     .where(
@@ -154,11 +149,7 @@ async function lockRemovalRow(
   if (removal.ghgStatementId !== null) {
     throw new SafeError(REMOVAL_DELETE_STATEMENT_ERROR);
   }
-  return {
-    id: removal.id,
-    ghgStatementId: removal.ghgStatementId,
-    registryBoundaryOpened: removalMayHaveExternalMutation(removal.metadata),
-  };
+  return removal;
 }
 
 function isDeletionInFlight(row: {
@@ -238,7 +229,7 @@ export async function claimRemovalDeletion(
     // Another deletion of this Removal may be mid-cleanup: its stamp sits on
     // rejected rows too, which `isLockedInFlight` does not consider.
     if (rows.some(isDeletionInFlight)) {
-      throw new SafeError(REMOVAL_DELETE_IN_FLIGHT_ERROR);
+      throw new SafeError(REMOVAL_DELETE_ALREADY_DELETING_ERROR);
     }
 
     const submissionIds = rows.map((row) => row.id);
@@ -315,6 +306,9 @@ export async function claimRemovalDeletion(
       if (!locked) throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
       lockedSubmissions.push({
         id: row.id,
+        // An interrupted attempt's own lock is part of its settle window; a
+        // failed deletion must hand it back untouched.
+        priorLockedAt: row.lockedAt,
         // A stale `deleting` marker (an expired earlier claim) is not a state
         // worth restoring.
         priorAttemptOutcome:
@@ -353,7 +347,11 @@ export async function releaseRemovalDeletionClaim(
         : sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify({ [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]: locked.priorAttemptOutcome })}::jsonb`;
     await db
       .update(certificationSubmissions)
-      .set({ lockedAt: null, metadata: restore, updatedAt: sql`now()` })
+      .set({
+        lockedAt: locked.priorLockedAt,
+        metadata: restore,
+        updatedAt: sql`now()`,
+      })
       .where(
         and(
           eq(certificationSubmissions.id, locked.id),
