@@ -48,6 +48,14 @@ it("shows a completed creation and failed evidence check when a dependent regist
     }),
   ).rejects.toThrow(error);
   expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
+  const creationCompleteIndex = updates.findIndex(
+    (update) => update.step === "removal.creating" && update.state === "complete",
+  );
+  const evidenceActiveIndex = updates.findIndex(
+    (update) => update.step === "removal.verifying_evidence" && update.state === "active",
+  );
+  expect(creationCompleteIndex).toBeGreaterThanOrEqual(0);
+  expect(evidenceActiveIndex).toBeGreaterThan(creationCompleteIndex);
 
   const html = renderToStaticMarkup(
     <SubmissionProgress kind="removal" updates={updates} error={error} />,
