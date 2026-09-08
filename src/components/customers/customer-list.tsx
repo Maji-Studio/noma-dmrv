@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { UsersIcon, PlusIcon, MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
@@ -225,7 +225,7 @@ export function CustomerList() {
     }
   };
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   if (fetchError) {
     return (

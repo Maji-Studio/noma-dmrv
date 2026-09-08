@@ -1,25 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 
-const ORG_CTX = {
+const ORG_CTX = vi.hoisted((): OrgContext => ({
   userId: "user-test-1",
   organizationId: "org-test-1",
   orgRole: "owner",
   isPlatformAdmin: false,
-} as OrgContext;
-
-vi.mock("../with-action", () => ({
-  withAction: async <T>(fn: (ctx: OrgContext) => Promise<T>) => {
-    try {
-      return { success: true as const, data: await fn(ORG_CTX) };
-    } catch (error) {
-      return {
-        success: false as const,
-        error: error instanceof Error ? error.message : "Unexpected error",
-      };
-    }
-  },
 }));
+
+vi.mock("../with-action", async () => {
+  const { mockWithAction } = await import("../../../tests/helpers/mock-with-action");
+  return mockWithAction(ORG_CTX);
+});
 vi.mock("@/data-access/certification", () => ({
   getLatestSubmissionsForEntities: vi.fn(),
 }));

@@ -104,7 +104,7 @@ const ORG_CREDENTIALS_LABEL = "Organization Isometric credentials present";
 const TRANSPORT_COVERAGE_LABEL = "Transport coverage complete";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
-const ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT = 5;
+const ENTITY_READINESS_CHECK_DISPLAY_LIMIT = 5;
 const DURABILITY_LABEL = "Sampling & durability eligibility met";
 const EVIDENCE_LABEL = "Registry value sources linked";
 const MEASUREMENT_DATES_LABEL = "Production and application dates";
@@ -113,7 +113,7 @@ const FUTURE_DATE_CHECK_DISPLAY_LIMIT = 3;
 // Keep the blocker list readable: show the first few full blocker lines as
 // reasons, then a "+N more" rollup rather than flooding the verdict.
 const DURABILITY_BLOCKER_REASON_PREVIEW_LIMIT = 3;
-const DURABILITY_BLOCKER_PREFLIGHT_DISPLAY_LIMIT = 3;
+const DURABILITY_BLOCKER_CHECK_DISPLAY_LIMIT = 3;
 
 // Durability sampling/eligibility gaps, phrased as the classifier's blocker
 // reasons. Each blocker is already a full protocol-cited sentence (see
@@ -306,12 +306,6 @@ export function deriveRemovalReadiness(
 // Stage 4 — Review-flow surfaces built on the same facts.
 // ---------------------------------------------------------------------------
 
-export type PreflightCheckStatus =
-  | "met" // precondition satisfied
-  | "unmet" // precondition failed — see `detail`
-  | "skipped" // not yet evaluable (an upstream check is unmet)
-  | "warning"; // advisory is incomplete, but does not block submission
-
 export type RemovalMeasurementDateFixTarget =
   | "productionRuns"
   | "labSamples"
@@ -325,57 +319,10 @@ export type RemovalFixTarget =
   | RemovalMeasurementDateFixTarget
   | "feedstockTypes";
 
-export interface PreflightCheck {
-  key:
-    | "mapping"
-    | "credentials"
-    | "template"
-    | "transport"
-    | "production"
-    | "measurementDates"
-    | "feedstockTypeMapping"
-    | "entityReadiness"
-    | "evidence"
-    | "durability";
-  /** Affirmative label — what's true when the check is met. */
-  label: string;
-  /**
-   * Plain-language requirement, identical across every readiness surface
-   * (Phase 0). Attached uniformly from `CERT_REQUIREMENT_META`.
-   */
-  requirementLabel: string;
-  /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
-  whyDetail?: string;
-  /**
-   * Typed destinations for repairing every future measurement date category.
-   */
-  fixTarget?: RemovalFixTarget;
-  /** Local record to open when the fix target supports an exact edit link. */
-  fixTargetId?: string;
-  status: PreflightCheckStatus;
-  /** The blocker text when unmet, or context when met/skipped. */
-  detail?: string;
-}
-
-/**
- * The builders below construct everything except the shared requirement
- * metadata, which is attached uniformly from `CERT_REQUIREMENT_META`.
- */
-type PreflightCheckBase = Omit<PreflightCheck, "requirementLabel" | "whyDetail">;
-
-function withPreflightMeta(check: PreflightCheckBase): PreflightCheck {
-  const meta = CERT_REQUIREMENT_META[check.key];
-  return {
-    ...check,
-    requirementLabel: meta.requirementLabel,
-    whyDetail: meta.whyDetail,
-  };
-}
-
-function evidencePreflightCheck(facts: RemovalReadinessFacts) {
+function evidenceRequirementCheck(facts: RemovalReadinessFacts) {
   const detail = evidenceMirrorDetail(facts);
   if (!detail) return null;
-  const status: PreflightCheckStatus =
+  const status: RemovalRequirementCheck["status"] =
     (facts.mirroredDocumentCount ?? 0) <
     (facts.supportingDocumentCount ?? 0)
       ? "warning"
@@ -393,7 +340,7 @@ const FEEDSTOCK_TYPE_MAPPING_LABEL = "Feedstock types linked to Isometric";
 interface FeedstockTypeMappingCheckBase {
   key: "feedstockTypeMapping";
   label: string;
-  status: PreflightCheckStatus;
+  status: RemovalRequirementCheck["status"];
   detail?: string;
   fixTarget?: "feedstockTypes";
   fixTargetId?: string;
@@ -426,13 +373,7 @@ function feedstockTypeMappingCheck(
       };
 }
 
-/**
- * Measurement-dates row, shared verbatim by both checklists — a future-dated
- * run end or application is the one blocker the submit pipeline used to raise
- * only AFTER the operator clicked submit. Narrowly typed so it satisfies both
- * the pre-flight and requirements check shapes. Skips (rather than reads "met")
- * when there is nothing to submit AND no offending date, mirroring durability.
- */
+/** Selects the repair destination for the measurement-date requirements row. */
 function measurementDateFixTarget(
   measurements: readonly string[],
 ): RemovalMeasurementDateFixTarget | undefined {
@@ -473,7 +414,7 @@ function measurementDatesCheck(facts: RemovalReadinessFacts): {
   key: "measurementDates";
   label: string;
   fixTarget?: RemovalMeasurementDateFixTarget;
-  status: PreflightCheckStatus;
+  status: RemovalRequirementCheck["status"];
   detail?: string;
 } {
   const measurements = facts.futureDatedMeasurements ?? [];
@@ -494,149 +435,6 @@ function measurementDatesCheck(facts: RemovalReadinessFacts): {
       .map(futureDatedMeasurementSummary)
       .join(" · "),
   };
-}
-
-/**
- * The pre-flight step's itemised checklist — the same preconditions the
- * classifier folds into one verdict, broken out per row so the operator sees
- * exactly what's satisfied and what isn't. Pure: a deterministic projection of
- * the readiness facts (the submission-status precedence is the orchestrator's
- * job; this only judges preconditions). This is the canonical pre-flight
- * source the credit-batch panel's inline blocker copy is superseded by.
- */
-export function buildRemovalPreflightChecklist(
-  facts: RemovalReadinessFacts,
-): PreflightCheck[] {
-  const linked = facts.hasMapping;
-  const credentialsConfigured = facts.hasOrgCredentials;
-  const templateClean =
-    credentialsConfigured && templateResolvesCleanly(facts);
-
-  const transport = ((): PreflightCheckBase => {
-    if (!linked || !templateClean) {
-      return {
-        key: "transport",
-        label: TRANSPORT_COVERAGE_LABEL,
-        status: "skipped",
-      };
-    }
-    if (facts.requiredTransport.length === 0) {
-      return {
-        key: "transport",
-        label: TRANSPORT_COVERAGE_LABEL,
-        status: "met",
-        detail: "This template requires no transport legs.",
-      };
-    }
-    const gaps = transportGapReasons(facts.requiredTransport);
-    return gaps.length === 0
-      ? { key: "transport", label: TRANSPORT_COVERAGE_LABEL, status: "met" }
-      : {
-          key: "transport",
-          label: TRANSPORT_COVERAGE_LABEL,
-          status: "unmet",
-          detail: gaps.join(" · "),
-        };
-  })();
-
-  const entityReadiness = ((): PreflightCheckBase => {
-    // Gaps are derived from the production runs, so with nothing to submit the
-    // list is empty for the "not evaluated" reason, not the "all complete" one.
-    // Skip rather than let an unevaluated check read as satisfied.
-    if (!facts.hasSubmittableRuns) {
-      return {
-        key: "entityReadiness",
-        label: ENTITY_READINESS_LABEL,
-        status: "skipped",
-      };
-    }
-    const gaps = facts.entityReadinessGaps ?? [];
-    return gaps.length === 0
-      ? { key: "entityReadiness", label: ENTITY_READINESS_LABEL, status: "met" }
-      : {
-          key: "entityReadiness",
-          label: ENTITY_READINESS_LABEL,
-          status: "unmet",
-          detail: gaps.slice(0, ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT).join(" · "),
-        };
-  })();
-
-  const feedstockTypeMapping = feedstockTypeMappingCheck(facts);
-
-  const checks: Array<PreflightCheckBase | null> = [
-    {
-      key: "mapping",
-      label: "Facility linked to an Isometric project",
-      status: linked ? "met" : "unmet",
-      detail: linked ? undefined : NOT_LINKED_REASON,
-    },
-    {
-      key: "credentials",
-      label: ORG_CREDENTIALS_LABEL,
-      status: !linked
-        ? "skipped"
-        : credentialsConfigured
-          ? "met"
-          : "unmet",
-      detail:
-        linked && !credentialsConfigured
-          ? NO_ORG_CREDENTIALS_REASON
-          : undefined,
-    },
-    {
-      key: "template",
-      label: "Removal template resolved",
-      status:
-        !linked || !credentialsConfigured
-          ? "skipped"
-          : templateClean
-            ? "met"
-            : "unmet",
-      detail:
-        !linked || !credentialsConfigured
-          ? undefined
-          : (templateBlockerReason(facts) ?? undefined),
-    },
-    transport,
-    {
-      key: "production",
-      label: "Production data linked",
-      status: facts.hasSubmittableRuns ? "met" : "unmet",
-      detail: facts.hasSubmittableRuns
-        ? undefined
-        : productionGapDetail(facts),
-    },
-    measurementDatesCheck(facts),
-    feedstockTypeMapping,
-    entityReadiness,
-    evidencePreflightCheck(facts),
-    durabilityPreflightCheck(facts),
-  ];
-  return checks
-    .filter((check): check is PreflightCheckBase => check !== null)
-    .map(withPreflightMeta);
-}
-
-// Sampling/eligibility pre-flight row (D3). Derived from the production runs, so
-// it skips (rather than reads "met") when there is nothing to submit, mirroring
-// the entity-readiness row.
-function durabilityPreflightCheck(
-  facts: RemovalReadinessFacts,
-): PreflightCheckBase {
-  if (!facts.hasSubmittableRuns) {
-    return { key: "durability", label: DURABILITY_LABEL, status: "skipped" };
-  }
-  const blockers = facts.durabilityGateBlockers ?? [];
-  return blockers.length === 0
-    ? { key: "durability", label: DURABILITY_LABEL, status: "met" }
-    : {
-        key: "durability",
-        label: DURABILITY_LABEL,
-        status: "unmet",
-        detail: blockers
-          .slice(0, DURABILITY_BLOCKER_PREFLIGHT_DISPLAY_LIMIT)
-          .join(" · "),
-      };
 }
 
 // ---------------------------------------------------------------------------
@@ -676,7 +474,7 @@ export interface RemovalRequirementCheck {
   fixTarget?: RemovalFixTarget;
   /** Local record to open when the fix target supports an exact edit link. */
   fixTargetId?: string;
-  status: PreflightCheckStatus;
+  status: "met" | "unmet" | "skipped" | "warning";
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
 }
@@ -704,7 +502,7 @@ function withRequirementMeta(
  * judged once batches are pooled into a removal, plus any production or entity
  * readiness blockers that can appear when an existing removal is resumed.
  * Transport-leg presence remains a batch-health concern. Pure projection of the
- * same facts the full pre-flight uses, so the two never disagree on shared rows.
+ * same facts used by the readiness classifier.
  */
 export function buildRemovalRequirementsChecklist(
   facts: RemovalReadinessFacts,
@@ -779,7 +577,7 @@ export function buildRemovalRequirementsChecklist(
           label: ENTITY_READINESS_LABEL,
           status: "unmet",
           detail: gaps
-            .slice(0, ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT)
+            .slice(0, ENTITY_READINESS_CHECK_DISPLAY_LIMIT)
             .join(" · "),
         };
   })();
@@ -810,7 +608,7 @@ export function buildRemovalRequirementsChecklist(
           label: DURABILITY_LABEL,
           status: "unmet",
           detail: blockers
-            .slice(0, DURABILITY_BLOCKER_PREFLIGHT_DISPLAY_LIMIT)
+            .slice(0, DURABILITY_BLOCKER_CHECK_DISPLAY_LIMIT)
             .join(" · "),
         };
   })();
@@ -855,7 +653,7 @@ export function buildRemovalRequirementsChecklist(
     measurementDatesCheck(facts),
     feedstockTypeMapping,
     entityReadiness,
-    evidencePreflightCheck(facts),
+    evidenceRequirementCheck(facts),
     durability,
   ];
   return checks

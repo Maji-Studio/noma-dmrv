@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   ArchiveIcon,
   FactoryIcon,
@@ -95,18 +95,15 @@ export function FacilityList() {
   const isAdmin = useIsAdmin();
   const { setFacilityId } = useFacilityContext();
 
-  const filters: Partial<FacilityFilterData> = useMemo(
-    () => ({
-      search: debouncedSearch || undefined,
-      country: countryFilter || undefined,
-      archived: showArchived,
-      page: currentPage,
-      pageSize,
-      sortBy: "name",
-      sortOrder: "asc",
-    }),
-    [debouncedSearch, countryFilter, showArchived, currentPage, pageSize]
-  );
+  const filters: Partial<FacilityFilterData> = {
+    search: debouncedSearch || undefined,
+    country: countryFilter || undefined,
+    archived: showArchived,
+    page: currentPage,
+    pageSize,
+    sortBy: "name",
+    sortOrder: "asc",
+  };
 
   const { data: facilitiesData, isLoading, error: fetchError } = useFacilities(filters);
   // Country options follow the visible collection — the archived view offers
