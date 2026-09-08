@@ -104,7 +104,7 @@ describe("parent document retirement", () => {
         fileUrl: "https://example.test/external-evidence.pdf",
         fileName: "external-evidence.pdf",
       });
-      const otherDocumentId = await insertManagedDocument(provider, 
+      const otherDocumentId = await insertManagedDocument(provider,
         "reactor",
         fixture.reactorId,
         otherOrgKey,
@@ -167,7 +167,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const fixture = await createReactorFixture(tag);
     const key = `reactor/${fixture.reactorId}/pdf/${tag}.pdf`;
-    const documentId = await insertManagedDocument(provider, 
+    const documentId = await insertManagedDocument(provider,
       "reactor",
       fixture.reactorId,
       key,
@@ -280,12 +280,12 @@ describe("parent document retirement", () => {
       .returning({ id: transportLegs.id });
     const deliveryKey = `delivery/${delivery.id}/pdf/${tag}.pdf`;
     const legKey = `transport_leg/${leg.id}/pdf/${tag}.pdf`;
-    const deliveryDocumentId = await insertManagedDocument(provider, 
+    const deliveryDocumentId = await insertManagedDocument(provider,
       "delivery",
       delivery.id,
       deliveryKey,
     );
-    const legDocumentId = await insertManagedDocument(provider, 
+    const legDocumentId = await insertManagedDocument(provider,
       "transport_leg",
       leg.id,
       legKey,
@@ -383,7 +383,7 @@ describe("parent document retirement", () => {
       })
       .returning({ id: productionSamples.id });
     const key = `production_run/${run.id}/pdf/${tag}.pdf`;
-    const documentId = await insertManagedDocument(provider, 
+    const documentId = await insertManagedDocument(provider,
       "production_run",
       run.id,
       key,
@@ -415,7 +415,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const fixture = await createReactorFixture(tag);
     const key = `reactor/${fixture.reactorId}/pdf/${tag}-rollback.pdf`;
-    const documentId = await insertManagedDocument(provider, 
+    const documentId = await insertManagedDocument(provider,
       "reactor",
       fixture.reactorId,
       key,
@@ -481,13 +481,13 @@ describe("parent document retirement", () => {
         `reactor/${fixture.reactorId}/pdf/${tag}-first.pdf`,
         `reactor/${fixture.reactorId}/pdf/${tag}-second.pdf`,
       ];
-      await insertManagedDocument(provider, 
+      await insertManagedDocument(provider,
         "reactor",
         fixture.reactorId,
         keys[0],
         organizationId,
       );
-      await insertManagedDocument(provider, 
+      await insertManagedDocument(provider,
         "reactor",
         fixture.reactorId,
         keys[1],
