@@ -78,13 +78,13 @@ IDs.
 
 | Method and path | Status | Use | Current call site |
 |---|---|---|---|
-| `GET /measurement_samples` | sandbox | Client-side supplier-reference reconciliation because the API has no reference filter | `src/lib/isometric/measurement-samples.ts` → `findMeasurementSampleBySupplierRef`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
-| `GET /measurement_samples` | wired | Find an exact journal identity across list pages during deletion; Certify has no single-measurement GET | `src/lib/isometric/measurement-samples.ts` → `getMeasurementSample`; consumer in `src/fn/certification/delete-removal.ts` |
+| `GET /measurement_samples` | wired | Client-side supplier-reference reconciliation and exact journal identity lookup during deletion; Certify has no reference filter or single-measurement GET | `src/lib/isometric/measurement-samples.ts` → `findMeasurementSampleBySupplierRef`, `getMeasurementSample`; consumers in `src/fn/certification/durability-measurement-samples.ts` and `src/fn/certification/delete-removal.ts` |
 | `DELETE /measurement_samples/{id}` | wired | Delete only exact version-owned measurements during Removal deletion | `src/lib/isometric/measurement-samples.ts` → `deleteMeasurementSample`; consumer in `src/fn/certification/delete-removal.ts` |
 | `POST /measurement_samples` | sandbox | Create sampled 1,000-year durability values and returned Datapoints | `src/lib/isometric/measurement-samples.ts` → `createMeasurementSample`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
 
-These operations are used by the sampled 1,000-year sandbox path. Their
-presence is not evidence of a live 200-year or production path.
+Creation and submission reconciliation are used by the sampled 1,000-year
+sandbox path. Lookup and deletion also support Removal cleanup. Their presence
+is not evidence of a live 200-year durability measurement submission path.
 
 ## Production and storage traceability operations
 
