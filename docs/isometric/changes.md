@@ -8,8 +8,8 @@
   the per-document mirror locks, rechecks after each delete, and records the
   released `documentId` / `externalDocumentId` pairs under the ledger row's
   `deletion.releasedDocumentMirrors`. The remote Source still stays on the
-  registry (`isometric/removal-deletion-orphans`); a later submission mirrors
-  a fresh one.
+  registry (`isometric/removal-deletion-orphans`); a later submission that
+  mirrors the same document reconciles onto it by supplier reference.
 - A ledger row stamped with the `deletion` metadata record no longer pins
   anything: the snapshot-reference guard behind document unlink and delete,
   and the reviewed-evidence lock from 2026-09-07, both skip such rows. Their

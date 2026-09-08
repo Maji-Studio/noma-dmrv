@@ -289,7 +289,8 @@ async function listSourceIdsCitedBySubmissions(
  * as deleted: a mapping those snapshots cite and no live snapshot does is
  * released so the owning record (an Application, a Delivery) can be deleted
  * afterwards. The remote Source is deliberately untouched, matching the
- * single-document delete; a later mirror mints a fresh one.
+ * single-document delete; a later mirror of the same document reconciles
+ * onto it through its `nm-src-{documentId}` supplier reference.
  *
  * Runs under the per-document mirror locks so a concurrent submit that is
  * reusing the mapping either finishes first (and its snapshot keeps the
@@ -334,22 +335,22 @@ export async function releaseDocumentUploadsReferencedOnlyBySubmissions(
 
   const released: ReleasedDocumentUpload[] = [];
   for (const candidate of candidates) {
-    const referencedElsewhere = (ignore: boolean) =>
+    const referencedElsewhere = () =>
       isExternalSourceReferencedInSnapshots(
         ctx,
         ISOMETRIC_PROVIDER,
         candidate.externalDocumentId,
         tx,
-        ignore ? { ignoreSubmissionIds: submissionIds } : {},
+        { ignoreSubmissionIds: submissionIds },
       );
-    if (await referencedElsewhere(true)) continue;
+    if (await referencedElsewhere()) continue;
     await deleteDocumentUploadByDocument(
       ctx,
       ISOMETRIC_PROVIDER,
       candidate.documentId,
       tx,
     );
-    if (await referencedElsewhere(true)) {
+    if (await referencedElsewhere()) {
       throw new SafeError(SOURCE_RELEASE_RACE_ERROR);
     }
     released.push(candidate);
