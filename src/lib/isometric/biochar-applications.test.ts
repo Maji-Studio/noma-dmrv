@@ -230,16 +230,30 @@ describe("Biochar Application reconciliation", () => {
 });
 
 describe("Biochar Application evidence reconciliation", () => {
- it("refuses a Biochar Application that lost a requested Source", () => {
-  const expected = buildCreateBiocharApplicationRequest({...BASE, sourceIds: ["src-proof"]});
-  expect(biocharApplicationMismatchMessage(remote(), expected)).toContain("Source");
-});
+  it("accepts a readback that omits Source links when Sources were requested", () => {
+    // Certify's documented Biochar Application response carries no
+    // `source_ids`; the accepted create request is the attachment contract.
+    const expected = buildCreateBiocharApplicationRequest({ ...BASE, sourceIds: ["src-proof"] });
+    expect(biocharApplicationMismatchMessage(remote(), expected)).toBeNull();
+  });
 
-it("verifies all requested Sources independent of order", () => {
-  const expected = buildCreateBiocharApplicationRequest({...BASE, sourceIds: ["src-a", "src-b"]});
-  expect(biocharApplicationMismatchMessage(remote({ source_ids: ["src-b", "src-a"] }), expected)).toBeNull();
-  expect(biocharApplicationMismatchMessage(remote({ source_ids: ["src-a"] }), expected)).toContain("Source");
-});
+  it("still reports non-Source drift when the readback omits Source links", () => {
+    const expected = buildCreateBiocharApplicationRequest({ ...BASE, sourceIds: ["src-proof"] });
+    expect(
+      biocharApplicationMismatchMessage(remote({ application_date: "1999-01-01" }), expected),
+    ).toContain("does not match this application");
+  });
+
+  it("refuses a readback that exposes Source links but lost a requested Source", () => {
+    const expected = buildCreateBiocharApplicationRequest({ ...BASE, sourceIds: ["src-proof"] });
+    expect(biocharApplicationMismatchMessage(remote({ source_ids: [] }), expected)).toContain("Source");
+  });
+
+  it("verifies all requested Sources independent of order", () => {
+    const expected = buildCreateBiocharApplicationRequest({ ...BASE, sourceIds: ["src-a", "src-b"] });
+    expect(biocharApplicationMismatchMessage(remote({ source_ids: ["src-b", "src-a"] }), expected)).toBeNull();
+    expect(biocharApplicationMismatchMessage(remote({ source_ids: ["src-a"] }), expected)).toContain("Source");
+  });
 
   it("rejects unexpected remote Sources even when every expected Source exists", () => {
     const expected = buildCreateBiocharApplicationRequest({ ...BASE, sourceIds: ["src-a"] });
