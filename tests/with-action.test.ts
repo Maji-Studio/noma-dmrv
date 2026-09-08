@@ -19,7 +19,8 @@ vi.mock("@/lib/log", () => ({
 }));
 
 import { withAction } from "@/fn/with-action";
-import { SafeError } from "@/lib/errors";
+import { ActionConflictError, SafeError, toActionError } from "@/lib/errors";
+import { logger } from "@/lib/log";
 import { requireOrgContext } from "@/lib/auth/server";
 import { makeTestOrgContext } from "./helpers/test-org";
 
@@ -169,5 +170,114 @@ describe("withAction", () => {
       success: false,
       error: "Order was not created. Try again.",
     });
+  });
+
+  it("logs unexpected errors with the caller's message and context", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
+    vi.mocked(logger.error).mockClear();
+
+    const result = await withAction(
+      async () => {
+        throw new Error("boom");
+      },
+      {
+        fallbackMessage: "Failed to load reactor",
+        log: { message: "reactor action failed", context: { op: "reactor:get" } },
+      },
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: toActionError(new Error("boom"), "Failed to load reactor"),
+    });
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ op: "reactor:get", errorName: "Error" }),
+      "reactor action failed",
+    );
+  });
+
+  it("logs unexpected errors as a generic server action failure by default", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
+    vi.mocked(logger.error).mockClear();
+
+    await withAction(async () => {
+      throw new Error("boom");
+    });
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ errorName: "Error" }),
+      "server action failed",
+    );
+  });
+
+  it("answers with the mapped result and skips logging when mapError claims the error", async () => {
+    class StockOverdrawError extends SafeError {}
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
+    vi.mocked(logger.error).mockClear();
+
+    const result = await withAction(
+      async () => {
+        throw new StockOverdrawError("Not enough biochar in the bin.");
+      },
+      {
+        mapError: (error) =>
+          error instanceof StockOverdrawError
+            ? { success: false as const, error: error.message, field: "lossMassKg" as const }
+            : undefined,
+      },
+    );
+    // The mapped shape survives the action's result type.
+    const failure = result as { success: false; error: string; field: "lossMassKg" };
+    expect(failure.field).toBe("lossMassKg");
+
+    expect(result).toEqual({
+      success: false,
+      error: "Not enough biochar in the bin.",
+      field: "lossMassKg",
+    });
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("falls through to the logged fallback when mapError returns undefined", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
+    vi.mocked(logger.error).mockClear();
+
+    const result = await withAction(
+      async () => {
+        throw new Error("boom");
+      },
+      {
+        fallbackMessage: "Failed to record loss",
+        mapError: () => undefined,
+      },
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: toActionError(new Error("boom"), "Failed to record loss"),
+    });
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the Zod and conflict branches ahead of mapError", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
+    const mapError = vi.fn(() => ({ success: false as const, error: "mapped" }));
+
+    const zodResult = await withAction(async () => {
+      z.object({ name: z.string().min(1, "Name is required") }).parse({ name: "" });
+    }, { mapError });
+    const conflict = { entity: "productionRun", id: "run-1", code: "PR-001" };
+    const conflictResult = await withAction(async () => {
+      throw new ActionConflictError("Overlaps PR-001.", conflict);
+    }, { mapError });
+
+    expect(zodResult).toEqual({ success: false, error: "Name is required." });
+    expect(conflictResult).toEqual({
+      success: false,
+      error: "Overlaps PR-001.",
+      conflict,
+    });
+    expect(mapError).not.toHaveBeenCalled();
   });
 });
