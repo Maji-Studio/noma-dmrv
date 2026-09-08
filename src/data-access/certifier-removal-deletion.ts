@@ -2,7 +2,7 @@ import { REMOVAL_DELETION_LEASE_KEY, hasFreshRemovalDeletionLease, removalDeleti
 import { removalOwnedMeasurements, type RemovalOwnedMeasurement } from "@/lib/certification/removal-deletion-artifacts";
 import { removalProductionBatchTargets, clearDeletedRemovalProductionBatches, type RemovalProductionBatch, type ProductionBatchDeletionOutcome } from "./removal-production-batch-deletion";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, withDedicatedLockConnection } from "@/db";
 import {
   certificationSubmissions,
   certifierRemovals,
@@ -40,14 +40,14 @@ import { requireOrgScope } from "./utils";
  * the registry while the local ledger row stays a draft. Operators must be
  * able to remove that Removal, and the registry records must go with it.
  *
- * The flow has three seams so the network calls never run inside a database
- * transaction:
+ * The flow has three seams; registry lookups stay outside database transactions:
  *   1. `claimRemovalDeletion` verifies eligibility under the Removal row lock
  *      and shared artifact lock, leases the Removal even without ledger rows,
  *      then stamps every ledger row (draft or
  *      rejected) with a fresh lock and the `deleting` attempt outcome so a
  *      concurrent submit can neither resume nor reclaim one for the lock TTL.
- *   2. The caller deletes the registry records.
+ *   2. Each destructive registry call holds the Removal, artifact, and batch
+ *      locks on a dedicated connection after revalidating claim ownership.
  *   3. `finalizeRemovalDeletion` re-reads the ledger to prove nothing was
  *      submitted in between, marks the ledger rows, removes the Biochar
  *      Application registrations so their supplier references are free for a
@@ -459,6 +459,41 @@ export interface RemovalDeletionFinalizeResult {
   releasedDocumentMirrors: ReleasedDocumentUpload[];
 }
 
+/**
+ * Fence one destructive registry call with the locks used by deletion,
+ * submission, and membership creation. The callback uses this transaction for
+ * database reads; pooled audit writes run only after this seam releases its
+ * locks. Lookups stay outside; the final batch sharing check runs inside it.
+ */
+export async function withRemovalDeletionMutation<T>(
+  ctx: OrgContext,
+  claim: RemovalDeletionClaim,
+  run: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  requireOrgScope(ctx);
+  return withDedicatedLockConnection(async (tx) => {
+    const removal = await lockRemovalRow(ctx, tx, claim.facilityId, claim.removalId);
+    if (removalDeletionLeaseTimestamp(removal.metadata) !== claim.lockedAt.toISOString()) {
+      throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
+    }
+    await acquireCertificationArtifactLocksSorted(tx, [{
+      provider: ISOMETRIC_PROVIDER,
+      localEntityType: REMOVAL_ENTITY_TYPE,
+      localEntityId: claim.removalId,
+    }]);
+    const batchIds = (claim.productionBatches ?? []).map((batch) => batch.creditBatchId);
+    if (batchIds.length) {
+      await tx.select({ id: creditBatches.id }).from(creditBatches)
+        .where(and(inArray(creditBatches.id, batchIds), eq(creditBatches.organizationId, ctx.organizationId)))
+        .orderBy(creditBatches.id).for("update");
+    }
+    await assertLedgerUnchangedSinceClaim(ctx, tx, claim);
+    // Exact ownership is sufficient while these locks fence takeover. Requiring
+    // TTL freshness here would make a long successful lookup impossible to finish.
+    return run(tx);
+  });
+}
+
 export async function finalizeRemovalDeletion(
   ctx: OrgContext,
   claim: RemovalDeletionClaim,
@@ -478,6 +513,14 @@ export async function finalizeRemovalDeletion(
         localEntityId: claim.removalId,
       },
     ]);
+
+    const productionBatchIds = (claim.productionBatches ?? []).map((batch) => batch.creditBatchId);
+    if (productionBatchIds.length) {
+      // Serialize finalizers of different Removals before checking surviving owners.
+      await tx.select({ id: creditBatches.id }).from(creditBatches)
+        .where(and(inArray(creditBatches.id, productionBatchIds), eq(creditBatches.organizationId, ctx.organizationId)))
+        .orderBy(creditBatches.id).for("update");
+    }
 
     await assertLedgerUnchangedSinceClaim(ctx, tx, claim);
 
